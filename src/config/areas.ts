@@ -15,6 +15,7 @@ import {
   Truck,
   ClipboardList,
   Copy,
+  Contact,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -81,6 +82,16 @@ const URL_CONTROL_LOCALES = import.meta.env.VITE_URL_CONTROL_LOCALES?.trim() || 
  * mover un app a otra área = cambiar su `areaId`.
  */
 export const APPS: AppDef[] = [
+  {
+    id: 'cuenta-amigos',
+    areaId: 'locales',
+    title: 'Cuenta Amigos',
+    description: 'Buscá un cliente por DNI o nombre y veré sus datos.',
+    icon: Contact,
+    kind: 'internal',
+    target: '/cuenta-amigos',
+    color: '#16a34a',
+  },
   {
     id: 'control-locales',
     areaId: 'locales',

@@ -5,6 +5,7 @@ import Login from '@/pages/Login'
 import Register from '@/pages/Register'
 import Menu from '@/pages/Menu'
 import Area from '@/pages/Area'
+import CuentaAmigos from '@/pages/CuentaAmigos'
 import ComingSoon from '@/pages/ComingSoon'
 
 export default function App() {
@@ -27,6 +28,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <Area />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/cuenta-amigos"
+            element={
+              <ProtectedRoute>
+                <CuentaAmigos />
               </ProtectedRoute>
             }
           />
