@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { LogIn, AlertTriangle } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 
@@ -80,6 +80,13 @@ export default function Login() {
             {busy ? 'Ingresando…' : 'Ingresar'}
           </button>
         </form>
+
+        <p className="mt-4 text-center text-sm text-slate-400">
+          ¿No tenés cuenta?{' '}
+          <Link to="/register" className="text-brand-400 hover:underline">
+            Registrate
+          </Link>
+        </p>
       </div>
     </div>
   )

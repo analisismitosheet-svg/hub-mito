@@ -15,6 +15,11 @@ interface AuthState {
   loading: boolean
   configured: boolean
   signIn: (email: string, password: string) => Promise<{ error: string | null }>
+  signUp: (
+    email: string,
+    password: string,
+    nombre: string,
+  ) => Promise<{ error: string | null; needsConfirm: boolean }>
   signOut: () => Promise<void>
 }
 
@@ -49,6 +54,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!supabase) return { error: 'Supabase no está configurado.' }
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         return { error: error?.message ?? null }
+      },
+      async signUp(email, password, nombre) {
+        if (!supabase) return { error: 'Supabase no está configurado.', needsConfirm: false }
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { nombre },
+            emailRedirectTo: `${window.location.origin}/login`,
+          },
+        })
+        if (error) return { error: error.message, needsConfirm: false }
+        // Si requiere confirmación por email, no viene sesión activa.
+        return { error: null, needsConfirm: !data.session }
       },
       async signOut() {
         if (!supabase) return
