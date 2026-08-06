@@ -87,7 +87,7 @@ export const APPS: AppDef[] = [
   },
   {
     id: 'transporte',
-    areaId: 'deposito',
+    areaId: 'locales',
     title: 'Transporte',
     description: 'Bultos, sesiones, remitos y stock entre bases.',
     icon: Truck,
@@ -97,7 +97,7 @@ export const APPS: AppDef[] = [
   },
   {
     id: 'repo-diaria',
-    areaId: 'deposito',
+    areaId: 'compras',
     title: 'Repo Diaria',
     description: 'Reposición diaria. En construcción.',
     icon: ClipboardList,
@@ -107,7 +107,7 @@ export const APPS: AppDef[] = [
   },
   {
     id: 'replicas',
-    areaId: 'deposito',
+    areaId: 'sistemas',
     title: 'Réplicas',
     description: 'Gestión de réplicas. En construcción.',
     icon: Copy,
