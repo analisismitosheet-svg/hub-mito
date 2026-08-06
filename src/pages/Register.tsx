@@ -3,6 +3,9 @@ import { Link, useNavigate } from 'react-router-dom'
 import { UserPlus, AlertTriangle, MailCheck } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 
+const inputCls =
+  'w-full rounded-xl border border-brand-200 bg-white px-3 py-2 text-ink outline-none transition duration-250 placeholder:text-brand-700/40 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/30'
+
 export default function Register() {
   const { signUp, configured } = useAuth()
   const navigate = useNavigate()
@@ -41,19 +44,19 @@ export default function Register() {
 
   if (sent) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4">
-        <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900/60 p-8 text-center shadow-xl">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-600 text-white">
+      <div className="flex min-h-screen items-center justify-center bg-paper px-4">
+        <div className="w-full max-w-sm rounded-2xl border border-brand-100 bg-white p-8 text-center shadow-soft-lg">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-600 text-white shadow-soft">
             <MailCheck size={26} />
           </div>
-          <h1 className="text-xl font-semibold text-white">Revisá tu correo</h1>
-          <p className="mt-2 text-sm text-slate-400">
-            Te enviamos un mail a <span className="text-slate-200">{email}</span> para confirmar
-            tu cuenta. Abrí el enlace y después iniciá sesión.
+          <h1 className="font-display text-xl font-semibold text-ink">Revisá tu correo</h1>
+          <p className="mt-2 text-sm text-brand-700/70">
+            Te enviamos un mail a <span className="font-medium text-ink">{email}</span> para
+            confirmar tu cuenta. Abrí el enlace y después iniciá sesión.
           </p>
           <Link
             to="/login"
-            className="mt-6 inline-block rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
+            className="btn-press mt-6 inline-block cursor-pointer rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-soft hover:bg-brand-700"
           >
             Ir al login
           </Link>
@@ -63,18 +66,18 @@ export default function Register() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4">
-      <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900/60 p-8 shadow-xl">
+    <div className="flex min-h-screen items-center justify-center bg-paper px-4">
+      <div className="w-full max-w-sm rounded-2xl border border-brand-100 bg-white p-8 shadow-soft-lg">
         <div className="mb-6 flex flex-col items-center gap-2 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-600 text-white">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-600 text-white shadow-soft">
             <UserPlus size={26} />
           </div>
-          <h1 className="text-xl font-semibold text-white">Crear cuenta</h1>
-          <p className="text-sm text-slate-400">Registrate para acceder al hub</p>
+          <h1 className="font-display text-xl font-semibold text-ink">Crear cuenta</h1>
+          <p className="text-sm text-brand-700/70">Registrate para acceder al hub</p>
         </div>
 
         {!configured && (
-          <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-300">
+          <div className="mb-4 flex items-start gap-2 rounded-xl border border-accent-600/25 bg-accent-600/10 p-3 text-xs text-accent-700">
             <AlertTriangle size={16} className="mt-0.5 shrink-0" />
             <span>Falta configurar Supabase; el registro no funcionará hasta configurarlo.</span>
           </div>
@@ -82,64 +85,90 @@ export default function Register() {
 
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
-            <label className="mb-1 block text-sm text-slate-300">Nombre</label>
+            <label htmlFor="reg-nombre" className="mb-1 block text-sm font-medium text-ink">
+              Nombre
+            </label>
             <input
+              id="reg-nombre"
+              name="name"
               type="text"
+              autoComplete="name"
               required
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-brand-500"
+              className={inputCls}
               placeholder="Tu nombre"
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm text-slate-300">Email</label>
+            <label htmlFor="reg-email" className="mb-1 block text-sm font-medium text-ink">
+              Email
+            </label>
             <input
+              id="reg-email"
+              name="email"
               type="email"
+              autoComplete="email"
+              inputMode="email"
+              spellCheck={false}
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-brand-500"
+              className={inputCls}
               placeholder="tu@email.com"
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm text-slate-300">Contraseña</label>
+            <label htmlFor="reg-password" className="mb-1 block text-sm font-medium text-ink">
+              Contraseña
+            </label>
             <input
+              id="reg-password"
+              name="new-password"
               type="password"
+              autoComplete="new-password"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-brand-500"
+              className={inputCls}
               placeholder="Mínimo 6 caracteres"
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm text-slate-300">Repetir contraseña</label>
+            <label htmlFor="reg-password2" className="mb-1 block text-sm font-medium text-ink">
+              Repetir contraseña
+            </label>
             <input
+              id="reg-password2"
+              name="confirm-password"
               type="password"
+              autoComplete="new-password"
               required
               value={password2}
               onChange={(e) => setPassword2(e.target.value)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-brand-500"
+              className={inputCls}
               placeholder="••••••••"
             />
           </div>
 
-          {error && <p className="text-sm text-red-400">{error}</p>}
+          {error && (
+            <p role="alert" aria-live="polite" className="text-sm text-red-600">
+              {error}
+            </p>
+          )}
 
           <button
             type="submit"
             disabled={busy || !configured}
-            className="w-full rounded-lg bg-brand-600 py-2 font-medium text-white transition hover:bg-brand-700 disabled:opacity-50"
+            className="btn-press w-full cursor-pointer rounded-xl bg-brand-600 py-2.5 font-medium text-white shadow-soft outline-none hover:bg-brand-700 focus-visible:ring-2 focus-visible:ring-brand-500/50 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy ? 'Creando…' : 'Crear cuenta'}
           </button>
         </form>
 
-        <p className="mt-4 text-center text-sm text-slate-400">
+        <p className="mt-4 text-center text-sm text-brand-700/70">
           ¿Ya tenés cuenta?{' '}
-          <Link to="/login" className="text-brand-400 hover:underline">
+          <Link to="/login" className="font-medium text-brand-600 hover:underline">
             Iniciá sesión
           </Link>
         </p>

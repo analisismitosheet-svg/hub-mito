@@ -35,6 +35,8 @@ export interface AreaDef {
   name: string
   icon: LucideIcon
   accent: string
+  /** color propio del área (hex) para tintar ícono y barra de acento */
+  color: string
 }
 
 export type AppKind = 'external' | 'internal'
@@ -49,22 +51,26 @@ export interface AppDef {
   /** external: URL destino · internal: ruta interna (ej. /repo-diaria) */
   target: string
   comingSoon?: boolean
+  /** color propio de la app (hex) para tintar ícono y barra de acento */
+  color: string
 }
 
+// accent: color de nivel 600 para contraste AA sobre superficies claras (Soft UI)
+// color: hex propio del área para tintar ícono/barra (identidad visual por área)
 export const AREAS: AreaDef[] = [
-  { id: 'administracion', name: 'Administración', icon: Briefcase, accent: 'text-sky-400' },
-  { id: 'tesoreria', name: 'Tesorería', icon: Wallet, accent: 'text-emerald-400' },
-  { id: 'rrhh', name: 'RR. HH.', icon: Users, accent: 'text-violet-400' },
-  { id: 'mayorista', name: 'Mayorista', icon: Boxes, accent: 'text-amber-400' },
-  { id: 'marketing', name: 'Marketing', icon: Megaphone, accent: 'text-pink-400' },
-  { id: 'compras', name: 'Compras', icon: ShoppingCart, accent: 'text-lime-400' },
-  { id: 'sistemas', name: 'Sistemas', icon: Server, accent: 'text-cyan-400' },
-  { id: 'locales', name: 'Locales', icon: Store, accent: 'text-green-400' },
-  { id: 'diseno', name: 'Diseño', icon: Palette, accent: 'text-fuchsia-400' },
-  { id: 'deposito', name: 'Depósito', icon: Warehouse, accent: 'text-orange-400' },
-  { id: 'polo52', name: 'Polo 52', icon: Building2, accent: 'text-indigo-400' },
-  { id: 'arquitectura', name: 'Arquitectura', icon: PencilRuler, accent: 'text-teal-400' },
-  { id: 'recepcion', name: 'Recepción', icon: Bell, accent: 'text-rose-400' },
+  { id: 'administracion', name: 'Administración', icon: Briefcase, accent: 'text-sky-600', color: '#0284c7' },
+  { id: 'tesoreria', name: 'Tesorería', icon: Wallet, accent: 'text-emerald-600', color: '#059669' },
+  { id: 'rrhh', name: 'RR. HH.', icon: Users, accent: 'text-violet-600', color: '#7c3aed' },
+  { id: 'mayorista', name: 'Mayorista', icon: Boxes, accent: 'text-amber-600', color: '#d97706' },
+  { id: 'marketing', name: 'Marketing', icon: Megaphone, accent: 'text-pink-600', color: '#db2777' },
+  { id: 'compras', name: 'Compras', icon: ShoppingCart, accent: 'text-lime-600', color: '#65a30d' },
+  { id: 'sistemas', name: 'Sistemas', icon: Server, accent: 'text-cyan-600', color: '#0891b2' },
+  { id: 'locales', name: 'Locales', icon: Store, accent: 'text-green-600', color: '#16a34a' },
+  { id: 'diseno', name: 'Diseño', icon: Palette, accent: 'text-fuchsia-600', color: '#c026d3' },
+  { id: 'deposito', name: 'Depósito', icon: Warehouse, accent: 'text-orange-600', color: '#ea580c' },
+  { id: 'polo52', name: 'Polo 52', icon: Building2, accent: 'text-indigo-600', color: '#4f46e5' },
+  { id: 'arquitectura', name: 'Arquitectura', icon: PencilRuler, accent: 'text-teal-600', color: '#0d9488' },
+  { id: 'recepcion', name: 'Recepción', icon: Bell, accent: 'text-rose-600', color: '#e11d48' },
 ]
 
 const URL_TRANSPORTE = import.meta.env.VITE_URL_TRANSPORTE?.trim() || ''
@@ -84,6 +90,7 @@ export const APPS: AppDef[] = [
     kind: 'external',
     target: URL_CONTROL_LOCALES,
     comingSoon: !URL_CONTROL_LOCALES,
+    color: '#16a34a',
   },
   {
     id: 'transporte',
@@ -94,6 +101,7 @@ export const APPS: AppDef[] = [
     kind: 'external',
     target: URL_TRANSPORTE,
     comingSoon: !URL_TRANSPORTE,
+    color: '#0891b2',
   },
   {
     id: 'repo-diaria',
@@ -104,6 +112,7 @@ export const APPS: AppDef[] = [
     kind: 'internal',
     target: '/repo-diaria',
     comingSoon: true,
+    color: '#d97706',
   },
   {
     id: 'replicas',
@@ -114,6 +123,7 @@ export const APPS: AppDef[] = [
     kind: 'internal',
     target: '/replicas',
     comingSoon: true,
+    color: '#7c3aed',
   },
 ]
 

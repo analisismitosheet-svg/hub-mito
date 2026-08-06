@@ -7,3 +7,6 @@ dist-ssr
 .DS_Store
 .vercel
 dev-dist
+
+# skills de diseño (no forman parte de la app)
+.claude/
