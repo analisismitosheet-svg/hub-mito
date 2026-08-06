@@ -4,7 +4,7 @@ import { LogIn, AlertTriangle } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 
 const inputCls =
-  'w-full rounded-xl border border-brand-200 bg-white px-3 py-2 text-ink outline-none transition duration-250 placeholder:text-brand-700/40 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/30'
+  'w-full rounded-xl border border-line bg-surface2 px-3 py-2 text-ink outline-none transition duration-250 placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40'
 
 export default function Login() {
   const { signIn, configured, user } = useAuth()
@@ -30,18 +30,18 @@ export default function Login() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-paper px-4">
-      <div className="w-full max-w-sm rounded-2xl border border-brand-100 bg-white p-8 shadow-soft-lg">
+      <div className="w-full max-w-sm rounded-2xl border border-line bg-surface p-8 shadow-soft-lg">
         <div className="mb-6 flex flex-col items-center gap-2 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-600 text-white shadow-soft">
-            <LogIn size={26} />
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-600 text-white shadow-glow">
+            <LogIn size={26} aria-hidden />
           </div>
           <h1 className="font-display text-xl font-semibold text-ink">Hub Mito</h1>
-          <p className="text-sm text-brand-700/70">Ingresá con tu usuario</p>
+          <p className="text-sm text-sub">Ingresá con tu usuario</p>
         </div>
 
         {!configured && (
-          <div className="mb-4 flex items-start gap-2 rounded-xl border border-accent-600/25 bg-accent-600/10 p-3 text-xs text-accent-700">
-            <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+          <div className="mb-4 flex items-start gap-2 rounded-xl border border-accent-500/30 bg-accent-500/10 p-3 text-xs text-accent-400">
+            <AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden />
             <span>
               Falta configurar Supabase (VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY en el
               archivo .env). Podés ver la interfaz pero el login no funcionará hasta configurarlo.
@@ -86,7 +86,7 @@ export default function Login() {
           </div>
 
           {error && (
-            <p role="alert" aria-live="polite" className="text-sm text-red-600">
+            <p role="alert" aria-live="polite" className="text-sm text-brand-400">
               {error}
             </p>
           )}
@@ -100,9 +100,9 @@ export default function Login() {
           </button>
         </form>
 
-        <p className="mt-4 text-center text-sm text-brand-700/70">
+        <p className="mt-4 text-center text-sm text-sub">
           ¿No tenés cuenta?{' '}
-          <Link to="/register" className="font-medium text-brand-600 hover:underline">
+          <Link to="/register" className="font-medium text-brand-500 hover:underline">
             Registrate
           </Link>
         </p>

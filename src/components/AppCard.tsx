@@ -23,8 +23,8 @@ export default function AppCard({ app, index = 0 }: { app: AppDef; index?: numbe
       style={{ animationDelay: `${index * 40}ms` }}
       className={`animate-enter group relative flex flex-col items-start gap-3 overflow-hidden rounded-2xl border p-5 text-left shadow-soft outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 ${
         disabled
-          ? 'cursor-not-allowed border-brand-100 bg-brand-50/60 opacity-70'
-          : 'hub-card cursor-pointer border-brand-100 bg-white'
+          ? 'cursor-not-allowed border-line bg-surface/60 opacity-70'
+          : 'hub-card cursor-pointer border-line bg-surface'
       }`}
     >
       {!disabled && (
@@ -40,8 +40,8 @@ export default function AppCard({ app, index = 0 }: { app: AppDef; index?: numbe
         }`}
         style={{
           color: app.color,
-          backgroundColor: `${app.color}${disabled ? '0f' : '14'}`,
-          borderColor: `${app.color}26`,
+          backgroundColor: `${app.color}${disabled ? '18' : '24'}`,
+          borderColor: `${app.color}40`,
         }}
       >
         <Icon size={24} aria-hidden />
@@ -50,13 +50,13 @@ export default function AppCard({ app, index = 0 }: { app: AppDef; index?: numbe
         <h3 className="flex items-center gap-2 font-display font-semibold text-ink">
           {app.title}
           {app.kind === 'external' && !disabled && (
-            <ExternalLink size={14} className="text-brand-400" aria-hidden />
+            <ExternalLink size={14} className="text-sub" aria-hidden />
           )}
         </h3>
-        <p className="mt-1 text-sm text-brand-700/70">{app.description}</p>
+        <p className="mt-1 text-sm text-sub">{app.description}</p>
       </div>
       {disabled ? (
-        <span className="mt-auto inline-flex items-center rounded-full bg-brand-100 px-2.5 py-0.5 text-xs font-medium text-brand-700">
+        <span className="mt-auto inline-flex items-center rounded-full bg-surface2 px-2.5 py-0.5 text-xs font-medium text-sub">
           Próximamente
         </span>
       ) : (

@@ -13,7 +13,7 @@ export default function Menu() {
     <Layout>
       <div className="mb-6">
         <h1 className="font-display text-2xl font-bold text-ink">Áreas</h1>
-        <p className="mt-1 text-brand-700/70">Elegí un área para ver sus aplicaciones.</p>
+        <p className="mt-1 text-sub">Elegí un área para ver sus aplicaciones.</p>
       </div>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">

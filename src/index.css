@@ -3,7 +3,8 @@
 @tailwind utilities;
 
 :root {
-  /* curvas de easing fuertes (emil-design-eng) — las de CSS por defecto son flojas */
+  color-scheme: dark;
+  /* curvas de easing fuertes (emil-design-eng) */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
 }
@@ -17,14 +18,13 @@ body,
 body {
   margin: 0;
   font-family: 'Open Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  color: #134e4a;
-  background-color: #f0fdfa;
+  color: #f4f4f5;
+  background-color: #0a0a0a;
   -webkit-font-smoothing: antialiased;
 }
 
 @layer components {
-  /* Tarjeta interactiva del hub: press-feedback + lift.
-     Solo transform/opacity (GPU). Hover gateado a punteros finos. */
+  /* Tarjeta interactiva: press-feedback + lift + glow rojo sutil en hover */
   .hub-card {
     transition:
       transform 0.24s var(--ease-out),
@@ -40,12 +40,12 @@ body {
   @media (hover: hover) and (pointer: fine) {
     .hub-card:hover {
       transform: translateY(-4px);
-      box-shadow: 0 2px 6px rgba(19, 78, 74, 0.06), 0 16px 38px rgba(19, 78, 74, 0.14);
-      border-color: #99f6e4;
+      border-color: #3a3a3a;
+      box-shadow: 0 0 0 1px rgba(225, 29, 46, 0.28), 0 16px 40px rgba(0, 0, 0, 0.6);
     }
   }
 
-  /* Botón pulsable: feedback inmediato al presionar */
+  /* Botón pulsable */
   .btn-press {
     transition:
       transform 0.14s var(--ease-out),
@@ -59,7 +59,7 @@ body {
   }
 }
 
-/* Entrada escalonada (stagger) — decorativa, no bloquea interacción */
+/* Entrada escalonada (stagger) */
 @keyframes hubFadeUp {
   from {
     opacity: 0;

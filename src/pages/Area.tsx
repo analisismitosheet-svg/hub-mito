@@ -12,9 +12,9 @@ export default function Area() {
   if (!area) {
     return (
       <Layout>
-        <p className="text-brand-700/70">Área no encontrada.</p>
-        <Link to="/" className="mt-4 inline-flex items-center gap-1 font-medium text-brand-600">
-          <ArrowLeft size={15} /> Volver
+        <p className="text-sub">Área no encontrada.</p>
+        <Link to="/" className="mt-4 inline-flex items-center gap-1 font-medium text-brand-500">
+          <ArrowLeft size={15} aria-hidden /> Volver
         </Link>
       </Layout>
     )
@@ -26,20 +26,27 @@ export default function Area() {
     <Layout>
       <Link
         to="/"
-        className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-brand-700/70 transition duration-250 hover:text-brand-700"
+        className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-sub transition duration-250 hover:text-ink"
       >
-        <ArrowLeft size={15} /> Áreas
+        <ArrowLeft size={15} aria-hidden /> Áreas
       </Link>
 
       <div className="mb-6 flex items-center gap-3">
-        <div className={`rounded-xl bg-white p-3 shadow-soft ring-1 ring-inset ring-brand-100 ${area.accent}`}>
-          <Icon size={26} />
+        <div
+          className="rounded-xl border p-3"
+          style={{
+            color: area.color,
+            backgroundColor: `${area.color}24`,
+            borderColor: `${area.color}40`,
+          }}
+        >
+          <Icon size={26} aria-hidden />
         </div>
         <h1 className="font-display text-2xl font-bold text-ink">{area.name}</h1>
       </div>
 
       {apps.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-brand-200 bg-white/60 py-16 text-center text-brand-700/70">
+        <div className="rounded-2xl border border-dashed border-line2 bg-surface/50 py-16 text-center text-sub">
           Todavía no hay aplicaciones en esta área.
         </div>
       ) : (

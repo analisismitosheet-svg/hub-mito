@@ -7,22 +7,22 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-paper text-ink">
-      <header className="sticky top-0 z-10 border-b border-brand-100 bg-paper/80 backdrop-blur">
+      <header className="sticky top-0 z-10 border-b border-line bg-paper/85 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 font-display text-sm font-bold text-white shadow-soft">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 font-display text-sm font-bold text-white shadow-glow">
               M
             </div>
             <span className="font-display font-semibold text-ink">Hub Mito</span>
           </div>
           {configured && user && (
             <div className="flex items-center gap-3">
-              <span className="hidden text-sm text-brand-700/80 sm:inline">{user.email}</span>
+              <span className="hidden text-sm text-sub sm:inline">{user.email}</span>
               <button
                 onClick={() => signOut()}
-                className="btn-press flex cursor-pointer items-center gap-1.5 rounded-xl border border-brand-200 bg-white px-3 py-1.5 text-sm font-medium text-brand-700 shadow-soft hover:border-brand-300 hover:bg-brand-50"
+                className="btn-press flex cursor-pointer items-center gap-1.5 rounded-xl border border-line bg-surface px-3 py-1.5 text-sm font-medium text-ink outline-none hover:border-line2 hover:bg-surface2 focus-visible:ring-2 focus-visible:ring-brand-500/50"
               >
-                <LogOut size={15} /> Salir
+                <LogOut size={15} aria-hidden /> Salir
               </button>
             </div>
           )}
