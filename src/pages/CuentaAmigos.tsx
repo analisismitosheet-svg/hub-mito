@@ -73,10 +73,15 @@ export default function CuentaAmigos() {
     if (!supabase) return
     setLoading(true)
     const like = `%${t}%`
+    // Los DNI se guardan sin puntos: si el término tiene dígitos, buscamos
+    // también por esos dígitos "pelados" (así "24.784.426" encuentra "24784426").
+    const digits = t.replace(/\D/g, '')
+    const filtros = [`nombre.ilike.${like}`, `dni.ilike.${like}`]
+    if (digits.length >= 2) filtros.push(`dni.ilike.%${digits}%`)
     const { data } = await supabase
       .from('cuentas_amigos')
       .select('id,dni,nombre,telefono,forma_pago,titular,estado')
-      .or(`dni.ilike.${like},nombre.ilike.${like}`)
+      .or(filtros.join(','))
       .order('nombre', { ascending: true })
       .limit(30)
     setResultados((data as Cliente[]) ?? [])
