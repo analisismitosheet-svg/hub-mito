@@ -21,6 +21,24 @@ interface Cliente {
   forma_pago: string | null
   titular: string | null
   estado: string | null
+  foto_url: string | null
+}
+
+/** Foto del DNI: se oculta sola si todavía no fue subida al storage. */
+function FotoDni({ url }: { url: string | null }) {
+  const [ok, setOk] = useState(true)
+  if (!url || !ok) return null
+  return (
+    <div className="border-b border-line bg-surface2">
+      <img
+        src={url}
+        alt="Foto del DNI"
+        loading="lazy"
+        onError={() => setOk(false)}
+        className="mx-auto max-h-56 w-full object-contain"
+      />
+    </div>
+  )
 }
 
 /** Estilo del semáforo de estado según el texto del estado. */
@@ -80,7 +98,7 @@ export default function CuentaAmigos() {
     if (digits.length >= 2) filtros.push(`dni.ilike.%${digits}%`)
     const { data } = await supabase
       .from('cuentas_amigos')
-      .select('id,dni,nombre,telefono,forma_pago,titular,estado')
+      .select('id,dni,nombre,telefono,forma_pago,titular,estado,foto_url')
       .or(filtros.join(','))
       .order('nombre', { ascending: true })
       .limit(30)
@@ -162,6 +180,7 @@ export default function CuentaAmigos() {
                   key={c.id}
                   className="animate-enter overflow-hidden rounded-2xl border border-line bg-surface shadow-soft"
                 >
+                  <FotoDni url={c.foto_url} />
                   <header className="flex items-center gap-3 border-b border-line p-4">
                     <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-600/15 font-display font-semibold text-brand-400">
                       {iniciales(c.nombre)}
