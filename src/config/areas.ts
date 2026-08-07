@@ -54,6 +54,10 @@ export interface AppDef {
   comingSoon?: boolean
   /** color propio de la app (hex) para tintar ícono y barra de acento */
   color: string
+  /** permiso requerido para ver/entrar (ej. 'cuentas_amigos.view'); si falta, la app es pública dentro del área */
+  permiso?: string
+  /** áreas adicionales donde también aparece la app (además de areaId) */
+  areaIds?: string[]
 }
 
 // accent: color de nivel 600 para contraste AA sobre superficies claras (Soft UI)
@@ -86,13 +90,15 @@ const URL_CONTROL_LOCALES =
 export const APPS: AppDef[] = [
   {
     id: 'cuenta-amigos',
-    areaId: 'locales',
-    title: 'Cuenta Amigos',
-    description: 'Buscá un cliente por DNI o nombre y veré sus datos.',
+    areaId: 'tesoreria',
+    areaIds: ['tesoreria', 'locales'],
+    title: 'Cuentas Amigos',
+    description: 'Clientes habilitados para retirar mercadería.',
     icon: Contact,
     kind: 'internal',
     target: '/cuenta-amigos',
-    color: '#16a34a',
+    color: '#0d9488',
+    permiso: 'cuentas_amigos.view',
   },
   {
     id: 'control-locales',
@@ -141,7 +147,7 @@ export const APPS: AppDef[] = [
 ]
 
 export function appsDeArea(areaId: string): AppDef[] {
-  return APPS.filter((a) => a.areaId === areaId)
+  return APPS.filter((a) => a.areaId === areaId || a.areaIds?.includes(areaId))
 }
 
 export function getArea(areaId: string): AreaDef | undefined {

@@ -3,11 +3,14 @@ import { ArrowLeft } from 'lucide-react'
 import Layout from '@/components/Layout'
 import AppCard from '@/components/AppCard'
 import { appsDeArea, getArea } from '@/config/areas'
+import { useAuth } from '@/context/AuthContext'
 
 export default function Area() {
   const { areaId = '' } = useParams()
+  const { can } = useAuth()
   const area = getArea(areaId)
-  const apps = appsDeArea(areaId)
+  // Ocultar apps para las que el usuario no tiene permiso (las externas sin permiso quedan visibles)
+  const apps = appsDeArea(areaId).filter((a) => !a.permiso || can(a.permiso))
 
   if (!area) {
     return (

@@ -1,11 +1,16 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AuthProvider } from '@/context/AuthContext'
 import ProtectedRoute from '@/components/ProtectedRoute'
+import PermissionRoute from '@/components/PermissionRoute'
+import AdminRoute from '@/components/AdminRoute'
 import Login from '@/pages/Login'
 import Register from '@/pages/Register'
+import Acceso from '@/pages/Acceso'
+import Denegado from '@/pages/Denegado'
 import Menu from '@/pages/Menu'
 import Area from '@/pages/Area'
 import CuentaAmigos from '@/pages/CuentaAmigos'
+import Configuraciones from '@/pages/Configuraciones'
 import ComingSoon from '@/pages/ComingSoon'
 
 export default function App() {
@@ -15,6 +20,9 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          {/* Pantalla para autenticados no aprobados (pendiente/rechazado/desactivado) */}
+          <Route path="/acceso" element={<Acceso />} />
+
           <Route
             path="/"
             element={
@@ -34,9 +42,9 @@ export default function App() {
           <Route
             path="/cuenta-amigos"
             element={
-              <ProtectedRoute>
+              <PermissionRoute permiso="cuentas_amigos.view">
                 <CuentaAmigos />
-              </ProtectedRoute>
+              </PermissionRoute>
             }
           />
           <Route
@@ -52,6 +60,22 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <ComingSoon title="Réplicas" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/configuraciones"
+            element={
+              <AdminRoute>
+                <Configuraciones />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/denegado"
+            element={
+              <ProtectedRoute>
+                <Denegado />
               </ProtectedRoute>
             }
           />

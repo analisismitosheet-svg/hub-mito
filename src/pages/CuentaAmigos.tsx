@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/context/AuthContext'
 
 interface Cliente {
   id: number
@@ -79,6 +80,9 @@ function FotoDni({ url }: { url: string | null }) {
 }
 
 export default function CuentaAmigos() {
+  const { can } = useAuth()
+  const puedeCrear = can('cuentas_amigos.create')
+  const puedeEditar = can('cuentas_amigos.edit')
   const [todos, setTodos] = useState<Cliente[]>([])
   const [cargando, setCargando] = useState(true)
   const [q, setQ] = useState('')
@@ -155,12 +159,14 @@ export default function CuentaAmigos() {
           >
             <ArrowLeft size={15} aria-hidden /> Volver a la lista
           </button>
-          <button
-            onClick={() => abrirEditar(sel)}
-            className="btn-press inline-flex items-center gap-1.5 rounded-xl border border-line bg-surface2 px-3 py-1.5 text-sm font-medium text-ink hover:bg-line"
-          >
-            <Pencil size={15} aria-hidden /> Editar
-          </button>
+          {puedeEditar && (
+            <button
+              onClick={() => abrirEditar(sel)}
+              className="btn-press inline-flex items-center gap-1.5 rounded-xl border border-line bg-surface2 px-3 py-1.5 text-sm font-medium text-ink hover:bg-line"
+            >
+              <Pencil size={15} aria-hidden /> Editar
+            </button>
+          )}
         </div>
 
         <article className="mx-auto max-w-xl animate-enter overflow-hidden rounded-2xl border border-line bg-surface shadow-soft">
@@ -192,10 +198,10 @@ export default function CuentaAmigos() {
   return (
     <Layout>
       <Link
-        to="/area/locales"
+        to="/area/tesoreria"
         className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-sub transition duration-250 hover:text-ink"
       >
-        <ArrowLeft size={15} aria-hidden /> Locales
+        <ArrowLeft size={15} aria-hidden /> Tesorería
       </Link>
 
       <div className="mb-5 flex items-center justify-between gap-3">
@@ -208,12 +214,14 @@ export default function CuentaAmigos() {
             <p className="text-sm text-sub">Clientes habilitados para retirar mercadería.</p>
           </div>
         </div>
-        <button
-          onClick={abrirNuevo}
-          className="btn-press inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-brand-600 px-3.5 py-2.5 text-sm font-medium text-white shadow-soft hover:bg-brand-700"
-        >
-          <Plus size={17} aria-hidden /> <span className="hidden sm:inline">Nuevo cliente</span>
-        </button>
+        {puedeCrear && (
+          <button
+            onClick={abrirNuevo}
+            className="btn-press inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-brand-600 px-3.5 py-2.5 text-sm font-medium text-white shadow-soft hover:bg-brand-700"
+          >
+            <Plus size={17} aria-hidden /> <span className="hidden sm:inline">Nuevo cliente</span>
+          </button>
+        )}
       </div>
 
       <div className="relative mb-4">
@@ -269,16 +277,18 @@ export default function CuentaAmigos() {
                       </span>
                     </td>
                     <td className="px-2 py-2.5 text-right">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          abrirEditar(c)
-                        }}
-                        aria-label={`Editar ${c.nombre}`}
-                        className="rounded-lg p-1.5 text-sub transition-colors hover:bg-line hover:text-ink"
-                      >
-                        <Pencil size={15} aria-hidden />
-                      </button>
+                      {puedeEditar && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            abrirEditar(c)
+                          }}
+                          aria-label={`Editar ${c.nombre}`}
+                          className="rounded-lg p-1.5 text-sub transition-colors hover:bg-line hover:text-ink"
+                        >
+                          <Pencil size={15} aria-hidden />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
