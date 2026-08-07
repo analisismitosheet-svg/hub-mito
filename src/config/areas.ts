@@ -74,8 +74,10 @@ export const AREAS: AreaDef[] = [
   { id: 'recepcion', name: 'Recepción', icon: Bell, accent: 'text-rose-600', color: '#e11d48' },
 ]
 
-const URL_TRANSPORTE = import.meta.env.VITE_URL_TRANSPORTE?.trim() || ''
-const URL_CONTROL_LOCALES = import.meta.env.VITE_URL_CONTROL_LOCALES?.trim() || ''
+const URL_TRANSPORTE =
+  import.meta.env.VITE_URL_TRANSPORTE?.trim() || 'https://project-r4hl5.vercel.app'
+const URL_CONTROL_LOCALES =
+  import.meta.env.VITE_URL_CONTROL_LOCALES?.trim() || 'https://control-locales-pwa.vercel.app'
 
 /**
  * Apps conocidas. La ubicación por área es una propuesta inicial:
