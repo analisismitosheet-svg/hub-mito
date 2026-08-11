@@ -16,6 +16,7 @@ import {
   ClipboardList,
   Copy,
   Contact,
+  BookOpen,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -99,6 +100,17 @@ export const APPS: AppDef[] = [
     target: '/cuenta-amigos',
     color: '#0d9488',
     permiso: 'cuentas_amigos.view',
+  },
+  {
+    id: 'manuales',
+    areaId: 'locales',
+    title: 'Manuales',
+    description: 'Instructivos y documentos: Excel, Word, PDF y más.',
+    icon: BookOpen,
+    kind: 'internal',
+    target: '/manuales',
+    color: '#16a34a',
+    permiso: 'manuales.view',
   },
   {
     id: 'control-locales',

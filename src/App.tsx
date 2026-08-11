@@ -10,6 +10,8 @@ import Denegado from '@/pages/Denegado'
 import Menu from '@/pages/Menu'
 import Area from '@/pages/Area'
 import CuentaAmigos from '@/pages/CuentaAmigos'
+import Documentos from '@/pages/Documentos'
+import Manuales from '@/pages/Manuales'
 import Configuraciones from '@/pages/Configuraciones'
 import ComingSoon from '@/pages/ComingSoon'
 
@@ -44,6 +46,22 @@ export default function App() {
             element={
               <PermissionRoute permiso="cuentas_amigos.view">
                 <CuentaAmigos />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/archivos/:areaId"
+            element={
+              <PermissionRoute permiso="documentos.view">
+                <Documentos />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/manuales"
+            element={
+              <PermissionRoute permiso="manuales.view">
+                <Manuales />
               </PermissionRoute>
             }
           />
