@@ -12,6 +12,7 @@ import Area from '@/pages/Area'
 import CuentaAmigos from '@/pages/CuentaAmigos'
 import Documentos from '@/pages/Documentos'
 import Manuales from '@/pages/Manuales'
+import RepoDiaria from '@/pages/RepoDiaria'
 import Configuraciones from '@/pages/Configuraciones'
 import ComingSoon from '@/pages/ComingSoon'
 
@@ -68,9 +69,9 @@ export default function App() {
           <Route
             path="/repo-diaria"
             element={
-              <ProtectedRoute>
-                <ComingSoon title="Repo Diaria" />
-              </ProtectedRoute>
+              <PermissionRoute permiso="repo_diaria.view">
+                <RepoDiaria />
+              </PermissionRoute>
             }
           />
           <Route
