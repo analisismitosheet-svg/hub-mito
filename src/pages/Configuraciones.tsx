@@ -193,11 +193,11 @@ export default function Configuraciones() {
             <thead>
               <tr className="bg-surface2 text-left text-sub">
                 <th className="px-3 py-2.5 font-medium">Nombre</th>
-                <th className="px-3 py-2.5 font-medium">Email</th>
+                <th className="hidden px-3 py-2.5 font-medium md:table-cell">Email</th>
                 <th className="px-3 py-2.5 font-medium">Rol</th>
                 <th className="px-3 py-2.5 font-medium">Local/Área</th>
                 <th className="px-3 py-2.5 font-medium">Estado</th>
-                <th className="px-3 py-2.5 font-medium">Alta</th>
+                <th className="hidden px-3 py-2.5 font-medium lg:table-cell">Alta</th>
                 <th className="px-3 py-2.5 text-right font-medium">Acciones</th>
               </tr>
             </thead>
@@ -206,8 +206,15 @@ export default function Configuraciones() {
                 const esYo = u.id === perfil?.id
                 return (
                   <tr key={u.id} className="border-t border-line align-middle">
-                    <td className="px-3 py-2.5 font-medium text-ink">{u.nombre}</td>
-                    <td className="px-3 py-2.5 text-sub">{u.email}</td>
+                    <td className="px-3 py-2.5 font-medium text-ink">
+                      {u.nombre}
+                      <span className="block max-w-[160px] truncate text-xs font-normal text-sub md:hidden" title={u.email}>
+                        {u.email}
+                      </span>
+                    </td>
+                    <td className="hidden max-w-[220px] truncate px-3 py-2.5 text-sub md:table-cell" title={u.email}>
+                      {u.email}
+                    </td>
                     <td className="px-3 py-2.5">
                       <select
                         value={u.rol}
@@ -241,34 +248,37 @@ export default function Configuraciones() {
                         {u.estado}
                       </span>
                     </td>
-                    <td className="px-3 py-2.5 text-sub">{fmtFecha(u.created_at)}</td>
+                    <td className="hidden px-3 py-2.5 text-sub lg:table-cell">{fmtFecha(u.created_at)}</td>
                     <td className="px-2 py-2.5">
                       <div className="flex items-center justify-end gap-1.5">
                         {u.estado === 'aprobado' && !esYo && (
                           <button
                             onClick={() => actualizar(u.id, { estado: 'desactivado' })}
-                            className="btn-press inline-flex items-center gap-1 rounded-lg border border-line bg-surface2 px-2 py-1 text-xs text-sub hover:text-ink"
+                            className="btn-press rounded-lg border border-line bg-surface2 p-1.5 text-sub hover:text-ink"
                             title="Desactivar"
+                            aria-label={`Desactivar ${u.nombre}`}
                           >
-                            <Ban size={13} aria-hidden /> Desactivar
+                            <Ban size={15} aria-hidden />
                           </button>
                         )}
                         {(u.estado === 'desactivado' || u.estado === 'rechazado') && (
                           <button
                             onClick={() => actualizar(u.id, { estado: 'aprobado', motivo_rechazo: null })}
-                            className="btn-press inline-flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-xs text-emerald-400"
+                            className="btn-press rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-1.5 text-emerald-400"
                             title="Reactivar"
+                            aria-label={`Reactivar ${u.nombre}`}
                           >
-                            <RotateCcw size={13} aria-hidden /> Reactivar
+                            <RotateCcw size={15} aria-hidden />
                           </button>
                         )}
                         <button
                           onClick={() => setGestion(u)}
                           disabled={u.rol === 'administrador'}
-                          className="btn-press inline-flex items-center gap-1 rounded-lg border border-line bg-surface2 px-2 py-1 text-xs text-ink hover:bg-line disabled:opacity-40"
+                          className="btn-press rounded-lg border border-line bg-surface2 p-1.5 text-ink hover:bg-line disabled:opacity-40"
                           title={u.rol === 'administrador' ? 'El administrador tiene acceso total' : 'Gestionar permisos'}
+                          aria-label={`Permisos de ${u.nombre}`}
                         >
-                          <SlidersHorizontal size={13} aria-hidden /> Permisos
+                          <SlidersHorizontal size={15} aria-hidden />
                         </button>
                       </div>
                     </td>
