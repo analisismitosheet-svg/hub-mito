@@ -104,7 +104,7 @@ export default function FileLibrary(props: FileLibraryProps) {
     let query = supabase
       .from(table)
       .select('id,nombre,descripcion,path,mime,tamano,created_at')
-      .order('created_at', { ascending: false })
+      .order('nombre', { ascending: true })
     for (const [k, v] of Object.entries(JSON.parse(scopeKey) as Record<string, string>)) query = query.eq(k, v)
     const { data, error } = await query
     if (error) setError(error.message)

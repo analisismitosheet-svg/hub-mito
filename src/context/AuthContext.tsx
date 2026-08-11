@@ -45,6 +45,11 @@ interface AuthState {
   signOut: () => Promise<void>
 }
 
+// URL canónica del sitio: el link de confirmación del mail siempre apunta acá
+// (evita que quede en localhost si te registrás en desarrollo). Configurable por env.
+const SITE_URL =
+  (import.meta.env.VITE_SITE_URL as string | undefined)?.trim() || 'https://hub-mito.vercel.app'
+
 const AuthContext = createContext<AuthState | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -129,7 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           password,
           options: {
             data: { nombre },
-            emailRedirectTo: `${window.location.origin}/login`,
+            emailRedirectTo: `${SITE_URL}/login`,
           },
         })
         if (error) return { error: error.message, needsConfirm: false }

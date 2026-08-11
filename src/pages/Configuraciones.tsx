@@ -25,6 +25,7 @@ interface UsuarioRow {
   estado: 'pendiente' | 'aprobado' | 'rechazado' | 'desactivado'
   created_at: string
   motivo_rechazo: string | null
+  local: string | null
 }
 interface Permiso {
   clave: string
@@ -66,7 +67,7 @@ export default function Configuraciones() {
     setCargando(true)
     setError(null)
     const [u, p, rp] = await Promise.all([
-      supabase.from('usuarios').select('id,email,nombre,rol,estado,created_at,motivo_rechazo').order('created_at', { ascending: false }),
+      supabase.from('usuarios').select('id,email,nombre,rol,estado,created_at,motivo_rechazo,local').order('nombre', { ascending: true }),
       supabase.from('permisos').select('clave,modulo,accion,label,orden').order('orden'),
       supabase.from('rol_permisos').select('rol,permiso_clave'),
     ])
@@ -181,6 +182,7 @@ export default function Configuraciones() {
                 <th className="px-3 py-2.5 font-medium">Nombre</th>
                 <th className="px-3 py-2.5 font-medium">Email</th>
                 <th className="px-3 py-2.5 font-medium">Rol</th>
+                <th className="px-3 py-2.5 font-medium">Local/Área</th>
                 <th className="px-3 py-2.5 font-medium">Estado</th>
                 <th className="px-3 py-2.5 font-medium">Alta</th>
                 <th className="px-3 py-2.5 text-right font-medium">Acciones</th>
@@ -204,6 +206,12 @@ export default function Configuraciones() {
                         <option value="usuario">Usuario</option>
                         <option value="administrador">Administrador</option>
                       </select>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <LocalCell
+                        value={u.local}
+                        onSave={(local) => actualizar(u.id, { local: local || null })}
+                      />
                     </td>
                     <td className="px-3 py-2.5">
                       <span className={`inline-block whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium ${ESTADO_STYLE[u.estado] ?? ''}`}>
@@ -258,6 +266,23 @@ export default function Configuraciones() {
         />
       )}
     </Layout>
+  )
+}
+
+function LocalCell({ value, onSave }: { value: string | null; onSave: (v: string) => void }) {
+  const [v, setV] = useState(value ?? '')
+  useEffect(() => setV(value ?? ''), [value])
+  return (
+    <input
+      value={v}
+      onChange={(e) => setV(e.target.value.toUpperCase())}
+      onBlur={() => {
+        if ((value ?? '') !== v.trim()) onSave(v.trim())
+      }}
+      placeholder="—"
+      className="w-24 rounded-lg border border-line bg-surface2 px-2 py-1 text-xs uppercase text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
+      aria-label="Local o área del usuario"
+    />
   )
 }
 

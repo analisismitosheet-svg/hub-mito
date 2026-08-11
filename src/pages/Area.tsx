@@ -10,8 +10,10 @@ export default function Area() {
   const navigate = useNavigate()
   const { can } = useAuth()
   const area = getArea(areaId)
-  // Ocultar apps para las que el usuario no tiene permiso (las externas sin permiso quedan visibles)
-  const apps = appsDeArea(areaId).filter((a) => !a.permiso || can(a.permiso))
+  // Ocultar apps sin permiso y ordenar alfabéticamente por título
+  const apps = appsDeArea(areaId)
+    .filter((a) => !a.permiso || can(a.permiso))
+    .sort((a, b) => a.title.localeCompare(b.title, 'es', { sensitivity: 'base' }))
   const verArchivos = can('documentos.view')
 
   if (!area) {
