@@ -17,6 +17,9 @@ import {
   Copy,
   Contact,
   BookOpen,
+  Wrench,
+  CreditCard,
+  Eye,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -77,6 +80,7 @@ export const AREAS: AreaDef[] = [
   { id: 'polo52', name: 'Polo 52', icon: Building2, accent: 'text-indigo-600', color: '#4f46e5' },
   { id: 'arquitectura', name: 'Arquitectura', icon: PencilRuler, accent: 'text-teal-600', color: '#0d9488' },
   { id: 'recepcion', name: 'Recepción', icon: Bell, accent: 'text-rose-600', color: '#e11d48' },
+  { id: 'mantenimiento', name: 'Mantenimiento', icon: Wrench, accent: 'text-slate-400', color: '#64748b' },
 ]
 
 const URL_TRANSPORTE =
@@ -111,6 +115,36 @@ export const APPS: AppDef[] = [
     target: '/manuales',
     color: '#16a34a',
     permiso: 'manuales.view',
+  },
+  {
+    id: 'errores-tarjetas',
+    areaId: 'locales',
+    title: 'Errores tarjetas',
+    description: 'Formulario para reportar errores de tarjetas.',
+    icon: CreditCard,
+    kind: 'external',
+    target: 'https://docs.google.com/forms/d/e/1FAIpQLSdD1eOXY9DVK0TZLqSrCnX6n4M8QUpgBbFUfwGSpe3brj-kDg/viewform',
+    color: '#f97316',
+  },
+  {
+    id: 'carga-requerimientos',
+    areaId: 'locales',
+    title: 'Carga requerimientos',
+    description: 'Formulario para cargar requerimientos.',
+    icon: ClipboardList,
+    kind: 'external',
+    target: 'https://docs.google.com/forms/d/e/1FAIpQLSfYBY4jL-YkZuAkMAvmqzDlhQWwP1DbdVhcV66jdbBi3jenpQ/viewform',
+    color: '#3b82f6',
+  },
+  {
+    id: 'control-vidrieras',
+    areaId: 'locales',
+    title: 'Control vidrieras',
+    description: 'Formulario de control de vidrieras.',
+    icon: Eye,
+    kind: 'external',
+    target: 'https://docs.google.com/forms/d/e/1FAIpQLScDiCgnqRrmdx705tjFVUfdYXw4EdFETAfuAAEZiBGDiNmgAA/viewform',
+    color: '#a855f7',
   },
   {
     id: 'control-locales',

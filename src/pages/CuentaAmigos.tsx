@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import {
   ArrowLeft,
   Search,
@@ -18,6 +18,7 @@ import {
 import Layout from '@/components/Layout'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
+import { getArea } from '@/config/areas'
 
 interface Cliente {
   id: number
@@ -81,6 +82,10 @@ function FotoDni({ url }: { url: string | null }) {
 
 export default function CuentaAmigos() {
   const { can } = useAuth()
+  const location = useLocation()
+  const fromArea = (location.state as { fromArea?: string } | null)?.fromArea
+  const backTo = fromArea ? `/area/${fromArea}` : '/area/tesoreria'
+  const backLabel = (fromArea ? getArea(fromArea)?.name : 'Tesorería') ?? 'Tesorería'
   const puedeCrear = can('cuentas_amigos.create')
   const puedeEditar = can('cuentas_amigos.edit')
   const [todos, setTodos] = useState<Cliente[]>([])
@@ -198,10 +203,10 @@ export default function CuentaAmigos() {
   return (
     <Layout>
       <Link
-        to="/area/tesoreria"
+        to={backTo}
         className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-sub transition duration-250 hover:text-ink"
       >
-        <ArrowLeft size={15} aria-hidden /> Tesorería
+        <ArrowLeft size={15} aria-hidden /> {backLabel}
       </Link>
 
       <div className="mb-5 flex items-center justify-between gap-3">

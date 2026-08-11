@@ -58,7 +58,7 @@ export default function Area() {
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {apps.map((app, i) => (
-            <AppCard key={app.id} app={app} index={i} />
+            <AppCard key={app.id} app={app} index={i} areaId={areaId} />
           ))}
           {verArchivos && (
             <button

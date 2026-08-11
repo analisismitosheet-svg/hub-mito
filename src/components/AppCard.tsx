@@ -2,7 +2,15 @@ import { useNavigate } from 'react-router-dom'
 import { ExternalLink, ArrowRight } from 'lucide-react'
 import type { AppDef } from '@/config/areas'
 
-export default function AppCard({ app, index = 0 }: { app: AppDef; index?: number }) {
+export default function AppCard({
+  app,
+  index = 0,
+  areaId,
+}: {
+  app: AppDef
+  index?: number
+  areaId?: string
+}) {
   const navigate = useNavigate()
   const Icon = app.icon
   const disabled = app.comingSoon
@@ -12,7 +20,9 @@ export default function AppCard({ app, index = 0 }: { app: AppDef; index?: numbe
     if (app.kind === 'external') {
       window.open(app.target, '_blank', 'noopener,noreferrer')
     } else {
-      navigate(app.target)
+      // Guardamos el área de origen para que "Volver" regrese a la correcta
+      // (una misma app puede vivir en varias áreas, ej. Cuentas Amigos).
+      navigate(app.target, { state: { fromArea: areaId } })
     }
   }
 
