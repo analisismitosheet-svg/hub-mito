@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   Upload,
   Download,
+  Eye,
   Pencil,
   Trash2,
   Loader2,
@@ -90,6 +91,7 @@ export default function FileLibrary(props: FileLibraryProps) {
   const [error, setError] = useState<string | null>(null)
   const [subiendo, setSubiendo] = useState(false)
   const [editando, setEditando] = useState<Archivo | null>(null)
+  const [viendo, setViendo] = useState<{ item: Archivo; url: string } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const scopeKey = JSON.stringify(scope ?? {})
 
@@ -147,9 +149,22 @@ export default function FileLibrary(props: FileLibraryProps) {
     await cargar()
   }
 
-  async function abrir(a: Archivo) {
+  async function ver(a: Archivo) {
     if (!supabase) return
-    const { data, error } = await supabase.storage.from(bucket).createSignedUrl(a.path, 60)
+    // enlace firmado (1h) para verlo en pantalla / embeberlo en el visor
+    const { data, error } = await supabase.storage.from(bucket).createSignedUrl(a.path, 3600)
+    if (error || !data) {
+      setError(error?.message ?? 'No se pudo generar el enlace.')
+      return
+    }
+    setViendo({ item: a, url: data.signedUrl })
+  }
+
+  async function descargar(a: Archivo) {
+    if (!supabase) return
+    const { data, error } = await supabase.storage.from(bucket).createSignedUrl(a.path, 120, {
+      download: a.nombre,
+    })
     if (error || !data) {
       setError(error?.message ?? 'No se pudo generar el enlace.')
       return
@@ -236,10 +251,10 @@ export default function FileLibrary(props: FileLibraryProps) {
                 </div>
                 <div className="mt-auto flex items-center gap-1.5">
                   <button
-                    onClick={() => abrir(a)}
+                    onClick={() => ver(a)}
                     className="btn-press inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-line bg-surface2 px-2 py-1.5 text-xs font-medium text-ink hover:bg-line"
                   >
-                    <Download size={14} aria-hidden /> Abrir
+                    <Eye size={14} aria-hidden /> Ver
                   </button>
                   {puedeEditar && (
                     <button onClick={() => setEditando(a)} aria-label={`Editar ${a.nombre}`} className="btn-press rounded-lg border border-line bg-surface2 p-1.5 text-sub hover:text-ink">
@@ -258,6 +273,10 @@ export default function FileLibrary(props: FileLibraryProps) {
         </div>
       )}
 
+      {viendo && (
+        <Visor item={viendo.item} url={viendo.url} onClose={() => setViendo(null)} onDescargar={descargar} />
+      )}
+
       {editando && (
         <EditarModal
           table={table}
@@ -270,6 +289,65 @@ export default function FileLibrary(props: FileLibraryProps) {
         />
       )}
     </Layout>
+  )
+}
+
+function Visor({
+  item,
+  url,
+  onClose,
+  onDescargar,
+}: {
+  item: Archivo
+  url: string
+  onClose: () => void
+  onDescargar: (a: Archivo) => void
+}) {
+  const mime = item.mime ?? ''
+  const esImagen = mime.startsWith('image/')
+  const esPdf = mime.includes('pdf')
+  const esOffice =
+    mime.includes('word') ||
+    mime.includes('excel') ||
+    mime.includes('spreadsheet') ||
+    mime.includes('presentation') ||
+    mime.includes('officedocument') ||
+    /\.(docx?|xlsx?|pptx?)$/i.test(item.nombre)
+  const officeUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-black/80" onClick={onClose}>
+      <div className="flex items-center justify-between gap-3 border-b border-line bg-surface px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
+        <p className="min-w-0 truncate font-medium text-ink" title={item.nombre}>{item.nombre}</p>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button onClick={() => onDescargar(item)} className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line">
+            <Download size={14} aria-hidden /> Descargar
+          </button>
+          <button onClick={onClose} aria-label="Cerrar" className="rounded-lg p-1.5 text-sub hover:bg-line hover:text-ink">
+            <X size={18} aria-hidden />
+          </button>
+        </div>
+      </div>
+      <div className="flex-1 overflow-auto" onClick={(e) => e.stopPropagation()}>
+        {esImagen ? (
+          <div className="flex h-full items-center justify-center p-4">
+            <img src={url} alt={item.nombre} className="max-h-full max-w-full object-contain" />
+          </div>
+        ) : esPdf ? (
+          <iframe src={url} title={item.nombre} className="h-full w-full border-0 bg-white" />
+        ) : esOffice ? (
+          <iframe src={officeUrl} title={item.nombre} className="h-full w-full border-0 bg-white" />
+        ) : (
+          <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-sub">
+            <FileIcon size={40} aria-hidden />
+            <p>Este tipo de archivo no se puede previsualizar en pantalla.</p>
+            <button onClick={() => onDescargar(item)} className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">
+              <Download size={15} aria-hidden /> Descargar archivo
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
 
