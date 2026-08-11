@@ -20,6 +20,7 @@ import {
   Wrench,
   CreditCard,
   Eye,
+  ArrowRightLeft,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -169,15 +170,15 @@ export const APPS: AppDef[] = [
     color: '#0891b2',
   },
   {
-    id: 'repo-diaria',
+    id: 'transferencias',
     areaId: 'compras',
-    title: 'Repo Diaria',
-    description: 'Subí el Excel y se manda a cada local.',
-    icon: ClipboardList,
+    title: 'Reposiciones / Transferencias',
+    description: 'Subí el Excel; cada local marca lo que ya envió.',
+    icon: ArrowRightLeft,
     kind: 'internal',
-    target: '/repo-diaria',
+    target: '/transferencias',
     color: '#d97706',
-    permiso: 'repo_diaria.view',
+    permiso: 'transferencias.view',
   },
   {
     id: 'replicas',

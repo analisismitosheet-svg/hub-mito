@@ -12,7 +12,7 @@ import Area from '@/pages/Area'
 import CuentaAmigos from '@/pages/CuentaAmigos'
 import Documentos from '@/pages/Documentos'
 import Manuales from '@/pages/Manuales'
-import RepoDiaria from '@/pages/RepoDiaria'
+import Transferencias from '@/pages/Transferencias'
 import Configuraciones from '@/pages/Configuraciones'
 import ComingSoon from '@/pages/ComingSoon'
 
@@ -67,10 +67,10 @@ export default function App() {
             }
           />
           <Route
-            path="/repo-diaria"
+            path="/transferencias"
             element={
-              <PermissionRoute permiso="repo_diaria.view">
-                <RepoDiaria />
+              <PermissionRoute permiso="transferencias.view">
+                <Transferencias />
               </PermissionRoute>
             }
           />

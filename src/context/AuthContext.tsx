@@ -22,6 +22,7 @@ export interface Perfil {
   estado: EstadoUsuario
   es_admin: boolean
   motivo_rechazo: string | null
+  local: string | null
 }
 
 interface AuthState {
