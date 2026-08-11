@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -11,6 +11,9 @@ import {
   Loader2,
   Check,
   X,
+  Plus,
+  Trash2,
+  Store,
   AlertTriangle,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
@@ -34,6 +37,10 @@ interface Permiso {
   label: string
   orden: number
 }
+interface Local {
+  codigo: string
+  nombre: string | null
+}
 
 const ESTADO_STYLE: Record<string, string> = {
   aprobado: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
@@ -55,6 +62,7 @@ export default function Configuraciones() {
   const [usuarios, setUsuarios] = useState<UsuarioRow[]>([])
   const [permisos, setPermisos] = useState<Permiso[]>([])
   const [rolPermisos, setRolPermisos] = useState<Set<string>>(new Set())
+  const [locales, setLocales] = useState<Local[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [gestion, setGestion] = useState<UsuarioRow | null>(null)
@@ -66,10 +74,11 @@ export default function Configuraciones() {
     }
     setCargando(true)
     setError(null)
-    const [u, p, rp] = await Promise.all([
+    const [u, p, rp, lc] = await Promise.all([
       supabase.from('usuarios').select('id,email,nombre,rol,estado,created_at,motivo_rechazo,local').order('nombre', { ascending: true }),
       supabase.from('permisos').select('clave,modulo,accion,label,orden').order('orden'),
       supabase.from('rol_permisos').select('rol,permiso_clave'),
+      supabase.from('locales').select('codigo,nombre').order('codigo', { ascending: true }),
     ])
     if (u.error) setError(u.error.message)
     setUsuarios((u.data as UsuarioRow[]) ?? [])
@@ -77,6 +86,7 @@ export default function Configuraciones() {
     setRolPermisos(
       new Set(((rp.data as { rol: string; permiso_clave: string }[]) ?? []).map((r) => `${r.rol}|${r.permiso_clave}`)),
     )
+    setLocales((lc.data as Local[]) ?? [])
     setCargando(false)
   }, [])
 
@@ -170,6 +180,9 @@ export default function Configuraciones() {
         </section>
       )}
 
+      {/* Catálogo de locales */}
+      <SeccionLocales locales={locales} onReload={cargar} />
+
       {/* Listado de usuarios */}
       <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-soft">
         <div className="border-b border-line px-4 py-3 font-display font-semibold text-ink">
@@ -208,10 +221,20 @@ export default function Configuraciones() {
                       </select>
                     </td>
                     <td className="px-3 py-2.5">
-                      <LocalCell
-                        value={u.local}
-                        onSave={(local) => actualizar(u.id, { local: local || null })}
-                      />
+                      <select
+                        value={u.local ?? ''}
+                        onChange={(e) => actualizar(u.id, { local: e.target.value || null })}
+                        className="rounded-lg border border-line bg-surface2 px-2 py-1 text-xs text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
+                        aria-label={`Local/Área de ${u.nombre}`}
+                      >
+                        <option value="">—</option>
+                        {locales.map((l) => (
+                          <option key={l.codigo} value={l.codigo}>
+                            {l.codigo}
+                            {l.nombre ? ` · ${l.nombre}` : ''}
+                          </option>
+                        ))}
+                      </select>
                     </td>
                     <td className="px-3 py-2.5">
                       <span className={`inline-block whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium ${ESTADO_STYLE[u.estado] ?? ''}`}>
@@ -269,20 +292,95 @@ export default function Configuraciones() {
   )
 }
 
-function LocalCell({ value, onSave }: { value: string | null; onSave: (v: string) => void }) {
-  const [v, setV] = useState(value ?? '')
-  useEffect(() => setV(value ?? ''), [value])
+function SeccionLocales({ locales, onReload }: { locales: Local[]; onReload: () => Promise<void> }) {
+  const [codigo, setCodigo] = useState('')
+  const [nombre, setNombre] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function agregar(e: FormEvent) {
+    e.preventDefault()
+    if (!supabase) return
+    const cod = codigo.trim().toUpperCase()
+    if (!cod) return
+    setBusy(true)
+    setError(null)
+    const { error } = await supabase.from('locales').insert({ codigo: cod, nombre: nombre.trim() || null })
+    setBusy(false)
+    if (error) {
+      setError(error.message)
+      return
+    }
+    setCodigo('')
+    setNombre('')
+    await onReload()
+  }
+
+  async function borrar(cod: string) {
+    if (!supabase) return
+    if (!window.confirm(`¿Borrar el local ${cod}? Los usuarios que lo tengan quedarán sin local asignado.`)) return
+    const { error } = await supabase.from('locales').delete().eq('codigo', cod)
+    if (error) {
+      setError(error.message)
+      return
+    }
+    await onReload()
+  }
+
   return (
-    <input
-      value={v}
-      onChange={(e) => setV(e.target.value.toUpperCase())}
-      onBlur={() => {
-        if ((value ?? '') !== v.trim()) onSave(v.trim())
-      }}
-      placeholder="—"
-      className="w-24 rounded-lg border border-line bg-surface2 px-2 py-1 text-xs uppercase text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
-      aria-label="Local o área del usuario"
-    />
+    <div className="mb-6 overflow-hidden rounded-2xl border border-line bg-surface shadow-soft">
+      <div className="flex items-center gap-2 border-b border-line px-4 py-3 font-display font-semibold text-ink">
+        <Store size={18} aria-hidden /> Locales ({locales.length})
+      </div>
+      <form onSubmit={agregar} className="flex flex-wrap items-end gap-2 border-b border-line px-4 py-3">
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-sub">Código (como en el Excel)</span>
+          <input
+            value={codigo}
+            onChange={(e) => setCodigo(e.target.value.toUpperCase())}
+            placeholder="VCPD"
+            className="w-28 rounded-lg border border-line bg-surface2 px-2 py-1.5 text-sm uppercase text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
+            required
+          />
+        </label>
+        <label className="block flex-1">
+          <span className="mb-1 block text-xs font-medium text-sub">Nombre (opcional)</span>
+          <input
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+            placeholder="Ej: Sucursal Centro"
+            className="w-full rounded-lg border border-line bg-surface2 px-2 py-1.5 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
+          />
+        </label>
+        <button
+          type="submit"
+          disabled={busy}
+          className="btn-press inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+        >
+          <Plus size={15} aria-hidden /> Agregar
+        </button>
+      </form>
+      {error && <p className="px-4 py-2 text-sm text-brand-400">{error}</p>}
+      {locales.length === 0 ? (
+        <p className="px-4 py-4 text-sm text-sub">Todavía no hay locales. Agregá el primero arriba.</p>
+      ) : (
+        <div className="flex flex-wrap gap-2 p-4">
+          {locales.map((l) => (
+            <span key={l.codigo} className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface2 py-1 pl-3 pr-1.5 text-sm text-ink">
+              <span className="font-medium">{l.codigo}</span>
+              {l.nombre && <span className="text-xs text-sub">· {l.nombre}</span>}
+              <button
+                onClick={() => borrar(l.codigo)}
+                aria-label={`Borrar ${l.codigo}`}
+                className="rounded-full p-0.5 text-sub hover:bg-brand-600/20 hover:text-brand-400"
+              >
+                <Trash2 size={13} aria-hidden />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
