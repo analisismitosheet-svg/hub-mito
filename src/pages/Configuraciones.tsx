@@ -14,6 +14,8 @@ import {
   Plus,
   Trash2,
   Store,
+  KeyRound,
+  Copy,
   AlertTriangle,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
@@ -66,6 +68,7 @@ export default function Configuraciones() {
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [gestion, setGestion] = useState<UsuarioRow | null>(null)
+  const [pwUser, setPwUser] = useState<UsuarioRow | null>(null)
 
   const cargar = useCallback(async () => {
     if (!supabase) {
@@ -272,6 +275,14 @@ export default function Configuraciones() {
                           </button>
                         )}
                         <button
+                          onClick={() => setPwUser(u)}
+                          className="btn-press rounded-lg border border-line bg-surface2 p-1.5 text-ink hover:bg-line"
+                          title="Cambiar contraseña"
+                          aria-label={`Cambiar contraseña de ${u.nombre}`}
+                        >
+                          <KeyRound size={15} aria-hidden />
+                        </button>
+                        <button
                           onClick={() => setGestion(u)}
                           disabled={u.rol === 'administrador'}
                           className="btn-press rounded-lg border border-line bg-surface2 p-1.5 text-ink hover:bg-line disabled:opacity-40"
@@ -298,7 +309,117 @@ export default function Configuraciones() {
           onClose={() => setGestion(null)}
         />
       )}
+
+      {pwUser && <PasswordModal usuario={pwUser} onClose={() => setPwUser(null)} />}
     </Layout>
+  )
+}
+
+function PasswordModal({ usuario, onClose }: { usuario: UsuarioRow; onClose: () => void }) {
+  const [pw, setPw] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [ok, setOk] = useState(false)
+
+  function generar() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
+    let s = ''
+    for (let i = 0; i < 10; i++) s += chars[Math.floor(Math.random() * chars.length)]
+    setPw(s)
+  }
+
+  async function guardar() {
+    if (!supabase) return
+    if (pw.length < 6) {
+      setError('La contraseña debe tener al menos 6 caracteres.')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    const { data, error } = await supabase.functions.invoke('admin-set-password', {
+      body: { userId: usuario.id, password: pw },
+    })
+    setBusy(false)
+    const res = (data as { ok?: boolean; error?: string } | null) ?? null
+    if (error || !res?.ok) {
+      setError(error?.message ?? res?.error ?? 'No se pudo cambiar la contraseña.')
+      return
+    }
+    setOk(true)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4" onClick={() => !busy && onClose()}>
+      <div className="w-full max-w-md rounded-t-2xl border border-line bg-surface shadow-soft-lg sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-line px-4 py-3">
+          <div className="min-w-0">
+            <h2 className="font-display font-semibold text-ink">Cambiar contraseña</h2>
+            <p className="truncate text-xs text-sub">{usuario.nombre} · {usuario.email}</p>
+          </div>
+          <button onClick={onClose} aria-label="Cerrar" className="rounded-lg p-1.5 text-sub hover:bg-line hover:text-ink">
+            <X size={18} aria-hidden />
+          </button>
+        </div>
+
+        {ok ? (
+          <div className="space-y-3 p-4">
+            <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-400">
+              <Check size={16} aria-hidden /> Contraseña actualizada.
+            </div>
+            <p className="text-sm text-sub">Pasale esta contraseña al usuario:</p>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 rounded-lg border border-line bg-surface2 px-3 py-2 text-sm text-ink">{pw}</code>
+              <button
+                onClick={() => navigator.clipboard?.writeText(pw)}
+                className="btn-press rounded-lg border border-line bg-surface2 p-2 text-sub hover:text-ink"
+                title="Copiar"
+              >
+                <Copy size={15} aria-hidden />
+              </button>
+            </div>
+            <button onClick={onClose} className="btn-press w-full rounded-xl bg-brand-600 py-2.5 text-sm font-medium text-white hover:bg-brand-700">
+              Listo
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-3 p-4">
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-ink">Nueva contraseña</span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={pw}
+                    onChange={(e) => setPw(e.target.value)}
+                    placeholder="Mínimo 6 caracteres"
+                    autoComplete="off"
+                    className="w-full rounded-xl border border-line bg-surface2 px-3 py-2 text-ink outline-none focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40"
+                  />
+                  <button onClick={generar} className="btn-press shrink-0 rounded-lg border border-line bg-surface2 px-3 py-2 text-xs font-medium text-ink hover:bg-line">
+                    Generar
+                  </button>
+                </div>
+              </label>
+              {error && <p className="text-sm text-brand-400">{error}</p>}
+              <p className="text-xs text-sub">La contraseña se cambia al instante. El usuario podrá entrar con la nueva.</p>
+            </div>
+            <div className="flex gap-2 border-t border-line px-4 py-3">
+              <button
+                onClick={guardar}
+                disabled={busy || pw.length < 6}
+                className="btn-press inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand-600 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+              >
+                {busy ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <KeyRound size={16} aria-hidden />}
+                {busy ? 'Cambiando…' : 'Cambiar contraseña'}
+              </button>
+              <button onClick={onClose} disabled={busy} className="btn-press rounded-xl border border-line bg-surface2 px-4 py-2.5 text-sm font-medium text-ink hover:bg-line disabled:opacity-50">
+                Cancelar
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   )
 }
 

@@ -172,6 +172,7 @@ export const APPS: AppDef[] = [
   {
     id: 'transferencias',
     areaId: 'compras',
+    areaIds: ['compras', 'locales'],
     title: 'Reposiciones / Transferencias',
     description: 'Subí el Excel; cada local marca lo que ya envió.',
     icon: ArrowRightLeft,
