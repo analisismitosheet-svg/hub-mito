@@ -8,6 +8,7 @@ import {
   Check,
   Plus,
   X,
+  Bookmark,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -21,7 +22,7 @@ interface Lote {
   fecha: string
   created_at: string
 }
-type EstadoItem = 'pendiente' | 'hecho' | 'faltante'
+type EstadoItem = 'pendiente' | 'hecho' | 'senado' | 'faltante'
 interface Item {
   id: string
   lote_id: string
@@ -437,11 +438,12 @@ export default function Transferencias() {
                                             // Acciona: tu local (una vez, si está pendiente) o el admin (siempre)
                                             const puedeAccionar = isAdmin || (esMio && it.estado === 'pendiente')
                                             const esHecho = it.estado === 'hecho'
+                                            const esSenado = it.estado === 'senado'
                                             const esFaltante = it.estado === 'faltante'
                                             return (
                                               <li key={it.id} className="flex items-center gap-3 px-3 py-2 pl-8">
                                                 <span className="min-w-0 flex-1">
-                                                  <span className={`block text-sm ${esHecho ? 'text-sub line-through' : esFaltante ? 'text-sub' : 'text-ink'}`}>
+                                                  <span className={`block text-sm ${esHecho ? 'text-sub line-through' : esSenado || esFaltante ? 'text-sub' : 'text-ink'}`}>
                                                     {it.articulo}
                                                     {it.color ? ` · ${it.color}` : ''}
                                                     {it.talle ? ` · T${it.talle}` : ''}
@@ -461,6 +463,15 @@ export default function Transferencias() {
                                                     className={`rounded-lg p-1.5 transition-colors disabled:opacity-40 ${esHecho ? 'bg-emerald-500/20 text-emerald-400' : 'text-sub hover:bg-line hover:text-ink'}`}
                                                   >
                                                     <Check size={15} aria-hidden />
+                                                  </button>
+                                                  <button
+                                                    onClick={() => marcar(it, esSenado ? 'pendiente' : 'senado')}
+                                                    disabled={!puedeAccionar}
+                                                    title="Señado / separado (no se puede mandar)"
+                                                    aria-label="Marcar señado"
+                                                    className={`rounded-lg p-1.5 transition-colors disabled:opacity-40 ${esSenado ? 'bg-amber-500/20 text-amber-400' : 'text-sub hover:bg-line hover:text-ink'}`}
+                                                  >
+                                                    <Bookmark size={15} aria-hidden />
                                                   </button>
                                                   <button
                                                     onClick={() => marcar(it, esFaltante ? 'pendiente' : 'faltante')}
