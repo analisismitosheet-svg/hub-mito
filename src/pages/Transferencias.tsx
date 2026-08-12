@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
 import {
-  ArrowLeft,
   Upload,
   Loader2,
   ChevronRight,
@@ -13,9 +11,9 @@ import {
   Lock,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
+import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
-import { getArea } from '@/config/areas'
 
 interface Lote {
   id: string
@@ -74,11 +72,6 @@ function Barra({ hechos, total }: { hechos: number; total: number }) {
 
 export default function Transferencias() {
   const { can, perfil, isAdmin } = useAuth()
-  const navigate = useNavigate()
-  const location = useLocation()
-  const fromArea = (location.state as { fromArea?: string } | null)?.fromArea
-  const backLabel = (fromArea ? getArea(fromArea)?.name : 'Volver') ?? 'Volver'
-  const volver = () => (fromArea ? navigate(`/area/${fromArea}`) : navigate(-1))
   const puedeImportar = can('transferencias.import')
   const miLocal = (perfil?.local ?? '').toUpperCase()
 
@@ -89,6 +82,7 @@ export default function Transferencias() {
   const [subiendo, setSubiendo] = useState(false)
   const [loteAbierto, setLoteAbierto] = useState<string | null>(null)
   const [origenAbierto, setOrigenAbierto] = useState<string | null>(null)
+  const [destinoAbierto, setDestinoAbierto] = useState<string | null>(null)
   const [modal, setModal] = useState(false)
   const [archivo, setArchivo] = useState<File | null>(null)
   const [nombreNuevo, setNombreNuevo] = useState('')
@@ -138,6 +132,22 @@ export default function Transferencias() {
     if (error) {
       setItems((arr) => arr.map((x) => (x.id === item.id ? { ...x, hecho: !hecho, hecho_at: hecho ? null : ahora } : x)))
       setError(error.message)
+    }
+  }
+
+  // Marca/desmarca varios ítems de una (ej. todo un destino)
+  async function marcarVarios(its: Item[], hecho: boolean) {
+    if (!supabase || !its.length) return
+    const ids = its.map((i) => i.id)
+    const ahora = new Date().toISOString()
+    setItems((arr) => arr.map((x) => (ids.includes(x.id) ? { ...x, hecho, hecho_at: hecho ? ahora : null } : x)))
+    const { error } = await supabase
+      .from('transfer_items')
+      .update({ hecho, hecho_at: hecho ? ahora : null, hecho_por: hecho ? perfil?.id ?? null : null })
+      .in('id', ids)
+    if (error) {
+      setError(error.message)
+      await cargar()
     }
   }
 
@@ -250,9 +260,7 @@ export default function Transferencias() {
 
   return (
     <Layout>
-      <button onClick={volver} className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-sub transition duration-250 hover:text-ink">
-        <ArrowLeft size={15} aria-hidden /> {backLabel}
-      </button>
+      <BackButton />
 
       <div className="mb-5 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -359,45 +367,99 @@ export default function Transferencias() {
                             <Barra hechos={h} total={de.length} />
                           </button>
                           {oAbierto && (
-                            <ul className="divide-y divide-line/70">
-                              {de.map((it) => {
-                                // Marcar: solo tu local (una vez). Desmarcar/editar: solo admin.
-                                const puedeTildar = it.hecho ? isAdmin : isAdmin || esMio
-                                return (
-                                <li key={it.id} className="flex items-center gap-3 px-3 py-2">
-                                  <label className={`flex flex-1 items-center gap-3 ${puedeTildar ? 'cursor-pointer' : ''}`}>
-                                    <input
-                                      type="checkbox"
-                                      checked={it.hecho}
-                                      disabled={!puedeTildar}
-                                      onChange={(e) => marcar(it, e.target.checked)}
-                                      className="h-4 w-4 shrink-0 accent-emerald-600 disabled:opacity-50"
-                                    />
-                                    <span className="min-w-0 flex-1">
-                                      <span className={`block text-sm ${it.hecho ? 'text-sub line-through' : 'text-ink'}`}>
-                                        {it.articulo}
-                                        {it.color ? ` · ${it.color}` : ''}
-                                        {it.talle ? ` · T${it.talle}` : ''}
-                                        {it.cantidad > 1 ? ` · x${it.cantidad}` : ''}
-                                      </span>
-                                      {it.descripcion && <span className="block truncate text-xs text-sub">{it.descripcion}</span>}
-                                    </span>
-                                  </label>
-                                  <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-sub">
-                                    <ArrowRightLeft size={12} aria-hidden /> {it.destino}
-                                  </span>
-                                  {it.hecho &&
-                                    (isAdmin ? (
-                                      <Check size={15} className="shrink-0 text-emerald-400" aria-hidden />
-                                    ) : (
-                                      <span title="Bloqueado — solo el administrador puede editar" className="shrink-0">
-                                        <Lock size={13} className="text-sub" aria-hidden />
-                                      </span>
-                                    ))}
-                                </li>
-                                )
-                              })}
-                            </ul>
+                            <div className="divide-y divide-line/70">
+                              {Array.from(
+                                de.reduce((m, i) => {
+                                  const a = m.get(i.destino) ?? []
+                                  a.push(i)
+                                  m.set(i.destino, a)
+                                  return m
+                                }, new Map<string, Item[]>()),
+                              )
+                                .sort((a, b) => a[0].localeCompare(b[0], 'es', { sensitivity: 'base' }))
+                                .map(([destino, dItems]) => {
+                                  const dHechos = dItems.filter((i) => i.hecho).length
+                                  const dAll = dItems.length > 0 && dHechos === dItems.length
+                                  const dSome = dHechos > 0 && !dAll
+                                  const dKey = `${key}|${destino}`
+                                  const dAbierto = destinoAbierto === dKey
+                                  const puedeGrupo = isAdmin || esMio
+                                  return (
+                                    <div key={destino}>
+                                      <div className="flex items-center gap-2 bg-surface px-3 py-2">
+                                        <button
+                                          onClick={() => setDestinoAbierto(dAbierto ? null : dKey)}
+                                          className="flex flex-1 items-center gap-2 text-left"
+                                        >
+                                          <ChevronRight size={14} aria-hidden className={`shrink-0 text-sub transition-transform ${dAbierto ? 'rotate-90' : ''}`} />
+                                          <span className="flex items-center gap-1 text-sm font-medium text-ink">
+                                            <ArrowRightLeft size={12} aria-hidden /> {destino}
+                                          </span>
+                                          <span className="text-xs tabular-nums text-sub">{dHechos}/{dItems.length}</span>
+                                        </button>
+                                        {puedeGrupo && (
+                                          <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-medium text-sub" title="Marcar todo este destino">
+                                            <input
+                                              type="checkbox"
+                                              ref={(cb) => {
+                                                if (cb) cb.indeterminate = dSome
+                                              }}
+                                              checked={dAll}
+                                              disabled={!isAdmin && dAll}
+                                              onChange={(e) =>
+                                                marcarVarios(
+                                                  e.target.checked ? dItems.filter((i) => !i.hecho) : dItems.filter((i) => i.hecho),
+                                                  e.target.checked,
+                                                )
+                                              }
+                                              className="h-4 w-4 accent-emerald-600 disabled:opacity-50"
+                                            />
+                                            todo
+                                          </label>
+                                        )}
+                                      </div>
+                                      {dAbierto && (
+                                        <ul className="divide-y divide-line/70 bg-surface/40">
+                                          {dItems.map((it) => {
+                                            // Marcar: solo tu local (una vez). Desmarcar/editar: solo admin.
+                                            const puedeTildar = it.hecho ? isAdmin : isAdmin || esMio
+                                            return (
+                                              <li key={it.id} className="flex items-center gap-3 px-3 py-2 pl-8">
+                                                <label className={`flex flex-1 items-center gap-3 ${puedeTildar ? 'cursor-pointer' : ''}`}>
+                                                  <input
+                                                    type="checkbox"
+                                                    checked={it.hecho}
+                                                    disabled={!puedeTildar}
+                                                    onChange={(e) => marcar(it, e.target.checked)}
+                                                    className="h-4 w-4 shrink-0 accent-emerald-600 disabled:opacity-50"
+                                                  />
+                                                  <span className="min-w-0 flex-1">
+                                                    <span className={`block text-sm ${it.hecho ? 'text-sub line-through' : 'text-ink'}`}>
+                                                      {it.articulo}
+                                                      {it.color ? ` · ${it.color}` : ''}
+                                                      {it.talle ? ` · T${it.talle}` : ''}
+                                                      {it.cantidad > 1 ? ` · x${it.cantidad}` : ''}
+                                                    </span>
+                                                    {it.descripcion && <span className="block truncate text-xs text-sub">{it.descripcion}</span>}
+                                                  </span>
+                                                </label>
+                                                {it.hecho &&
+                                                  (isAdmin ? (
+                                                    <Check size={15} className="shrink-0 text-emerald-400" aria-hidden />
+                                                  ) : (
+                                                    <span title="Bloqueado — solo el administrador puede editar" className="shrink-0">
+                                                      <Lock size={13} className="text-sub" aria-hidden />
+                                                    </span>
+                                                  ))}
+                                              </li>
+                                            )
+                                          })}
+                                        </ul>
+                                      )}
+                                    </div>
+                                  )
+                                })}
+                            </div>
                           )}
                         </div>
                       )

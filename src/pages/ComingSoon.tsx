@@ -1,6 +1,6 @@
-import { Link } from 'react-router-dom'
-import { ArrowLeft, Hammer } from 'lucide-react'
+import { Hammer } from 'lucide-react'
 import Layout from '@/components/Layout'
+import BackButton from '@/components/BackButton'
 
 export default function ComingSoon({ title }: { title: string }) {
   return (
@@ -14,12 +14,10 @@ export default function ComingSoon({ title }: { title: string }) {
           Este módulo todavía está en construcción. Cuando definamos sus datos, lo armamos
           acá dentro del hub.
         </p>
-        <Link
-          to="/"
+        <BackButton
+          label="Volver"
           className="btn-press mt-2 flex cursor-pointer items-center gap-1 rounded-xl border border-line bg-surface px-4 py-2 text-sm font-medium text-ink shadow-soft hover:border-line2 hover:bg-surface2"
-        >
-          <ArrowLeft size={15} aria-hidden /> Volver al menú
-        </Link>
+        />
       </div>
     </Layout>
   )

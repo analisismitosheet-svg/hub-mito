@@ -1,7 +1,8 @@
-import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, FolderOpen, ArrowRight } from 'lucide-react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { FolderOpen, ArrowRight } from 'lucide-react'
 import Layout from '@/components/Layout'
 import AppCard from '@/components/AppCard'
+import BackButton from '@/components/BackButton'
 import { appsDeArea, getArea } from '@/config/areas'
 import { useAuth } from '@/context/AuthContext'
 
@@ -20,9 +21,7 @@ export default function Area() {
     return (
       <Layout>
         <p className="text-sub">Área no encontrada.</p>
-        <Link to="/" className="mt-4 inline-flex items-center gap-1 font-medium text-brand-500">
-          <ArrowLeft size={15} aria-hidden /> Volver
-        </Link>
+        <BackButton className="mt-4 inline-flex items-center gap-1 font-medium text-brand-500" />
       </Layout>
     )
   }
@@ -32,12 +31,8 @@ export default function Area() {
 
   return (
     <Layout>
-      <Link
-        to="/"
-        className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-sub transition duration-250 hover:text-ink"
-      >
-        <ArrowLeft size={15} aria-hidden /> Áreas
-      </Link>
+      <BackButton />
+
 
       <div className="mb-6 flex items-center gap-3">
         <div

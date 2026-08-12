@@ -1,6 +1,6 @@
-import { Link } from 'react-router-dom'
-import { ShieldX, ArrowLeft } from 'lucide-react'
+import { ShieldX } from 'lucide-react'
 import Layout from '@/components/Layout'
+import BackButton from '@/components/BackButton'
 
 /** 403 — el usuario está aprobado pero no tiene permiso para esta sección. */
 export default function Denegado() {
@@ -15,12 +15,10 @@ export default function Denegado() {
           No tenés permiso para ver esta sección. Si creés que deberías tenerlo, pedile al
           administrador que te lo asigne.
         </p>
-        <Link
-          to="/"
+        <BackButton
+          label="Volver"
           className="btn-press mt-2 flex items-center gap-1 rounded-xl border border-line bg-surface2 px-4 py-2 text-sm font-medium text-ink hover:bg-line"
-        >
-          <ArrowLeft size={15} aria-hidden /> Volver al menú
-        </Link>
+        />
       </div>
     </Layout>
   )

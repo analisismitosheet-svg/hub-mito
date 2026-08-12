@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
 import {
-  ArrowLeft,
   Upload,
   Download,
   Eye,
@@ -18,6 +16,7 @@ import {
   Check,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
+import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 
@@ -186,12 +185,7 @@ export default function FileLibrary(props: FileLibraryProps) {
 
   return (
     <Layout>
-      <Link
-        to={props.backTo}
-        className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-sub transition duration-250 hover:text-ink"
-      >
-        <ArrowLeft size={15} aria-hidden /> {props.backLabel}
-      </Link>
+      <BackButton label={props.backLabel} />
 
       <div className="mb-5 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">

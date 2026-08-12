@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
   Search,
@@ -16,9 +15,9 @@ import {
   X,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
+import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
-import { getArea } from '@/config/areas'
 
 interface Cliente {
   id: number
@@ -82,11 +81,6 @@ function FotoDni({ url }: { url: string | null }) {
 
 export default function CuentaAmigos() {
   const { can } = useAuth()
-  const navigate = useNavigate()
-  const location = useLocation()
-  const fromArea = (location.state as { fromArea?: string } | null)?.fromArea
-  const backLabel = (fromArea ? getArea(fromArea)?.name : 'Volver') ?? 'Volver'
-  const volver = () => (fromArea ? navigate(`/area/${fromArea}`) : navigate(-1))
   const puedeCrear = can('cuentas_amigos.create')
   const puedeEditar = can('cuentas_amigos.edit')
   const [todos, setTodos] = useState<Cliente[]>([])
@@ -203,12 +197,7 @@ export default function CuentaAmigos() {
   // ---------- LISTA ----------
   return (
     <Layout>
-      <button
-        onClick={volver}
-        className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-sub transition duration-250 hover:text-ink"
-      >
-        <ArrowLeft size={15} aria-hidden /> {backLabel}
-      </button>
+      <BackButton />
 
       <div className="mb-5 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
