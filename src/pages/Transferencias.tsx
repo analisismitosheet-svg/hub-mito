@@ -8,7 +8,6 @@ import {
   Check,
   Plus,
   X,
-  Lock,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -22,6 +21,7 @@ interface Lote {
   fecha: string
   created_at: string
 }
+type EstadoItem = 'pendiente' | 'hecho' | 'faltante'
 interface Item {
   id: string
   lote_id: string
@@ -33,7 +33,7 @@ interface Item {
   color: string | null
   talle: string | null
   cantidad: number
-  hecho: boolean
+  estado: EstadoItem
   hecho_at: string | null
 }
 
@@ -42,6 +42,15 @@ function fmtFechaHora(iso: string) {
     return new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(iso))
   } catch {
     return iso
+  }
+}
+
+function fmtHora(iso: string | null) {
+  if (!iso) return ''
+  try {
+    return new Intl.DateTimeFormat('es-AR', { timeStyle: 'short' }).format(new Date(iso))
+  } catch {
+    return ''
   }
 }
 
@@ -101,7 +110,7 @@ export default function Transferencias() {
     if (lotesData.length) {
       const { data: it } = await supabase
         .from('transfer_items')
-        .select('id,lote_id,orden,origen,destino,articulo,descripcion,color,talle,cantidad,hecho,hecho_at')
+        .select('id,lote_id,orden,origen,destino,articulo,descripcion,color,talle,cantidad,estado,hecho_at')
         .in('lote_id', lotesData.map((l) => l.id))
         .order('orden', { ascending: true })
       setItems((it as Item[]) ?? [])
@@ -121,29 +130,31 @@ export default function Transferencias() {
     [miLocal],
   )
 
-  async function marcar(item: Item, hecho: boolean) {
+  async function marcar(item: Item, estado: EstadoItem) {
     if (!supabase) return
     const ahora = new Date().toISOString()
-    setItems((arr) => arr.map((x) => (x.id === item.id ? { ...x, hecho, hecho_at: hecho ? ahora : null } : x)))
+    const at = estado === 'pendiente' ? null : ahora
+    setItems((arr) => arr.map((x) => (x.id === item.id ? { ...x, estado, hecho_at: at } : x)))
     const { error } = await supabase
       .from('transfer_items')
-      .update({ hecho, hecho_at: hecho ? ahora : null, hecho_por: hecho ? perfil?.id ?? null : null })
+      .update({ estado, hecho: estado === 'hecho', hecho_at: at, hecho_por: estado === 'pendiente' ? null : perfil?.id ?? null })
       .eq('id', item.id)
     if (error) {
-      setItems((arr) => arr.map((x) => (x.id === item.id ? { ...x, hecho: !hecho, hecho_at: hecho ? null : ahora } : x)))
       setError(error.message)
+      await cargar()
     }
   }
 
-  // Marca/desmarca varios ítems de una (ej. todo un destino)
-  async function marcarVarios(its: Item[], hecho: boolean) {
+  // Marca varios ítems de una (ej. todo un destino)
+  async function marcarVarios(its: Item[], estado: EstadoItem) {
     if (!supabase || !its.length) return
     const ids = its.map((i) => i.id)
     const ahora = new Date().toISOString()
-    setItems((arr) => arr.map((x) => (ids.includes(x.id) ? { ...x, hecho, hecho_at: hecho ? ahora : null } : x)))
+    const at = estado === 'pendiente' ? null : ahora
+    setItems((arr) => arr.map((x) => (ids.includes(x.id) ? { ...x, estado, hecho_at: at } : x)))
     const { error } = await supabase
       .from('transfer_items')
-      .update({ hecho, hecho_at: hecho ? ahora : null, hecho_por: hecho ? perfil?.id ?? null : null })
+      .update({ estado, hecho: estado === 'hecho', hecho_at: at, hecho_por: estado === 'pendiente' ? null : perfil?.id ?? null })
       .in('id', ids)
     if (error) {
       setError(error.message)
@@ -169,7 +180,7 @@ export default function Transferencias() {
     try {
       const XLSX = await import('xlsx')
       const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' })
-      const nuevos: Omit<Item, 'id' | 'lote_id' | 'hecho' | 'hecho_at'>[] = []
+      const nuevos: Omit<Item, 'id' | 'lote_id' | 'estado' | 'hecho_at'>[] = []
       let orden = 0
       for (const hoja of wb.SheetNames) {
         // La hoja "venta"/"ventas" nunca se importa
@@ -300,7 +311,7 @@ export default function Transferencias() {
             const its = itemsPorLote.get(lote.id) ?? []
             // usuario de local: no mostrar archivos que no incluyen su local
             if (its.length === 0 && !isAdmin && !puedeImportar) return null
-            const hechos = its.filter((i) => i.hecho).length
+            const hechos = its.filter((i) => i.estado !== 'pendiente').length
             const abierto = loteAbierto === lote.id
             // orígenes en el orden en que aparecen en el archivo
             const origenes: string[] = []
@@ -343,7 +354,7 @@ export default function Transferencias() {
                   <div className="border-t border-line px-3 py-2">
                     {origenes.map((origen) => {
                       const de = its.filter((i) => i.origen === origen)
-                      const h = de.filter((i) => i.hecho).length
+                      const h = de.filter((i) => i.estado !== 'pendiente').length
                       const key = `${lote.id}|${origen}`
                       const oAbierto = origenAbierto === key
                       const esMio = esMiLocal(origen)
@@ -378,7 +389,7 @@ export default function Transferencias() {
                               )
                                 .sort((a, b) => a[0].localeCompare(b[0], 'es', { sensitivity: 'base' }))
                                 .map(([destino, dItems]) => {
-                                  const dHechos = dItems.filter((i) => i.hecho).length
+                                  const dHechos = dItems.filter((i) => i.estado !== 'pendiente').length
                                   const dAll = dItems.length > 0 && dHechos === dItems.length
                                   const dSome = dHechos > 0 && !dAll
                                   const dKey = `${key}|${destino}`
@@ -408,8 +419,10 @@ export default function Transferencias() {
                                               disabled={!isAdmin && dAll}
                                               onChange={(e) =>
                                                 marcarVarios(
-                                                  e.target.checked ? dItems.filter((i) => !i.hecho) : dItems.filter((i) => i.hecho),
-                                                  e.target.checked,
+                                                  e.target.checked
+                                                    ? dItems.filter((i) => i.estado === 'pendiente')
+                                                    : dItems.filter((i) => i.estado !== 'pendiente'),
+                                                  e.target.checked ? 'hecho' : 'pendiente',
                                                 )
                                               }
                                               className="h-4 w-4 accent-emerald-600 disabled:opacity-50"
@@ -421,36 +434,44 @@ export default function Transferencias() {
                                       {dAbierto && (
                                         <ul className="divide-y divide-line/70 bg-surface/40">
                                           {dItems.map((it) => {
-                                            // Marcar: solo tu local (una vez). Desmarcar/editar: solo admin.
-                                            const puedeTildar = it.hecho ? isAdmin : isAdmin || esMio
+                                            // Acciona: tu local (una vez, si está pendiente) o el admin (siempre)
+                                            const puedeAccionar = isAdmin || (esMio && it.estado === 'pendiente')
+                                            const esHecho = it.estado === 'hecho'
+                                            const esFaltante = it.estado === 'faltante'
                                             return (
                                               <li key={it.id} className="flex items-center gap-3 px-3 py-2 pl-8">
-                                                <label className={`flex flex-1 items-center gap-3 ${puedeTildar ? 'cursor-pointer' : ''}`}>
-                                                  <input
-                                                    type="checkbox"
-                                                    checked={it.hecho}
-                                                    disabled={!puedeTildar}
-                                                    onChange={(e) => marcar(it, e.target.checked)}
-                                                    className="h-4 w-4 shrink-0 accent-emerald-600 disabled:opacity-50"
-                                                  />
-                                                  <span className="min-w-0 flex-1">
-                                                    <span className={`block text-sm ${it.hecho ? 'text-sub line-through' : 'text-ink'}`}>
-                                                      {it.articulo}
-                                                      {it.color ? ` · ${it.color}` : ''}
-                                                      {it.talle ? ` · T${it.talle}` : ''}
-                                                      {it.cantidad > 1 ? ` · x${it.cantidad}` : ''}
-                                                    </span>
-                                                    {it.descripcion && <span className="block truncate text-xs text-sub">{it.descripcion}</span>}
+                                                <span className="min-w-0 flex-1">
+                                                  <span className={`block text-sm ${esHecho ? 'text-sub line-through' : esFaltante ? 'text-sub' : 'text-ink'}`}>
+                                                    {it.articulo}
+                                                    {it.color ? ` · ${it.color}` : ''}
+                                                    {it.talle ? ` · T${it.talle}` : ''}
+                                                    {it.cantidad > 1 ? ` · x${it.cantidad}` : ''}
                                                   </span>
-                                                </label>
-                                                {it.hecho &&
-                                                  (isAdmin ? (
-                                                    <Check size={15} className="shrink-0 text-emerald-400" aria-hidden />
-                                                  ) : (
-                                                    <span title="Bloqueado — solo el administrador puede editar" className="shrink-0">
-                                                      <Lock size={13} className="text-sub" aria-hidden />
-                                                    </span>
-                                                  ))}
+                                                  {it.descripcion && <span className="block truncate text-xs text-sub">{it.descripcion}</span>}
+                                                </span>
+                                                {it.hecho_at && it.estado !== 'pendiente' && (
+                                                  <span className="hidden shrink-0 text-[11px] tabular-nums text-sub sm:inline">{fmtHora(it.hecho_at)}</span>
+                                                )}
+                                                <div className="flex shrink-0 items-center gap-1">
+                                                  <button
+                                                    onClick={() => marcar(it, esHecho ? 'pendiente' : 'hecho')}
+                                                    disabled={!puedeAccionar}
+                                                    title="Hecho / enviado"
+                                                    aria-label="Marcar hecho"
+                                                    className={`rounded-lg p-1.5 transition-colors disabled:opacity-40 ${esHecho ? 'bg-emerald-500/20 text-emerald-400' : 'text-sub hover:bg-line hover:text-ink'}`}
+                                                  >
+                                                    <Check size={15} aria-hidden />
+                                                  </button>
+                                                  <button
+                                                    onClick={() => marcar(it, esFaltante ? 'pendiente' : 'faltante')}
+                                                    disabled={!puedeAccionar}
+                                                    title="Faltante / no enviado"
+                                                    aria-label="Marcar faltante"
+                                                    className={`rounded-lg p-1.5 transition-colors disabled:opacity-40 ${esFaltante ? 'bg-brand-600/20 text-brand-400' : 'text-sub hover:bg-line hover:text-ink'}`}
+                                                  >
+                                                    <X size={15} aria-hidden />
+                                                  </button>
+                                                </div>
                                               </li>
                                             )
                                           })}
