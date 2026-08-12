@@ -8,6 +8,9 @@ import {
   ArrowRightLeft,
   Trash2,
   Check,
+  Plus,
+  X,
+  Lock,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import { supabase } from '@/lib/supabase'
@@ -16,6 +19,7 @@ import { useAuth } from '@/context/AuthContext'
 interface Lote {
   id: string
   nombre: string
+  motivo: string | null
   fecha: string
   created_at: string
 }
@@ -79,6 +83,10 @@ export default function Transferencias() {
   const [subiendo, setSubiendo] = useState(false)
   const [loteAbierto, setLoteAbierto] = useState<string | null>(null)
   const [origenAbierto, setOrigenAbierto] = useState<string | null>(null)
+  const [modal, setModal] = useState(false)
+  const [archivo, setArchivo] = useState<File | null>(null)
+  const [nombreNuevo, setNombreNuevo] = useState('')
+  const [motivoNuevo, setMotivoNuevo] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
   const cargar = useCallback(async () => {
@@ -87,7 +95,7 @@ export default function Transferencias() {
       return
     }
     setCargando(true)
-    const { data: ld } = await supabase.from('transfer_lotes').select('id,nombre,fecha,created_at').order('created_at', { ascending: false }).limit(60)
+    const { data: ld } = await supabase.from('transfer_lotes').select('id,nombre,motivo,fecha,created_at').order('created_at', { ascending: false }).limit(60)
     const lotesData = (ld as Lote[]) ?? []
     setLotes(lotesData)
     if (lotesData.length) {
@@ -107,9 +115,10 @@ export default function Transferencias() {
     void cargar()
   }, [cargar])
 
-  const puedeMarcar = useCallback(
-    (origen: string) => isAdmin || puedeImportar || (!!miLocal && origen.toUpperCase() === miLocal),
-    [isAdmin, puedeImportar, miLocal],
+  // ¿Este origen es el local del usuario? (para tildar sus propios artículos)
+  const esMiLocal = useCallback(
+    (origen: string) => !!miLocal && origen.toUpperCase() === miLocal,
+    [miLocal],
   )
 
   async function marcar(item: Item, hecho: boolean) {
@@ -126,9 +135,19 @@ export default function Transferencias() {
     }
   }
 
-  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0]
+  function onSelectFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0] ?? null
+    setArchivo(f)
+    if (f && !nombreNuevo) setNombreNuevo(f.name.replace(/\.(xlsx|xls)$/i, ''))
+  }
+
+  async function procesar() {
+    const f = archivo
     if (!f || !supabase) return
+    if (!nombreNuevo.trim()) {
+      setError('Poné un nombre para el archivo.')
+      return
+    }
     setSubiendo(true)
     setError(null)
     try {
@@ -137,6 +156,8 @@ export default function Transferencias() {
       const nuevos: Omit<Item, 'id' | 'lote_id' | 'hecho' | 'hecho_at'>[] = []
       let orden = 0
       for (const hoja of wb.SheetNames) {
+        // La hoja "venta"/"ventas" nunca se importa
+        if (['venta', 'ventas'].includes(hoja.trim().toLowerCase())) continue
         const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[hoja], { header: 1, blankrows: false, defval: '' })
         const hidx = rows.findIndex((r) => r.some((c) => String(c).trim().toUpperCase() === 'ARTICULO'))
         if (hidx < 0) continue
@@ -179,20 +200,25 @@ export default function Transferencias() {
       } else {
         const { data: lote, error: e1 } = await supabase
           .from('transfer_lotes')
-          .insert({ nombre: f.name, subido_por: perfil?.id ?? null })
+          .insert({ nombre: nombreNuevo.trim(), motivo: motivoNuevo.trim() || null, subido_por: perfil?.id ?? null })
           .select('id')
           .single()
         if (e1 || !lote) throw new Error(e1?.message ?? 'No se pudo crear el lote')
         const loteId = (lote as { id: string }).id
         const { error: e2 } = await supabase.from('transfer_items').insert(nuevos.map((n) => ({ ...n, lote_id: loteId })))
         if (e2) throw new Error(e2.message)
+        // limpiar y cerrar
+        setModal(false)
+        setArchivo(null)
+        setNombreNuevo('')
+        setMotivoNuevo('')
+        if (fileRef.current) fileRef.current.value = ''
         await cargar()
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo leer el Excel.')
     }
     setSubiendo(false)
-    if (fileRef.current) fileRef.current.value = ''
   }
 
   async function borrarLote(id: string) {
@@ -233,13 +259,9 @@ export default function Transferencias() {
           </div>
         </div>
         {puedeImportar && (
-          <>
-            <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={onFile} className="hidden" />
-            <button onClick={() => fileRef.current?.click()} disabled={subiendo} className="btn-press inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-brand-600 px-3.5 py-2.5 text-sm font-medium text-white shadow-soft hover:bg-brand-700 disabled:opacity-50">
-              {subiendo ? <Loader2 size={17} className="animate-spin" aria-hidden /> : <Upload size={17} aria-hidden />}
-              <span className="hidden sm:inline">{subiendo ? 'Procesando…' : 'Subir Excel'}</span>
-            </button>
-          </>
+          <button onClick={() => setModal(true)} className="btn-press inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-brand-600 px-3.5 py-2.5 text-sm font-medium text-white shadow-soft hover:bg-brand-700">
+            <Plus size={17} aria-hidden /> <span className="hidden sm:inline">Nuevo archivo</span>
+          </button>
         )}
       </div>
 
@@ -279,7 +301,10 @@ export default function Transferencias() {
                   <ChevronRight size={16} aria-hidden className={`shrink-0 text-sub transition-transform ${abierto ? 'rotate-90' : ''}`} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium text-ink">{lote.nombre}</p>
-                    <p className="text-xs text-sub">Cargado {fmtFechaHora(lote.created_at)} · {origenes.length} locales</p>
+                    <p className="truncate text-xs text-sub">
+                      Cargado {fmtFechaHora(lote.created_at)} · {origenes.length} locales
+                      {lote.motivo ? ` · ${lote.motivo}` : ''}
+                    </p>
                   </div>
                   <Barra hechos={hechos} total={its.length} />
                   {puedeImportar && (
@@ -305,7 +330,7 @@ export default function Transferencias() {
                       const h = de.filter((i) => i.hecho).length
                       const key = `${lote.id}|${origen}`
                       const oAbierto = origenAbierto === key
-                      const marcable = puedeMarcar(origen)
+                      const esMio = esMiLocal(origen)
                       const completo = de.length > 0 && h === de.length
                       const finIso = completo ? de.reduce((mx, i) => (i.hecho_at && i.hecho_at > mx ? i.hecho_at : mx), '') : ''
                       const dur = completo && finIso ? fmtDuracion(lote.created_at, finIso) : ''
@@ -317,7 +342,7 @@ export default function Transferencias() {
                           >
                             <ChevronRight size={15} aria-hidden className={`shrink-0 text-sub transition-transform ${oAbierto ? 'rotate-90' : ''}`} />
                             <span className="flex-1 font-display font-semibold text-ink">{origen}</span>
-                            {marcable && <span className="rounded-full bg-brand-600/15 px-2 py-0.5 text-[11px] font-medium text-brand-400">tu local</span>}
+                            {esMio && <span className="rounded-full bg-brand-600/15 px-2 py-0.5 text-[11px] font-medium text-brand-400">tu local</span>}
                             {completo && dur && (
                               <span className="hidden items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-400 sm:inline-flex">
                                 <Check size={11} aria-hidden /> {dur}
@@ -327,13 +352,16 @@ export default function Transferencias() {
                           </button>
                           {oAbierto && (
                             <ul className="divide-y divide-line/70">
-                              {de.map((it) => (
+                              {de.map((it) => {
+                                // Marcar: solo tu local (una vez). Desmarcar/editar: solo admin.
+                                const puedeTildar = it.hecho ? isAdmin : isAdmin || esMio
+                                return (
                                 <li key={it.id} className="flex items-center gap-3 px-3 py-2">
-                                  <label className={`flex flex-1 items-center gap-3 ${marcable ? 'cursor-pointer' : ''}`}>
+                                  <label className={`flex flex-1 items-center gap-3 ${puedeTildar ? 'cursor-pointer' : ''}`}>
                                     <input
                                       type="checkbox"
                                       checked={it.hecho}
-                                      disabled={!marcable}
+                                      disabled={!puedeTildar}
                                       onChange={(e) => marcar(it, e.target.checked)}
                                       className="h-4 w-4 shrink-0 accent-emerald-600 disabled:opacity-50"
                                     />
@@ -350,9 +378,17 @@ export default function Transferencias() {
                                   <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-sub">
                                     <ArrowRightLeft size={12} aria-hidden /> {it.destino}
                                   </span>
-                                  {it.hecho && <Check size={15} className="shrink-0 text-emerald-400" aria-hidden />}
+                                  {it.hecho &&
+                                    (isAdmin ? (
+                                      <Check size={15} className="shrink-0 text-emerald-400" aria-hidden />
+                                    ) : (
+                                      <span title="Bloqueado — solo el administrador puede editar" className="shrink-0">
+                                        <Lock size={13} className="text-sub" aria-hidden />
+                                      </span>
+                                    ))}
                                 </li>
-                              ))}
+                                )
+                              })}
                             </ul>
                           )}
                         </div>
@@ -363,6 +399,63 @@ export default function Transferencias() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {modal && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4" onClick={() => !subiendo && setModal(false)}>
+          <div className="w-full max-w-md rounded-t-2xl border border-line bg-surface shadow-soft-lg sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-line px-4 py-3">
+              <h2 className="font-display font-semibold text-ink">Nuevo archivo</h2>
+              <button onClick={() => setModal(false)} aria-label="Cerrar" className="rounded-lg p-1.5 text-sub hover:bg-line hover:text-ink">
+                <X size={18} aria-hidden />
+              </button>
+            </div>
+            <div className="space-y-4 p-4">
+              <div>
+                <span className="mb-1 block text-sm font-medium text-ink">Archivo Excel</span>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={onSelectFile}
+                  className="block w-full text-sm text-sub file:mr-3 file:cursor-pointer file:rounded-lg file:border file:border-line file:bg-surface2 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink hover:file:bg-line"
+                />
+              </div>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-ink">Nombre</span>
+                <input
+                  value={nombreNuevo}
+                  onChange={(e) => setNombreNuevo(e.target.value)}
+                  placeholder="Ej: Cascada por local 10/08"
+                  className="w-full rounded-xl border border-line bg-surface2 px-3 py-2 text-ink outline-none focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-ink">Motivo</span>
+                <input
+                  value={motivoNuevo}
+                  onChange={(e) => setMotivoNuevo(e.target.value)}
+                  placeholder="Opcional (ej: reposición semanal)"
+                  className="w-full rounded-xl border border-line bg-surface2 px-3 py-2 text-ink outline-none focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40"
+                />
+              </label>
+              <p className="text-xs text-sub">La fecha y hora se registran automáticamente al cargar.</p>
+            </div>
+            <div className="flex gap-2 border-t border-line px-4 py-3">
+              <button
+                onClick={procesar}
+                disabled={subiendo || !archivo || !nombreNuevo.trim()}
+                className="btn-press inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand-600 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+              >
+                {subiendo ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Upload size={16} aria-hidden />}
+                {subiendo ? 'Procesando…' : 'Cargar'}
+              </button>
+              <button onClick={() => setModal(false)} disabled={subiendo} className="btn-press rounded-xl border border-line bg-surface2 px-4 py-2.5 text-sm font-medium text-ink hover:bg-line disabled:opacity-50">
+                Cancelar
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </Layout>
