@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
   Upload,
@@ -15,6 +15,7 @@ import {
 import Layout from '@/components/Layout'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
+import { getArea } from '@/config/areas'
 
 interface Lote {
   id: string
@@ -73,6 +74,11 @@ function Barra({ hechos, total }: { hechos: number; total: number }) {
 
 export default function Transferencias() {
   const { can, perfil, isAdmin } = useAuth()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const fromArea = (location.state as { fromArea?: string } | null)?.fromArea
+  const backLabel = (fromArea ? getArea(fromArea)?.name : 'Volver') ?? 'Volver'
+  const volver = () => (fromArea ? navigate(`/area/${fromArea}`) : navigate(-1))
   const puedeImportar = can('transferencias.import')
   const miLocal = (perfil?.local ?? '').toUpperCase()
 
@@ -244,9 +250,9 @@ export default function Transferencias() {
 
   return (
     <Layout>
-      <Link to="/area/compras" className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-sub transition duration-250 hover:text-ink">
-        <ArrowLeft size={15} aria-hidden /> Compras
-      </Link>
+      <button onClick={volver} className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-sub transition duration-250 hover:text-ink">
+        <ArrowLeft size={15} aria-hidden /> {backLabel}
+      </button>
 
       <div className="mb-5 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -284,6 +290,8 @@ export default function Transferencias() {
         <div className="space-y-3">
           {lotes.map((lote) => {
             const its = itemsPorLote.get(lote.id) ?? []
+            // usuario de local: no mostrar archivos que no incluyen su local
+            if (its.length === 0 && !isAdmin && !puedeImportar) return null
             const hechos = its.filter((i) => i.hecho).length
             const abierto = loteAbierto === lote.id
             // orígenes en el orden en que aparecen en el archivo
