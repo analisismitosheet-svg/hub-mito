@@ -26,7 +26,7 @@ interface UsuarioRow {
   id: string
   email: string
   nombre: string
-  rol: 'administrador' | 'usuario'
+  rol: string
   estado: 'pendiente' | 'aprobado' | 'rechazado' | 'desactivado'
   created_at: string
   motivo_rechazo: string | null
@@ -42,6 +42,12 @@ interface Permiso {
 interface Local {
   codigo: string
   nombre: string | null
+}
+interface Rol {
+  codigo: string
+  nombre: string
+  es_admin: boolean
+  protegido: boolean
 }
 
 const ESTADO_STYLE: Record<string, string> = {
@@ -65,10 +71,12 @@ export default function Configuraciones() {
   const [permisos, setPermisos] = useState<Permiso[]>([])
   const [rolPermisos, setRolPermisos] = useState<Set<string>>(new Set())
   const [locales, setLocales] = useState<Local[]>([])
+  const [roles, setRoles] = useState<Rol[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [gestion, setGestion] = useState<UsuarioRow | null>(null)
   const [pwUser, setPwUser] = useState<UsuarioRow | null>(null)
+  const [rolGestion, setRolGestion] = useState<Rol | null>(null)
 
   const cargar = useCallback(async () => {
     if (!supabase) {
@@ -77,11 +85,12 @@ export default function Configuraciones() {
     }
     setCargando(true)
     setError(null)
-    const [u, p, rp, lc] = await Promise.all([
+    const [u, p, rp, lc, rl] = await Promise.all([
       supabase.from('usuarios').select('id,email,nombre,rol,estado,created_at,motivo_rechazo,local').order('nombre', { ascending: true }),
       supabase.from('permisos').select('clave,modulo,accion,label,orden').order('orden'),
       supabase.from('rol_permisos').select('rol,permiso_clave'),
       supabase.from('locales').select('codigo,nombre').order('codigo', { ascending: true }),
+      supabase.from('roles').select('codigo,nombre,es_admin,protegido').order('orden', { ascending: true }),
     ])
     if (u.error) setError(u.error.message)
     setUsuarios((u.data as UsuarioRow[]) ?? [])
@@ -90,6 +99,7 @@ export default function Configuraciones() {
       new Set(((rp.data as { rol: string; permiso_clave: string }[]) ?? []).map((r) => `${r.rol}|${r.permiso_clave}`)),
     )
     setLocales((lc.data as Local[]) ?? [])
+    setRoles((rl.data as Rol[]) ?? [])
     setCargando(false)
   }, [])
 
@@ -124,7 +134,7 @@ export default function Configuraciones() {
       /* email opcional */
     }
   }
-  async function aprobar(u: UsuarioRow, rol: 'administrador' | 'usuario') {
+  async function aprobar(u: UsuarioRow, rol: string) {
     await actualizar(u.id, { estado: 'aprobado', rol, motivo_rechazo: null })
     await notificar('aprobado', u)
   }
@@ -177,11 +187,14 @@ export default function Configuraciones() {
           </div>
           <div className="space-y-3">
             {pendientes.map((u) => (
-              <SolicitudCard key={u.id} u={u} onAprobar={aprobar} onRechazar={rechazar} />
+              <SolicitudCard key={u.id} u={u} roles={roles} onAprobar={aprobar} onRechazar={rechazar} />
             ))}
           </div>
         </section>
       )}
+
+      {/* Roles y permisos */}
+      <SeccionRoles roles={roles} onReload={cargar} onPermisos={setRolGestion} />
 
       {/* Catálogo de locales */}
       <SeccionLocales locales={locales} onReload={cargar} />
@@ -207,6 +220,7 @@ export default function Configuraciones() {
             <tbody>
               {usuarios.map((u) => {
                 const esYo = u.id === perfil?.id
+                const rolAdmin = roles.find((r) => r.codigo === u.rol)?.es_admin ?? false
                 return (
                   <tr key={u.id} className="border-t border-line align-middle">
                     <td className="px-3 py-2.5 font-medium text-ink">
@@ -222,12 +236,13 @@ export default function Configuraciones() {
                       <select
                         value={u.rol}
                         disabled={esYo}
-                        onChange={(e) => actualizar(u.id, { rol: e.target.value as UsuarioRow['rol'] })}
+                        onChange={(e) => actualizar(u.id, { rol: e.target.value })}
                         className="rounded-lg border border-line bg-surface2 px-2 py-1 text-xs text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 disabled:opacity-50"
                         aria-label={`Rol de ${u.nombre}`}
                       >
-                        <option value="usuario">Usuario</option>
-                        <option value="administrador">Administrador</option>
+                        {roles.map((r) => (
+                          <option key={r.codigo} value={r.codigo}>{r.nombre}</option>
+                        ))}
                       </select>
                     </td>
                     <td className="px-3 py-2.5">
@@ -284,9 +299,9 @@ export default function Configuraciones() {
                         </button>
                         <button
                           onClick={() => setGestion(u)}
-                          disabled={u.rol === 'administrador'}
+                          disabled={rolAdmin}
                           className="btn-press rounded-lg border border-line bg-surface2 p-1.5 text-ink hover:bg-line disabled:opacity-40"
-                          title={u.rol === 'administrador' ? 'El administrador tiene acceso total' : 'Gestionar permisos'}
+                          title={rolAdmin ? 'Este rol tiene acceso total' : 'Permisos extra de este usuario'}
                           aria-label={`Permisos de ${u.nombre}`}
                         >
                           <SlidersHorizontal size={15} aria-hidden />
@@ -311,7 +326,246 @@ export default function Configuraciones() {
       )}
 
       {pwUser && <PasswordModal usuario={pwUser} onClose={() => setPwUser(null)} />}
+
+      {rolGestion && (
+        <RolPermisosModal
+          rol={rolGestion}
+          permisos={permisos}
+          onClose={() => setRolGestion(null)}
+          onSaved={async () => {
+            setRolGestion(null)
+            await cargar()
+          }}
+        />
+      )}
     </Layout>
+  )
+}
+
+function SeccionRoles({
+  roles,
+  onReload,
+  onPermisos,
+}: {
+  roles: Rol[]
+  onReload: () => Promise<void>
+  onPermisos: (r: Rol) => void
+}) {
+  const [nombre, setNombre] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  function codigoDe(n: string) {
+    return n
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+  }
+
+  async function agregar(e: FormEvent) {
+    e.preventDefault()
+    if (!supabase) return
+    const cod = codigoDe(nombre)
+    if (!cod) {
+      setError('Poné un nombre válido.')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    const { error } = await supabase.from('roles').insert({ codigo: cod, nombre: nombre.trim() })
+    setBusy(false)
+    if (error) {
+      setError(error.message)
+      return
+    }
+    setNombre('')
+    await onReload()
+  }
+
+  async function borrar(r: Rol) {
+    if (!supabase) return
+    if (!window.confirm(`¿Borrar el rol "${r.nombre}"? Los usuarios que lo tengan pasarán a "Usuario".`)) return
+    const { error } = await supabase.from('roles').delete().eq('codigo', r.codigo)
+    if (error) {
+      setError(error.message)
+      return
+    }
+    await onReload()
+  }
+
+  return (
+    <div className="mb-6 overflow-hidden rounded-2xl border border-line bg-surface shadow-soft">
+      <div className="flex items-center gap-2 border-b border-line px-4 py-3 font-display font-semibold text-ink">
+        <ShieldCheck size={18} aria-hidden /> Roles ({roles.length})
+      </div>
+      <form onSubmit={agregar} className="flex flex-wrap items-end gap-2 border-b border-line px-4 py-3">
+        <label className="block flex-1">
+          <span className="mb-1 block text-xs font-medium text-sub">Nuevo rol</span>
+          <input
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+            placeholder="Ej: Supervisor, Depósito, Cajero…"
+            className="w-full rounded-lg border border-line bg-surface2 px-2 py-1.5 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
+          />
+        </label>
+        <button type="submit" disabled={busy} className="btn-press inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">
+          <Plus size={15} aria-hidden /> Crear rol
+        </button>
+      </form>
+      {error && <p className="px-4 py-2 text-sm text-brand-400">{error}</p>}
+      <div className="divide-y divide-line/70">
+        {roles.map((r) => (
+          <div key={r.codigo} className="flex items-center gap-3 px-4 py-2.5">
+            <span className="flex-1 font-medium text-ink">
+              {r.nombre}
+              {r.es_admin && <span className="ml-2 rounded-full bg-brand-600/15 px-2 py-0.5 text-[11px] font-medium text-brand-400">acceso total</span>}
+            </span>
+            {!r.es_admin && (
+              <button
+                onClick={() => onPermisos(r)}
+                className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface2 px-2.5 py-1 text-xs font-medium text-ink hover:bg-line"
+              >
+                <SlidersHorizontal size={13} aria-hidden /> Permisos
+              </button>
+            )}
+            {!r.protegido && (
+              <button onClick={() => borrar(r)} aria-label={`Borrar rol ${r.nombre}`} className="btn-press rounded-lg border border-brand-600/30 bg-brand-600/10 p-1.5 text-brand-400 hover:bg-brand-600/20">
+                <Trash2 size={13} aria-hidden />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function RolPermisosModal({
+  rol,
+  permisos,
+  onClose,
+  onSaved,
+}: {
+  rol: Rol
+  permisos: Permiso[]
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [sel, setSel] = useState<Set<string>>(new Set())
+  const [cargando, setCargando] = useState(true)
+  const [guardando, setGuardando] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let activo = true
+    ;(async () => {
+      if (!supabase) return
+      const { data } = await supabase.from('rol_permisos').select('permiso_clave').eq('rol', rol.codigo)
+      if (!activo) return
+      setSel(new Set(((data as { permiso_clave: string }[]) ?? []).map((r) => r.permiso_clave)))
+      setCargando(false)
+    })()
+    return () => {
+      activo = false
+    }
+  }, [rol.codigo])
+
+  const grupos = useMemo(() => {
+    const m = new Map<string, Permiso[]>()
+    for (const p of permisos) {
+      const arr = m.get(p.modulo) ?? []
+      arr.push(p)
+      m.set(p.modulo, arr)
+    }
+    return Array.from(m.entries())
+  }, [permisos])
+
+  function toggle(clave: string) {
+    setSel((s) => {
+      const n = new Set(s)
+      if (n.has(clave)) n.delete(clave)
+      else n.add(clave)
+      return n
+    })
+  }
+  function setTodos(v: boolean) {
+    setSel(v ? new Set(permisos.map((p) => p.clave)) : new Set())
+  }
+
+  async function guardar() {
+    if (!supabase) return
+    setGuardando(true)
+    setError(null)
+    // Reemplaza el set de permisos del rol
+    const { error: e1 } = await supabase.from('rol_permisos').delete().eq('rol', rol.codigo)
+    if (e1) {
+      setError(e1.message)
+      setGuardando(false)
+      return
+    }
+    const filas = Array.from(sel).map((permiso_clave) => ({ rol: rol.codigo, permiso_clave }))
+    if (filas.length) {
+      const { error: e2 } = await supabase.from('rol_permisos').insert(filas)
+      if (e2) {
+        setError(e2.message)
+        setGuardando(false)
+        return
+      }
+    }
+    setGuardando(false)
+    onSaved()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4" onClick={onClose}>
+      <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-line bg-surface shadow-soft-lg sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-line px-4 py-3">
+          <div className="min-w-0">
+            <h2 className="font-display font-semibold text-ink">Permisos del rol</h2>
+            <p className="truncate text-xs text-sub">{rol.nombre}</p>
+          </div>
+          <button onClick={onClose} aria-label="Cerrar" className="rounded-lg p-1.5 text-sub hover:bg-line hover:text-ink">
+            <X size={18} aria-hidden />
+          </button>
+        </div>
+        <div className="flex items-center gap-2 border-b border-line px-4 py-2">
+          <button onClick={() => setTodos(true)} className="btn-press rounded-lg border border-line bg-surface2 px-2.5 py-1 text-xs text-ink hover:bg-line">Seleccionar todo</button>
+          <button onClick={() => setTodos(false)} className="btn-press rounded-lg border border-line bg-surface2 px-2.5 py-1 text-xs text-ink hover:bg-line">Deseleccionar todo</button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-4 py-3">
+          {cargando ? (
+            <div className="flex items-center justify-center gap-2 py-10 text-sub"><Loader2 size={18} className="animate-spin" aria-hidden /> Cargando…</div>
+          ) : (
+            <div className="space-y-4">
+              {grupos.map(([modulo, items]) => (
+                <div key={modulo}>
+                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-sub">{modulo.replace('area_', 'Área: ')}</p>
+                  <div className="divide-y divide-line/70 overflow-hidden rounded-xl border border-line">
+                    {items.map((p) => (
+                      <label key={p.clave} className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2 hover:bg-surface2">
+                        <span className="text-sm text-ink">{p.label}</span>
+                        <input type="checkbox" checked={sel.has(p.clave)} onChange={() => toggle(p.clave)} className="h-4 w-4 accent-brand-600" />
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        {error && <p className="px-4 pb-2 text-sm text-brand-400">{error}</p>}
+        <div className="flex gap-2 border-t border-line px-4 py-3">
+          <button onClick={guardar} disabled={guardando || cargando} className="btn-press inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand-600 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">
+            {guardando ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Check size={16} aria-hidden />}
+            {guardando ? 'Guardando…' : 'Guardar permisos'}
+          </button>
+          <button onClick={onClose} className="btn-press rounded-xl border border-line bg-surface2 px-4 py-2.5 text-sm font-medium text-ink hover:bg-line">Cancelar</button>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -517,14 +771,16 @@ function SeccionLocales({ locales, onReload }: { locales: Local[]; onReload: () 
 
 function SolicitudCard({
   u,
+  roles,
   onAprobar,
   onRechazar,
 }: {
   u: UsuarioRow
-  onAprobar: (u: UsuarioRow, rol: 'administrador' | 'usuario') => Promise<void>
+  roles: Rol[]
+  onAprobar: (u: UsuarioRow, rol: string) => Promise<void>
   onRechazar: (u: UsuarioRow) => Promise<void>
 }) {
-  const [rol, setRol] = useState<'administrador' | 'usuario'>('usuario')
+  const [rol, setRol] = useState<string>('usuario')
   const [busy, setBusy] = useState(false)
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-3 sm:flex-row sm:items-center sm:justify-between">
@@ -535,12 +791,13 @@ function SolicitudCard({
       <div className="flex flex-wrap items-center gap-2">
         <select
           value={rol}
-          onChange={(e) => setRol(e.target.value as 'administrador' | 'usuario')}
+          onChange={(e) => setRol(e.target.value)}
           className="rounded-lg border border-line bg-surface2 px-2 py-1.5 text-xs text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
           aria-label="Rol al aprobar"
         >
-          <option value="usuario">Usuario</option>
-          <option value="administrador">Administrador</option>
+          {roles.map((r) => (
+            <option key={r.codigo} value={r.codigo}>{r.nombre}</option>
+          ))}
         </select>
         <button
           onClick={async () => {
