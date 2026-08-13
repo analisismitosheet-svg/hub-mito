@@ -324,7 +324,7 @@ export default function Transferencias() {
                     setLoteAbierto(abierto ? null : lote.id)
                     setOrigenAbierto(null)
                   }}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface2"
+                  className={`flex w-full items-center gap-3 px-4 py-3 text-left ${its.length > 0 && hechos === its.length ? 'bg-emerald-500/10 hover:bg-emerald-500/15' : 'hover:bg-surface2'}`}
                 >
                   <ChevronRight size={16} aria-hidden className={`shrink-0 text-sub transition-transform ${abierto ? 'rotate-90' : ''}`} />
                   <div className="min-w-0 flex-1">
@@ -366,7 +366,7 @@ export default function Transferencias() {
                         <div key={origen} className="my-1 overflow-hidden rounded-xl border border-line">
                           <button
                             onClick={() => setOrigenAbierto(oAbierto ? null : key)}
-                            className="flex w-full items-center gap-3 bg-surface2 px-3 py-2 text-left hover:bg-line"
+                            className={`flex w-full items-center gap-3 px-3 py-2 text-left ${completo ? 'bg-emerald-500/10 hover:bg-emerald-500/15' : 'bg-surface2 hover:bg-line'}`}
                           >
                             <ChevronRight size={15} aria-hidden className={`shrink-0 text-sub transition-transform ${oAbierto ? 'rotate-90' : ''}`} />
                             <span className="flex-1 font-display font-semibold text-ink">{origen}</span>
@@ -398,7 +398,7 @@ export default function Transferencias() {
                                   const puedeGrupo = isAdmin || esMio
                                   return (
                                     <div key={destino}>
-                                      <div className="flex items-center gap-2 bg-surface px-3 py-2">
+                                      <div className={`flex items-center gap-2 px-3 py-2 ${dAll ? 'bg-emerald-500/10' : 'bg-surface'}`}>
                                         <button
                                           onClick={() => setDestinoAbierto(dAbierto ? null : dKey)}
                                           className="flex flex-1 items-center gap-2 text-left"
