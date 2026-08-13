@@ -34,6 +34,7 @@ interface Item {
   color: string | null
   talle: string | null
   cantidad: number
+  venta_local: number | null
   estado: EstadoM
   hecho_at: string | null
 }
@@ -82,49 +83,50 @@ function Celda({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
+function fmtFechaCorta(iso: string | null) {
+  if (!iso) return '—'
+  try {
+    return new Intl.DateTimeFormat('es-AR', { dateStyle: 'short' }).format(new Date(iso + 'T00:00:00'))
+  } catch {
+    return iso
+  }
+}
+
 function Estadisticas({
   lote,
   items,
   localesCount,
+  personasCount,
   puedeEditar,
   onSaved,
 }: {
   lote: Lote
   items: Item[]
   localesCount: number
+  personasCount: number
   puedeEditar: boolean
   onSaved: () => Promise<void>
 }) {
   const total = items.length
   const faltantes = items.filter((i) => i.estado === 'faltante').length
-  const [venta, setVenta] = useState(lote.venta_fecha ?? '')
-  const [cantVenta, setCantVenta] = useState(lote.cant_venta != null ? String(lote.cant_venta) : '')
-  const [horas, setHoras] = useState(lote.horas != null ? String(lote.horas) : '')
-  const [personas, setPersonas] = useState(lote.personas != null ? String(lote.personas) : '')
   const [obs, setObs] = useState(lote.observacion ?? '')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
-  const h = parseFloat(horas.replace(',', '.')) || 0
-  const p = parseInt(personas, 10) || 0
-  const hsxper = h * p
+
+  // Horas: desde que se cargó hasta que se completó todo (o el tiempo transcurrido si sigue en curso)
+  const allDone = total > 0 && items.every((i) => i.estado !== 'pendiente')
+  const inicio = new Date(lote.created_at).getTime()
+  const fin = allDone ? Math.max(...items.map((i) => (i.hecho_at ? new Date(i.hecho_at).getTime() : inicio))) : Date.now()
+  const horas = Math.max(0, (fin - inicio) / 3600000)
+  const personas = personasCount
+  const hsxper = horas * personas
   const prendasHs = hsxper ? total / hsxper : 0
-  const inputCls =
-    'w-full rounded-lg border border-line bg-surface px-2 py-1 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 disabled:opacity-60'
 
   async function guardar() {
     if (!supabase) return
     setBusy(true)
     setErr(null)
-    const { error } = await supabase
-      .from('mayorista_lotes')
-      .update({
-        venta_fecha: venta || null,
-        cant_venta: cantVenta ? parseInt(cantVenta, 10) : null,
-        horas: horas ? parseFloat(horas.replace(',', '.')) : null,
-        personas: personas ? parseInt(personas, 10) : null,
-        observacion: obs.trim() || null,
-      })
-      .eq('id', lote.id)
+    const { error } = await supabase.from('mayorista_lotes').update({ observacion: obs.trim() || null }).eq('id', lote.id)
     setBusy(false)
     if (error) {
       setErr(error.message)
@@ -133,24 +135,33 @@ function Estadisticas({
     await onSaved()
   }
 
+  const dato = 'py-1 text-sm font-medium text-ink'
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-        <Celda label="Venta"><input type="date" disabled={!puedeEditar} value={venta} onChange={(e) => setVenta(e.target.value)} className={inputCls} /></Celda>
-        <Celda label="Cant venta"><input inputMode="numeric" disabled={!puedeEditar} value={cantVenta} onChange={(e) => setCantVenta(e.target.value.replace(/\D/g, ''))} className={inputCls} /></Celda>
-        <Celda label="Cant repo"><div className="py-1 text-sm font-medium text-ink">{total}</div></Celda>
+        <Celda label="Venta"><div className={dato}>{fmtFechaCorta(lote.venta_fecha)}</div></Celda>
+        <Celda label="Cant venta"><div className={dato}>{lote.cant_venta ?? '—'}</div></Celda>
+        <Celda label="Cant repo"><div className={dato}>{total}</div></Celda>
         <Celda label="Art no mandados"><div className="py-1 text-sm font-medium text-red-400">{faltantes}</div></Celda>
-        <Celda label="Locales"><div className="py-1 text-sm font-medium text-ink">{localesCount}</div></Celda>
-        <Celda label="Horas"><input inputMode="decimal" disabled={!puedeEditar} value={horas} onChange={(e) => setHoras(e.target.value)} className={inputCls} /></Celda>
-        <Celda label="Personas"><input inputMode="numeric" disabled={!puedeEditar} value={personas} onChange={(e) => setPersonas(e.target.value.replace(/\D/g, ''))} className={inputCls} /></Celda>
-        <Celda label="Hs x per"><div className="py-1 text-sm font-medium text-ink">{hsxper || '—'}</div></Celda>
-        <Celda label="Prendas/hs"><div className="py-1 text-sm font-medium text-ink">{prendasHs ? prendasHs.toFixed(2) : '—'}</div></Celda>
-        <Celda label="Observación"><input disabled={!puedeEditar} value={obs} onChange={(e) => setObs(e.target.value)} placeholder="—" className={inputCls} /></Celda>
+        <Celda label="Locales"><div className={dato}>{localesCount}</div></Celda>
+        <Celda label="Horas"><div className={dato}>{horas.toFixed(2)}{!allDone && total > 0 ? ' · en curso' : ''}</div></Celda>
+        <Celda label="Personas"><div className={dato}>{personas || '—'}</div></Celda>
+        <Celda label="Hs x per"><div className={dato}>{hsxper ? hsxper.toFixed(2) : '—'}</div></Celda>
+        <Celda label="Prendas/hs"><div className={dato}>{prendasHs ? prendasHs.toFixed(2) : '—'}</div></Celda>
+        <Celda label="Observación">
+          <input
+            disabled={!puedeEditar}
+            value={obs}
+            onChange={(e) => setObs(e.target.value)}
+            placeholder="—"
+            className="w-full rounded-lg border border-line bg-surface px-2 py-1 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 disabled:opacity-60"
+          />
+        </Celda>
       </div>
       {err && <p className="text-sm text-brand-400">{err}</p>}
       {puedeEditar && (
         <button onClick={guardar} disabled={busy} className="btn-press inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">
-          {busy ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Check size={15} aria-hidden />} Guardar estadísticas
+          {busy ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Check size={15} aria-hidden />} Guardar observación
         </button>
       )}
     </div>
@@ -200,7 +211,7 @@ export default function Mayorista() {
       const [itR, respR] = await Promise.all([
         supabase
           .from('mayorista_items')
-          .select('id,lote_id,orden,prioridad,local,material,codigo,articulo,color,talle,cantidad,estado,hecho_at')
+          .select('id,lote_id,orden,prioridad,local,material,codigo,articulo,color,talle,cantidad,venta_local,estado,hecho_at')
           .in('lote_id', ids)
           .order('orden', { ascending: true }),
         supabase.from('mayorista_responsables').select('lote_id,local,empleado_id').in('lote_id', ids),
@@ -277,56 +288,128 @@ export default function Mayorista() {
     try {
       const XLSX = await import('xlsx')
       const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' })
-      const nuevos: Omit<Item, 'id' | 'lote_id' | 'estado' | 'hecho_at'>[] = []
+      const nuevos: Omit<Item, 'id' | 'lote_id' | 'estado' | 'hecho_at' | 'venta_local'>[] = []
       let orden = 0
-      for (const hoja of wb.SheetNames) {
-        const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[hoja], { header: 1, blankrows: false, defval: '' })
-        const hidx = rows.findIndex((r) => {
-          const up = r.map((c) => String(c).trim().toUpperCase())
-          return up.includes('LOCAL') && up.includes('CODIGO')
+      // normaliza encabezados: mayúsculas, sin acentos, espacios colapsados
+      const norm = (c: unknown) =>
+        String(c ?? '')
+          .normalize('NFD')
+          .replace(/[̀-ͯ]/g, '')
+          .trim()
+          .toUpperCase()
+          .replace(/\s+/g, ' ')
+      const esLocal = (h: string) => h === 'LOCAL' || h === 'CLIENTE REPO' || h === 'CLIENTE'
+      const esCodigo = (h: string) => h === 'CODIGO' || h === 'ARTICULO'
+      const tieneEncabezado = (rows: unknown[][]) =>
+        rows.some((r) => {
+          const up = r.map(norm)
+          return up.some(esLocal) && up.some(esCodigo)
         })
-        if (hidx < 0) continue
-        const up = rows[hidx].map((c) => String(c).trim().toUpperCase())
-        const idx = (n: string) => up.indexOf(n)
-        const iPri = idx('PRIORIDAD')
-        const iLocal = idx('LOCAL')
-        const iMat = idx('MATERIAL')
-        const iCod = idx('CODIGO')
-        const iArt = up.findIndex((h) => h.includes('ARTICULO') || h.includes('ARTÍCULO') || h.includes('DESC'))
-        const iColor = idx('COLOR')
-        const iTalle = idx('TALLE')
-        const iCant = idx('CANTIDAD')
-        for (let i = hidx + 1; i < rows.length; i++) {
-          const row = rows[i]
-          const local = String(row[iLocal] ?? '').trim()
-          const cod = String(row[iCod] ?? '').trim()
-          if (!local || !cod) continue
-          const pri = iPri >= 0 ? parseInt(String(row[iPri]).trim(), 10) : NaN
-          const cant = iCant >= 0 ? parseInt(String(row[iCant]).trim(), 10) : NaN
-          nuevos.push({
-            orden: orden++,
-            prioridad: Number.isNaN(pri) ? null : pri,
-            local,
-            material: iMat >= 0 ? String(row[iMat] ?? '').trim() || null : null,
-            codigo: cod,
-            articulo: iArt >= 0 ? String(row[iArt] ?? '').trim() || null : null,
-            color: iColor >= 0 ? String(row[iColor] ?? '').trim() || null : null,
-            talle: iTalle >= 0 ? String(row[iTalle] ?? '').trim() || null : null,
-            cantidad: Number.isNaN(cant) ? 1 : cant,
-          })
+      const leer = (hoja: string) =>
+        XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[hoja], { header: 1, blankrows: false, defval: '' })
+
+      // Preferir la hoja "ORDENADA POR LOCAL"; si no está, la primera con columnas válidas
+      let hojaElegida = wb.SheetNames.find((n) => norm(n) === 'ORDENADA POR LOCAL')
+      if (!hojaElegida) hojaElegida = wb.SheetNames.find((n) => tieneEncabezado(leer(n)))
+
+      if (hojaElegida) {
+        const rows = leer(hojaElegida)
+        const hidx = rows.findIndex((r) => {
+          const up = r.map(norm)
+          return up.some(esLocal) && up.some(esCodigo)
+        })
+        if (hidx >= 0) {
+          const up = rows[hidx].map(norm)
+          const find = (pred: (h: string) => boolean) => up.findIndex(pred)
+          const iLocal = find(esLocal)
+          const iCod = find(esCodigo)
+          const iPri = find((h) => h === 'PRIORIDAD')
+          const iMat = find((h) => h === 'MATERIAL' || h === 'DESCRIPCION')
+          const iName = find((h) => h.includes('ADICIONAL') || h === 'ARTICULO_ADICIONAL')
+          const iColor = find((h) => h === 'COLOR')
+          const iTalle = find((h) => h === 'TALLE')
+          const iCant = find((h) => h === 'CANTIDAD' || h === 'A REPONER')
+          for (let i = hidx + 1; i < rows.length; i++) {
+            const row = rows[i]
+            const local = String(row[iLocal] ?? '').trim()
+            const cod = String(row[iCod] ?? '').trim()
+            if (!local || !cod) continue
+            // saltar filas de encabezado repetidas dentro de la hoja
+            if (esLocal(norm(local)) || esCodigo(norm(cod))) continue
+            const pri = iPri >= 0 ? parseInt(String(row[iPri]).trim(), 10) : NaN
+            const cant = iCant >= 0 ? parseInt(String(row[iCant]).trim(), 10) : NaN
+            nuevos.push({
+              orden: orden++,
+              prioridad: Number.isNaN(pri) ? null : pri,
+              local,
+              material: iMat >= 0 ? String(row[iMat] ?? '').trim() || null : null,
+              codigo: cod,
+              articulo: iName >= 0 ? String(row[iName] ?? '').trim() || null : null,
+              color: iColor >= 0 ? String(row[iColor] ?? '').trim() || null : null,
+              talle: iTalle >= 0 ? String(row[iTalle] ?? '').trim() || null : null,
+              cantidad: Number.isNaN(cant) ? 1 : cant,
+            })
+          }
         }
       }
+      // Fecha del repo: primer dd/mm/aaaa que aparezca en los títulos de las hojas
+      let fechaRepo: string | null = null
+      buscarFecha: for (const hoja of wb.SheetNames) {
+        const rs = leer(hoja)
+        for (let i = 0; i < Math.min(rs.length, 3); i++) {
+          for (const c of rs[i]) {
+            const m = String(c ?? '').match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/)
+            if (m) {
+              const y = m[3].length === 2 ? `20${m[3]}` : m[3]
+              fechaRepo = `${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`
+              break buscarFecha
+            }
+          }
+        }
+      }
+      // Cant venta (total) y venta por local: suma de "VENTA LOCAL" en la hoja REPO POR DIA
+      let cantVenta: number | null = null
+      const ventaPorLocal: Record<string, number> = {}
+      const hojaRepo = wb.SheetNames.find((n) => norm(n) === 'REPO POR DIA')
+      if (hojaRepo) {
+        const rs = leer(hojaRepo)
+        const hi = rs.findIndex((r) => {
+          const upp = r.map(norm)
+          return upp.some(esLocal) && upp.some(esCodigo)
+        })
+        if (hi >= 0) {
+          const upp = rs[hi].map(norm)
+          const iVL = upp.findIndex((h) => h === 'VENTA LOCAL')
+          const iLo = upp.findIndex(esLocal)
+          if (iVL >= 0) {
+            let s = 0
+            for (let i = hi + 1; i < rs.length; i++) {
+              const lo = String(rs[i][iLo] ?? '').trim()
+              if (!lo || esLocal(norm(lo))) continue
+              const v = parseInt(String(rs[i][iVL]).trim(), 10)
+              if (!Number.isNaN(v)) {
+                s += v
+                ventaPorLocal[lo] = (ventaPorLocal[lo] ?? 0) + v
+              }
+            }
+            cantVenta = s
+          }
+        }
+      }
+
       if (!nuevos.length) {
-        setError('No se detectaron repos. El Excel debe tener una fila de encabezado con columnas LOCAL y CODIGO.')
+        setError('No encontré los datos. Debe existir la hoja "ORDENADA POR LOCAL" (o columnas CLIENTE REPO/LOCAL y ARTÍCULO/CODIGO).')
       } else {
         const { data: lote, error: e1 } = await supabase
           .from('mayorista_lotes')
-          .insert({ nombre: nombreNuevo.trim(), motivo: motivoNuevo.trim() || null, subido_por: perfil?.id ?? null })
+          .insert({ nombre: nombreNuevo.trim(), motivo: motivoNuevo.trim() || null, subido_por: perfil?.id ?? null, venta_fecha: fechaRepo, cant_venta: cantVenta })
           .select('id')
           .single()
         if (e1 || !lote) throw new Error(e1?.message ?? 'No se pudo crear el lote')
         const loteId = (lote as { id: string }).id
-        const { error: e2 } = await supabase.from('mayorista_items').insert(nuevos.map((n) => ({ ...n, lote_id: loteId })))
+        const { error: e2 } = await supabase
+          .from('mayorista_items')
+          .insert(nuevos.map((n) => ({ ...n, lote_id: loteId, venta_local: ventaPorLocal[n.local] ?? null })))
         if (e2) throw new Error(e2.message)
         setModal(false)
         setArchivo(null)
@@ -416,6 +499,12 @@ export default function Mayorista() {
               const pb = Math.min(...b[1].map((i) => i.prioridad ?? 9999))
               return pa !== pb ? pa - pb : a[0].localeCompare(b[0], 'es')
             })
+            // personas = responsables únicos asignados en este archivo
+            const personasLote = new Set(
+              Object.entries(responsables)
+                .filter(([k, v]) => k.startsWith(`${lote.id}|`) && v)
+                .map(([, v]) => v),
+            ).size
             return (
               <div key={lote.id} className="overflow-hidden rounded-2xl border border-line bg-surface shadow-soft">
                 <button
@@ -465,7 +554,7 @@ export default function Mayorista() {
                       </button>
                       {subAbierto === `${lote.id}|stats` && (
                         <div className="px-4 pb-3">
-                          <Estadisticas lote={lote} items={its} localesCount={locales.length} puedeEditar={puedeEditarStats} onSaved={cargar} />
+                          <Estadisticas lote={lote} items={its} localesCount={locales.length} personasCount={personasLote} puedeEditar={puedeEditarStats} onSaved={cargar} />
                         </div>
                       )}
                     </div>
@@ -486,6 +575,7 @@ export default function Mayorista() {
                       const completo = lItems.length > 0 && resueltos === lItems.length
                       const todoHecho = lItems.length > 0 && lItems.every((i) => i.estado === 'hecho')
                       const pri = Math.min(...lItems.map((i) => i.prioridad ?? 9999))
+                      const ventaLocal = lItems.find((i) => i.venta_local != null)?.venta_local ?? null
                       return (
                         <div key={local} className="my-1 overflow-hidden rounded-xl border border-line">
                           <div className={`flex w-full items-center gap-3 px-3 py-2 ${todoHecho ? 'bg-emerald-500/10' : 'bg-surface2'}`}>
@@ -493,6 +583,9 @@ export default function Mayorista() {
                               <ChevronRight size={15} aria-hidden className={`shrink-0 text-sub transition-transform ${lAbierto ? 'rotate-90' : ''}`} />
                               {pri < 9999 && <span className="rounded-full bg-line px-1.5 py-0.5 text-[11px] font-semibold text-sub">P{pri}</span>}
                               <span className="flex-1 font-display font-semibold text-ink">{local}</span>
+                              {ventaLocal != null && (
+                                <span className="shrink-0 rounded-full bg-line px-2 py-0.5 text-[11px] font-medium text-sub">venta {ventaLocal}</span>
+                              )}
                               <Barra items={lItems} />
                             </button>
                             {puedeAsignar ? (
