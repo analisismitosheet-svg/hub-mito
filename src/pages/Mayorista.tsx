@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Upload, Loader2, ChevronRight, Store, Trash2, Check, X, Plus } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Upload, Loader2, ChevronRight, Store, Trash2, Check, X, Plus, BarChart3, ArrowRightLeft } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
@@ -11,6 +11,16 @@ interface Lote {
   nombre: string
   motivo: string | null
   created_at: string
+  venta_fecha: string | null
+  cant_venta: number | null
+  horas: number | null
+  personas: number | null
+  observacion: string | null
+}
+interface Empleado {
+  id: string
+  legajo: string | null
+  nombre: string
 }
 interface Item {
   id: string
@@ -63,6 +73,90 @@ function Barra({ items }: { items: Item[] }) {
   )
 }
 
+function Celda({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="rounded-lg border border-line bg-surface2 px-2.5 py-1.5">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-sub">{label}</div>
+      {children}
+    </div>
+  )
+}
+
+function Estadisticas({
+  lote,
+  items,
+  localesCount,
+  puedeEditar,
+  onSaved,
+}: {
+  lote: Lote
+  items: Item[]
+  localesCount: number
+  puedeEditar: boolean
+  onSaved: () => Promise<void>
+}) {
+  const total = items.length
+  const faltantes = items.filter((i) => i.estado === 'faltante').length
+  const [venta, setVenta] = useState(lote.venta_fecha ?? '')
+  const [cantVenta, setCantVenta] = useState(lote.cant_venta != null ? String(lote.cant_venta) : '')
+  const [horas, setHoras] = useState(lote.horas != null ? String(lote.horas) : '')
+  const [personas, setPersonas] = useState(lote.personas != null ? String(lote.personas) : '')
+  const [obs, setObs] = useState(lote.observacion ?? '')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const h = parseFloat(horas.replace(',', '.')) || 0
+  const p = parseInt(personas, 10) || 0
+  const hsxper = h * p
+  const prendasHs = hsxper ? total / hsxper : 0
+  const inputCls =
+    'w-full rounded-lg border border-line bg-surface px-2 py-1 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 disabled:opacity-60'
+
+  async function guardar() {
+    if (!supabase) return
+    setBusy(true)
+    setErr(null)
+    const { error } = await supabase
+      .from('mayorista_lotes')
+      .update({
+        venta_fecha: venta || null,
+        cant_venta: cantVenta ? parseInt(cantVenta, 10) : null,
+        horas: horas ? parseFloat(horas.replace(',', '.')) : null,
+        personas: personas ? parseInt(personas, 10) : null,
+        observacion: obs.trim() || null,
+      })
+      .eq('id', lote.id)
+    setBusy(false)
+    if (error) {
+      setErr(error.message)
+      return
+    }
+    await onSaved()
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+        <Celda label="Venta"><input type="date" disabled={!puedeEditar} value={venta} onChange={(e) => setVenta(e.target.value)} className={inputCls} /></Celda>
+        <Celda label="Cant venta"><input inputMode="numeric" disabled={!puedeEditar} value={cantVenta} onChange={(e) => setCantVenta(e.target.value.replace(/\D/g, ''))} className={inputCls} /></Celda>
+        <Celda label="Cant repo"><div className="py-1 text-sm font-medium text-ink">{total}</div></Celda>
+        <Celda label="Art no mandados"><div className="py-1 text-sm font-medium text-red-400">{faltantes}</div></Celda>
+        <Celda label="Locales"><div className="py-1 text-sm font-medium text-ink">{localesCount}</div></Celda>
+        <Celda label="Horas"><input inputMode="decimal" disabled={!puedeEditar} value={horas} onChange={(e) => setHoras(e.target.value)} className={inputCls} /></Celda>
+        <Celda label="Personas"><input inputMode="numeric" disabled={!puedeEditar} value={personas} onChange={(e) => setPersonas(e.target.value.replace(/\D/g, ''))} className={inputCls} /></Celda>
+        <Celda label="Hs x per"><div className="py-1 text-sm font-medium text-ink">{hsxper || '—'}</div></Celda>
+        <Celda label="Prendas/hs"><div className="py-1 text-sm font-medium text-ink">{prendasHs ? prendasHs.toFixed(2) : '—'}</div></Celda>
+        <Celda label="Observación"><input disabled={!puedeEditar} value={obs} onChange={(e) => setObs(e.target.value)} placeholder="—" className={inputCls} /></Celda>
+      </div>
+      {err && <p className="text-sm text-brand-400">{err}</p>}
+      {puedeEditar && (
+        <button onClick={guardar} disabled={busy} className="btn-press inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">
+          {busy ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Check size={15} aria-hidden />} Guardar estadísticas
+        </button>
+      )}
+    </div>
+  )
+}
+
 export default function Mayorista() {
   const { can, perfil, isAdmin } = useAuth()
   const puedeImportar = can('mayorista.import')
@@ -73,8 +167,13 @@ export default function Mayorista() {
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [subiendo, setSubiendo] = useState(false)
+  const puedeEditarStats = isAdmin || puedeImportar
+  const puedeAsignar = isAdmin || puedeImportar || puedeMarcar
   const [loteAbierto, setLoteAbierto] = useState<string | null>(null)
   const [localAbierto, setLocalAbierto] = useState<string | null>(null)
+  const [subAbierto, setSubAbierto] = useState<string | null>(null)
+  const [empleados, setEmpleados] = useState<Empleado[]>([])
+  const [responsables, setResponsables] = useState<Record<string, string | null>>({})
   const [modal, setModal] = useState(false)
   const [archivo, setArchivo] = useState<File | null>(null)
   const [nombreNuevo, setNombreNuevo] = useState('')
@@ -87,18 +186,34 @@ export default function Mayorista() {
       return
     }
     setCargando(true)
-    const { data: ld } = await supabase.from('mayorista_lotes').select('id,nombre,motivo,created_at').order('created_at', { ascending: false }).limit(60)
+    const { data: ld } = await supabase
+      .from('mayorista_lotes')
+      .select('id,nombre,motivo,created_at,venta_fecha,cant_venta,horas,personas,observacion')
+      .order('created_at', { ascending: false })
+      .limit(60)
     const lotesData = (ld as Lote[]) ?? []
     setLotes(lotesData)
+    const { data: emp } = await supabase.from('empleados').select('id,legajo,nombre').order('nombre', { ascending: true })
+    setEmpleados((emp as Empleado[]) ?? [])
     if (lotesData.length) {
-      const { data: it } = await supabase
-        .from('mayorista_items')
-        .select('id,lote_id,orden,prioridad,local,material,codigo,articulo,color,talle,cantidad,estado,hecho_at')
-        .in('lote_id', lotesData.map((l) => l.id))
-        .order('orden', { ascending: true })
-      setItems((it as Item[]) ?? [])
+      const ids = lotesData.map((l) => l.id)
+      const [itR, respR] = await Promise.all([
+        supabase
+          .from('mayorista_items')
+          .select('id,lote_id,orden,prioridad,local,material,codigo,articulo,color,talle,cantidad,estado,hecho_at')
+          .in('lote_id', ids)
+          .order('orden', { ascending: true }),
+        supabase.from('mayorista_responsables').select('lote_id,local,empleado_id').in('lote_id', ids),
+      ])
+      setItems((itR.data as Item[]) ?? [])
+      const m: Record<string, string | null> = {}
+      for (const r of (respR.data as { lote_id: string; local: string; empleado_id: string | null }[]) ?? []) {
+        m[`${r.lote_id}|${r.local}`] = r.empleado_id
+      }
+      setResponsables(m)
     } else {
       setItems([])
+      setResponsables({})
     }
     setCargando(false)
   }, [])
@@ -120,6 +235,15 @@ export default function Mayorista() {
       await cargar()
     }
   }
+  async function asignarResponsable(loteId: string, local: string, empleadoId: string | null) {
+    if (!supabase) return
+    setResponsables((r) => ({ ...r, [`${loteId}|${local}`]: empleadoId }))
+    const { error } = await supabase
+      .from('mayorista_responsables')
+      .upsert({ lote_id: loteId, local, empleado_id: empleadoId }, { onConflict: 'lote_id,local' })
+    if (error) setError(error.message)
+  }
+
   async function marcarVarios(its: Item[], estado: EstadoM) {
     if (!supabase || !its.length) return
     const ids = its.map((i) => i.id)
@@ -296,8 +420,10 @@ export default function Mayorista() {
               <div key={lote.id} className="overflow-hidden rounded-2xl border border-line bg-surface shadow-soft">
                 <button
                   onClick={() => {
-                    setLoteAbierto(abierto ? null : lote.id)
+                    const nuevo = abierto ? null : lote.id
+                    setLoteAbierto(nuevo)
                     setLocalAbierto(null)
+                    setSubAbierto(nuevo ? `${lote.id}|repo` : null)
                   }}
                   className={`flex w-full items-center gap-3 px-4 py-3 text-left ${loteTodoHecho ? 'bg-emerald-500/10 hover:bg-emerald-500/15' : 'hover:bg-surface2'}`}
                 >
@@ -327,7 +453,32 @@ export default function Mayorista() {
                 </button>
 
                 {abierto && (
-                  <div className="border-t border-line px-3 py-2">
+                  <div className="border-t border-line">
+                    <div className="border-b border-line">
+                      <button
+                        onClick={() => setSubAbierto(subAbierto === `${lote.id}|stats` ? null : `${lote.id}|stats`)}
+                        className="flex w-full items-center gap-2 px-4 py-2.5 text-left hover:bg-surface2"
+                      >
+                        <ChevronRight size={15} aria-hidden className={`shrink-0 text-sub transition-transform ${subAbierto === `${lote.id}|stats` ? 'rotate-90' : ''}`} />
+                        <BarChart3 size={15} aria-hidden className="text-sub" />
+                        <span className="font-display font-semibold text-ink">Estadísticas</span>
+                      </button>
+                      {subAbierto === `${lote.id}|stats` && (
+                        <div className="px-4 pb-3">
+                          <Estadisticas lote={lote} items={its} localesCount={locales.length} puedeEditar={puedeEditarStats} onSaved={cargar} />
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => setSubAbierto(subAbierto === `${lote.id}|repo` ? null : `${lote.id}|repo`)}
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left hover:bg-surface2"
+                    >
+                      <ChevronRight size={15} aria-hidden className={`shrink-0 text-sub transition-transform ${subAbierto === `${lote.id}|repo` ? 'rotate-90' : ''}`} />
+                      <ArrowRightLeft size={15} aria-hidden className="text-sub" />
+                      <span className="font-display font-semibold text-ink">Reposición</span>
+                    </button>
+                    {subAbierto === `${lote.id}|repo` && (
+                    <div className="px-3 pb-2">
                     {locales.map(([local, lItems]) => {
                       const key = `${lote.id}|${local}`
                       const lAbierto = localAbierto === key
@@ -344,6 +495,23 @@ export default function Mayorista() {
                               <span className="flex-1 font-display font-semibold text-ink">{local}</span>
                               <Barra items={lItems} />
                             </button>
+                            {puedeAsignar ? (
+                              <select
+                                value={responsables[key] ?? ''}
+                                onChange={(e) => asignarResponsable(lote.id, local, e.target.value || null)}
+                                className="max-w-[8.5rem] shrink-0 rounded-lg border border-line bg-surface px-2 py-1 text-xs text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
+                                title="Empleado responsable"
+                              >
+                                <option value="">Responsable…</option>
+                                {empleados.map((em) => (
+                                  <option key={em.id} value={em.id}>{em.nombre}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              responsables[key] && (
+                                <span className="shrink-0 text-xs text-sub">{empleados.find((e) => e.id === responsables[key])?.nombre}</span>
+                              )
+                            )}
                             {puedeMarcar && (
                               <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-medium text-sub" title="Marcar todo el local">
                                 <input
@@ -411,6 +579,8 @@ export default function Mayorista() {
                         </div>
                       )
                     })}
+                    </div>
+                    )}
                   </div>
                 )}
               </div>
