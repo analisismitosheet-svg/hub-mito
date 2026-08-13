@@ -379,20 +379,42 @@ export default function Transferencias() {
                       const dur = completo && finIso ? fmtDuracion(lote.created_at, finIso) : ''
                       return (
                         <div key={origen} className="my-1 overflow-hidden rounded-xl border border-line">
-                          <button
-                            onClick={() => setOrigenAbierto(oAbierto ? null : key)}
-                            className={`flex w-full items-center gap-3 px-3 py-2 text-left ${origTodoHecho ? 'bg-emerald-500/10 hover:bg-emerald-500/15' : 'bg-surface2 hover:bg-line'}`}
-                          >
-                            <ChevronRight size={15} aria-hidden className={`shrink-0 text-sub transition-transform ${oAbierto ? 'rotate-90' : ''}`} />
-                            <span className="flex-1 font-display font-semibold text-ink">{origen}</span>
-                            {esMio && <span className="rounded-full bg-brand-600/15 px-2 py-0.5 text-[11px] font-medium text-brand-400">tu local</span>}
-                            {completo && dur && (
-                              <span className="hidden items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-400 sm:inline-flex">
-                                <Check size={11} aria-hidden /> {dur}
-                              </span>
+                          <div className={`flex w-full items-center gap-3 px-3 py-2 ${origTodoHecho ? 'bg-emerald-500/10' : 'bg-surface2'}`}>
+                            <button
+                              onClick={() => setOrigenAbierto(oAbierto ? null : key)}
+                              className="flex flex-1 items-center gap-3 text-left"
+                            >
+                              <ChevronRight size={15} aria-hidden className={`shrink-0 text-sub transition-transform ${oAbierto ? 'rotate-90' : ''}`} />
+                              <span className="flex-1 font-display font-semibold text-ink">{origen}</span>
+                              {esMio && <span className="rounded-full bg-brand-600/15 px-2 py-0.5 text-[11px] font-medium text-brand-400">tu local</span>}
+                              {completo && dur && (
+                                <span className="hidden items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-400 sm:inline-flex">
+                                  <Check size={11} aria-hidden /> {dur}
+                                </span>
+                              )}
+                              <Barra items={de} />
+                            </button>
+                            {(isAdmin || esMio) && (
+                              <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-medium text-sub" title="Marcar todo el local">
+                                <input
+                                  type="checkbox"
+                                  ref={(cb) => {
+                                    if (cb) cb.indeterminate = resueltos > 0 && resueltos < de.length
+                                  }}
+                                  checked={completo}
+                                  disabled={!isAdmin && completo}
+                                  onChange={(e) =>
+                                    marcarVarios(
+                                      e.target.checked ? de.filter((i) => i.estado === 'pendiente') : de.filter((i) => i.estado !== 'pendiente'),
+                                      e.target.checked ? 'hecho' : 'pendiente',
+                                    )
+                                  }
+                                  className="h-4 w-4 accent-emerald-600 disabled:opacity-50"
+                                />
+                                todo
+                              </label>
                             )}
-                            <Barra items={de} />
-                          </button>
+                          </div>
                           {oAbierto && (
                             <div className="divide-y divide-line/70">
                               {Array.from(
