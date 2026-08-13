@@ -83,6 +83,7 @@ function Barra({ hechos, total }: { hechos: number; total: number }) {
 export default function Transferencias() {
   const { can, perfil, isAdmin } = useAuth()
   const puedeImportar = can('transferencias.import')
+  const verTodo = isAdmin || puedeImportar || can('transferencias.ver_todo')
   const miLocal = (perfil?.local ?? '').toUpperCase()
 
   const [lotes, setLotes] = useState<Lote[]>([])
@@ -310,8 +311,8 @@ export default function Transferencias() {
         <div className="space-y-3">
           {lotes.map((lote) => {
             const its = itemsPorLote.get(lote.id) ?? []
-            // usuario de local: no mostrar archivos que no incluyen su local
-            if (its.length === 0 && !isAdmin && !puedeImportar) return null
+            // usuario de local (sin "ver todo"): no mostrar archivos que no incluyen su local
+            if (its.length === 0 && !verTodo) return null
             const hechos = its.filter((i) => i.estado !== 'pendiente').length
             const abierto = loteAbierto === lote.id
             // orígenes en el orden en que aparecen en el archivo
