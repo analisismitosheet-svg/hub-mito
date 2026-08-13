@@ -13,6 +13,7 @@ import CuentaAmigos from '@/pages/CuentaAmigos'
 import Documentos from '@/pages/Documentos'
 import Manuales from '@/pages/Manuales'
 import Transferencias from '@/pages/Transferencias'
+import Mayorista from '@/pages/Mayorista'
 import Configuraciones from '@/pages/Configuraciones'
 import ComingSoon from '@/pages/ComingSoon'
 
@@ -71,6 +72,14 @@ export default function App() {
             element={
               <PermissionRoute permiso="transferencias.view">
                 <Transferencias />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/mayorista"
+            element={
+              <PermissionRoute permiso="mayorista.view">
+                <Mayorista />
               </PermissionRoute>
             }
           />

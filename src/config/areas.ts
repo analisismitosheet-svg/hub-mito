@@ -170,6 +170,17 @@ export const APPS: AppDef[] = [
     color: '#0891b2',
   },
   {
+    id: 'mayorista-repo',
+    areaId: 'mayorista',
+    title: 'Repos Mayorista',
+    description: 'Preparar repos por local: marcar hecho o faltante.',
+    icon: Store,
+    kind: 'internal',
+    target: '/mayorista',
+    color: '#d97706',
+    permiso: 'mayorista.view',
+  },
+  {
     id: 'transferencias',
     areaId: 'compras',
     areaIds: ['compras', 'locales'],
