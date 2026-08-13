@@ -16,6 +16,7 @@ import {
   Store,
   KeyRound,
   Copy,
+  UserRound,
   AlertTriangle,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
@@ -49,6 +50,11 @@ interface Rol {
   es_admin: boolean
   protegido: boolean
 }
+interface Empleado {
+  id: string
+  legajo: string | null
+  nombre: string
+}
 
 const ESTADO_STYLE: Record<string, string> = {
   aprobado: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
@@ -72,6 +78,7 @@ export default function Configuraciones() {
   const [rolPermisos, setRolPermisos] = useState<Set<string>>(new Set())
   const [locales, setLocales] = useState<Local[]>([])
   const [roles, setRoles] = useState<Rol[]>([])
+  const [empleados, setEmpleados] = useState<Empleado[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [gestion, setGestion] = useState<UsuarioRow | null>(null)
@@ -85,12 +92,13 @@ export default function Configuraciones() {
     }
     setCargando(true)
     setError(null)
-    const [u, p, rp, lc, rl] = await Promise.all([
+    const [u, p, rp, lc, rl, em] = await Promise.all([
       supabase.from('usuarios').select('id,email,nombre,rol,estado,created_at,motivo_rechazo,local').order('nombre', { ascending: true }),
       supabase.from('permisos').select('clave,modulo,accion,label,orden').order('orden'),
       supabase.from('rol_permisos').select('rol,permiso_clave'),
       supabase.from('locales').select('codigo,nombre').order('codigo', { ascending: true }),
       supabase.from('roles').select('codigo,nombre,es_admin,protegido').order('orden', { ascending: true }),
+      supabase.from('empleados').select('id,legajo,nombre').order('nombre', { ascending: true }),
     ])
     if (u.error) setError(u.error.message)
     setUsuarios((u.data as UsuarioRow[]) ?? [])
@@ -100,6 +108,7 @@ export default function Configuraciones() {
     )
     setLocales((lc.data as Local[]) ?? [])
     setRoles((rl.data as Rol[]) ?? [])
+    setEmpleados((em.data as Empleado[]) ?? [])
     setCargando(false)
   }, [])
 
@@ -198,6 +207,9 @@ export default function Configuraciones() {
 
       {/* Catálogo de locales */}
       <SeccionLocales locales={locales} onReload={cargar} />
+
+      {/* Empleados */}
+      <SeccionEmpleados empleados={empleados} onReload={cargar} />
 
       {/* Listado de usuarios */}
       <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-soft">
@@ -339,6 +351,81 @@ export default function Configuraciones() {
         />
       )}
     </Layout>
+  )
+}
+
+function SeccionEmpleados({ empleados, onReload }: { empleados: Empleado[]; onReload: () => Promise<void> }) {
+  const [legajo, setLegajo] = useState('')
+  const [nombre, setNombre] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function agregar(e: FormEvent) {
+    e.preventDefault()
+    if (!supabase) return
+    if (!nombre.trim()) {
+      setError('Poné el nombre completo.')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    const { error } = await supabase.from('empleados').insert({ legajo: legajo.trim() || null, nombre: nombre.trim() })
+    setBusy(false)
+    if (error) {
+      setError(error.message)
+      return
+    }
+    setLegajo('')
+    setNombre('')
+    await onReload()
+  }
+
+  async function borrar(id: string, nom: string) {
+    if (!supabase) return
+    if (!window.confirm(`¿Borrar al empleado "${nom}"?`)) return
+    const { error } = await supabase.from('empleados').delete().eq('id', id)
+    if (error) {
+      setError(error.message)
+      return
+    }
+    await onReload()
+  }
+
+  return (
+    <div className="mb-6 overflow-hidden rounded-2xl border border-line bg-surface shadow-soft">
+      <div className="flex items-center gap-2 border-b border-line px-4 py-3 font-display font-semibold text-ink">
+        <UserRound size={18} aria-hidden /> Empleados ({empleados.length})
+      </div>
+      <form onSubmit={agregar} className="flex flex-wrap items-end gap-2 border-b border-line px-4 py-3">
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-sub">N° legajo</span>
+          <input value={legajo} onChange={(e) => setLegajo(e.target.value)} placeholder="1234" className="w-24 rounded-lg border border-line bg-surface2 px-2 py-1.5 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40" />
+        </label>
+        <label className="block flex-1">
+          <span className="mb-1 block text-xs font-medium text-sub">Nombre completo</span>
+          <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Juan Pérez" className="w-full rounded-lg border border-line bg-surface2 px-2 py-1.5 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40" />
+        </label>
+        <button type="submit" disabled={busy} className="btn-press inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">
+          <Plus size={15} aria-hidden /> Agregar
+        </button>
+      </form>
+      {error && <p className="px-4 py-2 text-sm text-brand-400">{error}</p>}
+      {empleados.length === 0 ? (
+        <p className="px-4 py-4 text-sm text-sub">Todavía no hay empleados. Agregá el primero arriba.</p>
+      ) : (
+        <div className="divide-y divide-line/70">
+          {empleados.map((e) => (
+            <div key={e.id} className="flex items-center gap-3 px-4 py-2.5">
+              {e.legajo && <span className="rounded-full bg-line px-2 py-0.5 text-[11px] font-semibold text-sub">#{e.legajo}</span>}
+              <span className="flex-1 font-medium text-ink">{e.nombre}</span>
+              <button onClick={() => borrar(e.id, e.nombre)} aria-label={`Borrar ${e.nombre}`} className="btn-press rounded-lg border border-brand-600/30 bg-brand-600/10 p-1.5 text-brand-400 hover:bg-brand-600/20">
+                <Trash2 size={13} aria-hidden />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
