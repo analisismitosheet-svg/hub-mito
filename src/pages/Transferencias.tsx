@@ -67,15 +67,28 @@ function fmtDuracion(desdeIso: string, hastaIso: string): string {
   return m ? `${h} h ${m} min` : `${h} h`
 }
 
-function Barra({ hechos, total }: { hechos: number; total: number }) {
-  const pct = total ? Math.round((hechos / total) * 100) : 0
-  const color = pct === 100 ? '#16a34a' : pct > 0 ? '#d97706' : '#3f3f46'
+// Barra segmentada: verde (hecho) · amarillo (señado) · rojo (faltante) · resto pendiente
+function Barra({ items }: { items: Item[] }) {
+  const total = items.length
+  let hecho = 0,
+    senado = 0,
+    faltante = 0
+  for (const i of items) {
+    if (i.estado === 'hecho') hecho++
+    else if (i.estado === 'senado') senado++
+    else if (i.estado === 'faltante') faltante++
+  }
+  const resueltos = hecho + senado + faltante
+  const pct = total ? Math.round((resueltos / total) * 100) : 0
+  const w = (n: number) => (total ? `${(n / total) * 100}%` : '0%')
   return (
-    <div className="flex items-center gap-2">
-      <div className="h-2 w-24 overflow-hidden rounded-full bg-surface2">
-        <div className="h-full rounded-full transition-all duration-300" style={{ width: `${pct}%`, backgroundColor: color }} />
+    <div className="flex shrink-0 items-center gap-2">
+      <div className="flex h-2 w-24 shrink-0 overflow-hidden rounded-full bg-surface2">
+        <div className="h-full bg-emerald-500 transition-all duration-300" style={{ width: w(hecho) }} />
+        <div className="h-full bg-amber-500 transition-all duration-300" style={{ width: w(senado) }} />
+        <div className="h-full bg-red-500 transition-all duration-300" style={{ width: w(faltante) }} />
       </div>
-      <span className="text-xs tabular-nums text-sub">{hechos}/{total} · {pct}%</span>
+      <span className="text-xs tabular-nums text-sub">{resueltos}/{total} · {pct}%</span>
     </div>
   )
 }
@@ -313,7 +326,7 @@ export default function Transferencias() {
             const its = itemsPorLote.get(lote.id) ?? []
             // usuario de local (sin "ver todo"): no mostrar archivos que no incluyen su local
             if (its.length === 0 && !verTodo) return null
-            const hechos = its.filter((i) => i.estado !== 'pendiente').length
+            const loteTodoHecho = its.length > 0 && its.every((i) => i.estado === 'hecho')
             const abierto = loteAbierto === lote.id
             // orígenes en el orden en que aparecen en el archivo
             const origenes: string[] = []
@@ -325,7 +338,7 @@ export default function Transferencias() {
                     setLoteAbierto(abierto ? null : lote.id)
                     setOrigenAbierto(null)
                   }}
-                  className={`flex w-full items-center gap-3 px-4 py-3 text-left ${its.length > 0 && hechos === its.length ? 'bg-emerald-500/10 hover:bg-emerald-500/15' : 'hover:bg-surface2'}`}
+                  className={`flex w-full items-center gap-3 px-4 py-3 text-left ${loteTodoHecho ? 'bg-emerald-500/10 hover:bg-emerald-500/15' : 'hover:bg-surface2'}`}
                 >
                   <ChevronRight size={16} aria-hidden className={`shrink-0 text-sub transition-transform ${abierto ? 'rotate-90' : ''}`} />
                   <div className="min-w-0 flex-1">
@@ -335,7 +348,7 @@ export default function Transferencias() {
                       {lote.motivo ? ` · ${lote.motivo}` : ''}
                     </p>
                   </div>
-                  <Barra hechos={hechos} total={its.length} />
+                  <Barra items={its} />
                   {puedeImportar && (
                     <span
                       role="button"
@@ -356,18 +369,19 @@ export default function Transferencias() {
                   <div className="border-t border-line px-3 py-2">
                     {origenes.map((origen) => {
                       const de = its.filter((i) => i.origen === origen)
-                      const h = de.filter((i) => i.estado !== 'pendiente').length
+                      const resueltos = de.filter((i) => i.estado !== 'pendiente').length
+                      const origTodoHecho = de.length > 0 && de.every((i) => i.estado === 'hecho')
                       const key = `${lote.id}|${origen}`
                       const oAbierto = origenAbierto === key
                       const esMio = esMiLocal(origen)
-                      const completo = de.length > 0 && h === de.length
+                      const completo = de.length > 0 && resueltos === de.length
                       const finIso = completo ? de.reduce((mx, i) => (i.hecho_at && i.hecho_at > mx ? i.hecho_at : mx), '') : ''
                       const dur = completo && finIso ? fmtDuracion(lote.created_at, finIso) : ''
                       return (
                         <div key={origen} className="my-1 overflow-hidden rounded-xl border border-line">
                           <button
                             onClick={() => setOrigenAbierto(oAbierto ? null : key)}
-                            className={`flex w-full items-center gap-3 px-3 py-2 text-left ${completo ? 'bg-emerald-500/10 hover:bg-emerald-500/15' : 'bg-surface2 hover:bg-line'}`}
+                            className={`flex w-full items-center gap-3 px-3 py-2 text-left ${origTodoHecho ? 'bg-emerald-500/10 hover:bg-emerald-500/15' : 'bg-surface2 hover:bg-line'}`}
                           >
                             <ChevronRight size={15} aria-hidden className={`shrink-0 text-sub transition-transform ${oAbierto ? 'rotate-90' : ''}`} />
                             <span className="flex-1 font-display font-semibold text-ink">{origen}</span>
@@ -377,7 +391,7 @@ export default function Transferencias() {
                                 <Check size={11} aria-hidden /> {dur}
                               </span>
                             )}
-                            <Barra hechos={h} total={de.length} />
+                            <Barra items={de} />
                           </button>
                           {oAbierto && (
                             <div className="divide-y divide-line/70">
@@ -394,12 +408,13 @@ export default function Transferencias() {
                                   const dHechos = dItems.filter((i) => i.estado !== 'pendiente').length
                                   const dAll = dItems.length > 0 && dHechos === dItems.length
                                   const dSome = dHechos > 0 && !dAll
+                                  const dTodoHecho = dItems.length > 0 && dItems.every((i) => i.estado === 'hecho')
                                   const dKey = `${key}|${destino}`
                                   const dAbierto = destinoAbierto === dKey
                                   const puedeGrupo = isAdmin || esMio
                                   return (
                                     <div key={destino}>
-                                      <div className={`flex items-center gap-2 px-3 py-2 ${dAll ? 'bg-emerald-500/10' : 'bg-surface'}`}>
+                                      <div className={`flex items-center gap-2 px-3 py-2 ${dTodoHecho ? 'bg-emerald-500/10' : 'bg-surface'}`}>
                                         <button
                                           onClick={() => setDestinoAbierto(dAbierto ? null : dKey)}
                                           className="flex flex-1 items-center gap-2 text-left"
@@ -408,7 +423,7 @@ export default function Transferencias() {
                                           <span className="flex items-center gap-1 text-sm font-medium text-ink">
                                             <ArrowRightLeft size={12} aria-hidden /> {destino}
                                           </span>
-                                          <span className="text-xs tabular-nums text-sub">{dHechos}/{dItems.length}</span>
+                                          <Barra items={dItems} />
                                         </button>
                                         {puedeGrupo && (
                                           <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-medium text-sub" title="Marcar todo este destino">
