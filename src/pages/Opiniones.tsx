@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { QrCode, Copy, Check, MessageSquare, ChevronDown, Trash2 } from 'lucide-react'
+import { QrCode, Copy, Check, MessageSquare, ChevronDown, Trash2, ArrowDownUp } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import Layout from '@/components/Layout'
@@ -57,6 +57,7 @@ export default function Opiniones() {
   const [abierto, setAbierto] = useState<string | null>(null)
   const [copiado, setCopiado] = useState<string | null>(null)
   const [qr, setQr] = useState<string | null>(null)
+  const [orden, setOrden] = useState<'desc' | 'asc'>('desc')
 
   // Carga inicial: locales + lista de encuestas
   useEffect(() => {
@@ -158,19 +159,6 @@ export default function Opiniones() {
     return { promEstrellas, pct, totalRespuestas: respuestas.length }
   }, [items, esEstrella, maxValorPreg, respuestas])
 
-  // Promedio por pregunta
-  const porPregunta = useMemo(() => {
-    return preguntas
-      .filter((p) => p.tipo !== 'texto')
-      .map((p) => {
-        const its = items.filter((i) => i.pregunta_id === p.id)
-        if (p.tipo === 'estrellas') {
-          return { p, tipo: 'estrellas' as const, valor: prom(its.map((i) => Number(i.estrellas ?? 0))), n: its.length }
-        }
-        return { p, tipo: 'valor' as const, valor: prom(its.map((i) => Number(i.valor ?? 0))), n: its.length }
-      })
-  }, [preguntas, items])
-
   // Resumen por local
   const respPorLocal = useMemo(() => {
     const m = new Map<string, Set<string>>()
@@ -237,6 +225,13 @@ export default function Opiniones() {
     const p = preguntas.find((q) => q.tipo === 'estrellas')
     return p?.config.max ?? 5
   }, [preguntas])
+
+  // Datos del gráfico: locales con respuestas, ordenados por promedio
+  const datosGrafico = useMemo(() => {
+    return resumenLocales
+      .filter((r) => r.total > 0)
+      .sort((a, b) => (orden === 'asc' ? a.prom - b.prom : b.prom - a.prom))
+  }, [resumenLocales, orden])
 
   function linkPublico(codigo: string) {
     return `${window.location.origin}/opinar/${encodeURIComponent(codigo)}`
@@ -312,28 +307,41 @@ export default function Opiniones() {
             </div>
           </div>
 
-          {/* Promedio por pregunta */}
-          {porPregunta.length > 0 && (
+          {/* Gráfico de barras: promedio por local */}
+          {datosGrafico.length > 0 && (
             <div className="mb-6 rounded-2xl border border-line bg-surface p-4">
-              <h2 className="mb-3 text-sm font-semibold text-ink">Promedio por pregunta</h2>
-              <div className="space-y-2.5">
-                {porPregunta.map(({ p, tipo, valor, n }) => (
-                  <div key={p.id} className="flex items-center justify-between gap-3">
-                    <span className="min-w-0 flex-1 truncate text-sm text-ink">{p.texto}</span>
-                    <span className="flex shrink-0 items-center gap-2">
-                      {tipo === 'estrellas' ? (
-                        <>
-                          <span className="text-sm font-semibold text-ink">{n ? valor.toFixed(1) : '—'}</span>
-                          <StarRating value={valor} max={p.config.max ?? 5} readOnly size={15} />
-                        </>
-                      ) : (
-                        <span className="text-sm font-semibold text-ink">{n ? valor.toFixed(2) : '—'}</span>
-                      )}
-                      <span className="w-10 text-right text-xs text-sub">{n}</span>
-                    </span>
-                  </div>
-                ))}
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h2 className="text-sm font-semibold text-ink">Promedio por local</h2>
+                <button
+                  onClick={() => setOrden((o) => (o === 'desc' ? 'asc' : 'desc'))}
+                  className="btn-press flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs text-sub hover:text-ink"
+                >
+                  <ArrowDownUp size={14} aria-hidden />
+                  {orden === 'desc' ? 'Mayor a menor' : 'Menor a mayor'}
+                </button>
               </div>
+              <div className="space-y-2.5">
+                {datosGrafico.map((r) => {
+                  const pct = maxEstrellas ? (r.prom / maxEstrellas) * 100 : 0
+                  return (
+                    <div key={r.codigo} className="flex items-center gap-3">
+                      <span className="w-28 shrink-0 truncate text-sm text-ink sm:w-40" title={r.nombre}>
+                        {r.nombre}
+                      </span>
+                      <div className="h-6 min-w-0 flex-1 overflow-hidden rounded-md bg-surface2">
+                        <div
+                          className="flex h-full items-center justify-end rounded-md bg-amber-400 px-2 transition-all"
+                          style={{ width: `${Math.max(pct, 6)}%` }}
+                        >
+                          <span className="text-xs font-semibold text-black/80">{r.prom.toFixed(1)}</span>
+                        </div>
+                      </div>
+                      <span className="w-8 shrink-0 text-right text-xs text-sub">{r.total}</span>
+                    </div>
+                  )
+                })}
+              </div>
+              <p className="mt-3 text-xs text-sub">Promedio de estrellas (sobre {maxEstrellas}) · el número de la derecha es la cantidad de respuestas.</p>
             </div>
           )}
 
