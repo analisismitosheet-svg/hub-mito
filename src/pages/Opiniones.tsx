@@ -1,71 +1,120 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Star, QrCode, Copy, Check, MessageSquare, ChevronDown } from 'lucide-react'
+import { QrCode, Copy, Check, MessageSquare, ChevronDown } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
+import StarRating from '@/components/StarRating'
+import type { Encuesta, Pregunta } from '@/types/encuestas'
 
-interface Opinion {
-  id: string
-  local: string
-  puntaje: number
-  comentario: string | null
-  created_at: string
-}
 interface Local {
   codigo: string
   nombre: string
 }
+interface Respuesta {
+  id: string
+  local: string | null
+  created_at: string
+}
+interface Item {
+  respuesta_id: string
+  pregunta_id: string
+  tipo: string
+  estrellas: number | null
+  valor: number | null
+  valor_texto: string | null
+}
 
 const PAGE = 1000
 
-function Estrellas({ valor, size = 16 }: { valor: number; size?: number }) {
-  return (
-    <span className="inline-flex items-center gap-0.5">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <Star
-          key={n}
-          size={size}
-          aria-hidden
-          className={n <= Math.round(valor) ? 'text-amber-400' : 'text-line2'}
-          fill={n <= Math.round(valor) ? 'currentColor' : 'none'}
-        />
-      ))}
-    </span>
-  )
+async function cargarTodo<T>(build: (desde: number) => PromiseLike<{ data: T[] | null; error: unknown }>) {
+  const out: T[] = []
+  for (let desde = 0; ; desde += PAGE) {
+    const { data, error } = await build(desde)
+    if (error || !data || data.length === 0) break
+    out.push(...data)
+    if (data.length < PAGE) break
+  }
+  return out
+}
+
+function prom(nums: number[]) {
+  return nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : 0
 }
 
 export default function Opiniones() {
-  const [opiniones, setOpiniones] = useState<Opinion[]>([])
+  const [encuestas, setEncuestas] = useState<Encuesta[]>([])
+  const [encuestaId, setEncuestaId] = useState<string>('')
+  const [preguntas, setPreguntas] = useState<Pregunta[]>([])
+  const [respuestas, setRespuestas] = useState<Respuesta[]>([])
+  const [items, setItems] = useState<Item[]>([])
   const [locales, setLocales] = useState<Local[]>([])
   const [cargando, setCargando] = useState(true)
+  const [cargandoDatos, setCargandoDatos] = useState(false)
   const [abierto, setAbierto] = useState<string | null>(null)
   const [copiado, setCopiado] = useState<string | null>(null)
   const [qr, setQr] = useState<string | null>(null)
 
+  // Carga inicial: locales + lista de encuestas
   useEffect(() => {
     if (!supabase) return
     ;(async () => {
-      const { data: locs } = await supabase!
-        .from('locales')
-        .select('codigo, nombre')
-        .order('nombre')
-
-      const todas: Opinion[] = []
-      for (let desde = 0; ; desde += PAGE) {
-        const { data, error } = await supabase!
-          .from('opiniones')
-          .select('id, local, puntaje, comentario, created_at')
-          .order('created_at', { ascending: false })
-          .range(desde, desde + PAGE - 1)
-        if (error || !data || data.length === 0) break
-        todas.push(...(data as Opinion[]))
-        if (data.length < PAGE) break
-      }
+      const [{ data: locs }, { data: encs }] = await Promise.all([
+        supabase!.from('locales').select('codigo, nombre').order('nombre'),
+        supabase!
+          .from('encuestas')
+          .select('id, nombre, descripcion, contexto, publica, estado, version, created_at, updated_at')
+          .order('created_at'),
+      ])
       setLocales((locs as Local[]) ?? [])
-      setOpiniones(todas)
+      const lista = (encs as Encuesta[]) ?? []
+      setEncuestas(lista)
+      const def = lista.find((e) => e.publica && e.contexto === 'local') ?? lista[0]
+      setEncuestaId(def?.id ?? '')
       setCargando(false)
     })()
   }, [])
+
+  // Al cambiar de encuesta: preguntas + respuestas + items
+  useEffect(() => {
+    if (!supabase || !encuestaId) return
+    ;(async () => {
+      setCargandoDatos(true)
+      const { data: preg } = await supabase!
+        .from('encuesta_preguntas')
+        .select('id, encuesta_id, orden, texto, ayuda, tipo, obligatoria, estado, config, version, created_at, updated_at')
+        .eq('encuesta_id', encuestaId)
+        .order('orden')
+
+      const resp = await cargarTodo<Respuesta>((desde) =>
+        supabase!
+          .from('encuesta_respuestas')
+          .select('id, local, created_at')
+          .eq('encuesta_id', encuestaId)
+          .order('created_at', { ascending: false })
+          .range(desde, desde + PAGE - 1),
+      )
+      const ids = resp.map((r) => r.id)
+      let its: Item[] = []
+      if (ids.length) {
+        // items en tandas por si hay muchas respuestas
+        for (let i = 0; i < ids.length; i += 200) {
+          const trozo = ids.slice(i, i + 200)
+          const parte = await cargarTodo<Item>((desde) =>
+            supabase!
+              .from('encuesta_respuesta_items')
+              .select('respuesta_id, pregunta_id, tipo, estrellas, valor, valor_texto')
+              .in('respuesta_id', trozo)
+              .range(desde, desde + PAGE - 1),
+          )
+          its = its.concat(parte)
+        }
+      }
+      setPreguntas((preg as Pregunta[]) ?? [])
+      setRespuestas(resp)
+      setItems(its)
+      setCargandoDatos(false)
+    })()
+  }, [encuestaId])
 
   const nombrePorCodigo = useMemo(() => {
     const m = new Map<string, string>()
@@ -73,35 +122,114 @@ export default function Opiniones() {
     return m
   }, [locales])
 
-  // Resumen por local (incluye locales sin opiniones)
-  const resumen = useMemo(() => {
-    const porLocal = new Map<string, Opinion[]>()
-    opiniones.forEach((o) => {
-      const arr = porLocal.get(o.local) ?? []
-      arr.push(o)
-      porLocal.set(o.local, arr)
+  // max valor por pregunta de estrellas (para puntuación porcentual)
+  const maxValorPreg = useMemo(() => {
+    const m = new Map<string, number>()
+    preguntas.forEach((p) => {
+      if (p.tipo !== 'estrellas') return
+      const vals = p.config.valores ?? []
+      const max = vals.length ? Math.max(...vals.map((v) => v.valor)) : p.config.max ?? 5
+      m.set(p.id, max)
     })
-    const codigos = new Set<string>([...locales.map((l) => l.codigo), ...porLocal.keys()])
+    return m
+  }, [preguntas])
+
+  const esEstrella = useMemo(() => {
+    const m = new Map<string, boolean>()
+    preguntas.forEach((p) => m.set(p.id, p.tipo === 'estrellas'))
+    return m
+  }, [preguntas])
+
+  // Promedio general de estrellas + puntuación %
+  const global = useMemo(() => {
+    const est = items.filter((i) => esEstrella.get(i.pregunta_id) && i.estrellas != null)
+    const promEstrellas = prom(est.map((i) => Number(i.estrellas)))
+    let sumV = 0
+    let sumMax = 0
+    est.forEach((i) => {
+      sumV += Number(i.valor ?? 0)
+      sumMax += maxValorPreg.get(i.pregunta_id) ?? 0
+    })
+    const pct = sumMax ? (sumV / sumMax) * 100 : 0
+    return { promEstrellas, pct, totalRespuestas: respuestas.length }
+  }, [items, esEstrella, maxValorPreg, respuestas])
+
+  // Promedio por pregunta
+  const porPregunta = useMemo(() => {
+    return preguntas
+      .filter((p) => p.tipo !== 'texto')
+      .map((p) => {
+        const its = items.filter((i) => i.pregunta_id === p.id)
+        if (p.tipo === 'estrellas') {
+          return { p, tipo: 'estrellas' as const, valor: prom(its.map((i) => Number(i.estrellas ?? 0))), n: its.length }
+        }
+        return { p, tipo: 'valor' as const, valor: prom(its.map((i) => Number(i.valor ?? 0))), n: its.length }
+      })
+  }, [preguntas, items])
+
+  // Resumen por local
+  const respPorLocal = useMemo(() => {
+    const m = new Map<string, Set<string>>()
+    respuestas.forEach((r) => {
+      const k = r.local ?? '—'
+      if (!m.has(k)) m.set(k, new Set())
+      m.get(k)!.add(r.id)
+    })
+    return m
+  }, [respuestas])
+
+  const comentariosPorRespuesta = useMemo(() => {
+    const m = new Map<string, string[]>()
+    items.forEach((i) => {
+      if (i.tipo === 'texto' && i.valor_texto) {
+        const arr = m.get(i.respuesta_id) ?? []
+        arr.push(i.valor_texto)
+        m.set(i.respuesta_id, arr)
+      }
+    })
+    return m
+  }, [items])
+
+  const resumenLocales = useMemo(() => {
+    const respById = new Map(respuestas.map((r) => [r.id, r]))
+    const itemsByResp = new Map<string, Item[]>()
+    items.forEach((i) => {
+      const a = itemsByResp.get(i.respuesta_id) ?? []
+      a.push(i)
+      itemsByResp.set(i.respuesta_id, a)
+    })
+    const codigos = new Set<string>([...locales.map((l) => l.codigo), ...respPorLocal.keys()])
     return [...codigos]
+      .filter((c) => c !== '—')
       .map((codigo) => {
-        const ops = porLocal.get(codigo) ?? []
-        const total = ops.length
-        const prom = total ? ops.reduce((s, o) => s + o.puntaje, 0) / total : 0
+        const respIds = respPorLocal.get(codigo) ?? new Set()
+        const estrellasLocal: number[] = []
+        const comentarios: { txt: string; fecha: string }[] = []
+        respIds.forEach((rid) => {
+          ;(itemsByResp.get(rid) ?? []).forEach((i) => {
+            if (esEstrella.get(i.pregunta_id) && i.estrellas != null) estrellasLocal.push(Number(i.estrellas))
+          })
+          const r = respById.get(rid)
+          ;(comentariosPorRespuesta.get(rid) ?? []).forEach((txt) =>
+            comentarios.push({ txt, fecha: r?.created_at ?? '' }),
+          )
+        })
         return {
           codigo,
           nombre: nombrePorCodigo.get(codigo) ?? codigo,
-          total,
-          prom,
-          ops,
+          total: respIds.size,
+          prom: prom(estrellasLocal),
+          comentarios: comentarios.sort((a, b) => (a.fecha < b.fecha ? 1 : -1)),
         }
       })
       .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
-  }, [opiniones, locales, nombrePorCodigo])
+  }, [locales, respPorLocal, items, esEstrella, comentariosPorRespuesta, respuestas, nombrePorCodigo])
 
-  const totalOpiniones = opiniones.length
-  const promGeneral = totalOpiniones
-    ? opiniones.reduce((s, o) => s + o.puntaje, 0) / totalOpiniones
-    : 0
+  const encuestaSel = encuestas.find((e) => e.id === encuestaId)
+  const maxEstrellas = useMemo(() => {
+    const p = preguntas.find((q) => q.tipo === 'estrellas')
+    return p?.config.max ?? 5
+  }, [preguntas])
 
   function linkPublico(codigo: string) {
     return `${window.location.origin}/opinar/${encodeURIComponent(codigo)}`
@@ -116,136 +244,164 @@ export default function Opiniones() {
     }
   }
   function fecha(iso: string) {
-    return new Date(iso).toLocaleDateString('es-AR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: '2-digit',
-    })
+    return iso
+      ? new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+      : ''
   }
 
   return (
     <Layout>
       <BackButton />
 
-      <header className="mb-6 mt-2">
-        <h1 className="font-display text-2xl font-semibold text-ink">Opiniones</h1>
-        <p className="mt-1 text-sm text-sub">
-          Puntaje de clientes por local. Compartí el enlace o el QR en cada tienda.
-        </p>
-      </header>
-
-      {!cargando && (
-        <div className="mb-6 flex flex-wrap items-center gap-4 rounded-2xl border border-line bg-surface p-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-display text-3xl font-bold text-ink">
-                {promGeneral ? promGeneral.toFixed(1) : '—'}
-              </span>
-              <Estrellas valor={promGeneral} size={20} />
-            </div>
-            <p className="mt-0.5 text-xs text-sub">
-              {totalOpiniones} opinión{totalOpiniones === 1 ? '' : 'es'} en total
-            </p>
-          </div>
+      <header className="mb-5 mt-2 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="font-display text-2xl font-semibold text-ink">Opiniones</h1>
+          <p className="mt-1 text-sm text-sub">Resultados de encuestas por local. Compartí el enlace o el QR.</p>
         </div>
-      )}
+        {encuestas.length > 1 && (
+          <select
+            value={encuestaId}
+            onChange={(e) => {
+              setEncuestaId(e.target.value)
+              setAbierto(null)
+            }}
+            className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus-visible:border-brand-500"
+          >
+            {encuestas.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.nombre}
+              </option>
+            ))}
+          </select>
+        )}
+      </header>
 
       {cargando ? (
         <p className="text-sm text-sub">Cargando…</p>
+      ) : !encuestaSel ? (
+        <p className="text-sm text-sub">No hay encuestas creadas todavía.</p>
       ) : (
-        <div className="space-y-2">
-          {resumen.map((r) => {
-            const open = abierto === r.codigo
-            return (
-              <div key={r.codigo} className="overflow-hidden rounded-2xl border border-line bg-surface">
-                <div className="flex items-center gap-3 p-3">
-                  <button
-                    onClick={() => setAbierto(open ? null : r.codigo)}
-                    className="flex flex-1 items-center gap-3 text-left"
-                  >
-                    <ChevronDown
-                      size={16}
-                      aria-hidden
-                      className={`shrink-0 text-sub transition-transform ${open ? 'rotate-180' : ''}`}
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium text-ink">{r.nombre}</span>
-                      <span className="text-xs text-sub">
-                        {r.total ? `${r.total} opinión${r.total === 1 ? '' : 'es'}` : 'Sin opiniones'}
-                      </span>
-                    </span>
-                    <span className="flex items-center gap-2">
-                      <span className="font-display text-lg font-semibold text-ink">
-                        {r.total ? r.prom.toFixed(1) : '—'}
-                      </span>
-                      <Estrellas valor={r.prom} />
-                    </span>
-                  </button>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <button
-                      onClick={() => copiar(r.codigo)}
-                      title="Copiar enlace público"
-                      className="btn-press rounded-lg border border-line p-2 text-sub hover:text-ink"
-                    >
-                      {copiado === r.codigo ? (
-                        <Check size={15} className="text-emerald-400" aria-hidden />
-                      ) : (
-                        <Copy size={15} aria-hidden />
-                      )}
-                    </button>
-                    <button
-                      onClick={() => setQr(qr === r.codigo ? null : r.codigo)}
-                      title="Ver QR"
-                      className="btn-press rounded-lg border border-line p-2 text-sub hover:text-ink"
-                    >
-                      <QrCode size={15} aria-hidden />
-                    </button>
-                  </div>
-                </div>
-
-                {qr === r.codigo && (
-                  <div className="flex flex-col items-center gap-2 border-t border-line bg-surface2 p-4">
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=8&data=${encodeURIComponent(
-                        linkPublico(r.codigo),
-                      )}`}
-                      alt={`QR para opinar sobre ${r.nombre}`}
-                      width={180}
-                      height={180}
-                      className="rounded-xl bg-white p-2"
-                    />
-                    <code className="max-w-full truncate text-xs text-sub">{linkPublico(r.codigo)}</code>
-                  </div>
-                )}
-
-                {open && (
-                  <div className="border-t border-line bg-surface2 p-3">
-                    {r.ops.length === 0 ? (
-                      <p className="text-sm text-sub">Todavía no hay opiniones de este local.</p>
-                    ) : (
-                      <ul className="space-y-2">
-                        {r.ops.map((o) => (
-                          <li key={o.id} className="rounded-xl border border-line bg-surface p-3">
-                            <div className="flex items-center justify-between gap-2">
-                              <Estrellas valor={o.puntaje} />
-                              <span className="text-xs text-sub">{fecha(o.created_at)}</span>
-                            </div>
-                            {o.comentario && (
-                              <p className="mt-1.5 flex items-start gap-1.5 text-sm text-ink">
-                                <MessageSquare size={14} className="mt-0.5 shrink-0 text-sub" aria-hidden />
-                                <span>{o.comentario}</span>
-                              </p>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
+        <>
+          {/* Resumen global */}
+          <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl border border-line bg-surface p-4">
+              <div className="flex items-center gap-2">
+                <span className="font-display text-3xl font-bold text-ink">
+                  {global.promEstrellas ? global.promEstrellas.toFixed(1) : '—'}
+                </span>
+                <StarRating value={global.promEstrellas} max={maxEstrellas} readOnly size={18} />
               </div>
-            )
-          })}
-        </div>
+              <p className="mt-0.5 text-xs text-sub">Promedio de estrellas</p>
+            </div>
+            <div className="rounded-2xl border border-line bg-surface p-4">
+              <span className="font-display text-3xl font-bold text-ink">
+                {global.pct ? `${global.pct.toFixed(0)}%` : '—'}
+              </span>
+              <p className="mt-0.5 text-xs text-sub">Puntuación porcentual</p>
+            </div>
+            <div className="rounded-2xl border border-line bg-surface p-4">
+              <span className="font-display text-3xl font-bold text-ink">{global.totalRespuestas}</span>
+              <p className="mt-0.5 text-xs text-sub">Respuestas totales</p>
+            </div>
+          </div>
+
+          {/* Promedio por pregunta */}
+          {porPregunta.length > 0 && (
+            <div className="mb-6 rounded-2xl border border-line bg-surface p-4">
+              <h2 className="mb-3 text-sm font-semibold text-ink">Promedio por pregunta</h2>
+              <div className="space-y-2.5">
+                {porPregunta.map(({ p, tipo, valor, n }) => (
+                  <div key={p.id} className="flex items-center justify-between gap-3">
+                    <span className="min-w-0 flex-1 truncate text-sm text-ink">{p.texto}</span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      {tipo === 'estrellas' ? (
+                        <>
+                          <span className="text-sm font-semibold text-ink">{n ? valor.toFixed(1) : '—'}</span>
+                          <StarRating value={valor} max={p.config.max ?? 5} readOnly size={15} />
+                        </>
+                      ) : (
+                        <span className="text-sm font-semibold text-ink">{n ? valor.toFixed(2) : '—'}</span>
+                      )}
+                      <span className="w-10 text-right text-xs text-sub">{n}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {cargandoDatos && <p className="mb-3 text-xs text-sub">Actualizando datos…</p>}
+
+          {/* Por local */}
+          <h2 className="mb-2 text-sm font-semibold text-ink">Por local</h2>
+          <div className="space-y-2">
+            {resumenLocales.map((r) => {
+              const open = abierto === r.codigo
+              return (
+                <div key={r.codigo} className="overflow-hidden rounded-2xl border border-line bg-surface">
+                  <div className="flex items-center gap-3 p-3">
+                    <button onClick={() => setAbierto(open ? null : r.codigo)} className="flex flex-1 items-center gap-3 text-left">
+                      <ChevronDown size={16} aria-hidden className={`shrink-0 text-sub transition-transform ${open ? 'rotate-180' : ''}`} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium text-ink">{r.nombre}</span>
+                        <span className="text-xs text-sub">
+                          {r.total ? `${r.total} respuesta${r.total === 1 ? '' : 's'}` : 'Sin respuestas'}
+                        </span>
+                      </span>
+                      <span className="flex items-center gap-2">
+                        <span className="font-display text-lg font-semibold text-ink">{r.total ? r.prom.toFixed(1) : '—'}</span>
+                        <StarRating value={r.prom} max={maxEstrellas} readOnly size={15} />
+                      </span>
+                    </button>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button onClick={() => copiar(r.codigo)} title="Copiar enlace público" className="btn-press rounded-lg border border-line p-2 text-sub hover:text-ink">
+                        {copiado === r.codigo ? <Check size={15} className="text-emerald-400" aria-hidden /> : <Copy size={15} aria-hidden />}
+                      </button>
+                      <button onClick={() => setQr(qr === r.codigo ? null : r.codigo)} title="Ver QR" className="btn-press rounded-lg border border-line p-2 text-sub hover:text-ink">
+                        <QrCode size={15} aria-hidden />
+                      </button>
+                    </div>
+                  </div>
+
+                  {qr === r.codigo && (
+                    <div className="flex flex-col items-center gap-2 border-t border-line bg-surface2 p-4">
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=8&data=${encodeURIComponent(linkPublico(r.codigo))}`}
+                        alt={`QR para opinar sobre ${r.nombre}`}
+                        width={180}
+                        height={180}
+                        className="rounded-xl bg-white p-2"
+                      />
+                      <code className="max-w-full truncate text-xs text-sub">{linkPublico(r.codigo)}</code>
+                    </div>
+                  )}
+
+                  {open && (
+                    <div className="border-t border-line bg-surface2 p-3">
+                      {r.comentarios.length === 0 ? (
+                        <p className="text-sm text-sub">Sin comentarios.</p>
+                      ) : (
+                        <ul className="space-y-2">
+                          {r.comentarios.map((c, idx) => (
+                            <li key={idx} className="rounded-xl border border-line bg-surface p-3">
+                              <div className="flex items-start justify-between gap-2">
+                                <p className="flex items-start gap-1.5 text-sm text-ink">
+                                  <MessageSquare size={14} className="mt-0.5 shrink-0 text-sub" aria-hidden />
+                                  <span>{c.txt}</span>
+                                </p>
+                                <span className="shrink-0 text-xs text-sub">{fecha(c.fecha)}</span>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </>
       )}
     </Layout>
   )

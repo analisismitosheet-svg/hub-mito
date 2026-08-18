@@ -16,6 +16,7 @@ import Transferencias from '@/pages/Transferencias'
 import Mayorista from '@/pages/Mayorista'
 import Opiniones from '@/pages/Opiniones'
 import Opinar from '@/pages/Opinar'
+import EncuestasAdmin from '@/pages/EncuestasAdmin'
 import Configuraciones from '@/pages/Configuraciones'
 import ComingSoon from '@/pages/ComingSoon'
 
@@ -92,6 +93,14 @@ export default function App() {
             element={
               <PermissionRoute permiso="opiniones.view">
                 <Opiniones />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/encuestas"
+            element={
+              <PermissionRoute permiso="encuestas.gestionar">
+                <EncuestasAdmin />
               </PermissionRoute>
             }
           />

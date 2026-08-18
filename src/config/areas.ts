@@ -22,6 +22,7 @@ import {
   Eye,
   ArrowRightLeft,
   Star,
+  ListChecks,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -197,12 +198,23 @@ export const APPS: AppDef[] = [
     id: 'opiniones',
     areaId: 'locales',
     title: 'Opiniones',
-    description: 'Puntaje de clientes por local. Enlace y QR público.',
+    description: 'Resultados de encuestas por local. Enlace y QR público.',
     icon: Star,
     kind: 'internal',
     target: '/opiniones',
     color: '#f59e0b',
     permiso: 'opiniones.view',
+  },
+  {
+    id: 'encuestas',
+    areaId: 'locales',
+    title: 'Encuestas',
+    description: 'Configurar preguntas y tipos de respuesta (estrellas, etc.).',
+    icon: ListChecks,
+    kind: 'internal',
+    target: '/encuestas',
+    color: '#f59e0b',
+    permiso: 'encuestas.gestionar',
   },
   {
     id: 'replicas',
