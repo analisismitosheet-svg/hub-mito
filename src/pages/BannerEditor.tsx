@@ -130,7 +130,7 @@ export default function BannerEditor() {
       <div className="mb-5">
         <p className="mb-2 text-xs text-sub">Vista previa</p>
         {cfg.enabled ? (
-          <BannerView config={cfg} />
+          <BannerView config={cfg} editable onLogoMove={(x, y) => set({ logo_x: x, logo_y: y })} />
         ) : (
           <div className="rounded-2xl border border-dashed border-line2 bg-surface2 p-6 text-center text-sm text-sub">
             El banner está desactivado. Activalo abajo para verlo y mostrarlo en el menú.
@@ -272,6 +272,31 @@ export default function BannerEditor() {
           <Campo label="Alto del logo (px)">
             <input type="number" value={cfg.logo_height} onChange={(e) => set({ logo_height: Number(e.target.value) })} className={inputCls} />
           </Campo>
+
+          <label className="flex items-center justify-between gap-2 rounded-lg border border-line bg-surface2 px-3 py-2">
+            <span className="text-sm text-ink">Posición libre (arrastrar)</span>
+            <button
+              type="button"
+              onClick={() => set({ logo_free: !cfg.logo_free })}
+              className={`relative h-6 w-11 rounded-full transition ${cfg.logo_free ? 'bg-brand-600' : 'bg-line2'}`}
+            >
+              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${cfg.logo_free ? 'left-[22px]' : 'left-0.5'}`} />
+            </button>
+          </label>
+
+          {cfg.logo_free && (
+            <>
+              <p className="text-xs text-sub">Arrastrá el logo directamente sobre la vista previa de arriba, o ajustá con precisión:</p>
+              <div className="grid grid-cols-2 gap-3">
+                <Campo label={`Horizontal (${Math.round(cfg.logo_x)}%)`}>
+                  <input type="range" min={0} max={100} step={0.5} value={cfg.logo_x} onChange={(e) => set({ logo_x: Number(e.target.value) })} className="w-full" />
+                </Campo>
+                <Campo label={`Vertical (${Math.round(cfg.logo_y)}%)`}>
+                  <input type="range" min={0} max={100} step={0.5} value={cfg.logo_y} onChange={(e) => set({ logo_y: Number(e.target.value) })} className="w-full" />
+                </Campo>
+              </div>
+            </>
+          )}
         </section>
 
         {/* Botón */}
