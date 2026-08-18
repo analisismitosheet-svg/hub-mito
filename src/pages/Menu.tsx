@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { Settings, ArrowRight } from 'lucide-react'
 import Layout from '@/components/Layout'
 import AreaCard from '@/components/AreaCard'
-import Banner from '@/components/Banner'
 import { AREAS } from '@/config/areas'
 import { useAuth } from '@/context/AuthContext'
 import { supabase } from '@/lib/supabase'
@@ -70,8 +69,6 @@ export default function Menu() {
 
   return (
     <Layout>
-      <Banner />
-
       <div className="mb-6">
         <h1 className="font-display text-2xl font-bold text-ink">Áreas</h1>
         <p className="mt-1 text-sub">Elegí un área para ver sus aplicaciones.</p>

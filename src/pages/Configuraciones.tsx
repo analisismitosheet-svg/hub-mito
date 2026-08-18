@@ -220,17 +220,17 @@ export default function Configuraciones() {
         <ChevronRight size={18} className="shrink-0 text-sub" aria-hidden />
       </Link>
 
-      {/* Editor de banner */}
+      {/* Editor de etiqueta del QR */}
       <Link
-        to="/banner"
+        to="/qr-etiqueta"
         className="mb-6 flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 shadow-soft transition duration-250 hover:border-line2"
       >
         <div className="rounded-xl border p-3" style={{ color: '#0ea5e9', backgroundColor: '#0ea5e924', borderColor: '#0ea5e940' }}>
           <ImageIcon size={22} aria-hidden />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="font-display font-semibold text-ink">Banner del menú</div>
-          <p className="text-sm text-sub">Crear y personalizar el banner: imágenes, colores, textos y botón.</p>
+          <div className="font-display font-semibold text-ink">Etiqueta del QR</div>
+          <p className="text-sm text-sub">Diseñar la impresión del QR: logo, textos y tamaños, con vista previa.</p>
         </div>
         <ChevronRight size={18} className="shrink-0 text-sub" aria-hidden />
       </Link>

@@ -17,7 +17,7 @@ import Mayorista from '@/pages/Mayorista'
 import Opiniones from '@/pages/Opiniones'
 import Opinar from '@/pages/Opinar'
 import EncuestasAdmin from '@/pages/EncuestasAdmin'
-import BannerEditor from '@/pages/BannerEditor'
+import QrEtiquetaEditor from '@/pages/QrEtiquetaEditor'
 import Configuraciones from '@/pages/Configuraciones'
 import ComingSoon from '@/pages/ComingSoon'
 
@@ -106,10 +106,10 @@ export default function App() {
             }
           />
           <Route
-            path="/banner"
+            path="/qr-etiqueta"
             element={
               <PermissionRoute permiso="banner.editar">
-                <BannerEditor />
+                <QrEtiquetaEditor />
               </PermissionRoute>
             }
           />
