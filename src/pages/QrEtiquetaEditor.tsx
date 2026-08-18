@@ -7,6 +7,8 @@ import {
   QrLabelPreview,
   imprimirEtiquetaQR,
   QR_LABEL_DEFAULT,
+  PAPELES,
+  paperPorKey,
   type QrLabelConfig,
 } from '@/components/QrEtiqueta'
 
@@ -18,6 +20,15 @@ function Campo({ label, children }: { label: string; children: ReactNode }) {
       <span className="text-xs text-sub">{label}</span>
       <div className="mt-1">{children}</div>
     </label>
+  )
+}
+
+function Color({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="flex items-center gap-2">
+      <input type="color" value={value} onChange={(e) => onChange(e.target.value)} className="h-9 w-12 cursor-pointer rounded-lg border border-line bg-surface2" />
+      <input value={value} onChange={(e) => onChange(e.target.value)} className="w-24 rounded-lg border border-line bg-surface2 px-2 py-1.5 text-sm text-ink outline-none focus-visible:border-brand-500" />
+    </div>
   )
 }
 
@@ -132,9 +143,27 @@ export default function QrEtiquetaEditor() {
           {/* Formato */}
           <section className="space-y-3 rounded-2xl border border-line bg-surface p-4 sm:col-span-2">
             <h2 className="text-sm font-semibold text-ink">Formato de etiqueta</h2>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <Campo label="Ancho de etiqueta (mm)">
-                <input type="number" value={cfg.ancho_mm} onChange={(e) => set({ ancho_mm: Number(e.target.value) })} className={inputCls} />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <Campo label="Tamaño de papel / etiqueta">
+                <select
+                  value={cfg.paper}
+                  onChange={(e) => {
+                    const key = e.target.value
+                    if (key === 'custom') {
+                      set({ paper: key })
+                    } else {
+                      const p = paperPorKey(key)
+                      set({ paper: key, ancho_mm: p.w, alto_mm: p.h })
+                    }
+                  }}
+                  className={inputCls}
+                >
+                  {PAPELES.map((p) => (
+                    <option key={p.key} value={p.key}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
               </Campo>
               <Campo label="Tamaño del QR (mm)">
                 <input type="number" value={cfg.qr_mm} onChange={(e) => set({ qr_mm: Number(e.target.value) })} className={inputCls} />
@@ -147,6 +176,27 @@ export default function QrEtiquetaEditor() {
                 </select>
               </Campo>
             </div>
+
+            {cfg.paper === 'custom' && (
+              <div className="grid grid-cols-2 gap-3">
+                <Campo label="Ancho (mm)">
+                  <input type="number" value={cfg.ancho_mm} onChange={(e) => set({ ancho_mm: Number(e.target.value) })} className={inputCls} />
+                </Campo>
+                <Campo label="Alto (mm, 0 = automático)">
+                  <input type="number" value={cfg.alto_mm} onChange={(e) => set({ alto_mm: Number(e.target.value) })} className={inputCls} />
+                </Campo>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <Campo label="Color de fondo">
+                <Color value={cfg.bg_color} onChange={(v) => set({ bg_color: v })} />
+              </Campo>
+              <Campo label="Color del texto">
+                <Color value={cfg.text_color} onChange={(v) => set({ text_color: v })} />
+              </Campo>
+            </div>
+            <p className="text-xs text-sub">Nota: las impresoras térmicas imprimen en blanco y negro; los colores se ven en pantalla y en impresoras de tinta/láser.</p>
           </section>
 
           {/* Logo */}

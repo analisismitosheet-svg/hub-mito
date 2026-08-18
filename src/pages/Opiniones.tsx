@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import StarRating from '@/components/StarRating'
-import { imprimirEtiquetaQR, QR_LABEL_DEFAULT, type QrLabelConfig } from '@/components/QrEtiqueta'
+import { buildLabelHtml, QR_LABEL_DEFAULT, type QrLabelConfig } from '@/components/QrEtiqueta'
 import type { Encuesta, Pregunta } from '@/types/encuestas'
 
 interface Local {
@@ -247,6 +247,25 @@ export default function Opiniones() {
   function linkPublico(codigo: string) {
     return `${window.location.origin}/opinar/${encodeURIComponent(codigo)}`
   }
+  /** Imprime la etiqueta leyendo SIEMPRE el diseño más reciente guardado. */
+  function imprimir(nombre: string, url: string) {
+    const w = window.open('', '_blank', 'width=480,height=680')
+    if (!w) return
+    w.document.write('<p style="font-family:Arial,sans-serif;padding:16px;color:#333">Generando etiqueta…</p>')
+    ;(async () => {
+      let cfg = qrCfg
+      if (supabase) {
+        const { data } = await supabase.from('config_app').select('valor').eq('clave', 'qr_etiqueta').maybeSingle()
+        if (data?.valor) {
+          cfg = { ...QR_LABEL_DEFAULT, ...(data.valor as Partial<QrLabelConfig>) }
+          setQrCfg(cfg)
+        }
+      }
+      w.document.open()
+      w.document.write(buildLabelHtml(cfg, nombre, url))
+      w.document.close()
+    })()
+  }
   async function copiar(codigo: string) {
     try {
       await navigator.clipboard.writeText(linkPublico(codigo))
@@ -386,7 +405,7 @@ export default function Opiniones() {
                       <button onClick={() => setQr(qr === r.codigo ? null : r.codigo)} title="Ver QR" className="btn-press rounded-lg border border-line p-2 text-sub hover:text-ink">
                         <QrCode size={15} aria-hidden />
                       </button>
-                      <button onClick={() => imprimirEtiquetaQR(qrCfg, r.nombre, linkPublico(r.codigo))} title="Imprimir QR" className="btn-press rounded-lg border border-line p-2 text-sub hover:text-ink">
+                      <button onClick={() => imprimir(r.nombre, linkPublico(r.codigo))} title="Imprimir QR" className="btn-press rounded-lg border border-line p-2 text-sub hover:text-ink">
                         <Printer size={15} aria-hidden />
                       </button>
                     </div>
