@@ -21,6 +21,7 @@ import {
   CreditCard,
   Eye,
   ArrowRightLeft,
+  Star,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -191,6 +192,17 @@ export const APPS: AppDef[] = [
     target: '/transferencias',
     color: '#d97706',
     permiso: 'transferencias.view',
+  },
+  {
+    id: 'opiniones',
+    areaId: 'locales',
+    title: 'Opiniones',
+    description: 'Puntaje de clientes por local. Enlace y QR público.',
+    icon: Star,
+    kind: 'internal',
+    target: '/opiniones',
+    color: '#f59e0b',
+    permiso: 'opiniones.view',
   },
   {
     id: 'replicas',

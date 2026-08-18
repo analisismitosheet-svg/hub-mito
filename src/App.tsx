@@ -14,6 +14,8 @@ import Documentos from '@/pages/Documentos'
 import Manuales from '@/pages/Manuales'
 import Transferencias from '@/pages/Transferencias'
 import Mayorista from '@/pages/Mayorista'
+import Opiniones from '@/pages/Opiniones'
+import Opinar from '@/pages/Opinar'
 import Configuraciones from '@/pages/Configuraciones'
 import ComingSoon from '@/pages/ComingSoon'
 
@@ -24,6 +26,8 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          {/* Enlace público para que los clientes puntúen un local (sin login) */}
+          <Route path="/opinar/:local" element={<Opinar />} />
           {/* Pantalla para autenticados no aprobados (pendiente/rechazado/desactivado) */}
           <Route path="/acceso" element={<Acceso />} />
 
@@ -80,6 +84,14 @@ export default function App() {
             element={
               <PermissionRoute permiso="mayorista.view">
                 <Mayorista />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/opiniones"
+            element={
+              <PermissionRoute permiso="opiniones.view">
+                <Opiniones />
               </PermissionRoute>
             }
           />
