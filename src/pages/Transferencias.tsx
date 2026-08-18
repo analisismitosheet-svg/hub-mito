@@ -89,23 +89,21 @@ function imprimirCascada(origen: string, items: Item[], lote: Lote) {
   // Columnas = destinos únicos (alfabético)
   const destinos = Array.from(new Set(items.map((i) => i.destino))).sort((a, b) => a.localeCompare(b, 'es'))
 
-  // Filas = artículo/desc/material/color/talle/tipo, con cantidad por destino
+  // Filas = artículo/desc/color/talle, con cantidad por destino
   type Fila = {
-    articulo: string; desc: string; material: string; color: string; talle: string; tipo: string
+    articulo: string; desc: string; color: string; talle: string
     porDestino: Record<string, number>; total: number
   }
   const mapa = new Map<string, Fila>()
   for (const i of items) {
     const articulo = i.articulo ?? ''
     const desc = i.descripcion ?? ''
-    const material = i.material ?? ''
     const color = i.color ?? ''
     const talle = i.talle ?? ''
-    const tipo = i.tipo ?? ''
-    const key = [articulo, desc, material, color, talle, tipo].join('¦')
+    const key = [articulo, desc, color, talle].join('¦')
     let f = mapa.get(key)
     if (!f) {
-      f = { articulo, desc, material, color, talle, tipo, porDestino: {}, total: 0 }
+      f = { articulo, desc, color, talle, porDestino: {}, total: 0 }
       mapa.set(key, f)
     }
     const q = i.cantidad || 1
@@ -117,7 +115,7 @@ function imprimirCascada(origen: string, items: Item[], lote: Lote) {
 
   const th = (t: string, extra = '') => `<th class="${extra}">${escHtml(t)}</th>`
   const encabezados =
-    th('ARTICULO', 'l') + th('DESC ADICIONAL MACRO', 'l') + th('MATERIAL', 'l') + th('COLOR') + th('TALLE') + th('TIPO') +
+    th('ARTICULO', 'l') + th('DESC ADICIONAL MACRO', 'l') + th('COLOR') + th('TALLE') +
     destinos.map((d) => th(d, 'dest')).join('') + th('TOTAL', 'tot')
 
   const cuerpo = filas
@@ -129,10 +127,8 @@ function imprimirCascada(origen: string, items: Item[], lote: Lote) {
         `<tr>` +
         `<td class="l">${escHtml(f.articulo)}</td>` +
         `<td class="l">${escHtml(f.desc)}</td>` +
-        `<td class="l">${escHtml(f.material)}</td>` +
         `<td>${escHtml(f.color)}</td>` +
         `<td>${escHtml(f.talle)}</td>` +
-        `<td>${escHtml(f.tipo)}</td>` +
         celdasDest +
         `<td class="num tot">${f.total}</td>` +
         `</tr>`
