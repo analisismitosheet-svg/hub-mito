@@ -198,10 +198,23 @@ export default function Transferencias() {
       const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' })
       const nuevos: Omit<Item, 'id' | 'lote_id' | 'estado' | 'hecho_at'>[] = []
       let orden = 0
+      const quitarAcentos = (s: string) =>
+        s.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toUpperCase()
       for (const hoja of wb.SheetNames) {
         // La hoja "venta"/"ventas" nunca se importa
         if (['venta', 'ventas'].includes(hoja.trim().toLowerCase())) continue
         const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[hoja], { header: 1, blankrows: false, defval: '' })
+        // Ignorar hojas de resumen/general (no son locales origen).
+        // Los locales origen tienen el título "CASCADA — <LOCAL>" en la primera fila.
+        const nom = quitarAcentos(hoja)
+        const titulo = quitarAcentos(String(rows[0]?.[0] ?? ''))
+        if (
+          ['RESUMEN', 'GENERAL', 'PRIORIDAD', 'HOJA1', 'HOJA2'].includes(nom) ||
+          titulo.startsWith('RESUMEN') ||
+          titulo.startsWith('IMPORTAR') ||
+          titulo.startsWith('GENERAL')
+        )
+          continue
         const hidx = rows.findIndex((r) => r.some((c) => String(c).trim().toUpperCase() === 'ARTICULO'))
         if (hidx < 0) continue
         const header = rows[hidx].map((c) => String(c).trim())
