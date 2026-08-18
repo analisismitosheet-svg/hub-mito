@@ -55,11 +55,11 @@ function fmtHora(iso: string | null) {
   }
 }
 
-// Barra segmentada: verde (hecho) · rojo (faltante) · resto pendiente
+// Barra segmentada por UNIDADES (suma cantidad): verde (hecho) · rojo (faltante)
 function Barra({ items }: { items: Item[] }) {
-  const total = items.length
-  const hecho = items.filter((i) => i.estado === 'hecho').length
-  const faltante = items.filter((i) => i.estado === 'faltante').length
+  const total = items.reduce((s, i) => s + (i.cantidad || 1), 0)
+  const hecho = items.filter((i) => i.estado === 'hecho').reduce((s, i) => s + (i.cantidad || 1), 0)
+  const faltante = items.filter((i) => i.estado === 'faltante').reduce((s, i) => s + (i.cantidad || 1), 0)
   const resueltos = hecho + faltante
   const pct = total ? Math.round((resueltos / total) * 100) : 0
   const w = (n: number) => (total ? `${(n / total) * 100}%` : '0%')
@@ -107,8 +107,8 @@ function Estadisticas({
   puedeEditar: boolean
   onSaved: () => Promise<void>
 }) {
-  const total = items.length
-  const faltantes = items.filter((i) => i.estado === 'faltante').length
+  const total = items.reduce((s, i) => s + (i.cantidad || 1), 0)
+  const faltantes = items.filter((i) => i.estado === 'faltante').reduce((s, i) => s + (i.cantidad || 1), 0)
   const [obs, setObs] = useState(lote.observacion ?? '')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)

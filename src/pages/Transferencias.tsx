@@ -67,16 +67,17 @@ function fmtDuracion(desdeIso: string, hastaIso: string): string {
   return m ? `${h} h ${m} min` : `${h} h`
 }
 
-// Barra segmentada: verde (hecho) · amarillo (señado) · rojo (faltante) · resto pendiente
+// Barra segmentada por UNIDADES (suma cantidad): verde (hecho) · amarillo (señado) · rojo (faltante)
 function Barra({ items }: { items: Item[] }) {
-  const total = items.length
+  const total = items.reduce((s, i) => s + (i.cantidad || 1), 0)
   let hecho = 0,
     senado = 0,
     faltante = 0
   for (const i of items) {
-    if (i.estado === 'hecho') hecho++
-    else if (i.estado === 'senado') senado++
-    else if (i.estado === 'faltante') faltante++
+    const q = i.cantidad || 1
+    if (i.estado === 'hecho') hecho += q
+    else if (i.estado === 'senado') senado += q
+    else if (i.estado === 'faltante') faltante += q
   }
   const resueltos = hecho + senado + faltante
   const pct = total ? Math.round((resueltos / total) * 100) : 0
