@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { QrCode, Copy, Check, MessageSquare, ChevronDown, Trash2, ArrowDownUp } from 'lucide-react'
+import { QrCode, Copy, Check, MessageSquare, ChevronDown, Trash2, ArrowDownUp, Printer } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import Layout from '@/components/Layout'
@@ -41,6 +41,44 @@ async function cargarTodo<T>(build: (desde: number) => PromiseLike<{ data: T[] |
 
 function prom(nums: number[]) {
   return nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : 0
+}
+
+function escHtml(s: string) {
+  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string))
+}
+
+/** Abre una ventana con la etiqueta del QR optimizada para impresoras térmicas (ancho ~50mm, monocromo). */
+function imprimirEtiquetaQR(nombre: string, url: string) {
+  const qr = `https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=0&ecc=M&data=${encodeURIComponent(url)}`
+  const w = window.open('', '_blank', 'width=420,height=600')
+  if (!w) return
+  w.document.write(
+    `<!doctype html><html><head><meta charset="utf-8"><title>QR ${escHtml(nombre)}</title>
+<style>
+  @page { size: 50mm auto; margin: 2mm; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #fff; color: #000; }
+  .lbl { width: 46mm; margin: 0 auto; text-align: center; font-family: Arial, Helvetica, sans-serif; padding: 2mm 0; }
+  .nombre { font-size: 11pt; font-weight: 700; line-height: 1.15; margin-bottom: 2mm; }
+  .qr { width: 42mm; height: 42mm; display: block; margin: 0 auto; image-rendering: pixelated; }
+  .cta { font-size: 8pt; margin-top: 2mm; }
+  .url { font-size: 6pt; word-break: break-all; margin-top: 1mm; }
+  @media screen { body { padding: 16px; } .lbl { border: 1px dashed #999; } }
+</style></head>
+<body><div class="lbl">
+  <div class="nombre">${escHtml(nombre)}</div>
+  <img class="qr" src="${qr}" alt="QR"/>
+  <div class="cta">Escaneá y dejanos tu opinión</div>
+  <div class="url">${escHtml(url)}</div>
+</div>
+<script>
+  var img = document.querySelector('img');
+  function go(){ setTimeout(function(){ window.focus(); window.print(); }, 200); }
+  if (img.complete) { go(); } else { img.onload = go; img.onerror = go; }
+<\/script>
+</body></html>`,
+  )
+  w.document.close()
 }
 
 export default function Opiniones() {
@@ -374,6 +412,9 @@ export default function Opiniones() {
                       </button>
                       <button onClick={() => setQr(qr === r.codigo ? null : r.codigo)} title="Ver QR" className="btn-press rounded-lg border border-line p-2 text-sub hover:text-ink">
                         <QrCode size={15} aria-hidden />
+                      </button>
+                      <button onClick={() => imprimirEtiquetaQR(r.nombre, linkPublico(r.codigo))} title="Imprimir QR" className="btn-press rounded-lg border border-line p-2 text-sub hover:text-ink">
+                        <Printer size={15} aria-hidden />
                       </button>
                     </div>
                   </div>

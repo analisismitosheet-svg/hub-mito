@@ -17,6 +17,7 @@ import Mayorista from '@/pages/Mayorista'
 import Opiniones from '@/pages/Opiniones'
 import Opinar from '@/pages/Opinar'
 import EncuestasAdmin from '@/pages/EncuestasAdmin'
+import BannerEditor from '@/pages/BannerEditor'
 import Configuraciones from '@/pages/Configuraciones'
 import ComingSoon from '@/pages/ComingSoon'
 
@@ -101,6 +102,14 @@ export default function App() {
             element={
               <PermissionRoute permiso="encuestas.gestionar">
                 <EncuestasAdmin />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/banner"
+            element={
+              <PermissionRoute permiso="banner.editar">
+                <BannerEditor />
               </PermissionRoute>
             }
           />

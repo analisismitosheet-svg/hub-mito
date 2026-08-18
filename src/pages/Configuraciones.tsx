@@ -20,6 +20,7 @@ import {
   AlertTriangle,
   ListChecks,
   ChevronRight,
+  Image as ImageIcon,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import { supabase } from '@/lib/supabase'
@@ -215,6 +216,21 @@ export default function Configuraciones() {
         <div className="min-w-0 flex-1">
           <div className="font-display font-semibold text-ink">Encuestas</div>
           <p className="text-sm text-sub">Configurar preguntas y tipos de respuesta (estrellas, Sí/No, texto…).</p>
+        </div>
+        <ChevronRight size={18} className="shrink-0 text-sub" aria-hidden />
+      </Link>
+
+      {/* Editor de banner */}
+      <Link
+        to="/banner"
+        className="mb-6 flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 shadow-soft transition duration-250 hover:border-line2"
+      >
+        <div className="rounded-xl border p-3" style={{ color: '#0ea5e9', backgroundColor: '#0ea5e924', borderColor: '#0ea5e940' }}>
+          <ImageIcon size={22} aria-hidden />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="font-display font-semibold text-ink">Banner del menú</div>
+          <p className="text-sm text-sub">Crear y personalizar el banner: imágenes, colores, textos y botón.</p>
         </div>
         <ChevronRight size={18} className="shrink-0 text-sub" aria-hidden />
       </Link>
