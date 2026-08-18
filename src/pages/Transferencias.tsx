@@ -124,12 +124,23 @@ export default function Transferencias() {
     const lotesData = (ld as Lote[]) ?? []
     setLotes(lotesData)
     if (lotesData.length) {
-      const { data: it } = await supabase
-        .from('transfer_items')
-        .select('id,lote_id,orden,origen,destino,articulo,descripcion,color,talle,cantidad,estado,hecho_at')
-        .in('lote_id', lotesData.map((l) => l.id))
-        .order('orden', { ascending: true })
-      setItems((it as Item[]) ?? [])
+      const ids = lotesData.map((l) => l.id)
+      // Paginar: Supabase corta en 1000 filas por consulta
+      const all: Item[] = []
+      const PAGE = 1000
+      for (let desde = 0; ; desde += PAGE) {
+        const { data, error } = await supabase
+          .from('transfer_items')
+          .select('id,lote_id,orden,origen,destino,articulo,descripcion,color,talle,cantidad,estado,hecho_at')
+          .in('lote_id', ids)
+          .order('lote_id', { ascending: true })
+          .order('orden', { ascending: true })
+          .range(desde, desde + PAGE - 1)
+        const chunk = (data as Item[]) ?? []
+        all.push(...chunk)
+        if (error || chunk.length < PAGE) break
+      }
+      setItems(all)
     } else {
       setItems([])
     }

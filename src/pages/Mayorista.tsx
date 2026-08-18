@@ -208,17 +208,25 @@ export default function Mayorista() {
     setEmpleados((emp as Empleado[]) ?? [])
     if (lotesData.length) {
       const ids = lotesData.map((l) => l.id)
-      const [itR, respR] = await Promise.all([
-        supabase
+      // Paginar los ítems: Supabase corta en 1000 filas por consulta
+      const all: Item[] = []
+      const PAGE = 1000
+      for (let desde = 0; ; desde += PAGE) {
+        const { data, error } = await supabase
           .from('mayorista_items')
           .select('id,lote_id,orden,prioridad,local,material,codigo,articulo,color,talle,cantidad,venta_local,estado,hecho_at')
           .in('lote_id', ids)
-          .order('orden', { ascending: true }),
-        supabase.from('mayorista_responsables').select('lote_id,local,empleado_id').in('lote_id', ids),
-      ])
-      setItems((itR.data as Item[]) ?? [])
+          .order('lote_id', { ascending: true })
+          .order('orden', { ascending: true })
+          .range(desde, desde + PAGE - 1)
+        const chunk = (data as Item[]) ?? []
+        all.push(...chunk)
+        if (error || chunk.length < PAGE) break
+      }
+      setItems(all)
+      const { data: respData } = await supabase.from('mayorista_responsables').select('lote_id,local,empleado_id').in('lote_id', ids)
       const m: Record<string, string | null> = {}
-      for (const r of (respR.data as { lote_id: string; local: string; empleado_id: string | null }[]) ?? []) {
+      for (const r of (respData as { lote_id: string; local: string; empleado_id: string | null }[]) ?? []) {
         m[`${r.lote_id}|${r.local}`] = r.empleado_id
       }
       setResponsables(m)
