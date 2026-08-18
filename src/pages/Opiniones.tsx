@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { QrCode, Copy, Check, MessageSquare, ChevronDown } from 'lucide-react'
+import { QrCode, Copy, Check, MessageSquare, ChevronDown, Trash2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/context/AuthContext'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import StarRating from '@/components/StarRating'
@@ -43,6 +44,8 @@ function prom(nums: number[]) {
 }
 
 export default function Opiniones() {
+  const { can } = useAuth()
+  const puedeBorrar = can('opiniones.borrar')
   const [encuestas, setEncuestas] = useState<Encuesta[]>([])
   const [encuestaId, setEncuestaId] = useState<string>('')
   const [preguntas, setPreguntas] = useState<Pregunta[]>([])
@@ -179,20 +182,7 @@ export default function Opiniones() {
     return m
   }, [respuestas])
 
-  const comentariosPorRespuesta = useMemo(() => {
-    const m = new Map<string, string[]>()
-    items.forEach((i) => {
-      const arr = m.get(i.respuesta_id) ?? []
-      if (i.tipo === 'texto' && i.valor_texto) arr.push(i.valor_texto)
-      // detalle de un Sí/No respondido "No"
-      if (i.tipo === 'si_no' && i.detalle) arr.push(`“No”: ${i.detalle}`)
-      if (arr.length) m.set(i.respuesta_id, arr)
-    })
-    return m
-  }, [items])
-
   const resumenLocales = useMemo(() => {
-    const respById = new Map(respuestas.map((r) => [r.id, r]))
     const itemsByResp = new Map<string, Item[]>()
     items.forEach((i) => {
       const a = itemsByResp.get(i.respuesta_id) ?? []
@@ -205,26 +195,42 @@ export default function Opiniones() {
       .map((codigo) => {
         const respIds = respPorLocal.get(codigo) ?? new Set()
         const estrellasLocal: number[] = []
-        const comentarios: { txt: string; fecha: string }[] = []
-        respIds.forEach((rid) => {
-          ;(itemsByResp.get(rid) ?? []).forEach((i) => {
-            if (esEstrella.get(i.pregunta_id) && i.estrellas != null) estrellasLocal.push(Number(i.estrellas))
+        const submissions: { id: string; fecha: string; estrellas: number | null; textos: string[] }[] = []
+        respuestas
+          .filter((r) => respIds.has(r.id))
+          .forEach((r) => {
+            const its = itemsByResp.get(r.id) ?? []
+            const est = its
+              .filter((i) => esEstrella.get(i.pregunta_id) && i.estrellas != null)
+              .map((i) => Number(i.estrellas))
+            est.forEach((e) => estrellasLocal.push(e))
+            const textos: string[] = []
+            its.forEach((i) => {
+              if (i.tipo === 'texto' && i.valor_texto) textos.push(i.valor_texto)
+              if (i.tipo === 'si_no' && i.detalle) textos.push(`“No”: ${i.detalle}`)
+            })
+            submissions.push({ id: r.id, fecha: r.created_at, estrellas: est.length ? prom(est) : null, textos })
           })
-          const r = respById.get(rid)
-          ;(comentariosPorRespuesta.get(rid) ?? []).forEach((txt) =>
-            comentarios.push({ txt, fecha: r?.created_at ?? '' }),
-          )
-        })
+        submissions.sort((a, b) => (a.fecha < b.fecha ? 1 : -1))
         return {
           codigo,
           nombre: nombrePorCodigo.get(codigo) ?? codigo,
           total: respIds.size,
           prom: prom(estrellasLocal),
-          comentarios: comentarios.sort((a, b) => (a.fecha < b.fecha ? 1 : -1)),
+          submissions,
         }
       })
       .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
-  }, [locales, respPorLocal, items, esEstrella, comentariosPorRespuesta, respuestas, nombrePorCodigo])
+  }, [locales, respPorLocal, items, esEstrella, respuestas, nombrePorCodigo])
+
+  async function borrarOpinion(id: string) {
+    if (!supabase) return
+    if (!confirm('¿Borrar esta opinión? No se puede deshacer.')) return
+    const { error } = await supabase.from('encuesta_respuestas').delete().eq('id', id)
+    if (error) return
+    setRespuestas((rs) => rs.filter((r) => r.id !== id))
+    setItems((its) => its.filter((i) => i.respuesta_id !== id))
+  }
 
   const encuestaSel = encuestas.find((e) => e.id === encuestaId)
   const maxEstrellas = useMemo(() => {
@@ -379,18 +385,39 @@ export default function Opiniones() {
 
                   {open && (
                     <div className="border-t border-line bg-surface2 p-3">
-                      {r.comentarios.length === 0 ? (
-                        <p className="text-sm text-sub">Sin comentarios.</p>
+                      {r.submissions.length === 0 ? (
+                        <p className="text-sm text-sub">Sin opiniones.</p>
                       ) : (
                         <ul className="space-y-2">
-                          {r.comentarios.map((c, idx) => (
-                            <li key={idx} className="rounded-xl border border-line bg-surface p-3">
+                          {r.submissions.map((s) => (
+                            <li key={s.id} className="rounded-xl border border-line bg-surface p-3">
                               <div className="flex items-start justify-between gap-2">
-                                <p className="flex items-start gap-1.5 text-sm text-ink">
-                                  <MessageSquare size={14} className="mt-0.5 shrink-0 text-sub" aria-hidden />
-                                  <span>{c.txt}</span>
-                                </p>
-                                <span className="shrink-0 text-xs text-sub">{fecha(c.fecha)}</span>
+                                <div className="min-w-0 flex-1">
+                                  {s.estrellas != null && (
+                                    <div className="mb-1 flex items-center gap-2">
+                                      <StarRating value={s.estrellas} max={maxEstrellas} readOnly size={14} />
+                                      <span className="text-xs text-sub">{s.estrellas.toFixed(1)}</span>
+                                    </div>
+                                  )}
+                                  {s.textos.map((t, i) => (
+                                    <p key={i} className="flex items-start gap-1.5 text-sm text-ink">
+                                      <MessageSquare size={14} className="mt-0.5 shrink-0 text-sub" aria-hidden />
+                                      <span>{t}</span>
+                                    </p>
+                                  ))}
+                                </div>
+                                <div className="flex shrink-0 items-center gap-2">
+                                  <span className="text-xs text-sub">{fecha(s.fecha)}</span>
+                                  {puedeBorrar && (
+                                    <button
+                                      onClick={() => borrarOpinion(s.id)}
+                                      title="Borrar opinión"
+                                      className="btn-press rounded-lg border border-line p-1.5 text-sub hover:border-brand-600/40 hover:text-brand-400"
+                                    >
+                                      <Trash2 size={14} aria-hidden />
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                             </li>
                           ))}
