@@ -22,6 +22,7 @@ interface Item {
   estrellas: number | null
   valor: number | null
   valor_texto: string | null
+  detalle: string | null
 }
 
 const PAGE = 1000
@@ -102,7 +103,7 @@ export default function Opiniones() {
           const parte = await cargarTodo<Item>((desde) =>
             supabase!
               .from('encuesta_respuesta_items')
-              .select('respuesta_id, pregunta_id, tipo, estrellas, valor, valor_texto')
+              .select('respuesta_id, pregunta_id, tipo, estrellas, valor, valor_texto, detalle')
               .in('respuesta_id', trozo)
               .range(desde, desde + PAGE - 1),
           )
@@ -181,11 +182,11 @@ export default function Opiniones() {
   const comentariosPorRespuesta = useMemo(() => {
     const m = new Map<string, string[]>()
     items.forEach((i) => {
-      if (i.tipo === 'texto' && i.valor_texto) {
-        const arr = m.get(i.respuesta_id) ?? []
-        arr.push(i.valor_texto)
-        m.set(i.respuesta_id, arr)
-      }
+      const arr = m.get(i.respuesta_id) ?? []
+      if (i.tipo === 'texto' && i.valor_texto) arr.push(i.valor_texto)
+      // detalle de un Sí/No respondido "No"
+      if (i.tipo === 'si_no' && i.detalle) arr.push(`“No”: ${i.detalle}`)
+      if (arr.length) m.set(i.respuesta_id, arr)
     })
     return m
   }, [items])

@@ -555,6 +555,43 @@ function ConfigEditor({ form, updConfig }: { form: Pregunta; updConfig: (p: Part
             />
           </div>
         </div>
+
+        <div className="mt-4 space-y-3 border-t border-line pt-4">
+          <label className="flex items-center justify-between gap-2 rounded-lg border border-line bg-surface px-3 py-2">
+            <span className="text-sm text-ink">Pedir un texto cuando responden "No"</span>
+            <button
+              type="button"
+              onClick={() => updConfig({ detalle_no: !cfg.detalle_no })}
+              className={`relative h-6 w-11 rounded-full transition ${cfg.detalle_no ? 'bg-brand-600' : 'bg-line2'}`}
+            >
+              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${cfg.detalle_no ? 'left-[22px]' : 'left-0.5'}`} />
+            </button>
+          </label>
+
+          {cfg.detalle_no && (
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-sub">Texto de ayuda del campo (opcional)</label>
+                <input
+                  value={cfg.detalle_no_label ?? ''}
+                  onChange={(e) => updConfig({ detalle_no_label: e.target.value })}
+                  placeholder="Ej: ¿Qué no encontraste?"
+                  className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus-visible:border-brand-500"
+                />
+              </div>
+              <label className="flex items-center justify-between gap-2 rounded-lg border border-line bg-surface px-3 py-2">
+                <span className="text-sm text-ink">El detalle es obligatorio</span>
+                <button
+                  type="button"
+                  onClick={() => updConfig({ detalle_no_obligatorio: !cfg.detalle_no_obligatorio })}
+                  className={`relative h-6 w-11 rounded-full transition ${cfg.detalle_no_obligatorio ? 'bg-brand-600' : 'bg-line2'}`}
+                >
+                  <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${cfg.detalle_no_obligatorio ? 'left-[22px]' : 'left-0.5'}`} />
+                </button>
+              </label>
+            </div>
+          )}
+        </div>
       </div>
     )
   }

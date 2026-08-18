@@ -37,6 +37,10 @@ export interface PreguntaConfig {
   // si_no
   valor_si?: number
   valor_no?: number
+  /** pedir un texto cuando la respuesta es "No" */
+  detalle_no?: boolean
+  detalle_no_label?: string
+  detalle_no_obligatorio?: boolean
   // opcion_unica / opcion_multiple
   opciones?: OpcionConfig[]
   // numero
@@ -94,6 +98,8 @@ export interface ItemRespuesta {
   estrellas?: number | null
   valor_texto?: string | null
   opciones?: string[] | null
+  /** detalle cuando Sí/No = No */
+  detalle?: string | null
 }
 
 /** Genera la escala de valores por defecto 1..n */

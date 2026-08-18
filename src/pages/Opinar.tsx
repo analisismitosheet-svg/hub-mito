@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 import StarRating from '@/components/StarRating'
 import type { EncuestaPublica, ItemRespuesta } from '@/types/encuestas'
 
-type Resp = { estrellas?: number; valor_texto?: string; opciones?: string[] }
+type Resp = { estrellas?: number; valor_texto?: string; opciones?: string[]; detalle?: string }
 
 export default function Opinar() {
   const { local = '' } = useParams()
@@ -33,8 +33,18 @@ export default function Opinar() {
 
   function faltaObligatoria(): string | null {
     for (const q of preguntas) {
-      if (!q.obligatoria) continue
       const r = resp[q.id]
+      // Detalle obligatorio cuando Sí/No = No
+      if (
+        q.tipo === 'si_no' &&
+        r?.valor_texto === 'no' &&
+        q.config.detalle_no &&
+        q.config.detalle_no_obligatorio &&
+        !r?.detalle?.trim()
+      ) {
+        return q.texto
+      }
+      if (!q.obligatoria) continue
       if (q.tipo === 'estrellas') {
         if (!r?.estrellas) return q.texto
       } else if (q.tipo === 'opcion_multiple') {
@@ -62,6 +72,7 @@ export default function Opinar() {
         estrellas: q.tipo === 'estrellas' ? r.estrellas ?? null : null,
         valor_texto: q.tipo === 'opcion_multiple' || q.tipo === 'estrellas' ? null : r.valor_texto ?? null,
         opciones: q.tipo === 'opcion_multiple' ? r.opciones ?? null : null,
+        detalle: q.tipo === 'si_no' && r.valor_texto === 'no' ? r.detalle ?? null : null,
       }
     })
     const { error } = await supabase.rpc('responder_encuesta', {
@@ -139,21 +150,33 @@ export default function Opinar() {
                       )}
 
                       {q.tipo === 'si_no' && (
-                        <div className="flex gap-2">
-                          {['si', 'no'].map((op) => (
-                            <button
-                              key={op}
-                              type="button"
-                              onClick={() => set(q.id, { valor_texto: op })}
-                              className={`btn-press flex-1 rounded-lg border px-3 py-2 text-sm font-medium capitalize ${
-                                r.valor_texto === op
-                                  ? 'border-brand-500 bg-brand-600 text-white'
-                                  : 'border-line bg-surface text-ink hover:border-line2'
-                              }`}
-                            >
-                              {op === 'si' ? 'Sí' : 'No'}
-                            </button>
-                          ))}
+                        <div className="space-y-2">
+                          <div className="flex gap-2">
+                            {['si', 'no'].map((op) => (
+                              <button
+                                key={op}
+                                type="button"
+                                onClick={() => set(q.id, { valor_texto: op })}
+                                className={`btn-press flex-1 rounded-lg border px-3 py-2 text-sm font-medium capitalize ${
+                                  r.valor_texto === op
+                                    ? 'border-brand-500 bg-brand-600 text-white'
+                                    : 'border-line bg-surface text-ink hover:border-line2'
+                                }`}
+                              >
+                                {op === 'si' ? 'Sí' : 'No'}
+                              </button>
+                            ))}
+                          </div>
+                          {r.valor_texto === 'no' && q.config.detalle_no && (
+                            <textarea
+                              value={r.detalle ?? ''}
+                              onChange={(e) => set(q.id, { detalle: e.target.value })}
+                              rows={2}
+                              maxLength={1000}
+                              placeholder={q.config.detalle_no_label || 'Contanos por qué (opcional)'}
+                              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-ink outline-none transition placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40"
+                            />
+                          )}
                         </div>
                       )}
 
