@@ -9,6 +9,7 @@ import {
   Plus,
   X,
   Bookmark,
+  Printer,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -31,8 +32,10 @@ interface Item {
   destino: string
   articulo: string | null
   descripcion: string | null
+  material: string | null
   color: string | null
   talle: string | null
+  tipo: string | null
   cantidad: number
   estado: EstadoItem
   hecho_at: string | null
@@ -65,6 +68,113 @@ function fmtDuracion(desdeIso: string, hastaIso: string): string {
   const h = Math.floor(min / 60)
   const m = min % 60
   return m ? `${h} h ${m} min` : `${h} h`
+}
+
+function escHtml(s: string) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string))
+}
+function fmtFechaCorta(iso: string) {
+  try {
+    return new Intl.DateTimeFormat('es-AR', { dateStyle: 'short' }).format(new Date(iso))
+  } catch {
+    return iso
+  }
+}
+
+/**
+ * Imprime la matriz "cascada" de un origen: filas = artículos, columnas = destinos,
+ * celda = cantidad, más una columna TOTAL. Formato igual al Excel de importación.
+ */
+function imprimirCascada(origen: string, items: Item[], lote: Lote) {
+  // Columnas = destinos únicos (alfabético)
+  const destinos = Array.from(new Set(items.map((i) => i.destino))).sort((a, b) => a.localeCompare(b, 'es'))
+
+  // Filas = artículo/desc/material/color/talle/tipo, con cantidad por destino
+  type Fila = {
+    articulo: string; desc: string; material: string; color: string; talle: string; tipo: string
+    porDestino: Record<string, number>; total: number
+  }
+  const mapa = new Map<string, Fila>()
+  for (const i of items) {
+    const articulo = i.articulo ?? ''
+    const desc = i.descripcion ?? ''
+    const material = i.material ?? ''
+    const color = i.color ?? ''
+    const talle = i.talle ?? ''
+    const tipo = i.tipo ?? ''
+    const key = [articulo, desc, material, color, talle, tipo].join('¦')
+    let f = mapa.get(key)
+    if (!f) {
+      f = { articulo, desc, material, color, talle, tipo, porDestino: {}, total: 0 }
+      mapa.set(key, f)
+    }
+    const q = i.cantidad || 1
+    f.porDestino[i.destino] = (f.porDestino[i.destino] ?? 0) + q
+    f.total += q
+  }
+  const filas = Array.from(mapa.values()).sort((a, b) => a.articulo.localeCompare(b.articulo, 'es'))
+  const totalGeneral = filas.reduce((s, f) => s + f.total, 0)
+
+  const th = (t: string, extra = '') => `<th class="${extra}">${escHtml(t)}</th>`
+  const encabezados =
+    th('ARTICULO', 'l') + th('DESC ADICIONAL MACRO', 'l') + th('MATERIAL', 'l') + th('COLOR') + th('TALLE') + th('TIPO') +
+    destinos.map((d) => th(d, 'dest')).join('') + th('TOTAL', 'tot')
+
+  const cuerpo = filas
+    .map((f) => {
+      const celdasDest = destinos
+        .map((d) => `<td class="num">${f.porDestino[d] ? f.porDestino[d] : ''}</td>`)
+        .join('')
+      return (
+        `<tr>` +
+        `<td class="l">${escHtml(f.articulo)}</td>` +
+        `<td class="l">${escHtml(f.desc)}</td>` +
+        `<td class="l">${escHtml(f.material)}</td>` +
+        `<td>${escHtml(f.color)}</td>` +
+        `<td>${escHtml(f.talle)}</td>` +
+        `<td>${escHtml(f.tipo)}</td>` +
+        celdasDest +
+        `<td class="num tot">${f.total}</td>` +
+        `</tr>`
+      )
+    })
+    .join('')
+
+  const w = window.open('', '_blank', 'width=1100,height=760')
+  if (!w) return
+  w.document.write(
+    `<!doctype html><html><head><meta charset="utf-8"><title>CASCADA — ${escHtml(origen)}</title>
+<style>
+  @page { size: A4 landscape; margin: 8mm; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: Arial, Helvetica, sans-serif; color: #111; }
+  h1 { font-size: 13pt; margin: 0 0 2mm; }
+  .sub { font-size: 9pt; color: #444; margin: 0 0 3mm; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 1px solid #999; padding: 2px 4px; font-size: 8pt; text-align: center; white-space: nowrap; }
+  th { background: #1f2d3a; color: #fff; }
+  td.l, th.l { text-align: left; }
+  th.dest { writing-mode: vertical-rl; transform: rotate(180deg); height: 70px; }
+  .num { text-align: center; }
+  .tot { font-weight: 700; background: #eef2f6; }
+  tr:nth-child(even) td { background: #f7f9fb; }
+  tr:nth-child(even) td.tot { background: #e6ebf1; }
+  tfoot td { font-weight: 700; border-top: 2px solid #333; }
+</style></head>
+<body>
+  <h1>CASCADA — ${escHtml(origen)}</h1>
+  <div class="sub">${escHtml(lote.nombre)} · ${escHtml(fmtFechaCorta(lote.fecha))} · ${destinos.length} destinos · ${totalGeneral} unidades</div>
+  <table>
+    <thead><tr>${encabezados}</tr></thead>
+    <tbody>${cuerpo}</tbody>
+  </table>
+<script>
+  window.focus();
+  setTimeout(function(){ window.print(); }, 250);
+<\/script>
+</body></html>`,
+  )
+  w.document.close()
 }
 
 // Barra segmentada por UNIDADES (suma cantidad): verde (hecho) · amarillo (señado) · rojo (faltante)
@@ -131,7 +241,7 @@ export default function Transferencias() {
       for (let desde = 0; ; desde += PAGE) {
         const { data, error } = await supabase
           .from('transfer_items')
-          .select('id,lote_id,orden,origen,destino,articulo,descripcion,color,talle,cantidad,estado,hecho_at')
+          .select('id,lote_id,orden,origen,destino,articulo,descripcion,material,color,talle,tipo,cantidad,estado,hecho_at')
           .in('lote_id', ids)
           .order('lote_id', { ascending: true })
           .order('orden', { ascending: true })
@@ -232,6 +342,7 @@ export default function Transferencias() {
         const up = header.map((h) => h.toUpperCase())
         const idxArt = up.indexOf('ARTICULO')
         const idxDesc = up.findIndex((h) => h.includes('DESC'))
+        const idxMaterial = up.indexOf('MATERIAL')
         const idxColor = up.indexOf('COLOR')
         const idxTalle = up.indexOf('TALLE')
         const idxTipo = up.indexOf('TIPO')
@@ -254,8 +365,10 @@ export default function Transferencias() {
                 destino: header[j].trim(),
                 articulo: art,
                 descripcion: String(row[idxDesc] ?? '').trim() || null,
+                material: idxMaterial >= 0 ? String(row[idxMaterial] ?? '').trim() || null : null,
                 color: idxColor >= 0 ? String(row[idxColor] ?? '').trim() || null : null,
                 talle: idxTalle >= 0 ? String(row[idxTalle] ?? '').trim() || null : null,
+                tipo: idxTipo >= 0 ? String(row[idxTipo] ?? '').trim() || null : null,
                 cantidad: n,
               })
             }
@@ -418,6 +531,16 @@ export default function Transferencias() {
                                 </span>
                               )}
                               <Barra items={de} />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                imprimirCascada(origen, de, lote)
+                              }}
+                              title="Imprimir cascada de este local"
+                              className="btn-press shrink-0 rounded-lg border border-line p-1.5 text-sub hover:text-ink"
+                            >
+                              <Printer size={14} aria-hidden />
                             </button>
                             {(isAdmin || esMio) && (
                               <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-medium text-sub" title="Marcar todo el local">
