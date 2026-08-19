@@ -21,6 +21,7 @@ import {
   ListChecks,
   ChevronRight,
   Image as ImageIcon,
+  Pencil,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import { supabase } from '@/lib/supabase'
@@ -392,6 +393,41 @@ function SeccionEmpleados({ empleados, onReload }: { empleados: Empleado[]; onRe
   const [nombre, setNombre] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [editId, setEditId] = useState<string | null>(null)
+  const [editLegajo, setEditLegajo] = useState('')
+  const [editNombre, setEditNombre] = useState('')
+
+  function empezarEdicion(e: Empleado) {
+    setEditId(e.id)
+    setEditLegajo(e.legajo ?? '')
+    setEditNombre(e.nombre)
+    setError(null)
+  }
+  function cancelarEdicion() {
+    setEditId(null)
+    setEditLegajo('')
+    setEditNombre('')
+  }
+  async function guardarEdicion() {
+    if (!supabase || !editId) return
+    if (!editNombre.trim()) {
+      setError('El nombre no puede quedar vacío.')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    const { error } = await supabase
+      .from('empleados')
+      .update({ legajo: editLegajo.trim() || null, nombre: editNombre.trim() })
+      .eq('id', editId)
+    setBusy(false)
+    if (error) {
+      setError(error.message)
+      return
+    }
+    cancelarEdicion()
+    await onReload()
+  }
 
   async function agregar(e: FormEvent) {
     e.preventDefault()
@@ -447,15 +483,45 @@ function SeccionEmpleados({ empleados, onReload }: { empleados: Empleado[]; onRe
         <p className="px-4 py-4 text-sm text-sub">Todavía no hay empleados. Agregá el primero arriba.</p>
       ) : (
         <div className="divide-y divide-line/70">
-          {empleados.map((e) => (
-            <div key={e.id} className="flex items-center gap-3 px-4 py-2.5">
-              {e.legajo && <span className="rounded-full bg-line px-2 py-0.5 text-[11px] font-semibold text-sub">#{e.legajo}</span>}
-              <span className="flex-1 font-medium text-ink">{e.nombre}</span>
-              <button onClick={() => borrar(e.id, e.nombre)} aria-label={`Borrar ${e.nombre}`} className="btn-press rounded-lg border border-brand-600/30 bg-brand-600/10 p-1.5 text-brand-400 hover:bg-brand-600/20">
-                <Trash2 size={13} aria-hidden />
-              </button>
-            </div>
-          ))}
+          {empleados.map((e) =>
+            editId === e.id ? (
+              <div key={e.id} className="flex flex-wrap items-center gap-2 px-4 py-2.5">
+                <input
+                  value={editLegajo}
+                  onChange={(ev) => setEditLegajo(ev.target.value)}
+                  placeholder="Legajo"
+                  className="w-24 rounded-lg border border-line bg-surface2 px-2 py-1.5 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
+                />
+                <input
+                  value={editNombre}
+                  onChange={(ev) => setEditNombre(ev.target.value)}
+                  placeholder="Nombre completo"
+                  className="min-w-0 flex-1 rounded-lg border border-line bg-surface2 px-2 py-1.5 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
+                  onKeyDown={(ev) => {
+                    if (ev.key === 'Enter') guardarEdicion()
+                    if (ev.key === 'Escape') cancelarEdicion()
+                  }}
+                />
+                <button onClick={guardarEdicion} disabled={busy} aria-label="Guardar" className="btn-press rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-1.5 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-50">
+                  <Check size={14} aria-hidden />
+                </button>
+                <button onClick={cancelarEdicion} aria-label="Cancelar" className="btn-press rounded-lg border border-line p-1.5 text-sub hover:text-ink">
+                  <X size={14} aria-hidden />
+                </button>
+              </div>
+            ) : (
+              <div key={e.id} className="flex items-center gap-3 px-4 py-2.5">
+                {e.legajo && <span className="rounded-full bg-line px-2 py-0.5 text-[11px] font-semibold text-sub">#{e.legajo}</span>}
+                <span className="flex-1 font-medium text-ink">{e.nombre}</span>
+                <button onClick={() => empezarEdicion(e)} aria-label={`Editar ${e.nombre}`} className="btn-press rounded-lg border border-line p-1.5 text-sub hover:text-ink">
+                  <Pencil size={13} aria-hidden />
+                </button>
+                <button onClick={() => borrar(e.id, e.nombre)} aria-label={`Borrar ${e.nombre}`} className="btn-press rounded-lg border border-brand-600/30 bg-brand-600/10 p-1.5 text-brand-400 hover:bg-brand-600/20">
+                  <Trash2 size={13} aria-hidden />
+                </button>
+              </div>
+            ),
+          )}
         </div>
       )}
     </div>
