@@ -62,7 +62,7 @@ export default function SectoresQr() {
 
   // Modales
   const [qrVer, setQrVer] = useState<{ token: string; local: string; sector: string } | null>(null)
-  const [nuevoSector, setNuevoSector] = useState<{ local: string; nombre: string } | null>(null)
+  const [nuevoSector, setNuevoSector] = useState<{ nombre: string } | null>(null)
   const [editSector, setEditSector] = useState<Sector | null>(null)
 
   const cargar = useCallback(async () => {
@@ -120,27 +120,44 @@ export default function SectoresQr() {
   }, [locales, localFiltro])
 
   // ---------- Sectores ----------
-  async function crearSector(local: string, nombre: string) {
+  async function crearSector(nombre: string) {
     if (!supabase) return
     const n = nombre.trim()
     if (!n) {
       setError('Poné un nombre para el sector.')
       return
     }
-    const { data, error } = await supabase
-      .from('sectores')
-      .insert({ local, nombre: n, orden: (sectoresPorLocal.get(local)?.length ?? 0) + 1 })
-      .select('*')
-      .single()
-    if (error) {
-      setError(error.message)
+    if (locales.length === 0) {
+      setError('No hay locales cargados. Agregalos desde Configuraciones → Locales.')
       return
     }
-    setSectores((s) => [...s, data as Sector])
-    // Crear QR de inmediato
-    await generarQr(local, (data as Sector).id, false)
+
+    const nuevos: Sector[] = []
+    let errores = 0
+
+    for (const l of locales) {
+      const { data, error } = await supabase
+        .from('sectores')
+        .insert({ local: l.codigo, nombre: n, orden: (sectoresPorLocal.get(l.codigo)?.length ?? 0) + 1 })
+        .select('*')
+        .single()
+      if (error) {
+        errores++
+        continue
+      }
+      nuevos.push(data as Sector)
+      await generarQr(l.codigo, (data as Sector).id, false)
+    }
+
+    if (nuevos.length > 0) {
+      setSectores((s) => [...s, ...nuevos])
+    }
     setNuevoSector(null)
-    flash('Sector creado')
+    if (errores === 0) {
+      flash(`Sector "${n}" creado en ${nuevos.length} local${nuevos.length === 1 ? '' : 'es'}`)
+    } else {
+      flash(`Sector creado en ${nuevos.length} locales (${errores} error${errores === 1 ? '' : 'es'})`)
+    }
   }
 
   async function guardarSector(s: Sector, nombre: string, activo: boolean) {
@@ -280,7 +297,7 @@ export default function SectoresQr() {
         <div>
           <h1 className="font-display text-2xl font-semibold text-ink">Sectores / QR</h1>
           <p className="mt-1 text-sm text-sub">
-            Un QR único por combinación <b>Local + Sector</b>. Cada sector tiene su propio código.
+            Un sector crea su QR en <b>todos los locales</b> de una. Cada combinación Local + Sector tiene un código único.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -302,6 +319,12 @@ export default function SectoresQr() {
               </option>
             ))}
           </select>
+          <button
+            onClick={() => setNuevoSector({ nombre: '' })}
+            className="btn-press inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700"
+          >
+            <Plus size={16} aria-hidden /> Sector
+          </button>
         </div>
       </header>
 
@@ -337,15 +360,6 @@ export default function SectoresQr() {
                     {sects.length} sector{sects.length === 1 ? '' : 'es'}
                   </p>
                 </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setNuevoSector({ local: l.codigo, nombre: '' })
-                  }}
-                  className="btn-press inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700"
-                >
-                  <Plus size={14} aria-hidden /> Sector
-                </button>
                 {open ? (
                   <ChevronUp size={16} className="shrink-0 text-sub" aria-hidden />
                 ) : (
@@ -516,11 +530,11 @@ export default function SectoresQr() {
 
       {nuevoSector && (
         <SectorFormModal
-          titulo={`Nuevo sector en ${nuevoSector.local}`}
+          titulo="Nuevo sector (todos los locales)"
           nombre={nuevoSector.nombre}
           activo
           onCancel={() => setNuevoSector(null)}
-          onSave={(nombre) => crearSector(nuevoSector.local, nombre)}
+          onSave={(nombre) => crearSector(nombre)}
         />
       )}
 
