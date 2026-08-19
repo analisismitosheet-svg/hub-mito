@@ -7,8 +7,16 @@ import type { EncuestaPublica, ItemRespuesta } from '@/types/encuestas'
 
 type Resp = { estrellas?: number; valor_texto?: string; opciones?: string[]; detalle?: string }
 
+/**
+ * Página pública que se abre al escanear un QR.
+ * Soporta dos rutas:
+ *   /opinar/:local                → compatibilidad con QRs viejos (por local)
+ *   /opinar/qr/:token             → QR único por (local + sector); resuelve todo el backend
+ */
 export default function Opinar() {
-  const { local = '' } = useParams()
+  const { local = '', token = '' } = useParams()
+  const esQr = Boolean(token)
+
   const [data, setData] = useState<EncuestaPublica | null>(null)
   const [cargando, setCargando] = useState(true)
   const [resp, setResp] = useState<Record<string, Resp>>({})
@@ -17,13 +25,18 @@ export default function Opinar() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!supabase || !local) return
+    if (!supabase) return
+    if (esQr && !token) return
+    if (!esQr && !local) return
     ;(async () => {
-      const { data: d } = await supabase!.rpc('encuesta_publica', { p_local: local })
+      const call = esQr
+        ? supabase!.rpc('encuesta_por_qr', { p_token: token })
+        : supabase!.rpc('encuesta_publica', { p_local: local })
+      const { data: d } = await call
       setData((d as EncuestaPublica | null) ?? null)
       setCargando(false)
     })()
-  }, [local])
+  }, [esQr, local, token])
 
   const preguntas = useMemo(() => data?.preguntas ?? [], [data])
 
@@ -34,7 +47,6 @@ export default function Opinar() {
   function faltaObligatoria(): string | null {
     for (const q of preguntas) {
       const r = resp[q.id]
-      // Detalle obligatorio cuando Sí/No = No
       if (
         q.tipo === 'si_no' &&
         r?.valor_texto === 'no' &&
@@ -70,16 +82,19 @@ export default function Opinar() {
       return {
         pregunta_id: q.id,
         estrellas: q.tipo === 'estrellas' ? r.estrellas ?? null : null,
-        valor_texto: q.tipo === 'opcion_multiple' || q.tipo === 'estrellas' ? null : r.valor_texto ?? null,
+        valor_texto:
+          q.tipo === 'opcion_multiple' || q.tipo === 'estrellas' ? null : r.valor_texto ?? null,
         opciones: q.tipo === 'opcion_multiple' ? r.opciones ?? null : null,
         detalle: q.tipo === 'si_no' && r.valor_texto === 'no' ? r.detalle ?? null : null,
       }
     })
-    const { error } = await supabase.rpc('responder_encuesta', {
-      p_encuesta: data.encuesta.id,
-      p_local: local,
-      p_items: items,
-    })
+    const { error } = esQr
+      ? await supabase.rpc('responder_por_qr', { p_token: token, p_items: items })
+      : await supabase.rpc('responder_encuesta', {
+          p_encuesta: data.encuesta.id,
+          p_local: local,
+          p_items: items,
+        })
     setBusy(false)
     if (error) {
       setError('No se pudo enviar. Probá de nuevo.')
@@ -87,6 +102,12 @@ export default function Opinar() {
     }
     setEnviado(true)
   }
+
+  const tituloUbicacion = data
+    ? data.sector_nombre
+      ? `${data.local_nombre ?? data.local} · ${data.sector_nombre}`
+      : data.local_nombre ?? data.local
+    : ''
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-paper px-4 py-10">
@@ -109,14 +130,16 @@ export default function Opinar() {
           <div className="text-center">
             <h1 className="font-display text-lg font-semibold text-ink">Encuesta no disponible</h1>
             <p className="mt-2 text-sm text-sub">
-              En este momento no hay una encuesta activa para este local.
+              {esQr
+                ? 'El QR no es válido o fue reemplazado por uno nuevo. Pedí uno actualizado al personal.'
+                : 'En este momento no hay una encuesta activa para este local.'}
             </p>
           </div>
         ) : (
           <>
             <div className="mb-5 text-center">
               <h1 className="font-display text-xl font-semibold text-ink">{data.encuesta.nombre}</h1>
-              <p className="mt-1 text-sm text-sub">{data.local_nombre ?? local}</p>
+              <p className="mt-1 text-sm text-sub">{tituloUbicacion}</p>
               {data.encuesta.descripcion && (
                 <p className="mt-1 text-xs text-sub">{data.encuesta.descripcion}</p>
               )}

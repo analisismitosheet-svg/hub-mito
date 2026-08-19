@@ -75,11 +75,15 @@ export interface Pregunta {
   updated_at: string
 }
 
-/** Forma que devuelve el RPC encuesta_publica */
+/** Forma que devuelve el RPC encuesta_publica y encuesta_por_qr */
 export interface EncuestaPublica {
   encuesta: { id: string; nombre: string; descripcion: string | null; version: number }
   local: string
   local_nombre: string | null
+  /** Presentes solo cuando la encuesta llega vía QR (RPC encuesta_por_qr) */
+  sector_id?: string | null
+  sector_nombre?: string | null
+  qr_token?: string | null
   preguntas: {
     id: string
     version: number
@@ -105,4 +109,25 @@ export interface ItemRespuesta {
 /** Genera la escala de valores por defecto 1..n */
 export function valoresPorDefecto(max: number): ValorEstrella[] {
   return Array.from({ length: max }, (_, i) => ({ estrellas: i + 1, valor: i + 1 }))
+}
+
+/** Sector físico dentro de un local (probadores, cajas, salón…) */
+export interface Sector {
+  id: string
+  local: string
+  nombre: string
+  orden: number
+  activo: boolean
+  created_at: string
+  updated_at: string
+}
+
+/** Token único que resuelve internamente a (local + sector) */
+export interface QrToken {
+  token: string
+  local: string
+  sector_id: string
+  activo: boolean
+  created_at: string
+  revoked_at: string | null
 }

@@ -22,6 +22,7 @@ import {
   ChevronRight,
   Image as ImageIcon,
   Pencil,
+  QrCode,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import { supabase } from '@/lib/supabase'
@@ -217,6 +218,23 @@ export default function Configuraciones() {
         <div className="min-w-0 flex-1">
           <div className="font-display font-semibold text-ink">Encuestas</div>
           <p className="text-sm text-sub">Configurar preguntas y tipos de respuesta (estrellas, Sí/No, texto…).</p>
+        </div>
+        <ChevronRight size={18} className="shrink-0 text-sub" aria-hidden />
+      </Link>
+
+      {/* Sectores y QR (uno por local + sector) */}
+      <Link
+        to="/sectores-qr"
+        className="mb-6 flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 shadow-soft transition duration-250 hover:border-line2"
+      >
+        <div className="rounded-xl border p-3" style={{ color: '#22c55e', backgroundColor: '#22c55e24', borderColor: '#22c55e40' }}>
+          <QrCode size={22} aria-hidden />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="font-display font-semibold text-ink">Sectores / QR</div>
+          <p className="text-sm text-sub">
+            Un QR único por combinación <b>Local + Sector</b> (probadores, cajas, salón…). Regenerá o imprimí desde acá.
+          </p>
         </div>
         <ChevronRight size={18} className="shrink-0 text-sub" aria-hidden />
       </Link>

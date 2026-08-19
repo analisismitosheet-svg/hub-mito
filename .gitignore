@@ -11,3 +11,12 @@ dev-dist
 # skills de diseño (no forman parte de la app)
 .claude/
 dnifotos/
+
+# Archivos de contenido: van a Supabase Storage, NO al repo
+manuales/
+*.exe
+*.xlsx
+*.xls
+*.doc
+*.docx
+*.pdf

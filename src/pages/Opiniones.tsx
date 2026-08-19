@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { QrCode, Copy, Check, MessageSquare, ChevronDown, Trash2, ArrowDownUp, Printer } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { QrCode, Copy, Check, MessageSquare, ChevronDown, Trash2, ArrowDownUp, Printer, MapPin, Settings } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import StarRating from '@/components/StarRating'
 import { buildLabelHtml, QR_LABEL_DEFAULT, type QrLabelConfig } from '@/components/QrEtiqueta'
-import type { Encuesta, Pregunta } from '@/types/encuestas'
+import type { Encuesta, Pregunta, Sector } from '@/types/encuestas'
 
 interface Local {
   codigo: string
@@ -15,6 +16,8 @@ interface Local {
 interface Respuesta {
   id: string
   local: string | null
+  sector_id: string | null
+  qr_token: string | null
   created_at: string
 }
 interface Item {
@@ -53,6 +56,7 @@ export default function Opiniones() {
   const [respuestas, setRespuestas] = useState<Respuesta[]>([])
   const [items, setItems] = useState<Item[]>([])
   const [locales, setLocales] = useState<Local[]>([])
+  const [sectores, setSectores] = useState<Sector[]>([])
   const [cargando, setCargando] = useState(true)
   const [cargandoDatos, setCargandoDatos] = useState(false)
   const [abierto, setAbierto] = useState<string | null>(null)
@@ -65,14 +69,16 @@ export default function Opiniones() {
   useEffect(() => {
     if (!supabase) return
     ;(async () => {
-      const [{ data: locs }, { data: encs }] = await Promise.all([
+      const [{ data: locs }, { data: encs }, { data: sects }] = await Promise.all([
         supabase!.from('locales').select('codigo, nombre').order('nombre'),
         supabase!
           .from('encuestas')
           .select('id, nombre, descripcion, contexto, publica, estado, version, created_at, updated_at')
           .order('created_at'),
+        supabase!.from('sectores').select('*').order('local').order('orden').order('nombre'),
       ])
       setLocales((locs as Local[]) ?? [])
+      setSectores((sects as Sector[]) ?? [])
       const lista = (encs as Encuesta[]) ?? []
       setEncuestas(lista)
       // Diseño de la etiqueta del QR (si está configurado)
@@ -104,7 +110,7 @@ export default function Opiniones() {
       const resp = await cargarTodo<Respuesta>((desde) =>
         supabase!
           .from('encuesta_respuestas')
-          .select('id, local, created_at')
+          .select('id, local, sector_id, qr_token, created_at')
           .eq('encuesta_id', encuestaId)
           .order('created_at', { ascending: false })
           .range(desde, desde + PAGE - 1),
@@ -181,6 +187,22 @@ export default function Opiniones() {
     return m
   }, [respuestas])
 
+  const sectorPorId = useMemo(() => {
+    const m = new Map<string, Sector>()
+    sectores.forEach((s) => m.set(s.id, s))
+    return m
+  }, [sectores])
+
+  const sectoresPorLocal = useMemo(() => {
+    const m = new Map<string, Sector[]>()
+    sectores.forEach((s) => {
+      const arr = m.get(s.local) ?? []
+      arr.push(s)
+      m.set(s.local, arr)
+    })
+    return m
+  }, [sectores])
+
   const resumenLocales = useMemo(() => {
     const itemsByResp = new Map<string, Item[]>()
     items.forEach((i) => {
@@ -194,7 +216,13 @@ export default function Opiniones() {
       .map((codigo) => {
         const respIds = respPorLocal.get(codigo) ?? new Set()
         const estrellasLocal: number[] = []
-        const submissions: { id: string; fecha: string; estrellas: number | null; textos: string[] }[] = []
+        const submissions: {
+          id: string
+          fecha: string
+          estrellas: number | null
+          textos: string[]
+          sector: string | null
+        }[] = []
         respuestas
           .filter((r) => respIds.has(r.id))
           .forEach((r) => {
@@ -208,7 +236,14 @@ export default function Opiniones() {
               if (i.tipo === 'texto' && i.valor_texto) textos.push(i.valor_texto)
               if (i.tipo === 'si_no' && i.detalle) textos.push(`“No”: ${i.detalle}`)
             })
-            submissions.push({ id: r.id, fecha: r.created_at, estrellas: est.length ? prom(est) : null, textos })
+            const sec = r.sector_id ? sectorPorId.get(r.sector_id) : null
+            submissions.push({
+              id: r.id,
+              fecha: r.created_at,
+              estrellas: est.length ? prom(est) : null,
+              textos,
+              sector: sec?.nombre ?? null,
+            })
           })
         submissions.sort((a, b) => (a.fecha < b.fecha ? 1 : -1))
         return {
@@ -216,11 +251,12 @@ export default function Opiniones() {
           nombre: nombrePorCodigo.get(codigo) ?? codigo,
           total: respIds.size,
           prom: prom(estrellasLocal),
+          sectores: sectoresPorLocal.get(codigo) ?? [],
           submissions,
         }
       })
       .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
-  }, [locales, respPorLocal, items, esEstrella, respuestas, nombrePorCodigo])
+  }, [locales, respPorLocal, items, esEstrella, respuestas, nombrePorCodigo, sectorPorId, sectoresPorLocal])
 
   async function borrarOpinion(id: string) {
     if (!supabase) return
@@ -391,6 +427,9 @@ export default function Opiniones() {
                         <span className="block truncate font-medium text-ink">{r.nombre}</span>
                         <span className="text-xs text-sub">
                           {r.total ? `${r.total} respuesta${r.total === 1 ? '' : 's'}` : 'Sin respuestas'}
+                          {r.sectores.length > 0 && (
+                            <> · {r.sectores.length} sector{r.sectores.length === 1 ? '' : 'es'}</>
+                          )}
                         </span>
                       </span>
                       <span className="flex items-center gap-2">
@@ -399,13 +438,20 @@ export default function Opiniones() {
                       </span>
                     </button>
                     <div className="flex shrink-0 items-center gap-1">
-                      <button onClick={() => copiar(r.codigo)} title="Copiar enlace público" className="btn-press rounded-lg border border-line p-2 text-sub hover:text-ink">
+                      <Link
+                        to="/sectores-qr"
+                        title="Administrar sectores y QR únicos por sector"
+                        className="btn-press rounded-lg border border-line p-2 text-sub hover:text-ink"
+                      >
+                        <Settings size={15} aria-hidden />
+                      </Link>
+                      <button onClick={() => copiar(r.codigo)} title="Copiar enlace por local (legacy)" className="btn-press rounded-lg border border-line p-2 text-sub hover:text-ink">
                         {copiado === r.codigo ? <Check size={15} className="text-emerald-400" aria-hidden /> : <Copy size={15} aria-hidden />}
                       </button>
-                      <button onClick={() => setQr(qr === r.codigo ? null : r.codigo)} title="Ver QR" className="btn-press rounded-lg border border-line p-2 text-sub hover:text-ink">
+                      <button onClick={() => setQr(qr === r.codigo ? null : r.codigo)} title="Ver QR por local (legacy)" className="btn-press rounded-lg border border-line p-2 text-sub hover:text-ink">
                         <QrCode size={15} aria-hidden />
                       </button>
-                      <button onClick={() => imprimir(r.nombre, linkPublico(r.codigo))} title="Imprimir QR" className="btn-press rounded-lg border border-line p-2 text-sub hover:text-ink">
+                      <button onClick={() => imprimir(r.nombre, linkPublico(r.codigo))} title="Imprimir QR por local (legacy)" className="btn-press rounded-lg border border-line p-2 text-sub hover:text-ink">
                         <Printer size={15} aria-hidden />
                       </button>
                     </div>
@@ -434,6 +480,11 @@ export default function Opiniones() {
                             <li key={s.id} className="rounded-xl border border-line bg-surface p-3">
                               <div className="flex items-start justify-between gap-2">
                                 <div className="min-w-0 flex-1">
+                                  {s.sector && (
+                                    <div className="mb-1 inline-flex items-center gap-1 rounded-full border border-line bg-surface2 px-2 py-0.5 text-[11px] font-medium text-sub">
+                                      <MapPin size={11} aria-hidden /> {s.sector}
+                                    </div>
+                                  )}
                                   {s.estrellas != null && (
                                     <div className="mb-1 flex items-center gap-2">
                                       <StarRating value={s.estrellas} max={maxEstrellas} readOnly size={14} />

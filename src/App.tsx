@@ -19,6 +19,7 @@ import Opinar from '@/pages/Opinar'
 import EncuestasAdmin from '@/pages/EncuestasAdmin'
 import QrEtiquetaEditor from '@/pages/QrEtiquetaEditor'
 import Configuraciones from '@/pages/Configuraciones'
+import SectoresQr from '@/pages/SectoresQr'
 import ComingSoon from '@/pages/ComingSoon'
 
 export default function App() {
@@ -28,8 +29,10 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          {/* Enlace público para que los clientes puntúen un local (sin login) */}
+          {/* Enlace público para que los clientes puntúen un local (compatibilidad) */}
           <Route path="/opinar/:local" element={<Opinar />} />
+          {/* Enlace público único por (local + sector) resuelto por token */}
+          <Route path="/opinar/qr/:token" element={<Opinar />} />
           {/* Pantalla para autenticados no aprobados (pendiente/rechazado/desactivado) */}
           <Route path="/acceso" element={<Acceso />} />
 
@@ -110,6 +113,14 @@ export default function App() {
             element={
               <PermissionRoute permiso="banner.editar">
                 <QrEtiquetaEditor />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/sectores-qr"
+            element={
+              <PermissionRoute permiso="sectores.gestionar">
+                <SectoresQr />
               </PermissionRoute>
             }
           />
