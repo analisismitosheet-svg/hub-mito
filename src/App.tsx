@@ -20,6 +20,10 @@ import EncuestasAdmin from '@/pages/EncuestasAdmin'
 import QrEtiquetaEditor from '@/pages/QrEtiquetaEditor'
 import Configuraciones from '@/pages/Configuraciones'
 import SectoresQr from '@/pages/SectoresQr'
+import Usuarios from '@/pages/Usuarios'
+import Roles from '@/pages/Roles'
+import LocalesPage from '@/pages/Locales'
+import EmpleadosPage from '@/pages/Empleados'
 import ComingSoon from '@/pages/ComingSoon'
 
 export default function App() {
@@ -137,6 +141,38 @@ export default function App() {
             element={
               <AdminRoute>
                 <Configuraciones />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/usuarios"
+            element={
+              <AdminRoute>
+                <Usuarios />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/roles"
+            element={
+              <AdminRoute>
+                <Roles />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/locales"
+            element={
+              <AdminRoute>
+                <LocalesPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/empleados"
+            element={
+              <AdminRoute>
+                <EmpleadosPage />
               </AdminRoute>
             }
           />
