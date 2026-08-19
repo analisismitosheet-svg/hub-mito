@@ -20,6 +20,7 @@ import EncuestasAdmin from '@/pages/EncuestasAdmin'
 import QrEtiquetaEditor from '@/pages/QrEtiquetaEditor'
 import Configuraciones from '@/pages/Configuraciones'
 import SectoresQr from '@/pages/SectoresQr'
+import QrLocales from '@/pages/QrLocales'
 import Usuarios from '@/pages/Usuarios'
 import Roles from '@/pages/Roles'
 import LocalesPage from '@/pages/Locales'
@@ -126,6 +127,14 @@ export default function App() {
               <PermissionRoute permiso="sectores.gestionar">
                 <SectoresQr />
               </PermissionRoute>
+            }
+          />
+          <Route
+            path="/qr-locales"
+            element={
+              <AdminRoute>
+                <QrLocales />
+              </AdminRoute>
             }
           />
           <Route
