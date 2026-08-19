@@ -24,6 +24,8 @@ import {
   Pencil,
   QrCode,
   MapPin,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import { supabase } from '@/lib/supabase'
@@ -90,6 +92,7 @@ export default function Configuraciones() {
   const [gestion, setGestion] = useState<UsuarioRow | null>(null)
   const [pwUser, setPwUser] = useState<UsuarioRow | null>(null)
   const [rolGestion, setRolGestion] = useState<Rol | null>(null)
+  const [seccionAbierta, setSeccionAbierta] = useState<string | null>(null)
 
   const cargar = useCallback(async () => {
     if (!supabase) {
@@ -261,129 +264,200 @@ export default function Configuraciones() {
       </div>
 
       {/* Roles y permisos */}
-      <SeccionRoles roles={roles} onReload={cargar} onPermisos={setRolGestion} />
+      <div className="mb-4 overflow-hidden rounded-2xl border border-line bg-surface shadow-soft">
+        <button
+          onClick={() => setSeccionAbierta(seccionAbierta === 'roles' ? null : 'roles')}
+          className="flex w-full items-center gap-3 px-4 py-3 text-left"
+        >
+          <div className="rounded-xl border p-2" style={{ color: '#7c3aed', backgroundColor: '#7c3aed24', borderColor: '#7c3aed40' }}>
+            <ShieldCheck size={20} aria-hidden />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="font-display font-semibold text-ink">Roles y permisos</div>
+            <p className="text-xs text-sub">{roles.length} rol{roles.length === 1 ? '' : 'es'} configurado{roles.length === 1 ? '' : 's'}</p>
+          </div>
+          {seccionAbierta === 'roles' ? <ChevronUp size={18} className="shrink-0 text-sub" /> : <ChevronDown size={18} className="shrink-0 text-sub" />}
+        </button>
+        {seccionAbierta === 'roles' && (
+          <div className="border-t border-line">
+            <SeccionRoles roles={roles} onReload={cargar} onPermisos={setRolGestion} />
+          </div>
+        )}
+      </div>
 
       {/* Catálogo de locales */}
-      <SeccionLocales locales={locales} onReload={cargar} />
+      <div className="mb-4 overflow-hidden rounded-2xl border border-line bg-surface shadow-soft">
+        <button
+          onClick={() => setSeccionAbierta(seccionAbierta === 'locales' ? null : 'locales')}
+          className="flex w-full items-center gap-3 px-4 py-3 text-left"
+        >
+          <div className="rounded-xl border p-2" style={{ color: '#16a34a', backgroundColor: '#16a34a24', borderColor: '#16a34a40' }}>
+            <Store size={20} aria-hidden />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="font-display font-semibold text-ink">Locales</div>
+            <p className="text-xs text-sub">{locales.length} local{locales.length === 1 ? '' : 'es'} cargado{locales.length === 1 ? '' : 's'}</p>
+          </div>
+          {seccionAbierta === 'locales' ? <ChevronUp size={18} className="shrink-0 text-sub" /> : <ChevronDown size={18} className="shrink-0 text-sub" />}
+        </button>
+        {seccionAbierta === 'locales' && (
+          <div className="border-t border-line">
+            <SeccionLocales locales={locales} onReload={cargar} />
+          </div>
+        )}
+      </div>
 
       {/* Empleados */}
-      <SeccionEmpleados empleados={empleados} onReload={cargar} />
+      <div className="mb-4 overflow-hidden rounded-2xl border border-line bg-surface shadow-soft">
+        <button
+          onClick={() => setSeccionAbierta(seccionAbierta === 'empleados' ? null : 'empleados')}
+          className="flex w-full items-center gap-3 px-4 py-3 text-left"
+        >
+          <div className="rounded-xl border p-2" style={{ color: '#0891b2', backgroundColor: '#0891b224', borderColor: '#0891b240' }}>
+            <UserRound size={20} aria-hidden />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="font-display font-semibold text-ink">Empleados</div>
+            <p className="text-xs text-sub">{empleados.length} empleado{empleados.length === 1 ? '' : 's'} cargado{empleados.length === 1 ? '' : 's'}</p>
+          </div>
+          {seccionAbierta === 'empleados' ? <ChevronUp size={18} className="shrink-0 text-sub" /> : <ChevronDown size={18} className="shrink-0 text-sub" />}
+        </button>
+        {seccionAbierta === 'empleados' && (
+          <div className="border-t border-line">
+            <SeccionEmpleados empleados={empleados} onReload={cargar} />
+          </div>
+        )}
+      </div>
 
-      {/* Listado de usuarios */}
-      <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-soft">
-        <div className="border-b border-line px-4 py-3 font-display font-semibold text-ink">
-          Usuarios ({usuarios.length})
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="bg-surface2 text-left text-sub">
-                <th className="px-3 py-2.5 font-medium">Nombre</th>
-                <th className="hidden px-3 py-2.5 font-medium md:table-cell">Email</th>
-                <th className="px-3 py-2.5 font-medium">Rol</th>
-                <th className="px-3 py-2.5 font-medium">Local/Área</th>
-                <th className="px-3 py-2.5 font-medium">Estado</th>
-                <th className="hidden px-3 py-2.5 font-medium lg:table-cell">Alta</th>
-                <th className="px-3 py-2.5 text-right font-medium">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {usuarios.map((u) => {
-                const esYo = u.id === perfil?.id
-                const rolAdmin = roles.find((r) => r.codigo === u.rol)?.es_admin ?? false
-                return (
-                  <tr key={u.id} className="border-t border-line align-middle">
-                    <td className="px-3 py-2.5 font-medium text-ink">
-                      {u.nombre}
-                      <span className="block max-w-[160px] truncate text-xs font-normal text-sub md:hidden" title={u.email}>
-                        {u.email}
-                      </span>
-                    </td>
-                    <td className="hidden max-w-[220px] truncate px-3 py-2.5 text-sub md:table-cell" title={u.email}>
-                      {u.email}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <select
-                        value={u.rol}
-                        disabled={esYo}
-                        onChange={(e) => actualizar(u.id, { rol: e.target.value })}
-                        className="rounded-lg border border-line bg-surface2 px-2 py-1 text-xs text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 disabled:opacity-50"
-                        aria-label={`Rol de ${u.nombre}`}
-                      >
-                        {roles.map((r) => (
-                          <option key={r.codigo} value={r.codigo}>{r.nombre}</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <select
-                        value={u.local ?? ''}
-                        onChange={(e) => actualizar(u.id, { local: e.target.value || null })}
-                        className="rounded-lg border border-line bg-surface2 px-2 py-1 text-xs text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
-                        aria-label={`Local/Área de ${u.nombre}`}
-                      >
-                        <option value="">—</option>
-                        {locales.map((l) => (
-                          <option key={l.codigo} value={l.codigo}>
-                            {l.codigo}
-                            {l.nombre ? ` · ${l.nombre}` : ''}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <span className={`inline-block whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium ${ESTADO_STYLE[u.estado] ?? ''}`}>
-                        {u.estado}
-                      </span>
-                    </td>
-                    <td className="hidden px-3 py-2.5 text-sub lg:table-cell">{fmtFecha(u.created_at)}</td>
-                    <td className="px-2 py-2.5">
-                      <div className="flex items-center justify-end gap-1.5">
-                        {u.estado === 'aprobado' && !esYo && (
-                          <button
-                            onClick={() => actualizar(u.id, { estado: 'desactivado' })}
-                            className="btn-press rounded-lg border border-line bg-surface2 p-1.5 text-sub hover:text-ink"
-                            title="Desactivar"
-                            aria-label={`Desactivar ${u.nombre}`}
-                          >
-                            <Ban size={15} aria-hidden />
-                          </button>
-                        )}
-                        {(u.estado === 'desactivado' || u.estado === 'rechazado') && (
-                          <button
-                            onClick={() => actualizar(u.id, { estado: 'aprobado', motivo_rechazo: null })}
-                            className="btn-press rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-1.5 text-emerald-400"
-                            title="Reactivar"
-                            aria-label={`Reactivar ${u.nombre}`}
-                          >
-                            <RotateCcw size={15} aria-hidden />
-                          </button>
-                        )}
-                        <button
-                          onClick={() => setPwUser(u)}
-                          className="btn-press rounded-lg border border-line bg-surface2 p-1.5 text-ink hover:bg-line"
-                          title="Cambiar contraseña"
-                          aria-label={`Cambiar contraseña de ${u.nombre}`}
-                        >
-                          <KeyRound size={15} aria-hidden />
-                        </button>
-                        <button
-                          onClick={() => setGestion(u)}
-                          disabled={rolAdmin}
-                          className="btn-press rounded-lg border border-line bg-surface2 p-1.5 text-ink hover:bg-line disabled:opacity-40"
-                          title={rolAdmin ? 'Este rol tiene acceso total' : 'Permisos extra de este usuario'}
-                          aria-label={`Permisos de ${u.nombre}`}
-                        >
-                          <SlidersHorizontal size={15} aria-hidden />
-                        </button>
-                      </div>
-                    </td>
+      {/* Usuarios */}
+      <div className="mb-4 overflow-hidden rounded-2xl border border-line bg-surface shadow-soft">
+        <button
+          onClick={() => setSeccionAbierta(seccionAbierta === 'usuarios' ? null : 'usuarios')}
+          className="flex w-full items-center gap-3 px-4 py-3 text-left"
+        >
+          <div className="rounded-xl border p-2" style={{ color: '#e11d48', backgroundColor: '#e11d4824', borderColor: '#e11d4840' }}>
+            <UserCheck size={20} aria-hidden />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="font-display font-semibold text-ink">Usuarios</div>
+            <p className="text-xs text-sub">{usuarios.length} usuario{usuarios.length === 1 ? '' : 's'} registrado{usuarios.length === 1 ? '' : 's'}</p>
+          </div>
+          {seccionAbierta === 'usuarios' ? <ChevronUp size={18} className="shrink-0 text-sub" /> : <ChevronDown size={18} className="shrink-0 text-sub" />}
+        </button>
+        {seccionAbierta === 'usuarios' && (
+          <div className="border-t border-line">
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr className="bg-surface2 text-left text-sub">
+                    <th className="px-3 py-2.5 font-medium">Nombre</th>
+                    <th className="hidden px-3 py-2.5 font-medium md:table-cell">Email</th>
+                    <th className="px-3 py-2.5 font-medium">Rol</th>
+                    <th className="px-3 py-2.5 font-medium">Local/Área</th>
+                    <th className="px-3 py-2.5 font-medium">Estado</th>
+                    <th className="hidden px-3 py-2.5 font-medium lg:table-cell">Alta</th>
+                    <th className="px-3 py-2.5 text-right font-medium">Acciones</th>
                   </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody>
+                  {usuarios.map((u) => {
+                    const esYo = u.id === perfil?.id
+                    const rolAdmin = roles.find((r) => r.codigo === u.rol)?.es_admin ?? false
+                    return (
+                      <tr key={u.id} className="border-t border-line align-middle">
+                        <td className="px-3 py-2.5 font-medium text-ink">
+                          {u.nombre}
+                          <span className="block max-w-[160px] truncate text-xs font-normal text-sub md:hidden" title={u.email}>
+                            {u.email}
+                          </span>
+                        </td>
+                        <td className="hidden max-w-[220px] truncate px-3 py-2.5 text-sub md:table-cell" title={u.email}>
+                          {u.email}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <select
+                            value={u.rol}
+                            disabled={esYo}
+                            onChange={(e) => actualizar(u.id, { rol: e.target.value })}
+                            className="rounded-lg border border-line bg-surface2 px-2 py-1 text-xs text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 disabled:opacity-50"
+                            aria-label={`Rol de ${u.nombre}`}
+                          >
+                            {roles.map((r) => (
+                              <option key={r.codigo} value={r.codigo}>{r.nombre}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <select
+                            value={u.local ?? ''}
+                            onChange={(e) => actualizar(u.id, { local: e.target.value || null })}
+                            className="rounded-lg border border-line bg-surface2 px-2 py-1 text-xs text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
+                            aria-label={`Local/Área de ${u.nombre}`}
+                          >
+                            <option value="">—</option>
+                            {locales.map((l) => (
+                              <option key={l.codigo} value={l.codigo}>
+                                {l.codigo}
+                                {l.nombre ? ` · ${l.nombre}` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <span className={`inline-block whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium ${ESTADO_STYLE[u.estado] ?? ''}`}>
+                            {u.estado}
+                          </span>
+                        </td>
+                        <td className="hidden px-3 py-2.5 text-sub lg:table-cell">{fmtFecha(u.created_at)}</td>
+                        <td className="px-2 py-2.5">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {u.estado === 'aprobado' && !esYo && (
+                              <button
+                                onClick={() => actualizar(u.id, { estado: 'desactivado' })}
+                                className="btn-press rounded-lg border border-line bg-surface2 p-1.5 text-sub hover:text-ink"
+                                title="Desactivar"
+                                aria-label={`Desactivar ${u.nombre}`}
+                              >
+                                <Ban size={15} aria-hidden />
+                              </button>
+                            )}
+                            {(u.estado === 'desactivado' || u.estado === 'rechazado') && (
+                              <button
+                                onClick={() => actualizar(u.id, { estado: 'aprobado', motivo_rechazo: null })}
+                                className="btn-press rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-1.5 text-emerald-400"
+                                title="Reactivar"
+                                aria-label={`Reactivar ${u.nombre}`}
+                              >
+                                <RotateCcw size={15} aria-hidden />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => setPwUser(u)}
+                              className="btn-press rounded-lg border border-line bg-surface2 p-1.5 text-ink hover:bg-line"
+                              title="Cambiar contraseña"
+                              aria-label={`Cambiar contraseña de ${u.nombre}`}
+                            >
+                              <KeyRound size={15} aria-hidden />
+                            </button>
+                            <button
+                              onClick={() => setGestion(u)}
+                              disabled={rolAdmin}
+                              className="btn-press rounded-lg border border-line bg-surface2 p-1.5 text-ink hover:bg-line disabled:opacity-40"
+                              title={rolAdmin ? 'Este rol tiene acceso total' : 'Permisos extra de este usuario'}
+                              aria-label={`Permisos de ${u.nombre}`}
+                            >
+                              <SlidersHorizontal size={15} aria-hidden />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
 
       {gestion && (
@@ -485,10 +559,7 @@ function SeccionEmpleados({ empleados, onReload }: { empleados: Empleado[]; onRe
   }
 
   return (
-    <div className="mb-6 overflow-hidden rounded-2xl border border-line bg-surface shadow-soft">
-      <div className="flex items-center gap-2 border-b border-line px-4 py-3 font-display font-semibold text-ink">
-        <UserRound size={18} aria-hidden /> Empleados ({empleados.length})
-      </div>
+    <div>
       <form onSubmit={agregar} className="flex flex-wrap items-end gap-2 border-b border-line px-4 py-3">
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-sub">N° legajo</span>
@@ -607,10 +678,7 @@ function SeccionRoles({
   }
 
   return (
-    <div className="mb-6 overflow-hidden rounded-2xl border border-line bg-surface shadow-soft">
-      <div className="flex items-center gap-2 border-b border-line px-4 py-3 font-display font-semibold text-ink">
-        <ShieldCheck size={18} aria-hidden /> Roles ({roles.length})
-      </div>
+    <div>
       <form onSubmit={agregar} className="flex flex-wrap items-end gap-2 border-b border-line px-4 py-3">
         <label className="block flex-1">
           <span className="mb-1 block text-xs font-medium text-sub">Nuevo rol</span>
@@ -923,10 +991,7 @@ function SeccionLocales({ locales, onReload }: { locales: Local[]; onReload: () 
   }
 
   return (
-    <div className="mb-6 overflow-hidden rounded-2xl border border-line bg-surface shadow-soft">
-      <div className="flex items-center gap-2 border-b border-line px-4 py-3 font-display font-semibold text-ink">
-        <Store size={18} aria-hidden /> Locales ({locales.length})
-      </div>
+    <div>
       <form onSubmit={agregar} className="flex flex-wrap items-end gap-2 border-b border-line px-4 py-3">
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-sub">Código (como en el Excel)</span>
