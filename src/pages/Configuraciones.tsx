@@ -23,6 +23,7 @@ import {
   Image as ImageIcon,
   Pencil,
   QrCode,
+  MapPin,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import { supabase } from '@/lib/supabase'
@@ -222,37 +223,42 @@ export default function Configuraciones() {
         <ChevronRight size={18} className="shrink-0 text-sub" aria-hidden />
       </Link>
 
-      {/* Sectores y QR (uno por local + sector) */}
-      <Link
-        to="/sectores-qr"
-        className="mb-6 flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 shadow-soft transition duration-250 hover:border-line2"
-      >
-        <div className="rounded-xl border p-3" style={{ color: '#22c55e', backgroundColor: '#22c55e24', borderColor: '#22c55e40' }}>
-          <QrCode size={22} aria-hidden />
+      {/* QR Locales — agrupa sectores/QR + etiqueta */}
+      <div className="mb-6 overflow-hidden rounded-2xl border border-line bg-surface shadow-soft">
+        <div className="flex items-center gap-3 px-4 py-3">
+          <div className="rounded-xl border p-3" style={{ color: '#22c55e', backgroundColor: '#22c55e24', borderColor: '#22c55e40' }}>
+            <QrCode size={22} aria-hidden />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="font-display font-semibold text-ink">QR Locales</div>
+            <p className="text-sm text-sub">Sectores, QR únicos por local y diseño de etiquetas.</p>
+          </div>
         </div>
-        <div className="min-w-0 flex-1">
-          <div className="font-display font-semibold text-ink">Sectores / QR</div>
-          <p className="text-sm text-sub">
-            Un QR único por combinación <b>Local + Sector</b> (probadores, cajas, salón…). Regenerá o imprimí desde acá.
-          </p>
+        <div className="divide-y divide-line/70 border-t border-line">
+          <Link
+            to="/sectores-qr"
+            className="flex items-center gap-3 px-4 py-3 transition duration-150 hover:bg-surface2"
+          >
+            <MapPin size={18} className="shrink-0 text-emerald-400" aria-hidden />
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium text-ink">Sectores / QR</div>
+              <p className="text-xs text-sub">Crear sectores, generar y regenerar QR únicos por combinación <b>Local + Sector</b>.</p>
+            </div>
+            <ChevronRight size={16} className="shrink-0 text-sub" aria-hidden />
+          </Link>
+          <Link
+            to="/qr-etiqueta"
+            className="flex items-center gap-3 px-4 py-3 transition duration-150 hover:bg-surface2"
+          >
+            <ImageIcon size={18} className="shrink-0 text-sky-400" aria-hidden />
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium text-ink">Etiqueta del QR</div>
+              <p className="text-xs text-sub">Diseñar la impresión del QR: logo, textos y tamaños, con vista previa.</p>
+            </div>
+            <ChevronRight size={16} className="shrink-0 text-sub" aria-hidden />
+          </Link>
         </div>
-        <ChevronRight size={18} className="shrink-0 text-sub" aria-hidden />
-      </Link>
-
-      {/* Editor de etiqueta del QR */}
-      <Link
-        to="/qr-etiqueta"
-        className="mb-6 flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 shadow-soft transition duration-250 hover:border-line2"
-      >
-        <div className="rounded-xl border p-3" style={{ color: '#0ea5e9', backgroundColor: '#0ea5e924', borderColor: '#0ea5e940' }}>
-          <ImageIcon size={22} aria-hidden />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="font-display font-semibold text-ink">Etiqueta del QR</div>
-          <p className="text-sm text-sub">Diseñar la impresión del QR: logo, textos y tamaños, con vista previa.</p>
-        </div>
-        <ChevronRight size={18} className="shrink-0 text-sub" aria-hidden />
-      </Link>
+      </div>
 
       {/* Roles y permisos */}
       <SeccionRoles roles={roles} onReload={cargar} onPermisos={setRolGestion} />
