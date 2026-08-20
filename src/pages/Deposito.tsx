@@ -483,6 +483,12 @@ export default function Deposito() {
         if (!h) return
         locales.push({ idx, nombre: headers[idx] })
       })
+      // REPARTIDO siempre al final
+      const repIdx = locales.findIndex((l) => l.nombre.toUpperCase().includes('REPARTIDO'))
+      if (repIdx >= 0) {
+        const [rep] = locales.splice(repIdx, 1)
+        locales.push(rep)
+      }
       if (!locales.length) throw new Error('No encontré columnas de locales.')
       const nuevos: Omit<Item, 'id' | 'lote_id' | 'estado' | 'hecho_at' | 'venta_local'>[] = []
       let orden = 0
@@ -541,6 +547,13 @@ export default function Deposito() {
     if (error) setError(error.message)
   }
 
+  function ordenarLocales(locs: string[]) {
+    const sorted = [...locs]
+    const ri = sorted.findIndex((l) => l.toUpperCase().includes('REPARTIDO'))
+    if (ri >= 0) { const [rep] = sorted.splice(ri, 1); sorted.push(rep) }
+    return sorted
+  }
+
   const itemsPorLote = useMemo(() => {
     const m = new Map<string, Item[]>()
     for (const it of items) {
@@ -565,7 +578,7 @@ export default function Deposito() {
       r.porLocal.set(it.local, (r.porLocal.get(it.local) ?? 0) + it.cantidad)
       r.items.push(it)
     }
-    const allLocales = [...new Set(its.map((i) => i.local))]
+    const allLocales = ordenarLocales([...new Set(its.map((i) => i.local))])
     const rows = Array.from(rowMap.values()).sort((a, b) => {
       const ap = a.picking.replace(/[()0-9]/g, '')
       const bp = b.picking.replace(/[()0-9]/g, '')
@@ -782,7 +795,7 @@ export default function Deposito() {
                       <span className="font-display font-semibold text-ink">Reposición</span>
                     </button>
                     {subAbierto === `${lote.id}|repo` && (() => {
-                      const allLocales = [...new Set(its.map((i) => i.local))]
+    const allLocales = ordenarLocales([...new Set(its.map((i) => i.local))])
                       const rowMap = new Map<string, { codigo: string; desc: string; color: string; talle: string; picking: string; porLocal: Map<string, Item> }>()
                       for (const it of its) {
                         const desc = it.material ?? it.articulo ?? ''
