@@ -60,6 +60,7 @@ export default function Opiniones() {
   const [cargando, setCargando] = useState(true)
   const [cargandoDatos, setCargandoDatos] = useState(false)
   const [abierto, setAbierto] = useState<string | null>(null)
+  const [opinionesAbiertas, setOpinionesAbiertas] = useState<Set<string>>(new Set())
   const [copiado, setCopiado] = useState<string | null>(null)
   const [qr, setQr] = useState<string | null>(null)
   const [tokens, setTokens] = useState<QrToken[]>([])
@@ -392,6 +393,15 @@ imgs.forEach(function(i){i.complete?go():(i.onload=go,i.onerror=go)});if(!p)go()
       : ''
   }
 
+  function toggleOpiniones(codigo: string) {
+    setOpinionesAbiertas((s) => {
+      const n = new Set(s)
+      if (n.has(codigo)) n.delete(codigo)
+      else n.add(codigo)
+      return n
+    })
+  }
+
   return (
     <Layout>
       <BackButton />
@@ -593,45 +603,60 @@ imgs.forEach(function(i){i.complete?go():(i.onload=go,i.onerror=go)});if(!p)go()
                       {r.submissions.length === 0 ? (
                         <p className="text-sm text-sub">Sin opiniones.</p>
                       ) : (
-                        <ul className="space-y-2">
-                          {r.submissions.map((s) => (
-                            <li key={s.id} className="rounded-xl border border-line bg-surface p-3">
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="min-w-0 flex-1">
-                                  {s.sector && (
-                                    <div className="mb-1 inline-flex items-center gap-1 rounded-full border border-line bg-surface2 px-2 py-0.5 text-[11px] font-medium text-sub">
-                                      <MapPin size={11} aria-hidden /> {s.sector}
+                        <>
+                          <button
+                            onClick={() => toggleOpiniones(r.codigo)}
+                            className="mb-2 flex w-full items-center justify-between rounded-lg border border-line bg-surface px-3 py-2 text-left text-sm font-medium text-ink hover:bg-line"
+                          >
+                            <span>{r.submissions.length} opinión{r.submissions.length === 1 ? '' : 'es'}</span>
+                            <ChevronDown
+                              size={14}
+                              aria-hidden
+                              className={`shrink-0 text-sub transition-transform ${opinionesAbiertas.has(r.codigo) ? 'rotate-180' : ''}`}
+                            />
+                          </button>
+                          {opinionesAbiertas.has(r.codigo) && (
+                            <ul className="space-y-2">
+                              {r.submissions.map((s) => (
+                                <li key={s.id} className="rounded-xl border border-line bg-surface p-3">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0 flex-1">
+                                      {s.sector && (
+                                        <div className="mb-1 inline-flex items-center gap-1 rounded-full border border-line bg-surface2 px-2 py-0.5 text-[11px] font-medium text-sub">
+                                          <MapPin size={11} aria-hidden /> {s.sector}
+                                        </div>
+                                      )}
+                                      {s.estrellas != null && (
+                                        <div className="mb-1 flex items-center gap-2">
+                                          <StarRating value={s.estrellas} max={maxEstrellas} readOnly size={14} />
+                                          <span className="text-xs text-sub">{s.estrellas.toFixed(1)}</span>
+                                        </div>
+                                      )}
+                                      {s.textos.map((t, i) => (
+                                        <p key={i} className="flex items-start gap-1.5 text-sm text-ink">
+                                          <MessageSquare size={14} className="mt-0.5 shrink-0 text-sub" aria-hidden />
+                                          <span>{t}</span>
+                                        </p>
+                                      ))}
                                     </div>
-                                  )}
-                                  {s.estrellas != null && (
-                                    <div className="mb-1 flex items-center gap-2">
-                                      <StarRating value={s.estrellas} max={maxEstrellas} readOnly size={14} />
-                                      <span className="text-xs text-sub">{s.estrellas.toFixed(1)}</span>
+                                    <div className="flex shrink-0 items-center gap-2">
+                                      <span className="text-xs text-sub">{fecha(s.fecha)}</span>
+                                      {puedeBorrar && (
+                                        <button
+                                          onClick={() => borrarOpinion(s.id)}
+                                          title="Borrar opinión"
+                                          className="btn-press rounded-lg border border-line p-1.5 text-sub hover:border-brand-600/40 hover:text-brand-400"
+                                        >
+                                          <Trash2 size={14} aria-hidden />
+                                        </button>
+                                      )}
                                     </div>
-                                  )}
-                                  {s.textos.map((t, i) => (
-                                    <p key={i} className="flex items-start gap-1.5 text-sm text-ink">
-                                      <MessageSquare size={14} className="mt-0.5 shrink-0 text-sub" aria-hidden />
-                                      <span>{t}</span>
-                                    </p>
-                                  ))}
-                                </div>
-                                <div className="flex shrink-0 items-center gap-2">
-                                  <span className="text-xs text-sub">{fecha(s.fecha)}</span>
-                                  {puedeBorrar && (
-                                    <button
-                                      onClick={() => borrarOpinion(s.id)}
-                                      title="Borrar opinión"
-                                      className="btn-press rounded-lg border border-line p-1.5 text-sub hover:border-brand-600/40 hover:text-brand-400"
-                                    >
-                                      <Trash2 size={14} aria-hidden />
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </>
                       )}
                     </div>
                   )}
