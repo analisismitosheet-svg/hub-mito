@@ -464,7 +464,9 @@ export default function Deposito() {
       const resp = await fetch(url)
       if (!resp.ok) throw new Error(`No se pudo leer el Sheet (${resp.status})`)
       const csv = await resp.text()
-      const lines = csv.split('\n').filter((l) => l.trim())
+      // Strip BOM if present
+      const raw = csv.charCodeAt(0) === 0xFEFF ? csv.slice(1) : csv
+      const lines = raw.split('\n').filter((l) => l.trim())
       if (lines.length < 2) throw new Error('El Sheet está vacío o no tiene datos.')
       const parseCsvLine = (line: string): string[] => {
         const result: string[] = []
@@ -485,26 +487,39 @@ export default function Deposito() {
         result.push(current)
         return result
       }
-      const headers = parseCsvLine(lines[0]).map((h) => h.trim())
+      const normH = (s: string) =>
+        s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase().replace(/\s+/g, ' ')
+      // Buscar la fila de encabezados: la que tenga "Articulo" o "Codigo"
+      let hIdx = 0
+      let headers: string[] = []
+      for (let i = 0; i < Math.min(lines.length, 5); i++) {
+        const row = parseCsvLine(lines[i]).map((h) => h.trim())
+        const up = row.map(normH)
+        const hasArt = up.some((h) => h.includes('ARTICULO') || h.includes('ARTICULO'))
+        const hasCod = up.some((h) => h.includes('CODIGO') || h === 'COD')
+        if (hasArt || hasCod) { hIdx = i; headers = row; break }
+      }
+      if (!headers.length) throw new Error('No encontré la fila de encabezados (Artículo/Código).')
+      const up = headers.map(normH)
       // Columnas fijas
-      const iArt = headers.findIndex((h) => /art[iú]culo|codigo|cod/i.test(h))
-      const iDesc = headers.findIndex((h) => /descripci[oó]n/i.test(h))
-      const iColor = headers.findIndex((h) => /^color$/i.test(h))
-      const iTalle = headers.findIndex((h) => /^talle$/i.test(h))
+      const iArt = up.findIndex((h) => h.includes('ARTICULO') || h.includes('CODIGO') || h === 'COD')
+      const iDesc = up.findIndex((h) => h.includes('DESCRIPCION'))
+      const iColor = up.findIndex((h) => h === 'COLOR')
+      const iTalle = up.findIndex((h) => h === 'TALLE')
       if (iArt < 0) throw new Error('No encontré la columna Artículo/Código.')
       // Columnas de locales: todo lo que no sea fijo ni STOCK ni PICKING
       const fijas = new Set([iArt, iDesc, iColor, iTalle].filter((i) => i >= 0))
       const locales: { idx: number; nombre: string }[] = []
-      headers.forEach((h, idx) => {
+      up.forEach((h, idx) => {
         if (fijas.has(idx)) return
-        if (/stock|picking|📍/i.test(h)) return
+        if (h.includes('STOCK') || h.includes('PICKING') || h.includes('📍')) return
         if (!h) return
-        locales.push({ idx, nombre: h })
+        locales.push({ idx, nombre: headers[idx] })
       })
       if (!locales.length) throw new Error('No encontré columnas de locales.')
       const nuevos: Omit<Item, 'id' | 'lote_id' | 'estado' | 'hecho_at' | 'venta_local'>[] = []
       let orden = 0
-      for (let i = 1; i < lines.length; i++) {
+      for (let i = hIdx + 1; i < lines.length; i++) {
         const row = parseCsvLine(lines[i])
         const cod = (row[iArt] ?? '').trim()
         if (!cod) continue
