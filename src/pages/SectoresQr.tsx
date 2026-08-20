@@ -257,6 +257,69 @@ export default function SectoresQr() {
     w.document.close()
   }
 
+  function imprimirTodos(localCode: string) {
+    const sects = sectoresPorLocal.get(localCode) ?? []
+    const labels: { nombre: string; url: string }[] = []
+    for (const s of sects) {
+      if (!s.activo) continue
+      const t = tokenActivoPorSector.get(s.id)
+      if (!t) continue
+      labels.push({ nombre: `${nombreLocal.get(localCode) ?? localCode} · ${s.nombre}`, url: urlPublico(t.token) })
+    }
+    if (labels.length === 0) {
+      setError('No hay sectores con QR activos para imprimir.')
+      return
+    }
+    const c = qrCfg
+    const contentW = Math.max(10, c.ancho_mm - 4)
+    const pageSize = c.alto_mm > 0 ? `${c.ancho_mm}mm ${c.alto_mm}mm` : `${c.ancho_mm}mm auto`
+    const escHtml = (s: string) => s.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] as string))
+    const parts = labels.map((l) => {
+      const inner: string[] = []
+      if (c.logo) inner.push(`<img class="logo" src="${escHtml(c.logo)}" alt=""/>`)
+      if (c.texto_encabezado) inner.push(`<div class="enc">${escHtml(c.texto_encabezado)}</div>`)
+      if (c.mostrar_nombre) inner.push(`<div class="nombre">${escHtml(l.nombre)}</div>`)
+      inner.push(`<img class="qr" src="${qrImgUrl(l.url)}" alt="QR"/>`)
+      if (c.cta) inner.push(`<div class="cta">${escHtml(c.cta)}</div>`)
+      if (c.mostrar_url) inner.push(`<div class="url">${escHtml(l.url)}</div>`)
+      return `<div class="lbl">${inner.join('')}</div>`
+    })
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>QRs · ${escHtml(localCode)}</title>
+<style>
+  @page { size: ${pageSize}; margin: 2mm; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #fff; }
+  .lbl {
+    width: ${contentW}mm; margin: 0 auto; text-align: ${c.align};
+    font-family: Arial, Helvetica, sans-serif; padding: 1mm 0;
+    background: ${c.bg_color}; color: ${c.text_color};
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    page-break-after: always;
+  }
+  .lbl:last-child { page-break-after: auto; }
+  .logo { height: ${c.logo_alto_mm}mm; object-fit: contain; display: block; margin: 0 auto 1.5mm; }
+  .enc { font-size: ${c.encabezado_pt}pt; margin-bottom: 1mm; }
+  .nombre { font-size: ${c.nombre_pt}pt; font-weight: ${c.nombre_bold ? 700 : 400}; line-height: 1.15; margin-bottom: 1.5mm; }
+  .qr { width: ${c.qr_mm}mm; height: ${c.qr_mm}mm; display: block; margin: 0 auto; image-rendering: pixelated; }
+  .cta { font-size: ${c.cta_pt}pt; margin-top: 1.5mm; }
+  .url { font-size: ${c.url_pt}pt; word-break: break-all; margin-top: 1mm; }
+  @media screen { body { padding: 16px; background: #ddd; } .lbl { border: 1px dashed #999; margin-bottom: 12px; } }
+</style></head>
+<body>${parts.join('')}
+<script>
+  var imgs = document.querySelectorAll('img.qr');
+  var pending = imgs.length;
+  function go(){ if(--pending<=0){ setTimeout(function(){ window.focus(); window.print(); }, 300); } }
+  imgs.forEach(function(img){ if(img.complete) go(); else { img.onload = go; img.onerror = go; } });
+  if(imgs.length===0) go();
+<\/script>
+</body></html>`
+    const w = window.open('', '_blank', 'width=480,height=680')
+    if (!w) return
+    w.document.write(html)
+    w.document.close()
+  }
+
   function descargar(local: string, sector: string, token: string) {
     // Descarga el PNG del QR (servicio externo)
     const a = document.createElement('a')
@@ -360,6 +423,18 @@ export default function SectoresQr() {
                     {sects.length} sector{sects.length === 1 ? '' : 'es'}
                   </p>
                 </div>
+                {sects.some((s) => s.activo && tokenActivoPorSector.has(s.id)) && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      imprimirTodos(l.codigo)
+                    }}
+                    className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-sub hover:bg-line hover:text-ink"
+                    title="Imprimir todos los QR de este local"
+                  >
+                    <Printer size={13} aria-hidden /> Imprimir
+                  </button>
+                )}
                 {open ? (
                   <ChevronUp size={16} className="shrink-0 text-sub" aria-hidden />
                 ) : (
