@@ -565,7 +565,7 @@ export default function Deposito() {
       r.porLocal.set(it.local, (r.porLocal.get(it.local) ?? 0) + it.cantidad)
       r.items.push(it)
     }
-    const allLocales = [...new Set(its.map((i) => i.local))].sort((a, b) => a.localeCompare(b, 'es'))
+    const allLocales = [...new Set(its.map((i) => i.local))]
     const rows = Array.from(rowMap.values()).sort((a, b) => {
       const ap = a.picking.replace(/[()0-9]/g, '')
       const bp = b.picking.replace(/[()0-9]/g, '')
@@ -782,7 +782,7 @@ export default function Deposito() {
                       <span className="font-display font-semibold text-ink">Reposición</span>
                     </button>
                     {subAbierto === `${lote.id}|repo` && (() => {
-                      const allLocales = locales.map(([l]) => l)
+                      const allLocales = [...new Set(its.map((i) => i.local))]
                       const rowMap = new Map<string, { codigo: string; desc: string; color: string; talle: string; picking: string; porLocal: Map<string, Item> }>()
                       for (const it of its) {
                         const desc = it.material ?? it.articulo ?? ''
