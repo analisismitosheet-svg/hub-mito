@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Upload, Loader2, ChevronRight, Store, Trash2, Check, X, Plus, BarChart3, ArrowRightLeft } from 'lucide-react'
+import { Upload, Loader2, ChevronRight, Store, Trash2, Check, X, Plus, BarChart3, ArrowRightLeft, Link as LinkIcon } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
@@ -177,6 +177,7 @@ export default function Deposito() {
   const [items, setItems] = useState<Item[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [msg, setMsg] = useState<string | null>(null)
   const [subiendo, setSubiendo] = useState(false)
   const puedeEditarStats = isAdmin || puedeImportar
   const puedeAsignar = isAdmin || puedeImportar || puedeMarcar
@@ -186,10 +187,19 @@ export default function Deposito() {
   const [empleados, setEmpleados] = useState<Empleado[]>([])
   const [responsables, setResponsables] = useState<Record<string, string | null>>({})
   const [modal, setModal] = useState(false)
+  const [modalSheet, setModalSheet] = useState(false)
+  const [sheetUrl, setSheetUrl] = useState('https://docs.google.com/spreadsheets/d/1N0tBAmXyFu9Wh3sby4l6o3u1JNUe01jwDotM8M61xfc/export?format=csv&gid=1571559083')
+  const [sheetNombre, setSheetNombre] = useState('')
+  const [sheetMotivo, setSheetMotivo] = useState('')
   const [archivo, setArchivo] = useState<File | null>(null)
   const [nombreNuevo, setNombreNuevo] = useState('')
   const [motivoNuevo, setMotivoNuevo] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+
+  function flash(t: string) {
+    setMsg(t)
+    setTimeout(() => setMsg((m) => (m === t ? null : m)), 3000)
+  }
 
   const cargar = useCallback(async () => {
     if (!supabase) {
@@ -443,6 +453,103 @@ export default function Deposito() {
     await cargar()
   }
 
+  async function importarSheet() {
+    if (!supabase) return
+    const url = sheetUrl.trim()
+    if (!url) { setError('Pegá la URL del Google Sheet.'); return }
+    if (!sheetNombre.trim()) { setError('Poné un nombre para el repo.'); return }
+    setSubiendo(true)
+    setError(null)
+    try {
+      const resp = await fetch(url)
+      if (!resp.ok) throw new Error(`No se pudo leer el Sheet (${resp.status})`)
+      const csv = await resp.text()
+      const lines = csv.split('\n').filter((l) => l.trim())
+      if (lines.length < 2) throw new Error('El Sheet está vacío o no tiene datos.')
+      const parseCsvLine = (line: string): string[] => {
+        const result: string[] = []
+        let current = ''
+        let inQuotes = false
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i]
+          if (inQuotes) {
+            if (ch === '"' && line[i + 1] === '"') { current += '"'; i++ }
+            else if (ch === '"') inQuotes = false
+            else current += ch
+          } else {
+            if (ch === '"') inQuotes = true
+            else if (ch === ',') { result.push(current); current = '' }
+            else current += ch
+          }
+        }
+        result.push(current)
+        return result
+      }
+      const headers = parseCsvLine(lines[0]).map((h) => h.trim())
+      // Columnas fijas
+      const iArt = headers.findIndex((h) => /art[iú]culo|codigo|cod/i.test(h))
+      const iDesc = headers.findIndex((h) => /descripci[oó]n/i.test(h))
+      const iColor = headers.findIndex((h) => /^color$/i.test(h))
+      const iTalle = headers.findIndex((h) => /^talle$/i.test(h))
+      if (iArt < 0) throw new Error('No encontré la columna Artículo/Código.')
+      // Columnas de locales: todo lo que no sea fijo ni STOCK ni PICKING
+      const fijas = new Set([iArt, iDesc, iColor, iTalle].filter((i) => i >= 0))
+      const locales: { idx: number; nombre: string }[] = []
+      headers.forEach((h, idx) => {
+        if (fijas.has(idx)) return
+        if (/stock|picking|📍/i.test(h)) return
+        if (!h) return
+        locales.push({ idx, nombre: h })
+      })
+      if (!locales.length) throw new Error('No encontré columnas de locales.')
+      const nuevos: Omit<Item, 'id' | 'lote_id' | 'estado' | 'hecho_at' | 'venta_local'>[] = []
+      let orden = 0
+      for (let i = 1; i < lines.length; i++) {
+        const row = parseCsvLine(lines[i])
+        const cod = (row[iArt] ?? '').trim()
+        if (!cod) continue
+        const desc = iDesc >= 0 ? (row[iDesc] ?? '').trim() : ''
+        const col = iColor >= 0 ? (row[iColor] ?? '').trim() : null
+        const tal = iTalle >= 0 ? (row[iTalle] ?? '').trim() : null
+        for (const loc of locales) {
+          const cant = parseInt(String(row[loc.idx] ?? '0').trim(), 10)
+          if (!cant || cant <= 0) continue
+          nuevos.push({
+            orden: orden++,
+            prioridad: null,
+            local: loc.nombre,
+            material: desc || null,
+            codigo: cod,
+            articulo: null,
+            color: col,
+            talle: tal,
+            cantidad: cant,
+          })
+        }
+      }
+      if (!nuevos.length) throw new Error('No encontré artículos con cantidades en el Sheet.')
+      const { data: lote, error: e1 } = await supabase
+        .from('deposito_lotes')
+        .insert({ nombre: sheetNombre.trim(), motivo: sheetMotivo.trim() || null, subido_por: perfil?.id ?? null })
+        .select('id')
+        .single()
+      if (e1 || !lote) throw new Error(e1?.message ?? 'No se pudo crear el lote')
+      const loteId = (lote as { id: string }).id
+      const { error: e2 } = await supabase
+        .from('deposito_items')
+        .insert(nuevos.map((n) => ({ ...n, lote_id: loteId })))
+      if (e2) throw new Error(e2.message)
+      setModalSheet(false)
+      setSheetNombre('')
+      setSheetMotivo('')
+      flash(`Importado: ${nuevos.length} ítems de ${locales.length} locales`)
+      await cargar()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo importar el Sheet.')
+    }
+    setSubiendo(false)
+  }
+
   const itemsPorLote = useMemo(() => {
     const m = new Map<string, Item[]>()
     for (const it of items) {
@@ -468,15 +575,26 @@ export default function Deposito() {
           </div>
         </div>
         {puedeImportar && (
-          <button onClick={() => setModal(true)} className="btn-press inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-brand-600 px-3.5 py-2.5 text-sm font-medium text-white shadow-soft hover:bg-brand-700">
-            <Plus size={17} aria-hidden /> <span className="hidden sm:inline">Nuevo archivo</span>
-          </button>
+          <div className="flex shrink-0 gap-2">
+            <button onClick={() => setModalSheet(true)} className="btn-press inline-flex items-center gap-1.5 rounded-xl border border-line bg-surface px-3.5 py-2.5 text-sm font-medium text-ink shadow-soft hover:bg-line">
+              <LinkIcon size={17} aria-hidden /> <span className="hidden sm:inline">Importar de Sheet</span>
+            </button>
+            <button onClick={() => setModal(true)} className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-3.5 py-2.5 text-sm font-medium text-white shadow-soft hover:bg-brand-700">
+              <Plus size={17} aria-hidden /> <span className="hidden sm:inline">Nuevo archivo</span>
+            </button>
+          </div>
         )}
       </div>
 
       {error && (
         <p role="alert" aria-live="polite" className="mb-4 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">
           {error}
+        </p>
+      )}
+
+      {msg && (
+        <p className="mb-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-400">
+          {msg}
         </p>
       )}
 
@@ -720,6 +838,42 @@ export default function Deposito() {
                 {subiendo ? 'Procesando…' : 'Cargar'}
               </button>
               <button onClick={() => setModal(false)} disabled={subiendo} className="btn-press rounded-xl border border-line bg-surface2 px-4 py-2.5 text-sm font-medium text-ink hover:bg-line disabled:opacity-50">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {modalSheet && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4" onClick={() => !subiendo && setModalSheet(false)}>
+          <div className="w-full max-w-md rounded-t-2xl border border-line bg-surface shadow-soft-lg sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-line px-4 py-3">
+              <h2 className="font-display font-semibold text-ink">Importar de Google Sheet</h2>
+              <button onClick={() => setModalSheet(false)} aria-label="Cerrar" className="rounded-lg p-1.5 text-sub hover:bg-line hover:text-ink">
+                <X size={18} aria-hidden />
+              </button>
+            </div>
+            <div className="space-y-4 p-4">
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-ink">URL del Sheet (export CSV)</span>
+                <input value={sheetUrl} onChange={(e) => setSheetUrl(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/..." className="w-full rounded-xl border border-line bg-surface2 px-3 py-2 text-ink text-sm outline-none focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40" />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-ink">Nombre del repo</span>
+                <input value={sheetNombre} onChange={(e) => setSheetNombre(e.target.value)} placeholder="Ej: Repo 20/08" className="w-full rounded-xl border border-line bg-surface2 px-3 py-2 text-ink outline-none focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40" />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-ink">Motivo</span>
+                <input value={sheetMotivo} onChange={(e) => setSheetMotivo(e.target.value)} placeholder="Opcional" className="w-full rounded-xl border border-line bg-surface2 px-3 py-2 text-ink outline-none focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40" />
+              </label>
+              <p className="text-xs text-sub">El Sheet debe ser público (Anyone with link can view). Se leen las columnas de locales con cantidades.</p>
+            </div>
+            <div className="flex gap-2 border-t border-line px-4 py-3">
+              <button onClick={importarSheet} disabled={subiendo || !sheetUrl.trim() || !sheetNombre.trim()} className="btn-press inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand-600 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">
+                {subiendo ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <LinkIcon size={16} aria-hidden />}
+                {subiendo ? 'Importando…' : 'Importar'}
+              </button>
+              <button onClick={() => setModalSheet(false)} disabled={subiendo} className="btn-press rounded-xl border border-line bg-surface2 px-4 py-2.5 text-sm font-medium text-ink hover:bg-line disabled:opacity-50">
                 Cancelar
               </button>
             </div>
