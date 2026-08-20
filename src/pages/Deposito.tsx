@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Upload, Loader2, ChevronRight, Store, Trash2, Check, X, Plus, BarChart3, ArrowRightLeft, Link as LinkIcon } from 'lucide-react'
+import { Upload, Loader2, ChevronRight, Store, Trash2, Check, X, Plus, BarChart3, ArrowRightLeft, Link as LinkIcon, Printer } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
@@ -16,11 +16,6 @@ interface Lote {
   horas: number | null
   personas: number | null
   observacion: string | null
-}
-interface Empleado {
-  id: string
-  legajo: string | null
-  nombre: string
 }
 interface Item {
   id: string
@@ -180,19 +175,22 @@ export default function Deposito() {
   const [msg, setMsg] = useState<string | null>(null)
   const [subiendo, setSubiendo] = useState(false)
   const puedeEditarStats = isAdmin || puedeImportar
-  const puedeAsignar = isAdmin || puedeImportar || puedeMarcar
   const [loteAbierto, setLoteAbierto] = useState<string | null>(null)
   const [localAbierto, setLocalAbierto] = useState<string | null>(null)
   const [subAbierto, setSubAbierto] = useState<string | null>(null)
-  const [empleados, setEmpleados] = useState<Empleado[]>([])
-  const [responsables, setResponsables] = useState<Record<string, string | null>>({})
   const [modal, setModal] = useState(false)
   const [modalSheet, setModalSheet] = useState(false)
   const [sheetUrl, setSheetUrl] = useState('https://docs.google.com/spreadsheets/d/1N0tBAmXyFu9Wh3sby4l6o3u1JNUe01jwDotM8M61xfc/export?format=csv&gid=1571559083')
-  const [sheetNombre, setSheetNombre] = useState('')
+  const [sheetNombre, setSheetNombre] = useState(() => {
+    const d = new Date()
+    return `Repo ${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}`
+  })
   const [sheetMotivo, setSheetMotivo] = useState('')
   const [archivo, setArchivo] = useState<File | null>(null)
-  const [nombreNuevo, setNombreNuevo] = useState('')
+  const [nombreNuevo, setNombreNuevo] = useState(() => {
+    const d = new Date()
+    return `Repo ${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}`
+  })
   const [motivoNuevo, setMotivoNuevo] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -214,8 +212,6 @@ export default function Deposito() {
       .limit(60)
     const lotesData = (ld as Lote[]) ?? []
     setLotes(lotesData)
-    const { data: emp } = await supabase.from('empleados').select('id,legajo,nombre').order('nombre', { ascending: true })
-    setEmpleados((emp as Empleado[]) ?? [])
     if (lotesData.length) {
       const ids = lotesData.map((l) => l.id)
       // Paginar los ítems: Supabase corta en 1000 filas por consulta
@@ -234,15 +230,8 @@ export default function Deposito() {
         if (error || chunk.length < PAGE) break
       }
       setItems(all)
-      const { data: respData } = await supabase.from('deposito_responsables').select('lote_id,local,empleado_id').in('lote_id', ids)
-      const m: Record<string, string | null> = {}
-      for (const r of (respData as { lote_id: string; local: string; empleado_id: string | null }[]) ?? []) {
-        m[`${r.lote_id}|${r.local}`] = r.empleado_id
-      }
-      setResponsables(m)
     } else {
       setItems([])
-      setResponsables({})
     }
     setCargando(false)
   }, [])
@@ -263,14 +252,6 @@ export default function Deposito() {
       setError(error.message)
       await cargar()
     }
-  }
-  async function asignarResponsable(loteId: string, local: string, empleadoId: string | null) {
-    if (!supabase) return
-    setResponsables((r) => ({ ...r, [`${loteId}|${local}`]: empleadoId }))
-    const { error } = await supabase
-      .from('deposito_responsables')
-      .upsert({ lote_id: loteId, local, empleado_id: empleadoId }, { onConflict: 'lote_id,local' })
-    if (error) setError(error.message)
   }
 
   async function marcarVarios(its: Item[], estado: EstadoM) {
@@ -575,6 +556,66 @@ export default function Deposito() {
     return m
   }, [items])
 
+  function imprimirLote(lote: Lote, its: Item[]) {
+    const porLocal = new Map<string, Item[]>()
+    for (const i of its) {
+      const a = porLocal.get(i.local) ?? []
+      a.push(i)
+      porLocal.set(i.local, a)
+    }
+    const sorted = Array.from(porLocal.entries()).sort((a, b) => a[0].localeCompare(b[0], 'es'))
+    const total = its.reduce((s, i) => s + (i.cantidad || 1), 0)
+    const hecho = its.filter((i) => i.estado === 'hecho').reduce((s, i) => s + (i.cantidad || 1), 0)
+    const faltante = its.filter((i) => i.estado === 'faltante').reduce((s, i) => s + (i.cantidad || 1), 0)
+    const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string))
+    const rows = sorted.map(([local, lItems]) =>
+      lItems.map((it) =>
+        `<tr>
+          <td>${esc(it.codigo ?? '')}</td>
+          <td>${esc(it.articulo ?? it.material ?? '')}</td>
+          <td>${esc(it.color ?? '')}</td>
+          <td>${esc(it.talle ?? '')}</td>
+          <td>${esc(local)}</td>
+          <td style="text-align:right">${it.cantidad}</td>
+          <td style="text-align:center">${it.estado === 'hecho' ? '✔' : it.estado === 'faltante' ? '✘' : ''}</td>
+        </tr>`
+      ).join('')
+    ).join('')
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(lote.nombre)}</title>
+<style>
+  @page { size: A4; margin: 12mm; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; font-size: 10pt; color: #000; margin: 0; }
+  h1 { font-size: 16pt; margin: 0 0 4px; }
+  .meta { font-size: 9pt; color: #555; margin-bottom: 12px; }
+  .stats { display: flex; gap: 16px; margin-bottom: 12px; font-size: 9pt; }
+  .stats span { background: #f3f4f6; padding: 2px 8px; border-radius: 4px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { background: #f3f4f6; text-align: left; padding: 4px 6px; font-size: 8pt; text-transform: uppercase; border-bottom: 2px solid #000; }
+  td { padding: 3px 6px; border-bottom: 1px solid #e5e7eb; font-size: 9pt; }
+  tr.local-row td { background: #f9fafb; font-weight: bold; border-bottom: 1px solid #000; }
+  @media screen { body { padding: 16px; background: #ddd; } }
+</style></head><body>
+<h1>${esc(lote.nombre)}</h1>
+<div class="meta">${esc(lote.motivo ?? '')} · ${sorted.length} locales · ${new Date(lote.created_at).toLocaleDateString('es-AR')}</div>
+<div class="stats">
+  <span>Total: ${total}</span>
+  <span>Hecho: ${hecho}</span>
+  <span>Faltante: ${faltante}</span>
+  <span>Pendiente: ${total - hecho - faltante}</span>
+</div>
+<table>
+  <thead><tr><th>Código</th><th>Artículo</th><th>Color</th><th>Talle</th><th>Local</th><th style="text-align:right">Cant</th><th style="text-align:center">Estado</th></tr></thead>
+  <tbody>${rows}</tbody>
+</table>
+<script>window.onload=function(){window.print()}</script>
+</body></html>`
+    const w = window.open('', '_blank')
+    if (!w) return
+    w.document.write(html)
+    w.document.close()
+  }
+
   return (
     <Layout>
       <BackButton />
@@ -640,12 +681,8 @@ export default function Deposito() {
               const pb = Math.min(...b[1].map((i) => i.prioridad ?? 9999))
               return pa !== pb ? pa - pb : a[0].localeCompare(b[0], 'es')
             })
-            // personas = responsables únicos asignados en este archivo
-            const personasLote = new Set(
-              Object.entries(responsables)
-                .filter(([k, v]) => k.startsWith(`${lote.id}|`) && v)
-                .map(([, v]) => v),
-            ).size
+            // personas = 0 (ya no se asignan responsables por local)
+            const personasLote = 0
             return (
               <div key={lote.id} className="overflow-hidden rounded-2xl border border-line bg-surface shadow-soft">
                 <button
@@ -666,6 +703,20 @@ export default function Deposito() {
                     </p>
                   </div>
                   <Barra items={its} />
+                  {puedeImportar && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        imprimirLote(lote, its)
+                      }}
+                      className="ml-1 rounded-lg p-1.5 text-sub hover:bg-line hover:text-ink"
+                      title="Imprimir repo"
+                    >
+                      <Printer size={15} aria-hidden />
+                    </span>
+                  )}
                   {puedeImportar && (
                     <span
                       role="button"
@@ -729,23 +780,6 @@ export default function Deposito() {
                               )}
                               <Barra items={lItems} />
                             </button>
-                            {puedeAsignar ? (
-                              <select
-                                value={responsables[key] ?? ''}
-                                onChange={(e) => asignarResponsable(lote.id, local, e.target.value || null)}
-                                className="max-w-[8.5rem] shrink-0 rounded-lg border border-line bg-surface px-2 py-1 text-xs text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
-                                title="Empleado responsable"
-                              >
-                                <option value="">Responsable…</option>
-                                {empleados.map((em) => (
-                                  <option key={em.id} value={em.id}>{em.nombre}</option>
-                                ))}
-                              </select>
-                            ) : (
-                              responsables[key] && (
-                                <span className="shrink-0 text-xs text-sub">{empleados.find((e) => e.id === responsables[key])?.nombre}</span>
-                              )
-                            )}
                             {puedeMarcar && (
                               <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-medium text-sub" title="Marcar todo el local">
                                 <input
