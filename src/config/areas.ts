@@ -151,6 +151,7 @@ export const APPS: AppDef[] = [
   {
     id: 'control-locales',
     areaId: 'locales',
+    areaIds: ['locales', 'deposito'],
     title: 'Control de Locales',
     description: 'Auditorías, inspectores, sectores y reportes.',
     icon: Store,
@@ -162,6 +163,7 @@ export const APPS: AppDef[] = [
   {
     id: 'transporte',
     areaId: 'locales',
+    areaIds: ['locales', 'deposito'],
     title: 'Transporte',
     description: 'Bultos, sesiones, remitos y stock entre bases.',
     icon: Truck,
