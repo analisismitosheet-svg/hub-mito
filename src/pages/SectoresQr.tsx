@@ -133,6 +133,7 @@ export default function SectoresQr() {
     }
 
     const nuevos: Sector[] = []
+    const nuevosTokens: QrToken[] = []
     let errores = 0
 
     for (const l of locales) {
@@ -146,11 +147,28 @@ export default function SectoresQr() {
         continue
       }
       nuevos.push(data as Sector)
-      await generarQr(l.codigo, (data as Sector).id, false)
+      // Crear QR sin refresh intermedio
+      const { data: tokenStr, error: qrErr } = await supabase.rpc('crear_qr_sector', {
+        p_local: l.codigo,
+        p_sector_id: (data as Sector).id,
+      })
+      if (!qrErr && tokenStr) {
+        nuevosTokens.push({
+          token: tokenStr as string,
+          local: l.codigo,
+          sector_id: (data as Sector).id,
+          activo: true,
+          created_at: new Date().toISOString(),
+          revoked_at: null,
+        })
+      }
     }
 
     if (nuevos.length > 0) {
       setSectores((s) => [...s, ...nuevos])
+    }
+    if (nuevosTokens.length > 0) {
+      setTokens((t) => [...t, ...nuevosTokens])
     }
     setNuevoSector(null)
     if (errores === 0) {
@@ -204,14 +222,17 @@ export default function SectoresQr() {
     })
     setBusyId(null)
     if (error) {
-      setError(error.message)
-      return
+      if (notificar) setError(error.message)
+      return null
     }
     const token = data as string
-    // Refrescar tokens
-    const { data: qt } = await supabase.from('qr_tokens').select('*').eq('activo', true)
-    setTokens((qt as QrToken[]) ?? [])
-    if (notificar) flash(`QR generado (${slugToken(token)})`)
+    if (notificar) {
+      // Refrescar tokens solo si es llamada individual
+      const { data: qt } = await supabase.from('qr_tokens').select('*').eq('activo', true)
+      setTokens((qt as QrToken[]) ?? [])
+      flash(`QR generado (${slugToken(token)})`)
+    }
+    return token
   }
 
   async function regenerarQr(local: string, sector: Sector) {
