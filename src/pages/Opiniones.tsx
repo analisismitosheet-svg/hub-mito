@@ -6,8 +6,8 @@ import { useAuth } from '@/context/AuthContext'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import StarRating from '@/components/StarRating'
-import { buildLabelHtml, QR_LABEL_DEFAULT, type QrLabelConfig } from '@/components/QrEtiqueta'
-import type { Encuesta, Pregunta, Sector } from '@/types/encuestas'
+import { buildLabelHtml, qrImgUrl, QR_LABEL_DEFAULT, type QrLabelConfig } from '@/components/QrEtiqueta'
+import type { Encuesta, Pregunta, Sector, QrToken } from '@/types/encuestas'
 
 interface Local {
   codigo: string
@@ -62,6 +62,7 @@ export default function Opiniones() {
   const [abierto, setAbierto] = useState<string | null>(null)
   const [copiado, setCopiado] = useState<string | null>(null)
   const [qr, setQr] = useState<string | null>(null)
+  const [tokens, setTokens] = useState<QrToken[]>([])
   const [orden, setOrden] = useState<'desc' | 'asc'>('desc')
   const [qrCfg, setQrCfg] = useState<QrLabelConfig>(QR_LABEL_DEFAULT)
 
@@ -69,16 +70,18 @@ export default function Opiniones() {
   useEffect(() => {
     if (!supabase) return
     ;(async () => {
-      const [{ data: locs }, { data: encs }, { data: sects }] = await Promise.all([
+      const [{ data: locs }, { data: encs }, { data: sects }, { data: toks }] = await Promise.all([
         supabase!.from('locales').select('codigo, nombre').order('nombre'),
         supabase!
           .from('encuestas')
           .select('id, nombre, descripcion, contexto, publica, estado, version, created_at, updated_at')
           .order('created_at'),
         supabase!.from('sectores').select('*').order('local').order('orden').order('nombre'),
+        supabase!.from('qr_tokens').select('*').eq('activo', true),
       ])
       setLocales((locs as Local[]) ?? [])
       setSectores((sects as Sector[]) ?? [])
+      setTokens((toks as QrToken[]) ?? [])
       const lista = (encs as Encuesta[]) ?? []
       setEncuestas(lista)
       // Diseño de la etiqueta del QR (si está configurado)
@@ -202,6 +205,78 @@ export default function Opiniones() {
     })
     return m
   }, [sectores])
+
+  const tokenActivoPorSector = useMemo(() => {
+    const m = new Map<string, QrToken>()
+    tokens.forEach((t) => m.set(t.sector_id, t))
+    return m
+  }, [tokens])
+
+  function slugToken(token: string) {
+    return token.slice(0, 8) + '…' + token.slice(-4)
+  }
+
+  function urlPublico(token: string) {
+    return `${window.location.origin}/opinar/qr/${token}`
+  }
+
+  function imprimirQrSector(localCode: string, sectorNombre: string, token: string) {
+    const w = window.open('', '_blank', 'width=480,height=680')
+    if (!w) return
+    const nombre = `${nombrePorCodigo.get(localCode) ?? localCode} · ${sectorNombre}`
+    w.document.write(buildLabelHtml(qrCfg, nombre, urlPublico(token)))
+    w.document.close()
+  }
+
+  function imprimirTodosSectores(localCode: string) {
+    const sects = sectoresPorLocal.get(localCode) ?? []
+    const labels: { nombre: string; url: string }[] = []
+    for (const s of sects) {
+      if (!s.activo) continue
+      const t = tokenActivoPorSector.get(s.id)
+      if (!t) continue
+      labels.push({ nombre: `${nombrePorCodigo.get(localCode) ?? localCode} · ${s.nombre}`, url: urlPublico(t.token) })
+    }
+    if (labels.length === 0) return
+    const c = qrCfg
+    const contentW = Math.max(10, c.ancho_mm - 4)
+    const pageSize = c.alto_mm > 0 ? `${c.ancho_mm}mm ${c.alto_mm}mm` : `${c.ancho_mm}mm auto`
+    const esc = (s: string) => s.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] as string))
+    const parts = labels.map((l) => {
+      const inner: string[] = []
+      if (c.logo) inner.push(`<img class="logo" src="${esc(c.logo)}" alt=""/>`)
+      if (c.texto_encabezado) inner.push(`<div class="enc">${esc(c.texto_encabezado)}</div>`)
+      if (c.mostrar_nombre) inner.push(`<div class="nombre">${esc(l.nombre)}</div>`)
+      inner.push(`<img class="qr" src="${qrImgUrl(l.url)}" alt="QR"/>`)
+      if (c.cta) inner.push(`<div class="cta">${esc(c.cta)}</div>`)
+      if (c.mostrar_url) inner.push(`<div class="url">${esc(l.url)}</div>`)
+      return `<div class="lbl">${inner.join('')}</div>`
+    })
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>QRs · ${esc(localCode)}</title>
+<style>
+  @page { size: ${pageSize}; margin: 2mm; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #fff; }
+  .lbl { width: ${contentW}mm; margin: 0 auto; text-align: ${c.align}; font-family: Arial, Helvetica, sans-serif; padding: 1mm 0; background: ${c.bg_color}; color: ${c.text_color}; -webkit-print-color-adjust: exact; print-color-adjust: exact; page-break-after: always; }
+  .lbl:last-child { page-break-after: auto; }
+  .logo { height: ${c.logo_alto_mm}mm; object-fit: contain; display: block; margin: 0 auto 1.5mm; }
+  .enc { font-size: ${c.encabezado_pt}pt; margin-bottom: 1mm; }
+  .nombre { font-size: ${c.nombre_pt}pt; font-weight: ${c.nombre_bold ? 700 : 400}; line-height: 1.15; margin-bottom: 1.5mm; }
+  .qr { width: ${c.qr_mm}mm; height: ${c.qr_mm}mm; display: block; margin: 0 auto; image-rendering: pixelated; }
+  .cta { font-size: ${c.cta_pt}pt; margin-top: 1.5mm; }
+  .url { font-size: ${c.url_pt}pt; word-break: break-all; margin-top: 1mm; }
+  @media screen { body { padding: 16px; background: #ddd; } .lbl { border: 1px dashed #999; margin-bottom: 12px; } }
+</style></head><body>${parts.join('')}
+<script>
+var imgs=document.querySelectorAll('img.qr'),p=imgs.length;
+function go(){if(--p<=0)setTimeout(function(){window.focus();window.print()},300)}
+imgs.forEach(function(i){i.complete?go():(i.onload=go,i.onerror=go)});if(!p)go();
+<\/script></body></html>`
+    const w = window.open('', '_blank', 'width=480,height=680')
+    if (!w) return
+    w.document.write(html)
+    w.document.close()
+  }
 
   const resumenLocales = useMemo(() => {
     const itemsByResp = new Map<string, Item[]>()
@@ -472,6 +547,49 @@ export default function Opiniones() {
 
                   {open && (
                     <div className="border-t border-line bg-surface2 p-3">
+                      {(() => {
+                        const sects = r.sectores.filter((s) => s.activo)
+                        const sectConQr = sects.filter((s) => tokenActivoPorSector.has(s.id))
+                        if (sectConQr.length > 0) {
+                          return (
+                            <div className="mb-3 rounded-xl border border-line bg-surface p-3">
+                              <div className="mb-2 flex items-center justify-between">
+                                <span className="text-xs font-semibold text-ink">QR por sector</span>
+                                {sectConQr.length > 1 && (
+                                  <button
+                                    onClick={() => imprimirTodosSectores(r.codigo)}
+                                    className="btn-press inline-flex items-center gap-1 rounded-lg border border-line bg-surface2 px-2 py-1 text-[11px] font-medium text-sub hover:text-ink"
+                                  >
+                                    <Printer size={11} aria-hidden /> Imprimir todos
+                                  </button>
+                                )}
+                              </div>
+                              <div className="space-y-1.5">
+                                {sectConQr.map((s) => {
+                                  const t = tokenActivoPorSector.get(s.id)!
+                                  return (
+                                    <div key={s.id} className="flex items-center gap-2">
+                                      <MapPin size={12} className="shrink-0 text-sub" aria-hidden />
+                                      <span className="min-w-0 flex-1 truncate text-sm text-ink">{s.nombre}</span>
+                                      <code className="shrink-0 rounded border border-line bg-surface2 px-1.5 py-0.5 text-[10px] text-sub" title={t.token}>
+                                        {slugToken(t.token)}
+                                      </code>
+                                      <button
+                                        onClick={() => imprimirQrSector(r.codigo, s.nombre, t.token)}
+                                        title={`Imprimir QR · ${s.nombre}`}
+                                        className="btn-press shrink-0 rounded-lg border border-line p-1.5 text-sub hover:text-ink"
+                                      >
+                                        <Printer size={12} aria-hidden />
+                                      </button>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          )
+                        }
+                        return null
+                      })()}
                       {r.submissions.length === 0 ? (
                         <p className="text-sm text-sub">Sin opiniones.</p>
                       ) : (
