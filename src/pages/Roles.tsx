@@ -191,6 +191,7 @@ function RolPermisosModal({
       'encuestas.gestionar': 'marketing',
       'banner.editar': 'marketing',
       'qr.regenerar': 'locales',
+      'sectores.gestionar': 'locales',
     }
 
     const porArea = new Map<string, { area: typeof AREAS[number]; permisos: Permiso[] }>()
