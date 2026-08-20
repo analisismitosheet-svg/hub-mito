@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Loader2, Plus, Trash2, SlidersHorizontal, Check, X } from 'lucide-react'
+import { Loader2, Plus, Trash2, SlidersHorizontal, Check, X, ChevronRight } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
+import { AREAS, APPS } from '@/config/areas'
 
 interface Rol {
   codigo: string
@@ -134,6 +135,7 @@ function RolPermisosModal({
   const [cargando, setCargando] = useState(true)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [abierto, setAbierto] = useState<Set<string>>(new Set(AREAS.map((a) => a.id)))
 
   useEffect(() => {
     let activo = true
@@ -147,13 +149,58 @@ function RolPermisosModal({
     return () => { activo = false }
   }, [rol.codigo])
 
-  const grupos = useMemo(() => {
-    const m = new Map<string, Permiso[]>()
-    for (const p of permisos) { const arr = m.get(p.modulo) ?? []; arr.push(p); m.set(p.modulo, arr) }
-    return Array.from(m.entries())
+  const areasPermisos = useMemo(() => {
+    const permMap = new Map(permisos.map((p) => [p.clave, p]))
+    const used = new Set<string>()
+    const resultado: { area: typeof AREAS[number]; areaPerm: Permiso | null; apps: { app: typeof APPS[number]; permisos: Permiso[] }[] }[] = []
+
+    for (const area of AREAS) {
+      const areaClave = `area_${area.id}.view`
+      const areaPerm = permMap.get(areaClave) ?? null
+      if (areaPerm) used.add(areaClave)
+
+      const appsDelArea = APPS.filter((a) => a.areaId === area.id || a.areaIds?.includes(area.id))
+      const apps: { app: typeof APPS[number]; permisos: Permiso[] }[] = []
+      for (const app of appsDelArea) {
+        if (!app.permiso) continue
+        const appPerm = permMap.get(app.permiso)
+        if (appPerm) {
+          used.add(app.permiso)
+          apps.push({ app, permisos: [appPerm] })
+        }
+      }
+      if (areaPerm || apps.length) {
+        resultado.push({ area, areaPerm, apps })
+      }
+    }
+
+    const sueltos = permisos.filter((p) => !used.has(p.clave))
+    if (sueltos.length) {
+      resultado.push({
+        area: { id: '_otros', name: 'Otros permisos', icon: SlidersHorizontal, accent: 'text-gray-500', color: '#64748b' },
+        areaPerm: null,
+        apps: [{ app: { id: '_otros', areaId: '_otros', title: 'Otros', description: '', icon: SlidersHorizontal, kind: 'internal', target: '', color: '#64748b' }, permisos: sueltos }],
+      })
+    }
+
+    return resultado
   }, [permisos])
 
   function toggle(clave: string) { setSel((s) => { const n = new Set(s); if (n.has(clave)) n.delete(clave); else n.add(clave); return n }) }
+
+  function toggleArea(claves: string[]) {
+    setSel((s) => {
+      const n = new Set(s)
+      const allChecked = claves.every((c) => n.has(c))
+      for (const c of claves) { allChecked ? n.delete(c) : n.add(c) }
+      return n
+    })
+  }
+
+  function toggleAbierto(areaId: string) {
+    setAbierto((s) => { const n = new Set(s); if (n.has(areaId)) n.delete(areaId); else n.add(areaId); return n })
+  }
+
   function setTodos(v: boolean) { setSel(v ? new Set(permisos.map((p) => p.clave)) : new Set()) }
 
   async function guardar() {
@@ -184,20 +231,52 @@ function RolPermisosModal({
           {cargando ? (
             <div className="flex items-center justify-center gap-2 py-10 text-sub"><Loader2 size={18} className="animate-spin" aria-hidden /> Cargando…</div>
           ) : (
-            <div className="space-y-4">
-              {grupos.map(([modulo, items]) => (
-                <div key={modulo}>
-                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-sub">{modulo.replace('area_', 'Área: ')}</p>
-                  <div className="divide-y divide-line/70 overflow-hidden rounded-xl border border-line">
-                    {items.map((p) => (
-                      <label key={p.clave} className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2 hover:bg-surface2">
-                        <span className="text-sm text-ink">{p.label}</span>
-                        <input type="checkbox" checked={sel.has(p.clave)} onChange={() => toggle(p.clave)} className="h-4 w-4 accent-brand-600" />
-                      </label>
-                    ))}
+            <div className="space-y-2">
+              {areasPermisos.map(({ area, areaPerm, apps }) => {
+                const allClaves = [areaPerm, ...apps.flatMap((a) => a.permisos)].filter(Boolean).map((p) => p!.clave)
+                const checked = allClaves.filter((c) => sel.has(c)).length
+                const total = allClaves.length
+                const isOpen = abierto.has(area.id)
+                const Icon = area.icon
+                return (
+                  <div key={area.id} className="overflow-hidden rounded-xl border border-line">
+                    <div className="flex items-center gap-2 bg-surface2 px-3 py-2">
+                      <button onClick={() => toggleAbierto(area.id)} className="flex flex-1 items-center gap-2 text-left">
+                        <ChevronRight size={14} className={`shrink-0 text-sub transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+                        <Icon size={15} style={{ color: area.color }} aria-hidden />
+                        <span className="flex-1 text-sm font-semibold text-ink">{area.name}</span>
+                        <span className="text-[11px] tabular-nums text-sub">{checked}/{total}</span>
+                      </button>
+                      {allClaves.length > 0 && (
+                        <button onClick={() => toggleArea(allClaves)} className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium ${checked === total && total > 0 ? 'bg-emerald-500/15 text-emerald-400' : 'bg-line text-sub hover:text-ink'}`} title="Seleccionar/deseleccionar área">
+                          {checked === total && total > 0 ? '✓' : '☐'}
+                        </button>
+                      )}
+                    </div>
+                    {isOpen && (
+                      <div className="divide-y divide-line/70 border-t border-line">
+                        {areaPerm && (
+                          <label className="flex cursor-pointer items-center justify-between gap-3 bg-surface/50 px-3 py-2 hover:bg-surface2">
+                            <span className="text-sm text-ink">{areaPerm.label}</span>
+                            <input type="checkbox" checked={sel.has(areaPerm.clave)} onChange={() => toggle(areaPerm.clave)} className="h-4 w-4 accent-brand-600" />
+                          </label>
+                        )}
+                        {apps.map(({ app, permisos: appPerms }) => (
+                          <div key={app.id}>
+                            <p className="bg-surface/30 px-3 py-1.5 text-[11px] font-medium text-sub">{app.title}</p>
+                            {appPerms.map((p) => (
+                              <label key={p.clave} className="flex cursor-pointer items-center justify-between gap-3 pl-6 pr-3 py-2 hover:bg-surface2">
+                                <span className="text-sm text-ink">{p.label}</span>
+                                <input type="checkbox" checked={sel.has(p.clave)} onChange={() => toggle(p.clave)} className="h-4 w-4 accent-brand-600" />
+                              </label>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
