@@ -3,7 +3,7 @@ import { Loader2, Plus, Trash2, SlidersHorizontal, Check, X, ChevronRight } from
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
-import { AREAS, APPS } from '@/config/areas'
+import { AREAS } from '@/config/areas'
 
 interface Rol {
   codigo: string
@@ -150,40 +150,71 @@ function RolPermisosModal({
   }, [rol.codigo])
 
   const areasPermisos = useMemo(() => {
-    const permMap = new Map(permisos.map((p) => [p.clave, p]))
-    const used = new Set<string>()
-    const resultado: { area: typeof AREAS[number]; areaPerm: Permiso | null; apps: { app: typeof APPS[number]; permisos: Permiso[] }[] }[] = []
+    // Mapa exhaustive: clave -> areaId
+    const permToArea: Record<string, string> = {
+      'area_administracion.view': 'administracion',
+      'area_tesoreria.view': 'tesoreria',
+      'area_rrhh.view': 'rrhh',
+      'area_mayorista.view': 'mayorista',
+      'area_marketing.view': 'marketing',
+      'area_compras.view': 'compras',
+      'area_sistemas.view': 'sistemas',
+      'area_locales.view': 'locales',
+      'area_diseno.view': 'diseno',
+      'area_deposito.view': 'deposito',
+      'area_polo52.view': 'polo52',
+      'area_arquitectura.view': 'arquitectura',
+      'area_recepcion.view': 'recepcion',
+      'area_mantenimiento.view': 'mantenimiento',
+      'cuentas_amigos.view': 'tesoreria',
+      'cuentas_amigos.create': 'tesoreria',
+      'cuentas_amigos.edit': 'tesoreria',
+      'manuales.view': 'locales',
+      'manuales.create': 'locales',
+      'manuales.edit': 'locales',
+      'manuales.delete': 'locales',
+      'documentos.view': 'locales',
+      'documentos.create': 'locales',
+      'documentos.edit': 'locales',
+      'documentos.delete': 'locales',
+      'transferencias.view': 'compras',
+      'transferencias.import': 'compras',
+      'transferencias.ver_todo': 'compras',
+      'mayorista.view': 'mayorista',
+      'mayorista.import': 'mayorista',
+      'mayorista.mark': 'mayorista',
+      'deposito.view': 'deposito',
+      'deposito.import': 'deposito',
+      'deposito.mark': 'deposito',
+      'opiniones.view': 'locales',
+      'opiniones.borrar': 'locales',
+      'encuestas.gestionar': 'marketing',
+      'banner.editar': 'marketing',
+      'qr.regenerar': 'locales',
+    }
 
+    const porArea = new Map<string, { area: typeof AREAS[number]; permisos: Permiso[] }>()
     for (const area of AREAS) {
-      const areaClave = `area_${area.id}.view`
-      const areaPerm = permMap.get(areaClave) ?? null
-      if (areaPerm) used.add(areaClave)
+      porArea.set(area.id, { area, permisos: [] })
+    }
 
-      const appsDelArea = APPS.filter((a) => a.areaId === area.id || a.areaIds?.includes(area.id))
-      const apps: { app: typeof APPS[number]; permisos: Permiso[] }[] = []
-      for (const app of appsDelArea) {
-        if (!app.permiso) continue
-        const appPerm = permMap.get(app.permiso)
-        if (appPerm) {
-          used.add(app.permiso)
-          apps.push({ app, permisos: [appPerm] })
-        }
-      }
-      if (areaPerm || apps.length) {
-        resultado.push({ area, areaPerm, apps })
+    for (const p of permisos) {
+      const areaId = permToArea[p.clave]
+      const bucket = porArea.get(areaId)
+      if (bucket) {
+        bucket.permisos.push(p)
+      } else {
+        // Fallback: intentar deducir del módulo
+        const fallback = permisos.find((x) => x.clave === p.clave)
+        const mod = fallback?.modulo?.replace('area_', '') ?? '_otros'
+        if (!porArea.has(mod)) porArea.set(mod, { area: { id: mod, name: mod, icon: SlidersHorizontal, accent: 'text-gray-500', color: '#64748b' }, permisos: [] })
+        porArea.get(mod)!.permisos.push(p)
       }
     }
 
-    const sueltos = permisos.filter((p) => !used.has(p.clave))
-    if (sueltos.length) {
-      resultado.push({
-        area: { id: '_otros', name: 'Otros permisos', icon: SlidersHorizontal, accent: 'text-gray-500', color: '#64748b' },
-        areaPerm: null,
-        apps: [{ app: { id: '_otros', areaId: '_otros', title: 'Otros', description: '', icon: SlidersHorizontal, kind: 'internal', target: '', color: '#64748b' }, permisos: sueltos }],
-      })
-    }
-
-    return resultado
+    return Array.from(porArea.values())
+      .filter((b) => b.permisos.length > 0)
+      .sort((a, b) => a.area.name.localeCompare(b.area.name, 'es'))
   }, [permisos])
 
   function toggle(clave: string) { setSel((s) => { const n = new Set(s); if (n.has(clave)) n.delete(clave); else n.add(clave); return n }) }
@@ -232,10 +263,9 @@ function RolPermisosModal({
             <div className="flex items-center justify-center gap-2 py-10 text-sub"><Loader2 size={18} className="animate-spin" aria-hidden /> Cargando…</div>
           ) : (
             <div className="space-y-2">
-              {areasPermisos.map(({ area, areaPerm, apps }) => {
-                const allClaves = [areaPerm, ...apps.flatMap((a) => a.permisos)].filter(Boolean).map((p) => p!.clave)
-                const checked = allClaves.filter((c) => sel.has(c)).length
-                const total = allClaves.length
+              {areasPermisos.map(({ area, permisos: areaPerms }) => {
+                const checked = areaPerms.filter((p) => sel.has(p.clave)).length
+                const total = areaPerms.length
                 const isOpen = abierto.has(area.id)
                 const Icon = area.icon
                 return (
@@ -247,30 +277,17 @@ function RolPermisosModal({
                         <span className="flex-1 text-sm font-semibold text-ink">{area.name}</span>
                         <span className="text-[11px] tabular-nums text-sub">{checked}/{total}</span>
                       </button>
-                      {allClaves.length > 0 && (
-                        <button onClick={() => toggleArea(allClaves)} className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium ${checked === total && total > 0 ? 'bg-emerald-500/15 text-emerald-400' : 'bg-line text-sub hover:text-ink'}`} title="Seleccionar/deseleccionar área">
-                          {checked === total && total > 0 ? '✓' : '☐'}
-                        </button>
-                      )}
+                      <button onClick={() => toggleArea(areaPerms.map((p) => p.clave))} className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium ${checked === total && total > 0 ? 'bg-emerald-500/15 text-emerald-400' : 'bg-line text-sub hover:text-ink'}`} title="Seleccionar/deseleccionar área">
+                        {checked === total && total > 0 ? '✓' : '☐'}
+                      </button>
                     </div>
                     {isOpen && (
                       <div className="divide-y divide-line/70 border-t border-line">
-                        {areaPerm && (
-                          <label className="flex cursor-pointer items-center justify-between gap-3 bg-surface/50 px-3 py-2 hover:bg-surface2">
-                            <span className="text-sm text-ink">{areaPerm.label}</span>
-                            <input type="checkbox" checked={sel.has(areaPerm.clave)} onChange={() => toggle(areaPerm.clave)} className="h-4 w-4 accent-brand-600" />
+                        {areaPerms.map((p) => (
+                          <label key={p.clave} className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2 hover:bg-surface2">
+                            <span className="text-sm text-ink">{p.label}</span>
+                            <input type="checkbox" checked={sel.has(p.clave)} onChange={() => toggle(p.clave)} className="h-4 w-4 accent-brand-600" />
                           </label>
-                        )}
-                        {apps.map(({ app, permisos: appPerms }) => (
-                          <div key={app.id}>
-                            <p className="bg-surface/30 px-3 py-1.5 text-[11px] font-medium text-sub">{app.title}</p>
-                            {appPerms.map((p) => (
-                              <label key={p.clave} className="flex cursor-pointer items-center justify-between gap-3 pl-6 pr-3 py-2 hover:bg-surface2">
-                                <span className="text-sm text-ink">{p.label}</span>
-                                <input type="checkbox" checked={sel.has(p.clave)} onChange={() => toggle(p.clave)} className="h-4 w-4 accent-brand-600" />
-                              </label>
-                            ))}
-                          </div>
                         ))}
                       </div>
                     )}
