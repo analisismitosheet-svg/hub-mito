@@ -182,6 +182,17 @@ export const APPS: AppDef[] = [
     permiso: 'mayorista.view',
   },
   {
+    id: 'deposito-repo',
+    areaId: 'deposito',
+    title: 'Repos Depósito',
+    description: 'Preparar repos por local: marcar hecho o faltante.',
+    icon: Store,
+    kind: 'internal',
+    target: '/deposito',
+    color: '#ea580c',
+    permiso: 'deposito.view',
+  },
+  {
     id: 'transferencias',
     areaId: 'compras',
     areaIds: ['compras', 'locales'],
