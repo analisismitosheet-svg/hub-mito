@@ -251,6 +251,23 @@ export default function Deposito() {
     }
   }
 
+  async function marcarTodo(its: Item[]) {
+    if (!supabase || !its.length) return
+    const pendientes = its.filter((i) => i.estado !== 'hecho')
+    if (!pendientes.length) return
+    const ids = pendientes.map((i) => i.id)
+    const at = new Date().toISOString()
+    setItems((arr) => arr.map((x) => (ids.includes(x.id) ? { ...x, estado: 'hecho' as const, hecho_at: at } : x)))
+    const { error } = await supabase
+      .from('deposito_items')
+      .update({ estado: 'hecho', hecho_at: at, hecho_por: perfil?.id ?? null })
+      .in('id', ids)
+    if (error) {
+      setError(error.message)
+      await cargar()
+    }
+  }
+
   function onSelectFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0] ?? null
     setArchivo(f)
@@ -786,14 +803,25 @@ export default function Deposito() {
                         </div>
                       )}
                     </div>
-                    <button
-                      onClick={() => setSubAbierto(subAbierto === `${lote.id}|repo` ? null : `${lote.id}|repo`)}
-                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left hover:bg-surface2"
-                    >
-                      <ChevronRight size={15} aria-hidden className={`shrink-0 text-sub transition-transform ${subAbierto === `${lote.id}|repo` ? 'rotate-90' : ''}`} />
-                      <ArrowRightLeft size={15} aria-hidden className="text-sub" />
-                      <span className="font-display font-semibold text-ink">Reposición</span>
-                    </button>
+                    <div className="flex items-center border-b border-line">
+                      <button
+                        onClick={() => setSubAbierto(subAbierto === `${lote.id}|repo` ? null : `${lote.id}|repo`)}
+                        className="flex flex-1 items-center gap-2 px-4 py-2.5 text-left hover:bg-surface2"
+                      >
+                        <ChevronRight size={15} aria-hidden className={`shrink-0 text-sub transition-transform ${subAbierto === `${lote.id}|repo` ? 'rotate-90' : ''}`} />
+                        <ArrowRightLeft size={15} aria-hidden className="text-sub" />
+                        <span className="font-display font-semibold text-ink">Reposición</span>
+                      </button>
+                      {puedeMarcar && its.some((i) => i.estado !== 'hecho') && (
+                        <button
+                          onClick={() => marcarTodo(its)}
+                          className="flex shrink-0 items-center gap-1 border-l border-line px-3 py-2.5 text-xs font-medium text-emerald-400 hover:bg-emerald-500/10"
+                          title="Marcar todo listo"
+                        >
+                          <Check size={14} aria-hidden /> Todo listo
+                        </button>
+                      )}
+                    </div>
                     {subAbierto === `${lote.id}|repo` && (() => {
     const allLocales = ordenarLocales([...new Set(its.map((i) => i.local))])
                       const rowMap = new Map<string, { codigo: string; desc: string; color: string; talle: string; picking: string; porLocal: Map<string, Item> }>()
