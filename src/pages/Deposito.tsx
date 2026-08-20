@@ -604,8 +604,9 @@ export default function Deposito() {
   .stats { display: flex; gap: 12px; margin-bottom: 8px; font-size: 8pt; }
   .stats span { background: #f3f4f6; padding: 2px 6px; border-radius: 3px; }
   table { width: 100%; border-collapse: collapse; }
-  th { background: #f3f4f6; text-align: left; padding: 3px 4px; font-size: 7pt; text-transform: uppercase; border-bottom: 2px solid #000; white-space: nowrap; }
-  td { padding: 2px 4px; border-bottom: 1px solid #e5e7eb; font-size: 8pt; white-space: nowrap; }
+  th { background: #f3f4f6; text-align: left; padding: 3px 4px; font-size: 7pt; text-transform: uppercase; border-bottom: 2px solid #000; border-right: 1px solid #ccc; white-space: nowrap; }
+  th:last-child, td:last-child { border-right: none; }
+  td { padding: 2px 4px; border-bottom: 1px solid #e5e7eb; border-right: 1px solid #ccc; font-size: 8pt; white-space: nowrap; }
   @media screen { body { padding: 12px; background: #ddd; } }
 </style></head><body>
 <h1>${esc(lote.nombre)}${resp ? ` — ${esc(resp)}` : ''}</h1>
