@@ -16,6 +16,8 @@ interface Lote {
   horas: number | null
   personas: number | null
   observacion: string | null
+  responsable1: string | null
+  responsable2: string | null
 }
 interface Item {
   id: string
@@ -32,6 +34,7 @@ interface Item {
   venta_local: number | null
   estado: EstadoM
   hecho_at: string | null
+  picking: string | null
 }
 
 function fmtFechaHora(iso: string) {
@@ -39,14 +42,6 @@ function fmtFechaHora(iso: string) {
     return new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(iso))
   } catch {
     return iso
-  }
-}
-function fmtHora(iso: string | null) {
-  if (!iso) return ''
-  try {
-    return new Intl.DateTimeFormat('es-AR', { timeStyle: 'short' }).format(new Date(iso))
-  } catch {
-    return ''
   }
 }
 
@@ -176,8 +171,8 @@ export default function Deposito() {
   const [subiendo, setSubiendo] = useState(false)
   const puedeEditarStats = isAdmin || puedeImportar
   const [loteAbierto, setLoteAbierto] = useState<string | null>(null)
-  const [localAbierto, setLocalAbierto] = useState<string | null>(null)
   const [subAbierto, setSubAbierto] = useState<string | null>(null)
+  const [empleados, setEmpleados] = useState<{ id: string; nombre: string }[]>([])
   const [modal, setModal] = useState(false)
   const [modalSheet, setModalSheet] = useState(false)
   const [sheetUrl, setSheetUrl] = useState('https://docs.google.com/spreadsheets/d/1N0tBAmXyFu9Wh3sby4l6o3u1JNUe01jwDotM8M61xfc/export?format=csv&gid=1571559083')
@@ -207,11 +202,13 @@ export default function Deposito() {
     setCargando(true)
     const { data: ld } = await supabase
       .from('deposito_lotes')
-      .select('id,nombre,motivo,created_at,venta_fecha,cant_venta,horas,personas,observacion')
+      .select('id,nombre,motivo,created_at,venta_fecha,cant_venta,horas,personas,observacion,responsable1,responsable2')
       .order('created_at', { ascending: false })
       .limit(60)
     const lotesData = (ld as Lote[]) ?? []
     setLotes(lotesData)
+    const { data: emp } = await supabase.from('empleados').select('id,nombre').order('nombre')
+    setEmpleados((emp as { id: string; nombre: string }[]) ?? [])
     if (lotesData.length) {
       const ids = lotesData.map((l) => l.id)
       // Paginar los ítems: Supabase corta en 1000 filas por consulta
@@ -220,7 +217,7 @@ export default function Deposito() {
       for (let desde = 0; ; desde += PAGE) {
         const { data, error } = await supabase
           .from('deposito_items')
-          .select('id,lote_id,orden,prioridad,local,material,codigo,articulo,color,talle,cantidad,venta_local,estado,hecho_at')
+          .select('id,lote_id,orden,prioridad,local,material,codigo,articulo,color,talle,cantidad,venta_local,estado,hecho_at,picking')
           .in('lote_id', ids)
           .order('lote_id', { ascending: true })
           .order('orden', { ascending: true })
@@ -248,21 +245,6 @@ export default function Deposito() {
       .from('deposito_items')
       .update({ estado, hecho_at: at, hecho_por: estado === 'pendiente' ? null : perfil?.id ?? null })
       .eq('id', item.id)
-    if (error) {
-      setError(error.message)
-      await cargar()
-    }
-  }
-
-  async function marcarVarios(its: Item[], estado: EstadoM) {
-    if (!supabase || !its.length) return
-    const ids = its.map((i) => i.id)
-    const at = estado === 'pendiente' ? null : new Date().toISOString()
-    setItems((arr) => arr.map((x) => (ids.includes(x.id) ? { ...x, estado, hecho_at: at } : x)))
-    const { error } = await supabase
-      .from('deposito_items')
-      .update({ estado, hecho_at: at, hecho_por: estado === 'pendiente' ? null : perfil?.id ?? null })
-      .in('id', ids)
     if (error) {
       setError(error.message)
       await cargar()
@@ -347,6 +329,7 @@ export default function Deposito() {
               color: iColor >= 0 ? String(row[iColor] ?? '').trim() || null : null,
               talle: iTalle >= 0 ? String(row[iTalle] ?? '').trim() || null : null,
               cantidad: Number.isNaN(cant) ? 1 : cant,
+              picking: null,
             })
           }
         }
@@ -362,8 +345,9 @@ export default function Deposito() {
               const y = m[3].length === 2 ? `20${m[3]}` : m[3]
               fechaRepo = `${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`
               break buscarFecha
-            }
-          }
+    }
+  }
+
         }
       }
       // Cant venta (total) y venta por local: suma de "VENTA LOCAL" en la hoja REPO POR DIA
@@ -490,10 +474,12 @@ export default function Deposito() {
       if (iArt < 0) throw new Error('No encontré la columna Artículo/Código.')
       // Columnas de locales: todo lo que no sea fijo ni STOCK ni PICKING
       const fijas = new Set([iArt, iDesc, iColor, iTalle].filter((i) => i >= 0))
+      const iPicking = up.findIndex((h) => h.includes('📍') || h.includes('PICKING'))
+      const iStock = up.findIndex((h) => h.includes('STOCK'))
       const locales: { idx: number; nombre: string }[] = []
       up.forEach((h, idx) => {
         if (fijas.has(idx)) return
-        if (h.includes('STOCK') || h.includes('PICKING') || h.includes('📍')) return
+        if (idx === iPicking || idx === iStock) return
         if (!h) return
         locales.push({ idx, nombre: headers[idx] })
       })
@@ -507,6 +493,7 @@ export default function Deposito() {
         const desc = iDesc >= 0 ? (row[iDesc] ?? '').trim() : ''
         const col = iColor >= 0 ? (row[iColor] ?? '').trim() : null
         const tal = iTalle >= 0 ? (row[iTalle] ?? '').trim() : null
+        const picking = iPicking >= 0 ? (row[iPicking] ?? '').trim() || null : null
         for (const loc of locales) {
           const cant = parseInt(String(row[loc.idx] ?? '0').trim(), 10)
           if (!cant || cant <= 0) continue
@@ -520,6 +507,7 @@ export default function Deposito() {
             color: col,
             talle: tal,
             cantidad: cant,
+            picking,
           })
         }
       }
@@ -546,6 +534,13 @@ export default function Deposito() {
     setSubiendo(false)
   }
 
+  async function guardarResponsable(loteId: string, field: 'responsable1' | 'responsable2', empleadoId: string | null) {
+    if (!supabase) return
+    setLotes((ls) => ls.map((l) => l.id === loteId ? { ...l, [field]: empleadoId } : l))
+    const { error } = await supabase.from('deposito_lotes').update({ [field]: empleadoId }).eq('id', loteId)
+    if (error) setError(error.message)
+  }
+
   const itemsPorLote = useMemo(() => {
     const m = new Map<string, Item[]>()
     for (const it of items) {
@@ -557,47 +552,64 @@ export default function Deposito() {
   }, [items])
 
   function imprimirLote(lote: Lote, its: Item[]) {
-    const porLocal = new Map<string, Item[]>()
-    for (const i of its) {
-      const a = porLocal.get(i.local) ?? []
-      a.push(i)
-      porLocal.set(i.local, a)
+    // Agrupar por (codigo, desc, color, talle, picking)
+    const rowMap = new Map<string, { codigo: string; desc: string; color: string; talle: string; picking: string; porLocal: Map<string, number>; items: Item[] }>()
+    for (const it of its) {
+      const desc = it.material ?? it.articulo ?? ''
+      const key = `${it.codigo}|${desc}|${it.color}|${it.talle}|${it.picking}`
+      let r = rowMap.get(key)
+      if (!r) {
+        r = { codigo: it.codigo ?? '', desc, color: it.color ?? '', talle: it.talle ?? '', picking: it.picking ?? '', porLocal: new Map(), items: [] }
+        rowMap.set(key, r)
+      }
+      r.porLocal.set(it.local, (r.porLocal.get(it.local) ?? 0) + it.cantidad)
+      r.items.push(it)
     }
-    const sorted = Array.from(porLocal.entries()).sort((a, b) => a[0].localeCompare(b[0], 'es'))
+    const allLocales = [...new Set(its.map((i) => i.local))].sort((a, b) => a.localeCompare(b, 'es'))
+    const rows = Array.from(rowMap.values()).sort((a, b) => {
+      const ap = a.picking.replace(/[()0-9]/g, '')
+      const bp = b.picking.replace(/[()0-9]/g, '')
+      if (ap !== bp) return ap.localeCompare(bp)
+      const an = parseInt(a.picking.match(/\d+/)?.[0] ?? '0', 10)
+      const bn = parseInt(b.picking.match(/\d+/)?.[0] ?? '0', 10)
+      return an - bn
+    })
+    const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string))
     const total = its.reduce((s, i) => s + (i.cantidad || 1), 0)
     const hecho = its.filter((i) => i.estado === 'hecho').reduce((s, i) => s + (i.cantidad || 1), 0)
     const faltante = its.filter((i) => i.estado === 'faltante').reduce((s, i) => s + (i.cantidad || 1), 0)
-    const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string))
-    const rows = sorted.map(([local, lItems]) =>
-      lItems.map((it) =>
-        `<tr>
-          <td>${esc(it.codigo ?? '')}</td>
-          <td>${esc(it.articulo ?? it.material ?? '')}</td>
-          <td>${esc(it.color ?? '')}</td>
-          <td>${esc(it.talle ?? '')}</td>
-          <td>${esc(local)}</td>
-          <td style="text-align:right">${it.cantidad}</td>
-          <td style="text-align:center">${it.estado === 'hecho' ? '✔' : it.estado === 'faltante' ? '✘' : ''}</td>
-        </tr>`
-      ).join('')
-    ).join('')
+    const thLocales = allLocales.map((l) => `<th style="text-align:center">${esc(l)}</th>`).join('')
+    const tdRows = rows.map((r) => {
+      const tds = allLocales.map((l) => {
+        const c = r.porLocal.get(l)
+        return `<td style="text-align:center;${!c ? 'color:#bbb' : ''}">${c ?? ''}</td>`
+      }).join('')
+      return `<tr>
+        <td>${esc(r.codigo)}</td>
+        <td>${esc(r.desc)}</td>
+        <td>${esc(r.color)}</td>
+        <td>${esc(r.talle)}</td>
+        ${tds}
+        <td style="text-align:center;font-weight:bold">${esc(r.picking)}</td>
+      </tr>`
+    }).join('')
+    const resp = [lote.responsable1, lote.responsable2].filter(Boolean).map((id) => empleados.find((e) => e.id === id)?.nombre ?? id).join(', ')
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(lote.nombre)}</title>
 <style>
-  @page { size: A4; margin: 12mm; }
+  @page { size: A4 landscape; margin: 8mm; }
   * { box-sizing: border-box; }
-  body { font-family: Arial, sans-serif; font-size: 10pt; color: #000; margin: 0; }
-  h1 { font-size: 16pt; margin: 0 0 4px; }
-  .meta { font-size: 9pt; color: #555; margin-bottom: 12px; }
-  .stats { display: flex; gap: 16px; margin-bottom: 12px; font-size: 9pt; }
-  .stats span { background: #f3f4f6; padding: 2px 8px; border-radius: 4px; }
+  body { font-family: Arial, sans-serif; font-size: 9pt; color: #000; margin: 0; }
+  h1 { font-size: 14pt; margin: 0 0 2px; }
+  .meta { font-size: 8pt; color: #555; margin-bottom: 8px; }
+  .stats { display: flex; gap: 12px; margin-bottom: 8px; font-size: 8pt; }
+  .stats span { background: #f3f4f6; padding: 2px 6px; border-radius: 3px; }
   table { width: 100%; border-collapse: collapse; }
-  th { background: #f3f4f6; text-align: left; padding: 4px 6px; font-size: 8pt; text-transform: uppercase; border-bottom: 2px solid #000; }
-  td { padding: 3px 6px; border-bottom: 1px solid #e5e7eb; font-size: 9pt; }
-  tr.local-row td { background: #f9fafb; font-weight: bold; border-bottom: 1px solid #000; }
-  @media screen { body { padding: 16px; background: #ddd; } }
+  th { background: #f3f4f6; text-align: left; padding: 3px 4px; font-size: 7pt; text-transform: uppercase; border-bottom: 2px solid #000; white-space: nowrap; }
+  td { padding: 2px 4px; border-bottom: 1px solid #e5e7eb; font-size: 8pt; white-space: nowrap; }
+  @media screen { body { padding: 12px; background: #ddd; } }
 </style></head><body>
-<h1>${esc(lote.nombre)}</h1>
-<div class="meta">${esc(lote.motivo ?? '')} · ${sorted.length} locales · ${new Date(lote.created_at).toLocaleDateString('es-AR')}</div>
+<h1>${esc(lote.nombre)}${resp ? ` — ${esc(resp)}` : ''}</h1>
+<div class="meta">${esc(lote.motivo ?? '')} · ${allLocales.length} locales · ${rows.length} artículos · ${new Date(lote.created_at).toLocaleDateString('es-AR')}</div>
 <div class="stats">
   <span>Total: ${total}</span>
   <span>Hecho: ${hecho}</span>
@@ -605,8 +617,8 @@ export default function Deposito() {
   <span>Pendiente: ${total - hecho - faltante}</span>
 </div>
 <table>
-  <thead><tr><th>Código</th><th>Artículo</th><th>Color</th><th>Talle</th><th>Local</th><th style="text-align:right">Cant</th><th style="text-align:center">Estado</th></tr></thead>
-  <tbody>${rows}</tbody>
+  <thead><tr><th>Código</th><th>Descripción</th><th>Color</th><th>Talle</th>${thLocales}<th>Picking</th></tr></thead>
+  <tbody>${tdRows}</tbody>
 </table>
 <script>window.onload=function(){window.print()}</script>
 </body></html>`
@@ -689,7 +701,6 @@ export default function Deposito() {
                   onClick={() => {
                     const nuevo = abierto ? null : lote.id
                     setLoteAbierto(nuevo)
-                    setLocalAbierto(null)
                     setSubAbierto(nuevo ? `${lote.id}|repo` : null)
                   }}
                   className={`flex w-full items-center gap-3 px-4 py-3 text-left ${loteTodoHecho ? 'bg-emerald-500/10 hover:bg-emerald-500/15' : 'hover:bg-surface2'}`}
@@ -735,6 +746,17 @@ export default function Deposito() {
 
                 {abierto && (
                   <div className="border-t border-line">
+                    <div className="flex items-center gap-3 border-b border-line px-4 py-2">
+                      <span className="text-[11px] font-medium text-sub">Responsables:</span>
+                      <select value={lote.responsable1 ?? ''} onChange={(e) => guardarResponsable(lote.id, 'responsable1', e.target.value || null)} className="max-w-[9rem] rounded-lg border border-line bg-surface2 px-2 py-1 text-xs text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40">
+                        <option value="">—</option>
+                        {empleados.map((em) => <option key={em.id} value={em.id}>{em.nombre}</option>)}
+                      </select>
+                      <select value={lote.responsable2 ?? ''} onChange={(e) => guardarResponsable(lote.id, 'responsable2', e.target.value || null)} className="max-w-[9rem] rounded-lg border border-line bg-surface2 px-2 py-1 text-xs text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40">
+                        <option value="">—</option>
+                        {empleados.map((em) => <option key={em.id} value={em.id}>{em.nombre}</option>)}
+                      </select>
+                    </div>
                     <div className="border-b border-line">
                       <button
                         onClick={() => setSubAbierto(subAbierto === `${lote.id}|stats` ? null : `${lote.id}|stats`)}
@@ -758,97 +780,80 @@ export default function Deposito() {
                       <ArrowRightLeft size={15} aria-hidden className="text-sub" />
                       <span className="font-display font-semibold text-ink">Reposición</span>
                     </button>
-                    {subAbierto === `${lote.id}|repo` && (
-                    <div className="px-3 pb-2">
-                    {locales.map(([local, lItems]) => {
-                      const key = `${lote.id}|${local}`
-                      const lAbierto = localAbierto === key
-                      const resueltos = lItems.filter((i) => i.estado !== 'pendiente').length
-                      const completo = lItems.length > 0 && resueltos === lItems.length
-                      const todoHecho = lItems.length > 0 && lItems.every((i) => i.estado === 'hecho')
-                      const pri = Math.min(...lItems.map((i) => i.prioridad ?? 9999))
-                      const ventaLocal = lItems.find((i) => i.venta_local != null)?.venta_local ?? null
+                    {subAbierto === `${lote.id}|repo` && (() => {
+                      const allLocales = locales.map(([l]) => l)
+                      const rowMap = new Map<string, { codigo: string; desc: string; color: string; talle: string; picking: string; porLocal: Map<string, Item> }>()
+                      for (const it of its) {
+                        const desc = it.material ?? it.articulo ?? ''
+                        const key = `${it.codigo}|${desc}|${it.color}|${it.talle}|${it.picking}`
+                        let r = rowMap.get(key)
+                        if (!r) {
+                          r = { codigo: it.codigo ?? '', desc, color: it.color ?? '', talle: it.talle ?? '', picking: it.picking ?? '', porLocal: new Map() }
+                          rowMap.set(key, r)
+                        }
+                        r.porLocal.set(it.local, it)
+                      }
+                      const rows = Array.from(rowMap.values()).sort((a, b) => {
+                        const ap = a.picking.replace(/[()0-9]/g, '')
+                        const bp = b.picking.replace(/[()0-9]/g, '')
+                        if (ap !== bp) return ap.localeCompare(bp)
+                        const an = parseInt(a.picking.match(/\d+/)?.[0] ?? '0', 10)
+                        const bn = parseInt(b.picking.match(/\d+/)?.[0] ?? '0', 10)
+                        return an - bn
+                      })
                       return (
-                        <div key={local} className="my-1 overflow-hidden rounded-xl border border-line">
-                          <div className={`flex w-full items-center gap-3 px-3 py-2 ${todoHecho ? 'bg-emerald-500/10' : 'bg-surface2'}`}>
-                            <button onClick={() => setLocalAbierto(lAbierto ? null : key)} className="flex flex-1 items-center gap-2 text-left">
-                              <ChevronRight size={15} aria-hidden className={`shrink-0 text-sub transition-transform ${lAbierto ? 'rotate-90' : ''}`} />
-                              {pri < 9999 && <span className="rounded-full bg-line px-1.5 py-0.5 text-[11px] font-semibold text-sub">P{pri}</span>}
-                              <span className="flex-1 font-display font-semibold text-ink">{local}</span>
-                              {ventaLocal != null && (
-                                <span className="shrink-0 rounded-full bg-line px-2 py-0.5 text-[11px] font-medium text-sub">venta {ventaLocal}</span>
-                              )}
-                              <Barra items={lItems} />
-                            </button>
-                            {puedeMarcar && (
-                              <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-medium text-sub" title="Marcar todo el local">
-                                <input
-                                  type="checkbox"
-                                  ref={(cb) => {
-                                    if (cb) cb.indeterminate = resueltos > 0 && !completo
-                                  }}
-                                  checked={completo}
-                                  onChange={(e) =>
-                                    marcarVarios(
-                                      e.target.checked ? lItems.filter((i) => i.estado !== 'hecho') : lItems.filter((i) => i.estado !== 'pendiente'),
-                                      e.target.checked ? 'hecho' : 'pendiente',
-                                    )
-                                  }
-                                  className="h-4 w-4 accent-emerald-600"
-                                />
-                                todo
-                              </label>
-                            )}
-                          </div>
-                          {lAbierto && (
-                            <ul className="divide-y divide-line/70 bg-surface/40">
-                              {lItems.map((it) => {
-                                const esHecho = it.estado === 'hecho'
-                                const esFaltante = it.estado === 'faltante'
+                        <div className="px-3 pb-2 overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b border-line text-left text-[11px] uppercase text-sub">
+                                <th className="px-2 py-1.5">Código</th>
+                                <th className="px-2 py-1.5">Descripción</th>
+                                <th className="px-2 py-1.5">Color</th>
+                                <th className="px-2 py-1.5">Talle</th>
+                                {allLocales.map((l) => <th key={l} className="px-2 py-1.5 text-center">{l}</th>)}
+                                <th className="px-2 py-1.5 text-center">Picking</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {rows.map((r, ri) => {
                                 return (
-                                  <li key={it.id} className="flex items-center gap-3 px-3 py-2 pl-8">
-                                    <span className="min-w-0 flex-1">
-                                      <span className={`block text-sm ${esHecho ? 'text-sub line-through' : esFaltante ? 'text-sub' : 'text-ink'}`}>
-                                        {it.codigo}
-                                        {it.color ? ` · ${it.color}` : ''}
-                                        {it.talle ? ` · T${it.talle}` : ''}
-                                        {it.cantidad > 1 ? ` · x${it.cantidad}` : ''}
-                                      </span>
-                                      {it.articulo && <span className="block truncate text-xs text-sub">{it.articulo}</span>}
-                                    </span>
-                                    {it.hecho_at && it.estado !== 'pendiente' && (
-                                      <span className="hidden shrink-0 text-[11px] tabular-nums text-sub sm:inline">{fmtHora(it.hecho_at)}</span>
-                                    )}
-                                    <div className="flex shrink-0 items-center gap-1">
-                                      <button
-                                        onClick={() => marcar(it, esHecho ? 'pendiente' : 'hecho')}
-                                        disabled={!puedeMarcar}
-                                        title="Hecho / preparado"
-                                        aria-label="Marcar hecho"
-                                        className={`rounded-lg p-1.5 transition-colors disabled:opacity-40 ${esHecho ? 'bg-emerald-500/20 text-emerald-400' : 'text-sub hover:bg-line hover:text-ink'}`}
-                                      >
-                                        <Check size={15} aria-hidden />
-                                      </button>
-                                      <button
-                                        onClick={() => marcar(it, esFaltante ? 'pendiente' : 'faltante')}
-                                        disabled={!puedeMarcar}
-                                        title="Faltante / no hay"
-                                        aria-label="Marcar faltante"
-                                        className={`rounded-lg p-1.5 transition-colors disabled:opacity-40 ${esFaltante ? 'bg-brand-600/20 text-brand-400' : 'text-sub hover:bg-line hover:text-ink'}`}
-                                      >
-                                        <X size={15} aria-hidden />
-                                      </button>
-                                    </div>
-                                  </li>
+                                  <tr key={ri} className="border-b border-line/50">
+                                    <td className="px-2 py-1 font-mono text-xs">{r.codigo}</td>
+                                    <td className="px-2 py-1 text-xs">{r.desc}</td>
+                                    <td className="px-2 py-1 text-xs">{r.color}</td>
+                                    <td className="px-2 py-1 text-xs">{r.talle}</td>
+                                    {allLocales.map((l) => {
+                                      const it = r.porLocal.get(l)
+                                      if (!it) return <td key={l} className="px-2 py-1 text-center text-sub/30">—</td>
+                                      const esHecho = it.estado === 'hecho'
+                                      const esFaltante = it.estado === 'faltante'
+                                      return (
+                                        <td key={l} className="px-2 py-1 text-center">
+                                          <div className="flex items-center justify-center gap-0.5">
+                                            <span className={`tabular-nums ${esHecho ? 'text-emerald-400 line-through' : esFaltante ? 'text-brand-400 line-through' : ''}`}>{it.cantidad}</span>
+                                            {puedeMarcar && (
+                                              <>
+                                                <button onClick={() => marcar(it, esHecho ? 'pendiente' : 'hecho')} title="Hecho" className={`rounded p-0.5 transition-colors ${esHecho ? 'bg-emerald-500/20 text-emerald-400' : 'text-sub/40 hover:text-emerald-400'}`}>
+                                                  <Check size={11} aria-hidden />
+                                                </button>
+                                                <button onClick={() => marcar(it, esFaltante ? 'pendiente' : 'faltante')} title="Faltante" className={`rounded p-0.5 transition-colors ${esFaltante ? 'bg-brand-600/20 text-brand-400' : 'text-sub/40 hover:text-brand-400'}`}>
+                                                  <X size={11} aria-hidden />
+                                                </button>
+                                              </>
+                                            )}
+                                          </div>
+                                        </td>
+                                      )
+                                    })}
+                                    <td className="px-2 py-1 text-center font-mono text-xs font-bold">{r.picking}</td>
+                                  </tr>
                                 )
                               })}
-                            </ul>
-                          )}
+                            </tbody>
+                          </table>
                         </div>
                       )
-                    })}
-                    </div>
-                    )}
+                    })()}
                   </div>
                 )}
               </div>
