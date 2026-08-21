@@ -54,6 +54,12 @@ const ESTADO_STYLE: Record<string, string> = {
   desactivado: 'bg-surface2 text-sub border-line2',
 }
 
+function iniciales(nombre: string | null): string {
+  if (!nombre) return '?'
+  const p = nombre.replace(',', ' ').trim().split(/\s+/)
+  return ((p[0]?.[0] || '') + (p[1]?.[0] || '')).slice(0, 2).toUpperCase() || '?'
+}
+
 function fmtFecha(iso: string): string {
   try {
     return new Intl.DateTimeFormat('es-AR', { dateStyle: 'short' }).format(new Date(iso))
@@ -204,134 +210,128 @@ export default function Usuarios() {
         </section>
       )}
 
-      <div className="mb-4 overflow-hidden rounded-2xl border border-line bg-surface shadow-soft">
-        <div className="flex items-center gap-3 px-4 py-3">
-          <div className="rounded-xl border p-3" style={{ color: '#e11d48', backgroundColor: '#e11d4824', borderColor: '#e11d4840' }}>
-            <UserCheck size={22} aria-hidden />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="font-display font-semibold text-ink">Usuarios</div>
-            <p className="text-sm text-sub">{usuarios.length} usuario{usuarios.length === 1 ? '' : 's'} registrado{usuarios.length === 1 ? '' : 's'}</p>
-          </div>
-        </div>
-        <div className="overflow-x-auto border-t border-line">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="bg-surface2 text-left text-sub">
-                <th className="px-3 py-2.5 font-medium">Nombre</th>
-                <th className="hidden px-3 py-2.5 font-medium md:table-cell">Email</th>
-                <th className="px-3 py-2.5 font-medium">Roles</th>
-                <th className="px-3 py-2.5 font-medium">Local/Área</th>
-                <th className="px-3 py-2.5 font-medium">Estado</th>
-                <th className="hidden px-3 py-2.5 font-medium lg:table-cell">Alta</th>
-                <th className="px-3 py-2.5 text-right font-medium">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {usuarios.map((u) => {
-                const esYo = u.id === perfil?.id
-                const rolesUsuario = getUserRoles(u.id)
-                const esAdmin = rolesUsuario.some((rc) => roles.find((r) => r.codigo === rc)?.es_admin)
-                return (
-                  <tr key={u.id} className="border-t border-line align-middle">
-                    <td className="px-3 py-2.5 font-medium text-ink">
-                      {u.nombre}
-                      <span className="block max-w-[160px] truncate text-xs font-normal text-sub md:hidden" title={u.email}>
-                        {u.email}
-                      </span>
-                    </td>
-                    <td className="hidden max-w-[220px] truncate px-3 py-2.5 text-sub md:table-cell" title={u.email}>
-                      {u.email}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <div className="flex flex-wrap gap-1">
-                        {rolesUsuario.length > 0 ? (
-                          rolesUsuario.map((rc) => (
-                            <span key={rc} className="inline-block whitespace-nowrap rounded-full border border-brand-600/30 bg-brand-600/10 px-2 py-0.5 text-[10px] font-medium text-brand-400">
-                              {getRolNombre(rc)}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="text-xs text-sub/50">—</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <select
-                        value={u.local ?? ''}
-                        onChange={(e) => actualizar(u.id, { local: e.target.value || null })}
-                        className="rounded-lg border border-line bg-surface2 px-2 py-1 text-xs text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
-                        aria-label={`Local/Área de ${u.nombre}`}
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="font-display text-lg font-semibold text-ink">Usuarios <span className="text-sm font-normal text-sub">({usuarios.length})</span></h2>
+      </div>
+
+      <div className="rounded-2xl border border-line overflow-hidden">
+        <table className="w-full text-[13px] leading-tight">
+          <thead>
+            <tr className="border-b border-line bg-zinc-800 text-left text-[10px] font-semibold uppercase tracking-wider text-zinc-300">
+              <th className="w-[15%] px-2 py-2 whitespace-nowrap">Nombre</th>
+              <th className="w-[25%] px-2 py-2 whitespace-nowrap">Email</th>
+              <th className="w-[12%] px-2 py-2 whitespace-nowrap">Roles</th>
+              <th className="w-[18%] px-2 py-2 whitespace-nowrap">Local/Área</th>
+              <th className="w-[10%] px-2 py-2 whitespace-nowrap">Estado</th>
+              <th className="w-[8%] px-2 py-2 whitespace-nowrap">Alta</th>
+              <th className="w-[12%] px-2 py-2 text-right whitespace-nowrap">Acciones</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line/50 bg-surface">
+            {usuarios.map((u) => {
+              const esYo = u.id === perfil?.id
+              const rolesUsuario = getUserRoles(u.id)
+              const esAdmin = rolesUsuario.some((rc) => roles.find((r) => r.codigo === rc)?.es_admin)
+              return (
+                <tr key={u.id} className="transition hover:bg-line/20">
+                  <td className="px-2 py-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-[10px] font-semibold text-amber-400">{iniciales(u.nombre)}</div>
+                      <span className="truncate font-medium text-ink" title={u.nombre}>{u.nombre}</span>
+                    </div>
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <span className="block truncate text-sub" title={u.email}>{u.email}</span>
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <div className="flex flex-nowrap gap-0.5">
+                      {rolesUsuario.length > 0 ? (
+                        rolesUsuario.slice(0, 2).map((rc) => (
+                          <span key={rc} className="inline-block whitespace-nowrap rounded-full border border-brand-600/30 bg-brand-600/10 px-1.5 py-px text-[9px] font-medium text-brand-400">
+                            {getRolNombre(rc)}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-[11px] text-sub/50">—</span>
+                      )}
+                      {rolesUsuario.length > 2 && (
+                        <span className="inline-block whitespace-nowrap rounded-full border border-line bg-surface2 px-1.5 py-px text-[9px] font-medium text-sub">+{rolesUsuario.length - 2}</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <select
+                      value={u.local ?? ''}
+                      onChange={(e) => actualizar(u.id, { local: e.target.value || null })}
+                      className="w-full rounded border border-line bg-surface2 px-1.5 py-0.5 text-[11px] text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
+                      aria-label={`Local/Área de ${u.nombre}`}
+                    >
+                      <option value="">—</option>
+                      {locales.map((l) => (
+                        <option key={l.codigo} value={l.codigo}>{l.codigo}{l.nombre ? ` · ${l.nombre}` : ''}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <span className={`inline-block whitespace-nowrap rounded-full border px-2 py-px text-[10px] font-medium ${ESTADO_STYLE[u.estado] ?? ''}`}>
+                      {u.estado}
+                    </span>
+                  </td>
+                  <td className="px-2 py-1.5 text-[11px] text-sub whitespace-nowrap">{fmtFecha(u.created_at)}</td>
+                  <td className="px-2 py-1.5 text-right">
+                    <div className="flex items-center justify-end gap-0.5">
+                      <button
+                        onClick={() => setEditUser(u)}
+                        className="rounded border border-line p-1 text-ink transition hover:bg-line"
+                        title="Editar"
+                        aria-label={`Editar ${u.nombre}`}
                       >
-                        <option value="">—</option>
-                        {locales.map((l) => (
-                          <option key={l.codigo} value={l.codigo}>
-                            {l.codigo}{l.nombre ? ` · ${l.nombre}` : ''}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <span className={`inline-block whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium ${ESTADO_STYLE[u.estado] ?? ''}`}>
-                        {u.estado}
-                      </span>
-                    </td>
-                    <td className="hidden px-3 py-2.5 text-sub lg:table-cell">{fmtFecha(u.created_at)}</td>
-                    <td className="px-2 py-2.5">
-                      <div className="flex items-center justify-end gap-1.5">
+                        <Pencil size={12} aria-hidden />
+                      </button>
+                      {u.estado === 'aprobado' && !esYo && (
                         <button
-                          onClick={() => setEditUser(u)}
-                          className="btn-press rounded-lg border border-line bg-surface2 p-1.5 text-ink hover:bg-line"
-                          title="Editar usuario"
-                          aria-label={`Editar ${u.nombre}`}
+                          onClick={() => actualizar(u.id, { estado: 'desactivado' })}
+                          className="rounded border border-line p-1 text-sub transition hover:text-ink"
+                          title="Desactivar"
+                          aria-label={`Desactivar ${u.nombre}`}
                         >
-                          <Pencil size={15} aria-hidden />
+                          <Ban size={12} aria-hidden />
                         </button>
-                        {u.estado === 'aprobado' && !esYo && (
-                          <button
-                            onClick={() => actualizar(u.id, { estado: 'desactivado' })}
-                            className="btn-press rounded-lg border border-line bg-surface2 p-1.5 text-sub hover:text-ink"
-                            title="Desactivar"
-                            aria-label={`Desactivar ${u.nombre}`}
-                          >
-                            <Ban size={15} aria-hidden />
-                          </button>
-                        )}
-                        {(u.estado === 'desactivado' || u.estado === 'rechazado') && (
-                          <button
-                            onClick={() => actualizar(u.id, { estado: 'aprobado', motivo_rechazo: null })}
-                            className="btn-press rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-1.5 text-emerald-400"
-                            title="Reactivar"
-                            aria-label={`Reactivar ${u.nombre}`}
-                          >
-                            <RotateCcw size={15} aria-hidden />
-                          </button>
-                        )}
+                      )}
+                      {(u.estado === 'desactivado' || u.estado === 'rechazado') && (
                         <button
-                          onClick={() => setPwUser(u)}
-                          className="btn-press rounded-lg border border-line bg-surface2 p-1.5 text-ink hover:bg-line"
-                          title="Cambiar contraseña"
-                          aria-label={`Cambiar contraseña de ${u.nombre}`}
+                          onClick={() => actualizar(u.id, { estado: 'aprobado', motivo_rechazo: null })}
+                          className="rounded border border-emerald-500/30 bg-emerald-500/10 p-1 text-emerald-400 transition"
+                          title="Reactivar"
+                          aria-label={`Reactivar ${u.nombre}`}
                         >
-                          <KeyRound size={15} aria-hidden />
+                          <RotateCcw size={12} aria-hidden />
                         </button>
-                        <button
-                          onClick={() => setGestion(u)}
-                          disabled={esAdmin}
-                          className="btn-press rounded-lg border border-line bg-surface2 p-1.5 text-ink hover:bg-line disabled:opacity-40"
-                          title={esAdmin ? 'Este usuario tiene acceso total' : 'Permisos extra de este usuario'}
-                          aria-label={`Permisos de ${u.nombre}`}
-                        >
-                          <SlidersHorizontal size={15} aria-hidden />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+                      )}
+                      <button
+                        onClick={() => setPwUser(u)}
+                        className="rounded border border-line p-1 text-ink transition hover:bg-line"
+                        title="Contraseña"
+                        aria-label={`Contraseña de ${u.nombre}`}
+                      >
+                        <KeyRound size={12} aria-hidden />
+                      </button>
+                      <button
+                        onClick={() => setGestion(u)}
+                        disabled={esAdmin}
+                        className="rounded border border-line p-1 text-ink transition hover:bg-line disabled:opacity-40"
+                        title={esAdmin ? 'Acceso total' : 'Permisos'}
+                        aria-label={`Permisos de ${u.nombre}`}
+                      >
+                        <SlidersHorizontal size={12} aria-hidden />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       </div>
 
       {gestion && (
