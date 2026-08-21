@@ -27,7 +27,7 @@ interface FactRegistro {
   total_despachos: string | null
   empleado_id: string | null
   quien_facturo: string | null
-  pol02s: boolean
+  polo52: boolean
   fecha_envio: string | null
   quien_retira_fabrica: string | null
   observaciones: string | null
@@ -144,9 +144,9 @@ export default function FacturacionFabrica() {
 
   const lista = useMemo(() => {
     let r = todos
-    if (!isAdmin && filtroPol) r = r.filter((f) => !f.pol02s)
+    if (!isAdmin && filtroPol) r = r.filter((f) => !f.polo52)
     if (isAdmin && !filtroPol) { /* show all */ }
-    else if (!isAdmin) r = r.filter((f) => !f.pol02s)
+    else if (!isAdmin) r = r.filter((f) => !f.polo52)
     if (filtroTransporte !== 'todos') r = r.filter((f) => f.transporte === filtroTransporte)
     if (term) r = r.filter((f) =>
       (f.razon_social || '').toUpperCase().includes(term) ||
@@ -184,7 +184,7 @@ export default function FacturacionFabrica() {
     setSel(null); setCard(null); await cargar(); mostrarToast('Registro eliminado')
   }
 
-  const polCount = todos.filter((f) => f.pol02s).length
+  const polCount = todos.filter((f) => f.polo52).length
 
   const ToastEl = () => toast ? (
     <div className="fixed left-1/2 top-4 z-50 -translate-x-1/2 animate-enter rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-400 shadow-lg backdrop-blur-sm">{toast}</div>
@@ -216,7 +216,7 @@ export default function FacturacionFabrica() {
             Ocultar restringidos
           </label>
         )}
-        <span className="text-[11px] text-sub/70">{lista.length} registros {polCount > 0 && isAdmin ? `(${polCount} POL02S)` : ''}</span>
+        <span className="text-[11px] text-sub/70">{lista.length} registros {polCount > 0 && isAdmin ? `(${polCount} POLO52)` : ''}</span>
         {puedeCrear && (
           <>
             <button onClick={() => setModal('importar')} className="btn-press inline-flex items-center gap-1 rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line"><Upload size={13} aria-hidden /> Importar</button>
@@ -269,7 +269,7 @@ export default function FacturacionFabrica() {
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('solicitud_retiro')}>Sol.Retiro{sortArrow('solicitud_retiro')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('total_despachos')}>Tot.Desp{sortArrow('total_despachos')}</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('quien_facturo')}>Quien Fact{sortArrow('quien_facturo')}</th>
-                  <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('pol02s')}>POL{sortArrow('pol02s')}</th>
+                  <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('polo52')}>POL{sortArrow('polo52')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('fecha_envio')}>F.Envio{sortArrow('fecha_envio')}</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('quien_retira_fabrica')}>Quien Retira{sortArrow('quien_retira_fabrica')}</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('observaciones')}>Observ{sortArrow('observaciones')}</th>
@@ -291,7 +291,7 @@ export default function FacturacionFabrica() {
                     <td className="px-1 py-[2px]"><span className={'inline-block whitespace-nowrap rounded-full border px-1.5 py-px text-[9px] font-medium leading-tight ' + retiroStyle(r.solicitud_retiro)}>{r.solicitud_retiro || 'FALSO'}</span></td>
                     <td className="px-1 py-[2px] text-center text-sub">{r.total_despachos || '-'}</td>
                     <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={r.quien_facturo || ''}>{r.quien_facturo || '-'}</span></td>
-                    <td className="px-1 py-[2px] text-center">{r.pol02s ? <span className="inline-block whitespace-nowrap rounded-full border border-amber-500/30 bg-amber-500/15 px-1.5 py-px text-[9px] font-medium text-amber-400"><Lock size={8} className="mr-0.5 inline" aria-hidden />POL</span> : <span className="text-sub/60">-</span>}</td>
+                    <td className="px-1 py-[2px] text-center">{r.polo52 ? <span className="inline-block whitespace-nowrap rounded-full border border-amber-500/30 bg-amber-500/15 px-1.5 py-px text-[9px] font-medium text-amber-400"><Lock size={8} className="mr-0.5 inline" aria-hidden />POL</span> : <span className="text-sub/60">-</span>}</td>
                     <td className="px-1 py-[2px] text-center text-sub whitespace-nowrap">{r.fecha_envio || '-'}</td>
                     <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={r.quien_retira_fabrica || ''}>{r.quien_retira_fabrica || '-'}</span></td>
                     <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={r.observaciones || ''}>{r.observaciones || '-'}</span></td>
@@ -354,7 +354,7 @@ function FactCard({ registro: r, onClose, onEdit, puedeEditar, empleados }: {
             <div className="flex items-center gap-2 text-ink">
               <FileText size={18} className="shrink-0 text-amber-400" aria-hidden />
               <h2 className="truncate text-lg font-semibold">{r.razon_social || 'Sin razon social'}</h2>
-              {r.pol02s && <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-400"><Lock size={10} aria-hidden /> Restringido</span>}
+              {r.polo52 && <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-400"><Lock size={10} aria-hidden /> Restringido</span>}
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-sub">
               <span className="font-medium text-ink">Aut: {r.autorizacion || '-'}</span>
@@ -387,7 +387,7 @@ function FactCard({ registro: r, onClose, onEdit, puedeEditar, empleados }: {
             <dl className="space-y-2 text-[13px]">
               <CRow label="Guia Despacho Cindy" value={r.guia_despacho_cindy} badge badgeCls={guiaStyle(r.guia_despacho_cindy)} />
               <CRow label="Solicitud Retiro" value={r.solicitud_retiro || 'FALSO'} badge badgeCls={retiroStyle(r.solicitud_retiro)} />
-              <CRow label="POL02S" value={r.pol02s ? 'VERDADERO' : 'FALSO'} badge badgeCls={r.pol02s ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' : 'bg-surface2 text-sub border-line'} />
+              <CRow label="POLO52" value={r.polo52 ? 'VERDADERO' : 'FALSO'} badge badgeCls={r.polo52 ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' : 'bg-surface2 text-sub border-line'} />
               <CRow label="Quien Facturo" value={empLabel ? `#${empLabel.legajo} - ${empLabel.nombre}` : r.quien_facturo} />
               <CRow label="Quien Retira en Fabrica" value={r.quien_retira_fabrica} />
             </dl>
@@ -446,7 +446,7 @@ function FactModal({ registro, clientes, empleados, onClose, onSaved }: {
   const [totalDespachos, setTotalDespachos] = useState(registro?.total_despachos || '')
   const [empleadoId, setEmpleadoId] = useState(registro?.empleado_id || '')
   const [quienFacturo, setQuienFacturo] = useState(registro?.quien_facturo || '')
-  const [pol02s, setPol02s] = useState(registro?.pol02s ?? false)
+  const [polo52, setPol02s] = useState(registro?.polo52 ?? false)
   const [fechaEnvio, setFechaEnvio] = useState(registro?.fecha_envio || '')
   const [quienRetiraFabrica, setQuienRetiraFabrica] = useState(registro?.quien_retira_fabrica || '')
   const [observaciones, setObservaciones] = useState(registro?.observaciones || '')
@@ -496,7 +496,7 @@ function FactModal({ registro, clientes, empleados, onClose, onSaved }: {
       total_despachos: totalDespachos.trim() || null,
       empleado_id: empleadoId || null,
       quien_facturo: quienFacturo.trim() || null,
-      pol02s,
+      polo52,
       fecha_envio: fechaEnvio.trim() || null,
       quien_retira_fabrica: quienRetiraFabrica.trim() || null,
       observaciones: observaciones.trim() || null,
@@ -581,8 +581,8 @@ function FactModal({ registro, clientes, empleados, onClose, onSaved }: {
             </label>
             <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Fecha Envio</span><input type="date" value={fechaEnvio} onChange={(e) => setFechaEnvio(e.target.value)} className={inputCls} /></label>
             <label className="block flex items-end gap-3 pb-1">
-              <input type="checkbox" checked={pol02s} onChange={(e) => setPol02s(e.target.checked)} className="h-4 w-4 rounded border-line bg-surface2 accent-brand-600" />
-              <span className="text-sm text-ink">POL02S (restringido)</span>
+              <input type="checkbox" checked={polo52} onChange={(e) => setPol02s(e.target.checked)} className="h-4 w-4 rounded border-line bg-surface2 accent-brand-600" />
+              <span className="text-sm text-ink">POLO52 (restringido)</span>
             </label>
 
             {/* Row 5 */}
@@ -635,7 +635,7 @@ function ImportFacturacion({ clientes, empleados, onClose, onSaved }: {
     { key: 'solicitud_retiro', label: 'Solicitud Retiro' },
     { key: 'total_despachos', label: 'Total Despachos' },
     { key: 'quien_facturo', label: 'Quien Facturo' },
-    { key: 'pol02s', label: 'POL02S' },
+    { key: 'polo52', label: 'POLO52' },
     { key: 'fecha_envio', label: 'Fecha Envio' },
     { key: 'quien_retira_fabrica', label: 'Quien Retira Fabrica' },
     { key: 'observaciones', label: 'Observaciones' },
@@ -689,8 +689,8 @@ function ImportFacturacion({ clientes, empleados, onClose, onSaved }: {
       const emp = nr.quien_facturo ? empleados.find((e) => (`#${e.legajo} - ${e.nombre}`).toUpperCase() === nr.quien_facturo.toUpperCase() || e.nombre.toUpperCase() === nr.quien_facturo.toUpperCase()) : null
       if (emp) { nr._empleado_id = emp.id; nr.quien_facturo = `#${emp.legajo} - ${emp.nombre}` }
       else if (nr.quien_facturo) { errs.push(`Fila ${i + 1}: Empleado "${nr.quien_facturo}" no existe en Empleados.`); return }
-      if (nr.pol02s) { const v = nr.pol02s.toUpperCase(); nr.pol02s = v === 'VERDADERO' || v === '1' || v === 'SI' || v === 'TRUE' }
-      else nr.pol02s = false
+      if (nr.polo52) { const v = nr.polo52.toUpperCase(); nr.polo52 = v === 'VERDADERO' || v === '1' || v === 'SI' || v === 'TRUE' }
+      else nr.polo52 = false
       if (nr.bulto) nr.bulto = Number(nr.bulto) || null
       valid.push(nr)
     })
@@ -709,7 +709,7 @@ function ImportFacturacion({ clientes, empleados, onClose, onSaved }: {
         bulto: rest.bulto ?? null, transporte: rest.transporte || null, porcentaje_declarado: rest.porcentaje_declarado || null,
         solicitud_retiro: rest.solicitud_retiro || 'FALSO',
         total_despachos: rest.total_despachos || null, empleado_id: _empleado_id || null, quien_facturo: rest.quien_facturo || null,
-        pol02s: !!rest.pol02s, fecha_envio: rest.fecha_envio || null, quien_retira_fabrica: rest.quien_retira_fabrica || null,
+        polo52: !!rest.polo52, fecha_envio: rest.fecha_envio || null, quien_retira_fabrica: rest.quien_retira_fabrica || null,
         observaciones: rest.observaciones || null,
       }))
       const { error } = await supabase.from('facturacion_fabrica').insert(batch)
