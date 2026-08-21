@@ -34,8 +34,10 @@ CREATE POLICY "admins gestionan todos los roles"
     )
   );
 
--- 5. Actualizar funcion mi_perfil para devolver array de roles
-CREATE OR REPLACE FUNCTION public.mi_perfil()
+-- 5. Drop y recrear funcion mi_perfil
+DROP FUNCTION IF EXISTS public.mi_perfil();
+
+CREATE FUNCTION public.mi_perfil()
 RETURNS TABLE (
   id uuid,
   email text,
@@ -73,8 +75,10 @@ BEGIN
 END;
 $$;
 
--- 6. Actualizar funcion mis_permisos para unir permisos de TODOS los roles
-CREATE OR REPLACE FUNCTION public.mis_permisos()
+-- 6. Drop y recrear funcion mis_permisos
+DROP FUNCTION IF EXISTS public.mis_permisos();
+
+CREATE FUNCTION public.mis_permisos()
 RETURNS TABLE (clave text)
 LANGUAGE plpgsql
 SECURITY DEFINER
