@@ -9,6 +9,7 @@ import {
   ChevronRight,
   ListChecks,
   QrCode,
+  Database,
   Loader2,
   UserX,
   UserCheck as UserCheckIcon,
@@ -232,6 +233,21 @@ export default function Configuraciones() {
         <div className="min-w-0 flex-1">
           <div className="font-display font-semibold text-ink">Empleados</div>
           <p className="text-sm text-sub">Alta, edición y baja de empleados.</p>
+        </div>
+        <ChevronRight size={18} className="shrink-0 text-sub" aria-hidden />
+      </Link>
+
+      {/* Conexión SQL */}
+      <Link
+        to="/configuraciones/sql"
+        className="mb-4 flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 shadow-soft transition duration-250 hover:border-line2"
+      >
+        <div className="rounded-xl border p-3" style={{ color: '#0891b2', backgroundColor: '#0891b224', borderColor: '#0891b240' }}>
+          <Database size={22} aria-hidden />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="font-display font-semibold text-ink">Conexión SQL</div>
+          <p className="text-sm text-sub">Estado del enlace al SQL Server, prueba de conexión y vistas expuestas.</p>
         </div>
         <ChevronRight size={18} className="shrink-0 text-sub" aria-hidden />
       </Link>

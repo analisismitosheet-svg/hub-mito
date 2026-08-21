@@ -28,6 +28,8 @@ import LocalesPage from '@/pages/Locales'
 import EmpleadosPage from '@/pages/Empleados'
 import Transportes from '@/pages/Transportes'
 import Clientes from '@/pages/Clientes'
+import DatosSql from '@/pages/DatosSql'
+import SqlConexion from '@/pages/SqlConexion'
 import ComingSoon from '@/pages/ComingSoon'
 
 export default function App() {
@@ -161,6 +163,22 @@ export default function App() {
             element={
               <AdminRoute>
                 <QrLocales />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/datos-sql"
+            element={
+              <PermissionRoute permiso="datos_sql.view">
+                <DatosSql />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/configuraciones/sql"
+            element={
+              <AdminRoute>
+                <SqlConexion />
               </AdminRoute>
             }
           />

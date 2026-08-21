@@ -22,6 +22,7 @@ import {
   Eye,
   ArrowRightLeft,
   Star,
+  Database,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -238,6 +239,17 @@ export const APPS: AppDef[] = [
     target: '/opiniones',
     color: '#f59e0b',
     permiso: 'opiniones.view',
+  },
+  {
+    id: 'datos-sql',
+    areaId: 'sistemas',
+    title: 'Datos SQL',
+    description: 'Consulta en vivo de vistas del SQL Server de la empresa.',
+    icon: Database,
+    kind: 'internal',
+    target: '/datos-sql',
+    color: '#0891b2',
+    permiso: 'datos_sql.view',
   },
   {
     id: 'replicas',
