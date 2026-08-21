@@ -1,6 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
-  Loader2, Search, SearchX, Plus, Pencil, Trash2, Eye, EyeOff, X, Hash, Upload, Check,
+  Loader2, Search, SearchX, Plus, Pencil, Trash2, Eye, EyeOff, X, Hash, Upload, Check, UserRound,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -68,6 +68,7 @@ export default function Clientes() {
   const [pagina, setPagina] = useState(1)
   const [sortKey, setSortKey] = useState<keyof Cliente>('n_cliente')
   const [sortAsc, setSortAsc] = useState(true)
+  const [card, setCard] = useState<Cliente | null>(null)
   const POR_PAGINA = 50
 
   const mostrarToast = useCallback((msg: string) => {
@@ -130,6 +131,13 @@ export default function Clientes() {
   const totalInactivos = todos.filter((c) => c.estado !== 'ACTIVO').length
 
   useEffect(() => { setPagina(1) }, [q, filtro])
+
+  useEffect(() => {
+    if (!card) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setCard(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [card])
 
   function toggleSort(key: keyof Cliente) {
     if (sortKey === key) setSortAsc(!sortAsc)
@@ -222,7 +230,7 @@ export default function Clientes() {
               </thead>
               <tbody className="divide-y divide-line/50 bg-surface">
                 {listaPagina.map((c) => (
-                  <tr key={c.id} className="transition hover:bg-line/20">
+                  <tr key={c.id} className="transition hover:bg-line/20 cursor-pointer" onClick={() => setCard(c)}>
                     <td className="px-1 py-[2px] text-center text-[10px] font-medium text-sub">{fmtN(c.n_cliente)}</td>
                     <td className="px-1 py-[2px]">
                       <div className="flex items-center gap-1 min-w-0">
@@ -240,7 +248,7 @@ export default function Clientes() {
                     <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={c.sucursal || ''}>{c.sucursal || '-'}</span></td>
                     <td className="px-1 py-[2px] text-center"><span className={'inline-block whitespace-nowrap rounded-full border px-1.5 py-px text-[9px] font-medium leading-tight ' + estadoStyle(c.estado)}>{c.estado || 'INACTIVO'}</span></td>
                     <td className="px-1 py-[2px] text-right">
-                      <div className="flex items-center justify-end gap-px">
+                      <div className="flex items-center justify-end gap-px" onClick={(e) => e.stopPropagation()}>
                         {puedeEditar && <button onClick={() => { setSel(c); setModal('edit') }} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Editar"><Pencil size={10} aria-hidden /></button>}
                         <button onClick={() => void toggleEstado(c)} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title={c.estado === 'ACTIVO' ? 'Desactivar' : 'Activar'}>{c.estado === 'ACTIVO' ? <EyeOff size={10} aria-hidden /> : <Eye size={10} aria-hidden />}</button>
                         {puedeBorrar && <button onClick={() => { setSel(c); void eliminar(c) }} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Eliminar"><Trash2 size={10} aria-hidden /></button>}
@@ -264,6 +272,15 @@ export default function Clientes() {
             </div>
           )}
         </div>
+      )}
+
+      {card && (
+        <ClienteCard
+          cliente={card}
+          onClose={() => setCard(null)}
+          onEdit={() => { setSel(card); setModal('edit'); setCard(null) }}
+          puedeEditar={puedeEditar}
+        />
       )}
 
       {modal === 'importar' && (
@@ -416,6 +433,92 @@ function ClienteModal({ cliente, nCliente, onClose, onSaved }: { cliente: Client
           </div>
         </form>
       </div>
+    </div>
+  )
+}
+
+function ClienteCard({ cliente, onClose, onEdit, puedeEditar }: { cliente: Cliente; onClose: () => void; onEdit: () => void; puedeEditar: boolean }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="relative flex w-[92vw] max-w-[1100px] flex-col rounded-2xl border border-line bg-surface shadow-2xl"
+        style={{ maxHeight: '88vh' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 text-ink">
+              <UserRound size={18} className="shrink-0 text-amber-400" aria-hidden />
+              <h2 className="truncate text-lg font-semibold">{cliente.razon_social}</h2>
+            </div>
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-sub">
+              <span className="font-medium text-ink">N° {fmtN(cliente.n_cliente)}</span>
+              <span className="text-sub/50">|</span>
+              <span className={'inline-block whitespace-nowrap rounded-full border px-1.5 py-px text-[9px] font-medium leading-tight ' + estadoStyle(cliente.estado)}>{cliente.estado || 'INACTIVO'}</span>
+              <span className="text-sub/50">|</span>
+              <span>Alta: {fmtDate(cliente.created_at)}</span>
+            </div>
+          </div>
+          <button onClick={onClose} className="shrink-0 rounded-lg border border-line p-1.5 text-sub transition hover:bg-line hover:text-ink" title="Cerrar">
+            <X size={16} aria-hidden />
+          </button>
+        </div>
+
+        {/* Body — 3 columns */}
+        <div className="grid grid-cols-1 gap-4 overflow-y-auto p-5 md:grid-cols-3" style={{ maxHeight: 'calc(88vh - 120px)' }}>
+          {/* Col 1: Datos principales */}
+          <section className="rounded-xl border border-line bg-surface2 p-4">
+            <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-sub/70">Datos Principales</h3>
+            <dl className="space-y-2 text-[13px]">
+              <Row label="Razón Social" value={cliente.razon_social} />
+              <Row label="Teléfono" value={cliente.telefono} />
+              <Row label="Transporte" value={cliente.transporte} />
+              <Row label="Cuenta" value={cliente.cuenta} />
+              <Row label="Sucursal" value={cliente.sucursal} />
+              <Row label="% Valor Declarado" value={cliente.valor_declarado} />
+            </dl>
+          </section>
+
+          {/* Col 2: Direcciones */}
+          <section className="rounded-xl border border-line bg-surface2 p-4">
+            <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-sub/70">Direcciones</h3>
+            <dl className="space-y-2 text-[13px]">
+              <Row label="Dirección - Barrio" value={cliente.direccion_barrio} />
+              <Row label="Localidad - Prov." value={cliente.localidad_provincia} />
+              <Row label="Dirección de Entrega" value={cliente.direccion_entrega} />
+            </dl>
+          </section>
+
+          {/* Col 3: Observaciones */}
+          <section className="rounded-xl border border-line bg-surface2 p-4">
+            <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-sub/70">Observaciones</h3>
+            <dl className="space-y-2 text-[13px]">
+              <Row label="Membretes" value={cliente.obs_membretes} />
+              <Row label="Facturación" value={cliente.obs_facturacion} />
+            </dl>
+          </section>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3">
+          {puedeEditar && (
+            <button onClick={onEdit} className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">
+              <Pencil size={14} aria-hidden /> Editar Cliente
+            </button>
+          )}
+          <button onClick={onClose} className="btn-press rounded-xl border border-line bg-surface2 px-4 py-2 text-sm font-medium text-ink hover:bg-line">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Row({ label, value }: { label: string; value: string | null | undefined }) {
+  return (
+    <div className="flex flex-col">
+      <dt className="text-[11px] font-medium text-sub/70">{label}</dt>
+      <dd className="mt-px whitespace-pre-wrap text-ink">{value?.trim() || '—'}</dd>
     </div>
   )
 }
