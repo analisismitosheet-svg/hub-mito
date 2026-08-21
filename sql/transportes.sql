@@ -39,8 +39,7 @@ CREATE POLICY "transportes_insert" ON public.transportes
     )
     OR EXISTS (
       SELECT 1 FROM public.usuario_permisos up
-      JOIN public.permisos p ON p.id = up.permiso_id
-      WHERE up.usuario_id = auth.uid() AND p.clave = 'mayorista.transportes.create'
+      WHERE up.usuario_id = auth.uid() AND up.permiso_clave = 'mayorista.transportes.create' AND up.efecto = 'grant'
     )
   );
 
@@ -54,8 +53,7 @@ CREATE POLICY "transportes_update" ON public.transportes
     )
     OR EXISTS (
       SELECT 1 FROM public.usuario_permisos up
-      JOIN public.permisos p ON p.id = up.permiso_id
-      WHERE up.usuario_id = auth.uid() AND p.clave = 'mayorista.transportes.edit'
+      WHERE up.usuario_id = auth.uid() AND up.permiso_clave = 'mayorista.transportes.edit' AND up.efecto = 'grant'
     )
   );
 
@@ -69,17 +67,16 @@ CREATE POLICY "transportes_delete" ON public.transportes
     )
     OR EXISTS (
       SELECT 1 FROM public.usuario_permisos up
-      JOIN public.permisos p ON p.id = up.permiso_id
-      WHERE up.usuario_id = auth.uid() AND p.clave = 'mayorista.transportes.delete'
+      WHERE up.usuario_id = auth.uid() AND up.permiso_clave = 'mayorista.transportes.delete' AND up.efecto = 'grant'
     )
   );
 
 -- 3. Permisos para transportes
-INSERT INTO public.permisos (clave, descripcion) VALUES
-  ('mayorista.transportes.view',   'Ver módulo de transportes'),
-  ('mayorista.transportes.create', 'Crear transportes'),
-  ('mayorista.transportes.edit',   'Editar transportes'),
-  ('mayorista.transportes.delete', 'Eliminar transportes')
+INSERT INTO public.permisos (clave, modulo, accion, label, orden) VALUES
+  ('mayorista.transportes.view',   'mayorista', 'transportes.view',   'Ver transportes',    900),
+  ('mayorista.transportes.create', 'mayorista', 'transportes.create', 'Crear transportes',  901),
+  ('mayorista.transportes.edit',   'mayorista', 'transportes.edit',   'Editar transportes', 902),
+  ('mayorista.transportes.delete', 'mayorista', 'transportes.delete', 'Eliminar transportes',903)
 ON CONFLICT (clave) DO NOTHING;
 
 -- 4. Trigger para updated_at
