@@ -195,6 +195,17 @@ export const APPS: AppDef[] = [
     permiso: 'mayorista.transportes.view',
   },
   {
+    id: 'mayorista-clientes',
+    areaId: 'mayorista',
+    title: 'Clientes',
+    description: 'ABM de clientes mayoristas, direcciones y condiciones de pago.',
+    icon: Users,
+    kind: 'internal',
+    target: '/mayorista/clientes',
+    color: '#d97706',
+    permiso: 'mayorista.clientes.view',
+  },
+  {
     id: 'deposito-repo',
     areaId: 'deposito',
     title: 'Repos Depósito',
