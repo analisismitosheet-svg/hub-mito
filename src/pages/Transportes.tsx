@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback, type FormEvent } from 'react'
 import {
   ArrowLeft, Search, Loader2, SearchX, Plus, Pencil, Truck, Phone,
-  Mail, Copy, MessageCircle, Eye, EyeOff, Trash2, Globe, ClipboardList,
+  Mail, Copy, MessageCircle, Eye, EyeOff, Trash2, Globe, ClipboardList, Check, Minus,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -13,15 +13,14 @@ interface Transporte {
   whatsapp: string | null; email: string | null; retiro_calera: string | null
   retiro_polo52: string | null; via_solicitud_retiro: string | null
   etiquetas: string | null; estado: string | null; observaciones: string | null
-  requisitos_remitente: string | null; requisitos_telefono: string | null
-  requisitos_direccion_retiro: string | null; requisitos_destinatario: string | null
-  requisitos_direccion_envio: string | null; requisitos_localidad: string | null
-  requisitos_cantidad_bultos: number | null; requisitos_pago: string | null
+  requiere_remitente: boolean; requiere_telefono: boolean
+  requiere_direccion_retiro: boolean; requiere_destinatario: boolean
+  requiere_direccion_envio: boolean; requiere_localidad: boolean
+  requiere_cantidad_bultos: boolean; requiere_pago: boolean
   created_at: string
 }
 
 type Vista = 'lista' | 'ficha' | 'form'
-const PAGO_OPCIONES = ['A cargo del remitente','A cargo del destinatario','Pagado','Contra entrega','Otro']
 const VIA_OPCIONES = ['WhatsApp','Telefono','Email','Otro']
 const inputCls = 'w-full rounded-xl border border-line bg-surface2 px-3 py-2 text-ink outline-none transition duration-250 placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40'
 
@@ -50,16 +49,19 @@ function Row({ icon: Icon, label, value }: { icon?: typeof Truck; label: string;
 }
 
 function requisitosText(t: Transporte): string {
+  const items = [
+    ['Remitente', t.requiere_remitente],
+    ['Telefono', t.requiere_telefono],
+    ['Direccion de retiro', t.requiere_direccion_retiro],
+    ['Destinatario', t.requiere_destinatario],
+    ['Direccion de envio', t.requiere_direccion_envio],
+    ['Localidad', t.requiere_localidad],
+    ['Cantidad de bultos', t.requiere_cantidad_bultos],
+    ['Pago', t.requiere_pago],
+  ] as const
   return [
     'REQUISITOS DE TRANSPORTE', '',
-    'Remitente: ' + (t.requisitos_remitente || '-'),
-    'Telefono: ' + (t.requisitos_telefono || '-'),
-    'Direccion de retiro: ' + (t.requisitos_direccion_retiro || '-'),
-    'Destinatario: ' + (t.requisitos_destinatario || '-'),
-    'Direccion de envio: ' + (t.requisitos_direccion_envio || '-'),
-    'Localidad: ' + (t.requisitos_localidad || '-'),
-    'Cantidad de bultos: ' + (t.requisitos_cantidad_bultos ?? '-'),
-    'Pago: ' + (t.requisitos_pago || '-'),
+    ...items.map(([label, req]) => (req ? '[x]' : '[ ]') + ' ' + label),
   ].join('\n')
 }
 export default function Transportes() {
@@ -133,7 +135,7 @@ export default function Transportes() {
   }
 
   if (vista === 'ficha' && sel) {
-    const hr = sel.requisitos_remitente || sel.requisitos_telefono || sel.requisitos_direccion_retiro || sel.requisitos_destinatario || sel.requisitos_direccion_envio || sel.requisitos_localidad || sel.requisitos_cantidad_bultos || sel.requisitos_pago
+    const hr = sel.requiere_remitente || sel.requiere_telefono || sel.requiere_direccion_retiro || sel.requiere_destinatario || sel.requiere_direccion_envio || sel.requiere_localidad || sel.requiere_cantidad_bultos || sel.requiere_pago
     return (
       <Layout>
         <ToastEl />
@@ -172,21 +174,33 @@ export default function Transportes() {
           )}
           {sel.observaciones && <div className="border-b border-line"><dl><Row label="Observaciones" value={sel.observaciones} /></dl></div>}
           {hr && (
-            <div className="px-4 py-3">
+            <div className="border-t border-line px-4 py-3">
               <div className="mb-2 flex items-center justify-between">
                 <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-sub"><ClipboardList size={14} aria-hidden /> Requisitos de transporte</p>
                 <button onClick={() => { clip(requisitosText(sel)); mostrarToast('Requisitos copiados al portapapeles') }} className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line"><Copy size={13} aria-hidden /> Copiar</button>
               </div>
-              <dl className="divide-y divide-line/70">
-                {sel.requisitos_remitente && <Row label="Remitente" value={sel.requisitos_remitente} />}
-                {sel.requisitos_telefono && <Row label="Telefono" value={sel.requisitos_telefono} />}
-                {sel.requisitos_direccion_retiro && <Row label="Direccion de retiro" value={sel.requisitos_direccion_retiro} />}
-                {sel.requisitos_destinatario && <Row label="Destinatario" value={sel.requisitos_destinatario} />}
-                {sel.requisitos_direccion_envio && <Row label="Direccion de envio" value={sel.requisitos_direccion_envio} />}
-                {sel.requisitos_localidad && <Row label="Localidad" value={sel.requisitos_localidad} />}
-                {sel.requisitos_cantidad_bultos != null && <Row label="Cantidad de bultos" value={String(sel.requisitos_cantidad_bultos)} />}
-                {sel.requisitos_pago && <Row label="Pago" value={sel.requisitos_pago} />}
-              </dl>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                {([
+                  ['Remitente', sel.requiere_remitente],
+                  ['Telefono', sel.requiere_telefono],
+                  ['Direccion de retiro', sel.requiere_direccion_retiro],
+                  ['Destinatario', sel.requiere_destinatario],
+                  ['Direccion de envio', sel.requiere_direccion_envio],
+                  ['Localidad', sel.requiere_localidad],
+                  ['Cantidad de bultos', sel.requiere_cantidad_bultos],
+                  ['Pago', sel.requiere_pago],
+                ] as const).map(([label, ok]) => (
+                  <div key={label} className="flex items-center gap-2 py-1">
+                    {ok
+                      ? <Check size={14} className="shrink-0 text-emerald-400" />
+                      : <Minus size={14} className="shrink-0 text-sub/40" />}
+                    <span className={'text-sm ' + (ok ? 'text-ink' : 'text-sub/60')}>{label}</span>
+                    <span className={'ml-auto text-[11px] font-medium ' + (ok ? 'text-emerald-400' : 'text-sub/40')}>
+                      {ok ? 'Requerido' : 'No requerido'}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </article>
@@ -277,14 +291,14 @@ function TransporteForm({ inicial, onCancel, onSaved }: { inicial: Transporte | 
   const [etiquetas, setEtiquetas] = useState(inicial?.etiquetas || '')
   const [estado, setEstado] = useState(inicial?.estado || 'ACTIVO')
   const [obs, setObs] = useState(inicial?.observaciones || '')
-  const [reqRemitente, setReqRemitente] = useState(inicial?.requisitos_remitente || '')
-  const [reqTelefono, setReqTelefono] = useState(inicial?.requisitos_telefono || '')
-  const [reqDirRetiro, setReqDirRetiro] = useState(inicial?.requisitos_direccion_retiro || '')
-  const [reqDestinatario, setReqDestinatario] = useState(inicial?.requisitos_destinatario || '')
-  const [reqDirEnvio, setReqDirEnvio] = useState(inicial?.requisitos_direccion_envio || '')
-  const [reqLocalidad, setReqLocalidad] = useState(inicial?.requisitos_localidad || '')
-  const [reqBultos, setReqBultos] = useState(inicial?.requisitos_cantidad_bultos?.toString() || '')
-  const [reqPago, setReqPago] = useState(inicial?.requisitos_pago || '')
+  const [reqRemitente, setReqRemitente] = useState(inicial?.requiere_remitente ?? false)
+  const [reqTelefono, setReqTelefono] = useState(inicial?.requiere_telefono ?? false)
+  const [reqDirRetiro, setReqDirRetiro] = useState(inicial?.requiere_direccion_retiro ?? false)
+  const [reqDestinatario, setReqDestinatario] = useState(inicial?.requiere_destinatario ?? false)
+  const [reqDirEnvio, setReqDirEnvio] = useState(inicial?.requiere_direccion_envio ?? false)
+  const [reqLocalidad, setReqLocalidad] = useState(inicial?.requiere_localidad ?? false)
+  const [reqBultos, setReqBultos] = useState(inicial?.requiere_cantidad_bultos ?? false)
+  const [reqPago, setReqPago] = useState(inicial?.requiere_pago ?? false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -298,10 +312,10 @@ function TransporteForm({ inicial, onCancel, onSaved }: { inicial: Transporte | 
       retiro_calera: retiroCalera.trim() || null, retiro_polo52: retiroPolo52.trim() || null,
       via_solicitud_retiro: viaSolicitud || null, etiquetas: etiquetas.trim() || null,
       estado, observaciones: obs.trim() || null,
-      requisitos_remitente: reqRemitente.trim() || null, requisitos_telefono: reqTelefono.trim() || null,
-      requisitos_direccion_retiro: reqDirRetiro.trim() || null, requisitos_destinatario: reqDestinatario.trim() || null,
-      requisitos_direccion_envio: reqDirEnvio.trim() || null, requisitos_localidad: reqLocalidad.trim() || null,
-      requisitos_cantidad_bultos: reqBultos ? Number(reqBultos) : null, requisitos_pago: reqPago || null,
+      requiere_remitente: reqRemitente, requiere_telefono: reqTelefono,
+      requiere_direccion_retiro: reqDirRetiro, requiere_destinatario: reqDestinatario,
+      requiere_direccion_envio: reqDirEnvio, requiere_localidad: reqLocalidad,
+      requiere_cantidad_bultos: reqBultos, requiere_pago: reqPago,
     }
     let result
     if (inicial) { result = await supabase.from('transportes').update(payload).eq('id', inicial.id).select().single() }
@@ -336,17 +350,22 @@ function TransporteForm({ inicial, onCancel, onSaved }: { inicial: Transporte | 
         </fieldset>
         <fieldset className="rounded-2xl border border-line bg-surface p-4">
           <legend className="flex items-center gap-2 px-1 text-xs font-semibold uppercase tracking-wider text-sub"><ClipboardList size={14} aria-hidden /> Requisitos de transporte</legend>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Remitente</span><input value={reqRemitente} onChange={(e) => setReqRemitente(e.target.value)} placeholder="JEMAVA S.A.S." className={inputCls} /></label>
-            <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Telefono</span><input value={reqTelefono} onChange={(e) => setReqTelefono(e.target.value)} placeholder="+54 9 351 XXX XXXX" className={inputCls} /></label>
-            <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Direccion de retiro</span><input value={reqDirRetiro} onChange={(e) => setReqDirRetiro(e.target.value)} placeholder="Av. XXXXX 1234" className={inputCls} /></label>
-            <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Destinatario</span><input value={reqDestinatario} onChange={(e) => setReqDestinatario(e.target.value)} placeholder="Juan Perez" className={inputCls} /></label>
-            <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Direccion de envio</span><input value={reqDirEnvio} onChange={(e) => setReqDirEnvio(e.target.value)} placeholder="Av. XXXXX 567" className={inputCls} /></label>
-            <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Localidad</span><input value={reqLocalidad} onChange={(e) => setReqLocalidad(e.target.value)} placeholder="Cordoba" className={inputCls} /></label>
-            <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Cantidad de bultos</span><input type="number" min="0" value={reqBultos} onChange={(e) => setReqBultos(e.target.value)} placeholder="3" className={inputCls} /></label>
-            <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Pago</span>
-              <select value={reqPago} onChange={(e) => setReqPago(e.target.value)} className={inputCls}><option value="">Seleccionar...</option>{PAGO_OPCIONES.map((p) => <option key={p} value={p}>{p}</option>)}</select>
-            </label>
+          <div className="mt-3 space-y-1">
+            {([
+              ['Requiere remitente', reqRemitente, setReqRemitente],
+              ['Requiere telefono', reqTelefono, setReqTelefono],
+              ['Requiere direccion de retiro', reqDirRetiro, setReqDirRetiro],
+              ['Requiere destinatario', reqDestinatario, setReqDestinatario],
+              ['Requiere direccion de envio', reqDirEnvio, setReqDirEnvio],
+              ['Requiere localidad', reqLocalidad, setReqLocalidad],
+              ['Requiere cantidad de bultos', reqBultos, setReqBultos],
+              ['Requiere pago', reqPago, setReqPago],
+            ] as const).map(([label, val, setter]) => (
+              <label key={label} className="flex items-center gap-3 cursor-pointer rounded-lg px-3 py-2 transition hover:bg-line/30">
+                <input type="checkbox" checked={val} onChange={(e) => setter(e.target.checked)} className="h-4 w-4 rounded border-line bg-surface2 text-brand-600 accent-brand-600" />
+                <span className="text-sm text-ink">{label}</span>
+              </label>
+            ))}
           </div>
         </fieldset>
         <fieldset className="rounded-2xl border border-line bg-surface p-4">
