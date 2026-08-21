@@ -518,26 +518,32 @@ function ImportarClientes({ todos, onClose, onSaved }: { todos: Cliente[]; onClo
     return v
   }
 
+  function normalizeValorDeclarado(v: string): string {
+    if (!v) return v
+    let cleaned = v.replace(/^[.=]+/, '').trim()
+    const up = cleaned.toUpperCase().replace(/[^A-Z0-9%]/g, '')
+    if (up.includes('ALNETO') || up === 'ALNETO' || cleaned.toUpperCase().includes('AL NETO')) return 'Al neto'
+    const pct = cleaned.match(/(\d{1,3})\s*%/)
+    if (pct) return pct[1] + '%'
+    return cleaned
+  }
+
   function validate() {
     if (!mapping) return
     const razonIdx = mapping.razon_social
     const existeNames = new Set(todos.map((t) => t.razon_social.toUpperCase().trim()))
     const seen = new Set<string>()
-    const validated = rows.map((r, i) => {
+    const validated = rows.filter((r) => {
+      if (razonIdx < 0) return true
+      const rs = cleanVal(r[headers[razonIdx]])
+      return rs !== ''
+    }).map((r, i) => {
       const errs: string[] = []
       const rs = razonIdx >= 0 ? cleanVal(r[headers[razonIdx]]) : ''
       if (rs) {
         if (existeNames.has(rs.toUpperCase())) errs.push('Ya existe en BD')
         else if (seen.has(rs.toUpperCase())) errs.push('Duplicada en archivo')
         else seen.add(rs.toUpperCase())
-      }
-      if (mapping.cuenta >= 0) {
-        const cv = cleanVal(r[headers[mapping.cuenta]])
-        if (cv && !CUENTA_OPCIONES.some((o) => o.toUpperCase() === cv.toUpperCase())) errs.push('Cuenta no estandar: ' + cv)
-      }
-      if (mapping.valor_declarado >= 0) {
-        const vd = cleanVal(r[headers[mapping.valor_declarado]])
-        if (vd && !VALOR_DEC_OPCIONES.some((o) => o.toUpperCase() === vd.toUpperCase())) errs.push('Valor declarado no estandar: ' + vd)
       }
       return { ...r, _errors: errs, _row: i + 1 }
     })
