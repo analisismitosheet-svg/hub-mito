@@ -584,7 +584,8 @@ function ImportarClientes({ todos, onClose, onSaved }: { todos: Cliente[]; onClo
     setMapping((m) => m ? { ...m, [field]: parseInt(val, 10) } : m)
   }
 
-  const hasRazon = mapping && mapping.razon_social >= 0
+
+
   const validCount = validRows.filter((r) => r._errors.length === 0).length
   const errorCount = validRows.length - validCount
   const previewRows = rows.slice(0, 5)
