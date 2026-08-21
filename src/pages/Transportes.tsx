@@ -17,6 +17,7 @@ interface Transporte {
   requiere_direccion_retiro: boolean; requiere_destinatario: boolean
   requiere_direccion_envio: boolean; requiere_localidad: boolean
   requiere_cantidad_bultos: boolean; requiere_pago: boolean
+  tamano_cajas: string | null
   created_at: string
 }
 
@@ -62,7 +63,8 @@ function requisitosText(t: Transporte): string {
   return [
     'REQUISITOS DE TRANSPORTE', '',
     ...items.map(([label, req]) => (req ? '[x]' : '[ ]') + ' ' + label),
-  ].join('\n')
+    t.tamano_cajas ? 'Medida de las cajas: ' + t.tamano_cajas : '',
+  ].filter(Boolean).join('\n')
 }
 export default function Transportes() {
   const { can } = useAuth()
@@ -135,7 +137,7 @@ export default function Transportes() {
   }
 
   if (vista === 'ficha' && sel) {
-    const hr = sel.requiere_remitente || sel.requiere_telefono || sel.requiere_direccion_retiro || sel.requiere_destinatario || sel.requiere_direccion_envio || sel.requiere_localidad || sel.requiere_cantidad_bultos || sel.requiere_pago
+    const hr = sel.requiere_remitente || sel.requiere_telefono || sel.requiere_direccion_retiro || sel.requiere_destinatario || sel.requiere_direccion_envio || sel.requiere_localidad || sel.requiere_cantidad_bultos || sel.requiere_pago || sel.tamano_cajas
     return (
       <Layout>
         <ToastEl />
@@ -201,6 +203,13 @@ export default function Transportes() {
                   </div>
                 ))}
               </div>
+              {sel.tamano_cajas && (
+                <div className="mt-2 flex items-center gap-2 border-t border-line/50 pt-2">
+                  <Check size={14} className="shrink-0 text-emerald-400" />
+                  <span className="text-sm text-ink">Medida de las cajas</span>
+                  <span className="ml-auto text-sm font-medium text-emerald-400">{sel.tamano_cajas}</span>
+                </div>
+              )}
             </div>
           )}
         </article>
@@ -242,40 +251,77 @@ export default function Transportes() {
       ) : lista.length === 0 ? (
         <div className="rounded-2xl border border-line bg-surface p-6 text-center"><SearchX size={32} className="mx-auto mb-2 text-sub/40" aria-hidden /><p className="text-sm text-sub">{term || filtro !== 'todos' ? 'No se encontraron transportes.' : 'Todavia no hay transportes cargados.'}</p></div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-line bg-surface">
-          <div className="hidden md:block overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b border-line text-left text-xs font-medium text-sub"><th className="px-4 py-2.5">Nombre</th><th className="px-4 py-2.5">Telefono</th><th className="px-4 py-2.5">Estado</th><th className="px-4 py-2.5 text-right">Acciones</th></tr></thead>
-              <tbody className="divide-y divide-line/70">
-                {lista.map((t) => (
-                  <tr key={t.id} className="cursor-pointer transition hover:bg-line/30" onClick={() => abrirFicha(t)}>
-                    <td className="px-4 py-2.5"><div className="flex items-center gap-2"><div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-xs font-semibold text-amber-400">{iniciales(t.nombre)}</div><span className="font-medium text-ink">{t.nombre}</span></div></td>
-                    <td className="px-4 py-2.5 text-sub">{t.telefono || '\u2014'}</td>
-                    <td className="px-4 py-2.5"><span className={'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ' + estadoStyle(t.estado)}>{t.estado || 'INACTIVO'}</span></td>
-                    <td className="px-4 py-2.5 text-right" onClick={(e) => e.stopPropagation()}><div className="flex items-center justify-end gap-1">
-                      {puedeEditar && <button onClick={() => abrirEditar(t)} className="btn-press rounded-lg border border-line p-1.5 text-sub hover:text-ink"><Pencil size={13} aria-hidden /></button>}
-                      <button onClick={() => void toggleEstado(t)} className="btn-press rounded-lg border border-line p-1.5 text-sub hover:text-ink">{t.estado === 'ACTIVO' ? <EyeOff size={13} aria-hidden /> : <Eye size={13} aria-hidden />}</button>
-                    </div></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="md:hidden divide-y divide-line/70">
-            {lista.map((t) => (
-              <div key={t.id} className="flex items-center gap-3 px-4 py-3 cursor-pointer transition hover:bg-line/30" onClick={() => abrirFicha(t)}>
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-sm font-semibold text-amber-400">{iniciales(t.nombre)}</div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2"><span className="truncate font-medium text-ink">{t.nombre}</span><span className={'shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ' + estadoStyle(t.estado)}>{t.estado || 'INACTIVO'}</span></div>
-                  <p className="truncate text-xs text-sub">{t.telefono || 'Sin datos'}</p>
-                </div>
-                <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                  {puedeEditar && <button onClick={() => abrirEditar(t)} className="btn-press rounded-lg border border-line p-1.5 text-sub hover:text-ink"><Pencil size={13} aria-hidden /></button>}
-                  <button onClick={() => void toggleEstado(t)} className="btn-press rounded-lg border border-line p-1.5 text-sub hover:text-ink">{t.estado === 'ACTIVO' ? <EyeOff size={13} aria-hidden /> : <Eye size={13} aria-hidden />}</button>
-                </div>
-              </div>
-            ))}
-          </div>
+        <div className="overflow-x-auto rounded-2xl border border-line">
+          <table className="w-full min-w-[800px] text-sm">
+            <thead>
+              <tr className="border-b border-line bg-zinc-800 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-300">
+                <th className="px-4 py-3">Transporte</th>
+                <th className="px-4 py-3">Retiro Calera</th>
+                <th className="px-4 py-3">Retiro Polo 52</th>
+                <th className="px-4 py-3">Via Solicitud Retiro</th>
+                <th className="px-4 py-3">Web</th>
+                <th className="px-4 py-3">Datos que piden</th>
+                <th className="px-4 py-3">Etiquetas para cajas</th>
+                <th className="px-4 py-3 text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line/70 bg-surface">
+              {lista.map((t) => (
+                <tr key={t.id} className="transition hover:bg-line/20">
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-xs font-semibold text-amber-400">{iniciales(t.nombre)}</div>
+                      <div>
+                        <span className="font-medium text-ink">{t.nombre}</span>
+                        <div className="mt-0.5"><span className={'inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ' + estadoStyle(t.estado)}>{t.estado || 'INACTIVO'}</span></div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    {t.retiro_calera ? (
+                      <button onClick={() => { clip(t.retiro_calera!); mostrarToast('Telefono copiado') }} className="btn-press inline-flex items-center gap-1 rounded-md border border-line bg-surface2 px-2 py-1 text-xs font-medium text-ink transition hover:bg-line" title="Copiar">{t.retiro_calera}</button>
+                    ) : <span className="text-sub/50">{'\u2014'}</span>}
+                  </td>
+                  <td className="px-4 py-3">
+                    {t.retiro_polo52 ? (
+                      <button onClick={() => { clip(t.retiro_polo52!); mostrarToast('Telefono copiado') }} className="btn-press inline-flex items-center gap-1 rounded-md border border-line bg-surface2 px-2 py-1 text-xs font-medium text-ink transition hover:bg-line" title="Copiar">{t.retiro_polo52}</button>
+                    ) : <span className="text-sub/50">{'\u2014'}</span>}
+                  </td>
+                  <td className="px-4 py-3 text-xs font-medium uppercase text-sub">{t.via_solicitud_retiro || <span className="text-sub/50">{'\u2014'}</span>}</td>
+                  <td className="px-4 py-3">
+                    {t.web ? (
+                      <a href={t.web} target="_blank" rel="noopener noreferrer" className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink transition hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-400">
+                        <Globe size={12} aria-hidden /> Abrir web
+                      </a>
+                    ) : <span className="text-sub/50">No tiene</span>}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-col gap-0.5 text-xs text-sub">
+                      {t.requiere_remitente && <span>Domicilio de retiro</span>}
+                      {t.requiere_direccion_retiro && <span>Direccion de retiro</span>}
+                      {t.requiere_destinatario && <span>Destinatario</span>}
+                      {t.requiere_direccion_envio && <span>Direccion de envio</span>}
+                      {t.requiere_localidad && <span>Localidad</span>}
+                      {t.requiere_cantidad_bultos && <span>Cantidad de bultos</span>}
+                      {t.requiere_pago && <span>Pago</span>}
+                      {t.tamano_cajas && <span>Medida de las cajas: {t.tamano_cajas}</span>}
+                      {!t.requiere_remitente && !t.requiere_direccion_retiro && !t.requiere_destinatario && !t.requiere_direccion_envio && !t.requiere_localidad && !t.requiere_cantidad_bultos && !t.requiere_pago && !t.tamano_cajas && <span className="text-sub/50">{'\u2014'}</span>}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-sub">
+                    {t.etiquetas || <span className="text-sub/50">No tiene</span>}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <button onClick={() => abrirFicha(t)} className="btn-press rounded-lg border border-line p-1.5 text-sub hover:text-ink" title="Ver detalle"><Search size={13} aria-hidden /></button>
+                      {puedeEditar && <button onClick={() => abrirEditar(t)} className="btn-press rounded-lg border border-line p-1.5 text-sub hover:text-ink" title="Editar"><Pencil size={13} aria-hidden /></button>}
+                      <button onClick={() => void toggleEstado(t)} className="btn-press rounded-lg border border-line p-1.5 text-sub hover:text-ink" title={t.estado === 'ACTIVO' ? 'Desactivar' : 'Activar'}>{t.estado === 'ACTIVO' ? <EyeOff size={13} aria-hidden /> : <Eye size={13} aria-hidden />}</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </Layout>
@@ -299,6 +345,7 @@ function TransporteForm({ inicial, onCancel, onSaved }: { inicial: Transporte | 
   const [reqLocalidad, setReqLocalidad] = useState(inicial?.requiere_localidad ?? false)
   const [reqBultos, setReqBultos] = useState(inicial?.requiere_cantidad_bultos ?? false)
   const [reqPago, setReqPago] = useState(inicial?.requiere_pago ?? false)
+  const [tamanoCajas, setTamanoCajas] = useState(inicial?.tamano_cajas || '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -316,6 +363,7 @@ function TransporteForm({ inicial, onCancel, onSaved }: { inicial: Transporte | 
       requiere_direccion_retiro: reqDirRetiro, requiere_destinatario: reqDestinatario,
       requiere_direccion_envio: reqDirEnvio, requiere_localidad: reqLocalidad,
       requiere_cantidad_bultos: reqBultos, requiere_pago: reqPago,
+      tamano_cajas: tamanoCajas.trim() || null,
     }
     let result
     if (inicial) { result = await supabase.from('transportes').update(payload).eq('id', inicial.id).select().single() }
@@ -367,6 +415,10 @@ function TransporteForm({ inicial, onCancel, onSaved }: { inicial: Transporte | 
               </label>
             ))}
           </div>
+          <label className="mt-3 block">
+            <span className="mb-1 block text-xs font-medium text-sub">Medida de las cajas</span>
+            <input value={tamanoCajas} onChange={(e) => setTamanoCajas(e.target.value)} placeholder="Ej: 60*40*40" className={inputCls} />
+          </label>
         </fieldset>
         <fieldset className="rounded-2xl border border-line bg-surface p-4">
           <legend className="flex items-center gap-2 px-1 text-xs font-semibold uppercase tracking-wider text-sub"><ClipboardList size={14} aria-hidden /> Etiquetas para pegar en las cajas</legend>
