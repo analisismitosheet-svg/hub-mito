@@ -16,7 +16,7 @@ interface Cliente {
   localidad_provincia: string | null
   transporte: string | null
   direccion_entrega: string | null
-  porcentaje_valor_declarado: number | null
+  valor_declarado: string | null
   cuenta: string | null
   sucursal: string | null
   obs_membretes: string | null
@@ -26,6 +26,7 @@ interface Cliente {
 }
 
 const CUENTA_OPCIONES = ['Corriente', 'Credito', 'Contado']
+const VALOR_DEC_OPCIONES = ['Al neto', '75%', '80%', '85%', '90%', '100%']
 const inputCls = 'w-full rounded-xl border border-line bg-surface2 px-3 py-1.5 text-[13px] text-ink outline-none transition duration-250 placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40'
 
 function estadoStyle(estado: string | null): string {
@@ -193,7 +194,7 @@ export default function Clientes() {
                   <td className="px-1.5 py-1"><span className="block truncate text-sub" title={c.localidad_provincia || ''}>{c.localidad_provincia || '-'}</span></td>
                   <td className="px-1.5 py-1"><span className="block truncate text-sub">{c.transporte || '-'}</span></td>
                   <td className="px-1.5 py-1"><span className="block truncate text-sub" title={c.direccion_entrega || ''}>{c.direccion_entrega || '-'}</span></td>
-                  <td className="px-1.5 py-1 text-center text-sub">{c.porcentaje_valor_declarado != null ? c.porcentaje_valor_declarado + '%' : '-'}</td>
+                  <td className="px-1.5 py-1 text-center text-sub">{c.valor_declarado || '-'}</td>
                   <td className="px-1.5 py-1 whitespace-nowrap text-sub">{c.cuenta || '-'}</td>
                   <td className="px-1.5 py-1"><span className="block truncate text-sub">{c.sucursal || '-'}</span></td>
                   <td className="px-1.5 py-1"><span className={'inline-block whitespace-nowrap rounded-full border px-2 py-px text-[10px] font-medium ' + estadoStyle(c.estado)}>{c.estado || 'INACTIVO'}</span></td>
@@ -225,7 +226,7 @@ function ClienteModal({ cliente, nCliente, onClose, onSaved }: { cliente: Client
   const [localidadProvincia, setLocalidadProvincia] = useState(cliente?.localidad_provincia || '')
   const [transporte, setTransporte] = useState(cliente?.transporte || '')
   const [direccionEntrega, setDireccionEntrega] = useState(cliente?.direccion_entrega || '')
-  const [porcentajeVd, setPorcentajeVd] = useState(cliente?.porcentaje_valor_declarado?.toString() || '')
+  const [valorDeclarado, setValorDeclarado] = useState(cliente?.valor_declarado || '')
   const [cuenta, setCuenta] = useState(cliente?.cuenta || 'Corriente')
   const [sucursal, setSucursal] = useState(cliente?.sucursal || '')
   const [obsMembretes, setObsMembretes] = useState(cliente?.obs_membretes || '')
@@ -248,7 +249,7 @@ function ClienteModal({ cliente, nCliente, onClose, onSaved }: { cliente: Client
       localidad_provincia: localidadProvincia.trim() || null,
       transporte: transporte.trim() || null,
       direccion_entrega: direccionEntrega.trim() || null,
-      porcentaje_valor_declarado: porcentajeVd ? parseFloat(porcentajeVd) : null,
+      valor_declarado: valorDeclarado || null,
       cuenta,
       sucursal: sucursal.trim() || null,
       obs_membretes: obsMembretes.trim() || null,
@@ -313,10 +314,10 @@ function ClienteModal({ cliente, nCliente, onClose, onSaved }: { cliente: Client
             </label>
             <label className="block">
               <span className="mb-0.5 block text-[11px] font-medium text-sub">% Valor Declarado</span>
-              <div className="relative">
-                <input type="number" min="0" max="100" step="0.1" value={porcentajeVd} onChange={(e) => setPorcentajeVd(e.target.value)} placeholder="75" className={inputCls + ' pr-6'} />
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-sub/60">%</span>
-              </div>
+              <select value={valorDeclarado} onChange={(e) => setValorDeclarado(e.target.value)} className={inputCls}>
+                <option value="">-</option>
+                {VALOR_DEC_OPCIONES.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
             </label>
             <label className="block">
               <span className="mb-0.5 block text-[11px] font-medium text-sub">Cuenta</span>
