@@ -375,6 +375,7 @@ function ClienteModal({ cliente, nCliente, onClose, onSaved }: { cliente: Client
 type FileRow = Record<string, any>
 
 interface Mapping {
+  n_cliente: number
   razon_social: number
   telefono: number
   direccion_barrio: number
@@ -389,6 +390,7 @@ interface Mapping {
 }
 
 const FIELD_LABELS: Record<keyof Mapping, string> = {
+  n_cliente: 'N Cliente',
   razon_social: 'Razon Social',
   telefono: 'Telefono',
   direccion_barrio: 'Direccion - Barrio',
@@ -403,6 +405,7 @@ const FIELD_LABELS: Record<keyof Mapping, string> = {
 }
 
 const AUTO_MAP: Record<keyof Mapping, string[]> = {
+  n_cliente: ['n cliente', 'n° cliente', 'num cliente', 'numero', 'codigo'],
   razon_social: ['razon', 'social', 'nombre', 'cliente'],
   telefono: ['telefono', 'tel', 'phone'],
   direccion_barrio: ['direccion', 'barrio', 'dir'],
@@ -419,7 +422,7 @@ const AUTO_MAP: Record<keyof Mapping, string[]> = {
 function autoMap(headers: string[]): Mapping {
   const lower = headers.map((h) => h.toLowerCase().trim())
   const result: Mapping = {
-    razon_social: -1, telefono: -1, direccion_barrio: -1, localidad_provincia: -1,
+    n_cliente: -1, razon_social: -1, telefono: -1, direccion_barrio: -1, localidad_provincia: -1,
     transporte: -1, direccion_entrega: -1, valor_declarado: -1, cuenta: -1,
     sucursal: -1, obs_membretes: -1, obs_facturacion: -1,
   }
@@ -545,7 +548,7 @@ function ImportarClientes({ todos, onClose, onSaved }: { todos: Cliente[]; onClo
     for (let i = 0; i < toImport.length; i += CHUNK) {
       const chunk = toImport.slice(i, i + CHUNK)
       const payload = chunk.map((r, j) => ({
-        n_cliente: base + i + j,
+        n_cliente: mapping.n_cliente >= 0 ? parseInt(r[headers[mapping.n_cliente]]?.trim() || '', 10) || base + i + j : base + i + j,
         razon_social: r[headers[mapping.razon_social]]?.trim() || '',
         telefono: mapping.telefono >= 0 ? r[headers[mapping.telefono]]?.trim() || null : null,
         direccion_barrio: mapping.direccion_barrio >= 0 ? r[headers[mapping.direccion_barrio]]?.trim() || null : null,
