@@ -23,6 +23,7 @@ export interface Perfil {
   es_admin: boolean
   motivo_rechazo: string | null
   local: string | null
+  roles: string[]
 }
 
 interface AuthState {
@@ -68,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       supabase.rpc('mis_permisos'),
     ])
     const p = Array.isArray(perfilData) ? (perfilData[0] as Perfil | undefined) : null
-    setPerfil(p ?? null)
+    setPerfil(p ? { ...p, roles: p.roles ?? (p.rol ? [p.rol] : []) } : null)
     const claves = Array.isArray(permisosData)
       ? (permisosData as { clave: string }[]).map((r) => r.clave)
       : []
@@ -106,7 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AuthState>(() => {
     const configured = isSupabaseConfigured
-    const isAdmin = !configured || perfil?.rol === 'administrador' || perfil?.es_admin === true
+    const isAdmin = !configured || perfil?.rol === 'administrador' || perfil?.es_admin === true || (perfil?.roles ?? []).includes('administrador')
     const isApproved = !configured || perfil?.estado === 'aprobado'
     return {
       user: session?.user ?? null,

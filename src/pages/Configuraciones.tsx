@@ -88,8 +88,10 @@ export default function Configuraciones() {
     } catch { /* email opcional */ }
   }
 
-  async function aprobar(u: UsuarioRow, rol: string) {
-    await actualizar(u.id, { estado: 'aprobado', rol, motivo_rechazo: null })
+  async function aprobar(u: UsuarioRow, rolesSeleccionados: string[]) {
+    if (rolesSeleccionados.length === 0) return
+    await actualizar(u.id, { estado: 'aprobado', rol: rolesSeleccionados[0], motivo_rechazo: null })
+    await supabase!.rpc('set_usuario_roles', { uid: u.id, roles_codes: rolesSeleccionados })
     await notificar('aprobado', u)
   }
 
@@ -241,11 +243,18 @@ function SolicitudCard({
   u, roles, onAprobar, onRechazar,
 }: {
   u: UsuarioRow; roles: Rol[]
-  onAprobar: (u: UsuarioRow, rol: string) => Promise<void>
+  onAprobar: (u: UsuarioRow, roles: string[]) => Promise<void>
   onRechazar: (u: UsuarioRow) => Promise<void>
 }) {
-  const [rol, setRol] = useState<string>('usuario')
+  const [rolesSel, setRolesSel] = useState<string[]>(['usuario'])
   const [busy, setBusy] = useState(false)
+
+  function toggleRol(codigo: string) {
+    setRolesSel((prev) =>
+      prev.includes(codigo) ? prev.filter((r) => r !== codigo) : [...prev, codigo],
+    )
+  }
+
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
@@ -253,11 +262,26 @@ function SolicitudCard({
         <p className="truncate text-sm text-sub">{u.email} · {fmtFecha(u.created_at)}</p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <select value={rol} onChange={(e) => setRol(e.target.value)} className="rounded-lg border border-line bg-surface2 px-2 py-1.5 text-xs text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40" aria-label="Rol al aprobar">
+        <div className="flex flex-wrap gap-1">
           {roles.map((r) => (
-            <option key={r.codigo} value={r.codigo}>{r.nombre}</option>
+            <label
+              key={r.codigo}
+              className={`inline-flex cursor-pointer items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition ${
+                rolesSel.includes(r.codigo)
+                  ? 'border-brand-600/30 bg-brand-600/10 text-brand-400'
+                  : 'border-line bg-surface2 text-sub hover:bg-line'
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={rolesSel.includes(r.codigo)}
+                onChange={() => toggleRol(r.codigo)}
+                className="sr-only"
+              />
+              {r.nombre}
+            </label>
           ))}
-        </select>
+        </div>
         <button
           onClick={async () => { setBusy(true); await onRechazar(u); setBusy(false) }}
           disabled={busy}
@@ -266,8 +290,13 @@ function SolicitudCard({
           <UserX size={14} aria-hidden /> Rechazar
         </button>
         <button
-          onClick={async () => { setBusy(true); await onAprobar(u, rol); setBusy(false) }}
-          disabled={busy}
+          onClick={async () => {
+            if (rolesSel.length === 0) return
+            setBusy(true)
+            await onAprobar(u, rolesSel)
+            setBusy(false)
+          }}
+          disabled={busy || rolesSel.length === 0}
           className="btn-press inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
         >
           <UserCheckIcon size={14} aria-hidden /> Aprobar
