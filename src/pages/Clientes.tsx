@@ -505,6 +505,19 @@ function ImportarClientes({ todos, onClose, onSaved }: { todos: Cliente[]; onClo
     setBusy(false)
   }
 
+  function cleanVal(s: string | undefined): string {
+    return (s || '').replace(/[\u00A0\u200B\uFEFF\r\n\t]/g, ' ').replace(/\s+/g, ' ').trim()
+  }
+
+  function normalizeValorDeclarado(v: string): string {
+    if (!v) return v
+    const up = v.toUpperCase().replace(/[^A-Z0-9%]/g, '')
+    if (up.includes('ALNETO') || up === 'ALNETO' || v.toUpperCase().includes('AL NETO')) return 'Al neto'
+    const pct = v.match(/(\d{1,3})\s*%/)
+    if (pct) return pct[1] + '%'
+    return v
+  }
+
   function validate() {
     if (!mapping) return
     const razonIdx = mapping.razon_social
@@ -512,19 +525,19 @@ function ImportarClientes({ todos, onClose, onSaved }: { todos: Cliente[]; onClo
     const seen = new Set<string>()
     const validated = rows.map((r, i) => {
       const errs: string[] = []
-      const rs = razonIdx >= 0 ? r[headers[razonIdx]]?.trim() : ''
+      const rs = razonIdx >= 0 ? cleanVal(r[headers[razonIdx]]) : ''
       if (rs) {
         if (existeNames.has(rs.toUpperCase())) errs.push('Ya existe en BD')
         else if (seen.has(rs.toUpperCase())) errs.push('Duplicada en archivo')
         else seen.add(rs.toUpperCase())
       }
       if (mapping.cuenta >= 0) {
-        const cv = r[headers[mapping.cuenta]]?.trim()
-        if (cv && !CUENTA_OPCIONES.includes(cv)) errs.push('Cuenta invalida: ' + cv)
+        const cv = cleanVal(r[headers[mapping.cuenta]])
+        if (cv && !CUENTA_OPCIONES.some((o) => o.toUpperCase() === cv.toUpperCase())) errs.push('Cuenta no estandar: ' + cv)
       }
       if (mapping.valor_declarado >= 0) {
-        const vd = r[headers[mapping.valor_declarado]]?.trim()
-        if (vd && !VALOR_DEC_OPCIONES.includes(vd) && vd !== 'Al neto') errs.push('Valor declarado invalido: ' + vd)
+        const vd = cleanVal(r[headers[mapping.valor_declarado]])
+        if (vd && !VALOR_DEC_OPCIONES.some((o) => o.toUpperCase() === vd.toUpperCase())) errs.push('Valor declarado no estandar: ' + vd)
       }
       return { ...r, _errors: errs, _row: i + 1 }
     })
@@ -548,18 +561,18 @@ function ImportarClientes({ todos, onClose, onSaved }: { todos: Cliente[]; onClo
     for (let i = 0; i < toImport.length; i += CHUNK) {
       const chunk = toImport.slice(i, i + CHUNK)
       const payload = chunk.map((r, j) => ({
-        n_cliente: mapping.n_cliente >= 0 ? parseInt(r[headers[mapping.n_cliente]]?.trim() || '', 10) || base + i + j : base + i + j,
-        razon_social: r[headers[mapping.razon_social]]?.trim() || '',
-        telefono: mapping.telefono >= 0 ? r[headers[mapping.telefono]]?.trim() || null : null,
-        direccion_barrio: mapping.direccion_barrio >= 0 ? r[headers[mapping.direccion_barrio]]?.trim() || null : null,
-        localidad_provincia: mapping.localidad_provincia >= 0 ? r[headers[mapping.localidad_provincia]]?.trim() || null : null,
-        transporte: mapping.transporte >= 0 ? r[headers[mapping.transporte]]?.trim() || null : null,
-        direccion_entrega: mapping.direccion_entrega >= 0 ? r[headers[mapping.direccion_entrega]]?.trim() || null : null,
-        valor_declarado: mapping.valor_declarado >= 0 ? r[headers[mapping.valor_declarado]]?.trim() || null : null,
-        cuenta: mapping.cuenta >= 0 ? r[headers[mapping.cuenta]]?.trim() || 'Corriente' : 'Corriente',
-        sucursal: mapping.sucursal >= 0 ? r[headers[mapping.sucursal]]?.trim() || null : null,
-        obs_membretes: mapping.obs_membretes >= 0 ? r[headers[mapping.obs_membretes]]?.trim() || null : null,
-        obs_facturacion: mapping.obs_facturacion >= 0 ? r[headers[mapping.obs_facturacion]]?.trim() || null : null,
+        n_cliente: mapping.n_cliente >= 0 ? parseInt(cleanVal(r[headers[mapping.n_cliente]]) || '', 10) || base + i + j : base + i + j,
+        razon_social: cleanVal(r[headers[mapping.razon_social]]) || '',
+        telefono: mapping.telefono >= 0 ? cleanVal(r[headers[mapping.telefono]]) || null : null,
+        direccion_barrio: mapping.direccion_barrio >= 0 ? cleanVal(r[headers[mapping.direccion_barrio]]) || null : null,
+        localidad_provincia: mapping.localidad_provincia >= 0 ? cleanVal(r[headers[mapping.localidad_provincia]]) || null : null,
+        transporte: mapping.transporte >= 0 ? cleanVal(r[headers[mapping.transporte]]) || null : null,
+        direccion_entrega: mapping.direccion_entrega >= 0 ? cleanVal(r[headers[mapping.direccion_entrega]]) || null : null,
+        valor_declarado: mapping.valor_declarado >= 0 ? normalizeValorDeclarado(cleanVal(r[headers[mapping.valor_declarado]])) || null : null,
+        cuenta: mapping.cuenta >= 0 ? cleanVal(r[headers[mapping.cuenta]]) || 'Corriente' : 'Corriente',
+        sucursal: mapping.sucursal >= 0 ? cleanVal(r[headers[mapping.sucursal]]) || null : null,
+        obs_membretes: mapping.obs_membretes >= 0 ? cleanVal(r[headers[mapping.obs_membretes]]) || null : null,
+        obs_facturacion: mapping.obs_facturacion >= 0 ? cleanVal(r[headers[mapping.obs_facturacion]]) || null : null,
         estado: 'ACTIVO',
       }))
       const { error: err } = await supabase.from('clientes').insert(payload)
