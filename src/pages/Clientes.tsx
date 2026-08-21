@@ -46,6 +46,10 @@ function fmtN(n: number | null): string {
   return String(n)
 }
 
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString('es-AR', { year: 'numeric', month: '2-digit', day: '2-digit' })
+}
+
 function nextNCliente(todos: Cliente[]): number {
   const max = todos.reduce((m, c) => Math.max(m, c.n_cliente ?? 0), 0)
   return max > 0 ? max + 1 : 1001
