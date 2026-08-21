@@ -1,6 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
-  Loader2, Search, SearchX, Plus, Pencil, Trash2, Eye, EyeOff, X, Hash,
+  Loader2, Search, SearchX, Plus, Pencil, Trash2, Eye, EyeOff, X, Hash, Upload,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -61,7 +61,7 @@ export default function Clientes() {
   const [error, setError] = useState<string | null>(null)
   const [q, setQ] = useState('')
   const [filtro, setFiltro] = useState<'todos' | 'ACTIVO' | 'INACTIVO'>('todos')
-  const [modal, setModal] = useState<'new' | 'edit' | null>(null)
+  const [modal, setModal] = useState<'new' | 'edit' | 'importar' | null>(null)
   const [sel, setSel] = useState<Cliente | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -147,9 +147,14 @@ export default function Clientes() {
         </select>
         <span className="text-[11px] text-sub/70">{totalActivos} act / {totalInactivos} inact / {todos.length} total</span>
         {puedeCrear && (
-          <button onClick={() => setModal('new')} className="btn-press inline-flex items-center gap-1 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-700">
-            <Plus size={13} aria-hidden /> Nuevo Cliente
-          </button>
+          <>
+            <button onClick={() => setModal('importar')} className="btn-press inline-flex items-center gap-1 rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line">
+              <Upload size={13} aria-hidden /> Importar
+            </button>
+            <button onClick={() => setModal('new')} className="btn-press inline-flex items-center gap-1 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-700">
+              <Plus size={13} aria-hidden /> Nuevo Cliente
+            </button>
+          </>
         )}
       </div>
 
@@ -212,7 +217,10 @@ export default function Clientes() {
         </div>
       )}
 
-      {modal && (
+      {modal === 'importar' && (
+        <ImportarClientes todos={todos} onClose={() => setModal(null)} onSaved={async () => { setModal(null); await cargar(); mostrarToast('Clientes importados') }} />
+      )}
+      {modal && modal !== 'importar' && (
         <ClienteModal cliente={modal === 'edit' ? sel : null} nCliente={modal === 'new' ? nextNCliente(todos) : sel?.n_cliente ?? null} onClose={() => { setModal(null); setSel(null) }} onSaved={async () => { setModal(null); setSel(null); await cargar(); mostrarToast(modal === 'edit' ? 'Cliente actualizado' : 'Cliente creado') }} />
       )}
     </Layout>
@@ -362,3 +370,243 @@ function ClienteModal({ cliente, nCliente, onClose, onSaved }: { cliente: Client
     </div>
   )
 }
+
+type FileRow = Record<string, string>
+
+interface Mapping {
+  razon_social: number
+  telefono: number
+  direccion_barrio: number
+  localidad_provincia: number
+  transporte: number
+  direccion_entrega: number
+  valor_declarado: number
+  cuenta: number
+  sucursal: number
+  obs_membretes: number
+  obs_facturacion: number
+}
+
+const FIELD_LABELS: Record<keyof Mapping, string> = {
+  razon_social: 'Razon Social',
+  telefono: 'Telefono',
+  direccion_barrio: 'Direccion - Barrio',
+  localidad_provincia: 'Localidad - Provincia',
+  transporte: 'Transporte',
+  direccion_entrega: 'Direccion de Entrega',
+  valor_declarado: 'Valor Declarado',
+  cuenta: 'Cuenta',
+  sucursal: 'Sucursal',
+  obs_membretes: 'Obs Membretes',
+  obs_facturacion: 'Obs Facturacion',
+}
+
+const AUTO_MAP: Record<keyof Mapping, string[]> = {
+  razon_social: ['razon', 'social', 'nombre', 'cliente'],
+  telefono: ['telefono', 'tel', 'phone'],
+  direccion_barrio: ['direccion', 'barrio', 'dir'],
+  localidad_provincia: ['localidad', 'provincia', 'ciudad'],
+  transporte: ['transporte', 'transport'],
+  direccion_entrega: ['entrega', 'dir entrega'],
+  valor_declarado: ['valor', 'declarado'],
+  cuenta: ['cuenta'],
+  sucursal: ['sucursal', 'branch'],
+  obs_membretes: ['membrete', 'obs membrete'],
+  obs_facturacion: ['facturacion', 'obs facturacion'],
+}
+
+function autoMap(headers: string[]): Mapping {
+  const lower = headers.map((h) => h.toLowerCase().trim())
+  const result: Mapping = {
+    razon_social: -1, telefono: -1, direccion_barrio: -1, localidad_provincia: -1,
+    transporte: -1, direccion_entrega: -1, valor_declarado: -1, cuenta: -1,
+    sucursal: -1, obs_membretes: -1, obs_facturacion: -1,
+  }
+  for (const [field, keywords] of Object.entries(AUTO_MAP) as [keyof Mapping, string[]][]) {
+    for (let i = 0; i < lower.length; i++) {
+      if (keywords.some((kw) => lower[i].includes(kw))) {
+        if (result[field] === -1) result[field] = i
+        break
+      }
+    }
+  }
+  return result
+}
+
+function ImportarClientes({ todos, onClose, onSaved }: { todos: Cliente[]; onClose: () => void; onSaved: () => void }) {
+  const [file, setFile] = useState<File | null>(null)
+  const [headers, setHeaders] = useState<string[]>([])
+  const [rows, setRows] = useState<FileRow[]>([])
+  const [mapping, setMapping] = useState<Mapping | null>(null)
+  const [paso, setPaso] = useState<'file' | 'map'>('file')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [progreso, setProgreso] = useState({ total: 0, listo: 0 })
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  function onSelectFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0] ?? null
+    if (!f) return
+    setFile(f)
+  }
+
+  async function parseFile() {
+    if (!file) return
+    setBusy(true)
+    setError(null)
+    try {
+      const XLSX = await import('xlsx')
+      const data = await file.arrayBuffer()
+      const wb = XLSX.read(data, { type: 'array' })
+      const wsName = wb.SheetNames[0]
+      if (!wsName) { setError('El archivo no tiene hojas.'); setBusy(false); return }
+      const jsonRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[wsName], { defval: '' })
+      if (jsonRows.length === 0) { setError('El archivo esta vacio.'); setBusy(false); return }
+      const hdrs = Object.keys(jsonRows[0])
+      const parsed: FileRow[] = jsonRows.map((r) => {
+        const obj: FileRow = {}
+        for (const h of hdrs) obj[h] = String(r[h] ?? '')
+        return obj
+      })
+      setHeaders(hdrs)
+      setRows(parsed)
+      setMapping(autoMap(hdrs))
+      setPaso('map')
+    } catch (err) {
+      setError('Error al leer: ' + (err instanceof Error ? err.message : String(err)))
+    }
+    setBusy(false)
+  }
+
+  async function importar() {
+    if (!supabase || !mapping) return
+    if (mapping.razon_social === -1) { setError('Debe mapear el campo Razon Social.'); return }
+    const sinRazon = rows.filter((r) => !r[headers[mapping.razon_social]]?.trim())
+    if (sinRazon.length > 0) { setError(sinRazon.length + ' filas sin razon social.'); return }
+    setBusy(true)
+    setError(null)
+    const base = nextNCliente(todos)
+    const payload = rows.map((r, i) => ({
+      n_cliente: base + i,
+      razon_social: r[headers[mapping.razon_social]]?.trim() || '',
+      telefono: mapping.telefono >= 0 ? r[headers[mapping.telefono]]?.trim() || null : null,
+      direccion_barrio: mapping.direccion_barrio >= 0 ? r[headers[mapping.direccion_barrio]]?.trim() || null : null,
+      localidad_provincia: mapping.localidad_provincia >= 0 ? r[headers[mapping.localidad_provincia]]?.trim() || null : null,
+      transporte: mapping.transporte >= 0 ? r[headers[mapping.transporte]]?.trim() || null : null,
+      direccion_entrega: mapping.direccion_entrega >= 0 ? r[headers[mapping.direccion_entrega]]?.trim() || null : null,
+      valor_declarado: mapping.valor_declarado >= 0 ? r[headers[mapping.valor_declarado]]?.trim() || null : null,
+      cuenta: mapping.cuenta >= 0 ? r[headers[mapping.cuenta]]?.trim() || 'Corriente' : 'Corriente',
+      sucursal: mapping.sucursal >= 0 ? r[headers[mapping.sucursal]]?.trim() || null : null,
+      obs_membretes: mapping.obs_membretes >= 0 ? r[headers[mapping.obs_membretes]]?.trim() || null : null,
+      obs_facturacion: mapping.obs_facturacion >= 0 ? r[headers[mapping.obs_facturacion]]?.trim() || null : null,
+      estado: 'ACTIVO',
+    }))
+    setProgreso({ total: payload.length, listo: 0 })
+    const CHUNK = 50
+    let ok = 0
+    for (let i = 0; i < payload.length; i += CHUNK) {
+      const chunk = payload.slice(i, i + CHUNK)
+      const { error: err } = await supabase.from('clientes').insert(chunk)
+      if (err) { setError('Error lote ' + (Math.floor(i / CHUNK) + 1) + ': ' + err.message); setBusy(false); return }
+      ok += chunk.length
+      setProgreso({ total: payload.length, listo: ok })
+    }
+    setBusy(false)
+    onSaved()
+  }
+
+  function setField(field: keyof Mapping, val: string) {
+    setMapping((m) => m ? { ...m, [field]: parseInt(val, 10) } : m)
+  }
+
+  const previewRows = rows.slice(0, 5)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 sm:p-4" onClick={() => !busy && onClose()}>
+      <div className="flex h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-soft-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-line px-5 py-3">
+          <h2 className="flex items-center gap-2 font-display font-semibold text-ink"><Upload size={16} aria-hidden /> Importar Clientes</h2>
+          <button onClick={onClose} aria-label="Cerrar" className="rounded-lg p-1.5 text-sub hover:bg-line hover:text-ink"><X size={18} aria-hidden /></button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          {paso === 'file' && (
+            <div className="flex flex-col items-center justify-center gap-4 py-10">
+              <p className="text-sm text-sub">Seleccione un archivo Excel (.xlsx, .xls) o CSV.</p>
+              <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={onSelectFile} className="text-sm text-sub file:mr-3 file:rounded-lg file:border-0 file:bg-brand-600 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white file:hover:bg-brand-700" />
+              {file && <p className="text-xs text-sub">Archivo: <span className="font-medium text-ink">{file.name}</span> ({rows.length > 0 ? rows.length + ' filas detectadas' : 'listo para parsear'})</p>}
+            </div>
+          )}
+
+          {paso === 'map' && mapping && (
+            <div>
+              <div className="mb-4 flex items-center justify-between">
+                <p className="text-sm text-sub">{rows.length} filas detectadas. Mapee las columnas del archivo a los campos del cliente:</p>
+                <span className="text-[11px] text-sub/60">Columnas sin mapear quedan en blanco</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {(Object.keys(FIELD_LABELS) as (keyof Mapping)[]).map((field) => (
+                  <label key={field} className="flex flex-col gap-0.5">
+                    <span className="text-[11px] font-medium text-sub">{FIELD_LABELS[field]}{field === 'razon_social' ? ' *' : ''}</span>
+                    <select value={mapping[field]} onChange={(e) => setField(field, e.target.value)} className={inputCls + ' text-[12px]'}>
+                      <option value="-1">-- No importar --</option>
+                      {headers.map((h, i) => <option key={i} value={i}>{h}</option>)}
+                    </select>
+                  </label>
+                ))}
+              </div>
+
+              {previewRows.length > 0 && (
+                <div className="mt-5">
+                  <p className="mb-2 text-xs font-semibold text-sub">Vista previa (primeras 5 filas):</p>
+                  <div className="overflow-x-auto rounded-xl border border-line">
+                    <table className="w-full text-[11px]">
+                      <thead>
+                        <tr className="bg-zinc-800 text-left text-[9px] uppercase tracking-wider text-zinc-300">
+                          {(Object.keys(FIELD_LABELS) as (keyof Mapping)[]).map((field) => (
+                            <th key={field} className="px-2 py-1.5 whitespace-nowrap">{FIELD_LABELS[field]}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-line/50 bg-surface">
+                        {previewRows.map((r, ri) => (
+                          <tr key={ri} className="hover:bg-line/20">
+                            {(Object.keys(FIELD_LABELS) as (keyof Mapping)[]).map((field) => (
+                              <td key={field} className="px-2 py-1 text-sub" title={mapping[field] >= 0 ? r[headers[mapping[field]]] : ''}>
+                                {mapping[field] >= 0 ? (r[headers[mapping[field]]] || '-') : '-'}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {error && <p className="px-5 pb-2 text-sm text-brand-400">{error}</p>}
+        {busy && progreso.total > 0 && (
+          <div className="px-5 pb-2">
+            <div className="h-1.5 overflow-hidden rounded-full bg-line">
+              <div className="h-full rounded-full bg-brand-600 transition-all" style={{ width: (progreso.listo / progreso.total * 100) + '%' }} />
+            </div>
+            <p className="mt-1 text-[11px] text-sub">{progreso.listo} / {progreso.total} clientes importados</p>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between border-t border-line px-5 py-3">
+          {paso === 'map' && <button onClick={() => setPaso('file')} disabled={busy} className="btn-press text-xs text-sub hover:text-ink">Volver</button>}
+          <div className="flex gap-2 ml-auto">
+            <button onClick={onClose} disabled={busy} className="btn-press rounded-xl border border-line bg-surface2 px-4 py-2 text-sm font-medium text-ink hover:bg-line">Cancelar</button>
+            {paso === 'file' && <button onClick={() => void parseFile()} disabled={!file || busy} className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">{busy ? <Loader2 size={15} className="animate-spin" aria-hidden /> : null} Siguiente</button>}
+            {paso === 'map' && <button onClick={() => void importar()} disabled={busy || mapping?.razon_social === -1} className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">{busy ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Upload size={15} aria-hidden />} Importar {rows.length} clientes</button>}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
