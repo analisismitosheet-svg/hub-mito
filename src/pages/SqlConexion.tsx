@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
-import { CheckCircle2, Database, Loader2, Plus, Trash2, XCircle } from 'lucide-react'
+import { CheckCircle2, Database, Eye, EyeOff, Loader2, Plus, Trash2, XCircle } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import {
+  cargarConexion,
   cargarVistas,
   estadoConexion,
+  guardarConexion,
   guardarVistas,
   leerVista,
   type EstadoSql,
@@ -15,9 +17,19 @@ const CYAN = '#0891b2'
 
 export default function SqlConexion() {
   const [estado, setEstado] = useState<EstadoSql | null>(null)
+
+  // Configuración de conexión
+  const [url, setUrl] = useState('')
+  const [maxRowsInput, setMaxRowsInput] = useState('')
+  const [verUrl, setVerUrl] = useState(false)
+  const [guardandoConn, setGuardandoConn] = useState(false)
+
+  // Vistas
   const [vistas, setVistas] = useState<VistaDef[]>([])
   const [nuevaVista, setNuevaVista] = useState('')
   const [nuevaLabel, setNuevaLabel] = useState('')
+
+  // General
   const [probando, setProbando] = useState(false)
   const [prueba, setPrueba] = useState<{ ok: boolean; msg: string } | null>(null)
   const [guardando, setGuardando] = useState(false)
@@ -29,7 +41,6 @@ export default function SqlConexion() {
     try {
       const [est, vs] = await Promise.all([estadoConexion(), cargarVistas()])
       setEstado(est)
-      // Si no hay nada en config_app pero sí env, precargar la lista editable con el env
       setVistas((prev) => (prev.length > 0 ? prev : vs))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error desconocido.')
@@ -38,7 +49,35 @@ export default function SqlConexion() {
 
   useEffect(() => {
     void cargar()
+    void cargarConexion().then((c) => {
+      setUrl(c?.logicapp_url ?? '')
+      setMaxRowsInput(c?.max_rows != null ? String(c.max_rows) : '')
+    })
   }, [cargar])
+
+  async function refrescarEstado() {
+    try {
+      setEstado(await estadoConexion())
+    } catch {
+      /* el estado se refresca al recargar */
+    }
+  }
+
+  async function guardarConfig(e: FormEvent) {
+    e.preventDefault()
+    setGuardandoConn(true)
+    setError(null)
+    setOkMsg(null)
+    const n = parseInt(maxRowsInput, 10)
+    const { error: err } = await guardarConexion(url, Number.isFinite(n) && n > 0 ? n : null)
+    setGuardandoConn(false)
+    if (err) {
+      setError(err)
+      return
+    }
+    setOkMsg('Conexión guardada.')
+    await refrescarEstado()
+  }
 
   function agregar(e: FormEvent) {
     e.preventDefault()
@@ -63,7 +102,7 @@ export default function SqlConexion() {
     setOkMsg(null)
   }
 
-  async function guardar() {
+  async function guardarLista() {
     setGuardando(true)
     setError(null)
     setOkMsg(null)
@@ -74,15 +113,7 @@ export default function SqlConexion() {
       return
     }
     setOkMsg('Cambios guardados. Ya están activos para todos los usuarios.')
-    await cargarEstadoSilencioso()
-  }
-
-  async function cargarEstadoSilencioso() {
-    try {
-      setEstado(await estadoConexion())
-    } catch {
-      /* el estado se refresca al recargar */
-    }
+    await refrescarEstado()
   }
 
   async function probar() {
@@ -130,6 +161,67 @@ export default function SqlConexion() {
         </p>
       )}
 
+      {/* Configuración de la conexión */}
+      <section className="mb-4 rounded-2xl border border-line bg-surface p-4 shadow-soft">
+        <h2 className="font-display mb-1 font-semibold text-ink">Conexión</h2>
+        <p className="mb-3 text-sm text-sub">
+          Pegá la URL completa del trigger HTTP del Logic App (incluye{' '}
+          <code className="rounded bg-surface2 px-1 py-0.5 text-xs">sp=/run&amp;sv=…&amp;sig=…</code>). Se guarda acá y solo
+          la ven los administradores; el resto consulta sin ver el secreto.
+        </p>
+        <form onSubmit={guardarConfig} className="flex flex-wrap items-end gap-2">
+          <label className="block min-w-[260px] flex-1">
+            <span className="mb-1 block text-xs font-medium text-sub">URL del Logic App</span>
+            <div className="relative">
+              <input
+                type={verUrl ? 'text' : 'password'}
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                autoComplete="off"
+                placeholder={
+                  estado?.origen === 'env'
+                    ? '(usando variable de entorno SQL_LOGICAPP_URL)'
+                    : 'https://prod-XX.logicazure.com:443/workflows/…/triggers/manual/paths/invoke?sp=…&sig=…'
+                }
+                className="w-full rounded-lg border border-line bg-surface2 px-2 py-1.5 pr-9 font-mono text-xs text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
+              />
+              <button
+                type="button"
+                onClick={() => setVerUrl((v) => !v)}
+                aria-label={verUrl ? 'Ocultar URL' : 'Mostrar URL'}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md p-1 text-sub hover:bg-brand-600/20 hover:text-brand-400"
+              >
+                {verUrl ? <EyeOff size={14} aria-hidden /> : <Eye size={14} aria-hidden />}
+              </button>
+            </div>
+          </label>
+          <label className="block w-28">
+            <span className="mb-1 block text-xs font-medium text-sub">Filas máx.</span>
+            <input
+              type="number"
+              min={1}
+              value={maxRowsInput}
+              onChange={(e) => setMaxRowsInput(e.target.value)}
+              placeholder="1000"
+              className="w-full rounded-lg border border-line bg-surface2 px-2 py-1.5 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={guardandoConn}
+            className="btn-press inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+          >
+            {guardandoConn && <Loader2 size={14} className="animate-spin" aria-hidden />} Guardar conexión
+          </button>
+        </form>
+        {estado?.origen === 'env' && !url && (
+          <p className="mt-2 text-xs text-sub/70">
+            Hoy se está usando la variable de entorno <code className="rounded bg-surface2 px-1">SQL_LOGICAPP_URL</code>.
+            Si guardás una URL acá, tiene prioridad.
+          </p>
+        )}
+      </section>
+
       {/* Estado */}
       <section className="mb-4 rounded-2xl border border-line bg-surface p-4 shadow-soft">
         <h2 className="font-display mb-3 font-semibold text-ink">Estado</h2>
@@ -148,10 +240,18 @@ export default function SqlConexion() {
                 ) : (
                   <XCircle size={15} className="shrink-0 text-brand-500" aria-hidden />
                 )}
-                <span className="text-ink">Logic App (SQL_LOGICAPP_URL):</span>
+                <span className="text-ink">Logic App:</span>
                 <span className={estado.logicApp ? 'text-emerald-500' : 'text-brand-400'}>
-                  {estado.logicApp ? 'configurada' : 'falta configurarla en Vercel'}
+                  {!estado.logicApp
+                    ? 'sin configurar'
+                    : estado.origen === 'db'
+                      ? 'configurada (base de datos)'
+                      : 'configurada (variable de entorno)'}
                 </span>
+              </li>
+              <li className="flex items-center gap-2 text-sub">
+                <Database size={15} aria-hidden className="shrink-0" />
+                Filas máximas por consulta: <strong className="text-ink">{estado.maxRows ?? 1000}</strong>
               </li>
               <li className="flex items-center gap-2 text-sub">
                 <Database size={15} aria-hidden className="shrink-0" />
@@ -230,7 +330,7 @@ export default function SqlConexion() {
           </button>
           <button
             type="button"
-            onClick={() => void guardar()}
+            onClick={() => void guardarLista()}
             disabled={guardando}
             className="btn-press inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
           >

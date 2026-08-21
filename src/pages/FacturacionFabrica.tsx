@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
-  Loader2, Search, SearchX, Plus, Pencil, Trash2, Eye, EyeOff, X, Upload, Check, FileText, Lock,
+  Loader2, Search, SearchX, Plus, Pencil, Trash2, X, Upload, FileText, Lock,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -55,7 +55,6 @@ const selectCls = inputCls + ' appearance-none'
 type SortKey = keyof FactRegistro
 
 function fmtN(n: number | null): string { return n == null ? '-' : String(n) }
-function fmtDate(iso: string) { return new Date(iso).toLocaleDateString('es-AR', { year: 'numeric', month: '2-digit', day: '2-digit' }) }
 
 function guiaStyle(v: string | null): string {
   const g = (v || '').toUpperCase()
@@ -323,11 +322,11 @@ export default function FacturacionFabrica() {
       )}
 
       {/* Detail card */}
-      {card && <FactCard registro={card} onClose={() => setCard(null)} onEdit={() => { setSel(card); setModal('edit'); setCard(null) }} puedeEditar={puedeEditar} clientes={clientes} empleados={empleados} />}
+      {card && <FactCard registro={card} onClose={() => setCard(null)} onEdit={() => { setSel(card); setModal('edit'); setCard(null) }} puedeEditar={puedeEditar} empleados={empleados} />}
 
       {/* Modals */}
       {modal === 'importar' && (
-        <ImportFacturacion registroActuales={todos} clientes={clientes} empleados={empleados} onClose={() => setModal(null)} onSaved={async () => { setModal(null); await cargar(); mostrarToast('Registros importados') }} />
+        <ImportFacturacion clientes={clientes} empleados={empleados} onClose={() => setModal(null)} onSaved={async () => { setModal(null); await cargar(); mostrarToast('Registros importados') }} />
       )}
       {modal && modal !== 'importar' && (
         <FactModal registro={modal === 'edit' ? sel : null} clientes={clientes} empleados={empleados} onClose={() => { setModal(null); setSel(null) }} onSaved={async () => { setModal(null); setSel(null); await cargar(); mostrarToast(modal === 'edit' ? 'Registro actualizado' : 'Registro creado') }} />
@@ -340,11 +339,10 @@ export default function FacturacionFabrica() {
 /*  Detail Card                                                        */
 /* ------------------------------------------------------------------ */
 
-function FactCard({ registro: r, onClose, onEdit, puedeEditar, clientes, empleados }: {
+function FactCard({ registro: r, onClose, onEdit, puedeEditar, empleados }: {
   registro: FactRegistro; onClose: () => void; onEdit: () => void; puedeEditar: boolean
-  clientes: ClienteMini[]; empleados: EmpleadoMini[]
+  empleados: EmpleadoMini[]
 }) {
-  const clienteLabel = clientes.find((c) => c.id === r.cliente_id)
   const empLabel = empleados.find((e) => e.id === r.empleado_id)
 
   return (
@@ -609,8 +607,8 @@ function FactModal({ registro, clientes, empleados, onClose, onSaved }: {
 
 type FileRow = Record<string, any>
 
-function ImportFacturacion({ registroActuales, clientes, empleados, onClose, onSaved }: {
-  registroActuales: FactRegistro[]; clientes: ClienteMini[]; empleados: EmpleadoMini[]; onClose: () => void; onSaved: () => void
+function ImportFacturacion({ clientes, empleados, onClose, onSaved }: {
+  clientes: ClienteMini[]; empleados: EmpleadoMini[]; onClose: () => void; onSaved: () => void
 }) {
   const [paso, setPaso] = useState<'file' | 'map' | 'validate' | 'done'>('file')
   const [file, setFile] = useState<File | null>(null)
