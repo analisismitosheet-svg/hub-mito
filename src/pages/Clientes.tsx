@@ -510,10 +510,11 @@ function ImportarClientes({ todos, onClose, onSaved }: { todos: Cliente[]; onClo
     const validated = rows.map((r, i) => {
       const errs: string[] = []
       const rs = razonIdx >= 0 ? r[headers[razonIdx]]?.trim() : ''
-      if (!rs) errs.push('Razon Social vacia')
-      else if (existeNames.has(rs.toUpperCase())) errs.push('Ya existe en BD')
-      else if (seen.has(rs.toUpperCase())) errs.push('Duplicada en archivo')
-      else seen.add(rs.toUpperCase())
+      if (rs) {
+        if (existeNames.has(rs.toUpperCase())) errs.push('Ya existe en BD')
+        else if (seen.has(rs.toUpperCase())) errs.push('Duplicada en archivo')
+        else seen.add(rs.toUpperCase())
+      }
       if (mapping.cuenta >= 0) {
         const cv = r[headers[mapping.cuenta]]?.trim()
         if (cv && !CUENTA_OPCIONES.includes(cv)) errs.push('Cuenta invalida: ' + cv)
@@ -653,12 +654,11 @@ function ImportarClientes({ todos, onClose, onSaved }: { todos: Cliente[]; onClo
             <div>
               <div className="mb-4 flex items-center justify-between">
                 <p className="text-sm text-sub">{rows.length} filas detectadas. Mapee las columnas:</p>
-                {!hasRazon && <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-400">Razon Social sin mapear</span>}
               </div>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
                 {(Object.keys(FIELD_LABELS) as (keyof Mapping)[]).map((field) => (
                   <label key={field} className="flex flex-col gap-0.5">
-                    <span className="text-[11px] font-medium text-sub">{FIELD_LABELS[field]}{field === 'razon_social' ? ' *' : ''}</span>
+                    <span className="text-[11px] font-medium text-sub">{FIELD_LABELS[field]}</span>
                     <select value={mapping[field]} onChange={(e) => setField(field, e.target.value)} className={inputCls + ' text-[12px]'}>
                       <option value="-1">-- Ignorar --</option>
                       {headers.map((h, i) => <option key={i} value={i}>{h}</option>)}
@@ -775,7 +775,7 @@ function ImportarClientes({ todos, onClose, onSaved }: { todos: Cliente[]; onClo
             <div className="flex gap-2">
               <button onClick={onClose} disabled={busy} className="btn-press rounded-xl border border-line bg-surface2 px-4 py-2 text-sm font-medium text-ink hover:bg-line">Cancelar</button>
               {paso === 'file' && <button onClick={() => void parseFile()} disabled={!file || busy} className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">{busy ? <Loader2 size={15} className="animate-spin" /> : null} Siguiente</button>}
-              {paso === 'map' && <button onClick={() => { validate() }} disabled={!hasRazon || busy} className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">Validar datos</button>}
+              {paso === 'map' && <button onClick={() => { validate() }} disabled={busy} className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">Validar datos</button>}
               {paso === 'validate' && <button onClick={() => void importar()} disabled={busy || validCount === 0} className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"><Upload size={15} /> Importar {validCount} clientes</button>}
             </div>
           </div>
