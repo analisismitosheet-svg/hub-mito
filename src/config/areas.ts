@@ -23,6 +23,7 @@ import {
   ArrowRightLeft,
   Star,
   Database,
+  FileText,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -205,6 +206,17 @@ export const APPS: AppDef[] = [
     target: '/mayorista/clientes',
     color: '#d97706',
     permiso: 'mayorista.clientes.view',
+  },
+  {
+    id: 'mayorista-facturacion',
+    areaId: 'mayorista',
+    title: 'Facturacion Fabrica',
+    description: 'Gestion de facturacion, remitos y despachos desde fabrica.',
+    icon: FileText,
+    kind: 'internal',
+    target: '/mayorista/facturacion-fabrica',
+    color: '#d97706',
+    permiso: 'mayorista.facturacion.view',
   },
   {
     id: 'deposito-repo',

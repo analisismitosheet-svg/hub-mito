@@ -28,6 +28,7 @@ import LocalesPage from '@/pages/Locales'
 import EmpleadosPage from '@/pages/Empleados'
 import Transportes from '@/pages/Transportes'
 import Clientes from '@/pages/Clientes'
+import FacturacionFabrica from '@/pages/FacturacionFabrica'
 import DatosSql from '@/pages/DatosSql'
 import SqlConexion from '@/pages/SqlConexion'
 import ComingSoon from '@/pages/ComingSoon'
@@ -115,6 +116,14 @@ export default function App() {
             element={
               <PermissionRoute permiso="mayorista.clientes.view">
                 <Clientes />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/mayorista/facturacion-fabrica"
+            element={
+              <PermissionRoute permiso="mayorista.facturacion.view">
+                <FacturacionFabrica />
               </PermissionRoute>
             }
           />
