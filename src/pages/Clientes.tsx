@@ -1,6 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
-  Loader2, Search, SearchX, Plus, Pencil, Trash2, Eye, EyeOff, X, Hash, Upload,
+  Loader2, Search, SearchX, Plus, Pencil, Trash2, Eye, EyeOff, X, Hash, Upload, Check,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -438,29 +438,57 @@ function ImportarClientes({ todos, onClose, onSaved }: { todos: Cliente[]; onClo
   const [headers, setHeaders] = useState<string[]>([])
   const [rows, setRows] = useState<FileRow[]>([])
   const [mapping, setMapping] = useState<Mapping | null>(null)
-  const [paso, setPaso] = useState<'file' | 'map'>('file')
+  const [validRows, setValidRows] = useState<(FileRow & { _errors: string[] })[]>([])
+  const [paso, setPaso] = useState<'file' | 'map' | 'validate' | 'done'>('file')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [progreso, setProgreso] = useState({ total: 0, listo: 0 })
+  const [progreso, setProgreso] = useState<{ total: number; listo: number; fallos: number; detalles: string[] }>({ total: 0, listo: 0, fallos: 0, detalles: [] })
+  const [csvSep, setCsvSep] = useState(',')
+  const [csvEnc, setCsvEnc] = useState('UTF-8')
+  const [dragOver, setDragOver] = useState(false)
+  const [validOnly, setValidOnly] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  function onSelectFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0] ?? null
+  function handleFile(f: File | null) {
     if (!f) return
+    const ext = f.name.split('.').pop()?.toLowerCase()
+    if (!['xlsx', 'xls', 'csv'].includes(ext || '')) { setError('Formato no soportado. Use .xlsx, .xls o .csv'); return }
+    if (f.size > 5 * 1024 * 1024) { setError('El archivo supera 5 MB.'); return }
     setFile(f)
+    setError(null)
+  }
+
+  function onSelectFile(e: React.ChangeEvent<HTMLInputElement>) { handleFile(e.target.files?.[0] ?? null) }
+
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault(); setDragOver(false)
+    handleFile(e.dataTransfer.files?.[0] ?? null)
   }
 
   async function parseFile() {
     if (!file) return
-    setBusy(true)
-    setError(null)
+    setBusy(true); setError(null)
     try {
       const XLSX = await import('xlsx')
-      const data = await file.arrayBuffer()
-      const wb = XLSX.read(data, { type: 'array' })
-      const wsName = wb.SheetNames[0]
-      if (!wsName) { setError('El archivo no tiene hojas.'); setBusy(false); return }
-      const jsonRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[wsName], { defval: '' })
+      let jsonRows: Record<string, unknown>[]
+      if (file.name.toLowerCase().endsWith('.csv')) {
+        const text = await file.text()
+        const lines = text.split(/\r?\n/).filter((l) => l.trim())
+        if (lines.length === 0) { setError('CSV vacio.'); setBusy(false); return }
+        const hdrs = lines[0].split(csvSep).map((h) => h.trim().replace(/^"|"$/g, ''))
+        jsonRows = lines.slice(1).map((line) => {
+          const vals = line.split(csvSep).map((v) => v.trim().replace(/^"|"$/g, ''))
+          const obj: Record<string, unknown> = {}
+          hdrs.forEach((h, i) => obj[h] = vals[i] ?? '')
+          return obj
+        })
+      } else {
+        const data = await file.arrayBuffer()
+        const wb = XLSX.read(data, { type: 'array' })
+        const wsName = wb.SheetNames[0]
+        if (!wsName) { setError('El archivo no tiene hojas.'); setBusy(false); return }
+        jsonRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[wsName], { defval: '' })
+      }
       if (jsonRows.length === 0) { setError('El archivo esta vacio.'); setBusy(false); return }
       const hdrs = Object.keys(jsonRows[0])
       const parsed: FileRow[] = jsonRows.map((r) => {
@@ -468,113 +496,189 @@ function ImportarClientes({ todos, onClose, onSaved }: { todos: Cliente[]; onClo
         for (const h of hdrs) obj[h] = String(r[h] ?? '')
         return obj
       })
-      setHeaders(hdrs)
-      setRows(parsed)
-      setMapping(autoMap(hdrs))
-      setPaso('map')
+      setHeaders(hdrs); setRows(parsed); setMapping(autoMap(hdrs)); setPaso('map')
     } catch (err) {
       setError('Error al leer: ' + (err instanceof Error ? err.message : String(err)))
     }
     setBusy(false)
   }
 
+  function validate() {
+    if (!mapping) return
+    const razonIdx = mapping.razon_social
+    const existeNames = new Set(todos.map((t) => t.razon_social.toUpperCase().trim()))
+    const seen = new Set<string>()
+    const validated = rows.map((r, i) => {
+      const errs: string[] = []
+      const rs = razonIdx >= 0 ? r[headers[razonIdx]]?.trim() : ''
+      if (!rs) errs.push('Razon Social vacia')
+      else if (existeNames.has(rs.toUpperCase())) errs.push('Ya existe en BD')
+      else if (seen.has(rs.toUpperCase())) errs.push('Duplicada en archivo')
+      else seen.add(rs.toUpperCase())
+      if (mapping.cuenta >= 0) {
+        const cv = r[headers[mapping.cuenta]]?.trim()
+        if (cv && !CUENTA_OPCIONES.includes(cv)) errs.push('Cuenta invalida: ' + cv)
+      }
+      if (mapping.valor_declarado >= 0) {
+        const vd = r[headers[mapping.valor_declarado]]?.trim()
+        if (vd && !VALOR_DEC_OPCIONES.includes(vd) && vd !== 'Al neto') errs.push('Valor declarado invalido: ' + vd)
+      }
+      return { ...r, _errors: errs, _row: i + 1 }
+    })
+    setValidRows(validated); setPaso('validate')
+  }
+
+  function editRow(rowIdx: number, colHeader: string, val: string) {
+    setValidRows((prev) => prev.map((r, i) => i === rowIdx ? { ...r, [colHeader]: val } : r))
+  }
+
   async function importar() {
     if (!supabase || !mapping) return
-    if (mapping.razon_social === -1) { setError('Debe mapear el campo Razon Social.'); return }
-    const sinRazon = rows.filter((r) => !r[headers[mapping.razon_social]]?.trim())
-    if (sinRazon.length > 0) { setError(sinRazon.length + ' filas sin razon social.'); return }
-    setBusy(true)
-    setError(null)
+    const toImport = validOnly ? validRows.filter((r) => r._errors.length === 0) : validRows.filter((r) => r._errors.length === 0)
+    if (toImport.length === 0) { setError('No hay filas validas para importar.'); return }
+    setBusy(true); setError(null); setPaso('done')
     const base = nextNCliente(todos)
-    const payload = rows.map((r, i) => ({
-      n_cliente: base + i,
-      razon_social: r[headers[mapping.razon_social]]?.trim() || '',
-      telefono: mapping.telefono >= 0 ? r[headers[mapping.telefono]]?.trim() || null : null,
-      direccion_barrio: mapping.direccion_barrio >= 0 ? r[headers[mapping.direccion_barrio]]?.trim() || null : null,
-      localidad_provincia: mapping.localidad_provincia >= 0 ? r[headers[mapping.localidad_provincia]]?.trim() || null : null,
-      transporte: mapping.transporte >= 0 ? r[headers[mapping.transporte]]?.trim() || null : null,
-      direccion_entrega: mapping.direccion_entrega >= 0 ? r[headers[mapping.direccion_entrega]]?.trim() || null : null,
-      valor_declarado: mapping.valor_declarado >= 0 ? r[headers[mapping.valor_declarado]]?.trim() || null : null,
-      cuenta: mapping.cuenta >= 0 ? r[headers[mapping.cuenta]]?.trim() || 'Corriente' : 'Corriente',
-      sucursal: mapping.sucursal >= 0 ? r[headers[mapping.sucursal]]?.trim() || null : null,
-      obs_membretes: mapping.obs_membretes >= 0 ? r[headers[mapping.obs_membretes]]?.trim() || null : null,
-      obs_facturacion: mapping.obs_facturacion >= 0 ? r[headers[mapping.obs_facturacion]]?.trim() || null : null,
-      estado: 'ACTIVO',
-    }))
-    setProgreso({ total: payload.length, listo: 0 })
+    const detalles: string[] = []
+    let ok = 0; let fallos = 0
+    setProgreso({ total: toImport.length, listo: 0, fallos: 0, detalles: [] })
     const CHUNK = 50
-    let ok = 0
-    for (let i = 0; i < payload.length; i += CHUNK) {
-      const chunk = payload.slice(i, i + CHUNK)
-      const { error: err } = await supabase.from('clientes').insert(chunk)
-      if (err) { setError('Error lote ' + (Math.floor(i / CHUNK) + 1) + ': ' + err.message); setBusy(false); return }
-      ok += chunk.length
-      setProgreso({ total: payload.length, listo: ok })
+    for (let i = 0; i < toImport.length; i += CHUNK) {
+      const chunk = toImport.slice(i, i + CHUNK)
+      const payload = chunk.map((r, j) => ({
+        n_cliente: base + i + j,
+        razon_social: r[headers[mapping.razon_social]]?.trim() || '',
+        telefono: mapping.telefono >= 0 ? r[headers[mapping.telefono]]?.trim() || null : null,
+        direccion_barrio: mapping.direccion_barrio >= 0 ? r[headers[mapping.direccion_barrio]]?.trim() || null : null,
+        localidad_provincia: mapping.localidad_provincia >= 0 ? r[headers[mapping.localidad_provincia]]?.trim() || null : null,
+        transporte: mapping.transporte >= 0 ? r[headers[mapping.transporte]]?.trim() || null : null,
+        direccion_entrega: mapping.direccion_entrega >= 0 ? r[headers[mapping.direccion_entrega]]?.trim() || null : null,
+        valor_declarado: mapping.valor_declarado >= 0 ? r[headers[mapping.valor_declarado]]?.trim() || null : null,
+        cuenta: mapping.cuenta >= 0 ? r[headers[mapping.cuenta]]?.trim() || 'Corriente' : 'Corriente',
+        sucursal: mapping.sucursal >= 0 ? r[headers[mapping.sucursal]]?.trim() || null : null,
+        obs_membretes: mapping.obs_membretes >= 0 ? r[headers[mapping.obs_membretes]]?.trim() || null : null,
+        obs_facturacion: mapping.obs_facturacion >= 0 ? r[headers[mapping.obs_facturacion]]?.trim() || null : null,
+        estado: 'ACTIVO',
+      }))
+      const { error: err } = await supabase.from('clientes').insert(payload)
+      if (err) { fallos += chunk.length; detalles.push('Lote ' + (Math.floor(i / CHUNK) + 1) + ': ' + err.message) }
+      else ok += chunk.length
+      setProgreso({ total: toImport.length, listo: ok, fallos, detalles })
     }
     setBusy(false)
-    onSaved()
+    if (ok > 0) onSaved()
+  }
+
+  function downloadErrors() {
+    const errs = validRows.filter((r) => r._errors.length > 0)
+    if (errs.length === 0) return
+    const csv = ['Fila,Errores,' + headers.join(',')].concat(
+      errs.map((r) => [r._row, r._errors.join('; '), ...headers.map((h) => '"' + (r[h] || '').replace(/"/g, '""') + '"')].join(','))
+    ).join('\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = 'errores_importacion.csv'; a.click()
+    URL.revokeObjectURL(url)
   }
 
   function setField(field: keyof Mapping, val: string) {
     setMapping((m) => m ? { ...m, [field]: parseInt(val, 10) } : m)
   }
 
+  const hasRazon = mapping && mapping.razon_social >= 0
+  const validCount = validRows.filter((r) => r._errors.length === 0).length
+  const errorCount = validRows.length - validCount
   const previewRows = rows.slice(0, 5)
+
+  const steps = ['Archivo', 'Mapeo', 'Validar', 'Importar']
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 sm:p-4" onClick={() => !busy && onClose()}>
-      <div className="flex h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-soft-lg" onClick={(e) => e.stopPropagation()}>
+      <div className="flex h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-soft-lg" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-line px-5 py-3">
           <h2 className="flex items-center gap-2 font-display font-semibold text-ink"><Upload size={16} aria-hidden /> Importar Clientes</h2>
-          <button onClick={onClose} aria-label="Cerrar" className="rounded-lg p-1.5 text-sub hover:bg-line hover:text-ink"><X size={18} aria-hidden /></button>
+          <div className="flex items-center gap-3">
+            <div className="hidden items-center gap-1 sm:flex">
+              {steps.map((s, i) => (
+                <span key={s} className={'flex items-center gap-1 text-[11px] font-medium ' + (i <= ['file', 'map', 'validate', 'done'].indexOf(paso) ? 'text-brand-400' : 'text-sub/40')}>
+                  <span className={'flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ' + (i <= ['file', 'map', 'validate', 'done'].indexOf(paso) ? 'bg-brand-600 text-white' : 'bg-line text-sub/40')}>{i + 1}</span>
+                  {s}
+                  {i < steps.length - 1 && <span className="mx-1 text-sub/30">-</span>}
+                </span>
+              ))}
+            </div>
+            <button onClick={onClose} aria-label="Cerrar" className="rounded-lg p-1.5 text-sub hover:bg-line hover:text-ink"><X size={18} aria-hidden /></button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {paso === 'file' && (
-            <div className="flex flex-col items-center justify-center gap-4 py-10">
-              <p className="text-sm text-sub">Seleccione un archivo Excel (.xlsx, .xls) o CSV.</p>
-              <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={onSelectFile} className="text-sm text-sub file:mr-3 file:rounded-lg file:border-0 file:bg-brand-600 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white file:hover:bg-brand-700" />
-              {file && <p className="text-xs text-sub">Archivo: <span className="font-medium text-ink">{file.name}</span> ({rows.length > 0 ? rows.length + ' filas detectadas' : 'listo para parsear'})</p>}
+            <div className="flex flex-col items-center gap-5 py-6">
+              <div
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={onDrop}
+                onClick={() => fileRef.current?.click()}
+                className={'flex w-full max-w-lg cursor-pointer flex-col items-center gap-3 rounded-2xl border-2 border-dashed p-8 transition ' + (dragOver ? 'border-brand-500 bg-brand-600/10' : 'border-line hover:border-brand-500/50 hover:bg-line/20')}
+              >
+                <Upload size={32} className={dragOver ? 'text-brand-400' : 'text-sub/40'} />
+                <p className="text-sm text-sub">{file ? 'Archivo seleccionado' : 'Arrastra tu archivo aqui o haz clic para seleccionar'}</p>
+                <p className="text-[11px] text-sub/60">Formatos: .xlsx, .xls, .csv | Maximo 5 MB</p>
+              </div>
+              {file && (
+                <div className="w-full max-w-lg space-y-3">
+                  <p className="text-xs text-sub">Archivo: <span className="font-medium text-ink">{file.name}</span> ({(file.size / 1024).toFixed(0)} KB)</p>
+                  {file.name.toLowerCase().endsWith('.csv') && (
+                    <div className="flex gap-3">
+                      <label className="flex flex-col gap-0.5">
+                        <span className="text-[11px] font-medium text-sub">Delimitador</span>
+                        <select value={csvSep} onChange={(e) => setCsvSep(e.target.value)} className={inputCls + ' w-auto text-[12px]'}>
+                          <option value=",">Coma (,)</option><option value=";">Punto y coma (;)</option><option value="&#9;">Tabulacion</option>
+                        </select>
+                      </label>
+                      <label className="flex flex-col gap-0.5">
+                        <span className="text-[11px] font-medium text-sub">Codificacion</span>
+                        <select value={csvEnc} onChange={(e) => setCsvEnc(e.target.value)} className={inputCls + ' w-auto text-[12px]'}>
+                          <option value="UTF-8">UTF-8</option><option value="ISO-8859-1">ISO-8859-1</option>
+                        </select>
+                      </label>
+                    </div>
+                  )}
+                  <button onClick={() => { setFile(null); setError(null) }} className="text-[11px] text-brand-400 hover:text-brand-300">Cambiar archivo</button>
+                </div>
+              )}
             </div>
           )}
 
           {paso === 'map' && mapping && (
             <div>
               <div className="mb-4 flex items-center justify-between">
-                <p className="text-sm text-sub">{rows.length} filas detectadas. Mapee las columnas del archivo a los campos del cliente:</p>
-                <span className="text-[11px] text-sub/60">Columnas sin mapear quedan en blanco</span>
+                <p className="text-sm text-sub">{rows.length} filas detectadas. Mapee las columnas:</p>
+                {!hasRazon && <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-400">Razon Social sin mapear</span>}
               </div>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
                 {(Object.keys(FIELD_LABELS) as (keyof Mapping)[]).map((field) => (
                   <label key={field} className="flex flex-col gap-0.5">
                     <span className="text-[11px] font-medium text-sub">{FIELD_LABELS[field]}{field === 'razon_social' ? ' *' : ''}</span>
                     <select value={mapping[field]} onChange={(e) => setField(field, e.target.value)} className={inputCls + ' text-[12px]'}>
-                      <option value="-1">-- No importar --</option>
+                      <option value="-1">-- Ignorar --</option>
                       {headers.map((h, i) => <option key={i} value={i}>{h}</option>)}
                     </select>
                   </label>
                 ))}
               </div>
-
               {previewRows.length > 0 && (
                 <div className="mt-5">
                   <p className="mb-2 text-xs font-semibold text-sub">Vista previa (primeras 5 filas):</p>
                   <div className="overflow-x-auto rounded-xl border border-line">
                     <table className="w-full text-[11px]">
-                      <thead>
-                        <tr className="bg-zinc-800 text-left text-[9px] uppercase tracking-wider text-zinc-300">
-                          {(Object.keys(FIELD_LABELS) as (keyof Mapping)[]).map((field) => (
-                            <th key={field} className="px-2 py-1.5 whitespace-nowrap">{FIELD_LABELS[field]}</th>
-                          ))}
-                        </tr>
-                      </thead>
+                      <thead><tr className="bg-zinc-800 text-left text-[9px] uppercase tracking-wider text-zinc-300">
+                        {(Object.keys(FIELD_LABELS) as (keyof Mapping)[]).map((f) => <th key={f} className="px-2 py-1.5 whitespace-nowrap">{FIELD_LABELS[f]}</th>)}
+                      </tr></thead>
                       <tbody className="divide-y divide-line/50 bg-surface">
                         {previewRows.map((r, ri) => (
                           <tr key={ri} className="hover:bg-line/20">
-                            {(Object.keys(FIELD_LABELS) as (keyof Mapping)[]).map((field) => (
-                              <td key={field} className="px-2 py-1 text-sub" title={mapping[field] >= 0 ? r[headers[mapping[field]]] : ''}>
-                                {mapping[field] >= 0 ? (r[headers[mapping[field]]] || '-') : '-'}
-                              </td>
+                            {(Object.keys(FIELD_LABELS) as (keyof Mapping)[]).map((f) => (
+                              <td key={f} className="px-2 py-1 text-sub">{mapping[f] >= 0 ? (r[headers[mapping[f]]] || '-') : '-'}</td>
                             ))}
                           </tr>
                         ))}
@@ -585,28 +689,98 @@ function ImportarClientes({ todos, onClose, onSaved }: { todos: Cliente[]; onClo
               )}
             </div>
           )}
+
+          {paso === 'validate' && (
+            <div>
+              <div className="mb-3 flex items-center gap-4">
+                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-400">{validCount} validas</span>
+                {errorCount > 0 && <span className="inline-flex items-center gap-1 rounded-full border border-brand-500/30 bg-brand-500/10 px-2.5 py-1 text-xs font-medium text-brand-400">{errorCount} con errores</span>}
+                {errorCount > 0 && <button onClick={downloadErrors} className="text-[11px] text-brand-400 hover:text-brand-300 underline">Descargar errores CSV</button>}
+              </div>
+              <div className="overflow-auto rounded-xl border border-line" style={{ maxHeight: '55vh' }}>
+                <table className="w-full text-[11px]">
+                  <thead className="sticky top-0 z-10"><tr className="bg-zinc-800 text-left text-[9px] uppercase tracking-wider text-zinc-300">
+                    <th className="w-[4%] px-1.5 py-1.5 text-center">#</th>
+                    {(Object.keys(FIELD_LABELS) as (keyof Mapping)[]).map((f) => <th key={f} className="px-1.5 py-1.5 whitespace-nowrap">{FIELD_LABELS[f]}</th>)}
+                    <th className="w-[12%] px-1.5 py-1.5">Estado</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-line/50 bg-surface">
+                    {validRows.map((r, ri) => (
+                      <tr key={ri} className={'transition ' + (r._errors.length > 0 ? 'bg-brand-600/5' : 'hover:bg-line/20')}>
+                        <td className="px-1.5 py-1 text-center text-sub">{r._row}</td>
+                        {(Object.keys(FIELD_LABELS) as (keyof Mapping)[]).map((f) => {
+                          const hdr = mapping && mapping[f] >= 0 ? headers[mapping[f]] : null
+                          return (
+                            <td key={f} className="px-1 py-0.5">
+                              {hdr ? (
+                                <input value={r[hdr] || ''} onChange={(e) => editRow(ri, hdr, e.target.value)} className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-[11px] text-ink outline-none transition focus:border-brand-500 focus:bg-surface2" />
+                              ) : <span className="text-sub/40">-</span>}
+                            </td>
+                          )
+                        })}
+                        <td className="px-1.5 py-1">
+                          {r._errors.length > 0 ? (
+                            <span className="text-[10px] text-brand-400" title={r._errors.join('; ')}>{r._errors.length} error(es)</span>
+                          ) : <span className="text-[10px] text-emerald-400">OK</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {paso === 'done' && (
+            <div className="flex flex-col items-center gap-4 py-8">
+              {busy ? (
+                <>
+                  <Loader2 size={32} className="animate-spin text-brand-400" />
+                  <p className="text-sm text-sub">Importando clientes...</p>
+                  <div className="w-full max-w-md">
+                    <div className="h-2 overflow-hidden rounded-full bg-line">
+                      <div className="h-full rounded-full bg-brand-600 transition-all" style={{ width: (progreso.total > 0 ? (progreso.listo + progreso.fallos) / progreso.total * 100 : 0) + '%' }} />
+                    </div>
+                    <p className="mt-1 text-center text-[11px] text-sub">{progreso.listo + progreso.fallos} / {progreso.total}</p>
+                  </div>
+                  {progreso.detalles.length > 0 && (
+                    <div className="w-full max-w-md space-y-1">
+                      {progreso.detalles.map((d, i) => <p key={i} className="text-[11px] text-brand-400">{d}</p>)}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15"><Check size={28} className="text-emerald-400" /></div>
+                  <p className="font-display text-lg font-semibold text-ink">Importacion completada</p>
+                  <div className="text-center text-sm text-sub">
+                    <p>{progreso.listo} clientes creados correctamente</p>
+                    {progreso.fallos > 0 && <p className="text-brand-400">{progreso.fallos} clientes fallaron</p>}
+                  </div>
+                  {progreso.fallos > 0 && <button onClick={downloadErrors} className="text-xs text-brand-400 hover:text-brand-300 underline">Descargar errores CSV</button>}
+                  <button onClick={onClose} className="btn-press mt-2 rounded-xl bg-brand-600 px-6 py-2 text-sm font-medium text-white hover:bg-brand-700">Cerrar</button>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {error && <p className="px-5 pb-2 text-sm text-brand-400">{error}</p>}
-        {busy && progreso.total > 0 && (
-          <div className="px-5 pb-2">
-            <div className="h-1.5 overflow-hidden rounded-full bg-line">
-              <div className="h-full rounded-full bg-brand-600 transition-all" style={{ width: (progreso.listo / progreso.total * 100) + '%' }} />
+
+        {paso !== 'done' && (
+          <div className="flex items-center justify-between border-t border-line px-5 py-3">
+            <div>
+              {paso !== 'file' && <button onClick={() => setPaso(paso === 'validate' ? 'map' : 'file')} disabled={busy} className="btn-press text-xs text-sub hover:text-ink">Atras</button>}
             </div>
-            <p className="mt-1 text-[11px] text-sub">{progreso.listo} / {progreso.total} clientes importados</p>
+            <div className="flex gap-2">
+              <button onClick={onClose} disabled={busy} className="btn-press rounded-xl border border-line bg-surface2 px-4 py-2 text-sm font-medium text-ink hover:bg-line">Cancelar</button>
+              {paso === 'file' && <button onClick={() => void parseFile()} disabled={!file || busy} className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">{busy ? <Loader2 size={15} className="animate-spin" /> : null} Siguiente</button>}
+              {paso === 'map' && <button onClick={() => { validate() }} disabled={!hasRazon || busy} className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">Validar datos</button>}
+              {paso === 'validate' && <button onClick={() => void importar()} disabled={busy || validCount === 0} className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"><Upload size={15} /> Importar {validCount} clientes</button>}
+            </div>
           </div>
         )}
-
-        <div className="flex items-center justify-between border-t border-line px-5 py-3">
-          {paso === 'map' && <button onClick={() => setPaso('file')} disabled={busy} className="btn-press text-xs text-sub hover:text-ink">Volver</button>}
-          <div className="flex gap-2 ml-auto">
-            <button onClick={onClose} disabled={busy} className="btn-press rounded-xl border border-line bg-surface2 px-4 py-2 text-sm font-medium text-ink hover:bg-line">Cancelar</button>
-            {paso === 'file' && <button onClick={() => void parseFile()} disabled={!file || busy} className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">{busy ? <Loader2 size={15} className="animate-spin" aria-hidden /> : null} Siguiente</button>}
-            {paso === 'map' && <button onClick={() => void importar()} disabled={busy || mapping?.razon_social === -1} className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">{busy ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Upload size={15} aria-hidden />} Importar {rows.length} clientes</button>}
-          </div>
-        </div>
       </div>
     </div>
   )
 }
-
