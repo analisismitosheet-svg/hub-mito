@@ -367,7 +367,7 @@ function TransporteForm({ inicial, onCancel, onSaved }: { inicial: Transporte | 
 
   return (
     <Layout>
-      <BackButton />
+      <button type="button" onClick={onCancel} className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-sub transition duration-250 hover:text-ink"><ArrowLeft size={15} aria-hidden /> Volver</button>
       <header className="mb-5 mt-2"><h1 className="font-display text-2xl font-semibold text-ink">{inicial ? 'Editar transporte' : 'Nuevo transporte'}</h1></header>
       {error && <p role="alert" className="mb-4 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
       <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
