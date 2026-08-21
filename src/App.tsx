@@ -26,6 +26,7 @@ import Usuarios from '@/pages/Usuarios'
 import Roles from '@/pages/Roles'
 import LocalesPage from '@/pages/Locales'
 import EmpleadosPage from '@/pages/Empleados'
+import Transportes from '@/pages/Transportes'
 import ComingSoon from '@/pages/ComingSoon'
 
 export default function App() {
@@ -95,6 +96,14 @@ export default function App() {
             element={
               <PermissionRoute permiso="mayorista.view">
                 <Mayorista />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/mayorista/transportes"
+            element={
+              <PermissionRoute permiso="mayorista.transportes.view">
+                <Transportes />
               </PermissionRoute>
             }
           />

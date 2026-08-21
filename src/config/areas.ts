@@ -184,6 +184,17 @@ export const APPS: AppDef[] = [
     permiso: 'mayorista.view',
   },
   {
+    id: 'mayorista-transportes',
+    areaId: 'mayorista',
+    title: 'Transportes',
+    description: 'ABM de transportes: crear, editar, activar/desactivar.',
+    icon: Truck,
+    kind: 'internal',
+    target: '/mayorista/transportes',
+    color: '#0891b2',
+    permiso: 'mayorista.transportes.view',
+  },
+  {
     id: 'deposito-repo',
     areaId: 'deposito',
     title: 'Repos Depósito',
