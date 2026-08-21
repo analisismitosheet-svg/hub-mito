@@ -65,6 +65,10 @@ export default function Clientes() {
   const [sel, setSel] = useState<Cliente | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [pagina, setPagina] = useState(1)
+  const [sortKey, setSortKey] = useState<keyof Cliente>('n_cliente')
+  const [sortAsc, setSortAsc] = useState(true)
+  const POR_PAGINA = 50
 
   const mostrarToast = useCallback((msg: string) => {
     setToast(msg)
@@ -92,13 +96,18 @@ export default function Clientes() {
   const lista = useMemo(() => {
     let r = todos
     if (filtro !== 'todos') r = r.filter((c) => c.estado === filtro)
-    if (!term) return r
-    return r.filter(
-      (c) =>
-        (c.razon_social || '').toUpperCase().includes(term) ||
-        (c.telefono || '').replace(/\D/g, '').includes(term.replace(/\D/g, '')),
-    )
-  }, [todos, term, filtro])
+    if (term) r = r.filter((c) => (c.razon_social || '').toUpperCase().includes(term) || (c.telefono || '').replace(/\D/g, '').includes(term.replace(/\D/g, '')))
+    r = [...r].sort((a, b) => {
+      const av = (a[sortKey] ?? '') as string
+      const bv = (b[sortKey] ?? '') as string
+      if (typeof av === 'number' && typeof bv === 'number') return sortAsc ? av - bv : bv - av
+      return sortAsc ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
+    })
+    return r
+  }, [todos, term, filtro, sortKey, sortAsc])
+  const totalPaginas = Math.max(1, Math.ceil(lista.length / POR_PAGINA))
+  const paginaSegura = Math.min(pagina, totalPaginas)
+  const listaPagina = lista.slice((paginaSegura - 1) * POR_PAGINA, paginaSegura * POR_PAGINA)
 
   async function toggleEstado(c: Cliente) {
     if (!supabase) return
@@ -119,6 +128,18 @@ export default function Clientes() {
 
   const totalActivos = todos.filter((c) => c.estado === 'ACTIVO').length
   const totalInactivos = todos.filter((c) => c.estado !== 'ACTIVO').length
+
+  useEffect(() => { setPagina(1) }, [q, filtro])
+
+  function toggleSort(key: keyof Cliente) {
+    if (sortKey === key) setSortAsc(!sortAsc)
+    else { setSortKey(key); setSortAsc(true) }
+  }
+
+  function sortArrow(key: keyof Cliente) {
+    if (sortKey !== key) return null
+    return sortAsc ? ' ▲' : ' ▼'
+  }
 
   const ToastEl = () =>
     toast ? (
@@ -166,54 +187,82 @@ export default function Clientes() {
           <p className="text-sm text-sub">{term || filtro !== 'todos' ? 'No se encontraron clientes.' : 'Todavia no hay clientes cargados.'}</p>
         </div>
       ) : (
-        <div className="rounded-2xl border border-line overflow-hidden">
-          <table className="w-full text-[12px] leading-tight">
-            <thead>
-              <tr className="border-b border-line bg-zinc-800 text-left text-[10px] font-semibold uppercase tracking-wider text-zinc-300">
-                <th className="w-[5%] px-1.5 py-1.5 text-center whitespace-nowrap">N</th>
-                <th className="w-[14%] px-1.5 py-1.5 whitespace-nowrap">Razon Social</th>
-                <th className="w-[9%] px-1.5 py-1.5 whitespace-nowrap">Telefono</th>
-                <th className="w-[12%] px-1.5 py-1.5 whitespace-nowrap">Dir / Barrio</th>
-                <th className="w-[11%] px-1.5 py-1.5 whitespace-nowrap">Localidad / Prov</th>
-                <th className="w-[9%] px-1.5 py-1.5 whitespace-nowrap">Transporte</th>
-                <th className="w-[11%] px-1.5 py-1.5 whitespace-nowrap">Dir Entrega</th>
-                <th className="w-[6%] px-1.5 py-1.5 text-center whitespace-nowrap">% V.Dec</th>
-                <th className="w-[7%] px-1.5 py-1.5 whitespace-nowrap">Cuenta</th>
-                <th className="w-[7%] px-1.5 py-1.5 whitespace-nowrap">Sucursal</th>
-                <th className="w-[5%] px-1.5 py-1.5 whitespace-nowrap">Estado</th>
-                <th className="w-[4%] px-1.5 py-1.5 text-right whitespace-nowrap">Acc</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line/50 bg-surface">
-              {lista.map((c) => (
-                <tr key={c.id} className="transition hover:bg-line/20">
-                  <td className="px-1.5 py-1 text-center text-[11px] font-medium text-sub">{fmtN(c.n_cliente)}</td>
-                  <td className="px-1.5 py-1">
-                    <div className="flex items-center gap-1">
-                      <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-[9px] font-semibold text-amber-400">{iniciales(c.razon_social)}</div>
-                      <span className="block truncate font-medium text-ink" title={c.razon_social}>{c.razon_social}</span>
-                    </div>
-                  </td>
-                  <td className="px-1.5 py-1"><span className="block truncate text-sub">{c.telefono || '-'}</span></td>
-                  <td className="px-1.5 py-1"><span className="block truncate text-sub" title={c.direccion_barrio || ''}>{c.direccion_barrio || '-'}</span></td>
-                  <td className="px-1.5 py-1"><span className="block truncate text-sub" title={c.localidad_provincia || ''}>{c.localidad_provincia || '-'}</span></td>
-                  <td className="px-1.5 py-1"><span className="block truncate text-sub">{c.transporte || '-'}</span></td>
-                  <td className="px-1.5 py-1"><span className="block truncate text-sub" title={c.direccion_entrega || ''}>{c.direccion_entrega || '-'}</span></td>
-                  <td className="px-1.5 py-1 text-center text-sub">{c.valor_declarado || '-'}</td>
-                  <td className="px-1.5 py-1 whitespace-nowrap text-sub">{c.cuenta || '-'}</td>
-                  <td className="px-1.5 py-1"><span className="block truncate text-sub">{c.sucursal || '-'}</span></td>
-                  <td className="px-1.5 py-1"><span className={'inline-block whitespace-nowrap rounded-full border px-2 py-px text-[10px] font-medium ' + estadoStyle(c.estado)}>{c.estado || 'INACTIVO'}</span></td>
-                  <td className="px-1.5 py-1 text-right">
-                    <div className="flex items-center justify-end gap-0.5">
-                      {puedeEditar && <button onClick={() => { setSel(c); setModal('edit') }} className="rounded border border-line p-1 text-sub transition hover:text-ink" title="Editar"><Pencil size={11} aria-hidden /></button>}
-                      <button onClick={() => void toggleEstado(c)} className="rounded border border-line p-1 text-sub transition hover:text-ink" title={c.estado === 'ACTIVO' ? 'Desactivar' : 'Activar'}>{c.estado === 'ACTIVO' ? <EyeOff size={11} aria-hidden /> : <Eye size={11} aria-hidden />}</button>
-                      {puedeBorrar && <button onClick={() => { setSel(c); void eliminar(c) }} className="rounded border border-line p-1 text-sub transition hover:text-ink" title="Eliminar"><Trash2 size={11} aria-hidden /></button>}
-                    </div>
-                  </td>
+        <div className="w-full overflow-hidden rounded-2xl border border-line">
+          <div className="w-full overflow-x-auto">
+            <table className="w-full table-fixed border-collapse text-[11px] leading-tight">
+              <colgroup>
+                <col className="w-[4%]" />
+                <col className="w-[15%]" />
+                <col className="w-[9%]" />
+                <col className="w-[13%]" />
+                <col className="w-[10%]" />
+                <col className="w-[8%]" />
+                <col className="w-[13%]" />
+                <col className="w-[5%]" />
+                <col className="w-[6%]" />
+                <col className="w-[6%]" />
+                <col className="w-[5%]" />
+                <col className="w-[6%]" />
+              </colgroup>
+              <thead>
+                <tr className="border-b border-line bg-zinc-800 text-left text-[9px] font-semibold uppercase tracking-wider text-zinc-300">
+                  <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('n_cliente')}>N°{sortArrow('n_cliente')}</th>
+                  <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('razon_social')}>Razon Social{sortArrow('razon_social')}</th>
+                  <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('telefono')}>Telefono{sortArrow('telefono')}</th>
+                  <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('direccion_barrio')}>Dir - Barrio{sortArrow('direccion_barrio')}</th>
+                  <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('localidad_provincia')}>Localidad - Prov{sortArrow('localidad_provincia')}</th>
+                  <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('transporte')}>Transporte{sortArrow('transporte')}</th>
+                  <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('direccion_entrega')}>Dir Entrega{sortArrow('direccion_entrega')}</th>
+                  <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('valor_declarado')}>V.Decl.{sortArrow('valor_declarado')}</th>
+                  <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('cuenta')}>Cuenta{sortArrow('cuenta')}</th>
+                  <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('sucursal')}>Sucursal{sortArrow('sucursal')}</th>
+                  <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('estado')}>Estado{sortArrow('estado')}</th>
+                  <th className="px-1 py-1 text-right whitespace-nowrap">Acc</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-line/50 bg-surface">
+                {listaPagina.map((c) => (
+                  <tr key={c.id} className="transition hover:bg-line/20">
+                    <td className="px-1 py-[2px] text-center text-[10px] font-medium text-sub">{fmtN(c.n_cliente)}</td>
+                    <td className="px-1 py-[2px]">
+                      <div className="flex items-center gap-1 min-w-0">
+                        <div className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-[8px] font-semibold text-amber-400">{iniciales(c.razon_social)}</div>
+                        <span className="block truncate font-medium text-ink" title={c.razon_social}>{c.razon_social}</span>
+                      </div>
+                    </td>
+                    <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={c.telefono || ''}>{c.telefono || '-'}</span></td>
+                    <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={c.direccion_barrio || ''}>{c.direccion_barrio || '-'}</span></td>
+                    <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={c.localidad_provincia || ''}>{c.localidad_provincia || '-'}</span></td>
+                    <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={c.transporte || ''}>{c.transporte || '-'}</span></td>
+                    <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={c.direccion_entrega || ''}>{c.direccion_entrega || '-'}</span></td>
+                    <td className="px-1 py-[2px] text-center text-sub">{c.valor_declarado || '-'}</td>
+                    <td className="px-1 py-[2px] whitespace-nowrap text-sub">{c.cuenta || '-'}</td>
+                    <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={c.sucursal || ''}>{c.sucursal || '-'}</span></td>
+                    <td className="px-1 py-[2px] text-center"><span className={'inline-block whitespace-nowrap rounded-full border px-1.5 py-px text-[9px] font-medium leading-tight ' + estadoStyle(c.estado)}>{c.estado || 'INACTIVO'}</span></td>
+                    <td className="px-1 py-[2px] text-right">
+                      <div className="flex items-center justify-end gap-px">
+                        {puedeEditar && <button onClick={() => { setSel(c); setModal('edit') }} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Editar"><Pencil size={10} aria-hidden /></button>}
+                        <button onClick={() => void toggleEstado(c)} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title={c.estado === 'ACTIVO' ? 'Desactivar' : 'Activar'}>{c.estado === 'ACTIVO' ? <EyeOff size={10} aria-hidden /> : <Eye size={10} aria-hidden />}</button>
+                        {puedeBorrar && <button onClick={() => { setSel(c); void eliminar(c) }} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Eliminar"><Trash2 size={10} aria-hidden /></button>}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {totalPaginas > 1 && (
+            <div className="flex items-center justify-between border-t border-line px-3 py-1.5 text-[11px] text-sub">
+              <span>{lista.length} clientes | Pag {paginaSegura} de {totalPaginas}</span>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setPagina(1)} disabled={paginaSegura <= 1} className="rounded border border-line px-1.5 py-0.5 text-[10px] hover:bg-line disabled:opacity-30">«</button>
+                <button onClick={() => setPagina((p) => Math.max(1, p - 1))} disabled={paginaSegura <= 1} className="rounded border border-line px-1.5 py-0.5 text-[10px] hover:bg-line disabled:opacity-30">‹</button>
+                <span className="px-1.5 text-[10px] font-medium text-ink">{paginaSegura}</span>
+                <button onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))} disabled={paginaSegura >= totalPaginas} className="rounded border border-line px-1.5 py-0.5 text-[10px] hover:bg-line disabled:opacity-30">›</button>
+                <button onClick={() => setPagina(totalPaginas)} disabled={paginaSegura >= totalPaginas} className="rounded border border-line px-1.5 py-0.5 text-[10px] hover:bg-line disabled:opacity-30">»</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
