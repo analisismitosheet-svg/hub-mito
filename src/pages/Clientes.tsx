@@ -438,7 +438,7 @@ function ImportarClientes({ todos, onClose, onSaved }: { todos: Cliente[]; onClo
   const [headers, setHeaders] = useState<string[]>([])
   const [rows, setRows] = useState<FileRow[]>([])
   const [mapping, setMapping] = useState<Mapping | null>(null)
-  const [validRows, setValidRows] = useState<(FileRow & { _errors: string[] })[]>([])
+  const [validRows, setValidRows] = useState<(FileRow & { _errors: string[]; _row: number })[]>([])
   const [paso, setPaso] = useState<'file' | 'map' | 'validate' | 'done'>('file')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -446,7 +446,6 @@ function ImportarClientes({ todos, onClose, onSaved }: { todos: Cliente[]; onClo
   const [csvSep, setCsvSep] = useState(',')
   const [csvEnc, setCsvEnc] = useState('UTF-8')
   const [dragOver, setDragOver] = useState(false)
-  const [validOnly, setValidOnly] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   function handleFile(f: File | null) {
@@ -458,7 +457,6 @@ function ImportarClientes({ todos, onClose, onSaved }: { todos: Cliente[]; onClo
     setError(null)
   }
 
-  function onSelectFile(e: React.ChangeEvent<HTMLInputElement>) { handleFile(e.target.files?.[0] ?? null) }
 
   function onDrop(e: React.DragEvent) {
     e.preventDefault(); setDragOver(false)
@@ -534,7 +532,7 @@ function ImportarClientes({ todos, onClose, onSaved }: { todos: Cliente[]; onClo
 
   async function importar() {
     if (!supabase || !mapping) return
-    const toImport = validOnly ? validRows.filter((r) => r._errors.length === 0) : validRows.filter((r) => r._errors.length === 0)
+    const toImport = validRows.filter((r) => r._errors.length === 0)
     if (toImport.length === 0) { setError('No hay filas validas para importar.'); return }
     setBusy(true); setError(null); setPaso('done')
     const base = nextNCliente(todos)
@@ -620,6 +618,7 @@ function ImportarClientes({ todos, onClose, onSaved }: { todos: Cliente[]; onClo
                 onClick={() => fileRef.current?.click()}
                 className={'flex w-full max-w-lg cursor-pointer flex-col items-center gap-3 rounded-2xl border-2 border-dashed p-8 transition ' + (dragOver ? 'border-brand-500 bg-brand-600/10' : 'border-line hover:border-brand-500/50 hover:bg-line/20')}
               >
+                <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(e) => handleFile(e.target.files?.[0] ?? null)} />
                 <Upload size={32} className={dragOver ? 'text-brand-400' : 'text-sub/40'} />
                 <p className="text-sm text-sub">{file ? 'Archivo seleccionado' : 'Arrastra tu archivo aqui o haz clic para seleccionar'}</p>
                 <p className="text-[11px] text-sub/60">Formatos: .xlsx, .xls, .csv | Maximo 5 MB</p>
