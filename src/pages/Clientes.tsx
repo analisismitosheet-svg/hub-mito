@@ -511,15 +511,6 @@ function ImportarClientes({ todos, onClose, onSaved }: { todos: Cliente[]; onClo
 
   function normalizeValorDeclarado(v: string): string {
     if (!v) return v
-    const up = v.toUpperCase().replace(/[^A-Z0-9%]/g, '')
-    if (up.includes('ALNETO') || up === 'ALNETO' || v.toUpperCase().includes('AL NETO')) return 'Al neto'
-    const pct = v.match(/(\d{1,3})\s*%/)
-    if (pct) return pct[1] + '%'
-    return v
-  }
-
-  function normalizeValorDeclarado(v: string): string {
-    if (!v) return v
     let cleaned = v.replace(/^[.=]+/, '').trim()
     const up = cleaned.toUpperCase().replace(/[^A-Z0-9%]/g, '')
     if (up.includes('ALNETO') || up === 'ALNETO' || cleaned.toUpperCase().includes('AL NETO')) return 'Al neto'
