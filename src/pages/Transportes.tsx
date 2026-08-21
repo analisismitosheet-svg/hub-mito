@@ -221,105 +221,97 @@ export default function Transportes() {
     <Layout>
       <ToastEl />
       <BackButton />
-      <header className="mb-5 mt-2">
+      <header className="mb-3 mt-2">
         <h1 className="font-display text-2xl font-semibold text-ink">Transportes</h1>
-        <p className="mt-1 text-sm text-sub">Gestion de transportes: crear, editar y administrar.</p>
       </header>
-      <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-sub">
-        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-emerald-400"><Eye size={12} aria-hidden /> {totalActivos} activos</span>
-        <span className="inline-flex items-center gap-1 rounded-full bg-brand-600/10 px-2.5 py-1 text-brand-400"><EyeOff size={12} aria-hidden /> {totalInactivos} inactivos</span>
-        <span className="text-sub/70">{'\u00B7'} {todos.length} total</span>
-      </div>
-      <div className="mb-4 flex flex-wrap items-end gap-2">
-        <label className="block flex-1 min-w-[200px]">
-          <span className="mb-1 block text-xs font-medium text-sub">Buscar</span>
-          <div className="relative">
-            <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sub/70" aria-hidden />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Nombre o telefono..." className={inputCls + ' pl-9'} />
-          </div>
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-xs font-medium text-sub">Estado</span>
-          <select value={filtro} onChange={(e) => setFiltro(e.target.value as typeof filtro)} className={inputCls + ' w-auto'}>
-            <option value="todos">Todos</option><option value="ACTIVO">Activos</option><option value="INACTIVO">Inactivos</option>
-          </select>
-        </label>
-        {puedeCrear && <button onClick={abrirNuevo} className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700"><Plus size={15} aria-hidden /> Nuevo transporte</button>}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[180px]">
+          <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sub/70" aria-hidden />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar..." className={inputCls + ' pl-8 py-1.5 text-xs'} />
+        </div>
+        <select value={filtro} onChange={(e) => setFiltro(e.target.value as typeof filtro)} className={inputCls + ' w-auto py-1.5 text-xs'}>
+          <option value="todos">Todos</option><option value="ACTIVO">Activos</option><option value="INACTIVO">Inactivos</option>
+        </select>
+        <span className="text-[11px] text-sub/70">{totalActivos} act / {totalInactivos} inact / {todos.length} total</span>
+        {puedeCrear && <button onClick={abrirNuevo} className="btn-press inline-flex items-center gap-1 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-700"><Plus size={13} aria-hidden /> Nuevo</button>}
       </div>
       {cargando ? (
         <div className="flex items-center justify-center gap-2 py-10 text-sub"><Loader2 size={18} className="animate-spin" aria-hidden /> Cargando...</div>
       ) : lista.length === 0 ? (
         <div className="rounded-2xl border border-line bg-surface p-6 text-center"><SearchX size={32} className="mx-auto mb-2 text-sub/40" aria-hidden /><p className="text-sm text-sub">{term || filtro !== 'todos' ? 'No se encontraron transportes.' : 'Todavia no hay transportes cargados.'}</p></div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-line">
-          <table className="w-full min-w-[800px] text-sm">
+        <div className="rounded-2xl border border-line overflow-hidden">
+          <table className="w-full text-[12px] leading-tight">
             <thead>
-              <tr className="border-b border-line bg-zinc-800 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-300">
-                <th className="px-4 py-3">Transporte</th>
-                <th className="px-4 py-3">Retiro Calera</th>
-                <th className="px-4 py-3">Retiro Polo 52</th>
-                <th className="px-4 py-3">Via Solicitud Retiro</th>
-                <th className="px-4 py-3">Web</th>
-                <th className="px-4 py-3">Datos que piden</th>
-                <th className="px-4 py-3">Etiquetas para cajas</th>
-                <th className="px-4 py-3 text-right">Acciones</th>
+              <tr className="border-b border-line bg-zinc-800 text-left text-[10px] font-semibold uppercase tracking-wider text-zinc-300">
+                <th className="px-2 py-2 whitespace-nowrap">Transporte</th>
+                <th className="px-2 py-2 whitespace-nowrap">Calera</th>
+                <th className="px-2 py-2 whitespace-nowrap">Polo 52</th>
+                <th className="px-2 py-2 whitespace-nowrap">Via</th>
+                <th className="px-2 py-2 whitespace-nowrap">Web</th>
+                <th className="px-2 py-2">Datos que piden</th>
+                <th className="px-2 py-2">Etiquetas</th>
+                <th className="px-2 py-2 text-right">Acciones</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-line/70 bg-surface">
-              {lista.map((t) => (
-                <tr key={t.id} className="transition hover:bg-line/20">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-xs font-semibold text-amber-400">{iniciales(t.nombre)}</div>
-                      <div>
-                        <span className="font-medium text-ink">{t.nombre}</span>
-                        <div className="mt-0.5"><span className={'inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ' + estadoStyle(t.estado)}>{t.estado || 'INACTIVO'}</span></div>
+            <tbody className="divide-y divide-line/50 bg-surface">
+              {lista.map((t) => {
+                const datos: string[] = []
+                if (t.requiere_remitente) datos.push('Domicilio retiro')
+                if (t.requiere_direccion_retiro) datos.push('Dir. retiro')
+                if (t.requiere_destinatario) datos.push('Destinatario')
+                if (t.requiere_direccion_envio) datos.push('Dir. envio')
+                if (t.requiere_localidad) datos.push('Localidad')
+                if (t.requiere_cantidad_bultos) datos.push('Bultos')
+                if (t.requiere_pago) datos.push('Pago')
+                if (t.tamano_cajas) datos.push('Cajas: ' + t.tamano_cajas)
+                return (
+                  <tr key={t.id} className="transition hover:bg-line/20">
+                    <td className="px-2 py-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-[10px] font-semibold text-amber-400">{iniciales(t.nombre)}</div>
+                        <div className="min-w-0">
+                          <span className="block truncate font-medium text-ink">{t.nombre}</span>
+                          <span className={'inline-flex items-center rounded-full border px-1.5 py-px text-[9px] font-medium ' + estadoStyle(t.estado)}>{t.estado || 'INACTIVO'}</span>
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    {t.retiro_calera ? (
-                      <button onClick={() => { clip(t.retiro_calera!); mostrarToast('Telefono copiado') }} className="btn-press inline-flex items-center gap-1 rounded-md border border-line bg-surface2 px-2 py-1 text-xs font-medium text-ink transition hover:bg-line" title="Copiar">{t.retiro_calera}</button>
-                    ) : <span className="text-sub/50">{'\u2014'}</span>}
-                  </td>
-                  <td className="px-4 py-3">
-                    {t.retiro_polo52 ? (
-                      <button onClick={() => { clip(t.retiro_polo52!); mostrarToast('Telefono copiado') }} className="btn-press inline-flex items-center gap-1 rounded-md border border-line bg-surface2 px-2 py-1 text-xs font-medium text-ink transition hover:bg-line" title="Copiar">{t.retiro_polo52}</button>
-                    ) : <span className="text-sub/50">{'\u2014'}</span>}
-                  </td>
-                  <td className="px-4 py-3 text-xs font-medium uppercase text-sub">{t.via_solicitud_retiro || <span className="text-sub/50">{'\u2014'}</span>}</td>
-                  <td className="px-4 py-3">
-                    {t.web ? (
-                      <a href={t.web} target="_blank" rel="noopener noreferrer" className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink transition hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-400">
-                        <Globe size={12} aria-hidden /> Abrir web
-                      </a>
-                    ) : <span className="text-sub/50">No tiene</span>}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-col gap-0.5 text-xs text-sub">
-                      {t.requiere_remitente && <span>Domicilio de retiro</span>}
-                      {t.requiere_direccion_retiro && <span>Direccion de retiro</span>}
-                      {t.requiere_destinatario && <span>Destinatario</span>}
-                      {t.requiere_direccion_envio && <span>Direccion de envio</span>}
-                      {t.requiere_localidad && <span>Localidad</span>}
-                      {t.requiere_cantidad_bultos && <span>Cantidad de bultos</span>}
-                      {t.requiere_pago && <span>Pago</span>}
-                      {t.tamano_cajas && <span>Medida de las cajas: {t.tamano_cajas}</span>}
-                      {!t.requiere_remitente && !t.requiere_direccion_retiro && !t.requiere_destinatario && !t.requiere_direccion_envio && !t.requiere_localidad && !t.requiere_cantidad_bultos && !t.requiere_pago && !t.tamano_cajas && <span className="text-sub/50">{'\u2014'}</span>}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-sub">
-                    {t.etiquetas || <span className="text-sub/50">No tiene</span>}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => abrirFicha(t)} className="btn-press rounded-lg border border-line p-1.5 text-sub hover:text-ink" title="Ver detalle"><Search size={13} aria-hidden /></button>
-                      {puedeEditar && <button onClick={() => abrirEditar(t)} className="btn-press rounded-lg border border-line p-1.5 text-sub hover:text-ink" title="Editar"><Pencil size={13} aria-hidden /></button>}
-                      <button onClick={() => void toggleEstado(t)} className="btn-press rounded-lg border border-line p-1.5 text-sub hover:text-ink" title={t.estado === 'ACTIVO' ? 'Desactivar' : 'Activar'}>{t.estado === 'ACTIVO' ? <EyeOff size={13} aria-hidden /> : <Eye size={13} aria-hidden />}</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-2 py-1.5">
+                      {t.retiro_calera ? (
+                        <button onClick={() => { clip(t.retiro_calera!); mostrarToast('Telefono copiado') }} className="rounded border border-line bg-surface2 px-1.5 py-0.5 text-[11px] font-medium text-ink transition hover:bg-line" title="Copiar">{t.retiro_calera}</button>
+                      ) : <span className="text-sub/40">-</span>}
+                    </td>
+                    <td className="px-2 py-1.5">
+                      {t.retiro_polo52 ? (
+                        <button onClick={() => { clip(t.retiro_polo52!); mostrarToast('Telefono copiado') }} className="rounded border border-line bg-surface2 px-1.5 py-0.5 text-[11px] font-medium text-ink transition hover:bg-line" title="Copiar">{t.retiro_polo52}</button>
+                      ) : <span className="text-sub/40">-</span>}
+                    </td>
+                    <td className="px-2 py-1.5 whitespace-nowrap text-[11px] font-medium uppercase text-sub">{t.via_solicitud_retiro || <span className="text-sub/40">-</span>}</td>
+                    <td className="px-2 py-1.5">
+                      {t.web ? (
+                        <a href={t.web} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded border border-line bg-surface2 px-1.5 py-0.5 text-[11px] font-medium text-ink transition hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-400">
+                          <Globe size={10} aria-hidden /> Web
+                        </a>
+                      ) : <span className="text-sub/40">-</span>}
+                    </td>
+                    <td className="px-2 py-1.5">
+                      {datos.length > 0 ? (
+                        <span className="text-[11px] text-sub">{datos.join(' / ')}</span>
+                      ) : <span className="text-sub/40">-</span>}
+                    </td>
+                    <td className="px-2 py-1.5 text-[11px] text-sub">
+                      {t.etiquetas ? <span className="line-clamp-1 max-w-[140px]">{t.etiquetas}</span> : <span className="text-sub/40">-</span>}
+                    </td>
+                    <td className="px-2 py-1.5 text-right">
+                      <div className="flex items-center justify-end gap-0.5">
+                        <button onClick={() => abrirFicha(t)} className="rounded border border-line p-1 text-sub transition hover:text-ink" title="Ver"><Search size={11} aria-hidden /></button>
+                        {puedeEditar && <button onClick={() => abrirEditar(t)} className="rounded border border-line p-1 text-sub transition hover:text-ink" title="Editar"><Pencil size={11} aria-hidden /></button>}
+                        <button onClick={() => void toggleEstado(t)} className="rounded border border-line p-1 text-sub transition hover:text-ink" title={t.estado === 'ACTIVO' ? 'Desactivar' : 'Activar'}>{t.estado === 'ACTIVO' ? <EyeOff size={11} aria-hidden /> : <Eye size={11} aria-hidden />}</button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
