@@ -371,7 +371,8 @@ function ClienteModal({ cliente, nCliente, onClose, onSaved }: { cliente: Client
   )
 }
 
-type FileRow = Record<string, string>
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type FileRow = Record<string, any>
 
 interface Mapping {
   razon_social: number
