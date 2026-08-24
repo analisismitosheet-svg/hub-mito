@@ -128,7 +128,7 @@ function DateRangeSlider({ min, max, desde, hasta, onDesde, onHasta }: {
   }, [min, max])
 
   return (
-    <div className="flex flex-col gap-1 w-56 select-none">
+    <div className="flex flex-col gap-1 w-44 shrink-0 select-none">
       <div className="flex items-center justify-between">
         <span className="text-[11px] font-medium text-ink">{fmtDateSlider(desde)}</span>
         <span className="text-[11px] font-medium text-ink">{fmtDateSlider(hasta)}</span>
@@ -151,7 +151,7 @@ function DateRangeSlider({ min, max, desde, hasta, onDesde, onHasta }: {
         <div className="absolute w-3.5 h-3.5 rounded-full bg-brand-500 border-2 border-zinc-900 shadow-lg pointer-events-none z-30"
           style={{ left: `calc(${pctTo}% - 7px)` }} />
       </div>
-      <div className="relative h-4 mx-1">
+      <div className="relative h-4 mx-1 overflow-hidden">
         {months.filter((m) => m.pct >= 0 && m.pct <= 100).map((m, i) => (
           <span key={i} className="absolute text-[8px] text-sub/60 -translate-x-1/2" style={{ left: `${m.pct}%` }}>{m.label}</span>
         ))}
