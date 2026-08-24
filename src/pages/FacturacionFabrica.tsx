@@ -747,7 +747,7 @@ function ImportFacturacion({ clientes, empleados, onClose, onSaved }: {
       /* POLO52 */
       if (nr.polo52) { const v = String(nr.polo52).toUpperCase(); nr.polo52 = v === 'VERDADERO' || v === '1' || v === 'SI' || v === 'TRUE' }
       else nr.polo52 = false
-      if (nr.bulto) nr.bulto = Number(nr.bulto) || null
+      nr.bulto = nr.bulto ? Number(nr.bulto) || null : null
 
       valid.push(nr)
     })
@@ -763,7 +763,7 @@ function ImportFacturacion({ clientes, empleados, onClose, onSaved }: {
       const batch = validRows.slice(i, i + batchSize).map(({ _cliente_id, _empleado_id, ...rest }) => ({
         autorizacion: rest.autorizacion || null, cliente_id: _cliente_id || null, razon_social: rest.razon_social || null,
         fecha_fact: rest.fecha_fact || null, n_remito: rest.n_remito || null, n_cliente: rest.n_cliente ?? null,
-        bulto: rest.bulto ?? null, transporte: rest.transporte || null, porcentaje_declarado: rest.porcentaje_declarado || null,
+        bulto: rest.bulto ? Number(rest.bulto) || null : null, transporte: rest.transporte || null, porcentaje_declarado: rest.porcentaje_declarado || null,
         solicitud_retiro: rest.solicitud_retiro || 'FALSO', total_despachos: rest.total_despachos || null,
         empleado_id: _empleado_id || null, n_legajo: rest.n_legajo || null, quien_facturo: rest.quien_facturo || null,
         polo52: !!rest.polo52, fecha_envio: rest.fecha_envio || null, quien_retira_fabrica: rest.quien_retira_fabrica || null,
