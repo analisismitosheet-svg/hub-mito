@@ -534,7 +534,8 @@ function FactModal({ registro, clientes, empleados, onClose, onSaved }: {
             <label className="block"><span className="mb-1 block text-xs font-medium text-sub">N Remito</span><input value={nRemito} onChange={(e) => setNRemito(e.target.value)} placeholder="30307 - 30308" className={inputCls} /></label>
             <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Bulto</span><input type="number" value={bulto} onChange={(e) => setBulto(e.target.value)} placeholder="0" className={inputCls} /></label>
             <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Transporte</span>
-              <select value={transporte} onChange={(e) => setTransporte(e.target.value)} className={selectCls}><option value="">--</option>{TRANSPORTE_OPCIONES.map((v) => <option key={v} value={v}>{v}</option>)}</select>
+              <input list="transportes-list" value={transporte} onChange={(e) => setTransporte(e.target.value)} placeholder="Seleccionar o escribir..." className={inputCls} />
+              <datalist id="transportes-list">{TRANSPORTE_OPCIONES.map((v) => <option key={v} value={v} />)}</datalist>
             </label>
 
             {/* Row 3 */}
