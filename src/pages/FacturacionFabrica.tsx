@@ -462,7 +462,8 @@ function FactModal({ registro, clientes, empleados, onClose, onSaved }: {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     if (!supabase) return
-    if (!razonSocial.trim()) { setError('Debe seleccionar una Razon Social.'); return }
+    if (!nCliente) { setError('Debe seleccionar un N° Cliente.'); return }
+    if (!autorizacion) { setError('Debe seleccionar Autorizacion (SI/NO).'); return }
     if (!quienFacturo.trim()) { setError('Debe seleccionar quien facturo.'); return }
     setBusy(true); setError(null)
     const payload: Record<string, unknown> = {
@@ -504,11 +505,14 @@ function FactModal({ registro, clientes, empleados, onClose, onSaved }: {
         <form onSubmit={(e) => void handleSubmit(e)} className="flex-1 overflow-y-auto p-5">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
             {/* Row 1 */}
-            <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Autorizacion</span><input value={autorizacion} onChange={(e) => setAutorizacion(e.target.value)} placeholder="Nro autorizacion" className={inputCls} /></label>
-            <label className="block sm:col-span-2 relative">
-              <span className="mb-1 block text-xs font-medium text-sub">Razon Social *</span>
+            <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Autorizacion *</span>
+              <select value={autorizacion} onChange={(e) => setAutorizacion(e.target.value)} className={selectCls}><option value="">--</option><option value="SI">SI</option><option value="NO">NO</option></select>
+            </label>
+            {/* N° Cliente — searchable dropdown */}
+            <label className="block relative">
+              <span className="mb-1 block text-xs font-medium text-sub">N Cliente *</span>
               <div className="relative">
-                <input value={openCliDrop ? busqCliente : razonSocial} onChange={(e) => { setBusqCliente(e.target.value); setOpenCliDrop(true) }} onFocus={() => setOpenCliDrop(true)} placeholder="Buscar cliente..." className={inputCls} />
+                <input value={openCliDrop ? busqCliente : (nCliente != null ? String(nCliente) : '')} onChange={(e) => { setBusqCliente(e.target.value); setOpenCliDrop(true) }} onFocus={() => setOpenCliDrop(true)} placeholder="Buscar por N° o nombre..." className={inputCls} />
                 {openCliDrop && (
                   <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-line bg-surface shadow-xl">
                     <div className="sticky top-0 bg-surface p-1"><input autoFocus value={busqCliente} onChange={(e) => setBusqCliente(e.target.value)} placeholder="Buscar..." className={inputCls + ' text-xs'} /></div>
@@ -522,11 +526,12 @@ function FactModal({ registro, clientes, empleados, onClose, onSaved }: {
                 )}
               </div>
             </label>
+            {/* Razon Social — autocompletada (BUSCARV) */}
+            <label className="block sm:col-span-2"><span className="mb-1 block text-xs font-medium text-sub">Razon Social</span><input value={razonSocial} readOnly className={inputCls + ' bg-line/30 text-sub'} placeholder="Se autocompleta al seleccionar N° Cliente" /></label>
             <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Fecha Facturacion</span><input type="date" value={fechaFact} onChange={(e) => setFechaFact(e.target.value)} className={inputCls} /></label>
 
             {/* Row 2 */}
             <label className="block"><span className="mb-1 block text-xs font-medium text-sub">N Remito</span><input value={nRemito} onChange={(e) => setNRemito(e.target.value)} placeholder="30307 - 30308" className={inputCls} /></label>
-            <label className="block"><span className="mb-1 block text-xs font-medium text-sub">N Cliente</span><input value={nCliente ?? ''} readOnly className={inputCls + ' bg-line/30 text-sub'} /></label>
             <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Bulto</span><input type="number" value={bulto} onChange={(e) => setBulto(e.target.value)} placeholder="0" className={inputCls} /></label>
             <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Transporte</span>
               <select value={transporte} onChange={(e) => setTransporte(e.target.value)} className={selectCls}><option value="">--</option>{TRANSPORTE_OPCIONES.map((v) => <option key={v} value={v}>{v}</option>)}</select>
