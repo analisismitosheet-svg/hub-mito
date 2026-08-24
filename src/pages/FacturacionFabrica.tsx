@@ -275,23 +275,23 @@ export default function FacturacionFabrica() {
             <table className="w-full table-fixed border-collapse text-[11px] leading-tight">
               <colgroup>
                 <col className="w-[3%]" />  {/* Check */}
-                <col className="w-[4%]" />  {/* Aut */}
+                <col className="w-[3%]" />  {/* Aut */}
                 <col className="w-[11%]" /> {/* Razon */}
-                <col className="w-[6%]" />  {/* F.Fact */}
+                <col className="w-[8%]" />  {/* F.Fact */}
                 <col className="w-[8%]" />  {/* Remito */}
-                <col className="w-[4%]" />  {/* N Cl */}
+                <col className="w-[3%]" />  {/* N Cl */}
                 <col className="w-[3%]" />  {/* Bulto */}
-                <col className="w-[6%]" />  {/* Transp */}
-                <col className="w-[5%]" />  {/* %Decl */}
-                <col className="w-[6%]" />  {/* SolRetiro */}
-                <col className="w-[5%]" />  {/* TotDesp */}
-                <col className="w-[5%]" />  {/* Legajo */}
-                <col className="w-[8%]" />  {/* Quien Fact */}
-                <col className="w-[5%]" />  {/* POLO52 */}
-                <col className="w-[6%]" />  {/* F.Envio */}
-                <col className="w-[6%]" />  {/* Retira */}
-                <col className="w-[7%]" />  {/* Obs */}
-                <col className="w-[5%]" />  {/* Acc */}
+                <col className="w-[5%]" />  {/* Transp */}
+                <col className="w-[4%]" />  {/* %Decl */}
+                <col className="w-[5%]" />  {/* SolRetiro */}
+                <col className="w-[4%]" />  {/* TotDesp */}
+                <col className="w-[4%]" />  {/* Legajo */}
+                <col className="w-[7%]" />  {/* Quien Fact */}
+                <col className="w-[4%]" />  {/* POLO52 */}
+                <col className="w-[5%]" />  {/* F.Envio */}
+                <col className="w-[5%]" />  {/* Retira */}
+                <col className="w-[6%]" />  {/* Obs */}
+                <col className="w-[4%]" />  {/* Acc */}
               </colgroup>
               <thead>
                 <tr className="border-b border-line bg-zinc-800 text-left text-[9px] font-semibold uppercase tracking-wider text-zinc-300">
