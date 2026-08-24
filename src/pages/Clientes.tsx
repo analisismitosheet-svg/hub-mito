@@ -401,9 +401,8 @@ function ClienteModal({ cliente, nCliente, onClose, onSaved }: { cliente: Client
             </label>
             <label className="block">
               <span className="mb-0.5 block text-[11px] font-medium text-sub">Cuenta</span>
-              <select value={cuenta} onChange={(e) => setCuenta(e.target.value)} className={inputCls}>
-                {CUENTA_OPCIONES.map((o) => <option key={o} value={o}>{o}</option>)}
-              </select>
+              <input list="cuentas-list" value={cuenta} onChange={(e) => setCuenta(e.target.value)} placeholder="Corriente" className={inputCls} />
+              <datalist id="cuentas-list">{CUENTA_OPCIONES.map((o) => <option key={o} value={o} />)}</datalist>
             </label>
 
             <label className="block">
