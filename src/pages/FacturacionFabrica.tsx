@@ -222,7 +222,7 @@ export default function FacturacionFabrica() {
 
   const lista = useMemo(() => {
     let r = todos
-    if (!isAdmin && !filtroPol) r = r.filter((f) => !f.polo52)
+    if (filtroPol) r = r.filter((f) => f.polo52)
     if (filtroTransporte !== 'todos') r = r.filter((f) => f.transporte === filtroTransporte)
     if (filtroFechaDesde) r = r.filter((f) => (f.fecha_fact || '') >= filtroFechaDesde)
     if (filtroFechaHasta) r = r.filter((f) => (f.fecha_fact || '') <= filtroFechaHasta)
@@ -292,12 +292,10 @@ export default function FacturacionFabrica() {
         <DateRangeSlider min={dateRange.min} max={dateRange.max}
           desde={filtroFechaDesde || dateRange.min} hasta={filtroFechaHasta || dateRange.max}
           onDesde={setFiltroFechaDesde} onHasta={setFiltroFechaHasta} />
-        {isAdmin && (
-          <label className="flex items-center gap-1.5 text-xs text-sub">
-            <input type="checkbox" checked={filtroPol} onChange={(e) => setFiltroPol(e.target.checked)} className="h-3.5 w-3.5 rounded border-line bg-surface2 accent-brand-600" />
-            Mostrar restringidos
-          </label>
-        )}
+        <label className="flex items-center gap-1.5 text-xs text-sub">
+          <input type="checkbox" checked={filtroPol} onChange={(e) => setFiltroPol(e.target.checked)} className="h-3.5 w-3.5 rounded border-line bg-surface2 accent-brand-600" />
+          Solo POLO52
+        </label>
         <span className="text-[11px] text-sub/70">{lista.length} registros {polCount > 0 && isAdmin ? `(${polCount} POLO52)` : ''}</span>
         {puedeCrear && (
           <>
@@ -435,7 +433,7 @@ function FactCard({ registro: r, onClose, onEdit, puedeEditar, empleados }: {
             <div className="flex items-center gap-2 text-ink">
               <FileText size={18} className="shrink-0 text-amber-400" aria-hidden />
               <h2 className="truncate text-lg font-semibold">{r.razon_social || 'Sin razon social'}</h2>
-              {r.polo52 && <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-400"><Lock size={10} aria-hidden /> Restringido</span>}
+              {r.polo52 && <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-400"><Lock size={10} aria-hidden /> POLO52</span>}
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-sub">
               <span className="font-medium text-ink">Aut: {r.autorizacion || '-'}</span>
@@ -657,7 +655,7 @@ function FactModal({ registro, clientes, empleados, onClose, onSaved }: {
             <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Fecha Envio</span><input type="date" value={fechaEnvio} onChange={(e) => setFechaEnvio(e.target.value)} className={inputCls} /></label>
             <label className="block flex items-end gap-3 pb-1">
               <input type="checkbox" checked={polo52} onChange={(e) => setPolo52(e.target.checked)} className="h-4 w-4 rounded border-line bg-surface2 accent-brand-600" />
-              <span className="text-sm text-ink">POLO52 (restringido)</span>
+              <span className="text-sm text-ink">POLO52</span>
             </label>
 
             {/* Row 5 */}
