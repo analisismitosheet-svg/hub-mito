@@ -12,10 +12,13 @@ interface Cliente {
   n_cliente: number | null
   razon_social: string
   telefono: string | null
+  telefono_2: string | null
   direccion_barrio: string | null
+  direccion_barrio_2: string | null
   localidad_provincia: string | null
   transporte: string | null
   direccion_entrega: string | null
+  direccion_entrega_2: string | null
   valor_declarado: string | null
   cuenta: string | null
   sucursal: string | null
@@ -301,10 +304,13 @@ function ClienteModal({ cliente, nCliente, onClose, onSaved }: { cliente: Client
   const [nClienteVal, setNClienteVal] = useState<string>(nCliente != null ? String(nCliente) : '')
   const [razonSocial, setRazonSocial] = useState(cliente?.razon_social || '')
   const [telefono, setTelefono] = useState(cliente?.telefono || '')
+  const [telefono2, setTelefono2] = useState(cliente?.telefono_2 || '')
   const [direccionBarrio, setDireccionBarrio] = useState(cliente?.direccion_barrio || '')
+  const [direccionBarrio2, setDireccionBarrio2] = useState(cliente?.direccion_barrio_2 || '')
   const [localidadProvincia, setLocalidadProvincia] = useState(cliente?.localidad_provincia || '')
   const [transporte, setTransporte] = useState(cliente?.transporte || '')
   const [direccionEntrega, setDireccionEntrega] = useState(cliente?.direccion_entrega || '')
+  const [direccionEntrega2, setDireccionEntrega2] = useState(cliente?.direccion_entrega_2 || '')
   const [valorDeclarado, setValorDeclarado] = useState(cliente?.valor_declarado || '')
   const [cuenta, setCuenta] = useState(cliente?.cuenta || 'Corriente')
   const [sucursal, setSucursal] = useState(cliente?.sucursal || '')
@@ -324,10 +330,13 @@ function ClienteModal({ cliente, nCliente, onClose, onSaved }: { cliente: Client
     const payload: Record<string, unknown> = {
       razon_social: razonSocial.trim(),
       telefono: telefono.trim() || null,
+      telefono_2: telefono2.trim() || null,
       direccion_barrio: direccionBarrio.trim() || null,
+      direccion_barrio_2: direccionBarrio2.trim() || null,
       localidad_provincia: localidadProvincia.trim() || null,
       transporte: transporte.trim() || null,
       direccion_entrega: direccionEntrega.trim() || null,
+      direccion_entrega_2: direccionEntrega2.trim() || null,
       valor_declarado: valorDeclarado || null,
       cuenta,
       sucursal: sucursal.trim() || null,
@@ -374,10 +383,18 @@ function ClienteModal({ cliente, nCliente, onClose, onSaved }: { cliente: Client
               <span className="mb-0.5 block text-[11px] font-medium text-sub">Telefono</span>
               <input value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder="3516 82-1473" className={inputCls} />
             </label>
+            <label className="block">
+              <span className="mb-0.5 block text-[11px] font-medium text-sub">Telefono 2</span>
+              <input value={telefono2} onChange={(e) => setTelefono2(e.target.value)} placeholder="Opcional" className={inputCls} />
+            </label>
 
             <label className="block">
               <span className="mb-0.5 block text-[11px] font-medium text-sub">Direccion - Barrio</span>
               <input value={direccionBarrio} onChange={(e) => setDireccionBarrio(e.target.value)} placeholder="Av. Colon 1234, B Centro" className={inputCls} />
+            </label>
+            <label className="block">
+              <span className="mb-0.5 block text-[11px] font-medium text-sub">Direccion - Barrio 2</span>
+              <input value={direccionBarrio2} onChange={(e) => setDireccionBarrio2(e.target.value)} placeholder="Opcional" className={inputCls} />
             </label>
             <label className="block">
               <span className="mb-0.5 block text-[11px] font-medium text-sub">Localidad - Provincia</span>
@@ -391,6 +408,10 @@ function ClienteModal({ cliente, nCliente, onClose, onSaved }: { cliente: Client
             <label className="block">
               <span className="mb-0.5 block text-[11px] font-medium text-sub">Direccion de Entrega</span>
               <input value={direccionEntrega} onChange={(e) => setDireccionEntrega(e.target.value)} placeholder="Calle Falsa 123" className={inputCls} />
+            </label>
+            <label className="block">
+              <span className="mb-0.5 block text-[11px] font-medium text-sub">Direccion de Entrega 2</span>
+              <input value={direccionEntrega2} onChange={(e) => setDireccionEntrega2(e.target.value)} placeholder="Opcional" className={inputCls} />
             </label>
             <label className="block">
               <span className="mb-0.5 block text-[11px] font-medium text-sub">% Valor Declarado</span>
@@ -478,6 +499,7 @@ function ClienteCard({ cliente, onClose, onEdit, puedeEditar }: { cliente: Clien
             <dl className="space-y-2 text-[13px]">
               <Row label="Razón Social" value={cliente.razon_social} />
               <Row label="Teléfono" value={cliente.telefono} />
+              {cliente.telefono_2 && <Row label="Teléfono 2" value={cliente.telefono_2} />}
               <Row label="Transporte" value={cliente.transporte} />
               <Row label="Cuenta" value={cliente.cuenta} />
               <Row label="Sucursal" value={cliente.sucursal} />
@@ -490,8 +512,10 @@ function ClienteCard({ cliente, onClose, onEdit, puedeEditar }: { cliente: Clien
             <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-sub/70">Direcciones</h3>
             <dl className="space-y-2 text-[13px]">
               <Row label="Dirección - Barrio" value={cliente.direccion_barrio} />
+              {cliente.direccion_barrio_2 && <Row label="Dirección - Barrio 2" value={cliente.direccion_barrio_2} />}
               <Row label="Localidad - Prov." value={cliente.localidad_provincia} />
               <Row label="Dirección de Entrega" value={cliente.direccion_entrega} />
+              {cliente.direccion_entrega_2 && <Row label="Dirección de Entrega 2" value={cliente.direccion_entrega_2} />}
             </dl>
           </section>
 
