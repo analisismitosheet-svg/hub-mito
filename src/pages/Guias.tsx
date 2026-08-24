@@ -44,7 +44,7 @@ const selectCls = inputCls + ' appearance-none'
 /* ------------------------------------------------------------------ */
 
 type SortKey = keyof Guia
-function cleanVal(s: string): string { return s.replace(/[\u200B\uFEFF\u00A0]/g, '').trim() }
+
 
 /* ------------------------------------------------------------------ */
 /*  Main Component                                                     */
