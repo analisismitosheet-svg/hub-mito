@@ -419,7 +419,7 @@ function FactModal({ registro, clientes, empleados, onClose, onSaved }: {
   const [clienteId, setClienteId] = useState(registro?.cliente_id || '')
   const [razonSocial, setRazonSocial] = useState(registro?.razon_social || '')
   const [nCliente, setNCliente] = useState<number | null>(registro?.n_cliente ?? null)
-  const [fechaFact, setFechaFact] = useState(registro?.fecha_fact || '')
+  const [fechaFact, setFechaFact] = useState(registro?.fecha_fact || new Date().toISOString().slice(0, 10))
   const [nRemito, setNRemito] = useState(registro?.n_remito || '')
   const [bulto, setBulto] = useState(registro?.bulto != null ? String(registro.bulto) : '')
   const [transporte, setTransporte] = useState(registro?.transporte || '')
