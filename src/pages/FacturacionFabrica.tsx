@@ -41,7 +41,7 @@ interface EmpleadoMini { id: string; legajo: string | null; nombre: string }
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
 
-const TRANSPORTE_OPCIONES = ['RETIRA', 'COMISIONISTA', 'CAFETERIA', 'CREDIFIN', 'OTRO']
+const TRANSPORTE_OPCIONES = ['RETIRA', 'COMISIONISTA', 'CADERTERIA', 'CREDIFIN', 'OTRO']
 const RETIRO_OPCIONES = ['VERDADERO', 'FALSO']
 const VALOR_DEC_OPCIONES = ['Al neto', '75%', '80%', '85%', '90%', '100%']
 const inputCls = 'w-full rounded-xl border border-line bg-surface2 px-3 py-1.5 text-[13px] text-ink outline-none transition duration-250 placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40'
