@@ -104,7 +104,7 @@ export default function Clientes() {
   const lista = useMemo(() => {
     let r = todos
     if (filtro !== 'todos') r = r.filter((c) => c.estado === filtro)
-    if (term) r = r.filter((c) => (c.razon_social || '').toUpperCase().includes(term) || (c.telefono || '').replace(/\D/g, '').includes(term.replace(/\D/g, '')))
+    if (term) r = r.filter((c) => (c.razon_social || '').toUpperCase().includes(term) || String(c.n_cliente).includes(term.replace(/\D/g, '')) || (c.telefono || '').replace(/\D/g, '').includes(term.replace(/\D/g, '')))
     r = [...r].sort((a, b) => {
       const av = (a[sortKey] ?? '') as string
       const bv = (b[sortKey] ?? '') as string
@@ -176,7 +176,7 @@ export default function Clientes() {
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[180px]">
           <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sub/70" aria-hidden />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por razon social o telefono..." className={inputCls + ' pl-8 text-xs'} />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por N° cliente, razon social o telefono..." className={inputCls + ' pl-8 text-xs'} />
         </div>
         <select value={filtro} onChange={(e) => setFiltro(e.target.value as typeof filtro)} className={inputCls + ' w-auto text-xs'}>
           <option value="todos">Todos</option><option value="ACTIVO">Activos</option><option value="INACTIVO">Inactivos</option>
