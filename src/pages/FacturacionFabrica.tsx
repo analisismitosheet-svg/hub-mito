@@ -216,7 +216,8 @@ export default function FacturacionFabrica() {
 
   const dateRange = useMemo(() => {
     const fechas = todos.map((r) => r.fecha_fact).filter(Boolean).sort()
-    return { min: fechas[0] || '2025-01-01', max: fechas[fechas.length - 1] || '2026-12-31' }
+    const today = new Date().toISOString().slice(0, 10)
+    return { min: fechas[0] || today, max: today }
   }, [todos])
 
   const lista = useMemo(() => {
