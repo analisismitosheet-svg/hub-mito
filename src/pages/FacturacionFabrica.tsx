@@ -220,7 +220,7 @@ export default function FacturacionFabrica() {
   ) : null
 
   return (
-    <Layout>
+    <Layout wide>
       <ToastEl />
       <BackButton />
       <header className="mb-3 mt-2">

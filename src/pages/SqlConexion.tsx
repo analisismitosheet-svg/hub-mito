@@ -146,7 +146,7 @@ export default function SqlConexion() {
         </div>
         <div>
           <h1 className="font-display text-2xl font-bold text-ink">Conexión SQL</h1>
-          <p className="text-sm text-sub">Enlace al SQL Server de la empresa vía Logic App + Gateway.</p>
+          <p className="text-sm text-sub">Enlace al SQL Server de la empresa vía Puente SQL local o Logic App.</p>
         </div>
       </header>
 
@@ -165,9 +165,9 @@ export default function SqlConexion() {
       <section className="mb-4 rounded-2xl border border-line bg-surface p-4 shadow-soft">
         <h2 className="font-display mb-1 font-semibold text-ink">Conexión</h2>
         <p className="mb-3 text-sm text-sub">
-          Pegá la URL completa del trigger HTTP del Logic App (incluye{' '}
-          <code className="rounded bg-surface2 px-1 py-0.5 text-xs">sp=/run&amp;sv=…&amp;sig=…</code>). Se guarda acá y solo
-          la ven los administradores; el resto consulta sin ver el secreto.
+          Pegá la URL completa del endpoint: el <strong>Puente SQL</strong> expuesto por túnel
+          (ej. <code className="rounded bg-surface2 px-1 py-0.5 text-xs">https://xxxx.trycloudflare.com</code>) o el trigger
+          del Logic App. Se guarda acá y solo la ven los administradores; el resto consulta sin ver el secreto.
         </p>
         <form onSubmit={guardarConfig} className="flex flex-wrap items-end gap-2">
           <label className="block min-w-[260px] flex-1">

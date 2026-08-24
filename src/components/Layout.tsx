@@ -2,13 +2,18 @@ import type { ReactNode } from 'react'
 import { LogOut } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 
-export default function Layout({ children }: { children: ReactNode }) {
+/**
+ * Shell de la app. Por defecto usa un contenedor ancho (aprovecha toda la pantalla).
+ * Pasar `wide={false}` para volver a un ancho centrado y angosto en una página puntual.
+ */
+export default function Layout({ children, wide = true }: { children: ReactNode; wide?: boolean }) {
   const { user, signOut, configured } = useAuth()
+  const maxW = wide ? 'max-w-[1600px]' : 'max-w-5xl'
 
   return (
     <div className="min-h-screen bg-paper text-ink">
       <header className="sticky top-0 z-10 border-b border-line bg-paper/85 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
+        <div className={`mx-auto flex ${maxW} items-center justify-between px-4 py-3`}>
           <div className="flex items-center gap-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 font-display text-sm font-bold text-white shadow-glow">
               M
@@ -28,7 +33,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           )}
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-4 py-8">{children}</main>
+      <main className={`mx-auto ${maxW} px-4 py-8`}>{children}</main>
     </div>
   )
 }
