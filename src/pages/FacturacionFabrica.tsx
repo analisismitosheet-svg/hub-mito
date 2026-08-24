@@ -375,7 +375,6 @@ function FactCard({ registro: r, onClose, onEdit, puedeEditar, empleados }: {
             <dl className="space-y-2 text-[13px]">
               <CRow label="Solicitud Retiro" value={r.solicitud_retiro || 'FALSO'} badge badgeCls={retiroStyle(r.solicitud_retiro)} />
               <CRow label="POLO52" value={r.polo52 ? 'VERDADERO' : 'FALSO'} badge badgeCls={r.polo52 ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' : 'bg-surface2 text-sub border-line'} />
-              <CRow label="N Legajo" value={r.n_legajo} />
               <CRow label="Quien Facturo" value={empLabel ? `#${empLabel.legajo} - ${empLabel.nombre}` : r.quien_facturo} />
               <CRow label="Quien Retira en Fabrica" value={r.quien_retira_fabrica} />
             </dl>
@@ -546,7 +545,6 @@ function FactModal({ registro, clientes, empleados, onClose, onSaved }: {
               <select value={solicitudRetiro} onChange={(e) => setSolicitudRetiro(e.target.value)} className={selectCls}>{RETIRO_OPCIONES.map((v) => <option key={v} value={v}>{v}</option>)}</select>
             </label>
             <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Total Despachos</span><input value={totalDespachos} onChange={(e) => setTotalDespachos(e.target.value)} placeholder="-" className={inputCls} /></label>
-            <label className="block"><span className="mb-1 block text-xs font-medium text-sub">N Legajo</span><input value={nLegajo} readOnly className={inputCls + ' bg-line/30 text-sub'} placeholder="Auto" /></label>
 
             {/* Row 4 — Employee autocomplete */}
             <label className="block sm:col-span-2 relative">
