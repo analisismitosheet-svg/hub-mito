@@ -219,6 +219,17 @@ export const APPS: AppDef[] = [
     permiso: 'mayorista.facturacion.view',
   },
   {
+    id: 'mayorista-guias',
+    areaId: 'mayorista',
+    title: 'Guias',
+    description: 'Gestion de guias de despacho y pedidos.',
+    icon: ClipboardList,
+    kind: 'internal',
+    target: '/mayorista/guias',
+    color: '#0891b2',
+    permiso: 'mayorista.guias.view',
+  },
+  {
     id: 'deposito-repo',
     areaId: 'deposito',
     title: 'Repos Depósito',
