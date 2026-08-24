@@ -64,7 +64,8 @@ function cleanVal(s: string): string { return s.replace(/[\u200B\uFEFF\u00A0]/g,
 
 function excelDate(val: unknown): string | null {
   if (val == null || val === '') return null
-  const s = String(val).trim()
+  let s = String(val).trim()
+  if (s.includes('\t')) s = s.split('\t')[0].trim()
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10)
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) { const [d, m, y] = s.split('/'); return `${y}-${m}-${d}` }
   const n = Number(s)
@@ -76,88 +77,12 @@ function excelDate(val: unknown): string | null {
   return null
 }
 
-function dateToNum(iso: string): number { return new Date(iso + 'T00:00:00').getTime() }
-function numToDate(ts: number): string { return new Date(ts).toISOString().slice(0, 10) }
 function fmtDateSlider(iso: string | null): string {
   if (!iso) return ''
   const fixed = excelDate(iso) || iso
   if (fixed.includes('-')) { const [y, m, d] = fixed.split('-'); return `${d}/${m}/${y}` }
   if (fixed.includes('/')) { const [d, m, y] = fixed.split('/'); return `${d}/${m}/${y}` }
   return fixed
-}
-
-function DateRangeSlider({ min, max, desde, hasta, onDesde, onHasta }: {
-  min: string; max: string; desde: string; hasta: string
-  onDesde: (v: string) => void; onHasta: (v: string) => void
-}) {
-  const trackRef = useRef<HTMLDivElement>(null)
-  const minNum = dateToNum(min)
-  const maxNum = dateToNum(max)
-  const desdeNum = dateToNum(desde)
-  const hastaNum = dateToNum(hasta)
-  const pctFrom = ((desdeNum - minNum) / (maxNum - minNum)) * 100
-  const pctTo = ((hastaNum - minNum) / (maxNum - minNum)) * 100
-
-  function fromPct(pct: number): string {
-    const ts = minNum + (pct / 100) * (maxNum - minNum)
-    return numToDate(ts)
-  }
-  function handleTrack(e: React.MouseEvent<HTMLDivElement>) {
-    const rect = e.currentTarget.getBoundingClientRect()
-    const pct = Math.round(((e.clientX - rect.left) / rect.width) * 100)
-    const val = fromPct(pct)
-    const mid = (desdeNum + hastaNum) / 2
-    if (dateToNum(val) < mid) onDesde(val); else onHasta(val)
-  }
-  function onInput(pct: number, side: 'from' | 'to') {
-    const val = fromPct(Math.max(0, Math.min(100, pct)))
-    if (side === 'from' && dateToNum(val) <= hastaNum) onDesde(val)
-    else if (side === 'to' && dateToNum(val) >= desdeNum) onHasta(val)
-  }
-
-  const months = useMemo(() => {
-    const arr: { label: string; pct: number }[] = []
-    const d = new Date(min + 'T00:00:00')
-    const end = new Date(max + 'T00:00:00')
-    while (d <= end) {
-      const pct = ((d.getTime() - minNum) / (maxNum - minNum)) * 100
-      arr.push({ label: d.toLocaleDateString('es', { month: 'short', year: '2-digit' }), pct })
-      d.setMonth(d.getMonth() + 3)
-    }
-    return arr
-  }, [min, max])
-
-  return (
-    <div className="flex flex-col gap-1 w-44 shrink-0 select-none">
-      <div className="flex items-center justify-between">
-        <span className="text-[11px] font-medium text-ink">{fmtDateSlider(desde)}</span>
-        <span className="text-[11px] font-medium text-ink">{fmtDateSlider(hasta)}</span>
-      </div>
-      <div ref={trackRef} className="relative h-6 flex items-center cursor-pointer" onClick={handleTrack}>
-        <div className="absolute inset-x-0 h-1.5 rounded-full bg-zinc-700" />
-        <div className="absolute h-1.5 rounded-full bg-brand-600" style={{ left: `${pctFrom}%`, width: `${pctTo - pctFrom}%` }} />
-        <input type="range" min={0} max={100} step={0.1} value={pctFrom}
-          onChange={(e) => onInput(parseFloat(e.target.value), 'from')}
-          className="slider-thumb absolute inset-0 w-full opacity-0 cursor-pointer z-10"
-          style={{ pointerEvents: 'all' }}
-          aria-label="Fecha desde" />
-        <input type="range" min={0} max={100} step={0.1} value={pctTo}
-          onChange={(e) => onInput(parseFloat(e.target.value), 'to')}
-          className="slider-thumb absolute inset-0 w-full opacity-0 cursor-pointer z-20"
-          style={{ pointerEvents: 'all' }}
-          aria-label="Fecha hasta" />
-        <div className="absolute w-3.5 h-3.5 rounded-full bg-brand-500 border-2 border-zinc-900 shadow-lg pointer-events-none z-30"
-          style={{ left: `calc(${pctFrom}% - 7px)` }} />
-        <div className="absolute w-3.5 h-3.5 rounded-full bg-brand-500 border-2 border-zinc-900 shadow-lg pointer-events-none z-30"
-          style={{ left: `calc(${pctTo}% - 7px)` }} />
-      </div>
-      <div className="relative h-4 mx-1 overflow-hidden">
-        {months.filter((m) => m.pct >= 0 && m.pct <= 100).map((m, i) => (
-          <span key={i} className="absolute text-[8px] text-sub/60 -translate-x-1/2" style={{ left: `${m.pct}%` }}>{m.label}</span>
-        ))}
-      </div>
-    </div>
-  )
 }
 
 /* ------------------------------------------------------------------ */
@@ -230,13 +155,6 @@ export default function FacturacionFabrica() {
   const transporteFiltro = useMemo(() => {
     return [...transportes].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
   }, [transportes])
-
-  const dateRange = useMemo(() => {
-    const fechas = todos.map((r) => excelDate(r.fecha_fact)).filter(Boolean).sort()
-    const today = new Date().toISOString().slice(0, 10)
-    const maxData = fechas[fechas.length - 1] || today
-    return { min: fechas[0] || today, max: maxData > today ? maxData : today }
-  }, [todos])
 
   const lista = useMemo(() => {
     let r = todos
@@ -322,9 +240,11 @@ export default function FacturacionFabrica() {
           <option value="todos">Todos transportes</option>
           {transporteFiltro.map((t) => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}
         </select>
-        <DateRangeSlider min={dateRange.min} max={dateRange.max}
-          desde={filtroFechaDesde || dateRange.min} hasta={filtroFechaHasta || dateRange.max}
-          onDesde={setFiltroFechaDesde} onHasta={setFiltroFechaHasta} />
+        <div className="flex items-center gap-1">
+          <input type="date" value={filtroFechaDesde} onChange={(e) => setFiltroFechaDesde(e.target.value)} className={inputCls + ' w-auto text-xs'} title="Fecha desde" />
+          <span className="text-[10px] text-sub/50">—</span>
+          <input type="date" value={filtroFechaHasta} onChange={(e) => setFiltroFechaHasta(e.target.value)} className={inputCls + ' w-auto text-xs'} title="Fecha hasta" />
+        </div>
         <label className="flex items-center gap-1.5 text-xs text-sub">
           <input type="checkbox" checked={filtroPol} onChange={(e) => setFiltroPol(e.target.checked)} className="h-3.5 w-3.5 rounded border-line bg-surface2 accent-brand-600" />
           Solo POLO52
