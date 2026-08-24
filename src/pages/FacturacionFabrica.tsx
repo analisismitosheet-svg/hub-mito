@@ -66,8 +66,9 @@ function dateToNum(iso: string): number { return new Date(iso + 'T00:00:00').get
 function numToDate(ts: number): string { return new Date(ts).toISOString().slice(0, 10) }
 function fmtDateSlider(iso: string | null): string {
   if (!iso) return ''
-  const [y, m, d] = iso.split('-')
-  return `${d}/${m}/${y}`
+  if (iso.includes('-')) { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}` }
+  if (iso.includes('/')) { const [d, m, y] = iso.split('/'); return `${d}/${m}/${y}` }
+  return iso
 }
 
 function DateRangeSlider({ min, max, desde, hasta, onDesde, onHasta }: {
@@ -217,7 +218,8 @@ export default function FacturacionFabrica() {
   const dateRange = useMemo(() => {
     const fechas = todos.map((r) => r.fecha_fact).filter(Boolean).sort()
     const today = new Date().toISOString().slice(0, 10)
-    return { min: fechas[0] || today, max: today }
+    const maxData = fechas[fechas.length - 1] || today
+    return { min: fechas[0] || today, max: maxData > today ? maxData : today }
   }, [todos])
 
   const lista = useMemo(() => {
@@ -362,7 +364,7 @@ export default function FacturacionFabrica() {
                   <tr key={r.id} className="transition hover:bg-line/20 cursor-pointer" onClick={() => setCard(r)}>
                     <td className="px-1 py-[2px] text-center text-[10px] font-medium text-sub">{r.autorizacion || '-'}</td>
                     <td className="px-1 py-[2px]"><span className="block truncate font-medium text-ink" title={r.razon_social || ''}>{r.razon_social || '-'}</span></td>
-                    <td className="px-1 py-[2px] text-center text-sub whitespace-nowrap">{r.fecha_fact || '-'}</td>
+                    <td className="px-1 py-[2px] text-center text-sub whitespace-nowrap">{fmtDateSlider(r.fecha_fact) || '-'}</td>
                     <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={r.n_remito || ''}>{r.n_remito || '-'}</span></td>
                     <td className="px-1 py-[2px] text-center text-sub">{fmtN(r.n_cliente)}</td>
                     <td className="px-1 py-[2px] text-center text-sub">{fmtN(r.bulto)}</td>
@@ -438,7 +440,7 @@ function FactCard({ registro: r, onClose, onEdit, puedeEditar, empleados }: {
             <div className="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-sub">
               <span className="font-medium text-ink">Aut: {r.autorizacion || '-'}</span>
               <span className="text-sub/50">|</span>
-              <span>F.Fact: {r.fecha_fact || '-'}</span>
+              <span>F.Fact: {fmtDateSlider(r.fecha_fact) || '-'}</span>
               {r.fecha_envio && <><span className="text-sub/50">|</span><span>F.Envio: {r.fecha_envio}</span></>}
             </div>
           </div>
