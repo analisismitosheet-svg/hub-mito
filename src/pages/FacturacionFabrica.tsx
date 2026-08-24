@@ -186,6 +186,7 @@ export default function FacturacionFabrica() {
   const [sortKey, setSortKey] = useState<SortKey>('fecha_fact')
   const [sortAsc, setSortAsc] = useState(false)
   const [card, setCard] = useState<FactRegistro | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
   const POR_PAGINA = 50
 
   const [clientes, setClientes] = useState<ClienteMini[]>([])
@@ -279,6 +280,21 @@ export default function FacturacionFabrica() {
     setSel(null); setCard(null); await cargar(); mostrarToast('Registro eliminado')
   }
 
+  const toggleSelect = (id: string) => setSelected((prev) => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
+  const allSelected = listaPagina.length > 0 && listaPagina.every((r) => selected.has(r.id))
+  const toggleSelectAll = () => {
+    if (allSelected) setSelected(new Set())
+    else setSelected(new Set(listaPagina.map((r) => r.id)))
+  }
+  async function eliminarSeleccionados() {
+    if (!supabase || selected.size === 0) return
+    if (!window.confirm(`Eliminar ${selected.size} registro(s)?`)) return
+    const ids = [...selected]
+    const { error: err } = await supabase.from('facturacion_fabrica').delete().in('id', ids)
+    if (err) { mostrarToast('Error al eliminar'); return }
+    setSelected(new Set()); await cargar(); mostrarToast(`${ids.length} registro(s) eliminados`)
+  }
+
   const polCount = todos.filter((f) => f.polo52).length
 
   const ToastEl = () => toast ? (
@@ -314,6 +330,9 @@ export default function FacturacionFabrica() {
           Solo POLO52
         </label>
         <span className="text-[11px] text-sub/70">{lista.length} registros {polCount > 0 && isAdmin ? `(${polCount} POLO52)` : ''}</span>
+        {selected.size > 0 && puedeBorrar && (
+          <button onClick={() => void eliminarSeleccionados()} className="btn-press inline-flex items-center gap-1 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/20"><Trash2 size={13} aria-hidden /> Eliminar ({selected.size})</button>
+        )}
         {puedeCrear && (
           <>
             <button onClick={() => setModal('importar')} className="btn-press inline-flex items-center gap-1 rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line"><Upload size={13} aria-hidden /> Importar</button>
@@ -335,6 +354,7 @@ export default function FacturacionFabrica() {
           <div className="w-full overflow-x-auto">
             <table className="w-full table-fixed border-collapse text-[11px] leading-tight">
               <colgroup>
+                <col className="w-[3%]" />  {/* Check */}
                 <col className="w-[4%]" />  {/* Aut */}
                 <col className="w-[11%]" /> {/* Razon */}
                 <col className="w-[6%]" />  {/* F.Fact */}
@@ -355,6 +375,7 @@ export default function FacturacionFabrica() {
               </colgroup>
               <thead>
                 <tr className="border-b border-line bg-zinc-800 text-left text-[9px] font-semibold uppercase tracking-wider text-zinc-300">
+                  <th className="px-1 py-1 text-center"><input type="checkbox" checked={allSelected} onChange={toggleSelectAll} className="h-3 w-3 rounded border-line bg-surface2 accent-brand-600" /></th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('autorizacion')}>Aut{sortArrow('autorizacion')}</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('razon_social')}>Razon Social{sortArrow('razon_social')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('fecha_fact')}>F.Fact{sortArrow('fecha_fact')}</th>
@@ -376,7 +397,8 @@ export default function FacturacionFabrica() {
               </thead>
               <tbody className="divide-y divide-line/50 bg-surface">
                 {listaPagina.map((r) => (
-                  <tr key={r.id} className="transition hover:bg-line/20 cursor-pointer" onClick={() => setCard(r)}>
+                  <tr key={r.id} className={'transition hover:bg-line/20 cursor-pointer' + (selected.has(r.id) ? ' bg-brand-600/10' : '')} onClick={() => setCard(r)}>
+                    <td className="px-1 py-[2px] text-center" onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} className="h-3 w-3 rounded border-line bg-surface2 accent-brand-600" /></td>
                     <td className="px-1 py-[2px] text-center text-[10px] font-medium text-sub">{r.autorizacion || '-'}</td>
                     <td className="px-1 py-[2px]"><span className="block truncate font-medium text-ink" title={r.razon_social || ''}>{r.razon_social || '-'}</span></td>
                     <td className="px-1 py-[2px] text-center text-sub whitespace-nowrap">{fmtDateSlider(r.fecha_fact) || '-'}</td>
