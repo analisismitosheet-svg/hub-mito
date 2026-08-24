@@ -61,6 +61,11 @@ function retiroStyle(v: string | null): string {
     : 'bg-surface2 text-sub border-line'
 }
 function cleanVal(s: string): string { return s.replace(/[\u200B\uFEFF\u00A0]/g, '').trim() }
+function fmtDateSlider(iso: string | null): string {
+  if (!iso) return ''
+  const [y, m, d] = iso.split('-')
+  return `${d}/${m}/${y}`
+}
 
 /* ------------------------------------------------------------------ */
 /*  Main Component                                                     */
@@ -132,6 +137,11 @@ export default function FacturacionFabrica() {
     return [...transportes].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
   }, [transportes])
 
+  const dateRange = useMemo(() => {
+    const fechas = todos.map((r) => r.fecha_fact).filter(Boolean).sort()
+    return { min: fechas[0] || '2020-01-01', max: fechas[fechas.length - 1] || '2099-12-31' }
+  }, [todos])
+
   const lista = useMemo(() => {
     let r = todos
     if (!isAdmin && !filtroPol) r = r.filter((f) => !f.polo52)
@@ -201,8 +211,19 @@ export default function FacturacionFabrica() {
           <option value="todos">Todos transportes</option>
           {transporteFiltro.map((t) => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}
         </select>
-        <input type="date" value={filtroFechaDesde} onChange={(e) => setFiltroFechaDesde(e.target.value)} className={inputCls + ' w-auto text-xs'} title="Fecha desde" />
-        <input type="date" value={filtroFechaHasta} onChange={(e) => setFiltroFechaHasta(e.target.value)} className={inputCls + ' w-auto text-xs'} title="Fecha hasta" />
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-sub whitespace-nowrap">{fmtDateSlider(filtroFechaDesde) || '...'}</span>
+          <input type="range" min={dateRange.min || '2020-01-01'} max={dateRange.max || '2099-12-31'} step="1"
+            value={filtroFechaDesde || dateRange.min || '2020-01-01'}
+            onChange={(e) => { const v = e.target.value; if (v <= (filtroFechaHasta || dateRange.max || '2099-12-31')) setFiltroFechaDesde(v) }}
+            className="slider-track w-28 accent-brand-600" title="Fecha desde" />
+          <span className="text-[10px] text-sub/50">—</span>
+          <input type="range" min={dateRange.min || '2020-01-01'} max={dateRange.max || '2099-12-31'} step="1"
+            value={filtroFechaHasta || dateRange.max || '2099-12-31'}
+            onChange={(e) => { const v = e.target.value; if (v >= (filtroFechaDesde || dateRange.min || '2020-01-01')) setFiltroFechaHasta(v) }}
+            className="slider-track w-28 accent-brand-600" title="Fecha hasta" />
+          <span className="text-[11px] text-sub whitespace-nowrap">{fmtDateSlider(filtroFechaHasta) || '...'}</span>
+        </div>
         {isAdmin && (
           <label className="flex items-center gap-1.5 text-xs text-sub">
             <input type="checkbox" checked={filtroPol} onChange={(e) => setFiltroPol(e.target.checked)} className="h-3.5 w-3.5 rounded border-line bg-surface2 accent-brand-600" />
