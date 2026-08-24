@@ -62,13 +62,28 @@ function retiroStyle(v: string | null): string {
 }
 function cleanVal(s: string): string { return s.replace(/[\u200B\uFEFF\u00A0]/g, '').trim() }
 
+function excelDate(val: unknown): string | null {
+  if (val == null || val === '') return null
+  const s = String(val).trim()
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10)
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) { const [d, m, y] = s.split('/'); return `${y}-${m}-${d}` }
+  const n = Number(s)
+  if (!isNaN(n) && n > 30000 && n < 60000) {
+    const epoch = new Date(1899, 11, 30)
+    const d = new Date(epoch.getTime() + n * 86400000)
+    return d.toISOString().slice(0, 10)
+  }
+  return null
+}
+
 function dateToNum(iso: string): number { return new Date(iso + 'T00:00:00').getTime() }
 function numToDate(ts: number): string { return new Date(ts).toISOString().slice(0, 10) }
 function fmtDateSlider(iso: string | null): string {
   if (!iso) return ''
-  if (iso.includes('-')) { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}` }
-  if (iso.includes('/')) { const [d, m, y] = iso.split('/'); return `${d}/${m}/${y}` }
-  return iso
+  const fixed = excelDate(iso) || iso
+  if (fixed.includes('-')) { const [y, m, d] = fixed.split('-'); return `${d}/${m}/${y}` }
+  if (fixed.includes('/')) { const [d, m, y] = fixed.split('/'); return `${d}/${m}/${y}` }
+  return fixed
 }
 
 function DateRangeSlider({ min, max, desde, hasta, onDesde, onHasta }: {
@@ -216,7 +231,7 @@ export default function FacturacionFabrica() {
   }, [transportes])
 
   const dateRange = useMemo(() => {
-    const fechas = todos.map((r) => r.fecha_fact).filter(Boolean).sort()
+    const fechas = todos.map((r) => excelDate(r.fecha_fact)).filter(Boolean).sort()
     const today = new Date().toISOString().slice(0, 10)
     const maxData = fechas[fechas.length - 1] || today
     return { min: fechas[0] || today, max: maxData > today ? maxData : today }
@@ -226,8 +241,8 @@ export default function FacturacionFabrica() {
     let r = todos
     if (filtroPol) r = r.filter((f) => f.polo52)
     if (filtroTransporte !== 'todos') r = r.filter((f) => f.transporte === filtroTransporte)
-    if (filtroFechaDesde) r = r.filter((f) => (f.fecha_fact || '') >= filtroFechaDesde)
-    if (filtroFechaHasta) r = r.filter((f) => (f.fecha_fact || '') <= filtroFechaHasta)
+    if (filtroFechaDesde) r = r.filter((f) => (excelDate(f.fecha_fact) || '') >= filtroFechaDesde)
+    if (filtroFechaHasta) r = r.filter((f) => (excelDate(f.fecha_fact) || '') <= filtroFechaHasta)
     if (term) r = r.filter((f) =>
       (f.razon_social || '').toUpperCase().includes(term) ||
       (f.n_remito || '').replace(/\D/g, '').includes(term.replace(/\D/g, '')) ||
