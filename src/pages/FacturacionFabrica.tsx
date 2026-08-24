@@ -34,7 +34,7 @@ interface FactRegistro {
   created_at: string
 }
 
-interface ClienteMini { id: string; n_cliente: number | null; razon_social: string }
+interface ClienteMini { id: string; n_cliente: string | null; razon_social: string }
 interface EmpleadoMini { id: string; legajo: string | null; nombre: string }
 
 /* ------------------------------------------------------------------ */

@@ -9,7 +9,7 @@ import { useAuth } from '@/context/AuthContext'
 
 interface Cliente {
   id: string
-  n_cliente: number | null
+  n_cliente: string | null
   razon_social: string
   telefono: string | null
   telefono_2: string | null
@@ -53,9 +53,10 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('es-AR', { year: 'numeric', month: '2-digit', day: '2-digit' })
 }
 
-function nextNCliente(todos: Cliente[]): number {
-  const max = todos.reduce((m, c) => Math.max(m, c.n_cliente ?? 0), 0)
-  return max > 0 ? max + 1 : 1001
+function nextNCliente(todos: Cliente[]): string {
+  const nums = todos.map((c) => c.n_cliente).filter(Boolean).map((n) => parseInt(n!, 10)).filter((n) => !isNaN(n))
+  const max = nums.length ? Math.max(...nums) : 0
+  return String(max > 0 ? max + 1 : 1001)
 }
 
 export default function Clientes() {
@@ -349,9 +350,8 @@ function ClienteModal({ cliente, nCliente, onClose, onSaved }: { cliente: Client
     if (cliente) {
       result = await supabase.from('clientes').update(payload).eq('id', cliente.id).select().single()
     } else {
-      const num = parseInt(nClienteVal, 10)
-      if (isNaN(num)) { setError('El N° Cliente es obligatorio y debe ser un número.'); setBusy(false); return }
-      payload.n_cliente = num
+      if (!nClienteVal.trim()) { setError('El N° Cliente es obligatorio.'); setBusy(false); return }
+      payload.n_cliente = nClienteVal.trim()
       result = await supabase.from('clientes').insert(payload).select().single()
     }
     setBusy(false)
@@ -373,7 +373,7 @@ function ClienteModal({ cliente, nCliente, onClose, onSaved }: { cliente: Client
           <div className="grid grid-cols-3 gap-x-4 gap-y-3">
             <label className="block">
               <span className="mb-0.5 block text-[11px] font-medium text-sub">N° Cliente *</span>
-              <input type="number" value={nClienteVal} onChange={(e) => setNClienteVal(e.target.value)} placeholder="1001" className={inputCls} autoFocus />
+              <input type="text" value={nClienteVal} onChange={(e) => setNClienteVal(e.target.value)} placeholder="1001" className={inputCls} autoFocus />
             </label>
             <label className="block">
               <span className="mb-0.5 block text-[11px] font-medium text-sub">Razon Social *</span>
@@ -739,7 +739,7 @@ function ImportarClientes({ todos, onClose, onSaved }: { todos: Cliente[]; onClo
     for (let i = 0; i < toImport.length; i += CHUNK) {
       const chunk = toImport.slice(i, i + CHUNK)
       const payload = chunk.map((r, j) => ({
-        n_cliente: mapping.n_cliente >= 0 ? parseInt(cleanVal(r[headers[mapping.n_cliente]]) || '', 10) || base + i + j : base + i + j,
+        n_cliente: mapping.n_cliente >= 0 ? cleanVal(r[headers[mapping.n_cliente]]) || String(base + i + j) : String(base + i + j),
         razon_social: cleanVal(r[headers[mapping.razon_social]]) || '',
         telefono: mapping.telefono >= 0 ? cleanVal(r[headers[mapping.telefono]]) || null : null,
         direccion_barrio: mapping.direccion_barrio >= 0 ? cleanVal(r[headers[mapping.direccion_barrio]]) || null : null,
