@@ -18,7 +18,7 @@ interface FactRegistro {
   razon_social: string | null
   fecha_fact: string | null
   n_remito: string | null
-  n_cliente: number | null
+  n_cliente: string | null
   bulto: number | null
   transporte: string | null
   porcentaje_declarado: string | null
