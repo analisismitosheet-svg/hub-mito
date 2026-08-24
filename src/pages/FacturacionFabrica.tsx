@@ -92,6 +92,7 @@ export default function FacturacionFabrica() {
 
   const [clientes, setClientes] = useState<ClienteMini[]>([])
   const [empleados, setEmpleados] = useState<EmpleadoMini[]>([])
+  const [transportes, setTransportes] = useState<{ id: string; nombre: string }[]>([])
 
   const mostrarToast = useCallback((msg: string) => {
     setToast(msg)
@@ -102,15 +103,17 @@ export default function FacturacionFabrica() {
   const cargar = useCallback(async () => {
     if (!supabase) { setCargando(false); return }
     setCargando(true); setError(null)
-    const [res, clRes, emRes] = await Promise.all([
+    const [res, clRes, emRes, trRes] = await Promise.all([
       supabase.from('facturacion_fabrica').select('*').order('created_at', { ascending: false }).limit(5000),
       supabase.from('clientes').select('id,n_cliente,razon_social').eq('estado', 'ACTIVO').order('razon_social'),
       supabase.from('empleados').select('id,legajo,nombre').order('nombre'),
+      supabase.from('transportes').select('id,nombre').order('nombre'),
     ])
     if (res.error) setError(res.error.message)
     setTodos((res.data as FactRegistro[]) ?? [])
     setClientes((clRes.data as ClienteMini[]) ?? [])
     setEmpleados((emRes.data as EmpleadoMini[]) ?? [])
+    setTransportes((trRes.data as { id: string; nombre: string }[]) ?? [])
     setCargando(false)
   }, [])
 
@@ -125,11 +128,9 @@ export default function FacturacionFabrica() {
 
   /* Filtering */
   const term = q.trim().toUpperCase()
-  const transporteUnicos = useMemo(() => {
-    const s = new Set<string>()
-    todos.forEach((r) => { if (r.transporte) s.add(r.transporte) })
-    return [...s].sort()
-  }, [todos])
+  const transporteFiltro = useMemo(() => {
+    return [...transportes].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+  }, [transportes])
 
   const lista = useMemo(() => {
     let r = todos
@@ -198,7 +199,7 @@ export default function FacturacionFabrica() {
         </div>
         <select value={filtroTransporte} onChange={(e) => setFiltroTransporte(e.target.value)} className={selectCls + ' w-auto text-xs'}>
           <option value="todos">Todos transportes</option>
-          {transporteUnicos.map((t) => <option key={t} value={t}>{t}</option>)}
+          {transporteFiltro.map((t) => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}
         </select>
         <input type="date" value={filtroFechaDesde} onChange={(e) => setFiltroFechaDesde(e.target.value)} className={inputCls + ' w-auto text-xs'} title="Fecha desde" />
         <input type="date" value={filtroFechaHasta} onChange={(e) => setFiltroFechaHasta(e.target.value)} className={inputCls + ' w-auto text-xs'} title="Fecha hasta" />
