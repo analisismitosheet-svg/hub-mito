@@ -114,3 +114,21 @@ body {
   border: 2px solid #18181b;
   cursor: pointer;
 }
+
+.slider-thumb::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: transparent;
+  cursor: grab;
+}
+.slider-thumb::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  cursor: grab;
+}
+.slider-thumb:active { cursor: grabbing; }
