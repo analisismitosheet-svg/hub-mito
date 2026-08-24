@@ -298,6 +298,7 @@ export default function Clientes() {
 }
 
 function ClienteModal({ cliente, nCliente, onClose, onSaved }: { cliente: Cliente | null; nCliente: number | null; onClose: () => void; onSaved: () => void }) {
+  const [nClienteVal, setNClienteVal] = useState<string>(nCliente != null ? String(nCliente) : '')
   const [razonSocial, setRazonSocial] = useState(cliente?.razon_social || '')
   const [telefono, setTelefono] = useState(cliente?.telefono || '')
   const [direccionBarrio, setDireccionBarrio] = useState(cliente?.direccion_barrio || '')
@@ -339,7 +340,9 @@ function ClienteModal({ cliente, nCliente, onClose, onSaved }: { cliente: Client
     if (cliente) {
       result = await supabase.from('clientes').update(payload).eq('id', cliente.id).select().single()
     } else {
-      payload.n_cliente = nCliente
+      const num = parseInt(nClienteVal, 10)
+      if (isNaN(num)) { setError('El N° Cliente es obligatorio y debe ser un número.'); setBusy(false); return }
+      payload.n_cliente = num
       result = await supabase.from('clientes').insert(payload).select().single()
     }
     setBusy(false)
@@ -353,7 +356,6 @@ function ClienteModal({ cliente, nCliente, onClose, onSaved }: { cliente: Client
         <div className="flex items-center justify-between border-b border-line px-5 py-3">
           <h2 className="flex items-center gap-2 font-display font-semibold text-ink">
             <Hash size={16} aria-hidden /> {cliente ? 'Editar cliente' : 'Nuevo Cliente'}
-            {nCliente != null && <span className="ml-2 rounded-full border border-line bg-surface2 px-2 py-0.5 text-xs font-medium text-sub">N° {nCliente}</span>}
           </h2>
           <button onClick={onClose} aria-label="Cerrar" className="rounded-lg p-1.5 text-sub hover:bg-line hover:text-ink"><X size={18} aria-hidden /></button>
         </div>
@@ -361,8 +363,8 @@ function ClienteModal({ cliente, nCliente, onClose, onSaved }: { cliente: Client
         <form onSubmit={(e) => void handleSubmit(e)} className="flex-1 overflow-y-auto px-5 py-4">
           <div className="grid grid-cols-3 gap-x-4 gap-y-3">
             <label className="block">
-              <span className="mb-0.5 block text-[11px] font-medium text-sub">N° Cliente</span>
-              <input value={nCliente ?? ''} disabled className="w-full rounded-xl border border-line bg-surface px-3 py-1.5 text-[13px] text-sub/60" />
+              <span className="mb-0.5 block text-[11px] font-medium text-sub">N° Cliente *</span>
+              <input type="number" value={nClienteVal} onChange={(e) => setNClienteVal(e.target.value)} placeholder="1001" className={inputCls} autoFocus />
             </label>
             <label className="block">
               <span className="mb-0.5 block text-[11px] font-medium text-sub">Razon Social *</span>
