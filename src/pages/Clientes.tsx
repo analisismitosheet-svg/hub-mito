@@ -44,10 +44,7 @@ function iniciales(nombre: string | null): string {
   return ((p[0]?.[0] || '') + (p[1]?.[0] || '')).slice(0, 2).toUpperCase() || '?'
 }
 
-function fmtN(n: number | null): string {
-  if (n == null) return '-'
-  return String(n)
-}
+function fmtN(n: number | string | null): string { return n == null ? '-' : String(n) }
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('es-AR', { year: 'numeric', month: '2-digit', day: '2-digit' })
@@ -301,7 +298,7 @@ export default function Clientes() {
   )
 }
 
-function ClienteModal({ cliente, nCliente, onClose, onSaved }: { cliente: Cliente | null; nCliente: number | null; onClose: () => void; onSaved: () => void }) {
+function ClienteModal({ cliente, nCliente, onClose, onSaved }: { cliente: Cliente | null; nCliente: string | null; onClose: () => void; onSaved: () => void }) {
   const [nClienteVal, setNClienteVal] = useState<string>(nCliente != null ? String(nCliente) : '')
   const [razonSocial, setRazonSocial] = useState(cliente?.razon_social || '')
   const [telefono, setTelefono] = useState(cliente?.telefono || '')

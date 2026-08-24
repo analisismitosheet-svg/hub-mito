@@ -505,7 +505,7 @@ function FactModal({ registro, clientes, empleados, onClose, onSaved }: {
   const [autorizacion, setAutorizacion] = useState(registro?.autorizacion || '')
   const [clienteId, setClienteId] = useState(registro?.cliente_id || '')
   const [razonSocial, setRazonSocial] = useState(registro?.razon_social || '')
-  const [nCliente, setNCliente] = useState<number | null>(registro?.n_cliente ?? null)
+  const [nCliente, setNCliente] = useState<string | null>(registro?.n_cliente ?? null)
   const [fechaFact, setFechaFact] = useState(registro?.fecha_fact || new Date().toISOString().slice(0, 10))
   const [nRemito, setNRemito] = useState(registro?.n_remito || '')
   const [bulto, setBulto] = useState(registro?.bulto != null ? String(registro.bulto) : '')
@@ -766,10 +766,9 @@ function ImportFacturacion({ clientes, empleados, onClose, onSaved }: {
 
       /* BUSCARV N° CLIENTE → cliente */
       const ncRaw = cleanVal(nr.n_cliente || '')
-      const nc = ncRaw ? Number(ncRaw) : NaN
-      if (!nc || isNaN(nc)) { errs.push({ idx: i, err: `Fila ${i + 1}: N° Cliente "${ncRaw}" invalido.` }); return }
-      const cli = clientes.find((c) => c.n_cliente === nc)
-      if (!cli) { errs.push({ idx: i, err: `Fila ${i + 1}: Cliente Nº ${nc} no existe en el sistema.` }); return }
+      if (!ncRaw) { errs.push({ idx: i, err: `Fila ${i + 1}: N° Cliente vacio.` }); return }
+      const cli = clientes.find((c) => String(c.n_cliente) === ncRaw)
+      if (!cli) { errs.push({ idx: i, err: `Fila ${i + 1}: Cliente Nº ${ncRaw} no existe en el sistema.` }); return }
       nr._cliente_id = cli.id; nr.n_cliente = cli.n_cliente; nr.razon_social = cli.razon_social
 
       /* BUSCARV LEGAJO / NOMBRE → empleado */
