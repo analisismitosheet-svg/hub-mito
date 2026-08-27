@@ -1,0 +1,13 @@
+{
+  "name": "puente-sql",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Puente de solo lectura entre el SQL Server local y la PWA hub-mito (vía túnel HTTPS).",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "mssql": "^10.0.2"
+  }
+}

@@ -14,6 +14,8 @@
  *   SQL_LOGICAPP_URL            - fallback si no hay URL guardada en BD
  *   SQL_VIEWS                   - whitelist fija opcional, ej: vw_stock,vw_precios
  *   SQL_MAX_ROWS                - fallback del tope de filas (default 1000)
+ *   SQL_BRIDGE_TOKEN            - si el destino es el Puente SQL local, el mismo
+ *                                 valor que su PUENTE_TOKEN (el Logic App lo ignora)
  *
  * La configuración completa se gestiona desde Configuraciones > Conexión SQL:
  *   - URL de la Logic App + tope de filas: tabla sql_conexion (prioridad sobre env)
@@ -144,11 +146,14 @@ export default async function handler(req: Req, res: Res) {
   try {
     la = await fetch(logicUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(process.env.SQL_BRIDGE_TOKEN ? { 'X-Puente-Token': process.env.SQL_BRIDGE_TOKEN } : {}),
+      },
       body: JSON.stringify({ vista, top }),
     })
   } catch {
-    return res.status(504).json({ error: 'No se pudo contactar la Logic App' })
+    return res.status(504).json({ error: 'No se pudo contactar la Logic App / Puente SQL' })
   }
 
   if (!la.ok) {
