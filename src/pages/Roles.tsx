@@ -19,30 +19,6 @@ interface Permiso {
   orden: number
 }
 
-/** Normaliza la acción de un permiso a una etiqueta CRUD legible. */
-function accionHumana(p: Permiso): string {
-  const a = p.accion.toLowerCase()
-  if (a.endsWith('.view') || a === 'view') return 'Ver'
-  if (a.endsWith('.create') || a === 'create') return 'Crear'
-  if (a.endsWith('.edit') || a.endsWith('.update') || a === 'edit' || a === 'update') return 'Editar'
-  if (a.endsWith('.delete') || a === 'delete') return 'Eliminar'
-  if (a.includes('import') || a === 'import') return 'Importar'
-  if (a.includes('mark') || a === 'mark') return 'Marcar'
-  if (a.includes('gestionar') || a === 'gestionar') return 'Gestionar'
-  if (a === 'borrar') return 'Borrar'
-  if (a === 'regenerar') return 'Regenerar'
-  return p.label
-}
-
-/** Etiqueta de alcance para distinguir items duplicados de la misma acción. */
-function alcanceEtiqueta(p: Permiso): string {
-  const c = (p.clave || '').toLowerCase()
-  const l = (p.label || '').toLowerCase()
-  if (c.includes('ver_todo') || l.includes('todos') || l.includes('todas')) return 'Todos'
-  if (l.includes('propias') || l.includes('propios') || l.includes('solo')) return 'Mías'
-  return ''
-}
-
 export default function Roles() {
   const [roles, setRoles] = useState<Rol[]>([])
   const [permisos, setPermisos] = useState<Permiso[]>([])
@@ -266,23 +242,6 @@ function RolPermisosModal({
 
   function toggle(clave: string) { setSel((s) => { const n = new Set(s); if (n.has(clave)) n.delete(clave); else n.add(clave); return n }) }
 
-  // Matriz por área: reduce los permisos a Acciones únicas (sin duplicados),
-  // presentándolas como columnas CRUD estándar con un Alcance cuando aplica.
-  const matriz: { area: typeof AREAS[number]; acciones: { accion: string; items: Permiso[] }[] }[] =
-    useMemo(() => {
-      return areasPermisos.map(({ area, permisos: areaPerms }) => {
-        const mapa = new Map<string, Permiso[]>()
-        for (const p of areaPerms) {
-          // normaliza la acción: '.view'/'read' -> "Ver", etc.
-          const a = accionHumana(p)
-          if (!mapa.has(a)) mapa.set(a, [])
-          mapa.get(a)!.push(p)
-        }
-        const acciones = Array.from(mapa.entries()).map(([accion, items]) => ({ accion, items }))
-        return { area, acciones }
-      })
-    }, [areasPermisos])
-
   function toggleArea(claves: string[]) {
     setSel((s) => {
       const n = new Set(s)
@@ -327,8 +286,7 @@ function RolPermisosModal({
             <div className="flex items-center justify-center gap-2 py-10 text-sub"><Loader2 size={18} className="animate-spin" aria-hidden /> Cargando…</div>
           ) : (
             <div className="space-y-2">
-              {matriz.map(({ area, acciones }) => {
-                const areaPerms = acciones.flatMap((a) => a.items)
+              {areasPermisos.map(({ area, permisos: areaPerms }) => {
                 const checked = areaPerms.filter((p) => sel.has(p.clave)).length
                 const total = areaPerms.length
                 const isOpen = abierto.has(area.id)
@@ -347,22 +305,13 @@ function RolPermisosModal({
                       </button>
                     </div>
                     {isOpen && (
-                      <div className="border-t border-line">
-                        <div className="grid grid-cols-1 gap-px bg-line/70 sm:grid-cols-2">
-                          {acciones.map(({ accion, items }) => (
-                            <div key={accion} className="flex items-center justify-between gap-3 bg-surface px-3 py-2">
-                              <span className="text-sm font-medium text-ink">{accion}</span>
-                              <div className="flex items-center gap-2">
-                                {items.map((p) => (
-                                  <label key={p.clave} title={p.label} className="flex cursor-pointer items-center gap-1.5 hover:bg-surface2">
-                                    <input type="checkbox" checked={sel.has(p.clave)} onChange={() => toggle(p.clave)} className="h-4 w-4 accent-brand-600" />
-                                    {items.length > 1 && <span className="text-[11px] text-sub">{alcanceEtiqueta(p)}</span>}
-                                  </label>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
+                      <div className="divide-y divide-line/70 border-t border-line">
+                        {areaPerms.map((p) => (
+                          <label key={p.clave} className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2 hover:bg-surface2">
+                            <span className="text-sm text-ink">{p.label}</span>
+                            <input type="checkbox" checked={sel.has(p.clave)} onChange={() => toggle(p.clave)} className="h-4 w-4 accent-brand-600" />
+                          </label>
+                        ))}
                       </div>
                     )}
                   </div>

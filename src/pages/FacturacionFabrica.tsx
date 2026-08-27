@@ -29,8 +29,6 @@ interface FactRegistro {
   n_legajo: string | null
   quien_facturo: string | null
   polo52: boolean
-  polo: string | null
-  created_by: string | null
   fecha_envio: string | null
   quien_retira_fabrica: string | null
   observaciones: string | null
@@ -93,7 +91,7 @@ function fmtDateSlider(iso: string | null): string {
 /* ------------------------------------------------------------------ */
 
 export default function FacturacionFabrica() {
-  const { can, isAdmin, perfil } = useAuth()
+  const { can, isAdmin } = useAuth()
   const [searchParams] = useSearchParams()
   const modoPolo52 = searchParams.get('polo52') === '1'
   const puedeCrear = can('mayorista.facturacion.create')
@@ -550,8 +548,6 @@ function FactModal({ modoPolo52, registro, clientes, empleados, onClose, onSaved
       n_legajo: nLegajo || null,
       quien_facturo: quienFacturo.trim() || null,
       polo52,
-      polo: polo52 ? 'A POLO52' : null,
-      created_by: perfil?.id ?? null,
       fecha_envio: fechaEnvio.trim() || null,
       quien_retira_fabrica: quienRetiraFabrica.trim() || null,
       observaciones: observaciones.trim() || null,
@@ -792,7 +788,7 @@ function ImportFacturacion({ clientes, empleados, onClose, onSaved }: {
         bulto: rest.bulto ? Number(rest.bulto) || null : null, transporte: rest.transporte || null, porcentaje_declarado: rest.porcentaje_declarado || null,
         solicitud_retiro: rest.solicitud_retiro || 'FALSO', total_despachos: rest.total_despachos || null,
         empleado_id: _empleado_id || null, n_legajo: rest.n_legajo || null, quien_facturo: rest.quien_facturo || null,
-        polo52: !!rest.polo52, polo: rest.polo52 ? 'A POLO52' : (rest.polo || null), fecha_envio: rest.fecha_envio || null, quien_retira_fabrica: rest.quien_retira_fabrica || null,
+        polo52: !!rest.polo52, fecha_envio: rest.fecha_envio || null, quien_retira_fabrica: rest.quien_retira_fabrica || null,
         observaciones: rest.observaciones || null,
       }))
       const { error } = await supabase.from('facturacion_fabrica').insert(batch)
