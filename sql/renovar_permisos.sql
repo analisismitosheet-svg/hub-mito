@@ -4,6 +4,23 @@
 -- Ejecutar en Supabase SQL Editor. Idempotente (ON CONFLICT DO NOTHING).
 -- ============================================================
 
+-- 0. Limpiar duplicados de la tabla permisos (row-level duplicates en clave)
+DELETE FROM public.permisos a
+USING public.permisos b
+WHERE a.id > b.id AND a.clave = b.clave;
+
+-- 0b. Garantizar unicidad por clave (previene futuros duplicados)
+--     Si ya existe un índice único distinto, este bloque no agrega nada.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'permisos_clave_unique' AND conrelid = 'public.permisos'::regclass
+  ) THEN
+    ALTER TABLE public.permisos ADD CONSTRAINT permisos_clave_unique UNIQUE (clave);
+  END IF;
+END $$;
+
 -- ---- Permisos de acceso a ÁREAS (menú principal) ----
 INSERT INTO public.permisos (clave, modulo, accion, label, orden) VALUES
   ('area_administracion.view', 'administracion', 'view',  'Área Administración', 10),

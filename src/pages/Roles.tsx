@@ -208,24 +208,30 @@ function RolPermisosModal({
     }
 
     const porArea = new Map<string, { area: typeof AREAS[number]; permisos: Permiso[] }>()
+    const clavesVistas = new Map<string, Set<string>>()
     for (const area of AREAS) {
       porArea.set(area.id, { area, permisos: [] })
+      clavesVistas.set(area.id, new Set())
     }
 
     for (const p of permisos) {
+      if (!p || !p.clave) continue
       const targets = permToArea[p.clave]
       const destinos: string[] = Array.isArray(targets) ? targets : targets ? [targets] : []
       if (destinos.length === 0) {
         // Fallback: intentar deducir del módulo
         const fallback = permisos.find((x) => x.clave === p.clave)
         const mod = fallback?.modulo?.replace('area_', '') ?? '_otros'
-        if (!porArea.has(mod)) porArea.set(mod, { area: { id: mod, name: mod, icon: SlidersHorizontal, accent: 'text-gray-500', color: '#64748b' }, permisos: [] })
-        porArea.get(mod)!.permisos.push(p)
+        if (!porArea.has(mod)) { porArea.set(mod, { area: { id: mod, name: mod, icon: SlidersHorizontal, accent: 'text-gray-500', color: '#64748b' }, permisos: [] }); clavesVistas.set(mod, new Set()) }
+        if (!clavesVistas.get(mod)!.has(p.clave)) { clavesVistas.get(mod)!.add(p.clave); porArea.get(mod)!.permisos.push(p) }
         continue
       }
       for (const areaId of destinos) {
         const bucket = porArea.get(areaId)
-        if (bucket) bucket.permisos.push(p)
+        if (!bucket) continue
+        const vistos = clavesVistas.get(areaId)!
+        // Evita duplicados: la misma clave no puede aparecer dos veces en el mismo área
+        if (!vistos.has(p.clave)) { vistos.add(p.clave); bucket.permisos.push(p) }
       }
     }
 
