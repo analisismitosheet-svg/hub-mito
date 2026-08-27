@@ -188,7 +188,7 @@ export const APPS: AppDef[] = [
   {
     id: 'mayorista-transportes',
     areaId: 'mayorista',
-    title: 'Transportes',
+    title: 'Transportes Mayorista',
     description: 'ABM de transportes: crear, editar, activar/desactivar.',
     icon: Truck,
     kind: 'internal',

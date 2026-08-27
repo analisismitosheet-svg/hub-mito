@@ -768,6 +768,8 @@ function ImportFacturacion({ clientes, empleados, onClose, onSaved }: {
       if (nr.polo52) { const v = String(nr.polo52).toUpperCase(); nr.polo52 = v === 'VERDADERO' || v === '1' || v === 'SI' || v === 'TRUE' }
       else nr.polo52 = false
       nr.bulto = nr.bulto ? Number(nr.bulto) || null : null
+      nr.fecha_fact = excelDate(nr.fecha_fact)
+      nr.fecha_envio = excelDate(nr.fecha_envio)
 
       valid.push(nr)
     })
