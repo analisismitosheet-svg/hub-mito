@@ -150,8 +150,9 @@ function RolPermisosModal({
   }, [rol.codigo])
 
   const areasPermisos = useMemo(() => {
-    // Mapa exhaustive: clave -> areaId
-    const permToArea: Record<string, string> = {
+    // Mapa exhaustive: clave -> areaId (o lista de areaIds si el permiso
+    // pertenece a más de un grupo, ej. Facturación Fábrica: Mayorista y Polo 52)
+    const permToArea: Record<string, string | string[]> = {
       'area_administracion.view': 'administracion',
       'area_tesoreria.view': 'tesoreria',
       'area_rrhh.view': 'rrhh',
@@ -187,10 +188,10 @@ function RolPermisosModal({
       'mayorista.clientes.create': 'mayorista',
       'mayorista.clientes.edit': 'mayorista',
       'mayorista.clientes.delete': 'mayorista',
-      'mayorista.facturacion.view': 'mayorista',
-      'mayorista.facturacion.create': 'mayorista',
-      'mayorista.facturacion.edit': 'mayorista',
-      'mayorista.facturacion.delete': 'mayorista',
+      'mayorista.facturacion.view': ['mayorista', 'polo52'],
+      'mayorista.facturacion.create': ['mayorista', 'polo52'],
+      'mayorista.facturacion.edit': ['mayorista', 'polo52'],
+      'mayorista.facturacion.delete': ['mayorista', 'polo52'],
       'mayorista.guias.view': 'mayorista',
       'mayorista.guias.create': 'mayorista',
       'mayorista.guias.edit': 'mayorista',
@@ -212,16 +213,19 @@ function RolPermisosModal({
     }
 
     for (const p of permisos) {
-      const areaId = permToArea[p.clave]
-      const bucket = porArea.get(areaId)
-      if (bucket) {
-        bucket.permisos.push(p)
-      } else {
+      const targets = permToArea[p.clave]
+      const destinos: string[] = Array.isArray(targets) ? targets : targets ? [targets] : []
+      if (destinos.length === 0) {
         // Fallback: intentar deducir del módulo
         const fallback = permisos.find((x) => x.clave === p.clave)
         const mod = fallback?.modulo?.replace('area_', '') ?? '_otros'
         if (!porArea.has(mod)) porArea.set(mod, { area: { id: mod, name: mod, icon: SlidersHorizontal, accent: 'text-gray-500', color: '#64748b' }, permisos: [] })
         porArea.get(mod)!.permisos.push(p)
+        continue
+      }
+      for (const areaId of destinos) {
+        const bucket = porArea.get(areaId)
+        if (bucket) bucket.permisos.push(p)
       }
     }
 
