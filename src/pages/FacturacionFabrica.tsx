@@ -380,7 +380,7 @@ export default function FacturacionFabrica() {
         <ImportFacturacion clientes={clientes} empleados={empleados} onClose={() => setModal(null)} onSaved={async () => { setModal(null); await cargar(); mostrarToast('Registros importados') }} />
       )}
       {modal && modal !== 'importar' && (
-        <FactModal modoPolo52={modoPolo52} registro={modal === 'edit' ? sel : null} clientes={clientes} empleados={empleados} onClose={() => { setModal(null); setSel(null) }} onSaved={async () => { setModal(null); setSel(null); await cargar(); mostrarToast(modal === 'edit' ? 'Registro actualizado' : 'Registro creado') }} />
+        <FactModal modoPolo52={modoPolo52} idUsuario={perfil?.id ?? null} registro={modal === 'edit' ? sel : null} clientes={clientes} empleados={empleados} onClose={() => { setModal(null); setSel(null) }} onSaved={async () => { setModal(null); setSel(null); await cargar(); mostrarToast(modal === 'edit' ? 'Registro actualizado' : 'Registro creado') }} />
       )}
     </Layout>
   )
@@ -469,8 +469,8 @@ function CRow({ label, value, badge, badgeCls, pre }: { label: string; value: st
 /*  Form Modal                                                         */
 /* ------------------------------------------------------------------ */
 
-function FactModal({ modoPolo52, registro, clientes, empleados, onClose, onSaved }: {
-  modoPolo52: boolean; registro: FactRegistro | null; clientes: ClienteMini[]; empleados: EmpleadoMini[]; onClose: () => void; onSaved: () => void
+function FactModal({ modoPolo52, idUsuario, registro, clientes, empleados, onClose, onSaved }: {
+  modoPolo52: boolean; idUsuario: string | null; registro: FactRegistro | null; clientes: ClienteMini[]; empleados: EmpleadoMini[]; onClose: () => void; onSaved: () => void
 }) {
   const [autorizacion, setAutorizacion] = useState(registro?.autorizacion || '')
   const [clienteId, setClienteId] = useState(registro?.cliente_id || '')
@@ -551,7 +551,7 @@ function FactModal({ modoPolo52, registro, clientes, empleados, onClose, onSaved
       quien_facturo: quienFacturo.trim() || null,
       polo52,
       polo: polo52 ? 'A POLO52' : null,
-      created_by: perfil?.id ?? null,
+      created_by: idUsuario,
       fecha_envio: fechaEnvio.trim() || null,
       quien_retira_fabrica: quienRetiraFabrica.trim() || null,
       observaciones: observaciones.trim() || null,
