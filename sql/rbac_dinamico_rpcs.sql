@@ -24,7 +24,7 @@ SET search_path = public
 AS $$
   SELECT p.name AS permiso
   FROM public.permissions p
-  JOIN public.role_permisos rp ON rp.permiso_clave = p.name
+  JOIN public.rol_permisos rp ON rp.permiso_clave = p.name
   WHERE rp.rol = codigo
   UNION
   SELECT permiso_clave FROM public.rol_permisos WHERE rol = codigo
@@ -40,56 +40,49 @@ $$;
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.permisos_tree(codigo text)
 RETURNS jsonb
-LANGUAGE plpgsql
+LANGUAGE sql
 STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-DECLARE
-  result jsonb;
-BEGIN
-  SELECT jsonb_agg(
-    jsonb_build_object(
-      'module', jsonb_build_object('key', m.key, 'name', m.name, 'icon', m.icon),
-      'submodules', COALESCE((
-        SELECT jsonb_agg(
-          jsonb_build_object(
-            'id', sm.id,
-            'key', sm.key,
-            'name', sm.name,
-            'has_scope', sm.has_scope,
-            'scope', COALESCE(
-              (SELECT rs.scope_value FROM public.role_scope_settings rs
-                WHERE rs.role_codigo = codigo AND rs.submodule_id = sm.id), 'none'),
-            'actions', COALESCE((
-              SELECT jsonb_agg(
-                jsonb_build_object(
-                  'key', a.key,
-                  'label', a.label,
-                  'has', EXISTS (
-                    SELECT 1 FROM public.role_permisos rp WHERE rp.rol = codigo
-                      AND rp.permiso_clave = p.name
-                  )
-                ) ORDER BY a.id
-              )
-              FROM public.permissions p
-              JOIN public.actions a ON a.id = p.action_id
-              WHERE p.submodule_id = sm.id
-            ), '[]'::jsonb)
-          ) ORDER BY sm.id
-        )
-        FROM public.submodules sm
-        WHERE sm.module_id = m.id AND sm.is_active
-      ), '[]'::jsonb)
-    ) ORDER BY m."order"
-  )
-  INTO result
-  FROM public.modules m
-  WHERE m.is_active
-  ORDER BY m."order";
-
-  RETURN COALESCE(result, '[]'::jsonb);
-END;
+  SELECT COALESCE(jsonb_agg(build ORDER BY mord), '[]'::jsonb)
+  FROM (
+    SELECT m."order" AS mord,
+      jsonb_build_object(
+        'module', jsonb_build_object('key', m.key, 'name', m.name, 'icon', m.icon),
+        'submodules', COALESCE((
+          SELECT jsonb_agg(
+            jsonb_build_object(
+              'id', sm.id,
+              'key', sm.key,
+              'name', sm.name,
+              'has_scope', sm.has_scope,
+              'scope', COALESCE(
+                (SELECT rs.scope_value FROM public.role_scope_settings rs
+                  WHERE rs.role_codigo = codigo AND rs.submodule_id = sm.id), 'none'),
+              'actions', COALESCE((
+                SELECT jsonb_agg(
+                  jsonb_build_object(
+                    'key', a.key,
+                    'label', a.label,
+                    'has', EXISTS (
+                      SELECT 1 FROM public.rol_permisos rp WHERE rp.rol = codigo
+                        AND rp.permiso_clave = p.name
+                    )
+                  ) ORDER BY a.id
+                )
+                FROM public.permissions p
+                JOIN public.actions a ON a.id = p.action_id
+                WHERE p.submodule_id = sm.id
+              ), '[]'::jsonb)
+            ) ORDER BY sm.id
+          )
+          FROM public.submodules sm WHERE sm.module_id = m.id AND sm.is_active
+        ), '[]'::jsonb)
+      ) AS build
+    FROM public.modules m
+    WHERE m.is_active
+  ) sub
 $$;
 
 -- ---------------------------------------------------------------------------
@@ -156,5 +149,30 @@ BEGIN
   SELECT up.permiso_clave AS clave
   FROM public.usuario_permisos up
   WHERE up.usuario_id = auth.uid() AND up.efecto = 'grant';
+END;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 6) BACKFILL: regenera permissions + espejo legacy para TODOS los submódulos
+--    activos YA EXISTENTES (los seeds de submodules se insertan ANTES de que
+--    existan los triggers en el mismo batch del schema, por eso la primera
+--    corrida no auto-genera nada; este bloque completa los huecos).
+--    IDEMPOTENTE. Debe correrse DESPUÉS del schema (y de los seeds).
+-- ---------------------------------------------------------------------------
+DO $$
+DECLARE
+  r RECORD; a RECORD; mkey text;
+BEGIN
+  FOR r IN SELECT sm.id, sm.module_id, sm.key, sm.name FROM public.submodules sm WHERE sm.is_active LOOP
+    SELECT m.key INTO mkey FROM public.modules m WHERE m.id = r.module_id;
+    FOR a IN SELECT id, key, label FROM public.actions LOOP
+      INSERT INTO public.permissions (submodule_id, action_id, name)
+      VALUES (r.id, a.id, mkey || '.' || r.key || '.' || a.key)
+      ON CONFLICT (submodule_id, action_id) DO NOTHING;
+      INSERT INTO public.permisos (clave, modulo, accion, label, orden)
+      VALUES (mkey || '.' || r.key || '.' || a.key, mkey, a.key, a.label || ' (' || r.name || ')', 1000)
+      ON CONFLICT (clave) DO NOTHING;
+    END LOOP;
+  END LOOP;
 END;
 $$;
