@@ -230,6 +230,17 @@ export const APPS: AppDef[] = [
     permiso: 'mayorista.guias.view',
   },
   {
+    id: 'polo52-facturacion',
+    areaId: 'polo52',
+    title: 'Facturacion Fabrica',
+    description: 'Despachos POLO52 desde fabrica (solo marcados).',
+    icon: FileText,
+    kind: 'internal',
+    target: '/mayorista/facturacion-fabrica?polo52=1',
+    color: '#4f46e5',
+    permiso: 'mayorista.facturacion.view',
+  },
+  {
     id: 'deposito-repo',
     areaId: 'deposito',
     title: 'Repos Depósito',

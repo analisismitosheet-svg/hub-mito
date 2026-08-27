@@ -91,6 +91,8 @@ function fmtDateSlider(iso: string | null): string {
 
 export default function FacturacionFabrica() {
   const { can, isAdmin } = useAuth()
+  const query = new URLSearchParams(window.location.search)
+  const modoPolo52 = query.get('polo52') === '1'
   const puedeCrear = can('mayorista.facturacion.create')
   const puedeEditar = can('mayorista.facturacion.edit')
   const puedeBorrar = can('mayorista.facturacion.delete')
@@ -100,7 +102,7 @@ export default function FacturacionFabrica() {
   const [error, setError] = useState<string | null>(null)
   const [q, setQ] = useState('')
   const [filtroTransporte, setFiltroTransporte] = useState('todos')
-  const [filtroPol, setFiltroPol] = useState(false)
+  const [filtroPol, setFiltroPol] = useState(modoPolo52)
   const [filtroFechaDesde, setFiltroFechaDesde] = useState('')
   const [filtroFechaHasta, setFiltroFechaHasta] = useState('')
   const [modal, setModal] = useState<'new' | 'edit' | 'importar' | null>(null)
@@ -158,7 +160,7 @@ export default function FacturacionFabrica() {
 
   const lista = useMemo(() => {
     let r = todos
-    if (filtroPol) r = r.filter((f) => f.polo52)
+    if (filtroPol || modoPolo52) r = r.filter((f) => f.polo52)
     if (filtroTransporte !== 'todos') r = r.filter((f) => f.transporte === filtroTransporte)
     if (filtroFechaDesde) r = r.filter((f) => (excelDate(f.fecha_fact) || '') >= filtroFechaDesde)
     if (filtroFechaHasta) r = r.filter((f) => (excelDate(f.fecha_fact) || '') <= filtroFechaHasta)
@@ -176,7 +178,7 @@ export default function FacturacionFabrica() {
       return sortAsc ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
     })
     return r
-  }, [todos, term, filtroTransporte, filtroPol, filtroFechaDesde, filtroFechaHasta, isAdmin, sortKey, sortAsc])
+  }, [todos, term, filtroTransporte, filtroPol, filtroFechaDesde, filtroFechaHasta, modoPolo52, sortKey, sortAsc])
 
   const totalPaginas = Math.max(1, Math.ceil(lista.length / POR_PAGINA))
   const paginaSegura = Math.min(pagina, totalPaginas)
@@ -224,7 +226,7 @@ export default function FacturacionFabrica() {
       <ToastEl />
       <BackButton />
       <header className="mb-3 mt-2">
-        <h1 className="font-display text-2xl font-semibold text-ink">Facturacion Fabrica <span className="text-sm font-normal text-sub">({todos.length})</span></h1>
+        <h1 className="font-display text-2xl font-semibold text-ink">Facturacion Fabrica {modoPolo52 && <span className="ml-2 inline-block whitespace-nowrap rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-400">Polo 52</span>} <span className="text-sm font-normal text-sub">({todos.length})</span></h1>
         <p className="text-xs text-sub/70">Gestion de facturacion, remitos y despachos desde fabrica</p>
       </header>
 
@@ -245,15 +247,21 @@ export default function FacturacionFabrica() {
           <span className="text-[10px] text-sub/50">—</span>
           <input type="date" value={filtroFechaHasta} onChange={(e) => setFiltroFechaHasta(e.target.value)} className={inputCls + ' w-auto text-xs'} title="Fecha hasta" />
         </div>
-        <label className="flex items-center gap-1.5 text-xs text-sub">
-          <input type="checkbox" checked={filtroPol} onChange={(e) => setFiltroPol(e.target.checked)} className="h-3.5 w-3.5 rounded border-line bg-surface2 accent-brand-600" />
+        <label className={`flex items-center gap-1.5 text-xs ${modoPolo52 ? 'text-sub/60' : 'text-sub'}`}>
+          <input
+            type="checkbox"
+            checked={filtroPol}
+            disabled={modoPolo52}
+            onChange={(e) => setFiltroPol(e.target.checked)}
+            className="h-3.5 w-3.5 rounded border-line bg-surface2 accent-brand-600"
+          />
           Solo POLO52
         </label>
         <span className="text-[11px] text-sub/70">{lista.length} registros {polCount > 0 && isAdmin ? `(${polCount} POLO52)` : ''}</span>
-        {selected.size > 0 && puedeBorrar && (
+        {!modoPolo52 && selected.size > 0 && puedeBorrar && (
           <button onClick={() => void eliminarSeleccionados()} className="btn-press inline-flex items-center gap-1 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/20"><Trash2 size={13} aria-hidden /> Eliminar ({selected.size})</button>
         )}
-        {puedeCrear && (
+        {!modoPolo52 && puedeCrear && (
           <>
             <button onClick={() => setModal('importar')} className="btn-press inline-flex items-center gap-1 rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line"><Upload size={13} aria-hidden /> Importar</button>
             <button onClick={() => setModal('new')} className="btn-press inline-flex items-center gap-1 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-700"><Plus size={13} aria-hidden /> Nuevo Registro</button>
@@ -337,8 +345,8 @@ export default function FacturacionFabrica() {
                     <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={r.observaciones || ''}>{r.observaciones || '-'}</span></td>
                     <td className="px-1 py-[2px] text-right">
                       <div className="flex items-center justify-end gap-px" onClick={(e) => e.stopPropagation()}>
-                        {puedeEditar && <button onClick={() => { setSel(r); setModal('edit') }} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Editar"><Pencil size={10} aria-hidden /></button>}
-                        {puedeBorrar && <button onClick={() => void eliminar(r)} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Eliminar"><Trash2 size={10} aria-hidden /></button>}
+                        {!modoPolo52 && puedeEditar && <button onClick={() => { setSel(r); setModal('edit') }} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Editar"><Pencil size={10} aria-hidden /></button>}
+                        {!modoPolo52 && puedeBorrar && <button onClick={() => void eliminar(r)} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Eliminar"><Trash2 size={10} aria-hidden /></button>}
                       </div>
                     </td>
                   </tr>
@@ -362,7 +370,7 @@ export default function FacturacionFabrica() {
       )}
 
       {/* Detail card */}
-      {card && <FactCard registro={card} onClose={() => setCard(null)} onEdit={() => { setSel(card); setModal('edit'); setCard(null) }} puedeEditar={puedeEditar} empleados={empleados} />}
+      {card && <FactCard registro={card} onClose={() => setCard(null)} onEdit={() => { setSel(card); setModal('edit'); setCard(null) }} puedeEditar={!modoPolo52 && puedeEditar} empleados={empleados} />}
 
       {/* Modals */}
       {modal === 'importar' && (
