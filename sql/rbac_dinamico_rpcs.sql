@@ -54,6 +54,7 @@ BEGIN
       'submodules', COALESCE((
         SELECT jsonb_agg(
           jsonb_build_object(
+            'id', sm.id,
             'key', sm.key,
             'name', sm.name,
             'has_scope', sm.has_scope,
