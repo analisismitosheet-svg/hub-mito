@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { LogIn, AlertTriangle } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
@@ -14,9 +14,9 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  if (user) {
-    navigate('/', { replace: true })
-  }
+  useEffect(() => {
+    if (user) navigate('/', { replace: true })
+  }, [user, navigate])
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()

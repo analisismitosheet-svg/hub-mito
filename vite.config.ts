@@ -33,7 +33,15 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api/],
+        navigateFallbackDenylist: [
+          /^\/api\//,
+          // Nunca hacer fallback con el HTML de la app para llamadas a Supabase
+          // (REST) ni a los endpoints de autenticación.
+          /\/rest\/v1\//,
+          /\/auth\/v1\//,
+          /\/functions\/v1\//,
+          /\.(?:js|css|png|jpg|jpeg|gif|svg|ico|woff2?|json)$/,
+        ],
       },
     }),
   ],
