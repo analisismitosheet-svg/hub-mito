@@ -15,69 +15,16 @@
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
--- 0. Funciones helpers en schema private (idempotente)
+-- 0. Funciones helpers en schema private
 -- ---------------------------------------------------------------------------
+-- IMPORTANTE: private.es_admin(), private.mi_local() y private.tiene_permiso()
+-- YA EXISTEN en la DB y están referenciadas por decenas de policies en toda la
+-- app (areas_admin, usuarios_propio_ver, ua_admin_todo, ca_admin, permisos_admin,
+-- rolperm_admin, titems_admin, titems_marcar, etc.). NO se redefinen aquí para
+-- evitar romper esas dependencias. Las policies de transfer_items que siguen las
+-- usan tal como están definidas.
+-------------------------------------------------------------------------------
 CREATE SCHEMA IF NOT EXISTS private;
-
--- es_admin(): ¿el usuario autenticado es administrador?
--- (DROP previo: CREATE OR REPLACE no puede renombrar parámetros de funciones
---  existentes, y puede haber una versión previa con distinto nombre.)
-DROP FUNCTION IF EXISTS private.es_admin();
-CREATE OR REPLACE FUNCTION private.es_admin()
-RETURNS boolean
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.usuarios u
-    WHERE u.id = auth.uid()
-      AND (u.es_admin = true OR u.rol = 'administrador'
-           OR EXISTS (SELECT 1 FROM public.usuario_roles ur
-                      JOIN public.roles r ON r.codigo = ur.rol_codigo
-                      WHERE ur.usuario_id = u.id AND r.es_admin = true))
-  );
-$$;
-
--- mi_local(): local (código) del usuario autenticado
-DROP FUNCTION IF EXISTS private.mi_local();
-CREATE OR REPLACE FUNCTION private.mi_local()
-RETURNS text
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT u.local FROM public.usuarios u WHERE u.id = auth.uid();
-$$;
-
--- tiene_permiso(clave): ¿el usuario autenticado tiene el permiso?
-DROP FUNCTION IF EXISTS private.tiene_permiso(text);
-CREATE OR REPLACE FUNCTION private.tiene_permiso(permiso_clave text)
-RETURNS boolean
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT EXISTS (
-    -- permisos de todos los roles del usuario
-    SELECT 1
-    FROM public.usuario_roles ur
-    JOIN public.rol_permisos rp ON rp.rol = ur.rol_codigo
-    WHERE ur.usuario_id = auth.uid()
-      AND rp.permiso_clave = permiso_clave
-    UNION ALL
-    -- overrides grant directos
-    SELECT 1
-    FROM public.usuario_permisos up
-    WHERE up.usuario_id = auth.uid()
-      AND up.permiso_clave = permiso_clave
-      AND up.efecto = 'grant'
-  )
-  OR private.es_admin();
-$$;
 
 -- ---------------------------------------------------------------------------
 -- 1. Índices de rendimiento (idempotente)
@@ -95,15 +42,21 @@ CREATE INDEX IF NOT EXISTS transfer_items_destino_idx
 
 -- ---------------------------------------------------------------------------
 -- 2. Limpiar TODAS las policies de transfer_items (evita duplicados/conflicto)
--- ---------------------------------------------------------------------------
 DROP POLICY IF EXISTS "titems_view"              ON public.transfer_items;
 DROP POLICY IF EXISTS "titems_view_full"         ON public.transfer_items;
 DROP POLICY IF EXISTS "titems_view_local"        ON public.transfer_items;
+DROP POLICY IF EXISTS "titems_admin"             ON public.transfer_items;
+DROP POLICY IF EXISTS "titems_marcar"            ON public.transfer_items;
 DROP POLICY IF EXISTS "titems_update"            ON public.transfer_items;
 DROP POLICY IF EXISTS "titems_update_full"       ON public.transfer_items;
 DROP POLICY IF EXISTS "titems_update_local"      ON public.transfer_items;
 DROP POLICY IF EXISTS "titems_insert"            ON public.transfer_items;
 DROP POLICY IF EXISTS "titems_insert_full"       ON public.transfer_items;
+DROP POLICY IF EXISTS "transfer_items_select_full"   ON public.transfer_items;
+DROP POLICY IF EXISTS "transfer_items_select_local"  ON public.transfer_items;
+DROP POLICY IF EXISTS "transfer_items_update_full"   ON public.transfer_items;
+DROP POLICY IF EXISTS "transfer_items_update_local"  ON public.transfer_items;
+DROP POLICY IF EXISTS "transfer_items_insert_full"   ON public.transfer_items;
 
 -- Habilitar RLS (idempotente)
 ALTER TABLE public.transfer_items ENABLE ROW LEVEL SECURITY;
