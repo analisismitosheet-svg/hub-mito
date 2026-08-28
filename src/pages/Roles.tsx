@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Loader2, Plus, Trash2, SlidersHorizontal, Check, X, ChevronRight } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
-import { AREAS } from '@/config/areas'
 
 interface Rol {
   codigo: string
@@ -11,17 +10,9 @@ interface Rol {
   es_admin: boolean
   protegido: boolean
 }
-interface Permiso {
-  clave: string
-  modulo: string
-  accion: string
-  label: string
-  orden: number
-}
 
 export default function Roles() {
   const [roles, setRoles] = useState<Rol[]>([])
-  const [permisos, setPermisos] = useState<Permiso[]>([])
   const [nombre, setNombre] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -30,12 +21,8 @@ export default function Roles() {
 
   const cargar = useCallback(async () => {
     if (!supabase) { setCargando(false); return }
-    const [rl, p] = await Promise.all([
-      supabase.from('roles').select('codigo,nombre,es_admin,protegido').order('orden'),
-      supabase.from('permisos').select('clave,modulo,accion,label,orden').order('orden'),
-    ])
-    setRoles((rl.data as Rol[]) ?? [])
-    setPermisos((p.data as Permiso[]) ?? [])
+    const { data: rl } = await supabase.from('roles').select('codigo,nombre,es_admin,protegido').order('orden')
+    setRoles((rl as Rol[]) ?? [])
     setCargando(false)
   }, [])
 
@@ -172,7 +159,7 @@ function RolPermisosModal({
       if (activo) {
         const s = new Set<string>()
         const sc: Record<string, { scope: string; moduleId: number; submodId: number }> = {}
-        t.forEach((app, i) => {
+        t.forEach((app) => {
           setAbierto((prev) => new Set(prev).add(`app_${app.id}`))
           for (const area of app.areas) {
             for (const a of area.actions) if (a.has) s.add(`${area.key}.${app.key}.${a.key}`)
@@ -271,7 +258,6 @@ function RolPermisosModal({
                 const permisosApp = app.areas.flatMap((area) => area.actions.map((a) => `${area.key}.${app.key}.${a.key}`))
                 const checkedApp = permisosApp.filter((c) => sel.has(c)).length
                 const allApp = permisosApp.length > 0 && permisosApp.every((c) => sel.has(c))
-                const someApp = permisosApp.some((c) => sel.has(c))
                 return (
                   <div key={app.id} className="overflow-hidden rounded-xl border border-line">
                     <div className="flex items-center gap-2 bg-surface2 px-3 py-2">

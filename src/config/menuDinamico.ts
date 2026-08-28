@@ -154,7 +154,7 @@ const appPorId = new Map(APPS.map((a) => [a.id, a]))
  * Devuelve null mientras carga (para no parpadear con el fallback).
  */
 export function useMenuNivel2(areaId: string): { apps: AppDef[] | null; subs: SubmoduleDb[] } {
-  const { can, scopes } = useAuth()
+  const { can } = useAuth()
   const { modulos, submodulos, estado } = useMenuDb()
 
   if (estado === 'sin-db') {
