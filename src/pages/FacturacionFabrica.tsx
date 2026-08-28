@@ -490,6 +490,9 @@ function FactModal({ modoPolo52, registro, clientes, empleados, onClose, onSaved
   const [observaciones, setObservaciones] = useState(registro?.observaciones || '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // En modo polo52, al crear nuevo registro completo se habilitan todos los campos;
+  // al editar un registro polo52 existente solo se permite fecha de envío / retiro.
+  const readonly = modoPolo52 && !!registro
 
   /* Client dropdown */
   const [busqCliente, setBusqCliente] = useState('')
@@ -517,8 +520,7 @@ function FactModal({ modoPolo52, registro, clientes, empleados, onClose, onSaved
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     if (!supabase) return
-    if (modoPolo52) {
-      if (!registro) return
+    if (modoPolo52 && registro) {
       setBusy(true); setError(null)
       const result = await supabase.from('facturacion_fabrica')
         .update({ fecha_envio: fechaEnvio.trim() || null, quien_retira_fabrica: quienRetiraFabrica.trim() || null })
@@ -547,7 +549,7 @@ function FactModal({ modoPolo52, registro, clientes, empleados, onClose, onSaved
       empleado_id: empleadoId || null,
       n_legajo: nLegajo || null,
       quien_facturo: quienFacturo.trim() || null,
-      polo52,
+      polo52: modoPolo52 ? true : polo52,
       fecha_envio: fechaEnvio.trim() || null,
       quien_retira_fabrica: quienRetiraFabrica.trim() || null,
       observaciones: observaciones.trim() || null,
@@ -564,7 +566,7 @@ function FactModal({ modoPolo52, registro, clientes, empleados, onClose, onSaved
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div className="relative flex w-[92vw] max-w-[1000px] flex-col rounded-2xl border border-line bg-surface shadow-2xl" style={{ maxHeight: '92vh' }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-line px-5 py-3">
-          <h2 className="flex items-center gap-2 text-lg font-semibold text-ink"><FileText size={18} className="text-amber-400" aria-hidden />{modoPolo52 ? 'Actualizar envío / retiro' : registro ? 'Editar Registro' : 'Nuevo Registro'}</h2>
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-ink"><FileText size={18} className="text-amber-400" aria-hidden />{registro ? (modoPolo52 ? 'Actualizar envío / retiro' : 'Editar Registro') : (modoPolo52 ? 'Nuevo Registro Polo52' : 'Nuevo Registro')}</h2>
           <button onClick={onClose} className="rounded-lg border border-line p-1.5 text-sub transition hover:bg-line hover:text-ink"><X size={16} aria-hidden /></button>
         </div>
         {error && <p role="alert" className="mx-5 mt-3 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
@@ -572,13 +574,13 @@ function FactModal({ modoPolo52, registro, clientes, empleados, onClose, onSaved
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
             {/* Row 1 */}
             <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Autorizacion *</span>
-              <select value={autorizacion} onChange={(e) => setAutorizacion(e.target.value)} disabled={modoPolo52} className={selectCls}><option value="">--</option><option value="SI">SI</option><option value="NO">NO</option></select>
+              <select value={autorizacion} onChange={(e) => setAutorizacion(e.target.value)} disabled={readonly} className={selectCls}><option value="">--</option><option value="SI">SI</option><option value="NO">NO</option></select>
             </label>
             {/* N° Cliente — searchable dropdown */}
             <label className="block relative">
               <span className="mb-1 block text-xs font-medium text-sub">N Cliente *</span>
               <div className="relative">
-                <input value={openCliDrop ? busqCliente : (nCliente != null ? String(nCliente) : '')} onChange={(e) => { setBusqCliente(e.target.value); setOpenCliDrop(true) }} onFocus={() => setOpenCliDrop(true)} disabled={modoPolo52} placeholder="Buscar por N° o nombre..." className={inputCls} />
+                <input value={openCliDrop ? busqCliente : (nCliente != null ? String(nCliente) : '')} onChange={(e) => { setBusqCliente(e.target.value); setOpenCliDrop(true) }} onFocus={() => setOpenCliDrop(true)} disabled={readonly} placeholder="Buscar por N° o nombre..." className={inputCls} />
                 {openCliDrop && (
                   <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-line bg-surface shadow-xl">
                     <div className="sticky top-0 bg-surface p-1"><input autoFocus value={busqCliente} onChange={(e) => setBusqCliente(e.target.value)} placeholder="Buscar..." className={inputCls + ' text-xs'} /></div>
@@ -594,30 +596,30 @@ function FactModal({ modoPolo52, registro, clientes, empleados, onClose, onSaved
             </label>
             {/* Razon Social — autocompletada (BUSCARV) */}
             <label className="block sm:col-span-2"><span className="mb-1 block text-xs font-medium text-sub">Razon Social</span><input value={razonSocial} readOnly className={inputCls + ' bg-line/30 text-sub'} placeholder="Se autocompleta al seleccionar N° Cliente" /></label>
-            <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Fecha Facturacion</span><input type="date" value={fechaFact} onChange={(e) => setFechaFact(e.target.value)} disabled={modoPolo52} className={inputCls} /></label>
+            <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Fecha Facturacion</span><input type="date" value={fechaFact} onChange={(e) => setFechaFact(e.target.value)} disabled={readonly} className={inputCls} /></label>
 
             {/* Row 2 */}
-            <label className="block"><span className="mb-1 block text-xs font-medium text-sub">N Remito</span><input value={nRemito} onChange={(e) => setNRemito(e.target.value)} disabled={modoPolo52} placeholder="30307 - 30308" className={inputCls} /></label>
-            <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Bulto</span><input type="number" value={bulto} onChange={(e) => setBulto(e.target.value)} disabled={modoPolo52} placeholder="0" className={inputCls} /></label>
+            <label className="block"><span className="mb-1 block text-xs font-medium text-sub">N Remito</span><input value={nRemito} onChange={(e) => setNRemito(e.target.value)} disabled={readonly} placeholder="30307 - 30308" className={inputCls} /></label>
+            <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Bulto</span><input type="number" value={bulto} onChange={(e) => setBulto(e.target.value)} disabled={readonly} placeholder="0" className={inputCls} /></label>
             <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Transporte</span>
-              <input list="transportes-list" value={transporte} onChange={(e) => setTransporte(e.target.value)} disabled={modoPolo52} placeholder="Seleccionar o escribir..." className={inputCls} />
+              <input list="transportes-list" value={transporte} onChange={(e) => setTransporte(e.target.value)} disabled={readonly} placeholder="Seleccionar o escribir..." className={inputCls} />
               <datalist id="transportes-list">{TRANSPORTE_OPCIONES.map((v) => <option key={v} value={v} />)}</datalist>
             </label>
 
             {/* Row 3 */}
             <label className="block"><span className="mb-1 block text-xs font-medium text-sub">% Declarado</span>
-              <select value={porcentajeDeclarado} onChange={(e) => setPorcentajeDeclarado(e.target.value)} disabled={modoPolo52} className={selectCls}><option value="">--</option>{VALOR_DEC_OPCIONES.map((v) => <option key={v} value={v}>{v}</option>)}</select>
+              <select value={porcentajeDeclarado} onChange={(e) => setPorcentajeDeclarado(e.target.value)} disabled={readonly} className={selectCls}><option value="">--</option>{VALOR_DEC_OPCIONES.map((v) => <option key={v} value={v}>{v}</option>)}</select>
             </label>
             <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Solicitud Retiro</span>
-              <select value={solicitudRetiro} onChange={(e) => setSolicitudRetiro(e.target.value)} disabled={modoPolo52} className={selectCls}>{RETIRO_OPCIONES.map((v) => <option key={v} value={v}>{v}</option>)}</select>
+              <select value={solicitudRetiro} onChange={(e) => setSolicitudRetiro(e.target.value)} disabled={readonly} className={selectCls}>{RETIRO_OPCIONES.map((v) => <option key={v} value={v}>{v}</option>)}</select>
             </label>
-            <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Total Despachos</span><input value={totalDespachos} onChange={(e) => setTotalDespachos(e.target.value)} disabled={modoPolo52} placeholder="-" className={inputCls} /></label>
+            <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Total Despachos</span><input value={totalDespachos} onChange={(e) => setTotalDespachos(e.target.value)} disabled={readonly} placeholder="-" className={inputCls} /></label>
 
             {/* Row 4 — Employee autocomplete */}
             <label className="block sm:col-span-2 relative">
               <span className="mb-1 block text-xs font-medium text-sub">Quien Facturo *</span>
               <div className="relative">
-                <input value={openEmpDrop ? busqEmpleado : (quienFacturo ? `${nLegajo ? '#' + nLegajo + ' - ' : ''}${quienFacturo}` : '')} onChange={(e) => { setBusqEmpleado(e.target.value); setOpenEmpDrop(true) }} onFocus={() => setOpenEmpDrop(true)} disabled={modoPolo52} placeholder="Buscar por legajo o nombre..." className={inputCls} />
+                <input value={openEmpDrop ? busqEmpleado : (quienFacturo ? `${nLegajo ? '#' + nLegajo + ' - ' : ''}${quienFacturo}` : '')} onChange={(e) => { setBusqEmpleado(e.target.value); setOpenEmpDrop(true) }} onFocus={() => setOpenEmpDrop(true)} disabled={readonly} placeholder="Buscar por legajo o nombre..." className={inputCls} />
                 {openEmpDrop && (
                   <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-line bg-surface shadow-xl">
                     <div className="sticky top-0 bg-surface p-1"><input autoFocus value={busqEmpleado} onChange={(e) => setBusqEmpleado(e.target.value)} placeholder="Buscar..." className={inputCls + ' text-xs'} /></div>
@@ -633,13 +635,13 @@ function FactModal({ modoPolo52, registro, clientes, empleados, onClose, onSaved
             </label>
             <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Fecha Envio</span><input type="date" value={fechaEnvio} onChange={(e) => setFechaEnvio(e.target.value)} className={inputCls} /></label>
             <label className="block flex items-end gap-3 pb-1">
-              <input type="checkbox" checked={polo52} onChange={(e) => setPolo52(e.target.checked)} disabled={modoPolo52} className="h-4 w-4 rounded border-line bg-surface2 accent-brand-600" />
+              <input type="checkbox" checked={modoPolo52 ? true : polo52} onChange={(e) => setPolo52(e.target.checked)} disabled={modoPolo52} className="h-4 w-4 rounded border-line bg-surface2 accent-brand-600" />
               <span className="text-sm text-ink">POLO52</span>
             </label>
 
             {/* Row 5 */}
             <label className="block sm:col-span-2"><span className="mb-1 block text-xs font-medium text-sub">Quien Retira en Fabrica</span><input value={quienRetiraFabrica} onChange={(e) => setQuienRetiraFabrica(e.target.value)} placeholder="Nombre completo" className={inputCls} /></label>
-            <label className="block sm:col-span-2"><span className="mb-1 block text-xs font-medium text-sub">Observaciones</span><textarea value={observaciones} onChange={(e) => setObservaciones(e.target.value)} disabled={modoPolo52} rows={2} className={inputCls + ' resize-none'} /></label>
+            <label className="block sm:col-span-2"><span className="mb-1 block text-xs font-medium text-sub">Observaciones</span><textarea value={observaciones} onChange={(e) => setObservaciones(e.target.value)} disabled={readonly} rows={2} className={inputCls + ' resize-none'} /></label>
           </div>
         </form>
         <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3">
