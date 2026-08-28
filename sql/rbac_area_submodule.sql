@@ -68,7 +68,11 @@ SET module_id = sm.module_id
 FROM public.submodules sm
 WHERE p.submodule_id = sm.id AND p.module_id IS NULL;
 
--- 3c) generar los permisos faltantes de las áreas ADICIONALES (submodule_areas),
+-- 3c) liberar la UNIQUE vieja (submodule_id, action_id) ANTES de insertar las
+--     áreas adicionales (el mismo submodule+action puede vivir en varias áreas).
+ALTER TABLE public.permissions DROP CONSTRAINT IF EXISTS permissions_submodule_id_action_id_key;
+
+-- 3d) generar los permisos faltantes de las áreas ADICIONALES (submodule_areas),
 --     con name '{area_key}.{submodule_key}.{action_key}'.
 INSERT INTO public.permissions (module_id, submodule_id, action_id, name)
 SELECT sa.module_id, sa.submodule_id, a.id,
@@ -79,8 +83,7 @@ JOIN public.modules   mk ON mk.id  = sa.module_id
 JOIN public.actions   a  ON true
 ON CONFLICT (name) DO NOTHING;
 
--- 3d) UNIQUE pasa a incluir el área: (module_id, submodule_id, action_id)
-ALTER TABLE public.permissions DROP CONSTRAINT IF EXISTS permissions_submodule_id_action_id_key;
+-- 3e) UNIQUE pasa a incluir el área: (module_id, submodule_id, action_id)
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -93,7 +96,7 @@ BEGIN
   END IF;
 END $$;
 
--- 3e) NOT NULL tras completar el backfill
+-- 3f) NOT NULL tras completar el backfill
 ALTER TABLE public.permissions ALTER COLUMN module_id SET NOT NULL;
 
 -- ---------------------------------------------------------------------------
