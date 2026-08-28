@@ -20,6 +20,9 @@
 CREATE SCHEMA IF NOT EXISTS private;
 
 -- es_admin(): ¿el usuario autenticado es administrador?
+-- (DROP previo: CREATE OR REPLACE no puede renombrar parámetros de funciones
+--  existentes, y puede haber una versión previa con distinto nombre.)
+DROP FUNCTION IF EXISTS private.es_admin();
 CREATE OR REPLACE FUNCTION private.es_admin()
 RETURNS boolean
 LANGUAGE sql
@@ -38,6 +41,7 @@ AS $$
 $$;
 
 -- mi_local(): local (código) del usuario autenticado
+DROP FUNCTION IF EXISTS private.mi_local();
 CREATE OR REPLACE FUNCTION private.mi_local()
 RETURNS text
 LANGUAGE sql
@@ -49,6 +53,7 @@ AS $$
 $$;
 
 -- tiene_permiso(clave): ¿el usuario autenticado tiene el permiso?
+DROP FUNCTION IF EXISTS private.tiene_permiso(text);
 CREATE OR REPLACE FUNCTION private.tiene_permiso(permiso_clave text)
 RETURNS boolean
 LANGUAGE sql
