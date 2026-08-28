@@ -214,29 +214,19 @@ function RolPermisosModal({
     if (!supabase) return
     setGuardando(true); setError(null)
 
-    // 1) permisos del rol (rol_permisos)
-    const f = await supabase.from('rol_permisos').delete().eq('rol', rol.codigo)
-    if (f.error) { setError(f.error.message); setGuardando(false); return }
-    const filas = Array.from(sel).map((permiso_clave) => ({ rol: rol.codigo, permiso_clave }))
-    if (filas.length) {
-      const ins = await supabase.from('rol_permisos').insert(filas)
-      if (ins.error) { setError(ins.error.message); setGuardando(false); return }
+    // construir payload para el RPC centralizado
+    const permisosArr = Array.from(sel)
+    const scopesObj: Record<string, string> = {}
+    for (const key of Object.keys(scopes)) {
+      scopesObj[key] = scopes[key].scope
     }
 
-    // 2) alcances (role_scope_settings) por (rol, submódulo, área)
-    const limpiar = await supabase.from('role_scope_settings').delete().eq('role_codigo', rol.codigo)
-    if (limpiar.error) { setError(limpiar.error.message); setGuardando(false); return }
-    const scopeFilas = Object.values(scopes).map((v) => ({
-      role_codigo: rol.codigo, submodule_id: v.submodId, module_id: v.moduleId, scope_value: v.scope,
-    }))
-    if (scopeFilas.length) {
-      const sIns = await supabase.from('role_scope_settings').insert(scopeFilas)
-      if (sIns.error) { setError(sIns.error.message); setGuardando(false); return }
-    }
-
-    // 3) registrar en submodule_areas las áreas donde hay permisos (menú sigue)
-    const sync = await supabase.rpc('sincronizar_submodule_areas')
-    if (sync.error) { setError(sync.error.message); setGuardando(false); return }
+    const { error } = await supabase.rpc('guardar_permisos', {
+      _rol: rol.codigo,
+      _permisos: permisosArr,
+      _scopes: scopesObj,
+    })
+    if (error) { setError(error.message); setGuardando(false); return }
 
     setGuardando(false); onSaved()
   }
