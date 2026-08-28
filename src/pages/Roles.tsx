@@ -125,16 +125,20 @@ export default function Roles() {
   )
 }
 
+interface AreaNode {
+  id: number
+  key: string
+  name: string
+  scope: string
+  actions: { key: string; label: string; has: boolean }[]
+}
+
 interface TreeNode {
-  module: { key: string; name: string; icon: string | null }
-  submodules: {
-    id: number
-    key: string
-    name: string
-    has_scope: boolean
-    scope: string
-    actions: { key: string; label: string; has: boolean }[]
-  }[]
+  id: number
+  key: string
+  name: string
+  has_scope: boolean
+  areas: AreaNode[]
 }
 
 const SCOPE_OPCIONES = ['all', 'own', 'locales_asignados', 'polo52', 'none']
@@ -146,7 +150,7 @@ function RolPermisosModal({
 }) {
   const [tree, setTree] = useState<TreeNode[] | null>(null)
   const [sel, setSel] = useState<Set<string>>(new Set())
-  const [scopes, setScopes] = useState<Record<number, { scope: string; submodId: number }>>({})
+  const [scopes, setScopes] = useState<Record<string, { scope: string; moduleId: number; submodId: number }>>({})
   const [cargando, setCargando] = useState(true)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -158,24 +162,23 @@ function RolPermisosModal({
       if (!supabase) return
       const { data, error: rpcErr } = await supabase.rpc('permisos_tree', { codigo: rol.codigo })
       if (!activo) return
-      // el RPC devuelve un jsonb = arreglo de módulos
       const t = Array.isArray(data) ? (data as TreeNode[]) : null
       if (rpcErr || !t) {
-        setError(rpcErr ? 'No se pudo leer el árbol (¿aplicaste rbac_dinamico_rpcs.sql?).' : null)
+        setError(rpcErr ? 'No se pudo leer el árbol (¿aplicaste los RPC actualizados?).' : null)
         setCargando(false)
         return
       }
       setTree(t)
       if (activo) {
         const s = new Set<string>()
-        const sc: Record<number, { scope: string; submodId: number }> = {}
-        for (const mod of t) {
-          setAbierto((prev) => new Set(prev).add(mod.module.key))
-          for (const sm of mod.submodules) {
-            for (const a of sm.actions) if (a.has) s.add(`${mod.module.key}.${sm.key}.${a.key}`)
-            if (sm.has_scope && sm.scope && sm.scope !== 'none') sc[sm.id] = { scope: sm.scope, submodId: sm.id }
+        const sc: Record<string, { scope: string; moduleId: number; submodId: number }> = {}
+        t.forEach((app, i) => {
+          setAbierto((prev) => new Set(prev).add(`app_${app.id}`))
+          for (const area of app.areas) {
+            for (const a of area.actions) if (a.has) s.add(`${area.key}.${app.key}.${a.key}`)
+            if (app.has_scope && area.scope && area.scope !== 'none') sc[`${area.id}:${app.id}`] = { scope: area.scope, moduleId: area.id, submodId: app.id }
           }
-        }
+        })
         setSel(s); setScopes(sc)
         setCargando(false)
       }
@@ -187,8 +190,8 @@ function RolPermisosModal({
     setSel((s) => { const n = new Set(s); n.has(clave) ? n.delete(clave) : n.add(clave); return n })
   }
 
-  function toggleSubmodulo(modKey: string, sm: TreeNode['submodules'][number]) {
-    const claves = sm.actions.map((a) => `${modKey}.${sm.key}.${a.key}`)
+  function toggleArea(app: TreeNode, area: AreaNode) {
+    const claves = area.actions.map((a) => `${area.key}.${app.key}.${a.key}`)
     setSel((s) => {
       const n = new Set(s)
       const all = claves.every((c) => n.has(c))
@@ -197,15 +200,24 @@ function RolPermisosModal({
     })
   }
 
+  function toggleSubmodulo(app: TreeNode) {
+    const claves = app.areas.flatMap((area) => area.actions.map((a) => `${area.key}.${app.key}.${a.key}`))
+    const n = new Set(sel)
+    const all = claves.length > 0 && claves.every((c) => n.has(c))
+    for (const c of claves) all ? n.delete(c) : n.add(c)
+    setSel(n)
+  }
+
   function toggleAbierto(key: string) {
     setAbierto((s) => { const n = new Set(s); n.has(key) ? n.delete(key) : n.add(key); return n })
   }
 
-  function setScope(smId: number, value: string) {
+  function setScope(moduleId: number, submodId: number, value: string) {
+    const key = `${moduleId}:${submodId}`
     setScopes((p) => {
       const n = { ...p }
-      if (value === 'none') delete n[smId]
-      else n[smId] = { scope: value, submodId: smId }
+      if (value === 'none') delete n[key]
+      else n[key] = { scope: value, moduleId, submodId }
       return n
     })
   }
@@ -223,11 +235,11 @@ function RolPermisosModal({
       if (ins.error) { setError(ins.error.message); setGuardando(false); return }
     }
 
-    // 2) alcances (role_scope_settings)
+    // 2) alcances (role_scope_settings) por (rol, submódulo, área)
     const limpiar = await supabase.from('role_scope_settings').delete().eq('role_codigo', rol.codigo)
     if (limpiar.error) { setError(limpiar.error.message); setGuardando(false); return }
-    const scopeFilas = Object.entries(scopes).map(([, v]) => ({
-      role_codigo: rol.codigo, submodule_id: v.submodId, scope_value: v.scope,
+    const scopeFilas = Object.values(scopes).map((v) => ({
+      role_codigo: rol.codigo, submodule_id: v.submodId, module_id: v.moduleId, scope_value: v.scope,
     }))
     if (scopeFilas.length) {
       const sIns = await supabase.from('role_scope_settings').insert(scopeFilas)
@@ -251,46 +263,54 @@ function RolPermisosModal({
           {cargando ? (
             <div className="flex items-center justify-center gap-2 py-10 text-sub"><Loader2 size={18} className="animate-spin" aria-hidden /> Cargando…</div>
           ) : !tree ? (
-            <p className="py-8 text-center text-sm text-sub">No hay datos. Revisá que hayas aplicado <code className="text-brand-400">rbac_dinamico_schema.sql</code> y <code className="text-brand-400">rbac_dinamico_rpcs.sql</code>.</p>
+            <p className="py-8 text-center text-sm text-sub">No hay datos. Revisá que hayas aplicado <code className="text-brand-400">rbac_area_submodule.sql</code> y los RPC actualizados.</p>
           ) : (
             <div className="space-y-2">
-              {tree.map((mod) => {
-                const isOpen = abierto.has(mod.module.key)
-                const permisosMod = mod.submodules.flatMap((sm) => sm.actions.map((a) => `${mod.module.key}.${sm.key}.${a.key}`))
-                const checkedMod = permisosMod.filter((c) => sel.has(c)).length
+              {tree.map((app) => {
+                const isOpen = abierto.has(`app_${app.id}`)
+                const permisosApp = app.areas.flatMap((area) => area.actions.map((a) => `${area.key}.${app.key}.${a.key}`))
+                const checkedApp = permisosApp.filter((c) => sel.has(c)).length
+                const allApp = permisosApp.length > 0 && permisosApp.every((c) => sel.has(c))
+                const someApp = permisosApp.some((c) => sel.has(c))
                 return (
-                  <div key={mod.module.key} className="overflow-hidden rounded-xl border border-line">
+                  <div key={app.id} className="overflow-hidden rounded-xl border border-line">
                     <div className="flex items-center gap-2 bg-surface2 px-3 py-2">
-                      <button onClick={() => toggleAbierto(mod.module.key)} className="flex flex-1 items-center gap-2 text-left">
+                      <button onClick={() => toggleAbierto(`app_${app.id}`)} className="flex flex-1 items-center gap-2 text-left">
                         <ChevronRight size={14} className={`shrink-0 text-sub transition-transform ${isOpen ? 'rotate-90' : ''}`} />
-                        <span className="flex-1 text-sm font-semibold text-ink">{mod.module.name}</span>
-                        <span className="text-[11px] tabular-nums text-sub">{checkedMod}/{permisosMod.length}</span>
+                        <span className="flex-1 text-sm font-semibold text-ink">{app.name}</span>
+                        <span className="text-[11px] tabular-nums text-sub">{checkedApp}/{permisosApp.length}</span>
                       </button>
+                      {app.areas.length > 1 && (
+                        <label className="flex shrink-0 cursor-pointer items-center gap-1.5 pl-1 text-xs text-sub" title="Todas las áreas de esta app">
+                          <input type="checkbox" checked={allApp} onChange={() => toggleSubmodulo(app)} className="h-3.5 w-3.5 accent-brand-600" />
+                          Todas
+                        </label>
+                      )}
                     </div>
                     {isOpen && (
                       <div className="border-t border-line">
-                        {mod.submodules.map((sm) => {
-                          const claves = sm.actions.map((a) => `${mod.module.key}.${sm.key}.${a.key}`)
+                        {app.areas.map((area, ai) => {
+                          const claves = area.actions.map((a) => `${area.key}.${app.key}.${a.key}`)
                           const allOn = claves.every((c) => sel.has(c))
                           const someOn = claves.some((c) => sel.has(c))
-                          const scopeVal = scopes[sm.id]?.scope ?? 'none'
+                          const scopeVal = scopes[`${area.id}:${app.id}`]?.scope ?? 'none'
                           return (
-                            <div key={sm.key} className="border-b border-line/60 px-3 py-2">
+                            <div key={`${ai}-${area.key}`} className="border-b border-line/60 px-3 py-2 last:border-b-0">
                               <div className="flex items-center justify-between gap-2">
-                                <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-ink">
-                                  <input type="checkbox" checked={allOn} onChange={() => toggleSubmodulo(mod.module.key, sm)} className="h-4 w-4 accent-brand-600" />
-                                  <span className={someOn && !allOn ? 'text-amber-400' : ''}>{sm.name}</span>
+                                <label className="flex cursor-pointer items-center gap-2 text-[13px] font-medium text-ink">
+                                  <input type="checkbox" checked={allOn} onChange={() => toggleArea(app, area)} className="h-4 w-4 accent-brand-600" />
+                                  <span className={`flex-1 ${someOn && !allOn ? 'text-amber-400' : ''}`}>{area.name}</span>
                                 </label>
-                                {sm.has_scope && (
-                                  <select value={scopeVal} onChange={(e) => setScope(sm.id, e.target.value)} className="rounded-lg border border-line bg-surface2 px-2 py-1 text-[11px] text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40">
+                                {app.has_scope && (
+                                  <select value={scopeVal} onChange={(e) => setScope(area.id, app.id, e.target.value)} className="rounded-lg border border-line bg-surface2 px-2 py-1 text-[11px] text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40">
                                     {SCOPE_OPCIONES.map((o) => <option key={o} value={o}>{o === 'none' ? 'Sin alcance' : o}</option>)}
                                   </select>
                                 )}
                               </div>
                               {!allOn && (
                                 <div className="mt-1.5 flex flex-wrap gap-1.5 pl-6">
-                                  {sm.actions.map((a) => {
-                                    const clave = `${mod.module.key}.${sm.key}.${a.key}`
+                                  {area.actions.map((a) => {
+                                    const clave = `${area.key}.${app.key}.${a.key}`
                                     return (
                                       <button key={a.key} onClick={() => toggle(clave)} className={`rounded-full border px-2 py-0.5 text-[11px] font-medium transition ${sel.has(clave) ? 'border-brand-500/40 bg-brand-600/15 text-brand-300' : 'border-line bg-surface2 text-sub hover:text-ink'}`}>
                                         {a.label}
