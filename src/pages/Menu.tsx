@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Settings, ArrowRight } from 'lucide-react'
 import Layout from '@/components/Layout'
 import AreaCard from '@/components/AreaCard'
-import { AREAS } from '@/config/areas'
+import { useMenuNivel1 } from '@/config/menuDinamico'
 import { useAuth } from '@/context/AuthContext'
 import { supabase } from '@/lib/supabase'
+import type { AreaDinamica } from '@/config/menuDinamico'
 
 function ConfiguracionesCard() {
   const navigate = useNavigate()
@@ -57,15 +58,8 @@ function ConfiguracionesCard() {
 }
 
 export default function Menu() {
-  const { can, isAdmin } = useAuth()
-  const areas = useMemo(
-    () =>
-      [...AREAS]
-        // Menú dinámico: cada área requiere su permiso area_<id>.view (admin ve todo)
-        .filter((a) => can(`area_${a.id}.view`))
-        .sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })),
-    [can],
-  )
+  const { isAdmin } = useAuth()
+  const { areas } = useMenuNivel1()
 
   return (
     <Layout>
@@ -75,7 +69,7 @@ export default function Menu() {
       </div>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-        {areas.map((area, i) => (
+        {areas.map((area: AreaDinamica, i) => (
           <AreaCard key={area.id} area={area} index={i} />
         ))}
         {/* Configuraciones va al final y solo para administradores */}
