@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Loader2, Plus, Trash2, SlidersHorizontal, Check, X, ChevronRight } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
+import { AREAS } from '@/config/areas'
 
 interface Rol {
   codigo: string
@@ -10,9 +11,17 @@ interface Rol {
   es_admin: boolean
   protegido: boolean
 }
+interface Permiso {
+  clave: string
+  modulo: string
+  accion: string
+  label: string
+  orden: number
+}
 
 export default function Roles() {
   const [roles, setRoles] = useState<Rol[]>([])
+  const [permisos, setPermisos] = useState<Permiso[]>([])
   const [nombre, setNombre] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -21,8 +30,12 @@ export default function Roles() {
 
   const cargar = useCallback(async () => {
     if (!supabase) { setCargando(false); return }
-    const { data: rl } = await supabase.from('roles').select('codigo,nombre,es_admin,protegido').order('orden')
-    setRoles((rl as Rol[]) ?? [])
+    const [rl, p] = await Promise.all([
+      supabase.from('roles').select('codigo,nombre,es_admin,protegido').order('orden'),
+      supabase.from('permisos').select('clave,modulo,accion,label,orden').order('orden'),
+    ])
+    setRoles((rl.data as Rol[]) ?? [])
+    setPermisos((p.data as Permiso[]) ?? [])
     setCargando(false)
   }, [])
 
@@ -104,6 +117,7 @@ export default function Roles() {
       {rolGestion && (
         <RolPermisosModal
           rol={rolGestion}
+          permisos={permisos}
           onClose={() => setRolGestion(null)}
           onSaved={async () => { setRolGestion(null); await cargar() }}
         />
@@ -112,200 +126,192 @@ export default function Roles() {
   )
 }
 
-interface AreaNode {
-  id: number
-  key: string
-  name: string
-  scope: string
-  asignado: boolean
-  actions: { key: string; label: string; has: boolean }[]
-}
-
-interface TreeNode {
-  id: number
-  key: string
-  name: string
-  has_scope: boolean
-  areas: AreaNode[]
-}
-
-const SCOPE_OPCIONES = ['all', 'own', 'locales_asignados', 'polo52', 'none']
-
 function RolPermisosModal({
-  rol, onClose, onSaved,
+  rol, permisos, onClose, onSaved,
 }: {
-  rol: Rol; onClose: () => void; onSaved: () => void
+  rol: Rol; permisos: Permiso[]; onClose: () => void; onSaved: () => void
 }) {
-  const [tree, setTree] = useState<TreeNode[] | null>(null)
   const [sel, setSel] = useState<Set<string>>(new Set())
-  const [scopes, setScopes] = useState<Record<string, { scope: string; moduleId: number; submodId: number }>>({})
   const [cargando, setCargando] = useState(true)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [abierto, setAbierto] = useState<Set<string>>(new Set())
+  const [abierto, setAbierto] = useState<Set<string>>(new Set(AREAS.map((a) => a.id)))
 
   useEffect(() => {
     let activo = true
     ;(async () => {
       if (!supabase) return
-      const { data, error: rpcErr } = await supabase.rpc('permisos_tree', { codigo: rol.codigo })
+      const { data } = await supabase.from('rol_permisos').select('permiso_clave').eq('rol', rol.codigo)
       if (!activo) return
-      const t = Array.isArray(data) ? (data as TreeNode[]) : null
-      if (rpcErr || !t) {
-        setError(rpcErr ? 'No se pudo leer el árbol (¿aplicaste los RPC actualizados?).' : null)
-        setCargando(false)
-        return
-      }
-      setTree(t)
-      if (activo) {
-        const s = new Set<string>()
-        const sc: Record<string, { scope: string; moduleId: number; submodId: number }> = {}
-        t.forEach((app) => {
-          setAbierto((prev) => new Set(prev).add(`app_${app.id}`))
-          for (const area of app.areas) {
-            for (const a of area.actions) if (a.has) s.add(`${area.key}.${app.key}.${a.key}`)
-            if (app.has_scope && area.scope && area.scope !== 'none') sc[`${area.id}:${app.id}`] = { scope: area.scope, moduleId: area.id, submodId: app.id }
-          }
-        })
-        setSel(s); setScopes(sc)
-        setCargando(false)
-      }
+      setSel(new Set(((data as { permiso_clave: string }[]) ?? []).map((r) => r.permiso_clave)))
+      setCargando(false)
     })()
     return () => { activo = false }
   }, [rol.codigo])
 
-  function toggle(clave: string) {
-    setSel((s) => { const n = new Set(s); n.has(clave) ? n.delete(clave) : n.add(clave); return n })
-  }
+  const areasPermisos = useMemo(() => {
+    // Mapa exhaustive: clave -> areaId (o lista de areaIds si el permiso
+    // pertenece a más de un grupo, ej. Facturación Fábrica: Mayorista y Polo 52)
+    const permToArea: Record<string, string | string[]> = {
+      'area_administracion.view': 'administracion',
+      'area_tesoreria.view': 'tesoreria',
+      'area_rrhh.view': 'rrhh',
+      'area_mayorista.view': 'mayorista',
+      'area_marketing.view': 'marketing',
+      'area_compras.view': 'compras',
+      'area_sistemas.view': 'sistemas',
+      'area_locales.view': 'locales',
+      'area_diseno.view': 'diseno',
+      'area_deposito.view': 'deposito',
+      'area_polo52.view': 'polo52',
+      'area_arquitectura.view': 'arquitectura',
+      'area_recepcion.view': 'recepcion',
+      'area_mantenimiento.view': 'mantenimiento',
+      'cuentas_amigos.view': 'tesoreria',
+      'cuentas_amigos.create': 'tesoreria',
+      'cuentas_amigos.edit': 'tesoreria',
+      'manuales.view': 'locales',
+      'manuales.create': 'locales',
+      'manuales.edit': 'locales',
+      'manuales.delete': 'locales',
+      'documentos.view': 'locales',
+      'documentos.create': 'locales',
+      'documentos.edit': 'locales',
+      'documentos.delete': 'locales',
+      'transferencias.view': 'compras',
+      'transferencias.import': 'compras',
+      'transferencias.ver_todo': 'compras',
+      'mayorista.view': 'mayorista',
+      'mayorista.import': 'mayorista',
+      'mayorista.mark': 'mayorista',
+      'mayorista.clientes.view': 'mayorista',
+      'mayorista.clientes.create': 'mayorista',
+      'mayorista.clientes.edit': 'mayorista',
+      'mayorista.clientes.delete': 'mayorista',
+      'mayorista.facturacion.view': ['mayorista', 'polo52'],
+      'mayorista.facturacion.create': ['mayorista', 'polo52'],
+      'mayorista.facturacion.edit': ['mayorista', 'polo52'],
+      'mayorista.facturacion.delete': ['mayorista', 'polo52'],
+      'mayorista.guias.view': 'mayorista',
+      'mayorista.guias.create': 'mayorista',
+      'mayorista.guias.edit': 'mayorista',
+      'mayorista.guias.delete': 'mayorista',
+      'deposito.view': 'deposito',
+      'deposito.import': 'deposito',
+      'deposito.mark': 'deposito',
+      'opiniones.view': 'locales',
+      'opiniones.borrar': 'locales',
+      'encuestas.gestionar': 'marketing',
+      'banner.editar': 'marketing',
+      'qr.regenerar': 'locales',
+      'sectores.gestionar': 'locales',
+    }
 
-  function toggleArea(app: TreeNode, area: AreaNode) {
-    const claves = area.actions.map((a) => `${area.key}.${app.key}.${a.key}`)
+    const porArea = new Map<string, { area: typeof AREAS[number]; permisos: Permiso[] }>()
+    const clavesVistas = new Map<string, Set<string>>()
+    for (const area of AREAS) {
+      porArea.set(area.id, { area, permisos: [] })
+      clavesVistas.set(area.id, new Set())
+    }
+
+    for (const p of permisos) {
+      if (!p || !p.clave) continue
+      const targets = permToArea[p.clave]
+      const destinos: string[] = Array.isArray(targets) ? targets : targets ? [targets] : []
+      if (destinos.length === 0) {
+        // Fallback: intentar deducir del módulo
+        const fallback = permisos.find((x) => x.clave === p.clave)
+        const mod = fallback?.modulo?.replace('area_', '') ?? '_otros'
+        if (!porArea.has(mod)) { porArea.set(mod, { area: { id: mod, name: mod, icon: SlidersHorizontal, accent: 'text-gray-500', color: '#64748b' }, permisos: [] }); clavesVistas.set(mod, new Set()) }
+        if (!clavesVistas.get(mod)!.has(p.clave)) { clavesVistas.get(mod)!.add(p.clave); porArea.get(mod)!.permisos.push(p) }
+        continue
+      }
+      for (const areaId of destinos) {
+        const bucket = porArea.get(areaId)
+        if (!bucket) continue
+        const vistos = clavesVistas.get(areaId)!
+        // Evita duplicados: la misma clave no puede aparecer dos veces en el mismo área
+        if (!vistos.has(p.clave)) { vistos.add(p.clave); bucket.permisos.push(p) }
+      }
+    }
+
+    return Array.from(porArea.values())
+      .filter((b) => b.permisos.length > 0)
+      .sort((a, b) => a.area.name.localeCompare(b.area.name, 'es'))
+  }, [permisos])
+
+  function toggle(clave: string) { setSel((s) => { const n = new Set(s); if (n.has(clave)) n.delete(clave); else n.add(clave); return n }) }
+
+  function toggleArea(claves: string[]) {
     setSel((s) => {
       const n = new Set(s)
-      const all = claves.every((c) => n.has(c))
-      for (const c of claves) all ? n.delete(c) : n.add(c)
+      const allChecked = claves.every((c) => n.has(c))
+      for (const c of claves) { allChecked ? n.delete(c) : n.add(c) }
       return n
     })
   }
 
-  function toggleSubmodulo(app: TreeNode) {
-    const claves = app.areas.flatMap((area) => area.actions.map((a) => `${area.key}.${app.key}.${a.key}`))
-    const n = new Set(sel)
-    const all = claves.length > 0 && claves.every((c) => n.has(c))
-    for (const c of claves) all ? n.delete(c) : n.add(c)
-    setSel(n)
+  function toggleAbierto(areaId: string) {
+    setAbierto((s) => { const n = new Set(s); if (n.has(areaId)) n.delete(areaId); else n.add(areaId); return n })
   }
 
-  function toggleAbierto(key: string) {
-    setAbierto((s) => { const n = new Set(s); n.has(key) ? n.delete(key) : n.add(key); return n })
-  }
-
-  function setScope(moduleId: number, submodId: number, value: string) {
-    const key = `${moduleId}:${submodId}`
-    setScopes((p) => {
-      const n = { ...p }
-      if (value === 'none') delete n[key]
-      else n[key] = { scope: value, moduleId, submodId }
-      return n
-    })
-  }
+  function setTodos(v: boolean) { setSel(v ? new Set(permisos.map((p) => p.clave)) : new Set()) }
 
   async function guardar() {
     if (!supabase) return
     setGuardando(true); setError(null)
-
-    // construir payload para el RPC centralizado
-    const permisosArr = Array.from(sel)
-    const scopesObj: Record<string, string> = {}
-    for (const key of Object.keys(scopes)) {
-      scopesObj[key] = scopes[key].scope
-    }
-
-    const { error } = await supabase.rpc('guardar_permisos', {
-      _rol: rol.codigo,
-      _permisos: permisosArr,
-      _scopes: scopesObj,
-    })
-    if (error) { setError(error.message); setGuardando(false); return }
-
+    const { error: e1 } = await supabase.from('rol_permisos').delete().eq('rol', rol.codigo)
+    if (e1) { setError(e1.message); setGuardando(false); return }
+    const filas = Array.from(sel).map((permiso_clave) => ({ rol: rol.codigo, permiso_clave }))
+    if (filas.length) { const { error: e2 } = await supabase.from('rol_permisos').insert(filas); if (e2) { setError(e2.message); setGuardando(false); return } }
     setGuardando(false); onSaved()
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4" onClick={onClose}>
-      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl border border-line bg-surface shadow-soft-lg sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-line bg-surface shadow-soft-lg sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-line px-4 py-3">
           <div className="min-w-0">
             <h2 className="font-display font-semibold text-ink">Permisos del rol</h2>
-            <p className="truncate text-xs text-sub">{rol.nombre}{error ? ' · ' + error : ''}</p>
+            <p className="truncate text-xs text-sub">{rol.nombre}</p>
           </div>
           <button onClick={onClose} aria-label="Cerrar" className="rounded-lg p-1.5 text-sub hover:bg-line hover:text-ink"><X size={18} aria-hidden /></button>
+        </div>
+        <div className="flex items-center gap-2 border-b border-line px-4 py-2">
+          <button onClick={() => setTodos(true)} className="btn-press rounded-lg border border-line bg-surface2 px-2.5 py-1 text-xs text-ink hover:bg-line">Seleccionar todo</button>
+          <button onClick={() => setTodos(false)} className="btn-press rounded-lg border border-line bg-surface2 px-2.5 py-1 text-xs text-ink hover:bg-line">Deseleccionar todo</button>
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-3">
           {cargando ? (
             <div className="flex items-center justify-center gap-2 py-10 text-sub"><Loader2 size={18} className="animate-spin" aria-hidden /> Cargando…</div>
-          ) : !tree ? (
-            <p className="py-8 text-center text-sm text-sub">No hay datos. Revisá que hayas aplicado <code className="text-brand-400">rbac_area_submodule.sql</code> y los RPC actualizados.</p>
           ) : (
             <div className="space-y-2">
-              {tree.map((app) => {
-                const isOpen = abierto.has(`app_${app.id}`)
-                const permisosApp = app.areas.flatMap((area) => area.actions.map((a) => `${area.key}.${app.key}.${a.key}`))
-                const checkedApp = permisosApp.filter((c) => sel.has(c)).length
-                const allApp = permisosApp.length > 0 && permisosApp.every((c) => sel.has(c))
+              {areasPermisos.map(({ area, permisos: areaPerms }) => {
+                const checked = areaPerms.filter((p) => sel.has(p.clave)).length
+                const total = areaPerms.length
+                const isOpen = abierto.has(area.id)
+                const Icon = area.icon
                 return (
-                  <div key={app.id} className="overflow-hidden rounded-xl border border-line">
+                  <div key={area.id} className="overflow-hidden rounded-xl border border-line">
                     <div className="flex items-center gap-2 bg-surface2 px-3 py-2">
-                      <button onClick={() => toggleAbierto(`app_${app.id}`)} className="flex flex-1 items-center gap-2 text-left">
+                      <button onClick={() => toggleAbierto(area.id)} className="flex flex-1 items-center gap-2 text-left">
                         <ChevronRight size={14} className={`shrink-0 text-sub transition-transform ${isOpen ? 'rotate-90' : ''}`} />
-                        <span className="flex-1 text-sm font-semibold text-ink">{app.name}</span>
-                        <span className="text-[11px] tabular-nums text-sub">{checkedApp}/{permisosApp.length}</span>
+                        <Icon size={15} style={{ color: area.color }} aria-hidden />
+                        <span className="flex-1 text-sm font-semibold text-ink">{area.name}</span>
+                        <span className="text-[11px] tabular-nums text-sub">{checked}/{total}</span>
                       </button>
-                      {app.areas.length > 1 && (
-                        <label className="flex shrink-0 cursor-pointer items-center gap-1.5 pl-1 text-xs text-sub" title="Todas las áreas de esta app">
-                          <input type="checkbox" checked={allApp} onChange={() => toggleSubmodulo(app)} className="h-3.5 w-3.5 accent-brand-600" />
-                          Todas
-                        </label>
-                      )}
+                      <button onClick={() => toggleArea(areaPerms.map((p) => p.clave))} className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium ${checked === total && total > 0 ? 'bg-emerald-500/15 text-emerald-400' : 'bg-line text-sub hover:text-ink'}`} title="Seleccionar/deseleccionar área">
+                        {checked === total && total > 0 ? '✓' : '☐'}
+                      </button>
                     </div>
                     {isOpen && (
-                      <div className="border-t border-line">
-                        {app.areas.map((area, ai) => {
-                          const claves = area.actions.map((a) => `${area.key}.${app.key}.${a.key}`)
-                          const allOn = claves.every((c) => sel.has(c))
-                          const someOn = claves.some((c) => sel.has(c))
-                          const scopeVal = scopes[`${area.id}:${app.id}`]?.scope ?? 'none'
-                          return (
-                            <div key={`${ai}-${area.key}`} className="border-b border-line/60 px-3 py-2 last:border-b-0">
-                              <div className="flex items-center justify-between gap-2">
-                                <label className="flex cursor-pointer items-center gap-2 text-[13px] font-medium text-ink">
-                                  <input type="checkbox" checked={allOn} onChange={() => toggleArea(app, area)} className="h-4 w-4 accent-brand-600" />
-                                  <span className={`flex-1 ${someOn && !allOn ? 'text-amber-400' : ''}`}>{area.name}</span>
-                                  <span className="shrink-0 text-[10px] font-medium text-sub" title="Aparece en el menú de esta área">
-                                    {area.asignado ? 'en menú' : 'sin asignar'}
-                                  </span>
-                                </label>
-                                {app.has_scope && (
-                                  <select value={scopeVal} onChange={(e) => setScope(area.id, app.id, e.target.value)} className="rounded-lg border border-line bg-surface2 px-2 py-1 text-[11px] text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40">
-                                    {SCOPE_OPCIONES.map((o) => <option key={o} value={o}>{o === 'none' ? 'Sin alcance' : o}</option>)}
-                                  </select>
-                                )}
-                              </div>
-                              {!allOn && (
-                                <div className="mt-1.5 flex flex-wrap gap-1.5 pl-6">
-                                  {area.actions.map((a) => {
-                                    const clave = `${area.key}.${app.key}.${a.key}`
-                                    return (
-                                      <button key={a.key} onClick={() => toggle(clave)} className={`rounded-full border px-2 py-0.5 text-[11px] font-medium transition ${sel.has(clave) ? 'border-brand-500/40 bg-brand-600/15 text-brand-300' : 'border-line bg-surface2 text-sub hover:text-ink'}`}>
-                                        {a.label}
-                                      </button>
-                                    )
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })}
+                      <div className="divide-y divide-line/70 border-t border-line">
+                        {areaPerms.map((p) => (
+                          <label key={p.clave} className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2 hover:bg-surface2">
+                            <span className="text-sm text-ink">{p.label}</span>
+                            <input type="checkbox" checked={sel.has(p.clave)} onChange={() => toggle(p.clave)} className="h-4 w-4 accent-brand-600" />
+                          </label>
+                        ))}
                       </div>
                     )}
                   </div>

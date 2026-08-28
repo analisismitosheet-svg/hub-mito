@@ -3,16 +3,18 @@ import { FolderOpen, ArrowRight } from 'lucide-react'
 import Layout from '@/components/Layout'
 import AppCard from '@/components/AppCard'
 import BackButton from '@/components/BackButton'
-import { useMenuNivel2 } from '@/config/menuDinamico'
-import { getArea } from '@/config/areas'
+import { appsDeArea, getArea } from '@/config/areas'
 import { useAuth } from '@/context/AuthContext'
 
 export default function Area() {
   const { areaId = '' } = useParams()
   const navigate = useNavigate()
   const { can } = useAuth()
-  const { apps } = useMenuNivel2(areaId)
   const area = getArea(areaId)
+  // Ocultar apps sin permiso y ordenar alfabéticamente por título
+  const apps = appsDeArea(areaId)
+    .filter((a) => !a.permiso || can(a.permiso))
+    .sort((a, b) => a.title.localeCompare(b.title, 'es', { sensitivity: 'base' }))
   const verArchivos = can('documentos.view')
 
   if (!area) {
@@ -24,9 +26,8 @@ export default function Area() {
     )
   }
 
-  const appsEfectivas = apps ?? [] // null mientras carga => evitar parpadeo
   const Icon = area.icon
-  const vacio = appsEfectivas.length === 0 && !verArchivos
+  const vacio = apps.length === 0 && !verArchivos
 
   return (
     <Layout>
@@ -53,7 +54,7 @@ export default function Area() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {appsEfectivas.map((app, i) => (
+          {apps.map((app, i) => (
             <AppCard key={app.id} app={app} index={i} areaId={areaId} />
           ))}
           {verArchivos && (

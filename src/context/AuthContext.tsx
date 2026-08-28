@@ -33,8 +33,6 @@ interface AuthState {
   configured: boolean
   perfil: Perfil | null
   permisos: Set<string>
-  /** Alcances por recurso (submódulo key -> scope) del usuario logueado, ej. { facturacion: 'own' } */
-  scopes: Record<string, string>
   isAdmin: boolean
   isApproved: boolean
   /** ¿El usuario tiene el permiso indicado? (admin siempre true) */
@@ -60,17 +58,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [perfil, setPerfil] = useState<Perfil | null>(null)
   const [permisos, setPermisos] = useState<Set<string>>(new Set())
-  const [scopes, setScopes] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const cargandoPerfil = useRef(false)
 
   const cargarPerfil = useCallback(async () => {
     if (!supabase) return
     cargandoPerfil.current = true
-    const [{ data: perfilData }, { data: permisosData }, { data: scopesData }] = await Promise.all([
+    const [{ data: perfilData }, { data: permisosData }] = await Promise.all([
       supabase.rpc('mi_perfil'),
       supabase.rpc('mis_permisos'),
-      supabase.rpc('scopes_usuario'),
     ])
     const p = Array.isArray(perfilData) ? (perfilData[0] as Perfil | undefined) : null
     setPerfil(p ? { ...p, roles: p.roles ?? (p.rol ? [p.rol] : []) } : null)
@@ -78,11 +74,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ? (permisosData as { clave: string }[]).map((r) => r.clave)
       : []
     setPermisos(new Set(claves))
-    setScopes(
-      scopesData && typeof scopesData === 'object' && !Array.isArray(scopesData)
-        ? (scopesData as Record<string, string>)
-        : {},
-    )
     cargandoPerfil.current = false
   }, [])
 
@@ -106,7 +97,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setPerfil(null)
         setPermisos(new Set())
-        setScopes({})
       }
     })
     return () => {
@@ -126,7 +116,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       configured,
       perfil,
       permisos,
-      scopes,
       isAdmin,
       isApproved,
       can(clave) {
@@ -166,10 +155,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await supabase.auth.signOut()
         setPerfil(null)
         setPermisos(new Set())
-        setScopes({})
       },
     }
-  }, [session, loading, perfil, permisos, scopes, cargarPerfil])
+  }, [session, loading, perfil, permisos, cargarPerfil])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
