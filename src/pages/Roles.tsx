@@ -117,6 +117,7 @@ interface AreaNode {
   key: string
   name: string
   scope: string
+  asignado: boolean
   actions: { key: string; label: string; has: boolean }[]
 }
 
@@ -233,6 +234,10 @@ function RolPermisosModal({
       if (sIns.error) { setError(sIns.error.message); setGuardando(false); return }
     }
 
+    // 3) registrar en submodule_areas las áreas donde hay permisos (menú sigue)
+    const sync = await supabase.rpc('sincronizar_submodule_areas')
+    if (sync.error) { setError(sync.error.message); setGuardando(false); return }
+
     setGuardando(false); onSaved()
   }
 
@@ -286,6 +291,9 @@ function RolPermisosModal({
                                 <label className="flex cursor-pointer items-center gap-2 text-[13px] font-medium text-ink">
                                   <input type="checkbox" checked={allOn} onChange={() => toggleArea(app, area)} className="h-4 w-4 accent-brand-600" />
                                   <span className={`flex-1 ${someOn && !allOn ? 'text-amber-400' : ''}`}>{area.name}</span>
+                                  <span className="shrink-0 text-[10px] font-medium text-sub" title="Aparece en el menú de esta área">
+                                    {area.asignado ? 'en menú' : 'sin asignar'}
+                                  </span>
                                 </label>
                                 {app.has_scope && (
                                   <select value={scopeVal} onChange={(e) => setScope(area.id, app.id, e.target.value)} className="rounded-lg border border-line bg-surface2 px-2 py-1 text-[11px] text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40">
