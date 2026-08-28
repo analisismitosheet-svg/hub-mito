@@ -3,317 +3,90 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Diseñador de Etiquetas</title>
-
-  <!-- Fuente moderna Inter -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-
-  <!-- Font Awesome: iconografía -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <title>Enriquecer Productos por Código de Barras</title>
 
   <!-- Hoja de estilos de la aplicación -->
   <link rel="stylesheet" href="style.css">
 
-  <!-- Librerías CDN -->
+  <!-- Librería XLSX: lee archivos Excel (.xlsx / .xls) en el navegador -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <!-- Librería jsPDF: genera el documento PDF -->
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+  <!-- Librería jspdf-autotable: crea tablas bonitas dentro del PDF -->
   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
 <body>
 
-  <!-- ======================= BARRA SUPERIOR ======================= -->
-  <header class="app-bar">
-    <div class="app-bar__brand">
-      <span class="app-bar__logo"><i class="fa-solid fa-tags"></i></span>
-      <div>
-        <h1>Diseñador de Etiquetas</h1>
-        <span class="app-bar__sub">Crea y exporta etiquetas profesionales</span>
+  <div class="contenedor">
+    <!-- =================== TITULAR =================== -->
+    <header class="cabecera">
+      <h1>📦 Enriquecer Productos</h1>
+      <p>Carga un archivo <strong>Excel (.xlsx / .xls)</strong> o <strong>Texto (.txt)</strong> con códigos de barras,
+         consulta la base de datos y genera un PDF profesional con la información completa.</p>
+    </header>
+
+    <!-- =================== CARGA DE ARCHIVO =================== -->
+    <section class="tarjeta">
+      <h2>1. Selecciona el archivo</h2>
+      <div class="fila-archivo">
+        <input type="file" id="archivo" accept=".xlsx,.xls,.txt">
+        <span id="nombre-archivo" class="nombre-archivo">Ningún archivo seleccionado</span>
       </div>
-    </div>
-    <div class="app-bar__actions">
-      <button class="btn btn-ghost" id="btn-archivo" title="Cargar archivo">
-        <i class="fa-solid fa-folder-open"></i> Cargar
-      </button>
-      <button class="btn btn-ghost" id="btn-limpiar-datos">
-        <i class="fa-regular fa-trash-can"></i> Limpiar
-      </button>
-    </div>
-  </header>
-
-  <!-- ======================= LAYOUT PRINCIPAL ======================= -->
-  <main class="layout">
-
-    <!-- ============ COLUMNA IZQUIERDA: CONFIGURACIÓN ============ -->
-    <aside class="panel-config">
-
-      <!-- Tarjeta: Tamaño -->
-      <section class="card config-card" data-card="tamano">
-        <header class="card__head">
-          <i class="fa-solid fa-ruler-combined card__icon"></i>
-          <h2>Tamaño</h2>
-        </header>
-        <div class="card__body">
-          <div class="campo-fila">
-            <div class="campo">
-              <label for="cfg-ancho">Ancho</label>
-              <div class="campo__input">
-                <input type="number" id="cfg-ancho" min="20" max="300" step="1" value="70">
-                <span class="campo__sufijo">mm</span>
-              </div>
-            </div>
-            <div class="campo">
-              <label for="cfg-alto">Alto</label>
-              <div class="campo__input">
-                <input type="number" id="cfg-alto" min="15" max="200" step="1" value="40">
-                <span class="campo__sufijo">mm</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Tarjeta: Código de barras -->
-      <section class="card config-card" data-card="codigo">
-        <header class="card__head">
-          <i class="fa-solid fa-barcode card__icon"></i>
-          <h2>Código de barras</h2>
-        </header>
-        <div class="card__body">
-          <div class="campo">
-            <label>Tipo de código</label>
-            <div class="segmented" id="cfg-tipo">
-              <button type="button" data-value="code128" class="segmented__btn active">
-                <i class="fa-solid fa-barcode"></i> Code&nbsp;128
-              </button>
-              <button type="button" data-value="code39" class="segmented__btn">
-                <i class="fa-solid fa-barcode"></i> Code&nbsp;39
-              </button>
-              <button type="button" data-value="qr" class="segmented__btn">
-                <i class="fa-solid fa-qrcode"></i> QR
-              </button>
-            </div>
-          </div>
-          <div class="campo">
-            <label for="cfg-contenido">Contenido del código</label>
-            <select id="cfg-contenido">
-              <option value="codigo">Código completo</option>
-              <option value="articulo">Solo artículo</option>
-              <option value="artcolor">Artículo + color</option>
-              <option value="completo">Art!Color!Talla</option>
-            </select>
-          </div>
-          <div class="campo">
-            <label for="cfg-texto-bajo">Texto bajo el código</label>
-            <select id="cfg-texto-bajo">
-              <option value="codigo">Código completo</option>
-              <option value="articulo">Artículo</option>
-              <option value="ninguno">Ninguno</option>
-            </select>
-          </div>
-          <div class="campo">
-            <label for="cfg-altura-bc">Altura del código</label>
-            <div class="campo__input">
-              <input type="range" id="cfg-altura-bc" min="8" max="30" step="1" value="16">
-              <span class="campo__valor" id="cfg-altura-bc-valor">16 mm</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Tarjeta: Campos visibles -->
-      <section class="card config-card" data-card="campos">
-        <header class="card__head">
-          <i class="fa-solid fa-layer-group card__icon"></i>
-          <h2>Campos visibles</h2>
-        </header>
-        <div class="card__body">
-          <div class="grid-campos">
-            <label class="check-campo">
-              <input type="checkbox" data-campo="articulo" checked>
-              <i class="fa-solid fa-barcode check-campo__icon"></i>
-              <span>Artículo</span>
-            </label>
-            <label class="check-campo">
-              <input type="checkbox" data-campo="descripcion" checked>
-              <i class="fa-solid fa-align-left check-campo__icon"></i>
-              <span>Descripción</span>
-            </label>
-            <label class="check-campo">
-              <input type="checkbox" data-campo="color" checked>
-              <i class="fa-solid fa-palette check-campo__icon"></i>
-              <span>Color</span>
-            </label>
-            <label class="check-campo">
-              <input type="checkbox" data-campo="talla" checked>
-              <i class="fa-solid fa-tag check-campo__icon"></i>
-              <span>Talla</span>
-            </label>
-            <label class="check-campo">
-              <input type="checkbox" data-campo="precio" checked>
-              <i class="fa-solid fa-dollar-sign check-campo__icon"></i>
-              <span>Precio</span>
-            </label>
-          </div>
-        </div>
-      </section>
-
-      <!-- Tarjeta: Texto -->
-      <section class="card config-card" data-card="texto">
-        <header class="card__head">
-          <i class="fa-solid fa-font card__icon"></i>
-          <h2>Texto</h2>
-        </header>
-        <div class="card__body">
-          <div class="campo">
-            <label for="cfg-fuente">Tamaño de letra</label>
-            <div class="campo__input">
-              <input type="range" id="cfg-fuente" min="7" max="18" step="1" value="11">
-              <span class="campo__valor" id="cfg-fuente-valor">11 px</span>
-            </div>
-          </div>
-          <div class="campo">
-            <label for="cfg-acento">Color de acento (precio / artículo)</label>
-            <div class="campo__input campo__input--color">
-              <input type="color" id="cfg-acento" value="#2563eb">
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Barra de acciones fija -->
-      <div class="config-actions">
-        <button class="btn btn-ghost" id="btn-restablecer">
-          <i class="fa-solid fa-rotate-left"></i> Restablecer
-        </button>
-        <button class="btn btn-primary" id="btn-generar">
-          <i class="fa-solid fa-file-pdf"></i> Generar PDF
-        </button>
-      </div>
-    </aside>
-
-    <!-- ============ COLUMNA DERECHA: CARGA + PREVIEW ============ -->
-    <section class="panel-trabajo">
-
-      <!-- Área de arrastre -->
-      <div class="dropzone" id="dropzone">
-        <input type="file" id="archivo" accept=".xlsx,.xls,.txt" hidden>
-        <i class="fa-solid fa-cloud-arrow-up dropzone__icon"></i>
-        <p class="dropzone__titulo">Arrastrá tu archivo aquí</p>
-        <p class="dropzone__sub">o hacé clic para buscar · <strong>.xlsx / .xls / .txt</strong></p>
-        <span class="dropzone__chip" id="chip-archivo" hidden></span>
-      </div>
-
-      <!-- Estado / spinner -->
-      <div class="estado" id="estado" hidden>
-        <span class="spinner"></span>
-        <span id="estado-texto">Consultando base de datos…</span>
-      </div>
-
-      <!-- Resumen rápido -->
-      <div class="resumen" id="resumen" hidden>
-        <div class="resumen__item">
-          <span class="resumen__num" id="res-total">0</span>
-          <span class="resumen__lbl">Registros</span>
-        </div>
-        <div class="resumen__item">
-          <span class="resumen__num" id="res-unicos">0</span>
-          <span class="resumen__lbl">Únicos</span>
-        </div>
-        <div class="resumen__item">
-          <span class="resumen__num" id="res-ok">0</span>
-          <span class="resumen__lbl">Con datos</span>
-        </div>
-        <div class="resumen__item resumen__item--warn">
-          <span class="resumen__num" id="res-sin">0</span>
-          <span class="resumen__lbl">Sin datos</span>
-        </div>
-      </div>
-
-      <!-- Previsualización de la etiqueta -->
-      <section class="card preview-card">
-        <header class="card__head preview-card__head">
-          <div>
-            <i class="fa-solid fa-eye card__icon"></i>
-            <h2>Vista previa</h2>
-          </div>
-          <div class="preview-selector">
-            <label for="preview-record" class="preview-selector__lbl">
-              <i class="fa-solid fa-pen-ruler"></i> Muestra con:
-            </label>
-            <select id="preview-record">
-              <option value="">— seleccioná un registro —</option>
-            </select>
-          </div>
-        </header>
-        <div class="preview-stage">
-          <div class="ruler ruler--top" aria-hidden="true"></div>
-          <div class="ruler ruler--left" aria-hidden="true"></div>
-          <div class="preview-stage__inner">
-            <div class="etiqueta" id="etiqueta-preview">
-              <!-- La etiqueta se dibuja aquí -->
-            </div>
-          </div>
-        </div>
-        <p class="preview-info" id="preview-info">La vista previa se actualiza mientras diseñás.</p>
-      </section>
-
-      <!-- Tabla de datos enriquecidos -->
-      <section class="card tabla-card">
-        <header class="card__head">
-          <i class="fa-solid fa-table-list card__icon"></i>
-          <h2>Registros enriquecidos</h2>
-          <span class="tabla-card__count" id="tabla-count">0</span>
-        </header>
-        <div class="tabla-contenedor">
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Código</th>
-                <th>Descripción</th>
-                <th>Color</th>
-                <th>Talla</th>
-                <th>Precio</th>
-              </tr>
-            </thead>
-            <tbody id="tabla-cuerpo"></tbody>
-          </table>
-        </div>
-      </section>
-
+      <p class="ayuda">
+        Si el archivo es Excel, se utilizará la <strong>primera hoja</strong>.
+        Se detectarán automáticamente columnas con nombres como
+        <code>BARCODE</code>, <code>CODE</code>, <code>DESCRIPTION</code>,
+        <code>COLOR</code>, <code>SIZE</code> (no importa mayúsculas/minúsculas).
+      </p>
     </section>
-  </main>
 
-  <!-- ======================= MODAL DE CONFIRMACIÓN PDF ======================= -->
-  <div class="modal-overlay" id="modal-pdf" hidden>
-    <div class="modal">
-      <header class="modal__head">
-        <i class="fa-solid fa-file-pdf"></i>
-        <h2>Confirmar exportación</h2>
-      </header>
-      <div class="modal__body">
-        <p>Se van a generar etiquetas con la siguiente configuración:</p>
-        <ul class="modal__detalles">
-          <li><i class="fa-solid fa-tag"></i> <strong id="modal-etiquetas">0</strong> etiquetas</li>
-          <li><i class="fa-solid fa-ruler-combined"></i> Tamaño: <strong id="modal-tamano">70 × 40 mm</strong></li>
-          <li><i class="fa-solid fa-barcode"></i> Código: <strong id="modal-codigo">Code 128</strong></li>
-          <li><i class="fa-solid fa-file"></i> Distribución: <strong id="modal-pagina">A4</strong></li>
-        </ul>
+    <!-- =================== BOTONES DE ACCIÓN =================== -->
+    <section class="tarjeta">
+      <h2>2. Acciones</h2>
+      <div class="fila-botones">
+        <button id="btn-preview" class="btn btn-primario" disabled>👁 Previsualizar</button>
+        <button id="btn-pdf" class="btn btn-secundario" disabled>📄 Generar PDF</button>
       </div>
-      <footer class="modal__foot">
-        <button class="btn btn-ghost" id="modal-cancelar">Cancelar</button>
-        <button class="btn btn-primary" id="modal-confirmar">
-          <i class="fa-solid fa-file-arrow-down"></i> Generar y descargar
-        </button>
-      </footer>
-    </div>
-  </div>
+      <!-- Barra de progreso (oculta por defecto) -->
+      <div id="progreso" class="progreso" hidden>
+        <div class="barra"><div id="barra-llena" class="barra-llena"></div></div>
+        <p id="texto-progreso" class="texto-progreso"></p>
+      </div>
+    </section>
 
-  <!-- Notificaciones toast -->
-  <div class="toasts" id="toasts"></div>
+    <!-- =================== RESUMEN =================== -->
+    <section id="resumen" class="tarjeta resumen" hidden>
+      <h2>Resumen</h2>
+      <div id="resumen-contenido" class="resumen-contenido"></div>
+    </section>
+
+    <!-- =================== TABLA DE PREVISUALIZACIÓN =================== -->
+    <section class="tarjeta">
+      <h2>3. Previsualización</h2>
+      <div class="tabla-contenedor">
+        <table id="tabla-productos">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Código de barras</th>
+              <th>Descripción</th>
+              <th>Precio</th>
+              <th>Color</th>
+              <th>Talla</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-cuerpo">
+            <!-- Las filas se generan dinámicamente con JavaScript -->
+          </tbody>
+        </table>
+      </div>
+      <p class="ayuda" id="sin-datos" hidden>
+        Aún no hay datos. Selecciona un archivo y pulsa <strong>Previsualizar</strong>.
+      </p>
+    </section>
+  </div>
 
   <!-- Lógica de la aplicación -->
   <script src="script.js"></script>
