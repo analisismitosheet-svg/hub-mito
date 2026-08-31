@@ -20,3 +20,6 @@ manuales/
 *.doc
 *.docx
 *.pdf
+
+.vercel
+.env*
