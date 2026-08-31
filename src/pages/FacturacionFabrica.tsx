@@ -1039,8 +1039,9 @@ function EtiquetasModal({ todos, registro, onClose }: { todos: FactRegistro[]; r
       `@media print {`,
       `  body * { visibility: hidden !important; }`,
       `  #etiquetas-print-area, #etiquetas-print-area * { visibility: visible !important; }`,
-      `  #etiquetas-print-area { position: absolute; left: 0; top: 0; margin: 0; padding: 0; display: block !important; }`,
+      `  #etiquetas-print-area { position: fixed !important; inset: 0 !important; margin: 0 !important; padding: 0 !important; display: block !important; width: ${ancho}mm !important; height: ${alto}mm !important; overflow: hidden !important; }`,
       `  #etiquetas-print-area .etiqueta-bulto { page-break-after: always; break-after: page; }`,
+      `  .etq-preview { display: none !important; }`,
       `}`,
     ].join('\n')
     document.head.appendChild(style)
@@ -1106,7 +1107,7 @@ function EtiquetasModal({ todos, registro, onClose }: { todos: FactRegistro[]; r
           {!generadas || !cliente ? (
             <p className="py-10 text-center text-sm text-sub">Configura la cantidad y presiona "Generar etiquetas".</p>
           ) : (
-            <div className="flex flex-wrap gap-3">
+            <div className="etq-preview flex flex-wrap gap-3">
               {nums.map((n) => (
                 <EtiquetaBulto key={n} cliente={cliente} num={n} total={total} destino={destino} origen={origen} ancho={ancho} alto={alto} fontSize={fontSize} qrSize={qrSize} />
               ))}
