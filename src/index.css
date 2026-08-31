@@ -159,10 +159,50 @@ body {
   gap: 2px;
 }
 
+.etiqueta-bulto .etq-lado {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
 .etiqueta-bulto .etq-num {
   font-weight: 700;
   font-size: 1.25em;
   white-space: nowrap;
+}
+
+.etiqueta-bulto .etq-origen {
+  font-size: 0.9em;
+  font-weight: 700;
+  text-transform: uppercase;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.etiqueta-bulto .etq-origen span {
+  color: #000;
+}
+
+.etiqueta-bulto .etq-qr-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5px;
+  flex-shrink: 0;
+}
+
+.etiqueta-bulto .etq-qr-txt {
+  max-width: 100%;
+  font-size: 0.6em;
+  line-height: 1;
+  font-weight: 600;
+  text-align: center;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .etiqueta-bulto .etq-razon {
