@@ -235,13 +235,17 @@ export default function Transferencias() {
       const all: Item[] = []
       const PAGE = 1000
       for (let desde = 0; ; desde += PAGE) {
-        const { data, error } = await supabase
+        // El local solo pide las filas de SU origen: la query usa el índice de
+        // "origen" y evita que la policy RLS haga un escaneo que baje a timeout.
+        let q = supabase
           .from('transfer_items')
           .select('id,lote_id,orden,origen,destino,articulo,descripcion,material,color,talle,tipo,cantidad,estado,hecho_at')
           .in('lote_id', ids)
           .order('lote_id', { ascending: true })
           .order('orden', { ascending: true })
           .range(desde, desde + PAGE - 1)
+        if (!verTodo && miLocal) q = q.eq('origen', miLocal)
+        const { data, error } = await q
         const chunk = (data as Item[]) ?? []
         all.push(...chunk)
         if (error || chunk.length < PAGE) break
