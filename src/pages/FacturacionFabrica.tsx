@@ -931,13 +931,12 @@ async function fetchClienteEtiqueta(nCl: string, fallback: { razon_social: strin
   }
 }
 
-function EtiquetaBulto({ cliente, num, total, destino, origen, contenido, ancho, alto, fontSize, qrSize }: {
+function EtiquetaBulto({ cliente, num, total, destino, origen, ancho, alto, fontSize, qrSize }: {
   cliente: EtiquetaCliente
   num: number
   total: number
   destino: string
   origen: string
-  contenido: string
   ancho: number
   alto: number
   fontSize: number
@@ -951,8 +950,8 @@ function EtiquetaBulto({ cliente, num, total, destino, origen, contenido, ancho,
           <div className="etq-origen"><span>ORIGEN:</span> {origen || '-'}</div>
         </div>
         <div className="etq-qr-col">
-          <QRCodeSVG value={`${origen}-BULTOS ${num}/${total}-${destino}`} size={qrSize} level="M" />
-          {contenido && <div className="etq-qr-txt">{contenido}</div>}
+          <QRCodeSVG value={`${origen}-BULTOS =${num}/${total}-${destino}`} size={qrSize} level="M" />
+          <div className="etq-qr-txt">{origen}-BULTOS ={num}/{total}{destino ? `-${destino}` : ''}</div>
         </div>
       </div>
       <div className="etq-razon">{cliente.razonSocial}</div>
@@ -982,7 +981,6 @@ function EtiquetasModal({ todos, registro, onClose }: { todos: FactRegistro[]; r
   const [qrSize, setQrSize] = useState(30)
   const [destino, setDestino] = useState('POLO52-NO')
   const [origen, setOrigen] = useState('MITO')
-  const [contenido, setContenido] = useState(registro?.observaciones || '')
   const [generadas, setGeneradas] = useState(false)
   const [cliente, setCliente] = useState<EtiquetaCliente | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -1057,7 +1055,7 @@ function EtiquetasModal({ todos, registro, onClose }: { todos: FactRegistro[]; r
               <button onClick={generar} className="btn-press w-full rounded-xl bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700">Generar etiquetas</button>
             </div>
           </div>
-          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="block">
               <span className="mb-1 block text-xs font-medium text-sub">Origen</span>
               <input value={origen} onChange={(e) => setOrigen(e.target.value)} placeholder="Ej: FABRICA" className={inputCls} />
@@ -1065,10 +1063,6 @@ function EtiquetasModal({ todos, registro, onClose }: { todos: FactRegistro[]; r
             <label className="block">
               <span className="mb-1 block text-xs font-medium text-sub">Destino</span>
               <input value={destino} onChange={(e) => setDestino(e.target.value)} placeholder="Local / Sucursal" className={inputCls} />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-sub">Lo que tiene (debajo del QR)</span>
-              <input value={contenido} onChange={(e) => setContenido(e.target.value)} placeholder="Contenido del bulto..." className={inputCls} />
             </label>
           </div>
         </div>
@@ -1080,7 +1074,7 @@ function EtiquetasModal({ todos, registro, onClose }: { todos: FactRegistro[]; r
           ) : (
             <div className="flex flex-wrap gap-3">
               {nums.map((n) => (
-                <EtiquetaBulto key={n} cliente={cliente} num={n} total={total} destino={destino} origen={origen} contenido={contenido} ancho={ancho} alto={alto} fontSize={fontSize} qrSize={qrSize} />
+                <EtiquetaBulto key={n} cliente={cliente} num={n} total={total} destino={destino} origen={origen} ancho={ancho} alto={alto} fontSize={fontSize} qrSize={qrSize} />
               ))}
             </div>
           )}
@@ -1098,7 +1092,7 @@ function EtiquetasModal({ todos, registro, onClose }: { todos: FactRegistro[]; r
         {/* Área de impresión oculta en pantalla */}
         <div id="etiquetas-print-area" className="etiquetas-print-area">
           {nums.map((n) => (
-            <EtiquetaBulto key={`p${n}`} cliente={cliente!} num={n} total={total} destino={destino} origen={origen} contenido={contenido} ancho={ancho} alto={alto} fontSize={fontSize} qrSize={qrSize} />
+            <EtiquetaBulto key={`p${n}`} cliente={cliente!} num={n} total={total} destino={destino} origen={origen} ancho={ancho} alto={alto} fontSize={fontSize} qrSize={qrSize} />
           ))}
         </div>
       </div>
