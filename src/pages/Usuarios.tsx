@@ -13,6 +13,7 @@ import {
   Copy,
   Pencil,
   ChevronDown,
+  Trash2,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -150,6 +151,15 @@ export default function Usuarios() {
     const motivo = window.prompt('Motivo del rechazo (opcional):') ?? ''
     await actualizar(u.id, { estado: 'rechazado', motivo_rechazo: motivo.trim() || null })
     await notificar('rechazado', u, motivo.trim() || undefined)
+  }
+
+  async function borrar(u: UsuarioRow) {
+    if (!supabase) return
+    if (!window.confirm(`¿Borrar el usuario "${u.nombre}" (${u.email})? Se elimina su perfil y ya no figurará en la lista.`)) return
+    setError(null)
+    const { error } = await supabase.rpc('borrar_usuario', { uid: u.id })
+    if (error) { setError(error.message); return }
+    await cargar()
   }
 
   function getUserRoles(uid: string): string[] {
@@ -325,6 +335,16 @@ export default function Usuarios() {
                       >
                         <SlidersHorizontal size={12} aria-hidden />
                       </button>
+                      {!esYo && (
+                        <button
+                          onClick={() => borrar(u)}
+                          className="rounded border border-red-500/30 bg-red-500/10 p-1 text-red-400 transition hover:bg-red-500/20"
+                          title="Borrar"
+                          aria-label={`Borrar ${u.nombre}`}
+                        >
+                          <Trash2 size={12} aria-hidden />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
