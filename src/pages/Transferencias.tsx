@@ -205,6 +205,15 @@ export default function Transferencias() {
   const puedeImportar = can('transferencias.import')
   const verTodo = isAdmin || puedeImportar || can('transferencias.ver_todo')
   const miLocal = (perfil?.local ?? '').toUpperCase()
+  // Algunos bultos se cargaron con el origen sin el sufijo "2" (ej: RUTA9D en
+  // lugar de RUTA9D2). Para que el usuario vea ambos, se consultan tanto su
+  // local exacto como la variante sin el "2" final.
+  const origenesUsuario = useMemo(() => {
+    const base = miLocal
+    if (!base) return []
+    const alt = base.endsWith('2') ? base.slice(0, -1) : null
+    return alt && alt !== base ? [base, alt] : [base]
+  }, [miLocal])
 
   const [lotes, setLotes] = useState<Lote[]>([])
   const [items, setItems] = useState<Item[]>([])
@@ -249,7 +258,7 @@ export default function Transferencias() {
           .order('lote_id', { ascending: true })
           .order('orden', { ascending: true })
           .range(desde, desde + PAGE - 1)
-        if (!verTodo && miLocal) q = q.eq('origen', miLocal)
+        if (!verTodo && origenesUsuario.length) q = q.in('origen', origenesUsuario)
         const { data, error } = await q
         if (error) {
           itemsErr = error.message
@@ -273,8 +282,8 @@ export default function Transferencias() {
 
   // ¿Este origen es el local del usuario? (para tildar sus propios artículos)
   const esMiLocal = useCallback(
-    (origen: string) => !!miLocal && origen.toUpperCase() === miLocal,
-    [miLocal],
+    (origen: string) => origenesUsuario.length > 0 && origenesUsuario.includes(origen.toUpperCase()),
+    [origenesUsuario],
   )
 
   async function marcar(item: Item, estado: EstadoItem) {
