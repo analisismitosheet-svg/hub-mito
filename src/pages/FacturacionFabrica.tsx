@@ -931,16 +931,17 @@ async function fetchClienteEtiqueta(nCl: string, fallback: { razon_social: strin
   }
 }
 
-function EtiquetaBulto({ cliente, num, total, destino, ancho, alto }: {
+function EtiquetaBulto({ cliente, num, total, destino, ancho, alto, fontSize }: {
   cliente: EtiquetaCliente
   num: number
   total: number
   destino: string
   ancho: number
   alto: number
+  fontSize: number
 }) {
   return (
-    <div className="etiqueta-bulto" style={{ width: `${ancho}mm`, height: `${alto}mm` }}>
+    <div className="etiqueta-bulto" style={{ width: `${ancho}mm`, height: `${alto}mm`, fontSize: `${fontSize}px` }}>
       <div className="etq-top">
         <div className="etq-num">Nº {cliente.numeroCliente}</div>
         <QRCodeSVG value={`MITO-BULTOS ${num}/${total}-POLO52-NO`} size={Math.min(38, ancho * 0.45)} level="M" />
@@ -961,6 +962,7 @@ function EtiquetasModal({ registro, onClose }: { registro: FactRegistro; onClose
   const [total, setTotal] = useState<number>(registro?.bulto ?? 1)
   const [ancho, setAncho] = useState(80)
   const [alto, setAlto] = useState(50)
+  const [fontSize, setFontSize] = useState(8)
   const [destino, setDestino] = useState('')
   const [generadas, setGeneradas] = useState(false)
   const [cliente, setCliente] = useState<EtiquetaCliente | null>(null)
@@ -1010,7 +1012,7 @@ function EtiquetasModal({ registro, onClose }: { registro: FactRegistro; onClose
         {error && <p role="alert" className="mx-5 mt-3 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
 
         {/* Config */}
-        <div className="grid grid-cols-2 gap-3 border-b border-line px-5 py-4 sm:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 border-b border-line px-5 py-4 sm:grid-cols-6">
           <label className="block">
             <span className="mb-1 block text-xs font-medium text-sub">Cant. bultos</span>
             <input type="number" min={1} value={total} onChange={(e) => setTotal(Math.max(1, Number(e.target.value) || 1))} className={inputCls} />
@@ -1027,6 +1029,10 @@ function EtiquetasModal({ registro, onClose }: { registro: FactRegistro; onClose
             <span className="mb-1 block text-xs font-medium text-sub">Destino</span>
             <input value={destino} onChange={(e) => setDestino(e.target.value)} placeholder="Local / Sucursal" className={inputCls} />
           </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-sub">Tamaño letra (px)</span>
+            <input type="number" min={5} max={20} value={fontSize} onChange={(e) => setFontSize(Math.max(5, Math.min(20, Number(e.target.value) || 8)))} className={inputCls} />
+          </label>
           <div className="flex items-end">
             <button onClick={generar} className="btn-press w-full rounded-xl bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700">Generar etiquetas</button>
           </div>
@@ -1039,7 +1045,7 @@ function EtiquetasModal({ registro, onClose }: { registro: FactRegistro; onClose
           ) : (
             <div className="flex flex-wrap gap-3">
               {nums.map((n) => (
-                <EtiquetaBulto key={n} cliente={cliente} num={n} total={total} destino={destino} ancho={ancho} alto={alto} />
+                <EtiquetaBulto key={n} cliente={cliente} num={n} total={total} destino={destino} ancho={ancho} alto={alto} fontSize={fontSize} />
               ))}
             </div>
           )}
@@ -1057,7 +1063,7 @@ function EtiquetasModal({ registro, onClose }: { registro: FactRegistro; onClose
         {/* Área de impresión oculta en pantalla */}
         <div id="etiquetas-print-area" className="etiquetas-print-area">
           {nums.map((n) => (
-            <EtiquetaBulto key={`p${n}`} cliente={cliente!} num={n} total={total} destino={destino} ancho={ancho} alto={alto} />
+            <EtiquetaBulto key={`p${n}`} cliente={cliente!} num={n} total={total} destino={destino} ancho={ancho} alto={alto} fontSize={fontSize} />
           ))}
         </div>
       </div>

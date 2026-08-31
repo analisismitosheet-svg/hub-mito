@@ -161,13 +161,13 @@ body {
 
 .etiqueta-bulto .etq-num {
   font-weight: 700;
-  font-size: 10px;
+  font-size: 1.25em;
   white-space: nowrap;
 }
 
 .etiqueta-bulto .etq-razon {
   font-weight: 700;
-  font-size: 9px;
+  font-size: 1.1em;
   text-transform: uppercase;
   overflow: hidden;
 }
