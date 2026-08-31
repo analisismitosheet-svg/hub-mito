@@ -234,20 +234,23 @@ export default function Transferencias() {
     if (lotesData.length) {
       const ids = lotesData.map((l) => l.id)
       // Paginar: Supabase corta en 1000 filas por consulta.
-      // NOTA: el filtrado "solo su local" lo hace la RLS (origen = mi_local, sin
-      // distinguir mayúsculas). NO filtramos por origen desde el cliente, porque
-      // un .eq() exacto y sensible a mayúsculas dejaba la tabla vacía.
       const all: Item[] = []
       const PAGE = 1000
       let itemsErr: string | null = null
       for (let desde = 0; ; desde += PAGE) {
-        const { data, error } = await supabase
+        // Para el usuario de local, filtrar por origen desde la query (usa el
+        // índice y evita que la RLS haga un escaneo que baje a timeout). El
+        // admin/importador no lo filtra: ve todo. El origen se guarda en
+        // mayúsculas y miLocal se fuerza a mayúsculas, así el match es exacto.
+        let q = supabase
           .from('transfer_items')
           .select('id,lote_id,orden,origen,destino,articulo,descripcion,material,color,talle,tipo,cantidad,estado,hecho_at')
           .in('lote_id', ids)
           .order('lote_id', { ascending: true })
           .order('orden', { ascending: true })
           .range(desde, desde + PAGE - 1)
+        if (!verTodo && miLocal) q = q.eq('origen', miLocal)
+        const { data, error } = await q
         if (error) {
           itemsErr = error.message
           break
