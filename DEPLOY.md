@@ -22,7 +22,7 @@ git push -u origin main
 | Variable | Valor |
 |---|---|
 | `VITE_SUPABASE_URL` | `https://qwlugajzxrrwckrqlrjp.supabase.co` |
-| `VITE_SUPABASE_ANON_KEY` | `sb_publishable_PNZsrMzU0oX_4ZW-x4VLRg_iZtMyWBx` |
+| `VITE_SUPABASE_ANON_KEY` | *(pegá acá la anon key actual; NO la rotada)* |
 | `VITE_URL_TRANSPORTE` | *(URL de la PWA de transporte, o vacío)* |
 | `VITE_URL_CONTROL_LOCALES` | *(URL de la PWA de control-locales, o vacío)* |
 
