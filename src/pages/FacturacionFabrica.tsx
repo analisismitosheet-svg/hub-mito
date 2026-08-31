@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
-  Loader2, Search, SearchX, Plus, Pencil, Trash2, X, Upload, FileText, Lock, Printer,
+  Loader2, Search, SearchX, Plus, Pencil, Trash2, X, Upload, FileText, Lock, Printer, BookmarkPlus,
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import Layout from '@/components/Layout'
@@ -966,6 +966,29 @@ function EtiquetaBulto({ cliente, num, total, destino, origen, ancho, alto, font
   )
 }
 
+const ETQ_PRE_KEY = 'etiqueta_bultos_predef'
+
+interface PredefEtiqueta {
+  ancho: number
+  alto: number
+  fontSize: number
+  qrSize: number
+  origen: string
+  destino: string
+}
+
+const ETQ_PRE_DEFECTO: PredefEtiqueta = { ancho: 80, alto: 50, fontSize: 8, qrSize: 30, origen: 'MITO', destino: 'POLO52-NO' }
+
+function leerPredef(): PredefEtiqueta {
+  try {
+    const raw = localStorage.getItem(ETQ_PRE_KEY)
+    if (!raw) return ETQ_PRE_DEFECTO
+    return { ...ETQ_PRE_DEFECTO, ...JSON.parse(raw) }
+  } catch {
+    return ETQ_PRE_DEFECTO
+  }
+}
+
 function EtiquetasModal({ todos, registro, onClose }: { todos: FactRegistro[]; registro: FactRegistro; onClose: () => void }) {
   // Cantidad total de bultos (Y): por defecto, cuántos registros comparten el
   // mismo N° Cliente que la fila seleccionada (editable).
@@ -975,15 +998,22 @@ function EtiquetasModal({ todos, registro, onClose }: { todos: FactRegistro[]; r
     return todos.filter((r) => r.n_cliente === nc).length || 1
   }, [todos, registro])
   const [total, setTotal] = useState<number>(totalDefault)
-  const [ancho, setAncho] = useState(80)
-  const [alto, setAlto] = useState(50)
-  const [fontSize, setFontSize] = useState(8)
-  const [qrSize, setQrSize] = useState(30)
-  const [destino, setDestino] = useState('POLO52-NO')
-  const [origen, setOrigen] = useState('MITO')
+  const [predef] = useState<PredefEtiqueta>(leerPredef)
+  const [ancho, setAncho] = useState(predef.ancho)
+  const [alto, setAlto] = useState(predef.alto)
+  const [fontSize, setFontSize] = useState(predef.fontSize)
+  const [qrSize, setQrSize] = useState(predef.qrSize)
+  const [destino, setDestino] = useState(predef.destino)
+  const [origen, setOrigen] = useState(predef.origen)
   const [generadas, setGeneradas] = useState(false)
   const [cliente, setCliente] = useState<EtiquetaCliente | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [guardado, setGuardado] = useState(false)
+
+  function guardarPredef() {
+    localStorage.setItem(ETQ_PRE_KEY, JSON.stringify({ ancho, alto, fontSize, qrSize, origen, destino }))
+    setGuardado(true)
+  }
 
   useEffect(() => {
     const nCl = registro?.n_cliente ? String(registro.n_cliente) : ''
@@ -1051,8 +1081,12 @@ function EtiquetasModal({ todos, registro, onClose }: { todos: FactRegistro[]; r
               <span className="mb-1 block text-xs font-medium text-sub">Tamaño QR (px)</span>
               <input type="number" min={10} max={80} value={qrSize} onChange={(e) => setQrSize(Math.max(10, Math.min(80, Number(e.target.value) || 30)))} className={inputCls} />
             </label>
-            <div className="flex items-end">
+            <div className="flex flex-col items-end gap-1">
               <button onClick={generar} className="btn-press w-full rounded-xl bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700">Generar etiquetas</button>
+              <button onClick={guardarPredef} className="btn-press inline-flex w-full items-center justify-center gap-1 rounded-xl border border-line bg-surface2 px-3 py-1.5 text-xs font-medium text-ink hover:bg-line">
+                <BookmarkPlus size={13} aria-hidden /> Guardar como predefinido
+              </button>
+              {guardado && <span className="text-[11px] font-medium text-emerald-500">✓ Predefinido guardado</span>}
             </div>
           </div>
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
