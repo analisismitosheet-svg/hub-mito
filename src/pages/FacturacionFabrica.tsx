@@ -1032,20 +1032,30 @@ function EtiquetasModal({ todos, registro, onClose }: { todos: FactRegistro[]; r
   }
 
   function imprimir() {
+    const src = document.getElementById('etiquetas-print-area')
+    if (!src || !src.innerHTML.trim()) return
+    // Clonar las etiquetas a un nodo hijo directo de <body> y ocultar TODO lo
+    // demás con display:none en print. Esto evita que el navegador pagee el
+    // resto de la app (tabla + modal) y duplique las impresiones.
+    const root = document.createElement('div')
+    root.id = 'etiquetas-print-root'
+    root.innerHTML = src.innerHTML
+    root.style.position = 'fixed'
+    root.style.inset = '0'
+    document.body.appendChild(root)
     const style = document.createElement('style')
     style.id = 'etiquetas-print-css'
     style.innerHTML = [
       `@page { size: ${ancho}mm ${alto}mm; margin: 0; }`,
       `@media print {`,
-      `  body * { visibility: hidden !important; }`,
-      `  #etiquetas-print-area, #etiquetas-print-area * { visibility: visible !important; }`,
-      `  #etiquetas-print-area { position: fixed !important; inset: 0 !important; margin: 0 !important; padding: 0 !important; display: block !important; width: ${ancho}mm !important; height: ${alto}mm !important; overflow: hidden !important; }`,
-      `  #etiquetas-print-area .etiqueta-bulto { page-break-after: always; break-after: page; }`,
-      `  .etq-preview { display: none !important; }`,
+      `  body > *:not(#etiquetas-print-root) { display: none !important; }`,
+      `  #etiquetas-print-root { display: block !important; }`,
+      `  #etiquetas-print-root .etiqueta-bulto { page-break-after: always; break-after: page; }`,
       `}`,
     ].join('\n')
     document.head.appendChild(style)
     window.print()
+    root.remove()
     document.getElementById('etiquetas-print-css')?.remove()
   }
 
