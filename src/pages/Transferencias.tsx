@@ -203,7 +203,7 @@ function Barra({ items }: { items: Item[] }) {
 export default function Transferencias() {
   const { can, perfil, isAdmin } = useAuth()
   const puedeImportar = can('transferencias.import')
-  const verTodo = isAdmin || puedeImportar || can('transferencias.ver_todo')
+  const verTodo = true
   const miLocal = (perfil?.local ?? '').toUpperCase()
 
   const [lotes, setLotes] = useState<Lote[]>([])
