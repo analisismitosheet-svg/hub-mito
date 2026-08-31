@@ -132,3 +132,76 @@ body {
   cursor: grab;
 }
 .slider-thumb:active { cursor: grabbing; }
+
+/* ------------------------------------------------------------------ */
+/*  Etiquetas de bultos (previsualización + impresión)                 */
+/* ------------------------------------------------------------------ */
+
+.etiqueta-bulto {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5px;
+  overflow: hidden;
+  border: 0.4mm solid #000;
+  padding: 2px;
+  font-size: 8px;
+  line-height: 1.05;
+  font-family: Arial, Helvetica, sans-serif;
+  color: #000;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.etiqueta-bulto .etq-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 2px;
+}
+
+.etiqueta-bulto .etq-num {
+  font-weight: 700;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.etiqueta-bulto .etq-razon {
+  font-weight: 700;
+  font-size: 9px;
+  text-transform: uppercase;
+  overflow: hidden;
+}
+
+.etiqueta-bulto .etq-line {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.etiqueta-bulto .etq-obs {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.etiqueta-bulto .etq-transp {
+  font-weight: 700;
+  margin-top: auto;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Zona de impresión: oculta en pantalla, al 100% al imprimir */
+.etiquetas-print-area {
+  display: none;
+  visibility: hidden;
+}
+
+@media print {
+  .etiquetas-print-area .etiqueta-bulto {
+    border-color: #000;
+  }
+}
+

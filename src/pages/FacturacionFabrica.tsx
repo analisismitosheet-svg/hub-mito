@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
-  Loader2, Search, SearchX, Plus, Pencil, Trash2, X, Upload, FileText, Lock,
+  Loader2, Search, SearchX, Plus, Pencil, Trash2, X, Upload, FileText, Lock, Printer,
 } from 'lucide-react'
+import { QRCodeSVG } from 'qrcode.react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { useSearchParams } from 'react-router-dom'
@@ -114,6 +115,7 @@ export default function FacturacionFabrica() {
   const [sortKey, setSortKey] = useState<SortKey>('fecha_fact')
   const [sortAsc, setSortAsc] = useState(false)
   const [card, setCard] = useState<FactRegistro | null>(null)
+  const [etiquetaSel, setEtiquetaSel] = useState<FactRegistro | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const POR_PAGINA = 50
 
@@ -346,6 +348,7 @@ export default function FacturacionFabrica() {
                     <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={r.observaciones || ''}>{r.observaciones || '-'}</span></td>
                     <td className="px-1 py-[2px] text-right">
                       <div className="flex items-center justify-end gap-px" onClick={(e) => e.stopPropagation()}>
+                        <button onClick={() => setEtiquetaSel(r)} className="rounded border border-line p-0.5 text-sub transition hover:text-amber-400" title="Etiquetas / Imprimir"><Printer size={10} aria-hidden /></button>
                         {(modoPolo52 || puedeEditar) && <button onClick={() => { setSel(r); setModal('edit') }} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Editar"><Pencil size={10} aria-hidden /></button>}
                         {puedeBorrar && <button onClick={() => void eliminar(r)} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Eliminar"><Trash2 size={10} aria-hidden /></button>}
                       </div>
@@ -372,6 +375,9 @@ export default function FacturacionFabrica() {
 
       {/* Detail card */}
       {card && <FactCard registro={card} onClose={() => setCard(null)} onEdit={() => { setSel(card); setModal('edit'); setCard(null) }} puedeEditar={modoPolo52 || puedeEditar} empleados={empleados} />}
+
+      {/* Etiquetas de bultos */}
+      {etiquetaSel && <EtiquetasModal registro={etiquetaSel} onClose={() => setEtiquetaSel(null)} />}
 
       {/* Modals */}
       {modal === 'importar' && (
@@ -884,3 +890,178 @@ function ImportFacturacion({ clientes, empleados, onClose, onSaved }: {
     </div>
   )
 }
+
+/* ------------------------------------------------------------------ */
+/*  Etiquetas de bultos (QR + impresión)                               */
+/* ------------------------------------------------------------------ */
+
+interface EtiquetaCliente {
+  numeroCliente: string
+  razonSocial: string
+  direccion: string
+  localidad: string
+  provincia: string
+  telefono: string
+  transporte: string
+  observaciones: string
+}
+
+/**
+ * Trae los datos completos del cliente para la etiqueta.
+ * IMPLEMENTACIÓN REAL: GET /api/clientes/{N_CL}
+ *   const res = await fetch(`/api/clientes/${encodeURIComponent(nCl)}`)
+ *   const data = await res.json();  // { razonSocial, direccion, localidad, provincia, telefono, ... }
+ * Mientras tanto devuelve datos de ejemplo + los campos que ya tenemos en el registro
+ * (razon social, transporte, observaciones). Reemplazar el bloque por el fetch real.
+ */
+async function fetchClienteEtiqueta(nCl: string, fallback: { razon_social: string | null; transporte: string | null; observaciones: string | null }): Promise<EtiquetaCliente> {
+  // TODO: reemplazar este bloque por el fetch a la API real.
+  // const res = await fetch(`/api/clientes/${encodeURIComponent(nCl)}`)
+  // const data = (await res.json()) ?? {}
+  const data: Record<string, string> = {}
+  return {
+    numeroCliente: nCl,
+    razonSocial: data.razonSocial ?? fallback.razon_social ?? '',
+    direccion: data.direccion ?? 'Direccion de ejemplo 123, Piso X - Dto Y',
+    localidad: data.localidad ?? 'Localidad de ejemplo',
+    provincia: data.provincia ?? 'Buenos Aires',
+    telefono: data.telefono ?? '(011) 5555-0000',
+    transporte: fallback.transporte ?? '',
+    observaciones: fallback.observaciones ?? '',
+  }
+}
+
+function EtiquetaBulto({ cliente, num, total, destino, ancho, alto }: {
+  cliente: EtiquetaCliente
+  num: number
+  total: number
+  destino: string
+  ancho: number
+  alto: number
+}) {
+  return (
+    <div className="etiqueta-bulto" style={{ width: `${ancho}mm`, height: `${alto}mm` }}>
+      <div className="etq-top">
+        <div className="etq-num">Nº {cliente.numeroCliente}</div>
+        <QRCodeSVG value={`MITO-BULTOS ${num}/${total}-POLO52-NO`} size={Math.min(38, ancho * 0.45)} level="M" />
+      </div>
+      <div className="etq-razon">{cliente.razonSocial}</div>
+      <div className="etq-line">TE: {cliente.telefono}</div>
+      <div className="etq-line"><b>DESTINO:</b> {destino}</div>
+      <div className="etq-line"><b>DIR. ENTREGA:</b> {cliente.direccion}</div>
+      <div className="etq-line">{cliente.localidad} - {cliente.provincia}</div>
+      <div className="etq-line"><b>TEL CONTACTO:</b> {cliente.telefono}</div>
+      <div className="etq-obs">OBS: {cliente.observaciones || '-'}</div>
+      <div className="etq-transp">TRANSPORTE: {cliente.transporte || '-'} · BULTOS {num}/{total}</div>
+    </div>
+  )
+}
+
+function EtiquetasModal({ registro, onClose }: { registro: FactRegistro; onClose: () => void }) {
+  const [total, setTotal] = useState<number>(registro?.bulto ?? 1)
+  const [ancho, setAncho] = useState(80)
+  const [alto, setAlto] = useState(50)
+  const [destino, setDestino] = useState('')
+  const [generadas, setGeneradas] = useState(false)
+  const [cliente, setCliente] = useState<EtiquetaCliente | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const nCl = registro?.n_cliente ? String(registro.n_cliente) : ''
+    if (!nCl) { setError('Este registro no tiene N° Cliente para buscar los datos de la etiqueta.'); return }
+    let activo = true
+    void fetchClienteEtiqueta(nCl, registro).then((c) => { if (activo) setCliente(c) }).catch(() => { if (activo) setError('No se pudieron cargar los datos del cliente.') })
+    return () => { activo = false }
+  }, [registro])
+
+  const nums = useMemo(() => (generadas && total > 0 ? Array.from({ length: total }, (_, i) => i + 1) : []), [generadas, total])
+
+  function generar() {
+    if (total < 1) { setError('La cantidad de bultos debe ser al menos 1.'); return }
+    setError(null)
+    setGeneradas(true)
+  }
+
+  function imprimir() {
+    const style = document.createElement('style')
+    style.id = 'etiquetas-print-css'
+    style.innerHTML = [
+      `@page { size: ${ancho}mm ${alto}mm; margin: 0; }`,
+      `@media print {`,
+      `  body * { visibility: hidden !important; }`,
+      `  #etiquetas-print-area, #etiquetas-print-area * { visibility: visible !important; }`,
+      `  #etiquetas-print-area { position: absolute; left: 0; top: 0; margin: 0; padding: 0; display: block !important; }`,
+      `  #etiquetas-print-area .etiqueta-bulto { page-break-after: always; break-after: page; }`,
+      `}`,
+    ].join('\n')
+    document.head.appendChild(style)
+    window.print()
+    document.getElementById('etiquetas-print-css')?.remove()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => !window.print && onClose()}>
+      <div className="flex w-[94vw] max-w-4xl flex-col rounded-2xl border border-line bg-surface shadow-2xl" style={{ maxHeight: '92vh' }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-line px-5 py-3">
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-ink"><Printer size={18} className="text-amber-400" aria-hidden /> Etiquetas de bultos — {registro.razon_social || 'Sin razon social'}</h2>
+          <button onClick={onClose} className="rounded-lg border border-line p-1.5 text-sub transition hover:bg-line hover:text-ink"><X size={16} aria-hidden /></button>
+        </div>
+
+        {error && <p role="alert" className="mx-5 mt-3 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
+
+        {/* Config */}
+        <div className="grid grid-cols-2 gap-3 border-b border-line px-5 py-4 sm:grid-cols-5">
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-sub">Cant. bultos</span>
+            <input type="number" min={1} value={total} onChange={(e) => setTotal(Math.max(1, Number(e.target.value) || 1))} className={inputCls} />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-sub">Ancho (mm)</span>
+            <input type="number" min={10} value={ancho} onChange={(e) => setAncho(Number(e.target.value) || 80)} className={inputCls} />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-sub">Alto (mm)</span>
+            <input type="number" min={10} value={alto} onChange={(e) => setAlto(Number(e.target.value) || 50)} className={inputCls} />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-sub">Destino</span>
+            <input value={destino} onChange={(e) => setDestino(e.target.value)} placeholder="Local / Sucursal" className={inputCls} />
+          </label>
+          <div className="flex items-end">
+            <button onClick={generar} className="btn-press w-full rounded-xl bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700">Generar etiquetas</button>
+          </div>
+        </div>
+
+        {/* Previsualización */}
+        <div className="flex-1 overflow-auto px-5 py-4">
+          {!generadas || !cliente ? (
+            <p className="py-10 text-center text-sm text-sub">Configura la cantidad y presiona "Generar etiquetas".</p>
+          ) : (
+            <div className="flex flex-wrap gap-3">
+              {nums.map((n) => (
+                <EtiquetaBulto key={n} cliente={cliente} num={n} total={total} destino={destino} ancho={ancho} alto={alto} />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between gap-2 border-t border-line px-5 py-3">
+          <p className="text-xs text-sub">Tamaño: {ancho} × {alto} mm · {nums.length || total} etiquetas</p>
+          <div className="flex gap-2">
+            <button onClick={onClose} className="btn-press rounded-xl border border-line bg-surface2 px-4 py-2 text-sm font-medium text-ink hover:bg-line">Cerrar</button>
+            <button onClick={imprimir} disabled={!generadas || nums.length === 0} className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"><Printer size={15} aria-hidden /> Imprimir</button>
+          </div>
+        </div>
+
+        {/* Área de impresión oculta en pantalla */}
+        <div id="etiquetas-print-area" className="etiquetas-print-area">
+          {nums.map((n) => (
+            <EtiquetaBulto key={`p${n}`} cliente={cliente!} num={n} total={total} destino={destino} ancho={ancho} alto={alto} />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
