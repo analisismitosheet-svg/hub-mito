@@ -377,7 +377,7 @@ export default function FacturacionFabrica() {
       {card && <FactCard registro={card} onClose={() => setCard(null)} onEdit={() => { setSel(card); setModal('edit'); setCard(null) }} puedeEditar={modoPolo52 || puedeEditar} empleados={empleados} />}
 
       {/* Etiquetas de bultos */}
-      {etiquetaSel && <EtiquetasModal registro={etiquetaSel} onClose={() => setEtiquetaSel(null)} />}
+      {etiquetaSel && <EtiquetasModal todos={todos} registro={etiquetaSel} onClose={() => setEtiquetaSel(null)} />}
 
       {/* Modals */}
       {modal === 'importar' && (
@@ -951,7 +951,7 @@ function EtiquetaBulto({ cliente, num, total, destino, origen, contenido, ancho,
           <div className="etq-origen"><span>ORIGEN:</span> {origen || '-'}</div>
         </div>
         <div className="etq-qr-col">
-          <QRCodeSVG value={`MITO-BULTOS ${num}/${total}-POLO52-NO`} size={qrSize} level="M" />
+          <QRCodeSVG value={`${origen}-BULTOS ${num}/${total}-${destino}`} size={qrSize} level="M" />
           {contenido && <div className="etq-qr-txt">{contenido}</div>}
         </div>
       </div>
@@ -967,14 +967,21 @@ function EtiquetaBulto({ cliente, num, total, destino, origen, contenido, ancho,
   )
 }
 
-function EtiquetasModal({ registro, onClose }: { registro: FactRegistro; onClose: () => void }) {
-  const [total, setTotal] = useState<number>(registro?.bulto ?? 1)
+function EtiquetasModal({ todos, registro, onClose }: { todos: FactRegistro[]; registro: FactRegistro; onClose: () => void }) {
+  // Cantidad total de bultos (Y): por defecto, cuántos registros comparten el
+  // mismo N° Cliente que la fila seleccionada (editable).
+  const totalDefault = useMemo(() => {
+    const nc = registro?.n_cliente
+    if (!nc) return registro?.bulto ?? 1
+    return todos.filter((r) => r.n_cliente === nc).length || 1
+  }, [todos, registro])
+  const [total, setTotal] = useState<number>(totalDefault)
   const [ancho, setAncho] = useState(80)
   const [alto, setAlto] = useState(50)
   const [fontSize, setFontSize] = useState(8)
   const [qrSize, setQrSize] = useState(30)
-  const [destino, setDestino] = useState('')
-  const [origen, setOrigen] = useState('')
+  const [destino, setDestino] = useState('POLO52-NO')
+  const [origen, setOrigen] = useState('MITO')
   const [contenido, setContenido] = useState(registro?.observaciones || '')
   const [generadas, setGeneradas] = useState(false)
   const [cliente, setCliente] = useState<EtiquetaCliente | null>(null)
