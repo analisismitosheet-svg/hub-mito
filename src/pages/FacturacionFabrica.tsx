@@ -1054,9 +1054,12 @@ function EtiquetasModal({ todos, registro, onClose }: { todos: FactRegistro[]; r
       `}`,
     ].join('\n')
     document.head.appendChild(style)
-    window.print()
-    root.remove()
-    document.getElementById('etiquetas-print-css')?.remove()
+    // Forzar paint antes de imprimir para que @media print se aplique
+    requestAnimationFrame(() => {
+      window.print()
+      root.remove()
+      document.getElementById('etiquetas-print-css')?.remove()
+    })
   }
 
   return (
