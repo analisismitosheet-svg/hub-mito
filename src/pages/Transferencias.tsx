@@ -226,30 +226,37 @@ export default function Transferencias() {
       return
     }
     setCargando(true)
-    const { data: ld } = await supabase.from('transfer_lotes').select('id,nombre,motivo,fecha,created_at').order('created_at', { ascending: false }).limit(60)
+    setError(null)
+    const { data: ld, error: lErr } = await supabase.from('transfer_lotes').select('id,nombre,motivo,fecha,created_at').order('created_at', { ascending: false }).limit(60)
+    if (lErr) setError(`No se pudieron cargar los archivos: ${lErr.message}`)
     const lotesData = (ld as Lote[]) ?? []
     setLotes(lotesData)
     if (lotesData.length) {
       const ids = lotesData.map((l) => l.id)
-      // Paginar: Supabase corta en 1000 filas por consulta
+      // Paginar: Supabase corta en 1000 filas por consulta.
+      // NOTA: el filtrado "solo su local" lo hace la RLS (origen = mi_local, sin
+      // distinguir mayúsculas). NO filtramos por origen desde el cliente, porque
+      // un .eq() exacto y sensible a mayúsculas dejaba la tabla vacía.
       const all: Item[] = []
       const PAGE = 1000
+      let itemsErr: string | null = null
       for (let desde = 0; ; desde += PAGE) {
-        // El local solo pide las filas de SU origen: la query usa el índice de
-        // "origen" y evita que la policy RLS haga un escaneo que baje a timeout.
-        let q = supabase
+        const { data, error } = await supabase
           .from('transfer_items')
           .select('id,lote_id,orden,origen,destino,articulo,descripcion,material,color,talle,tipo,cantidad,estado,hecho_at')
           .in('lote_id', ids)
           .order('lote_id', { ascending: true })
           .order('orden', { ascending: true })
           .range(desde, desde + PAGE - 1)
-        if (!verTodo && miLocal) q = q.eq('origen', miLocal)
-        const { data, error } = await q
+        if (error) {
+          itemsErr = error.message
+          break
+        }
         const chunk = (data as Item[]) ?? []
         all.push(...chunk)
-        if (error || chunk.length < PAGE) break
+        if (chunk.length < PAGE) break
       }
+      if (itemsErr) setError(`No se pudieron cargar las líneas: ${itemsErr}`)
       setItems(all)
     } else {
       setItems([])
