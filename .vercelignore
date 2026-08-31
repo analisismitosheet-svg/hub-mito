@@ -1,0 +1,23 @@
+node_modules
+.git
+dist
+dist-ssr
+dev-dist
+manuales
+dnifotos
+.claude
+.skills
+*.exe
+*.msi
+*.xlsx
+*.xls
+*.doc
+*.docx
+*.pdf
+*.csv
+errores_importacion*
+OpenCode Desktop Installer.exe
+Cuentas Amigos.xlsx
+.env
+.env.local
+.vercel
