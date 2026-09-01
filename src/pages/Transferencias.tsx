@@ -242,34 +242,16 @@ export default function Transferencias() {
     setLotes(lotesData)
     if (lotesData.length) {
       const ids = lotesData.map((l) => l.id)
-      // Paginar: Supabase corta en 1000 filas por consulta.
-      const all: Item[] = []
-      const PAGE = 1000
-      let itemsErr: string | null = null
-      for (let desde = 0; ; desde += PAGE) {
-        // Para el usuario de local, filtrar por origen desde la query (usa el
-        // índice y evita que la RLS haga un escaneo que baje a timeout). El
-        // admin/importador no lo filtra: ve todo. El origen se guarda en
-        // mayúsculas y miLocal se fuerza a mayúsculas, así el match es exacto.
-        let q = supabase
-          .from('transfer_items')
-          .select('id,lote_id,orden,origen,destino,articulo,descripcion,material,color,talle,tipo,cantidad,estado,hecho_at')
-          .in('lote_id', ids)
-          .order('lote_id', { ascending: true })
-          .order('orden', { ascending: true })
-          .range(desde, desde + PAGE - 1)
-        if (!verTodo && origenesUsuario.length) q = q.in('origen', origenesUsuario)
-        const { data, error } = await q
-        if (error) {
-          itemsErr = error.message
-          break
-        }
-        const chunk = (data as Item[]) ?? []
-        all.push(...chunk)
-        if (chunk.length < PAGE) break
-      }
-      if (itemsErr) setError(`No se pudieron cargar las líneas: ${itemsErr}`)
-      setItems(all)
+      // Usamos la RPC SECURITY DEFINER listar_transfer_items: valida los
+      // permisos UNA sola vez (no por fila) y evita que la RLS por-fila con
+      // funciones no inmutables baje a timeout con tablas grandes.
+      const origenes = !verTodo && origenesUsuario.length ? origenesUsuario : null
+      const { data: its, error: itemsErr } = await supabase.rpc('listar_transfer_items', {
+        p_lotes: ids,
+        p_origenes: origenes,
+      })
+      if (itemsErr) setError(`No se pudieron cargar las líneas: ${itemsErr.message}`)
+      setItems((its as Item[]) ?? [])
     } else {
       setItems([])
     }
