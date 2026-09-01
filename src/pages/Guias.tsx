@@ -45,6 +45,16 @@ const selectCls = inputCls + ' appearance-none'
 
 type SortKey = keyof Guia
 
+type EstadoGuia = 'en_proceso' | 'finalizado'
+
+function estadoDe(g: Pick<Guia, 'en_proceso' | 'finalizado'>): EstadoGuia {
+  return g.finalizado ? 'finalizado' : 'en_proceso'
+}
+
+function cambiarEstadoEnTodos(todos: Guia[], id: string, estado: EstadoGuia): Guia[] {
+  return todos.map((x) => x.id === id ? { ...x, en_proceso: estado === 'en_proceso', finalizado: estado === 'finalizado' } : x)
+}
+
 
 /* ------------------------------------------------------------------ */
 /*  Main Component                                                     */
@@ -148,6 +158,14 @@ export default function Guias() {
     setSel(null); setCard(null); await cargar(); mostrarToast('Guia eliminada')
   }
 
+  async function cambiarEstado(g: Guia, estado: EstadoGuia) {
+    if (!supabase) return
+    setTodos((arr) => cambiarEstadoEnTodos(arr, g.id, estado))
+    const { error: err } = await supabase.from('guias').update({ en_proceso: estado === 'en_proceso', finalizado: estado === 'finalizado' }).eq('id', g.id)
+    if (err) { mostrarToast('Error al actualizar estado'); await cargar() }
+    else mostrarToast(estado === 'finalizado' ? 'Guia finalizada' : 'Guia en proceso')
+  }
+
   const toggleSelect = (id: string) => setSelected((prev) => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
   const allSelected = listaPagina.length > 0 && listaPagina.every((r) => selected.has(r.id))
   const toggleSelectAll = () => {
@@ -212,8 +230,7 @@ export default function Guias() {
                 <col className="w-[18%]" /> {/* Razon Social */}
                 <col className="w-[14%]" /> {/* Pedido */}
                 <col className="w-[10%]" /> {/* Sucursal */}
-                <col className="w-[7%]" />  {/* En Proceso */}
-                <col className="w-[7%]" />  {/* Finalizado */}
+                <col className="w-[14%]" /> {/* Estado */}
                 <col className="w-[14%]" /> {/* Observaciones */}
                 <col className="w-[7%]" />  {/* Acc */}
               </colgroup>
@@ -225,8 +242,7 @@ export default function Guias() {
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('razon_social')}>Razon Social{sortArrow('razon_social')}</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('pedido')}>Pedido{sortArrow('pedido')}</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('sucursal')}>Sucursal{sortArrow('sucursal')}</th>
-                  <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('en_proceso')}>Proceso{sortArrow('en_proceso')}</th>
-                  <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('finalizado')}>Final{sortArrow('finalizado')}</th>
+                  <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('finalizado')}>Estado{sortArrow('finalizado')}</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('observaciones')}>Obs{sortArrow('observaciones')}</th>
                   <th className="px-1 py-1 text-right whitespace-nowrap">Acc</th>
                 </tr>
@@ -240,8 +256,17 @@ export default function Guias() {
                     <td className="px-1 py-[2px]"><span className="block truncate font-medium text-ink" title={g.razon_social || ''}>{g.razon_social || '-'}</span></td>
                     <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={g.pedido || ''}>{g.pedido || '-'}</span></td>
                     <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={g.sucursal || ''}>{g.sucursal || '-'}</span></td>
-                    <td className="px-1 py-[2px] text-center">{g.en_proceso ? <span className="inline-block rounded-full border border-amber-500/30 bg-amber-500/15 px-1.5 py-px text-[9px] font-medium text-amber-400">SI</span> : <span className="text-sub/60">-</span>}</td>
-                    <td className="px-1 py-[2px] text-center">{g.finalizado ? <span className="inline-block rounded-full border border-emerald-500/30 bg-emerald-500/15 px-1.5 py-px text-[9px] font-medium text-emerald-400">SI</span> : <span className="text-sub/60">-</span>}</td>
+                    <td className="px-1 py-[2px] text-center" onClick={(e) => e.stopPropagation()}>
+                      <select
+                        value={estadoDe(g)}
+                        onChange={(e) => void cambiarEstado(g, e.target.value as EstadoGuia)}
+                        disabled={!puedeEditar}
+                        className="cursor-pointer rounded border border-line bg-surface2 px-1 py-[1px] text-[9px] font-medium text-ink outline-none transition hover:border-brand-500/60 disabled:cursor-default disabled:opacity-60"
+                      >
+                        <option value="en_proceso">En Proceso</option>
+                        <option value="finalizado">Finalizado</option>
+                      </select>
+                    </td>
                     <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={g.observaciones || ''}>{g.observaciones || '-'}</span></td>
                     <td className="px-1 py-[2px] text-right">
                       <div className="flex items-center justify-end gap-px" onClick={(e) => e.stopPropagation()}>
@@ -284,8 +309,7 @@ export default function Guias() {
                   <CRow label="Razon Social" value={card.razon_social} />
                   <CRow label="Pedido" value={card.pedido} />
                   <CRow label="Sucursal" value={card.sucursal} />
-                  <CRow label="En Proceso" value={card.en_proceso ? 'VERDADERO' : 'FALSO'} badge badgeCls={card.en_proceso ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' : 'bg-surface2 text-sub border-line'} />
-                  <CRow label="Finalizado" value={card.finalizado ? 'VERDADERO' : 'FALSO'} badge badgeCls={card.finalizado ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : 'bg-surface2 text-sub border-line'} />
+                  <CRow label="Estado" value={estadoDe(card) === 'finalizado' ? 'FINALIZADO' : 'EN PROCESO'} badge badgeCls={estadoDe(card) === 'finalizado' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/15 text-amber-400 border-amber-500/30'} />
                   <CRow label="Observaciones" value={card.observaciones} />
                 </dl>
               </section>
@@ -342,8 +366,7 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, onClose, 
   const [razonSocial, setRazonSocial] = useState(guia?.razon_social || '')
   const [pedido, setPedido] = useState(guia?.pedido || '')
   const [sucursal, setSucursal] = useState(guia?.sucursal || '')
-  const [enProceso, setEnProceso] = useState(guia?.en_proceso ?? false)
-  const [finalizado, setFinalizado] = useState(guia?.finalizado ?? false)
+  const [estado, setEstado] = useState<EstadoGuia>(estadoDe(guia ?? { en_proceso: false, finalizado: false }))
   const [observaciones, setObservaciones] = useState(guia?.observaciones || '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -391,8 +414,8 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, onClose, 
       razon_social: razonSocial || null,
       pedido: pedido || null,
       sucursal: sucursal || null,
-      en_proceso: enProceso,
-      finalizado: finalizado,
+      en_proceso: estado === 'en_proceso',
+      finalizado: estado === 'finalizado',
       observaciones: observaciones.trim() || null,
     }
 
@@ -483,14 +506,13 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, onClose, 
               )}
             </label>
 
-            {/* En Proceso / Finalizado */}
-            <label className="flex items-end gap-3 pb-1">
-              <input type="checkbox" checked={enProceso} onChange={(e) => setEnProceso(e.target.checked)} className="h-4 w-4 rounded border-line bg-surface2 accent-brand-600" />
-              <span className="text-sm text-ink">En Proceso</span>
-            </label>
-            <label className="flex items-end gap-3 pb-1">
-              <input type="checkbox" checked={finalizado} onChange={(e) => setFinalizado(e.target.checked)} className="h-4 w-4 rounded border-line bg-surface2 accent-brand-600" />
-              <span className="text-sm text-ink">Finalizado</span>
+            {/* Estado */}
+            <label className="block sm:col-span-2">
+              <span className="mb-0.5 block text-[11px] font-medium text-sub">Estado</span>
+              <select value={estado} onChange={(e) => setEstado(e.target.value as EstadoGuia)} className={selectCls}>
+                <option value="en_proceso">En Proceso</option>
+                <option value="finalizado">Finalizado</option>
+              </select>
             </label>
 
             {/* Observaciones */}
