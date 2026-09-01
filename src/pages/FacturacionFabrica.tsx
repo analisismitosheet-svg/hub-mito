@@ -85,17 +85,25 @@ function retiroStyle(v: string | null): string {
 }
 function cleanVal(s: string): string { return s.replace(/[\u200B\uFEFF\u00A0]/g, '').trim() }
 
+const pad2 = (n: number) => String(n).padStart(2, '0')
+
 function excelDate(val: unknown): string | null {
   if (val == null || val === '') return null
+  if (val instanceof Date) {
+    if (isNaN(val.getTime())) return null
+    return `${val.getFullYear()}-${pad2(val.getMonth() + 1)}-${pad2(val.getDate())}`
+  }
   let s = String(val).trim()
   if (s.includes('\t')) s = s.split('\t')[0].trim()
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10)
-  if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) { const [d, m, y] = s.split('/'); return `${y}-${m}-${d}` }
+  let m = /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s].*)?$/.exec(s)
+  if (m) return `${m[1]}-${pad2(Number(m[2]))}-${pad2(Number(m[3]))}`
+  m = /^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})$/.exec(s)
+  if (m) return `${m[3]}-${pad2(Number(m[2]))}-${pad2(Number(m[1]))}`
   const n = Number(s)
   if (!isNaN(n) && n > 30000 && n < 60000) {
-    const epoch = new Date(1899, 11, 30)
-    const d = new Date(epoch.getTime() + n * 86400000)
-    return d.toISOString().slice(0, 10)
+    const days = Math.floor(n)
+    const d = new Date(Date.UTC(1899, 11, 30) + days * 86400000)
+    return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`
   }
   return null
 }
@@ -152,18 +160,32 @@ export default function FacturacionFabrica() {
 
   const cargar = useCallback(async () => {
     if (!supabase) { setCargando(false); return }
+    const sb = supabase
     setCargando(true); setError(null)
-    const [res, clRes, emRes, trRes] = await Promise.all([
-      supabase.from('facturacion_fabrica').select('*').order('created_at', { ascending: false }).limit(5000),
-      supabase.from('clientes').select('id,n_cliente,razon_social').eq('estado', 'ACTIVO').order('razon_social'),
-      supabase.from('empleados').select('id,legajo,nombre').order('nombre'),
-      supabase.from('transportes').select('id,nombre').order('nombre'),
+    const PAGE = 1000
+    async function traerTodo<T>(build: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>): Promise<T[]> {
+      const acc: T[] = []
+      try {
+        for (let from = 0; ; from += PAGE) {
+          const { data, error } = await build(from, from + PAGE - 1)
+          if (error) { setError(error.message); break }
+          const d = (data as T[] | null) ?? []
+          acc.push(...d)
+          if (d.length < PAGE) break
+        }
+      } catch (e) { setError(e instanceof Error ? e.message : 'Error de red') }
+      return acc
+    }
+    const [todosData, clData, emData, trData] = await Promise.all([
+      traerTodo((from, to) => sb.from('facturacion_fabrica').select('*').order('created_at', { ascending: false }).range(from, to)),
+      traerTodo((from, to) => sb.from('clientes').select('id,n_cliente,razon_social').eq('estado', 'ACTIVO').order('razon_social').range(from, to)),
+      traerTodo((from, to) => sb.from('empleados').select('id,legajo,nombre').order('nombre').range(from, to)),
+      traerTodo((from, to) => sb.from('transportes').select('id,nombre').order('nombre').range(from, to)),
     ])
-    if (res.error) setError(res.error.message)
-    setTodos((res.data as FactRegistro[]) ?? [])
-    setClientes((clRes.data as ClienteMini[]) ?? [])
-    setEmpleados((emRes.data as EmpleadoMini[]) ?? [])
-    setTransportes((trRes.data as { id: string; nombre: string }[]) ?? [])
+    setTodos(todosData as FactRegistro[])
+    setClientes(clData as ClienteMini[])
+    setEmpleados(emData as EmpleadoMini[])
+    setTransportes(trData as { id: string; nombre: string }[])
     setCargando(false)
   }, [])
 
