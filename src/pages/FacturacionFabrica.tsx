@@ -1040,8 +1040,6 @@ function EtiquetasModal({ todos, registro, onClose }: { todos: FactRegistro[]; r
     const root = document.createElement('div')
     root.id = 'etiquetas-print-root'
     root.innerHTML = src.innerHTML
-    root.style.position = 'fixed'
-    root.style.inset = '0'
     document.body.appendChild(root)
     const style = document.createElement('style')
     style.id = 'etiquetas-print-css'
@@ -1049,7 +1047,7 @@ function EtiquetasModal({ todos, registro, onClose }: { todos: FactRegistro[]; r
       `@page { size: ${ancho}mm ${alto}mm; margin: 0; }`,
       `@media print {`,
       `  body > *:not(#etiquetas-print-root) { display: none !important; }`,
-      `  #etiquetas-print-root { display: block !important; }`,
+      `  #etiquetas-print-root { display: block !important; position: static !important; margin: 0 !important; padding: 0 !important; }`,
       `  #etiquetas-print-root .etiqueta-bulto { page-break-after: always; break-after: page; }`,
       `}`,
     ].join('\n')
