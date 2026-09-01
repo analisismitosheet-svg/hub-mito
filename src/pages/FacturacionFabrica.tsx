@@ -377,7 +377,7 @@ export default function FacturacionFabrica() {
       {card && <FactCard registro={card} onClose={() => setCard(null)} onEdit={() => { setSel(card); setModal('edit'); setCard(null) }} puedeEditar={modoPolo52 || puedeEditar} empleados={empleados} />}
 
       {/* Etiquetas de bultos */}
-      {etiquetaSel && <EtiquetasModal todos={todos} registro={etiquetaSel} onClose={() => setEtiquetaSel(null)} />}
+      {etiquetaSel && <EtiquetasModal registro={etiquetaSel} onClose={() => setEtiquetaSel(null)} />}
 
       {/* Modals */}
       {modal === 'importar' && (
@@ -931,12 +931,13 @@ async function fetchClienteEtiqueta(nCl: string, fallback: { razon_social: strin
   }
 }
 
-function EtiquetaBulto({ cliente, num, total, destino, origen, ancho, alto, fontSize, qrSize }: {
+function EtiquetaBulto({ cliente, num, total, destino, origen, nRemito, ancho, alto, fontSize, qrSize }: {
   cliente: EtiquetaCliente
   num: number
   total: number
   destino: string
   origen: string
+  nRemito: string
   ancho: number
   alto: number
   fontSize: number
@@ -950,8 +951,8 @@ function EtiquetaBulto({ cliente, num, total, destino, origen, ancho, alto, font
           <div className="etq-origen"><span>ORIGEN:</span> {origen || '-'}</div>
         </div>
         <div className="etq-qr-col">
-          <QRCodeSVG value={`${origen}-BULTOS =${num}/${total}-${destino}`} size={qrSize} level="M" />
-          <div className="etq-qr-txt">{origen}-BULTOS ={num}/{total}{destino ? `-${destino}` : ''}</div>
+          <QRCodeSVG value={`${origen}-${nRemito}(${num}/${total})-${destino}`} size={qrSize} level="M" />
+          <div className="etq-qr-txt">{origen}-{nRemito}({num}/{total}){destino ? `-${destino}` : ''}</div>
         </div>
       </div>
       <div className="etq-razon">{cliente.razonSocial}</div>
@@ -989,14 +990,10 @@ function leerPredef(): PredefEtiqueta {
   }
 }
 
-function EtiquetasModal({ todos, registro, onClose }: { todos: FactRegistro[]; registro: FactRegistro; onClose: () => void }) {
-  // Cantidad total de bultos (Y): por defecto, cuántos registros comparten el
-  // mismo N° Cliente que la fila seleccionada (editable).
-  const totalDefault = useMemo(() => {
-    const nc = registro?.n_cliente
-    if (!nc) return registro?.bulto ?? 1
-    return todos.filter((r) => r.n_cliente === nc).length || 1
-  }, [todos, registro])
+function EtiquetasModal({ registro, onClose }: { registro: FactRegistro; onClose: () => void }) {
+  // Cantidad total de bultos (Y): por defecto, la columna "Bultos" del registro
+  // de facturación (editable).
+  const totalDefault = useMemo(() => (registro?.bulto ?? 1), [registro])
   const [total, setTotal] = useState<number>(totalDefault)
   const [predef] = useState<PredefEtiqueta>(leerPredef)
   const [ancho, setAncho] = useState(predef.ancho)
@@ -1120,7 +1117,7 @@ function EtiquetasModal({ todos, registro, onClose }: { todos: FactRegistro[]; r
           ) : (
             <div className="etq-preview flex flex-wrap gap-3">
               {nums.map((n) => (
-                <EtiquetaBulto key={n} cliente={cliente} num={n} total={total} destino={destino} origen={origen} ancho={ancho} alto={alto} fontSize={fontSize} qrSize={qrSize} />
+                <EtiquetaBulto key={n} cliente={cliente} num={n} total={total} destino={destino} origen={origen} nRemito={registro?.n_remito || ''} ancho={ancho} alto={alto} fontSize={fontSize} qrSize={qrSize} />
               ))}
             </div>
           )}
@@ -1138,7 +1135,7 @@ function EtiquetasModal({ todos, registro, onClose }: { todos: FactRegistro[]; r
         {/* Área de impresión oculta en pantalla */}
         <div id="etiquetas-print-area" className="etiquetas-print-area">
           {nums.map((n) => (
-            <EtiquetaBulto key={`p${n}`} cliente={cliente!} num={n} total={total} destino={destino} origen={origen} ancho={ancho} alto={alto} fontSize={fontSize} qrSize={qrSize} />
+            <EtiquetaBulto key={`p${n}`} cliente={cliente!} num={n} total={total} destino={destino} origen={origen} nRemito={registro?.n_remito || ''} ancho={ancho} alto={alto} fontSize={fontSize} qrSize={qrSize} />
           ))}
         </div>
       </div>
