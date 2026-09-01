@@ -57,6 +57,27 @@ type SortKey = keyof FactRegistro
 
 function fmtN(n: number | null | string): string { return n == null ? '-' : String(n) }
 
+function camposBuscables(f: FactRegistro): string[] {
+  const arr: string[] = []
+  const push = (v: unknown) => { if (v != null && String(v) !== '') arr.push(String(v).toUpperCase()) }
+  for (const v of Object.values(f)) push(v)
+  if (f.n_cliente) push(f.n_cliente.replace(/\D/g, ''))
+  if (f.n_remito) push(f.n_remito.replace(/\D/g, ''))
+  for (const fd of [f.fecha_fact, f.fecha_envio]) {
+    const iso = excelDate(fd)
+    if (iso) {
+      push(iso)
+      push(iso.replace(/-/g, ''))
+      const [y, m, d] = iso.split('-')
+      push(`${d}/${m}/${y}`)
+      push(`${d}-${m}-${y}`)
+      push(`${y}-${m}`)
+    }
+  }
+  if (f.polo52) { arr.push('SI'); arr.push('POLO52') }
+  return arr
+}
+
 function retiroStyle(v: string | null): string {
   return (v || '').toUpperCase() === 'VERDADERO'
     ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
@@ -167,12 +188,7 @@ export default function FacturacionFabrica() {
     if (filtroTransporte !== 'todos') r = r.filter((f) => f.transporte === filtroTransporte)
     if (filtroFechaDesde) r = r.filter((f) => (excelDate(f.fecha_fact) || '') >= filtroFechaDesde)
     if (filtroFechaHasta) r = r.filter((f) => (excelDate(f.fecha_fact) || '') <= filtroFechaHasta)
-    if (term) r = r.filter((f) =>
-      (f.razon_social || '').toUpperCase().includes(term) ||
-      (f.n_remito || '').replace(/\D/g, '').includes(term.replace(/\D/g, '')) ||
-      (f.autorizacion || '').toUpperCase().includes(term) ||
-      (f.quien_facturo || '').toUpperCase().includes(term)
-    )
+    if (term) r = r.filter((f) => camposBuscables(f).some((c) => c.includes(term)))
     r = [...r].sort((a, b) => {
       const av = a[sortKey] ?? ''
       const bv = b[sortKey] ?? ''
