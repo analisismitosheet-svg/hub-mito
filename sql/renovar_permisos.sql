@@ -41,9 +41,10 @@ ON CONFLICT (clave) DO NOTHING;
 
 -- ---- Cuenta Amigos (Tesorería) ----
 INSERT INTO public.permisos (clave, modulo, accion, label, orden) VALUES
-  ('cuentas_amigos.view',   'tesoreria', 'view',   'Ver Cuentas Amigos', 200),
-  ('cuentas_amigos.create', 'tesoreria', 'create', 'Crear Cuentas Amigos', 201),
-  ('cuentas_amigos.edit',   'tesoreria', 'edit',   'Editar Cuentas Amigos', 202)
+  ('cuentas_amigos.view',   'tesoreria', 'view',     'Ver Cuentas Amigos', 200),
+  ('cuentas_amigos.create', 'tesoreria', 'create',   'Crear Cuentas Amigos', 201),
+  ('cuentas_amigos.edit',   'tesoreria', 'edit',     'Editar Cuentas Amigos', 202),
+  ('cuentas_amigos.delete', 'tesoreria', 'delete',   'Eliminar Cuentas Amigos', 203)
 ON CONFLICT (clave) DO NOTHING;
 
 -- ---- Manuales y Documentos (Locales) ----

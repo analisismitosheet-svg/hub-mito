@@ -170,6 +170,7 @@ function RolPermisosModal({
       'cuentas_amigos.view': 'tesoreria',
       'cuentas_amigos.create': 'tesoreria',
       'cuentas_amigos.edit': 'tesoreria',
+      'cuentas_amigos.delete': 'tesoreria',
       'manuales.view': 'locales',
       'manuales.create': 'locales',
       'manuales.edit': 'locales',

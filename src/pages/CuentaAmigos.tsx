@@ -10,6 +10,7 @@ import {
   SearchX,
   Plus,
   Pencil,
+  Trash2,
   Camera,
   Check,
   X,
@@ -83,6 +84,7 @@ export default function CuentaAmigos() {
   const { can } = useAuth()
   const puedeCrear = can('cuentas_amigos.create')
   const puedeEditar = can('cuentas_amigos.edit')
+  const puedeBorrar = can('cuentas_amigos.delete')
   const [todos, setTodos] = useState<Cliente[]>([])
   const [cargando, setCargando] = useState(true)
   const [q, setQ] = useState('')
@@ -128,6 +130,17 @@ export default function CuentaAmigos() {
     setEditando(c)
     setVista('form')
   }
+  async function borrarCliente(c: Cliente) {
+    if (!supabase) return
+    if (!window.confirm(`¿Eliminar a "${c.nombre}"? Esta acción no se puede deshacer.`)) return
+    const { error } = await supabase.from('cuentas_amigos').delete().eq('id', c.id)
+    if (error) {
+      alert(`No se pudo eliminar: ${error.message}`)
+      return
+    }
+    await cargar()
+    if (sel?.id === c.id) setVista('lista')
+  }
   function abrirFicha(c: Cliente) {
     setSel(c)
     setVista('ficha')
@@ -159,14 +172,24 @@ export default function CuentaAmigos() {
           >
             <ArrowLeft size={15} aria-hidden /> Volver a la lista
           </button>
-          {puedeEditar && (
-            <button
-              onClick={() => abrirEditar(sel)}
-              className="btn-press inline-flex items-center gap-1.5 rounded-xl border border-line bg-surface2 px-3 py-1.5 text-sm font-medium text-ink hover:bg-line"
-            >
-              <Pencil size={15} aria-hidden /> Editar
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {puedeEditar && (
+              <button
+                onClick={() => abrirEditar(sel)}
+                className="btn-press inline-flex items-center gap-1.5 rounded-xl border border-line bg-surface2 px-3 py-1.5 text-sm font-medium text-ink hover:bg-line"
+              >
+                <Pencil size={15} aria-hidden /> Editar
+              </button>
+            )}
+            {puedeBorrar && (
+              <button
+                onClick={() => void borrarCliente(sel)}
+                className="btn-press inline-flex items-center gap-1.5 rounded-xl border border-brand-600/30 bg-brand-600/10 px-3 py-1.5 text-sm font-medium text-brand-400 hover:bg-brand-600/20"
+              >
+                <Trash2 size={15} aria-hidden /> Eliminar
+              </button>
+            )}
+          </div>
         </div>
 
         <article className="mx-auto max-w-xl animate-enter overflow-hidden rounded-2xl border border-line bg-surface shadow-soft">
@@ -272,18 +295,32 @@ export default function CuentaAmigos() {
                       </span>
                     </td>
                     <td className="px-2 py-2.5 text-right">
-                      {puedeEditar && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            abrirEditar(c)
-                          }}
-                          aria-label={`Editar ${c.nombre}`}
-                          className="rounded-lg p-1.5 text-sub transition-colors hover:bg-line hover:text-ink"
-                        >
-                          <Pencil size={15} aria-hidden />
-                        </button>
-                      )}
+                      <div className="inline-flex items-center gap-1">
+                        {puedeEditar && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              abrirEditar(c)
+                            }}
+                            aria-label={`Editar ${c.nombre}`}
+                            className="rounded-lg p-1.5 text-sub transition-colors hover:bg-line hover:text-ink"
+                          >
+                            <Pencil size={15} aria-hidden />
+                          </button>
+                        )}
+                        {puedeBorrar && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              void borrarCliente(c)
+                            }}
+                            aria-label={`Eliminar ${c.nombre}`}
+                            className="rounded-lg p-1.5 text-sub transition-colors hover:bg-brand-600/20 hover:text-brand-400"
+                          >
+                            <Trash2 size={15} aria-hidden />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
