@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
-  Loader2, Search, SearchX, Plus, Pencil, Trash2, X, ClipboardList,
+  Loader2, Search, SearchX, Plus, Pencil, Trash2, X, ClipboardList, Upload, FileText,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -70,7 +70,7 @@ export default function Guias() {
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [q, setQ] = useState('')
-  const [modal, setModal] = useState<'new' | 'edit' | null>(null)
+  const [modal, setModal] = useState<'new' | 'edit' | 'importar' | null>(null)
   const [sel, setSel] = useState<Guia | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -207,7 +207,10 @@ export default function Guias() {
           <button onClick={() => void eliminarSeleccionados()} className="btn-press inline-flex items-center gap-1 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/20"><Trash2 size={13} aria-hidden /> Eliminar ({selected.size})</button>
         )}
         {puedeCrear && (
-          <button onClick={() => setModal('new')} className="btn-press inline-flex items-center gap-1 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-700"><Plus size={13} aria-hidden /> Nueva Guia</button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setModal('importar')} className="btn-press inline-flex items-center gap-1 rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line"><Upload size={13} aria-hidden /> Importar</button>
+            <button onClick={() => setModal('new')} className="btn-press inline-flex items-center gap-1 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-700"><Plus size={13} aria-hidden /> Nueva Guia</button>
+          </div>
         )}
       </div>
 
@@ -323,8 +326,13 @@ export default function Guias() {
         </div>
       )}
 
+      {/* Import Modal */}
+      {modal === 'importar' && (
+        <ImportGuias onClose={() => setModal(null)} onSaved={async () => { setModal(null); await cargar(); mostrarToast('Guias importadas') }} />
+      )}
+
       {/* Form Modal */}
-      {modal && (
+      {modal && modal !== 'importar' && (
         <GuiaModal
           guia={modal === 'edit' ? sel : null}
           clientes={clientes}
@@ -530,6 +538,221 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, onClose, 
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/*  Import Wizard (BUSCARV)                                            */
+/* ------------------------------------------------------------------ */
+
+type FileRow = Record<string, unknown>
+
+function cleanVal(s: string): string { return s.replace(/[\u200B\uFEFF\u00A0]/g, '').trim() }
+
+const PEDIDO_PALABRAS: Record<string, string> = { 'nota de credito': 'NOTA DE CREDITO', 'stock preventa': 'STOCK-PREVENTA', 'stock-preventa': 'STOCK-PREVENTA', 'stock': 'STOCK' }
+
+function normalizarPedido(v: string): string {
+  const t = cleanVal(v).toLowerCase()
+  return PEDIDO_PALABRAS[t] || cleanVal(v)
+}
+
+function ImportGuias({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const [paso, setPaso] = useState<'file' | 'map' | 'validate' | 'done'>('file')
+  const [file, setFile] = useState<File | null>(null)
+  const [headers, setHeaders] = useState<string[]>([])
+  const [rows, setRows] = useState<FileRow[]>([])
+  const [map, setMap] = useState<Record<string, string>>({})
+  const [validRows, setValidRows] = useState<FileRow[]>([])
+  const [invalidRows, setInvalidRows] = useState<{ idx: number; err: string }[]>([])
+  const [validCount, setValidCount] = useState(0)
+  const [busy, setBusy] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [resultMsg, setResultMsg] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const COLS_DESTINO = [
+    { key: 'nro_pedido', label: 'N Pedido' },
+    { key: 'n_cliente', label: '★ N Cliente (obligatorio)', req: true },
+    { key: 'razon_social', label: 'Razon Social' },
+    { key: 'pedido', label: 'Pedido' },
+    { key: 'sucursal', label: 'Sucursal' },
+    { key: 'estado', label: 'Estado' },
+    { key: 'observaciones', label: 'Observaciones' },
+  ]
+
+  const autoMap = useCallback((hdrs: string[]) => {
+    const m: Record<string, string> = {}
+    const norm = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]/g, '')
+    hdrs.forEach((h) => {
+      const n = norm(h)
+      if (n.includes('npedido') || n.includes('nrodepedido')) m['nro_pedido'] = h
+      else if (n.includes('ncliente') || n.includes('nrocliente')) m['n_cliente'] = h
+      else if (n.includes('razonsocial') || n.includes('razon')) m['razon_social'] = h
+      else if (n === 'pedido' || n.includes('tipo')) m['pedido'] = h
+      else if (n === 'sucursal' || n.includes('sucursal')) m['sucursal'] = h
+      else if (n === 'estado' || n === 'enproceso' || n.includes('finalizado')) { if (!m['estado']) m['estado'] = h }
+      else if (n.includes('observacion') || n === 'obs') m['observaciones'] = h
+    })
+    return m
+  }, [])
+
+  function parseFile() {
+    if (!file) return
+    setBusy(true)
+    const reader = new FileReader()
+    reader.onload = async (ev) => {
+      try {
+        const XLSX = await import('xlsx')
+        const data = new Uint8Array(ev.target?.result as ArrayBuffer)
+        const wb = XLSX.read(data, { type: 'array', raw: true })
+        const ws = wb.Sheets[wb.SheetNames[0]]
+        const json = XLSX.utils.sheet_to_json<FileRow>(ws, { defval: '' })
+        if (json.length === 0) { setBusy(false); return }
+        const hdrs = Object.keys(json[0])
+        setHeaders(hdrs)
+        setRows(json)
+        setMap(autoMap(hdrs))
+        setPaso('map')
+      } catch { alert('Error al leer el archivo.') }
+      setBusy(false)
+    }
+    reader.readAsArrayBuffer(file)
+  }
+
+  function validate() {
+    const errs: { idx: number; err: string }[] = []
+    const valid: FileRow[] = []
+    rows.forEach((row, i) => {
+      const nr: FileRow = {}
+      Object.entries(map).forEach(([dest, src]) => { if (dest && src) nr[dest] = String(row[src] ?? '').trim() })
+
+      const ncRaw = cleanVal(String(nr.n_cliente ?? ''))
+      if (!ncRaw) { errs.push({ idx: i, err: `Fila ${i + 1}: N° Cliente vacio.` }); return }
+
+      /* Estado → en_proceso / finalizado */
+      const stRaw = cleanVal(String(nr.estado ?? '')).toUpperCase()
+      const finalizado = stRaw === 'FINALIZADO' || stRaw === 'VERDADERO' || stRaw === 'TRUE' || stRaw === '1'
+      nr.en_proceso = !finalizado
+      nr.finalizado = finalizado
+      delete nr.estado
+
+      nr.n_cliente = ncRaw
+      nr.nro_pedido = nr.nro_pedido ? cleanVal(String(nr.nro_pedido)) : null
+      nr.razon_social = nr.razon_social ? cleanVal(String(nr.razon_social)) : null
+      nr.pedido = nr.pedido ? normalizarPedido(String(nr.pedido)) : null
+      nr.sucursal = nr.sucursal ? cleanVal(String(nr.sucursal)).toUpperCase() : null
+      nr.observaciones = nr.observaciones ? cleanVal(String(nr.observaciones)) : null
+
+      valid.push(nr)
+    })
+    setInvalidRows(errs); setValidRows(valid); setValidCount(valid.length); setPaso('validate')
+  }
+
+  async function importar() {
+    if (!supabase || validRows.length === 0) return
+    setBusy(true); setProgress(0)
+    const batchSize = 50
+    let inserted = 0
+    for (let i = 0; i < validRows.length; i += batchSize) {
+      const batch = validRows.slice(i, i + batchSize).map((r) => ({
+        nro_pedido: r.nro_pedido || null,
+        n_cliente: String(r.n_cliente ?? ''),
+        razon_social: r.razon_social || null,
+        pedido: r.pedido || null,
+        sucursal: r.sucursal || null,
+        en_proceso: !!r.en_proceso,
+        finalizado: !!r.finalizado,
+        observaciones: r.observaciones || null,
+      }))
+      const { error } = await supabase.from('guias').insert(batch)
+      if (error) { setBusy(false); setResultMsg('Error: ' + error.message); setPaso('done'); return }
+      inserted += batch.length
+      setProgress(Math.round((inserted / validRows.length) * 100))
+    }
+    setResultMsg(`${inserted} guias importadas correctamente.`)
+    setBusy(false); setPaso('done')
+  }
+
+  function downloadErrors() {
+    if (invalidRows.length === 0) return
+    const csv = 'Fila,Error\n' + invalidRows.map((e) => `"${e.idx + 1}","${e.err}"`).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = 'errores_importacion.csv'; a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function onDrop(e: React.DragEvent) { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) setFile(f) }
+
+  if (paso === 'done') {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="w-[90vw] max-w-md rounded-2xl border border-line bg-surface p-6 text-center shadow-2xl">
+          <FileText size={36} className="mx-auto mb-3 text-amber-400" aria-hidden />
+          <p className="text-sm text-ink">{resultMsg}</p>
+          <div className="mt-5 flex justify-center gap-2">
+            <button onClick={() => { if (validCount > 0 && resultMsg) onSaved(); else onClose() }} className="btn-press rounded-xl border border-line bg-surface2 px-4 py-2 text-sm font-medium text-ink hover:bg-line">Cerrar</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="flex w-[90vw] max-w-3xl flex-col rounded-2xl border border-line bg-surface shadow-2xl" style={{ maxHeight: '88vh' }}>
+        <div className="flex items-center justify-between border-b border-line px-5 py-3">
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-ink"><Upload size={18} className="text-amber-400" aria-hidden /> Importar Guias</h2>
+          <button onClick={onClose} className="rounded-lg border border-line p-1.5 text-sub transition hover:bg-line hover:text-ink"><X size={16} aria-hidden /></button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-5">
+          {paso === 'file' && (
+            <div onDragOver={(e) => e.preventDefault()} onDrop={onDrop} onClick={() => fileRef.current?.click()} className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-line bg-surface2 py-12 text-center transition hover:border-amber-500/50 hover:bg-amber-500/5">
+              <Upload size={32} className="mb-3 text-sub/40" aria-hidden />
+              <p className="text-sm font-medium text-ink">{file ? file.name : 'Arrastra un archivo Excel o CSV'}</p>
+              <p className="mt-1 text-xs text-sub/70">o haz clic para seleccionar</p>
+              <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+            </div>
+          )}
+          {paso === 'map' && (
+            <div className="space-y-2">
+              <p className="mb-2 text-xs text-sub">Mapea las columnas del archivo. El campo con ★ es obligatorio.</p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {COLS_DESTINO.map((col) => (
+                  <label key={col.key} className="flex items-center gap-2 text-xs">
+                    <span className={'w-44 shrink-0 truncate ' + (col.req ? 'font-semibold text-amber-400' : 'text-sub')}>{col.label}</span>
+                    <select value={map[col.key] || ''} onChange={(e) => setMap({ ...map, [col.key]: e.target.value })} className={selectCls + ' flex-1 text-xs'}>
+                      <option value="">-- ignorar --</option>
+                      {headers.map((h) => <option key={h} value={h}>{h}</option>)}
+                    </select>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+          {paso === 'validate' && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-sub">{validCount} validos de {rows.length} filas. {invalidRows.length} con errores.</p>
+                {invalidRows.length > 0 && <button onClick={downloadErrors} className="text-xs text-brand-400 hover:underline">Descargar errores CSV</button>}
+              </div>
+              {invalidRows.length > 0 && (
+                <div className="max-h-40 overflow-y-auto rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-400">
+                  {invalidRows.map((e, i) => <p key={i}>{e.err}</p>)}
+                </div>
+              )}
+              {busy && <div className="h-2 overflow-hidden rounded-full bg-line"><div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: progress + '%' }} /></div>}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3">
+          <button onClick={onClose} disabled={busy} className="btn-press rounded-xl border border-line bg-surface2 px-4 py-2 text-sm font-medium text-ink hover:bg-line disabled:opacity-50">Cancelar</button>
+          {paso === 'file' && <button onClick={() => void parseFile()} disabled={!file || busy} className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">{busy ? <Loader2 size={15} className="animate-spin" /> : null} Siguiente</button>}
+          {paso === 'map' && <button onClick={validate} className="btn-press rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">Validar datos</button>}
+          {paso === 'validate' && <button onClick={() => void importar()} disabled={busy || validCount === 0} className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"><Upload size={15} /> Importar {validCount} guias</button>}
+        </div>
       </div>
     </div>
   )
