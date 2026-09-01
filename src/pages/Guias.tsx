@@ -574,7 +574,7 @@ function ImportGuias({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 
   const COLS_DESTINO = [
     { key: 'nro_pedido', label: 'N Pedido' },
-    { key: 'n_cliente', label: 'N Cliente' },
+    { key: 'nro_cliente', label: 'N Cliente' },
     { key: 'razon_social', label: 'Razon Social' },
     { key: 'pedido', label: 'Pedido' },
     { key: 'sucursal', label: 'Sucursal' },
@@ -588,7 +588,7 @@ function ImportGuias({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
     hdrs.forEach((h) => {
       const n = norm(h)
       if (n.includes('npedido') || n.includes('nrodepedido')) m['nro_pedido'] = h
-      else if (n.includes('ncliente') || n.includes('nrocliente')) m['n_cliente'] = h
+      else if (n.includes('ncliente') || n.includes('nrocliente')) m['nro_cliente'] = h
       else if (n.includes('razonsocial') || n.includes('razon')) m['razon_social'] = h
       else if (n === 'pedido' || n.includes('tipo')) m['pedido'] = h
       else if (n === 'sucursal' || n.includes('sucursal')) m['sucursal'] = h
@@ -639,7 +639,7 @@ function ImportGuias({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
       nr.finalizado = finalizado
       delete nr.estado
 
-      nr.n_cliente = nr.n_cliente ? cleanVal(String(nr.n_cliente)) : null
+      nr.nro_cliente = nr.nro_cliente ? cleanVal(String(nr.nro_cliente)) : null
       nr.nro_pedido = nr.nro_pedido ? cleanVal(String(nr.nro_pedido)) : null
       nr.razon_social = nr.razon_social ? cleanVal(String(nr.razon_social)) : null
       nr.pedido = nr.pedido ? normalizarPedido(String(nr.pedido)) : null
@@ -659,7 +659,7 @@ function ImportGuias({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
     for (let i = 0; i < validRows.length; i += batchSize) {
       const batch = validRows.slice(i, i + batchSize).map((r) => ({
         nro_pedido: r.nro_pedido || null,
-        n_cliente: r.n_cliente || null,
+        nro_cliente: r.nro_cliente || null,
         razon_social: r.razon_social || null,
         pedido: r.pedido || null,
         sucursal: r.sucursal || null,
