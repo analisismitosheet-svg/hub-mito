@@ -943,6 +943,7 @@ function EtiquetaBulto({ cliente, num, total, destino, origen, nRemito, ancho, a
   fontSize: number
   qrSize: number
 }) {
+  const remito = nRemito.replace(/-/g, '/')
   return (
     <div className="etiqueta-bulto" style={{ width: `${ancho}mm`, height: `${alto}mm`, fontSize: `${fontSize}px` }}>
       <div className="etq-top">
@@ -951,8 +952,8 @@ function EtiquetaBulto({ cliente, num, total, destino, origen, nRemito, ancho, a
           <div className="etq-origen"><span>ORIGEN:</span> {origen || '-'}</div>
         </div>
         <div className="etq-qr-col">
-          <QRCodeSVG value={`${origen}-${nRemito}(${num}/${total})-${destino}`} size={qrSize} level="M" />
-          <div className="etq-qr-txt">{origen}-{nRemito}({num}/{total}){destino ? `-${destino}` : ''}</div>
+          <QRCodeSVG value={`${origen}-${remito}(${num}/${total})-${destino}`} size={qrSize} level="M" />
+          <div className="etq-qr-txt">{origen}-{remito}({num}/{total}){destino ? `-${destino}` : ''}</div>
         </div>
       </div>
       <div className="etq-razon">{cliente.razonSocial}</div>
