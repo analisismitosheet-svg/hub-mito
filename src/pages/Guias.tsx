@@ -574,7 +574,7 @@ function ImportGuias({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 
   const COLS_DESTINO = [
     { key: 'nro_pedido', label: 'N Pedido' },
-    { key: 'n_cliente', label: '★ N Cliente (obligatorio)', req: true },
+    { key: 'n_cliente', label: 'N Cliente' },
     { key: 'razon_social', label: 'Razon Social' },
     { key: 'pedido', label: 'Pedido' },
     { key: 'sucursal', label: 'Sucursal' },
@@ -624,12 +624,13 @@ function ImportGuias({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
   function validate() {
     const errs: { idx: number; err: string }[] = []
     const valid: FileRow[] = []
-    rows.forEach((row, i) => {
-      const nr: FileRow = {}
-      Object.entries(map).forEach(([dest, src]) => { if (dest && src) nr[dest] = String(row[src] ?? '').trim() })
+    rows.forEach((row) => {
+      const mapeo = Object.entries(map)
+      /* Fila completamente vacia → se ignora */
+      if (mapeo.every(([, src]) => !String(row[src] ?? '').trim())) return
 
-      const ncRaw = cleanVal(String(nr.n_cliente ?? ''))
-      if (!ncRaw) { errs.push({ idx: i, err: `Fila ${i + 1}: N° Cliente vacio.` }); return }
+      const nr: FileRow = {}
+      mapeo.forEach(([dest, src]) => { if (dest && src) nr[dest] = String(row[src] ?? '').trim() })
 
       /* Estado → en_proceso / finalizado */
       const stRaw = cleanVal(String(nr.estado ?? '')).toUpperCase()
@@ -638,7 +639,7 @@ function ImportGuias({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
       nr.finalizado = finalizado
       delete nr.estado
 
-      nr.n_cliente = ncRaw
+      nr.n_cliente = nr.n_cliente ? cleanVal(String(nr.n_cliente)) : null
       nr.nro_pedido = nr.nro_pedido ? cleanVal(String(nr.nro_pedido)) : null
       nr.razon_social = nr.razon_social ? cleanVal(String(nr.razon_social)) : null
       nr.pedido = nr.pedido ? normalizarPedido(String(nr.pedido)) : null
@@ -658,7 +659,7 @@ function ImportGuias({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
     for (let i = 0; i < validRows.length; i += batchSize) {
       const batch = validRows.slice(i, i + batchSize).map((r) => ({
         nro_pedido: r.nro_pedido || null,
-        n_cliente: String(r.n_cliente ?? ''),
+        n_cliente: r.n_cliente || null,
         razon_social: r.razon_social || null,
         pedido: r.pedido || null,
         sucursal: r.sucursal || null,
@@ -718,11 +719,11 @@ function ImportGuias({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
           )}
           {paso === 'map' && (
             <div className="space-y-2">
-              <p className="mb-2 text-xs text-sub">Mapea las columnas del archivo. El campo con ★ es obligatorio.</p>
+              <p className="mb-2 text-xs text-sub">Mapea las columnas del archivo. Las filas completamente vacias se ignoran; las celdas vacias se importan como null.</p>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {COLS_DESTINO.map((col) => (
                   <label key={col.key} className="flex items-center gap-2 text-xs">
-                    <span className={'w-44 shrink-0 truncate ' + (col.req ? 'font-semibold text-amber-400' : 'text-sub')}>{col.label}</span>
+                    <span className={'w-44 shrink-0 truncate text-sub'}>{col.label}</span>
                     <select value={map[col.key] || ''} onChange={(e) => setMap({ ...map, [col.key]: e.target.value })} className={selectCls + ' flex-1 text-xs'}>
                       <option value="">-- ignorar --</option>
                       {headers.map((h) => <option key={h} value={h}>{h}</option>)}
