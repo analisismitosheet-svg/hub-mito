@@ -767,7 +767,7 @@ function ImportFacturacion({ clientes, empleados, onClose, onSaved }: {
       try {
         const XLSX = await import('xlsx')
         const data = new Uint8Array(ev.target?.result as ArrayBuffer)
-        const wb = XLSX.read(data, { type: 'array' })
+        const wb = XLSX.read(data, { type: 'array', raw: true })
         const ws = wb.Sheets[wb.SheetNames[0]]
         const json = XLSX.utils.sheet_to_json<FileRow>(ws, { defval: '' })
         if (json.length === 0) { setBusy(false); return }
