@@ -755,22 +755,36 @@ function ImportFacturacion({ clientes, empleados, onClose, onSaved }: {
       const ncRaw = cleanVal(nr.n_cliente || '')
       if (!ncRaw) { errs.push({ idx: i, err: `Fila ${i + 1}: N° Cliente vacio.` }); return }
       const cli = clientes.find((c) => String(c.n_cliente) === ncRaw)
-      if (!cli) { errs.push({ idx: i, err: `Fila ${i + 1}: Cliente Nº ${ncRaw} no existe en el sistema.` }); return }
-      nr._cliente_id = cli.id; nr.n_cliente = cli.n_cliente; nr.razon_social = cli.razon_social
+      if (!cli) {
+        // Cliente no existe en el sistema: se importa igual con FK null y el
+        // n° de cliente tal cual vino del Excel.
+        nr._cliente_id = null
+        nr.n_cliente = ncRaw
+        nr.razon_social = nr.razon_social || null
+      } else {
+        nr._cliente_id = cli.id; nr.n_cliente = cli.n_cliente; nr.razon_social = cli.razon_social
+      }
 
       /* BUSCARV LEGAJO / NOMBRE → empleado */
       const empRaw = cleanVal(nr.quien_facturo || '')
-      if (!empRaw) { errs.push({ idx: i, err: `Fila ${i + 1}: Quien Facturo vacio.` }); return }
-      const empNum = Number(empRaw)
       let emp: EmpleadoMini | undefined
-      if (!isNaN(empNum) && empNum > 0) {
-        emp = empleados.find((e) => Number(e.legajo) === empNum)
-      } else {
-        emp = empleados.find((e) => e.nombre.toUpperCase() === empRaw.toUpperCase())
-          || empleados.find((e) => e.nombre.toUpperCase().includes(empRaw.toUpperCase()))
+      if (empRaw) {
+        const empNum = Number(empRaw)
+        if (!isNaN(empNum) && empNum > 0) {
+          emp = empleados.find((e) => Number(e.legajo) === empNum)
+        } else {
+          emp = empleados.find((e) => e.nombre.toUpperCase() === empRaw.toUpperCase())
+            || empleados.find((e) => e.nombre.toUpperCase().includes(empRaw.toUpperCase()))
+        }
       }
-      if (!emp) { errs.push({ idx: i, err: `Fila ${i + 1}: Empleado "${empRaw}" no encontrado.` }); return }
-      nr._empleado_id = emp.id; nr.n_legajo = emp.legajo || ''; nr.quien_facturo = emp.nombre
+      if (!emp) {
+        // Empleado en blanco o no encontrado (ej. "-"): se importa igual con null.
+        nr._empleado_id = null
+        nr.n_legajo = ''
+        nr.quien_facturo = empRaw || null
+      } else {
+        nr._empleado_id = emp.id; nr.n_legajo = emp.legajo || ''; nr.quien_facturo = emp.nombre
+      }
 
       /* POLO52 */
       if (nr.polo52) { const v = String(nr.polo52).toUpperCase(); nr.polo52 = v === 'VERDADERO' || v === '1' || v === 'SI' || v === 'TRUE' }
