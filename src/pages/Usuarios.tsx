@@ -780,22 +780,23 @@ function PermisosModal({
   async function guardar() {
     if (!supabase) return
     setGuardando(true); setError(null)
-    const upserts: { usuario_id: string; permiso_clave: string; efecto: 'grant' | 'revoke' }[] = []
-    const borrar: string[] = []
+    const grants: string[] = []
+    const revokes: string[] = []
+    const limpiar: string[] = []
     for (const p of permisos) {
       const deseado = !!estado[p.clave]
       const def = defaultDe(p.clave)
-      if (deseado === def) borrar.push(p.clave)
-      else upserts.push({ usuario_id: usuario.id, permiso_clave: p.clave, efecto: deseado ? 'grant' : 'revoke' })
+      if (deseado === def) limpiar.push(p.clave)
+      else if (deseado) grants.push(p.clave)
+      else revokes.push(p.clave)
     }
-    if (borrar.length) {
-      const { error: e1 } = await supabase.from('usuario_permisos').delete().eq('usuario_id', usuario.id).in('permiso_clave', borrar)
-      if (e1) { setError(e1.message); setGuardando(false); return }
-    }
-    if (upserts.length) {
-      const { error: e2 } = await supabase.from('usuario_permisos').upsert(upserts, { onConflict: 'usuario_id,permiso_clave' })
-      if (e2) { setError(e2.message); setGuardando(false); return }
-    }
+    const { error } = await supabase.rpc('set_usuario_permisos', {
+      uid: usuario.id,
+      limpiar,
+      grants,
+      revokes,
+    })
+    if (error) { setError(error.message); setGuardando(false); return }
     setGuardando(false); onClose()
   }
 
