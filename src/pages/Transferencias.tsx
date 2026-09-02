@@ -892,26 +892,34 @@ function EnviarTransferencia({ lote, items, usuariosLocales, onClose }: {
   const conMail = origenes.filter((o) => o.mails.length > 0)
   const sinMail = origenes.filter((o) => o.mails.length === 0)
 
-  // Abre la redacción del mail para un local. Usamos window.open para que
-  // puedan abrirse varias en un mismo click sin que una sobrescriba a la otra.
-  function enviar(origen: string, mails: string[], preview: string) {
+  // Arma el enlace de redacción de Outlook Web (navegador autenticado).
+  function enlaceOutlook(origen: string, mails: string[], preview: string): string {
     const asunto = encodeURIComponent(`TRANSFERENCIA — ${origen} — ${lote.nombre}`)
     const cuerpo = encodeURIComponent(preview)
     const to = mails.join(',')
-    const w = window.open(`mailto:${to}?subject=${asunto}&body=${cuerpo}`)
+    return `https://outlook.office.com/mail/deeplink/compose?to=${to}&subject=${asunto}&body=${cuerpo}`
+  }
+
+  // Abre una hoja en Outlook Web.
+  function enviar(origen: string, mails: string[], preview: string) {
+    const w = window.open(enlaceOutlook(origen, mails, preview))
     if (w) w.opener = null
   }
 
-  // Envía todas las hojas de una: abre UN mail por hoja/local, en lote.
+  // Envía todas las hojas de una: abre un Outlook Web por hoja/local.
+  // Se escalonan con setTimeout para que el navegador no los considere
+  // popups bloqueados y no se pierda ninguno.
   function enviarTodo() {
-    for (const o of conMail) {
-      const asunto = encodeURIComponent(`TRANSFERENCIA — ${o.origen} — ${lote.nombre}`)
-      const cuerpo = encodeURIComponent(o.preview)
-      const to = o.mails.join(',')
-      const w = window.open(`mailto:${to}?subject=${asunto}&body=${cuerpo}`)
-      if (w) w.opener = null
+    if (conMail.length === 0) {
+      window.confirm('Ningún local tiene mail registrado.')
+      return
     }
-    if (conMail.length === 0 && !window.confirm('Ningún local tiene mail registrado. ¿Cerrar?')) return
+    conMail.forEach((o, i) => {
+      setTimeout(() => {
+        const w = window.open(enlaceOutlook(o.origen, o.mails, o.preview))
+        if (w) w.opener = null
+      }, i * 300)
+    })
   }
 
   return (
@@ -935,8 +943,8 @@ function EnviarTransferencia({ lote, items, usuariosLocales, onClose }: {
         </div>
         <div className="flex-1 space-y-3 overflow-y-auto p-4" style={{ maxHeight: 'calc(88vh - 120px)' }}>
           <p className="text-xs text-sub">
-            Usá <span className="font-semibold text-emerald-400">Enviar todo</span> para abrir de una vez un mail por
-            cada hoja/local con su contenido. O redactá cada uno individualmente abajo.
+            Usá <span className="font-semibold text-emerald-400">Enviar todo</span> para abrir en Outlook Web de una
+            vez un correo por cada hoja/local con su contenido. O redactá cada uno individualmente abajo.
           </p>
           {origenes.length === 0 && <p className="py-6 text-center text-sm text-sub">No hay hojas para este archivo.</p>}
           {origenes.map((o) => (
