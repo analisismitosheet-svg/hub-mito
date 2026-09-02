@@ -211,8 +211,21 @@ export default function Transferencias() {
   const origenesUsuario = useMemo(() => {
     const base = miLocal
     if (!base) return []
-    const alt = base.endsWith('2') ? base.slice(0, -1) : null
-    return alt && alt !== base ? [base, alt] : [base]
+    const out: string[] = [base]
+    // Variantes sin el sufijo "2" final (ej: RUTA9D2 -> RUTA9D)
+    if (base.endsWith('2')) {
+      const alt = base.slice(0, -1)
+      if (!out.includes(alt)) out.push(alt)
+    }
+    // Variantes con/sin la "d" final (ej: WALMARTD <-> WALMART)
+    if (base.endsWith('D') && base.length > 1) {
+      const alt = base.slice(0, -1)
+      if (!out.includes(alt)) out.push(alt)
+    } else {
+      const alt = base + 'D'
+      if (!out.includes(alt)) out.push(alt)
+    }
+    return out
   }, [miLocal])
 
   const [lotes, setLotes] = useState<Lote[]>([])
