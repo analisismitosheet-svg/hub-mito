@@ -853,19 +853,23 @@ function EnviarTransferencia({ lote, items, usuariosLocales, onClose }: {
     return m
   }, [items])
 
-  // Variantes posibles de un local para matchear el mail del usuario:
-  // - WALMARTD -> también WALMART (quita "d" final)
-  // - RUTA9D2  -> también RUTA9D (quita "2" final)
+  // Variantes posibles de un local para matchear el mail del usuario, en AMBOS
+  // sentidos:
+  // - quita "d" final  (WALMARTD -> WALMART) y también agrega "d" (WALMART -> WALMARTD)
+  // - quita "2" final  (RUTA9D2  -> RUTA9D)  y también agrega "2" (RUTA9D -> RUTA9D2)
   function variantesLocal(local: string): string[] {
     const base = local.trim().toUpperCase()
     const out = [base]
+    const ayadir = (s: string) => { if (!out.includes(s)) out.push(s) }
     if (base.endsWith('D') && base.length > 1) {
-      const alt = base.slice(0, -1)
-      if (!out.includes(alt)) out.push(alt)
+      ayadir(base.slice(0, -1))
+    } else {
+      ayadir(base + 'D')
     }
     if (base.endsWith('2') && base.length > 1) {
-      const alt = base.slice(0, -1)
-      if (!out.includes(alt)) out.push(alt)
+      ayadir(base.slice(0, -1))
+    } else {
+      ayadir(base + '2')
     }
     return out
   }
