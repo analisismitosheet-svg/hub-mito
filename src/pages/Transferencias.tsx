@@ -10,6 +10,7 @@ import {
   X,
   Bookmark,
   Printer,
+  Send,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -173,6 +174,46 @@ function imprimirCascada(origen: string, items: Item[], lote: Lote) {
   w.document.close()
 }
 
+/**
+ * Arma el texto plano del mail para un local origen: la matriz de ítems que
+ * ese local debe enviar, agrupados por destino (igual que la cascada impresa).
+ */
+function construirMailOrigen(origen: string, items: Item[], lote: Lote): string {
+  const destinos = Array.from(new Set(items.map((i) => i.destino))).sort((a, b) => a.localeCompare(b, 'es'))
+  const lineas: string[] = []
+  lineas.push(`TRANSFERENCIA — ${origen}`)
+  lineas.push(`Archivo: ${lote.nombre} · ${fmtFechaCorta(lote.fecha)}`)
+  lineas.push('')
+  lineas.push('ARTICULO          | DESCRIPCION            | COLOR | TALLE | ' + destinos.map((d) => d.padEnd(9)).join('| ') + '| TOTAL')
+  lineas.push('-'.repeat(80))
+  const porArt = new Map<string, Item[]>()
+  for (const i of items) {
+    const k = [i.articulo ?? '', i.descripcion ?? '', i.color ?? '', i.talle ?? ''].join('¦')
+    const a = porArt.get(k) ?? []
+    a.push(i)
+    porArt.set(k, a)
+  }
+  for (const [k, grup] of porArt) {
+    const [art, desc, color, talle] = k.split('¦')
+    const total = grup.reduce((s, i) => s + (i.cantidad || 1), 0)
+    const celdas = destinos.map((d) => {
+      const q = grup.filter((i) => i.destino === d).reduce((s, i) => s + (i.cantidad || 1), 0)
+      return q ? String(q) : ''
+    })
+    const fila =
+      art.padEnd(16).slice(0, 16) +
+      desc.padEnd(20).slice(0, 20) +
+      color.padEnd(6).slice(0, 6) +
+      talle.padEnd(6).slice(0, 6) +
+      celdas.map((c) => c.padStart(9)).join('| ') +
+      String(total).padStart(9)
+    lineas.push(fila)
+  }
+  lineas.push('')
+  lineas.push(`Total: ${items.reduce((s, i) => s + (i.cantidad || 1), 0)} unidades a ${destinos.length} destinos.`)
+  return lineas.join('\n')
+}
+
 // Barra segmentada por UNIDADES (suma cantidad): verde (hecho) · amarillo (señado) · rojo (faltante)
 function Barra({ items }: { items: Item[] }) {
   const total = items.reduce((s, i) => s + (i.cantidad || 1), 0)
@@ -237,6 +278,8 @@ export default function Transferencias() {
   const [origenAbierto, setOrigenAbierto] = useState<string | null>(null)
   const [destinoAbierto, setDestinoAbierto] = useState<string | null>(null)
   const [modal, setModal] = useState(false)
+  const [modalEnvio, setModalEnvio] = useState<Lote | null>(null)
+  const [usuariosLocales, setUsuariosLocales] = useState<{ email: string; local: string }[]>([])
   const [archivo, setArchivo] = useState<File | null>(null)
   const [nombreNuevo, setNombreNuevo] = useState('')
   const [motivoNuevo, setMotivoNuevo] = useState('')
@@ -249,9 +292,13 @@ export default function Transferencias() {
     }
     setCargando(true)
     setError(null)
-    const { data: ld, error: lErr } = await supabase.from('transfer_lotes').select('id,nombre,motivo,fecha,created_at').order('created_at', { ascending: false }).limit(60)
-    if (lErr) setError(`No se pudieron cargar los archivos: ${lErr.message}`)
-    const lotesData = (ld as Lote[]) ?? []
+    const [ld, uRes] = await Promise.all([
+      supabase.from('transfer_lotes').select('id,nombre,motivo,fecha,created_at').order('created_at', { ascending: false }).limit(60),
+      supabase.from('usuarios').select('email,local').eq('estado', 'aprobado').not('local', 'is', null),
+    ])
+    if (ld.error) setError(`No se pudieron cargar los archivos: ${ld.error.message}`)
+    setUsuariosLocales((uRes.data as { email: string; local: string }[]) ?? [])
+    const lotesData = (ld.data as Lote[]) ?? []
     setLotes(lotesData)
     if (lotesData.length) {
       const ids = lotesData.map((l) => l.id)
@@ -502,18 +549,30 @@ export default function Transferencias() {
                   </div>
                   <Barra items={its} />
                   {puedeImportar && (
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        borrarLote(lote.id)
-                      }}
-                      className="ml-1 rounded-lg p-1.5 text-sub hover:bg-brand-600/20 hover:text-brand-400"
-                      title="Borrar archivo"
-                    >
-                      <Trash2 size={15} aria-hidden />
-                    </span>
+                    <>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setModalEnvio(lote)
+                        }}
+                        className="btn-press ml-1 flex shrink-0 items-center gap-1 rounded-lg border border-line p-1.5 text-sub hover:text-ink"
+                        title="Enviar cada hoja a su local por mail"
+                      >
+                        <Send size={14} aria-hidden />
+                      </button>
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          borrarLote(lote.id)
+                        }}
+                        className="ml-1 rounded-lg p-1.5 text-sub hover:bg-brand-600/20 hover:text-brand-400"
+                        title="Borrar archivo"
+                      >
+                        <Trash2 size={15} aria-hidden />
+                      </span>
+                    </>
                   )}
                 </button>
 
@@ -704,6 +763,15 @@ export default function Transferencias() {
         </div>
       )}
 
+      {modalEnvio && (
+        <EnviarTransferencia
+          lote={modalEnvio}
+          items={itemsPorLote.get(modalEnvio.id) ?? []}
+          usuariosLocales={usuariosLocales}
+          onClose={() => setModalEnvio(null)}
+        />
+      )}
+
       {modal && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4" onClick={() => !subiendo && setModal(false)}>
           <div className="w-full max-w-md rounded-t-2xl border border-line bg-surface shadow-soft-lg sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
@@ -761,5 +829,103 @@ export default function Transferencias() {
         </div>
       )}
     </Layout>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/*  Enviar transferencia (mail)                                        */
+/* ------------------------------------------------------------------ */
+
+function EnviarTransferencia({ lote, items, usuariosLocales, onClose }: {
+  lote: Lote
+  items: Item[]
+  usuariosLocales: { email: string; local: string }[]
+  onClose: () => void
+}) {
+  // Agrupar los ítems del lote por ORIGEN (cada hoja = un local origen)
+  const porOrigen = useMemo(() => {
+    const m = new Map<string, Item[]>()
+    for (const it of items) {
+      const a = m.get(it.origen) ?? []
+      a.push(it)
+      m.set(it.origen, a)
+    }
+    return m
+  }, [items])
+
+  // Para cada origen, los emails de los usuarios aprobados con ese local
+  const origenes = useMemo(() => {
+    const res: { origen: string; mails: string[]; preview: string }[] = []
+    porOrigen.forEach((its, origen) => {
+      const local = origen.trim().toUpperCase()
+      const mails = usuariosLocales
+        .filter((u) => u.local.trim().toUpperCase() === local)
+        .map((u) => u.email)
+        .filter((e, i, ar) => e && ar.indexOf(e) === i)
+      res.push({ origen, mails, preview: construirMailOrigen(origen, its, lote) })
+    })
+    return res
+  }, [porOrigen, usuariosLocales, lote])
+
+  const sinMail = origenes.filter((o) => o.mails.length === 0)
+
+  function enviar(origen: string, mails: string[], preview: string) {
+    const asunto = encodeURIComponent(`TRANSFERENCIA — ${origen} — ${lote.nombre}`)
+    const cuerpo = encodeURIComponent(preview)
+    const to = mails.join(',')
+    window.location.href = `mailto:${to}?subject=${asunto}&body=${cuerpo}`
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-t-2xl border border-line bg-surface shadow-soft-lg sm:rounded-2xl" style={{ maxHeight: '88vh' }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-line px-4 py-3">
+          <h2 className="font-display font-semibold text-ink">Enviar transferencia</h2>
+          <button onClick={onClose} aria-label="Cerrar" className="rounded-lg p-1.5 text-sub hover:bg-line hover:text-ink">
+            <X size={18} aria-hidden />
+          </button>
+        </div>
+        <div className="flex-1 space-y-3 overflow-y-auto p-4" style={{ maxHeight: 'calc(88vh - 120px)' }}>
+          <p className="text-xs text-sub">
+            Cada hoja (local origen) se abre en el mail del usuario registrado con ese local. El mail se arma en tu
+            cliente de correo; revisalo y presioná "Enviar".
+          </p>
+          {origenes.length === 0 && <p className="py-6 text-center text-sm text-sub">No hay hojas para este archivo.</p>}
+          {origenes.map((o) => (
+            <div key={o.origen} className="rounded-xl border border-line bg-surface2 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-semibold text-ink">{o.origen}</p>
+                  <p className="truncate text-xs text-sub">
+                    {o.mails.length
+                      ? `→ ${o.mails.join(', ')}`
+                      : 'Sin email / usuario registrado para este local'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => o.mails.length && enviar(o.origen, o.mails, o.preview)}
+                  disabled={o.mails.length === 0}
+                  className="btn-press inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-brand-600 px-3 py-2 text-xs font-medium text-white hover:bg-brand-700 disabled:opacity-40"
+                >
+                  <Send size={13} aria-hidden /> Redactar mail
+                </button>
+              </div>
+              <details className="mt-2">
+                <summary className="cursor-pointer text-[11px] text-sub hover:text-ink">Ver contenido</summary>
+                <pre className="mt-2 overflow-x-auto whitespace-pre rounded-lg bg-black/30 p-2 text-[10px] leading-snug text-zinc-300">{o.preview}</pre>
+              </details>
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center justify-between gap-2 border-t border-line px-4 py-3">
+          <p className="text-xs text-sub">
+            {origenes.length - sinMail.length}/{origenes.length} con mail{sinMail.length > 0 ? ` · ${sinMail.length} sin mail` : ''}
+          </p>
+          <button onClick={onClose} className="btn-press rounded-xl border border-line bg-surface2 px-4 py-2 text-sm font-medium text-ink hover:bg-line">
+            Cerrar
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
