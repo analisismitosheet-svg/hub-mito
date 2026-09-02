@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
-  Loader2, Search, SearchX, Plus, Pencil, Trash2, X, Upload, FileText, Lock, Printer, BookmarkPlus,
+  Loader2, Search, SearchX, Plus, Pencil, Trash2, X, Upload, FileText, Lock, Printer, BookmarkPlus, Check,
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import Layout from '@/components/Layout'
@@ -85,6 +85,20 @@ function retiroStyle(v: string | null): string {
 }
 function cleanVal(s: string): string { return s.replace(/[\u200B\uFEFF\u00A0]/g, '').trim() }
 
+// Normaliza un número de remito para compararlo con los bultos recibidos de
+// transporte (misma regla que la edge function bultos-recibidos):
+// - Reemplaza guiones "-" por "/".
+// - Quita el sufijo (n/total) que indica qué bulto dentro del remito.
+// - Cualquier otro símbolo se deja tal cual.
+function normalizarRemito(raw: string | null | undefined): string {
+  let s = (raw ?? '').trim().toUpperCase()
+  s = s.replace(/-/g, '/')
+  s = s.replace(/\(\d+\/\d+\)$/, '')
+  s = s.split('/').map((p) => p.trim()).filter(Boolean).join('/')
+  return s
+}
+
+
 const pad2 = (n: number) => String(n).padStart(2, '0')
 
 function excelDate(val: unknown): string | null {
@@ -151,6 +165,7 @@ export default function FacturacionFabrica() {
   const [clientes, setClientes] = useState<ClienteMini[]>([])
   const [empleados, setEmpleados] = useState<EmpleadoMini[]>([])
   const [transportes, setTransportes] = useState<{ id: string; nombre: string }[]>([])
+  const [recibidos, setRecibidos] = useState<Set<string>>(new Set())
 
   const mostrarToast = useCallback((msg: string) => {
     setToast(msg)
@@ -190,6 +205,32 @@ export default function FacturacionFabrica() {
   }, [])
 
   useEffect(() => { void cargar() }, [cargar])
+
+  // Carga los números de remito que POLO marcó como RECIBIDO en la app de
+  // Transporte, para pintar la columna POLO en verde. No bloquea la tabla:
+  // si transporte está caído, la app sigue funcionando sin el marcado.
+  useEffect(() => {
+    let activo = true
+    async function cargarRecibidos() {
+      try {
+        if (!supabase) return
+        const { data } = await supabase.auth.getSession()
+        const token = data.session?.access_token
+        if (!token) return
+        const res = await fetch('/api/bultos-recibidos', {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const json = (await res.json().catch(() => ({}))) as { recibidos?: string[] }
+        if (activo && res.ok && Array.isArray(json.recibidos)) {
+          setRecibidos(new Set(json.recibidos))
+        }
+      } catch {
+        /* silencioso: no bloquear la tabla */
+      }
+    }
+    void cargarRecibidos()
+    return () => { activo = false }
+  }, [])
 
   useEffect(() => {
     if (!card) return
@@ -380,7 +421,7 @@ export default function FacturacionFabrica() {
                     <td className="px-1 py-[2px] text-center text-sub">{r.total_despachos || '-'}</td>
                     <td className="px-1 py-[2px] text-center text-[10px] font-medium text-sub">{r.n_legajo || '-'}</td>
                     <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={r.quien_facturo || ''}>{r.quien_facturo || '-'}</span></td>
-                    <td className="px-1 py-[2px] text-center">{r.polo52 ? <span className="inline-block whitespace-nowrap rounded-full border border-amber-500/30 bg-amber-500/15 px-1.5 py-px text-[9px] font-medium text-amber-400"><Lock size={8} className="mr-0.5 inline" aria-hidden />POLO52</span> : <span className="text-sub/60">-</span>}</td>
+                    <td className="px-1 py-[2px] text-center">{recibidos.has(normalizarRemito(r.n_remito)) ? <span className="inline-block whitespace-nowrap rounded-full border border-emerald-500/40 bg-emerald-500/15 px-1.5 py-px text-[9px] font-medium text-emerald-400"><Check size={8} className="mr-0.5 inline" aria-hidden />RECIBIDO</span> : (r.polo52 ? <span className="inline-block whitespace-nowrap rounded-full border border-amber-500/30 bg-amber-500/15 px-1.5 py-px text-[9px] font-medium text-amber-400"><Lock size={8} className="mr-0.5 inline" aria-hidden />POLO52</span> : <span className="text-sub/60">-</span>)}</td>
                     <td className="px-1 py-[2px] text-center text-sub whitespace-nowrap">{fmtDateSlider(r.fecha_envio) || '-'}</td>
                     <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={r.quien_retira_fabrica || ''}>{r.quien_retira_fabrica || '-'}</span></td>
                     <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={r.observaciones || ''}>{r.observaciones || '-'}</span></td>
