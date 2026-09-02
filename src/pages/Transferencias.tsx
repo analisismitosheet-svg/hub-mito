@@ -867,13 +867,29 @@ function EnviarTransferencia({ lote, items, usuariosLocales, onClose }: {
     return res
   }, [porOrigen, usuariosLocales, lote])
 
+  const conMail = origenes.filter((o) => o.mails.length > 0)
   const sinMail = origenes.filter((o) => o.mails.length === 0)
 
+  // Abre la redacción del mail para un local. Usamos window.open para que
+  // puedan abrirse varias en un mismo click sin que una sobrescriba a la otra.
   function enviar(origen: string, mails: string[], preview: string) {
     const asunto = encodeURIComponent(`TRANSFERENCIA — ${origen} — ${lote.nombre}`)
     const cuerpo = encodeURIComponent(preview)
     const to = mails.join(',')
-    window.location.href = `mailto:${to}?subject=${asunto}&body=${cuerpo}`
+    const w = window.open(`mailto:${to}?subject=${asunto}&body=${cuerpo}`)
+    if (w) w.opener = null
+  }
+
+  // Envía todas las hojas de una: abre UN mail por hoja/local, en lote.
+  function enviarTodo() {
+    for (const o of conMail) {
+      const asunto = encodeURIComponent(`TRANSFERENCIA — ${o.origen} — ${lote.nombre}`)
+      const cuerpo = encodeURIComponent(o.preview)
+      const to = o.mails.join(',')
+      const w = window.open(`mailto:${to}?subject=${asunto}&body=${cuerpo}`)
+      if (w) w.opener = null
+    }
+    if (conMail.length === 0 && !window.confirm('Ningún local tiene mail registrado. ¿Cerrar?')) return
   }
 
   return (
@@ -881,14 +897,24 @@ function EnviarTransferencia({ lote, items, usuariosLocales, onClose }: {
       <div className="w-full max-w-lg rounded-t-2xl border border-line bg-surface shadow-soft-lg sm:rounded-2xl" style={{ maxHeight: '88vh' }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-line px-4 py-3">
           <h2 className="font-display font-semibold text-ink">Enviar transferencia</h2>
-          <button onClick={onClose} aria-label="Cerrar" className="rounded-lg p-1.5 text-sub hover:bg-line hover:text-ink">
-            <X size={18} aria-hidden />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={enviarTodo}
+              disabled={conMail.length === 0}
+              className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-40"
+              title="Abre un mail por cada hoja/local en un solo click"
+            >
+              <Send size={13} aria-hidden /> Enviar todo ({conMail.length})
+            </button>
+            <button onClick={onClose} aria-label="Cerrar" className="rounded-lg p-1.5 text-sub hover:bg-line hover:text-ink">
+              <X size={18} aria-hidden />
+            </button>
+          </div>
         </div>
         <div className="flex-1 space-y-3 overflow-y-auto p-4" style={{ maxHeight: 'calc(88vh - 120px)' }}>
           <p className="text-xs text-sub">
-            Cada hoja (local origen) se abre en el mail del usuario registrado con ese local. El mail se arma en tu
-            cliente de correo; revisalo y presioná "Enviar".
+            Usá <span className="font-semibold text-emerald-400">Enviar todo</span> para abrir de una vez un mail por
+            cada hoja/local con su contenido. O redactá cada uno individualmente abajo.
           </p>
           {origenes.length === 0 && <p className="py-6 text-center text-sm text-sub">No hay hojas para este archivo.</p>}
           {origenes.map((o) => (
