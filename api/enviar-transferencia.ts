@@ -1,22 +1,23 @@
 /**
  * Envía las transferencias de un lote por mail automáticamente.
  *
- * Flujo: PWA (JWT Supabase) -> esta función -> SMTP Outlook/Office 365 -> cada local
+ * Flujo: PWA (JWT Supabase) -> esta función -> Microsoft Graph API (sendMail) -> cada local
  *
  * La función:
  *  1. Valida el JWT del usuario (debe tener permiso de importar transferencias).
  *  2. Recibe { lote_id } y lee el lote + sus ítems con service role.
  *  3. Agrupa los ítems por ORIGEN (cada hoja = un local origen).
  *  4. Busca el email de los usuarios aprobados cuyo local = origen (con/sin "d"/"2").
- *  5. Envía un mail por local origen con el contenido de su hoja.
+ *  5. Envía un mail por local origen con el contenido de su hoja vía Microsoft Graph.
  *
  * Variables de entorno en Vercel (sin prefijo VITE_):
  *   SUPABASE_URL                  - proyecto Supabase
  *   SUPABASE_ANON_KEY             - anon (validar JWT)
  *   SUPABASE_SERVICE_ROLE_KEY     - service role (leer lote/items/usuarios)
- *   SMTP_HOST / SMTP_PORT         - ej: smtp.office365.com / 587
- *   SMTP_USER / SMTP_PASS         - cuenta Microsoft 365 autenticada
- *   SMTP_FROM                     - remitente (mismo que SMTP_USER normalmente)
+ *   AZURE_TENANT_ID               - Id. de directorio (inquilino) de Microsoft Entra ID
+ *   AZURE_CLIENT_ID               - Id. de aplicación registrada en Entra ID
+ *   AZURE_CLIENT_SECRET           - secreto de cliente de la app registrada
+ *   MAIL_FROM                     - email remitente de los mails (debe tener permiso Mail.Send)
  */
 
 type Req = {
@@ -124,16 +125,63 @@ function construirMail(origen: string, items: TransItem[], lote: Lote): string {
   return lineas.join('\n')
 }
 
-function smtpConfig() {
-  const host = process.env.SMTP_HOST
-  const user = process.env.SMTP_USER
-  const pass = process.env.SMTP_PASS
-  if (!host || !user || !pass) return null
-  return {
-    host,
-    port: Number(process.env.SMTP_PORT ?? 587),
-    secure: Number(process.env.SMTP_PORT ?? 587) === 465,
-    auth: { user, pass },
+function graphConfig() {
+  const tenant = process.env.AZURE_TENANT_ID
+  const client = process.env.AZURE_CLIENT_ID
+  const secret = process.env.AZURE_CLIENT_SECRET
+  const from = process.env.MAIL_FROM
+  if (!tenant || !client || !secret || !from) return null
+  return { tenant, client, secret, from }
+}
+
+/** Obtiene un access token OAuth de aplicación (client_credentials) para Graph. */
+async function obtenerGraphToken(cfg: { tenant: string; client: string; secret: string }): Promise<string | null> {
+  const body = new URLSearchParams({
+    client_id: cfg.client,
+    client_secret: cfg.secret,
+    scope: 'https://graph.microsoft.com/.default',
+    grant_type: 'client_credentials',
+  })
+  try {
+    const r = await fetch(`https://login.microsoftonline.com/${cfg.tenant}/oauth2/v2.0/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+    })
+    const j = (await r.json().catch(() => ({}))) as { access_token?: string; error?: string; error_description?: string }
+    if (!r.ok) throw new Error(j.error_description || j.error || `Token error ${r.status}`)
+    return j.access_token ?? null
+  } catch (e) {
+    throw new Error(`No se pudo obtener token Graph: ${e instanceof Error ? e.message : String(e)}`)
+  }
+}
+
+/** Envía un mail vía Microsoft Graph (application permission Mail.Send). */
+async function enviarMailGraph(
+  token: string,
+  cfg: { from: string },
+  to: string[],
+  subject: string,
+  text: string,
+): Promise<void> {
+  const r = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(cfg.from)}/sendMail`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      message: {
+        subject,
+        body: { contentType: 'text', content: text },
+        toRecipients: to.map((email) => ({ emailAddress: { address: email } })),
+      },
+      saveToSentItems: true,
+    }),
+  })
+  if (!r.ok) {
+    const j = (await r.json().catch(() => ({}))) as { error?: { message?: string } }
+    throw new Error(j.error?.message ?? `Graph error ${r.status}`)
   }
 }
 
@@ -213,18 +261,11 @@ export default async function handler(req: Req, res: Res) {
     porOrigen.set(o, a)
   }
 
-  const cfg = smtpConfig()
-  if (!cfg) return res.status(500).json({ error: 'Falta configurar SMTP (host/user/pass)' })
+  const cfg = graphConfig()
+  if (!cfg) return res.status(500).json({ error: 'Falta configurar Azure AD (tenant/client/secret) o MAIL_FROM' })
 
-  // nodemailer se importa dinámicamente (evita temas de bundling en Vercel)
-  let nodemailer: typeof import('nodemailer')
-  try {
-    nodemailer = await import('nodemailer')
-  } catch {
-    return res.status(500).json({ error: 'nodemailer no disponible' })
-  }
-  const transporter = nodemailer.createTransport({ ...cfg, secure: cfg.secure })
-  const from = process.env.SMTP_FROM ?? process.env.SMTP_USER
+  const token = await obtenerGraphToken(cfg)
+  if (!token) return res.status(502).json({ error: 'No se pudo autenticar en Microsoft Graph' })
 
   const enviados: string[] = []
   const sinMail: string[] = []
@@ -245,12 +286,7 @@ export default async function handler(req: Req, res: Res) {
 
     const contenido = construirMail(origen, its, lote)
     try {
-      await transporter.sendMail({
-        from,
-        to: mails,
-        subject: `TRANSFERENCIA — ${origen} — ${lote.nombre ?? ''}`,
-        text: contenido,
-      })
+      await enviarMailGraph(token, cfg, mails, `TRANSFERENCIA — ${origen} — ${lote.nombre ?? ''}`, contenido)
       enviados.push(`${origen}→${mails.join(',')}`)
     } catch (e) {
       errores.push(`${origen}: ${e instanceof Error ? e.message : String(e)}`)
