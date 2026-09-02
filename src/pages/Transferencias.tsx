@@ -853,13 +853,31 @@ function EnviarTransferencia({ lote, items, usuariosLocales, onClose }: {
     return m
   }, [items])
 
+  // Variantes posibles de un local para matchear el mail del usuario:
+  // - WALMARTD -> también WALMART (quita "d" final)
+  // - RUTA9D2  -> también RUTA9D (quita "2" final)
+  function variantesLocal(local: string): string[] {
+    const base = local.trim().toUpperCase()
+    const out = [base]
+    if (base.endsWith('D') && base.length > 1) {
+      const alt = base.slice(0, -1)
+      if (!out.includes(alt)) out.push(alt)
+    }
+    if (base.endsWith('2') && base.length > 1) {
+      const alt = base.slice(0, -1)
+      if (!out.includes(alt)) out.push(alt)
+    }
+    return out
+  }
+
   // Para cada origen, los emails de los usuarios aprobados con ese local
+  // (aceptando variantes con/sin "d"/"2" final).
   const origenes = useMemo(() => {
     const res: { origen: string; mails: string[]; preview: string }[] = []
     porOrigen.forEach((its, origen) => {
-      const local = origen.trim().toUpperCase()
+      const variantes = variantesLocal(origen)
       const mails = usuariosLocales
-        .filter((u) => u.local.trim().toUpperCase() === local)
+        .filter((u) => variantes.includes(u.local.trim().toUpperCase()))
         .map((u) => u.email)
         .filter((e, i, ar) => e && ar.indexOf(e) === i)
       res.push({ origen, mails, preview: construirMailOrigen(origen, its, lote) })
