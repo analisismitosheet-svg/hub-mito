@@ -264,8 +264,8 @@ export default async function handler(req: Req, res: Res) {
   const cfg = graphConfig()
   if (!cfg) return res.status(500).json({ error: 'Falta configurar Azure AD (tenant/client/secret) o MAIL_FROM' })
 
-  const token = await obtenerGraphToken(cfg)
-  if (!token) return res.status(502).json({ error: 'No se pudo autenticar en Microsoft Graph' })
+  const graphToken = await obtenerGraphToken(cfg)
+  if (!graphToken) return res.status(502).json({ error: 'No se pudo autenticar en Microsoft Graph' })
 
   const enviados: string[] = []
   const sinMail: string[] = []
@@ -286,7 +286,7 @@ export default async function handler(req: Req, res: Res) {
 
     const contenido = construirMail(origen, its, lote)
     try {
-      await enviarMailGraph(token, cfg, mails, `TRANSFERENCIA — ${origen} — ${lote.nombre ?? ''}`, contenido)
+      await enviarMailGraph(graphToken, cfg, mails, `TRANSFERENCIA — ${origen} — ${lote.nombre ?? ''}`, contenido)
       enviados.push(`${origen}→${mails.join(',')}`)
     } catch (e) {
       errores.push(`${origen}: ${e instanceof Error ? e.message : String(e)}`)
