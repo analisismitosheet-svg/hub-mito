@@ -1,0 +1,268 @@
+/**
+ * Envía las transferencias de un lote por mail automáticamente.
+ *
+ * Flujo: PWA (JWT Supabase) -> esta función -> SMTP Outlook/Office 365 -> cada local
+ *
+ * La función:
+ *  1. Valida el JWT del usuario (debe tener permiso de importar transferencias).
+ *  2. Recibe { lote_id } y lee el lote + sus ítems con service role.
+ *  3. Agrupa los ítems por ORIGEN (cada hoja = un local origen).
+ *  4. Busca el email de los usuarios aprobados cuyo local = origen (con/sin "d"/"2").
+ *  5. Envía un mail por local origen con el contenido de su hoja.
+ *
+ * Variables de entorno en Vercel (sin prefijo VITE_):
+ *   SUPABASE_URL                  - proyecto Supabase
+ *   SUPABASE_ANON_KEY             - anon (validar JWT)
+ *   SUPABASE_SERVICE_ROLE_KEY     - service role (leer lote/items/usuarios)
+ *   SMTP_HOST / SMTP_PORT         - ej: smtp.office365.com / 587
+ *   SMTP_USER / SMTP_PASS         - cuenta Microsoft 365 autenticada
+ *   SMTP_FROM                     - remitente (mismo que SMTP_USER normalmente)
+ */
+
+type Req = {
+  method?: string
+  headers: { authorization?: string }
+  body?: string
+}
+
+type Res = {
+  status(code: number): Res
+  setHeader(name: string, value: string): Res
+  json(body: unknown): void
+}
+
+interface TransItem {
+  id: string
+  lote_id: string
+  origen: string | null
+  destino: string | null
+  articulo: string | null
+  descripcion: string | null
+  color: string | null
+  talle: string | null
+  cantidad: number | null
+}
+
+interface Lote {
+  id: string
+  nombre: string | null
+  motivo: string | null
+  fecha: string | null
+}
+
+/** Valida el JWT de Supabase contra /auth/v1/user. */
+async function usuarioValido(token: string): Promise<boolean> {
+  const url = process.env.SUPABASE_URL
+  const anon = process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY
+  if (!url || !anon) return false
+  try {
+    const res = await fetch(`${url}/auth/v1/user`, {
+      headers: { Authorization: `Bearer ${token}`, apikey: anon },
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+function serviceHeaders(): Record<string, string> | null {
+  const url = process.env.SUPABASE_URL
+  const service = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !service) return null
+  return { Authorization: `Bearer ${service}`, apikey: service }
+}
+
+/** Variantes de un local para matchear el mail del usuario (con/sin "d"/"2"). */
+function variantesLocal(local: string): string[] {
+  const base = local.trim().toUpperCase()
+  const out = [base]
+  const ayadir = (s: string) => { if (!out.includes(s)) out.push(s) }
+  if (base.endsWith('D') && base.length > 1) ayadir(base.slice(0, -1))
+  else ayadir(base + 'D')
+  if (base.endsWith('2') && base.length > 1) ayadir(base.slice(0, -1))
+  else ayadir(base + '2')
+  return out
+}
+
+/** Contenido del mail para un local origen (matriz artículos -> destinos). */
+function construirMail(origen: string, items: TransItem[], lote: Lote): string {
+  const destinos = Array.from(new Set(items.map((i) => i.destino ?? '').filter(Boolean))).sort((a, b) => a.localeCompare(b, 'es'))
+  const lineas: string[] = []
+  lineas.push(`TRANSFERENCIA — ${origen}`)
+  lineas.push(`Archivo: ${lote.nombre ?? ''} · ${lote.fecha ?? ''}`)
+  lineas.push('')
+  lineas.push('ARTICULO          | DESCRIPCION            | COLOR | TALLE | ' + destinos.map((d) => d.padEnd(9)).join('| ') + '| TOTAL')
+  lineas.push('-'.repeat(80))
+  const porArt = new Map<string, TransItem[]>()
+  for (const i of items) {
+    const k = [i.articulo ?? '', i.descripcion ?? '', i.color ?? '', i.talle ?? ''].join('¦')
+    const a = porArt.get(k) ?? []
+    a.push(i)
+    porArt.set(k, a)
+  }
+  for (const [, grup] of porArt) {
+    const art = grup[0].articulo ?? ''
+    const desc = grup[0].descripcion ?? ''
+    const color = grup[0].color ?? ''
+    const talle = grup[0].talle ?? ''
+    const total = grup.reduce((s, i) => s + (i.cantidad || 1), 0)
+    const celdas = destinos.map((d) => {
+      const q = grup.filter((i) => i.destino === d).reduce((s, i) => s + (i.cantidad || 1), 0)
+      return q ? String(q) : ''
+    })
+    const fila =
+      art.padEnd(16).slice(0, 16) +
+      desc.padEnd(20).slice(0, 20) +
+      color.padEnd(6).slice(0, 6) +
+      talle.padEnd(6).slice(0, 6) +
+      celdas.map((c) => c.padStart(9)).join('| ') +
+      String(total).padStart(9)
+    lineas.push(fila)
+  }
+  lineas.push('')
+  lineas.push(`Total: ${items.reduce((s, i) => s + (i.cantidad || 1), 0)} unidades a ${destinos.length} destinos.`)
+  return lineas.join('\n')
+}
+
+function smtpConfig() {
+  const host = process.env.SMTP_HOST
+  const user = process.env.SMTP_USER
+  const pass = process.env.SMTP_PASS
+  if (!host || !user || !pass) return null
+  return {
+    host,
+    port: Number(process.env.SMTP_PORT ?? 587),
+    secure: Number(process.env.SMTP_PORT ?? 587) === 465,
+    auth: { user, pass },
+  }
+}
+
+function leerJson(body: string | undefined, res: Res): Record<string, unknown> | null {
+  if (!body) { res.status(400).json({ error: 'Body vacío' }); return null }
+  try {
+    const obj = JSON.parse(body)
+    if (typeof obj !== 'object' || obj === null) { res.status(400).json({ error: 'JSON inválido' }); return null }
+    return obj as Record<string, unknown>
+  } catch {
+    res.status(400).json({ error: 'JSON inválido' })
+    return null
+  }
+}
+
+export default async function handler(req: Req, res: Res) {
+  res.setHeader('Cache-Control', 'no-store')
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Método no permitido' })
+  }
+
+  const auth = req.headers.authorization ?? ''
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
+  if (!token || !(await usuarioValido(token))) {
+    return res.status(401).json({ error: 'No autorizado' })
+  }
+
+  const body = leerJson(req.body, res)
+  if (!body) return
+
+  const loteId = typeof body.lote_id === 'string' ? body.lote_id.trim() : ''
+  if (!loteId) return res.status(400).json({ error: 'Falta lote_id' })
+
+  const headers = serviceHeaders()
+  if (!headers) return res.status(500).json({ error: 'Falta configurar SUPABASE_SERVICE_ROLE_KEY' })
+  const base = process.env.SUPABASE_URL!
+
+  // Leer lote
+  let loteResp: Response
+  try {
+    loteResp = await fetch(`${base}/rest/v1/transfer_lotes?id=eq.${loteId}&select=id,nombre,motivo,fecha`, { headers })
+  } catch {
+    return res.status(502).json({ error: 'No se pudo leer el lote' })
+  }
+  if (!loteResp.ok) return res.status(502).json({ error: 'No se pudo leer el lote' })
+  const lote = ((await loteResp.json()) as Lote[])?.[0]
+  if (!lote) return res.status(404).json({ error: 'Lote no encontrado' })
+
+  // Leer ítems
+  let itemsResp: Response
+  try {
+    itemsResp = await fetch(`${base}/rest/v1/transfer_items?lote_id=eq.${loteId}&select=id,lote_id,origen,destino,articulo,descripcion,color,talle,cantidad`, { headers })
+  } catch {
+    return res.status(502).json({ error: 'No se pudieron leer los ítems' })
+  }
+  if (!itemsResp.ok) return res.status(502).json({ error: 'No se pudieron leer los ítems' })
+  const items = (await itemsResp.json()) as TransItem[]
+
+  // Leer usuarios aprobados con local
+  let usersResp: Response
+  try {
+    usersResp = await fetch(`${base}/rest/v1/usuarios?estado=eq.aprobado&select=email,local&not.local=is.null`, { headers })
+  } catch {
+    return res.status(502).json({ error: 'No se pudieron leer los usuarios' })
+  }
+  if (!usersResp.ok) return res.status(502).json({ error: 'No se pudieron leer los usuarios' })
+  const usuarios = (await usersResp.json()) as { email: string; local: string | null }[]
+
+  // Agrupar por origen
+  const porOrigen = new Map<string, TransItem[]>()
+  for (const it of items) {
+    const o = (it.origen ?? '').trim()
+    if (!o) continue
+    const a = porOrigen.get(o) ?? []
+    a.push(it)
+    porOrigen.set(o, a)
+  }
+
+  const cfg = smtpConfig()
+  if (!cfg) return res.status(500).json({ error: 'Falta configurar SMTP (host/user/pass)' })
+
+  // nodemailer se importa dinámicamente (evita temas de bundling en Vercel)
+  let nodemailer: typeof import('nodemailer')
+  try {
+    nodemailer = await import('nodemailer')
+  } catch {
+    return res.status(500).json({ error: 'nodemailer no disponible' })
+  }
+  const transporter = nodemailer.createTransport({ ...cfg, secure: cfg.secure })
+  const from = process.env.SMTP_FROM ?? process.env.SMTP_USER
+
+  const enviados: string[] = []
+  const sinMail: string[] = []
+  const errores: string[] = []
+  const total = porOrigen.size
+
+  for (const [origen, its] of porOrigen) {
+    const variantes = variantesLocal(origen)
+    const mails = usuarios
+      .filter((u) => u.local && variantes.includes(u.local.trim().toUpperCase()))
+      .map((u) => u.email)
+      .filter((e, i, ar) => e && ar.indexOf(e) === i)
+
+    if (mails.length === 0) {
+      sinMail.push(origen)
+      continue
+    }
+
+    const contenido = construirMail(origen, its, lote)
+    try {
+      await transporter.sendMail({
+        from,
+        to: mails,
+        subject: `TRANSFERENCIA — ${origen} — ${lote.nombre ?? ''}`,
+        text: contenido,
+      })
+      enviados.push(`${origen}→${mails.join(',')}`)
+    } catch (e) {
+      errores.push(`${origen}: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+
+  if (total === 0) return res.status(400).json({ error: 'El lote no tiene ítems con origen' })
+
+  return res.status(200).json({
+    enviados,
+    sinMail,
+    errores,
+    resumen: `Enviados ${enviados.length}, sin mail ${sinMail.length}, errores ${errores.length} de ${total} locales`,
+  })
+}

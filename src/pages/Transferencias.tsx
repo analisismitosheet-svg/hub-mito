@@ -892,6 +892,12 @@ function EnviarTransferencia({ lote, items, usuariosLocales, onClose }: {
   const conMail = origenes.filter((o) => o.mails.length > 0)
   const sinMail = origenes.filter((o) => o.mails.length === 0)
 
+  const [enviando, setEnviando] = useState(false)
+  const [resultado, setResultado] = useState<{
+    ok: boolean
+    mensaje: string
+  } | null>(null)
+
   // Arma el enlace de redacción de Outlook Web (navegador autenticado).
   function enlaceOutlook(origen: string, mails: string[], preview: string): string {
     const asunto = encodeURIComponent(`TRANSFERENCIA — ${origen} — ${lote.nombre}`)
@@ -906,20 +912,40 @@ function EnviarTransferencia({ lote, items, usuariosLocales, onClose }: {
     if (w) w.opener = null
   }
 
-  // Envía todas las hojas de una: abre un Outlook Web por hoja/local.
-  // Se escalonan con setTimeout para que el navegador no los considere
-  // popups bloqueados y no se pierda ninguno.
-  function enviarTodo() {
+  // Envía TODAS las hojas automáticamente desde el backend (SMTP Outlook).
+  // No depende del navegador: manda un mail real a cada local con su hoja.
+  async function enviarTodo() {
+    if (enviando) return
     if (conMail.length === 0) {
       window.confirm('Ningún local tiene mail registrado.')
       return
     }
-    conMail.forEach((o, i) => {
-      setTimeout(() => {
-        const w = window.open(enlaceOutlook(o.origen, o.mails, o.preview))
-        if (w) w.opener = null
-      }, i * 300)
-    })
+    if (!window.confirm(`¿Enviar automáticamente ${conMail.length} mail(s) a los locales?`)) return
+    setEnviando(true)
+    setResultado(null)
+    try {
+      if (!supabase) throw new Error('Supabase no configurado')
+      const { data } = await supabase.auth.getSession()
+      const token = data.session?.access_token
+      const res = await fetch('/api/enviar-transferencia', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ lote_id: lote.id }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (res.ok) {
+        setResultado({ ok: true, mensaje: json.resumen ?? 'Enviado' })
+      } else {
+        setResultado({ ok: false, mensaje: json.error ?? `Error ${res.status}` })
+      }
+    } catch {
+      setResultado({ ok: false, mensaje: 'No se pudo enviar. Revisá la configuración SMTP.' })
+    } finally {
+      setEnviando(false)
+    }
   }
 
   return (
@@ -930,11 +956,12 @@ function EnviarTransferencia({ lote, items, usuariosLocales, onClose }: {
           <div className="flex items-center gap-2">
             <button
               onClick={enviarTodo}
-              disabled={conMail.length === 0}
+              disabled={enviando || conMail.length === 0}
               className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-40"
-              title="Abre un mail por cada hoja/local en un solo click"
+              title="Envía automáticamente un mail a cada local con su hoja (SMTP Outlook)"
             >
-              <Send size={13} aria-hidden /> Enviar todo ({conMail.length})
+              {enviando ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} aria-hidden />}
+              {enviando ? 'Enviando…' : `Enviar todo (${conMail.length})`}
             </button>
             <button onClick={onClose} aria-label="Cerrar" className="rounded-lg p-1.5 text-sub hover:bg-line hover:text-ink">
               <X size={18} aria-hidden />
@@ -943,9 +970,18 @@ function EnviarTransferencia({ lote, items, usuariosLocales, onClose }: {
         </div>
         <div className="flex-1 space-y-3 overflow-y-auto p-4" style={{ maxHeight: 'calc(88vh - 120px)' }}>
           <p className="text-xs text-sub">
-            Usá <span className="font-semibold text-emerald-400">Enviar todo</span> para abrir en Outlook Web de una
-            vez un correo por cada hoja/local con su contenido. O redactá cada uno individualmente abajo.
+            Usá <span className="font-semibold text-emerald-400">Enviar todo</span> para mandar por mail de forma
+            automática un correo a cada hoja/local con su contenido. O redactá cada uno manualmente en Outlook abajo.
           </p>
+          {resultado && (
+            <div
+              className={`rounded-xl border px-3 py-2 text-xs font-medium ${
+                resultado.ok ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-red-500/40 bg-red-500/10 text-red-300'
+              }`}
+            >
+              {resultado.mensaje}
+            </div>
+          )}
           {origenes.length === 0 && <p className="py-6 text-center text-sm text-sub">No hay hojas para este archivo.</p>}
           {origenes.map((o) => (
             <div key={o.origen} className="rounded-xl border border-line bg-surface2 p-3">
