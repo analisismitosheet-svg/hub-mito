@@ -94,14 +94,28 @@ export default function Guias() {
   const cargar = useCallback(async () => {
     if (!supabase) { setCargando(false); return }
     setCargando(true); setError(null)
-    const [res, clRes, opRes] = await Promise.all([
-      supabase.from('guias').select('*').order('created_at', { ascending: false }).limit(5000),
-      supabase.from('clientes').select('id,n_cliente,razon_social').eq('estado', 'ACTIVO').order('razon_social'),
+
+    const PAGE = 1000
+    async function traerTodo<T>(fetcher: (from: number, to: number) => PromiseLike<{ data: T[] | null }>): Promise<T[]> {
+      const all: T[] = []
+      let from = 0
+      for (;;) {
+        const res = await fetcher(from, from + PAGE - 1)
+        const chunk = res.data ?? []
+        all.push(...chunk)
+        if (chunk.length < PAGE) break
+        from += PAGE
+      }
+      return all
+    }
+
+    const [gu, cl, opRes] = await Promise.all([
+      traerTodo<Guia>((f, t) => supabase!.from('guias').select('*').order('created_at', { ascending: false }).range(f, t)),
+      traerTodo<ClienteMini>((f, t) => supabase!.from('clientes').select('id,n_cliente,razon_social').eq('estado', 'ACTIVO').order('razon_social').range(f, t)),
       supabase.from('guias_opciones').select('tipo,valor').order('valor'),
     ])
-    if (res.error) setError(res.error.message)
-    setTodos((res.data as Guia[]) ?? [])
-    setClientes((clRes.data as ClienteMini[]) ?? [])
+    setTodos(gu)
+    setClientes(cl)
     const ops = (opRes.data as { tipo: string; valor: string }[]) ?? []
     const ped = ops.filter((o) => o.tipo === 'pedido').map((o) => o.valor)
     const suc = ops.filter((o) => o.tipo === 'sucursal').map((o) => o.valor)
