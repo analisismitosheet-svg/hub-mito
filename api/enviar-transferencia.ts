@@ -9,6 +9,7 @@
  *  3. Agrupa los ítems por ORIGEN (cada hoja = un local origen).
  *  4. Busca el email de los usuarios aprobados cuyo local = origen (con/sin "d"/"2").
  *  5. Envía un mail por local origen con el contenido de su hoja vía Microsoft Graph.
+ *     El reply-to se setea al mail del usuario logueado: si el local responde, va directo a él.
  *
  * Variables de entorno en Vercel (sin prefijo VITE_):
  *   SUPABASE_URL                  - proyecto Supabase
@@ -51,18 +52,20 @@ interface Lote {
   fecha: string | null
 }
 
-/** Valida el JWT de Supabase contra /auth/v1/user. */
-async function usuarioValido(token: string): Promise<boolean> {
+/** Valida el JWT de Supabase contra /auth/v1/user y devuelve el EMAIL del usuario logueado (o null si inválido). */
+async function usuarioEmail(token: string): Promise<string | null> {
   const url = process.env.SUPABASE_URL
   const anon = process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY
-  if (!url || !anon) return false
+  if (!url || !anon) return null
   try {
     const res = await fetch(`${url}/auth/v1/user`, {
       headers: { Authorization: `Bearer ${token}`, apikey: anon },
     })
-    return res.ok
+    if (!res.ok) return null
+    const user = (await res.json()) as { email?: string | null }
+    return (user.email ?? '').trim() || null
   } catch {
-    return false
+    return null
   }
 }
 
@@ -169,13 +172,14 @@ async function obtenerGraphToken(cfg: { tenant: string; client: string; secret: 
   }
 }
 
-/** Envía un mail vía Microsoft Graph (application permission Mail.Send). */
+/** Envía un mail vía Microsoft Graph (application permission Mail.Send). replyTo hace que responder vaya al usuario. */
 async function enviarMailGraph(
   token: string,
   cfg: { from: string },
   to: string[],
   subject: string,
   text: string,
+  replyTo?: string,
 ): Promise<void> {
   const r = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(cfg.from)}/sendMail`, {
     method: 'POST',
@@ -188,6 +192,7 @@ async function enviarMailGraph(
         subject,
         body: { contentType: 'text', content: text },
         toRecipients: to.map((email) => ({ emailAddress: { address: email } })),
+        ...(replyTo ? { replyTo: [{ emailAddress: { address: replyTo } }] } : {}),
       },
       saveToSentItems: true,
     }),
@@ -219,7 +224,8 @@ export default async function handler(req: Req, res: Res) {
 
   const auth = req.headers.authorization ?? ''
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
-  if (!token || !(await usuarioValido(token))) {
+  const autorEmail = await usuarioEmail(token)
+  if (!autorEmail) {
     return res.status(401).json({ error: 'No autorizado' })
   }
 
@@ -299,7 +305,7 @@ export default async function handler(req: Req, res: Res) {
 
     const contenido = construirMail(origen, its, lote)
     try {
-      await enviarMailGraph(graphToken, cfg, mails, `TRANSFERENCIA — ${origen} — ${lote.nombre ?? ''}`, contenido)
+      await enviarMailGraph(graphToken, cfg, mails, `TRANSFERENCIA — ${origen} — ${lote.nombre ?? ''}`, contenido, autorEmail)
       enviados.push(`${origen}→${mails.join(',')}`)
     } catch (e) {
       errores.push(`${origen}: ${e instanceof Error ? e.message : String(e)}`)
