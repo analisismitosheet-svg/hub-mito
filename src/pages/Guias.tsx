@@ -21,6 +21,7 @@ interface Guia {
   sucursal: string | null
   en_proceso: boolean
   finalizado: boolean
+  estado: string | null
   fecha: string | null
   nro_remito: string | null
   observaciones: string | null
@@ -48,14 +49,21 @@ const selectCls = inputCls + ' appearance-none'
 
 type SortKey = keyof Guia
 
-type EstadoGuia = 'en_proceso' | 'finalizado'
+type EstadoGuia = 'NUEVO' | 'EN_PROCESO' | 'FINALIZADO'
 
-function estadoDe(g: Pick<Guia, 'en_proceso' | 'finalizado'>): EstadoGuia {
-  return g.finalizado ? 'finalizado' : 'en_proceso'
+function estadoDe(g: Pick<Guia, 'estado' | 'en_proceso' | 'finalizado'>): EstadoGuia {
+  const e = (g.estado || '').toUpperCase()
+  if (e === 'NUEVO' || e === 'EN_PROCESO' || e === 'FINALIZADO') return e as EstadoGuia
+  return g.finalizado ? 'FINALIZADO' : 'EN_PROCESO'
 }
 
 function cambiarEstadoEnTodos(todos: Guia[], id: string, estado: EstadoGuia): Guia[] {
-  return todos.map((x) => x.id === id ? { ...x, en_proceso: estado === 'en_proceso', finalizado: estado === 'finalizado' } : x)
+  return todos.map((x) => x.id === id ? {
+    ...x,
+    estado,
+    en_proceso: estado === 'EN_PROCESO',
+    finalizado: estado === 'FINALIZADO',
+  } : x)
 }
 
 
@@ -178,9 +186,9 @@ export default function Guias() {
   async function cambiarEstado(g: Guia, estado: EstadoGuia) {
     if (!supabase) return
     setTodos((arr) => cambiarEstadoEnTodos(arr, g.id, estado))
-    const { error: err } = await supabase.from('guias').update({ en_proceso: estado === 'en_proceso', finalizado: estado === 'finalizado' }).eq('id', g.id)
+    const { error: err } = await supabase.from('guias').update({ estado, en_proceso: estado === 'EN_PROCESO', finalizado: estado === 'FINALIZADO' }).eq('id', g.id)
     if (err) { mostrarToast('Error al actualizar estado'); await cargar() }
-    else mostrarToast(estado === 'finalizado' ? 'Guia finalizada' : 'Guia en proceso')
+    else mostrarToast(estado === 'FINALIZADO' ? 'Guia finalizada' : estado === 'NUEVO' ? 'Guia nueva' : 'Guia en proceso')
   }
 
   const toggleSelect = (id: string) => setSelected((prev) => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
@@ -286,8 +294,9 @@ export default function Guias() {
                         disabled={!puedeEditar}
                         className="cursor-pointer rounded border border-line bg-surface2 px-1 py-[1px] text-[9px] font-medium text-ink outline-none transition hover:border-brand-500/60 disabled:cursor-default disabled:opacity-60"
                       >
-                        <option value="en_proceso">En Proceso</option>
-                        <option value="finalizado">Finalizado</option>
+                        <option value="NUEVO">Nuevo</option>
+                        <option value="EN_PROCESO">En Proceso</option>
+                        <option value="FINALIZADO">Finalizado</option>
                       </select>
                     </td>
                     <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={g.observaciones || ''}>{g.observaciones || '-'}</span></td>
@@ -334,7 +343,7 @@ export default function Guias() {
                   <CRow label="Razon Social" value={card.razon_social} />
                   <CRow label="Pedido" value={card.pedido} />
                   <CRow label="Sucursal" value={card.sucursal} />
-                  <CRow label="Estado" value={estadoDe(card) === 'finalizado' ? 'FINALIZADO' : 'EN PROCESO'} badge badgeCls={estadoDe(card) === 'finalizado' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/15 text-amber-400 border-amber-500/30'} />
+                  <CRow label="Estado" value={estadoDe(card)} badge badgeCls={estadoDe(card) === 'FINALIZADO' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : estadoDe(card) === 'NUEVO' ? 'bg-sky-500/15 text-sky-400 border-sky-500/30' : 'bg-amber-500/15 text-amber-400 border-amber-500/30'} />
                   <CRow label="Observaciones" value={card.observaciones} />
                 </dl>
               </section>
@@ -397,7 +406,7 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, onClose, 
   const [razonSocial, setRazonSocial] = useState(guia?.razon_social || '')
   const [pedido, setPedido] = useState(guia?.pedido || '')
   const [sucursal, setSucursal] = useState(guia?.sucursal || '')
-  const [estado, setEstado] = useState<EstadoGuia>(estadoDe(guia ?? { en_proceso: false, finalizado: false }))
+  const [estado, setEstado] = useState<EstadoGuia>(guia ? estadoDe(guia) : 'NUEVO')
   const [nroRemito, setNroRemito] = useState(guia?.nro_remito || '')
   const [observaciones, setObservaciones] = useState(guia?.observaciones || '')
   const [busy, setBusy] = useState(false)
@@ -446,8 +455,9 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, onClose, 
       razon_social: razonSocial || null,
       pedido: pedido || null,
       sucursal: sucursal || null,
-      en_proceso: estado === 'en_proceso',
-      finalizado: estado === 'finalizado',
+      en_proceso: estado === 'EN_PROCESO',
+      finalizado: estado === 'FINALIZADO',
+      estado,
       nro_remito: nroRemito.trim() || null,
       fecha: guia ? undefined : new Date().toISOString().slice(0, 10),
       observaciones: observaciones.trim() || null,
@@ -568,8 +578,9 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, onClose, 
             <label className="block sm:col-span-2">
               <span className="mb-0.5 block text-[11px] font-medium text-sub">Estado</span>
               <select value={estado} onChange={(e) => setEstado(e.target.value as EstadoGuia)} className={selectCls}>
-                <option value="en_proceso">En Proceso</option>
-                <option value="finalizado">Finalizado</option>
+                <option value="NUEVO">Nuevo</option>
+                <option value="EN_PROCESO">En Proceso</option>
+                <option value="FINALIZADO">Finalizado</option>
               </select>
             </label>
 
@@ -684,12 +695,15 @@ function ImportGuias({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
       const nr: FileRow = {}
       mapeo.forEach(([dest, src]) => { if (dest && src) nr[dest] = String(row[src] ?? '').trim() })
 
-      /* Estado → en_proceso / finalizado */
+      /* Estado → estado + en_proceso/finalizado */
       const stRaw = cleanVal(String(nr.estado ?? '')).toUpperCase()
-      const finalizado = stRaw === 'FINALIZADO' || stRaw === 'VERDADERO' || stRaw === 'TRUE' || stRaw === '1'
-      nr.en_proceso = !finalizado
-      nr.finalizado = finalizado
-      delete nr.estado
+      let st: EstadoGuia
+      if (stRaw === 'NUEVO') st = 'NUEVO'
+      else if (stRaw === 'FINALIZADO' || stRaw === 'VERDADERO' || stRaw === 'TRUE' || stRaw === '1') st = 'FINALIZADO'
+      else st = 'EN_PROCESO'
+      nr.estado = st
+      nr.en_proceso = st === 'EN_PROCESO'
+      nr.finalizado = st === 'FINALIZADO'
 
       nr.nro_cliente = nr.nro_cliente ? cleanVal(String(nr.nro_cliente)) : null
       nr.nro_pedido = nr.nro_pedido ? cleanVal(String(nr.nro_pedido)) : null
@@ -718,6 +732,7 @@ function ImportGuias({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
         sucursal: r.sucursal || null,
         en_proceso: !!r.en_proceso,
         finalizado: !!r.finalizado,
+        estado: (r.estado as EstadoGuia) || 'EN_PROCESO',
         nro_remito: r.nro_remito ? (r.nro_remito as string) : null,
         fecha: new Date().toISOString().slice(0, 10),
         observaciones: r.observaciones || null,
