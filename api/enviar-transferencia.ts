@@ -9,7 +9,8 @@
  *  3. Agrupa los ítems por ORIGEN (cada hoja = un local origen).
  *  4. Busca el email de los usuarios aprobados cuyo local = origen (con/sin "d"/"2").
  *  5. Envía un mail por local origen con el contenido de su hoja vía Microsoft Graph.
- *     El reply-to se setea al mail del usuario logueado: si el local responde, va directo a él.
+ *     El reply-to se setea al mail del usuario logueado (si el local responde, va directo a él)
+ *     y el cuerpo lleva una firma "Enviado por: [nombre] <email>".
  *
  * Variables de entorno en Vercel (sin prefijo VITE_):
  *   SUPABASE_URL                  - proyecto Supabase
@@ -52,8 +53,8 @@ interface Lote {
   fecha: string | null
 }
 
-/** Valida el JWT de Supabase contra /auth/v1/user y devuelve el EMAIL del usuario logueado (o null si inválido). */
-async function usuarioEmail(token: string): Promise<string | null> {
+/** Valida el JWT de Supabase contra /auth/v1/user y devuelve email + nombre del usuario (o null si inválido). */
+async function usuarioAutenticado(token: string): Promise<{ email: string; nombre: string } | null> {
   const url = process.env.SUPABASE_URL
   const anon = process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY
   if (!url || !anon) return null
@@ -62,8 +63,16 @@ async function usuarioEmail(token: string): Promise<string | null> {
       headers: { Authorization: `Bearer ${token}`, apikey: anon },
     })
     if (!res.ok) return null
-    const user = (await res.json()) as { email?: string | null }
-    return (user.email ?? '').trim() || null
+    const user = (await res.json()) as {
+      email?: string | null
+      user_metadata?: Record<string, unknown>
+      app_metadata?: Record<string, unknown>
+    }
+    const email = (user.email ?? '').trim()
+    if (!email) return null
+    const meta = { ...(user.user_metadata ?? {}), ...(user.app_metadata ?? {}) }
+    const nombre = (meta.full_name ?? meta.name ?? meta.nombre ?? '').toString().trim()
+    return { email, nombre }
   } catch {
     return null
   }
@@ -224,8 +233,8 @@ export default async function handler(req: Req, res: Res) {
 
   const auth = req.headers.authorization ?? ''
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
-  const autorEmail = await usuarioEmail(token)
-  if (!autorEmail) {
+  const autor = await usuarioAutenticado(token)
+  if (!autor) {
     return res.status(401).json({ error: 'No autorizado' })
   }
 
@@ -303,9 +312,10 @@ export default async function handler(req: Req, res: Res) {
       continue
     }
 
-    const contenido = construirMail(origen, its, lote)
+    const contenido = construirMail(origen, its, lote) +
+      `\n\n\n---\nEnviado por: ${autor.nombre ? autor.nombre + ' ' : ''}<${autor.email}>\nResponder a este correo irá directo a quien lo envió.`
     try {
-      await enviarMailGraph(graphToken, cfg, mails, `TRANSFERENCIA — ${origen} — ${lote.nombre ?? ''}`, contenido, autorEmail)
+      await enviarMailGraph(graphToken, cfg, mails, `TRANSFERENCIA — ${origen} — ${lote.nombre ?? ''}`, contenido, autor.email)
       enviados.push(`${origen}→${mails.join(',')}`)
     } catch (e) {
       errores.push(`${origen}: ${e instanceof Error ? e.message : String(e)}`)
