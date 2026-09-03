@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+﻿import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
-  Loader2, Search, SearchX, Plus, Pencil, Trash2, X, Upload, FileText, Lock, Printer, BookmarkPlus, Check,
+  Loader2, Search, SearchX, Plus, Pencil, Trash2, X, Upload, FileText, Lock, Printer, Check,
 } from 'lucide-react'
-import { QRCodeSVG } from 'qrcode.react'
+import { EtiquetasModal } from '@/components/EtiquetasBultos'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
@@ -86,11 +86,11 @@ function retiroStyle(v: string | null): string {
 }
 function cleanVal(s: string): string { return s.replace(/[\u200B\uFEFF\u00A0]/g, '').trim() }
 
-// Normaliza un número de remito para compararlo con los bultos recibidos de
+// Normaliza un nÃºmero de remito para compararlo con los bultos recibidos de
 // transporte (misma regla que la edge function bultos-recibidos):
 // - Reemplaza guiones "-" por "/".
-// - Quita el sufijo (n/total) que indica qué bulto dentro del remito.
-// - Cualquier otro símbolo se deja tal cual.
+// - Quita el sufijo (n/total) que indica quÃ© bulto dentro del remito.
+// - Cualquier otro sÃ­mbolo se deja tal cual.
 function normalizarRemito(raw: string | null | undefined): string {
   let s = (raw ?? '').trim().toUpperCase()
   s = s.replace(/-/g, '/')
@@ -208,9 +208,9 @@ export default function FacturacionFabrica() {
 
   useEffect(() => { void cargar() }, [cargar])
 
-  // Carga los números de remito que POLO marcó como RECIBIDO en la app de
+  // Carga los nÃºmeros de remito que POLO marcÃ³ como RECIBIDO en la app de
   // Transporte, para pintar la columna POLO en verde. No bloquea la tabla:
-  // si transporte está caído, la app sigue funcionando sin el marcado.
+  // si transporte estÃ¡ caÃ­do, la app sigue funcionando sin el marcado.
   useEffect(() => {
     let activo = true
     async function cargarRecibidos() {
@@ -274,7 +274,7 @@ export default function FacturacionFabrica() {
     if (sortKey === key) setSortAsc(!sortAsc)
     else { setSortKey(key); setSortAsc(true) }
   }
-  function sortArrow(key: SortKey) { return sortKey !== key ? null : sortAsc ? ' ▲' : ' ▼' }
+  function sortArrow(key: SortKey) { return sortKey !== key ? null : sortAsc ? ' â–²' : ' â–¼' }
 
   async function eliminar(r: FactRegistro) {
     if (!supabase) return
@@ -326,7 +326,7 @@ export default function FacturacionFabrica() {
         </select>
         <div className="flex items-center gap-1">
           <input type="date" value={filtroFechaDesde} onChange={(e) => setFiltroFechaDesde(e.target.value)} className={inputCls + ' w-auto text-xs'} title="Fecha desde" />
-          <span className="text-[10px] text-sub/50">—</span>
+          <span className="text-[10px] text-sub/50">â€”</span>
           <input type="date" value={filtroFechaHasta} onChange={(e) => setFiltroFechaHasta(e.target.value)} className={inputCls + ' w-auto text-xs'} title="Fecha hasta" />
         </div>
         <label className={`flex items-center gap-1.5 text-xs ${modoPolo52 ? 'text-sub/60' : 'text-sub'}`}>
@@ -441,11 +441,11 @@ export default function FacturacionFabrica() {
             <div className="flex items-center justify-between border-t border-line px-3 py-1.5 text-[11px] text-sub">
               <span>{lista.length} registros | Pag {paginaSegura} de {totalPaginas}</span>
               <div className="flex items-center gap-1">
-                <button onClick={() => setPagina(1)} disabled={paginaSegura <= 1} className="rounded border border-line px-1.5 py-0.5 text-[10px] hover:bg-line disabled:opacity-30">«</button>
-                <button onClick={() => setPagina((p) => Math.max(1, p - 1))} disabled={paginaSegura <= 1} className="rounded border border-line px-1.5 py-0.5 text-[10px] hover:bg-line disabled:opacity-30">‹</button>
+                <button onClick={() => setPagina(1)} disabled={paginaSegura <= 1} className="rounded border border-line px-1.5 py-0.5 text-[10px] hover:bg-line disabled:opacity-30">Â«</button>
+                <button onClick={() => setPagina((p) => Math.max(1, p - 1))} disabled={paginaSegura <= 1} className="rounded border border-line px-1.5 py-0.5 text-[10px] hover:bg-line disabled:opacity-30">â€¹</button>
                 <span className="px-1.5 text-[10px] font-medium text-ink">{paginaSegura}</span>
-                <button onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))} disabled={paginaSegura >= totalPaginas} className="rounded border border-line px-1.5 py-0.5 text-[10px] hover:bg-line disabled:opacity-30">›</button>
-                <button onClick={() => setPagina(totalPaginas)} disabled={paginaSegura >= totalPaginas} className="rounded border border-line px-1.5 py-0.5 text-[10px] hover:bg-line disabled:opacity-30">»</button>
+                <button onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))} disabled={paginaSegura >= totalPaginas} className="rounded border border-line px-1.5 py-0.5 text-[10px] hover:bg-line disabled:opacity-30">â€º</button>
+                <button onClick={() => setPagina(totalPaginas)} disabled={paginaSegura >= totalPaginas} className="rounded border border-line px-1.5 py-0.5 text-[10px] hover:bg-line disabled:opacity-30">Â»</button>
               </div>
             </div>
           )}
@@ -539,7 +539,7 @@ function FactCard({ registro: r, onClose, onEdit, puedeEditar, empleados }: {
 }
 
 function CRow({ label, value, badge, badgeCls, pre }: { label: string; value: string | null | undefined; badge?: boolean; badgeCls?: string; pre?: boolean }) {
-  const txt = value?.trim() || '—'
+  const txt = value?.trim() || 'â€”'
   return (
     <div className="flex flex-col">
       <dt className="text-[11px] font-medium text-sub/70">{label}</dt>
@@ -577,7 +577,7 @@ function FactModal({ modoPolo52, registro, clientes, empleados, onClose, onSaved
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // En modo polo52, al crear nuevo registro completo se habilitan todos los campos;
-  // al editar un registro polo52 existente solo se permite fecha de envío / retiro.
+  // al editar un registro polo52 existente solo se permite fecha de envÃ­o / retiro.
   const readonly = modoPolo52 && !!registro
 
   /* Client dropdown */
@@ -616,7 +616,7 @@ function FactModal({ modoPolo52, registro, clientes, empleados, onClose, onSaved
       onSaved()
       return
     }
-    if (!nCliente) { setError('Debe seleccionar un N° Cliente.'); return }
+    if (!nCliente) { setError('Debe seleccionar un NÂ° Cliente.'); return }
     if (!autorizacion) { setError('Debe seleccionar Autorizacion (SI/NO).'); return }
     if (!quienFacturo.trim()) { setError('Debe seleccionar quien facturo.'); return }
     setBusy(true); setError(null)
@@ -652,7 +652,7 @@ function FactModal({ modoPolo52, registro, clientes, empleados, onClose, onSaved
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div className="relative flex w-[92vw] max-w-[1000px] flex-col rounded-2xl border border-line bg-surface shadow-2xl" style={{ maxHeight: '92vh' }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-line px-5 py-3">
-          <h2 className="flex items-center gap-2 text-lg font-semibold text-ink"><FileText size={18} className="text-amber-400" aria-hidden />{registro ? (modoPolo52 ? 'Actualizar envío / retiro' : 'Editar Registro') : (modoPolo52 ? 'Nuevo Registro Polo52' : 'Nuevo Registro')}</h2>
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-ink"><FileText size={18} className="text-amber-400" aria-hidden />{registro ? (modoPolo52 ? 'Actualizar envÃ­o / retiro' : 'Editar Registro') : (modoPolo52 ? 'Nuevo Registro Polo52' : 'Nuevo Registro')}</h2>
           <button onClick={onClose} className="rounded-lg border border-line p-1.5 text-sub transition hover:bg-line hover:text-ink"><X size={16} aria-hidden /></button>
         </div>
         {error && <p role="alert" className="mx-5 mt-3 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
@@ -662,11 +662,11 @@ function FactModal({ modoPolo52, registro, clientes, empleados, onClose, onSaved
             <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Autorizacion *</span>
               <select value={autorizacion} onChange={(e) => setAutorizacion(e.target.value)} disabled={readonly} className={selectCls}><option value="">--</option><option value="SI">SI</option><option value="NO">NO</option></select>
             </label>
-            {/* N° Cliente — searchable dropdown */}
+            {/* NÂ° Cliente â€” searchable dropdown */}
             <label className="block relative">
               <span className="mb-1 block text-xs font-medium text-sub">N Cliente *</span>
               <div className="relative">
-                <input value={openCliDrop ? busqCliente : (nCliente != null ? String(nCliente) : '')} onChange={(e) => { setBusqCliente(e.target.value); setOpenCliDrop(true) }} onFocus={() => setOpenCliDrop(true)} disabled={readonly} placeholder="Buscar por N° o nombre..." className={inputCls} />
+                <input value={openCliDrop ? busqCliente : (nCliente != null ? String(nCliente) : '')} onChange={(e) => { setBusqCliente(e.target.value); setOpenCliDrop(true) }} onFocus={() => setOpenCliDrop(true)} disabled={readonly} placeholder="Buscar por NÂ° o nombre..." className={inputCls} />
                 {openCliDrop && (
                   <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-line bg-surface shadow-xl">
                     <div className="sticky top-0 bg-surface p-1"><input autoFocus value={busqCliente} onChange={(e) => setBusqCliente(e.target.value)} placeholder="Buscar..." className={inputCls + ' text-xs'} /></div>
@@ -680,8 +680,8 @@ function FactModal({ modoPolo52, registro, clientes, empleados, onClose, onSaved
                 )}
               </div>
             </label>
-            {/* Razon Social — autocompletada (BUSCARV) */}
-            <label className="block sm:col-span-2"><span className="mb-1 block text-xs font-medium text-sub">Razon Social</span><input value={razonSocial} readOnly className={inputCls + ' bg-line/30 text-sub'} placeholder="Se autocompleta al seleccionar N° Cliente" /></label>
+            {/* Razon Social â€” autocompletada (BUSCARV) */}
+            <label className="block sm:col-span-2"><span className="mb-1 block text-xs font-medium text-sub">Razon Social</span><input value={razonSocial} readOnly className={inputCls + ' bg-line/30 text-sub'} placeholder="Se autocompleta al seleccionar NÂ° Cliente" /></label>
             <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Fecha Facturacion</span><input type="date" value={fechaFact} onChange={(e) => setFechaFact(e.target.value)} disabled={readonly} className={inputCls} /></label>
 
             {/* Row 2 */}
@@ -701,7 +701,7 @@ function FactModal({ modoPolo52, registro, clientes, empleados, onClose, onSaved
             </label>
             <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Total Despachos</span><input value={totalDespachos} onChange={(e) => setTotalDespachos(e.target.value)} disabled={readonly} placeholder="-" className={inputCls} /></label>
 
-            {/* Row 4 — Employee autocomplete */}
+            {/* Row 4 â€” Employee autocomplete */}
             <label className="block sm:col-span-2 relative">
               <span className="mb-1 block text-xs font-medium text-sub">Quien Facturo *</span>
               <div className="relative">
@@ -764,8 +764,8 @@ function ImportFacturacion({ clientes, empleados, onClose, onSaved }: {
   const fileRef = useRef<HTMLInputElement>(null)
 
   const COLS_DESTINO = [
-    { key: 'n_cliente', label: '★ N Cliente (obligatorio)', req: true },
-    { key: 'quien_facturo', label: '★ Legajo / Quien Facturo (obligatorio)', req: true },
+    { key: 'n_cliente', label: 'â˜… N Cliente (obligatorio)', req: true },
+    { key: 'quien_facturo', label: 'â˜… Legajo / Quien Facturo (obligatorio)', req: true },
     { key: 'autorizacion', label: 'Autorizacion' },
     { key: 'fecha_fact', label: 'Fecha Fact' },
     { key: 'n_remito', label: 'N Remito' },
@@ -785,16 +785,16 @@ function ImportFacturacion({ clientes, empleados, onClose, onSaved }: {
     const norm = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]/g, '')
     hdrs.forEach((h) => {
       const n = norm(h)
-      // N° CLIENTE → n_cliente
+      // NÂ° CLIENTE â†’ n_cliente
       if (n.includes('ncliente') || n.includes('ncliente') || n === 'ncliente' || n.includes('nrocliente')) m['n_cliente'] = h
-      // Legajo / Quien Facturo → quien_facturo
+      // Legajo / Quien Facturo â†’ quien_facturo
       else if (n.includes('legajo') || n.includes('quienfacturo') || n.includes('quien')) m['quien_facturo'] = h
-      // Razon Social → ignorar
+      // Razon Social â†’ ignorar
       else if (n.includes('razonsocial') || n.includes('razon')) { /* ignorar */ }
-      // Nombre empleado → ignorar
+      // Nombre empleado â†’ ignorar
       else if (n.includes('nombreempleado') || n.includes('nombre')) { /* ignorar */ }
       else {
-        const found = COLS_DESTINO.find((c) => norm(c.label.replace('★ ', '').replace(' (obligatorio)', '')) === n || norm(c.key) === n)
+        const found = COLS_DESTINO.find((c) => norm(c.label.replace('â˜… ', '').replace(' (obligatorio)', '')) === n || norm(c.key) === n)
         if (found) m[found.key] = h
       }
     })
@@ -831,13 +831,13 @@ function ImportFacturacion({ clientes, empleados, onClose, onSaved }: {
       const nr: FileRow = {}
       Object.entries(map).forEach(([dest, src]) => { if (dest && src) nr[dest] = String(row[src] ?? '').trim() })
 
-      /* BUSCARV N° CLIENTE → cliente */
+      /* BUSCARV NÂ° CLIENTE â†’ cliente */
       const ncRaw = cleanVal(nr.n_cliente || '')
-      if (!ncRaw) { errs.push({ idx: i, err: `Fila ${i + 1}: N° Cliente vacio.` }); return }
+      if (!ncRaw) { errs.push({ idx: i, err: `Fila ${i + 1}: NÂ° Cliente vacio.` }); return }
       const cli = clientes.find((c) => String(c.n_cliente) === ncRaw)
       if (!cli) {
         // Cliente no existe en el sistema: se importa igual con FK null y el
-        // n° de cliente tal cual vino del Excel.
+        // nÂ° de cliente tal cual vino del Excel.
         nr._cliente_id = null
         nr.n_cliente = ncRaw
         nr.razon_social = nr.razon_social || null
@@ -845,7 +845,7 @@ function ImportFacturacion({ clientes, empleados, onClose, onSaved }: {
         nr._cliente_id = cli.id; nr.n_cliente = cli.n_cliente; nr.razon_social = cli.razon_social
       }
 
-      /* BUSCARV LEGAJO / NOMBRE → empleado */
+      /* BUSCARV LEGAJO / NOMBRE â†’ empleado */
       const empRaw = cleanVal(nr.quien_facturo || '')
       let emp: EmpleadoMini | undefined
       if (empRaw) {
@@ -945,7 +945,7 @@ function ImportFacturacion({ clientes, empleados, onClose, onSaved }: {
           )}
           {paso === 'map' && (
             <div className="space-y-2">
-              <p className="mb-2 text-xs text-sub">Mapea las columnas del archivo. Los campos con ★ son obligatorios. "Razon Social" y "Nombre Empleado" se ignoran (se autocompletan desde Clientes/Empleados).</p>
+              <p className="mb-2 text-xs text-sub">Mapea las columnas del archivo. Los campos con â˜… son obligatorios. "Razon Social" y "Nombre Empleado" se ignoran (se autocompletan desde Clientes/Empleados).</p>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {COLS_DESTINO.map((col) => (
                   <label key={col.key} className="flex items-center gap-2 text-xs">
@@ -984,257 +984,3 @@ function ImportFacturacion({ clientes, empleados, onClose, onSaved }: {
     </div>
   )
 }
-
-/* ------------------------------------------------------------------ */
-/*  Etiquetas de bultos (QR + impresión)                               */
-/* ------------------------------------------------------------------ */
-
-interface EtiquetaCliente {
-  numeroCliente: string
-  razonSocial: string
-  direccion: string
-  localidad: string
-  provincia: string
-  telefono: string
-  transporte: string
-  observaciones: string
-}
-
-/**
- * Trae los datos completos del cliente para la etiqueta.
- * IMPLEMENTACIÓN REAL: GET /api/clientes/{N_CL}
- *   const res = await fetch(`/api/clientes/${encodeURIComponent(nCl)}`)
- *   const data = await res.json();  // { razonSocial, direccion, localidad, provincia, telefono, ... }
- * Mientras tanto devuelve datos de ejemplo + los campos que ya tenemos en el registro
- * (razon social, transporte, observaciones). Reemplazar el bloque por el fetch real.
- */
-async function fetchClienteEtiqueta(nCl: string, fallback: { razon_social: string | null; transporte: string | null; observaciones: string | null }): Promise<EtiquetaCliente> {
-  // TODO: reemplazar este bloque por el fetch a la API real.
-  // const res = await fetch(`/api/clientes/${encodeURIComponent(nCl)}`)
-  // const data = (await res.json()) ?? {}
-  const data: Record<string, string> = {}
-  return {
-    numeroCliente: nCl,
-    razonSocial: data.razonSocial ?? fallback.razon_social ?? '',
-    direccion: data.direccion ?? 'Direccion de ejemplo 123, Piso X - Dto Y',
-    localidad: data.localidad ?? 'Localidad de ejemplo',
-    provincia: data.provincia ?? 'Buenos Aires',
-    telefono: data.telefono ?? '(011) 5555-0000',
-    transporte: fallback.transporte ?? '',
-    observaciones: fallback.observaciones ?? '',
-  }
-}
-
-function EtiquetaBulto({ cliente, num, total, destino, origen, nRemito, ancho, alto, fontSize, qrSize }: {
-  cliente: EtiquetaCliente
-  num: number
-  total: number
-  destino: string
-  origen: string
-  nRemito: string
-  ancho: number
-  alto: number
-  fontSize: number
-  qrSize: number
-}) {
-  const remito = nRemito.replace(/-/g, '/')
-  return (
-    <div className="etiqueta-bulto" style={{ width: `${ancho}mm`, height: `${alto}mm`, fontSize: `${fontSize}px` }}>
-      <div className="etq-top">
-        <div className="etq-lado">
-          <div className="etq-num">Nº {cliente.numeroCliente}</div>
-          <div className="etq-origen"><span>ORIGEN:</span> {origen || '-'}</div>
-        </div>
-        <div className="etq-qr-col">
-          <QRCodeSVG value={`${origen}-${remito}(${num}/${total})-${destino}`} size={qrSize} level="M" />
-          <div className="etq-qr-txt">{origen}-{remito}({num}/{total}){destino ? `-${destino}` : ''}</div>
-        </div>
-      </div>
-      <div className="etq-razon">{cliente.razonSocial}</div>
-      <div className="etq-line">TE: {cliente.telefono}</div>
-      <div className="etq-line"><b>DESTINO:</b> {destino || '-'}</div>
-      <div className="etq-line"><b>DIR. ENTREGA:</b> {cliente.direccion}</div>
-      <div className="etq-line">{cliente.localidad} - {cliente.provincia}</div>
-      <div className="etq-line"><b>TEL CONTACTO:</b> {cliente.telefono}</div>
-      <div className="etq-obs">OBS: {cliente.observaciones || '-'}</div>
-      <div className="etq-transp">TRANSPORTE: {cliente.transporte || '-'} · BULTOS {num}/{total}</div>
-    </div>
-  )
-}
-
-const ETQ_PRE_KEY = 'etiqueta_bultos_predef'
-
-interface PredefEtiqueta {
-  ancho: number
-  alto: number
-  fontSize: number
-  qrSize: number
-  origen: string
-  destino: string
-}
-
-const ETQ_PRE_DEFECTO: PredefEtiqueta = { ancho: 80, alto: 50, fontSize: 8, qrSize: 30, origen: 'MITO', destino: 'POLO52-NO' }
-
-function leerPredef(): PredefEtiqueta {
-  try {
-    const raw = localStorage.getItem(ETQ_PRE_KEY)
-    if (!raw) return ETQ_PRE_DEFECTO
-    return { ...ETQ_PRE_DEFECTO, ...JSON.parse(raw) }
-  } catch {
-    return ETQ_PRE_DEFECTO
-  }
-}
-
-function EtiquetasModal({ registro, onClose }: { registro: FactRegistro; onClose: () => void }) {
-  // Cantidad total de bultos (Y): por defecto, la columna "Bultos" del registro
-  // de facturación (editable).
-  const totalDefault = useMemo(() => (registro?.bulto ?? 1), [registro])
-  const [total, setTotal] = useState<number>(totalDefault)
-  const [predef] = useState<PredefEtiqueta>(leerPredef)
-  const [ancho, setAncho] = useState(predef.ancho)
-  const [alto, setAlto] = useState(predef.alto)
-  const [fontSize, setFontSize] = useState(predef.fontSize)
-  const [qrSize, setQrSize] = useState(predef.qrSize)
-  const [destino, setDestino] = useState(predef.destino)
-  const [origen, setOrigen] = useState(predef.origen)
-  const [generadas, setGeneradas] = useState(false)
-  const [cliente, setCliente] = useState<EtiquetaCliente | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [guardado, setGuardado] = useState(false)
-
-  function guardarPredef() {
-    localStorage.setItem(ETQ_PRE_KEY, JSON.stringify({ ancho, alto, fontSize, qrSize, origen, destino }))
-    setGuardado(true)
-  }
-
-  useEffect(() => {
-    const nCl = registro?.n_cliente ? String(registro.n_cliente) : ''
-    if (!nCl) { setError('Este registro no tiene N° Cliente para buscar los datos de la etiqueta.'); return }
-    let activo = true
-    void fetchClienteEtiqueta(nCl, registro).then((c) => { if (activo) setCliente(c) }).catch(() => { if (activo) setError('No se pudieron cargar los datos del cliente.') })
-    return () => { activo = false }
-  }, [registro])
-
-  const nums = useMemo(() => (generadas && total > 0 ? Array.from({ length: total }, (_, i) => i + 1) : []), [generadas, total])
-
-  function generar() {
-    if (total < 1) { setError('La cantidad de bultos debe ser al menos 1.'); return }
-    setError(null)
-    setGeneradas(true)
-  }
-
-  function imprimir() {
-    const src = document.getElementById('etiquetas-print-area')
-    if (!src || !src.innerHTML.trim()) return
-    // Clonar las etiquetas a un nodo hijo directo de <body> y ocultar TODO lo
-    // demás con display:none en print. Esto evita que el navegador pagee el
-    // resto de la app (tabla + modal) y duplique las impresiones.
-    const root = document.createElement('div')
-    root.id = 'etiquetas-print-root'
-    root.innerHTML = src.innerHTML
-    document.body.appendChild(root)
-    const style = document.createElement('style')
-    style.id = 'etiquetas-print-css'
-    style.innerHTML = [
-      `@page { size: ${ancho}mm ${alto}mm; margin: 0; }`,
-      `@media print {`,
-      `  body > *:not(#etiquetas-print-root) { display: none !important; }`,
-      `  #etiquetas-print-root { display: block !important; position: static !important; margin: 0 !important; padding: 0 !important; }`,
-      `  #etiquetas-print-root .etiqueta-bulto { page-break-after: always; break-after: page; }`,
-      `}`,
-    ].join('\n')
-    document.head.appendChild(style)
-    // Forzar paint antes de imprimir para que @media print se aplique
-    requestAnimationFrame(() => {
-      window.print()
-      root.remove()
-      document.getElementById('etiquetas-print-css')?.remove()
-    })
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => !window.print && onClose()}>
-      <div className="flex w-[94vw] max-w-4xl flex-col rounded-2xl border border-line bg-surface shadow-2xl" style={{ maxHeight: '92vh' }} onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between border-b border-line px-5 py-3">
-          <h2 className="flex items-center gap-2 text-lg font-semibold text-ink"><Printer size={18} className="text-amber-400" aria-hidden /> Etiquetas de bultos — {registro.razon_social || 'Sin razon social'}</h2>
-          <button onClick={onClose} className="rounded-lg border border-line p-1.5 text-sub transition hover:bg-line hover:text-ink"><X size={16} aria-hidden /></button>
-        </div>
-
-        {error && <p role="alert" className="mx-5 mt-3 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
-
-        {/* Config */}
-        <div className="border-b border-line px-5 py-4">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-sub">Cant. bultos</span>
-              <input type="number" min={1} value={total} onChange={(e) => setTotal(Math.max(1, Number(e.target.value) || 1))} className={inputCls} />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-sub">Ancho (mm)</span>
-              <input type="number" min={10} value={ancho} onChange={(e) => setAncho(Number(e.target.value) || 80)} className={inputCls} />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-sub">Alto (mm)</span>
-              <input type="number" min={10} value={alto} onChange={(e) => setAlto(Number(e.target.value) || 50)} className={inputCls} />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-sub">Tamaño letra (px)</span>
-              <input type="number" min={5} max={20} value={fontSize} onChange={(e) => setFontSize(Math.max(5, Math.min(20, Number(e.target.value) || 8)))} className={inputCls} />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-sub">Tamaño QR (px)</span>
-              <input type="number" min={10} max={80} value={qrSize} onChange={(e) => setQrSize(Math.max(10, Math.min(80, Number(e.target.value) || 30)))} className={inputCls} />
-            </label>
-            <div className="flex flex-col items-end gap-1">
-              <button onClick={generar} className="btn-press w-full rounded-xl bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700">Generar etiquetas</button>
-              <button onClick={guardarPredef} className="btn-press inline-flex w-full items-center justify-center gap-1 rounded-xl border border-line bg-surface2 px-3 py-1.5 text-xs font-medium text-ink hover:bg-line">
-                <BookmarkPlus size={13} aria-hidden /> Guardar como predefinido
-              </button>
-              {guardado && <span className="text-[11px] font-medium text-emerald-500">✓ Predefinido guardado</span>}
-            </div>
-          </div>
-          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-sub">Origen</span>
-              <input value={origen} onChange={(e) => setOrigen(e.target.value)} placeholder="Ej: FABRICA" className={inputCls} />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-sub">Destino</span>
-              <input value={destino} onChange={(e) => setDestino(e.target.value)} placeholder="Local / Sucursal" className={inputCls} />
-            </label>
-          </div>
-        </div>
-
-        {/* Previsualización */}
-        <div className="flex-1 overflow-auto px-5 py-4">
-          {!generadas || !cliente ? (
-            <p className="py-10 text-center text-sm text-sub">Configura la cantidad y presiona "Generar etiquetas".</p>
-          ) : (
-            <div className="etq-preview flex flex-wrap gap-3">
-              {nums.map((n) => (
-                <EtiquetaBulto key={n} cliente={cliente} num={n} total={total} destino={destino} origen={origen} nRemito={registro?.n_remito || ''} ancho={ancho} alto={alto} fontSize={fontSize} qrSize={qrSize} />
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-between gap-2 border-t border-line px-5 py-3">
-          <p className="text-xs text-sub">Tamaño: {ancho} × {alto} mm · {nums.length || total} etiquetas</p>
-          <div className="flex gap-2">
-            <button onClick={onClose} className="btn-press rounded-xl border border-line bg-surface2 px-4 py-2 text-sm font-medium text-ink hover:bg-line">Cerrar</button>
-            <button onClick={imprimir} disabled={!generadas || nums.length === 0} className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"><Printer size={15} aria-hidden /> Imprimir</button>
-          </div>
-        </div>
-
-        {/* Área de impresión oculta en pantalla */}
-        <div id="etiquetas-print-area" className="etiquetas-print-area">
-          {nums.map((n) => (
-            <EtiquetaBulto key={`p${n}`} cliente={cliente!} num={n} total={total} destino={destino} origen={origen} nRemito={registro?.n_remito || ''} ancho={ancho} alto={alto} fontSize={fontSize} qrSize={qrSize} />
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
-

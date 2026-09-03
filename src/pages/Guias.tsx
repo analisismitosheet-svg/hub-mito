@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
-  Loader2, Search, SearchX, Plus, Pencil, Trash2, X, ClipboardList, Upload, FileText,
+  Loader2, Search, SearchX, Plus, Pencil, Trash2, X, ClipboardList, Upload, FileText, Printer,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import { EtiquetasModal } from '@/components/EtiquetasBultos'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 
@@ -24,6 +25,7 @@ interface Guia {
   estado: string | null
   fecha: string | null
   nro_remito: string | null
+  bulto: number | null
   observaciones: string | null
   created_at: string
 }
@@ -96,6 +98,7 @@ export default function Guias() {
   const [sortKey, setSortKey] = useState<SortKey>('created_at')
   const [sortAsc, setSortAsc] = useState(false)
   const [card, setCard] = useState<Guia | null>(null)
+  const [etiquetaSel, setEtiquetaSel] = useState<Guia | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
   const POR_PAGINA = 50
@@ -259,13 +262,16 @@ export default function Guias() {
             <table className="w-full table-fixed border-collapse text-[11px] leading-tight">
               <colgroup>
                 <col className="w-[3%]" />  {/* Check */}
-                <col className="w-[12%]" /> {/* Nro Pedido */}
+                <col className="w-[11%]" /> {/* Nro Pedido */}
+                <col className="w-[7%]" />  {/* Fecha */}
+                <col className="w-[7%]" />  {/* Nro Remito */}
+                <col className="w-[5%]" />  {/* Bulto */}
                 <col className="w-[8%]" />  {/* Nro Cliente */}
-                <col className="w-[18%]" /> {/* Razon Social */}
-                <col className="w-[14%]" /> {/* Pedido */}
-                <col className="w-[10%]" /> {/* Sucursal */}
-                <col className="w-[14%]" /> {/* Estado */}
-                <col className="w-[14%]" /> {/* Observaciones */}
+                <col className="w-[16%]" /> {/* Razon Social */}
+                <col className="w-[12%]" /> {/* Pedido */}
+                <col className="w-[8%]" />  {/* Sucursal */}
+                <col className="w-[12%]" /> {/* Estado */}
+                <col className="w-[9%]" />  {/* Observaciones */}
                 <col className="w-[7%]" />  {/* Acc */}
               </colgroup>
               <thead>
@@ -274,6 +280,7 @@ export default function Guias() {
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('nro_pedido')}>N° Pedido{sortArrow('nro_pedido')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('fecha')}>Fecha{sortArrow('fecha')}</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('nro_remito')}>N° Remito{sortArrow('nro_remito')}</th>
+                  <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('bulto')}>Bulto{sortArrow('bulto')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('nro_cliente')}>N° Cl{sortArrow('nro_cliente')}</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('razon_social')}>Razon Social{sortArrow('razon_social')}</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('pedido')}>Pedido{sortArrow('pedido')}</th>
@@ -290,6 +297,7 @@ export default function Guias() {
                     <td className="px-1 py-[2px]"><span className="block truncate font-medium text-ink" title={g.nro_pedido || ''}>{g.nro_pedido || '-'}</span></td>
                     <td className="px-1 py-[2px] text-center text-sub">{g.fecha || '-'}</td>
                     <td className="px-1 py-[2px] text-center text-sub">{g.nro_remito || '-'}</td>
+                    <td className="px-1 py-[2px] text-center text-sub">{g.bulto != null ? g.bulto : '-'}</td>
                     <td className="px-1 py-[2px] text-center text-sub">{g.nro_cliente || '-'}</td>
                     <td className="px-1 py-[2px]"><span className="block truncate font-medium text-ink" title={g.razon_social || ''}>{g.razon_social || '-'}</span></td>
                     <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={g.pedido || ''}>{g.pedido || '-'}</span></td>
@@ -309,6 +317,7 @@ export default function Guias() {
                     <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={g.observaciones || ''}>{g.observaciones || '-'}</span></td>
                     <td className="px-1 py-[2px] text-right">
                       <div className="flex items-center justify-end gap-px" onClick={(e) => e.stopPropagation()}>
+                        <button onClick={() => setEtiquetaSel(g)} className="rounded border border-line p-0.5 text-sub transition hover:text-amber-400" title="Etiquetas / Imprimir"><Printer size={10} aria-hidden /></button>
                         {puedeEditar && <button onClick={() => { setSel(g); setModal('edit') }} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Editar"><Pencil size={10} aria-hidden /></button>}
                         {puedeBorrar && <button onClick={() => setConfirm({ message: 'Eliminar guia de "' + (g.razon_social || '-') + '"?', onConfirm: () => void eliminar(g) })} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Eliminar"><Trash2 size={10} aria-hidden /></button>}
                       </div>
@@ -346,6 +355,7 @@ export default function Guias() {
                   <CRow label="N° Pedido" value={card.nro_pedido} />
                   <CRow label="Fecha" value={card.fecha} />
                   <CRow label="N° Remito" value={card.nro_remito} />
+                  <CRow label="Bulto" value={card.bulto != null ? String(card.bulto) : null} />
                   <CRow label="N° Cliente" value={card.nro_cliente} />
                   <CRow label="Razon Social" value={card.razon_social} />
                   <CRow label="Pedido" value={card.pedido} />
@@ -363,6 +373,9 @@ export default function Guias() {
           </div>
         </div>
       )}
+
+      {/* Etiquetas Modal */}
+      {etiquetaSel && <EtiquetasModal registro={{ n_cliente: etiquetaSel.nro_cliente, razon_social: etiquetaSel.razon_social, n_remito: etiquetaSel.nro_remito, bulto: etiquetaSel.bulto, observaciones: etiquetaSel.observaciones }} onClose={() => setEtiquetaSel(null)} />}
 
       {/* Import Modal */}
       {modal === 'importar' && (
@@ -415,6 +428,7 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, onClose, 
   const [sucursal, setSucursal] = useState(guia?.sucursal || '')
   const [estado, setEstado] = useState<EstadoGuia>(guia ? estadoDe(guia) : 'NUEVO')
   const [nroRemito, setNroRemito] = useState(guia?.nro_remito || '')
+  const [bulto, setBulto] = useState(guia?.bulto != null ? String(guia.bulto) : '')
   const [observaciones, setObservaciones] = useState(guia?.observaciones || '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -466,6 +480,7 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, onClose, 
       finalizado: estado === 'FINALIZADO',
       estado,
       nro_remito: nroRemito.trim() || null,
+      bulto: bulto ? Number(bulto) || null : null,
       fecha: guia ? undefined : new Date().toISOString().slice(0, 10),
       observaciones: observaciones.trim() || null,
     }
@@ -581,6 +596,12 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, onClose, 
               <input value={nroRemito} onChange={(e) => setNroRemito(e.target.value)} placeholder="Remito (opcional)..." className={inputCls} />
             </label>
 
+            {/* Bulto */}
+            <label className="block">
+              <span className="mb-0.5 block text-[11px] font-medium text-sub">Cant. Bultos</span>
+              <input type="number" min={0} value={bulto} onChange={(e) => setBulto(e.target.value)} placeholder="0" className={inputCls} />
+            </label>
+
             {/* Estado */}
             <label className="block sm:col-span-2">
               <span className="mb-0.5 block text-[11px] font-medium text-sub">Estado</span>
@@ -647,6 +668,7 @@ function ImportGuias({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
     { key: 'pedido', label: 'Pedido' },
     { key: 'sucursal', label: 'Sucursal' },
     { key: 'nro_remito', label: 'N Remito' },
+    { key: 'bulto', label: 'Bulto' },
     { key: 'estado', label: 'Estado' },
     { key: 'observaciones', label: 'Observaciones' },
   ]
@@ -662,6 +684,7 @@ function ImportGuias({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
       else if (n === 'pedido' || n.includes('tipo')) m['pedido'] = h
       else if (n === 'sucursal' || n.includes('sucursal')) m['sucursal'] = h
       else if (n.includes('remito') || n === 'nremito') m['nro_remito'] = h
+      else if (n === 'bulto' || n === 'bultos' || n.includes('cantbult')) m['bulto'] = h
       else if (n === 'estado' || n === 'enproceso' || n.includes('finalizado')) { if (!m['estado']) m['estado'] = h }
       else if (n.includes('observacion') || n === 'obs') m['observaciones'] = h
     })
@@ -718,6 +741,7 @@ function ImportGuias({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
       nr.pedido = nr.pedido ? normalizarPedido(String(nr.pedido)) : null
       nr.sucursal = nr.sucursal ? cleanVal(String(nr.sucursal)).toUpperCase() : null
       nr.nro_remito = nr.nro_remito ? cleanVal(String(nr.nro_remito)) : null
+      nr.bulto = nr.bulto ? Number(cleanVal(String(nr.bulto))) || null : null
       nr.observaciones = nr.observaciones ? cleanVal(String(nr.observaciones)) : null
 
       valid.push(nr)
@@ -741,6 +765,7 @@ function ImportGuias({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
         finalizado: !!r.finalizado,
         estado: (r.estado as EstadoGuia) || 'EN_PROCESO',
         nro_remito: r.nro_remito ? (r.nro_remito as string) : null,
+        bulto: r.bulto ? Number(r.bulto) || null : null,
         fecha: new Date().toISOString().slice(0, 10),
         observaciones: r.observaciones || null,
       }))
