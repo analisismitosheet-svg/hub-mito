@@ -25,7 +25,7 @@
 type Req = {
   method?: string
   headers: { authorization?: string }
-  body?: string
+  body?: string | Record<string, unknown>
 }
 
 type Res = {
@@ -212,10 +212,10 @@ async function enviarMailGraph(
   }
 }
 
-function leerJson(body: string | undefined, res: Res): Record<string, unknown> | null {
-  if (!body) { res.status(400).json({ error: 'Body vacío' }); return null }
+function leerJson(body: string | Record<string, unknown> | undefined, res: Res): Record<string, unknown> | null {
+  if (body == null || body === '') { res.status(400).json({ error: 'Body vacío' }); return null }
   try {
-    const obj = JSON.parse(body)
+    const obj = typeof body === 'string' ? JSON.parse(body) : body
     if (typeof obj !== 'object' || obj === null) { res.status(400).json({ error: 'JSON inválido' }); return null }
     return obj as Record<string, unknown>
   } catch {
