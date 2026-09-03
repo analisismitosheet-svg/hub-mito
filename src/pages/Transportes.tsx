@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 
@@ -79,6 +80,7 @@ export default function Transportes() {
   const [sel, setSel] = useState<Transporte | null>(null)
   const [editando, setEditando] = useState<Transporte | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const mostrarToast = useCallback((msg: string) => {
@@ -115,7 +117,6 @@ export default function Transportes() {
 
   async function eliminar(t: Transporte) {
     if (!supabase) return
-    if (!window.confirm('Eliminar "' + t.nombre + '"?')) return
     const { error } = await supabase.from('transportes').delete().eq('id', t.id)
     if (error) { mostrarToast('Error al eliminar'); return }
     setVista('lista'); setSel(null); await cargar(); mostrarToast('Transporte eliminado')
@@ -145,7 +146,7 @@ export default function Transportes() {
           <button onClick={() => setVista('lista')} className="inline-flex items-center gap-1 text-sm font-medium text-sub transition hover:text-ink"><ArrowLeft size={15} aria-hidden /> Volver a la lista</button>
           <div className="flex items-center gap-2">
             {puedeEditar && <button onClick={() => abrirEditar(sel)} className="btn-press inline-flex items-center gap-1.5 rounded-xl border border-line bg-surface2 px-3 py-1.5 text-sm font-medium text-ink hover:bg-line"><Pencil size={15} aria-hidden /> Editar</button>}
-            {puedeBorrar && <button onClick={() => void eliminar(sel)} className="btn-press inline-flex items-center gap-1.5 rounded-xl border border-brand-600/30 bg-brand-600/10 px-3 py-1.5 text-sm font-medium text-brand-400 hover:bg-brand-600/20"><Trash2 size={15} aria-hidden /> Eliminar</button>}
+            {puedeBorrar && <button onClick={() => { const t = sel; if (t) setConfirm({ message: 'Eliminar "' + t.nombre + '"?', onConfirm: () => void eliminar(t) }) }} className="btn-press inline-flex items-center gap-1.5 rounded-xl border border-brand-600/30 bg-brand-600/10 px-3 py-1.5 text-sm font-medium text-brand-400 hover:bg-brand-600/20"><Trash2 size={15} aria-hidden /> Eliminar</button>}
           </div>
         </div>
         <article className="mx-auto max-w-xl animate-enter overflow-hidden rounded-2xl border border-line bg-surface shadow-soft">
@@ -213,6 +214,7 @@ export default function Transportes() {
             </div>
           )}
         </article>
+        <ConfirmDialog open={!!confirm} message={confirm?.message ?? ''} onCancel={() => setConfirm(null)} onConfirm={() => { confirm?.onConfirm(); setConfirm(null) }} />
       </Layout>
     )
   }

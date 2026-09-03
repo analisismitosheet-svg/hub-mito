@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Loader2, Plus, Trash2, Pencil, Check, X } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 
 interface Empleado {
@@ -20,6 +21,7 @@ export default function Empleados() {
   const [editLegajo, setEditLegajo] = useState('')
   const [editNombre, setEditNombre] = useState('')
   const [cargando, setCargando] = useState(true)
+  const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
 
   const cargar = useCallback(async () => {
     if (!supabase) { setCargando(false); return }
@@ -62,9 +64,8 @@ export default function Empleados() {
     setLegajo(''); setNombre(''); await cargar()
   }
 
-  async function borrar(id: string, nom: string) {
+  async function borrar(id: string) {
     if (!supabase) return
-    if (!window.confirm(`¿Borrar al empleado "${nom}"?`)) return
     const { error } = await supabase.from('empleados').delete().eq('id', id)
     if (error) { setError(error.message); return }
     await cargar()
@@ -116,13 +117,14 @@ export default function Empleados() {
                   {e.legajo && <span className="rounded-full bg-line px-2 py-0.5 text-[11px] font-semibold text-sub">#{e.legajo}</span>}
                   <span className="flex-1 font-medium text-ink">{e.nombre}</span>
                   <button onClick={() => empezarEdicion(e)} aria-label={`Editar ${e.nombre}`} className="btn-press rounded-lg border border-line p-1.5 text-sub hover:text-ink"><Pencil size={13} aria-hidden /></button>
-                  <button onClick={() => borrar(e.id, e.nombre)} aria-label={`Borrar ${e.nombre}`} className="btn-press rounded-lg border border-brand-600/30 bg-brand-600/10 p-1.5 text-brand-400 hover:bg-brand-600/20"><Trash2 size={13} aria-hidden /></button>
+                  <button onClick={() => setConfirm({ message: `¿Borrar al empleado "${e.nombre}"?`, onConfirm: () => void borrar(e.id) })} aria-label={`Borrar ${e.nombre}`} className="btn-press rounded-lg border border-brand-600/30 bg-brand-600/10 p-1.5 text-brand-400 hover:bg-brand-600/20"><Trash2 size={13} aria-hidden /></button>
                 </div>
               ),
             )}
           </div>
         </div>
       )}
+      <ConfirmDialog open={!!confirm} message={confirm?.message ?? ''} onCancel={() => setConfirm(null)} onConfirm={() => { confirm?.onConfirm(); setConfirm(null) }} />
     </Layout>
   )
 }

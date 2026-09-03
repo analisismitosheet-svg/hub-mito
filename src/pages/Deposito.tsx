@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Upload, Loader2, ChevronRight, Store, Trash2, Check, X, Plus, BarChart3, ArrowRightLeft, Link as LinkIcon, Printer } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 
@@ -172,6 +173,7 @@ export default function Deposito() {
   const puedeEditarStats = isAdmin || puedeImportar
   const [loteAbierto, setLoteAbierto] = useState<string | null>(null)
   const [subAbierto, setSubAbierto] = useState<string | null>(null)
+  const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
   const [empleados, setEmpleados] = useState<{ id: string; nombre: string }[]>([])
   const [modal, setModal] = useState(false)
   const [modalSheet, setModalSheet] = useState(false)
@@ -426,7 +428,6 @@ export default function Deposito() {
 
   async function borrarLote(id: string) {
     if (!supabase) return
-    if (!window.confirm('¿Borrar este archivo y todos sus repos?')) return
     const { error } = await supabase.from('deposito_lotes').delete().eq('id', id)
     if (error) {
       setError(error.message)
@@ -765,7 +766,7 @@ export default function Deposito() {
                       tabIndex={0}
                       onClick={(e) => {
                         e.stopPropagation()
-                        borrarLote(lote.id)
+                        setConfirm({ message: '¿Borrar este archivo y todos sus repos?', onConfirm: () => void borrarLote(lote.id) })
                       }}
                       className="ml-1 rounded-lg p-1.5 text-sub hover:bg-brand-600/20 hover:text-brand-400"
                       title="Borrar archivo"
@@ -976,6 +977,7 @@ export default function Deposito() {
           </div>
         </div>
       )}
+      <ConfirmDialog open={!!confirm} message={confirm?.message ?? ''} onCancel={() => setConfirm(null)} onConfirm={() => { confirm?.onConfirm(); setConfirm(null) }} />
     </Layout>
   )
 }

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 
@@ -82,6 +83,7 @@ export default function Usuarios() {
   const [gestion, setGestion] = useState<UsuarioRow | null>(null)
   const [pwUser, setPwUser] = useState<UsuarioRow | null>(null)
   const [editUser, setEditUser] = useState<UsuarioRow | null>(null)
+  const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
 
   const cargar = useCallback(async () => {
     if (!supabase) { setCargando(false); return }
@@ -155,7 +157,6 @@ export default function Usuarios() {
 
   async function borrar(u: UsuarioRow) {
     if (!supabase) return
-    if (!window.confirm(`¿Borrar el usuario "${u.nombre}" (${u.email})? Se elimina su perfil y ya no figurará en la lista.`)) return
     setError(null)
     const { error } = await supabase.rpc('borrar_usuario', { uid: u.id })
     if (error) { setError(error.message); return }
@@ -337,7 +338,7 @@ export default function Usuarios() {
                       </button>
                       {!esYo && (
                         <button
-                          onClick={() => borrar(u)}
+                          onClick={() => setConfirm({ message: `¿Borrar el usuario "${u.nombre}" (${u.email})? Se elimina su perfil y ya no figurará en la lista.`, onConfirm: () => void borrar(u) })}
                           className="rounded border border-red-500/30 bg-red-500/10 p-1 text-red-400 transition hover:bg-red-500/20"
                           title="Borrar"
                           aria-label={`Borrar ${u.nombre}`}
@@ -376,6 +377,7 @@ export default function Usuarios() {
           onSaved={async () => { setEditUser(null); await cargar() }}
         />
       )}
+      <ConfirmDialog open={!!confirm} message={confirm?.message ?? ''} onCancel={() => setConfirm(null)} onConfirm={() => { confirm?.onConfirm(); setConfirm(null) }} />
     </Layout>
   )
 }

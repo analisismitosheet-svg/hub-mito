@@ -5,6 +5,7 @@ import {
 import { QRCodeSVG } from 'qrcode.react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
@@ -158,6 +159,7 @@ export default function FacturacionFabrica() {
   const [sortKey, setSortKey] = useState<SortKey>('fecha_fact')
   const [sortAsc, setSortAsc] = useState(false)
   const [card, setCard] = useState<FactRegistro | null>(null)
+  const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
   const [etiquetaSel, setEtiquetaSel] = useState<FactRegistro | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const POR_PAGINA = 50
@@ -276,7 +278,6 @@ export default function FacturacionFabrica() {
 
   async function eliminar(r: FactRegistro) {
     if (!supabase) return
-    if (!window.confirm('Eliminar registro de facturacion de "' + (r.razon_social || '-') + '"?')) return
     const { error: err } = await supabase.from('facturacion_fabrica').delete().eq('id', r.id)
     if (err) { mostrarToast('Error al eliminar'); return }
     setSel(null); setCard(null); await cargar(); mostrarToast('Registro eliminado')
@@ -290,7 +291,6 @@ export default function FacturacionFabrica() {
   }
   async function eliminarSeleccionados() {
     if (!supabase || selected.size === 0) return
-    if (!window.confirm(`Eliminar ${selected.size} registro(s)?`)) return
     const ids = [...selected]
     const { error: err } = await supabase.from('facturacion_fabrica').delete().in('id', ids)
     if (err) { mostrarToast('Error al eliminar'); return }
@@ -341,7 +341,7 @@ export default function FacturacionFabrica() {
         </label>
         <span className="text-[11px] text-sub/70">{lista.length} registros {polCount > 0 && isAdmin ? `(${polCount} POLO52)` : ''}</span>
         {selected.size > 0 && puedeBorrar && (
-          <button onClick={() => void eliminarSeleccionados()} className="btn-press inline-flex items-center gap-1 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/20"><Trash2 size={13} aria-hidden /> Eliminar ({selected.size})</button>
+          <button onClick={() => setConfirm({ message: `Eliminar ${selected.size} registro(s)?`, onConfirm: () => void eliminarSeleccionados() })} className="btn-press inline-flex items-center gap-1 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/20"><Trash2 size={13} aria-hidden /> Eliminar ({selected.size})</button>
         )}
         {puedeCrear && (
           <>
@@ -429,7 +429,7 @@ export default function FacturacionFabrica() {
                       <div className="flex items-center justify-end gap-px" onClick={(e) => e.stopPropagation()}>
                         <button onClick={() => setEtiquetaSel(r)} className="rounded border border-line p-0.5 text-sub transition hover:text-amber-400" title="Etiquetas / Imprimir"><Printer size={10} aria-hidden /></button>
                         {(modoPolo52 || puedeEditar) && <button onClick={() => { setSel(r); setModal('edit') }} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Editar"><Pencil size={10} aria-hidden /></button>}
-                        {puedeBorrar && <button onClick={() => void eliminar(r)} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Eliminar"><Trash2 size={10} aria-hidden /></button>}
+                        {puedeBorrar && <button onClick={() => setConfirm({ message: 'Eliminar registro de facturacion de "' + (r.razon_social || '-') + '"?', onConfirm: () => void eliminar(r) })} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Eliminar"><Trash2 size={10} aria-hidden /></button>}
                       </div>
                     </td>
                   </tr>
@@ -465,6 +465,7 @@ export default function FacturacionFabrica() {
       {modal && modal !== 'importar' && (
         <FactModal modoPolo52={modoPolo52} registro={modal === 'edit' ? sel : null} clientes={clientes} empleados={empleados} onClose={() => { setModal(null); setSel(null) }} onSaved={async () => { setModal(null); setSel(null); await cargar(); mostrarToast(modal === 'edit' ? 'Registro actualizado' : 'Registro creado') }} />
       )}
+      <ConfirmDialog open={!!confirm} message={confirm?.message ?? ''} onCancel={() => setConfirm(null)} onConfirm={() => { confirm?.onConfirm(); setConfirm(null) }} />
     </Layout>
   )
 }

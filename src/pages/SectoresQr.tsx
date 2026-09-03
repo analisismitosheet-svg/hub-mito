@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import {
@@ -55,6 +56,7 @@ export default function SectoresQr() {
   const [msg, setMsg] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [copiado, setCopiado] = useState<string | null>(null)
+  const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
 
   // Filtros
   const [localFiltro, setLocalFiltro] = useState<string>('')
@@ -195,13 +197,6 @@ export default function SectoresQr() {
 
   async function borrarSector(s: Sector) {
     if (!supabase) return
-    if (
-      !window.confirm(
-        `¿Borrar el sector "${s.nombre}" del local ${s.local}?\n` +
-          'También se revoca su QR y se pierde el vínculo desde nuevas opiniones.',
-      )
-    )
-      return
     const { error } = await supabase.from('sectores').delete().eq('id', s.id)
     if (error) {
       setError(error.message)
@@ -593,7 +588,7 @@ export default function SectoresQr() {
                                       <Pencil size={13} aria-hidden />
                                     </button>
                                     <button
-                                      onClick={() => borrarSector(s)}
+                                      onClick={() => setConfirm({ message: `¿Borrar el sector "${s.nombre}" del local ${s.local}?\nTambién se revoca su QR y se pierde el vínculo desde nuevas opiniones.`, onConfirm: () => void borrarSector(s) })}
                                       title="Borrar sector"
                                       className="btn-press rounded-lg border border-brand-600/30 bg-brand-600/10 p-1.5 text-brand-400 hover:bg-brand-600/20"
                                     >
@@ -644,6 +639,7 @@ export default function SectoresQr() {
           conActivo
         />
       )}
+      <ConfirmDialog open={!!confirm} message={confirm?.message ?? ''} onCancel={() => setConfirm(null)} onConfirm={() => { confirm?.onConfirm(); setConfirm(null) }} />
     </Layout>
   )
 }

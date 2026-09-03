@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 
@@ -277,6 +278,7 @@ export default function Transferencias() {
   const [loteAbierto, setLoteAbierto] = useState<string | null>(null)
   const [origenAbierto, setOrigenAbierto] = useState<string | null>(null)
   const [destinoAbierto, setDestinoAbierto] = useState<string | null>(null)
+  const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
   const [modal, setModal] = useState(false)
   const [modalEnvio, setModalEnvio] = useState<Lote | null>(null)
   const [usuariosLocales, setUsuariosLocales] = useState<{ email: string; local: string }[]>([])
@@ -464,7 +466,6 @@ export default function Transferencias() {
 
   async function borrarLote(id: string) {
     if (!supabase) return
-    if (!window.confirm('¿Borrar este archivo y todas sus transferencias?')) return
     const { error } = await supabase.from('transfer_lotes').delete().eq('id', id)
     if (error) {
       setError(error.message)
@@ -565,7 +566,7 @@ export default function Transferencias() {
                         tabIndex={0}
                         onClick={(e) => {
                           e.stopPropagation()
-                          borrarLote(lote.id)
+                          setConfirm({ message: '¿Borrar este archivo y todas sus transferencias?', onConfirm: () => void borrarLote(lote.id) })
                         }}
                         className="ml-1 rounded-lg p-1.5 text-sub hover:bg-brand-600/20 hover:text-brand-400"
                         title="Borrar archivo"
@@ -828,6 +829,7 @@ export default function Transferencias() {
           </div>
         </div>
       )}
+      <ConfirmDialog open={!!confirm} message={confirm?.message ?? ''} onCancel={() => setConfirm(null)} onConfirm={() => { confirm?.onConfirm(); setConfirm(null) }} />
     </Layout>
   )
 }

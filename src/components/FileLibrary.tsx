@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 
@@ -91,6 +92,7 @@ export default function FileLibrary(props: FileLibraryProps) {
   const [subiendo, setSubiendo] = useState(false)
   const [editando, setEditando] = useState<Archivo | null>(null)
   const [viendo, setViendo] = useState<{ item: Archivo; url: string } | null>(null)
+  const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const scopeKey = JSON.stringify(scope ?? {})
 
@@ -173,7 +175,6 @@ export default function FileLibrary(props: FileLibraryProps) {
 
   async function eliminar(a: Archivo) {
     if (!supabase) return
-    if (!window.confirm(`¿Eliminar "${a.nombre}"? Esta acción no se puede deshacer.`)) return
     const del = await supabase.from(table).delete().eq('id', a.id)
     if (del.error) {
       setError(del.error.message)
@@ -256,7 +257,7 @@ export default function FileLibrary(props: FileLibraryProps) {
                     </button>
                   )}
                   {puedeEliminar && (
-                    <button onClick={() => eliminar(a)} aria-label={`Eliminar ${a.nombre}`} className="btn-press rounded-lg border border-brand-600/30 bg-brand-600/10 p-1.5 text-brand-400 hover:bg-brand-600/20">
+                    <button onClick={() => setConfirm({ message: `¿Eliminar "${a.nombre}"? Esta acción no se puede deshacer.`, onConfirm: () => void eliminar(a) })} aria-label={`Eliminar ${a.nombre}`} className="btn-press rounded-lg border border-brand-600/30 bg-brand-600/10 p-1.5 text-brand-400 hover:bg-brand-600/20">
                       <Trash2 size={14} aria-hidden />
                     </button>
                   )}
@@ -282,6 +283,7 @@ export default function FileLibrary(props: FileLibraryProps) {
           }}
         />
       )}
+      <ConfirmDialog open={!!confirm} message={confirm?.message ?? ''} onCancel={() => setConfirm(null)} onConfirm={() => { confirm?.onConfirm(); setConfirm(null) }} />
     </Layout>
   )
 }

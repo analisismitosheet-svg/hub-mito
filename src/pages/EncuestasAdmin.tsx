@@ -12,6 +12,7 @@ import {
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import StarRating from '@/components/StarRating'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import {
   TIPOS_PREGUNTA,
@@ -52,6 +53,7 @@ export default function EncuestasAdmin() {
   const [cargando, setCargando] = useState(true)
   const [guardando, setGuardando] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
+  const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
 
   const enc = encuestas.find((e) => e.id === encId) ?? null
 
@@ -114,7 +116,6 @@ export default function EncuestasAdmin() {
   }
   async function eliminarEncuesta() {
     if (!supabase || !enc) return
-    if (!confirm(`¿Eliminar la encuesta "${enc.nombre}" y todas sus respuestas?`)) return
     await supabase.from('encuestas').delete().eq('id', enc.id)
     setEncId('')
     await cargarEncuestas()
@@ -166,7 +167,6 @@ export default function EncuestasAdmin() {
 
   async function eliminarPregunta() {
     if (!supabase || !form) return
-    if (!confirm(`¿Eliminar la pregunta "${form.texto}"?`)) return
     await supabase.from('encuesta_preguntas').delete().eq('id', form.id)
     setPregId('')
     await cargarPreguntas(form.encuesta_id)
@@ -281,7 +281,7 @@ export default function EncuestasAdmin() {
                     <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${enc.publica ? 'left-[22px]' : 'left-0.5'}`} />
                   </button>
                 </label>
-                <button onClick={eliminarEncuesta} className="btn-press flex items-center gap-1.5 text-sm text-brand-400 hover:text-brand-300">
+                <button onClick={() => { const e = enc; if (e) setConfirm({ message: `¿Eliminar la encuesta "${e.nombre}" y todas sus respuestas?`, onConfirm: () => void eliminarEncuesta() }) }} className="btn-press flex items-center gap-1.5 text-sm text-brand-400 hover:text-brand-300">
                   <Trash2 size={14} aria-hidden /> Eliminar encuesta
                 </button>
               </div>
@@ -422,13 +422,14 @@ export default function EncuestasAdmin() {
               {/* Config por tipo */}
               <ConfigEditor form={form} updConfig={updConfig} />
 
-              <button onClick={eliminarPregunta} className="btn-press flex items-center gap-1.5 text-sm text-brand-400 hover:text-brand-300">
+              <button onClick={() => { const f = form; if (f) setConfirm({ message: `¿Eliminar la pregunta "${f.texto}"?`, onConfirm: () => void eliminarPregunta() }) }} className="btn-press flex items-center gap-1.5 text-sm text-brand-400 hover:text-brand-300">
                 <Trash2 size={14} aria-hidden /> Eliminar pregunta
               </button>
             </div>
           )}
         </section>
       </div>
+      <ConfirmDialog open={!!confirm} message={confirm?.message ?? ''} onCancel={() => setConfirm(null)} onConfirm={() => { confirm?.onConfirm(); setConfirm(null) }} />
     </Layout>
   )
 }

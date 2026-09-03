@@ -4,6 +4,7 @@ import {
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 
@@ -101,6 +102,7 @@ export default function Clientes() {
   const [sortKey, setSortKey] = useState<keyof Cliente>('n_cliente')
   const [sortAsc, setSortAsc] = useState(true)
   const [card, setCard] = useState<Cliente | null>(null)
+  const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
   const POR_PAGINA = 50
 
   const mostrarToast = useCallback((msg: string) => {
@@ -165,7 +167,6 @@ export default function Clientes() {
 
   async function eliminar(c: Cliente) {
     if (!supabase) return
-    if (!window.confirm('Eliminar "' + c.razon_social + '"?')) return
     const { error: err } = await supabase.from('clientes').delete().eq('id', c.id)
     if (err) { mostrarToast('Error al eliminar'); return }
     setSel(null); await cargar(); mostrarToast('Cliente eliminado')
@@ -295,7 +296,7 @@ export default function Clientes() {
                       <div className="flex items-center justify-end gap-px" onClick={(e) => e.stopPropagation()}>
                         {puedeEditar && <button onClick={() => { setSel(c); setModal('edit') }} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Editar"><Pencil size={10} aria-hidden /></button>}
                         <button onClick={() => void toggleEstado(c)} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title={c.estado === 'ACTIVO' ? 'Desactivar' : 'Activar'}>{c.estado === 'ACTIVO' ? <EyeOff size={10} aria-hidden /> : <Eye size={10} aria-hidden />}</button>
-                        {puedeBorrar && <button onClick={() => { setSel(c); void eliminar(c) }} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Eliminar"><Trash2 size={10} aria-hidden /></button>}
+                        {puedeBorrar && <button onClick={() => { setSel(c); setConfirm({ message: 'Eliminar "' + c.razon_social + '"?', onConfirm: () => void eliminar(c) }) }} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Eliminar"><Trash2 size={10} aria-hidden /></button>}
                       </div>
                     </td>
                   </tr>
@@ -333,6 +334,7 @@ export default function Clientes() {
       {modal && modal !== 'importar' && (
         <ClienteModal cliente={modal === 'edit' ? sel : null} nCliente={modal === 'new' ? nextNCliente(todos) : sel?.n_cliente ?? null} onClose={() => { setModal(null); setSel(null) }} onSaved={async () => { setModal(null); setSel(null); await cargar(); mostrarToast(modal === 'edit' ? 'Cliente actualizado' : 'Cliente creado') }} />
       )}
+      <ConfirmDialog open={!!confirm} message={confirm?.message ?? ''} onCancel={() => setConfirm(null)} onConfirm={() => { confirm?.onConfirm(); setConfirm(null) }} />
     </Layout>
   )
 }

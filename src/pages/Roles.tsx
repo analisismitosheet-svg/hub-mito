@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import { Loader2, Plus, Trash2, SlidersHorizontal, Check, X, ChevronRight } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { AREAS } from '@/config/areas'
 
@@ -27,6 +28,7 @@ export default function Roles() {
   const [error, setError] = useState<string | null>(null)
   const [cargando, setCargando] = useState(true)
   const [rolGestion, setRolGestion] = useState<Rol | null>(null)
+  const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
 
   const cargar = useCallback(async () => {
     if (!supabase) { setCargando(false); return }
@@ -59,7 +61,6 @@ export default function Roles() {
 
   async function borrar(r: Rol) {
     if (!supabase) return
-    if (!window.confirm(`¿Borrar el rol "${r.nombre}"? Los usuarios que lo tengan pasarán a "Usuario".`)) return
     const { error } = await supabase.from('roles').delete().eq('codigo', r.codigo)
     if (error) { setError(error.message); return }
     await cargar()
@@ -104,7 +105,7 @@ export default function Roles() {
                   </button>
                 )}
                 {!r.protegido && (
-                  <button onClick={() => borrar(r)} aria-label={`Borrar rol ${r.nombre}`} className="btn-press rounded-lg border border-brand-600/30 bg-brand-600/10 p-1.5 text-brand-400 hover:bg-brand-600/20">
+                  <button onClick={() => setConfirm({ message: `¿Borrar el rol "${r.nombre}"? Los usuarios que lo tengan pasarán a "Usuario".`, onConfirm: () => void borrar(r) })} aria-label={`Borrar rol ${r.nombre}`} className="btn-press rounded-lg border border-brand-600/30 bg-brand-600/10 p-1.5 text-brand-400 hover:bg-brand-600/20">
                     <Trash2 size={13} aria-hidden />
                   </button>
                 )}
@@ -122,6 +123,7 @@ export default function Roles() {
           onSaved={async () => { setRolGestion(null); await cargar() }}
         />
       )}
+      <ConfirmDialog open={!!confirm} message={confirm?.message ?? ''} onCancel={() => setConfirm(null)} onConfirm={() => { confirm?.onConfirm(); setConfirm(null) }} />
     </Layout>
   )
 }

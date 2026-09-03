@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Loader2, Plus, Trash2 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 
 interface Local {
@@ -16,6 +17,7 @@ export default function Locales() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [cargando, setCargando] = useState(true)
+  const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
 
   const cargar = useCallback(async () => {
     if (!supabase) { setCargando(false); return }
@@ -40,7 +42,6 @@ export default function Locales() {
 
   async function borrar(cod: string) {
     if (!supabase) return
-    if (!window.confirm(`¿Borrar el local ${cod}? Los usuarios que lo tengan quedarán sin local asignado.`)) return
     const { error } = await supabase.from('locales').delete().eq('codigo', cod)
     if (error) { setError(error.message); return }
     await cargar()
@@ -82,13 +83,14 @@ export default function Locales() {
             <span key={l.codigo} className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface2 py-1 pl-3 pr-1.5 text-sm text-ink">
               <span className="font-medium">{l.codigo}</span>
               {l.nombre && <span className="text-xs text-sub">· {l.nombre}</span>}
-              <button onClick={() => borrar(l.codigo)} aria-label={`Borrar ${l.codigo}`} className="rounded-full p-0.5 text-sub hover:bg-brand-600/20 hover:text-brand-400">
+              <button onClick={() => setConfirm({ message: `¿Borrar el local ${l.codigo}? Los usuarios que lo tengan quedarán sin local asignado.`, onConfirm: () => void borrar(l.codigo) })} aria-label={`Borrar ${l.codigo}`} className="rounded-full p-0.5 text-sub hover:bg-brand-600/20 hover:text-brand-400">
                 <Trash2 size={13} aria-hidden />
               </button>
             </span>
           ))}
         </div>
       )}
+      <ConfirmDialog open={!!confirm} message={confirm?.message ?? ''} onCancel={() => setConfirm(null)} onConfirm={() => { confirm?.onConfirm(); setConfirm(null) }} />
     </Layout>
   )
 }

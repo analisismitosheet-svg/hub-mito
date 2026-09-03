@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import StarRating from '@/components/StarRating'
 import { buildLabelHtml, qrImgUrl, QR_LABEL_DEFAULT, type QrLabelConfig } from '@/components/QrEtiqueta'
 import type { Encuesta, Pregunta, Sector, QrToken } from '@/types/encuestas'
@@ -66,6 +67,7 @@ export default function Opiniones() {
   const [tokens, setTokens] = useState<QrToken[]>([])
   const [orden, setOrden] = useState<'desc' | 'asc'>('desc')
   const [qrCfg, setQrCfg] = useState<QrLabelConfig>(QR_LABEL_DEFAULT)
+  const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
 
   // Carga inicial: locales + lista de encuestas
   useEffect(() => {
@@ -336,7 +338,6 @@ imgs.forEach(function(i){i.complete?go():(i.onload=go,i.onerror=go)});if(!p)go()
 
   async function borrarOpinion(id: string) {
     if (!supabase) return
-    if (!confirm('¿Borrar esta opinión? No se puede deshacer.')) return
     const { error } = await supabase.from('encuesta_respuestas').delete().eq('id', id)
     if (error) return
     setRespuestas((rs) => rs.filter((r) => r.id !== id))
@@ -643,7 +644,7 @@ imgs.forEach(function(i){i.complete?go():(i.onload=go,i.onerror=go)});if(!p)go()
                                       <span className="text-xs text-sub">{fecha(s.fecha)}</span>
                                       {puedeBorrar && (
                                         <button
-                                          onClick={() => borrarOpinion(s.id)}
+                                          onClick={() => setConfirm({ message: '¿Borrar esta opinión? No se puede deshacer.', onConfirm: () => void borrarOpinion(s.id) })}
                                           title="Borrar opinión"
                                           className="btn-press rounded-lg border border-line p-1.5 text-sub hover:border-brand-600/40 hover:text-brand-400"
                                         >
@@ -666,6 +667,7 @@ imgs.forEach(function(i){i.complete?go():(i.onload=go,i.onerror=go)});if(!p)go()
           </div>
         </>
       )}
+      <ConfirmDialog open={!!confirm} message={confirm?.message ?? ''} onCancel={() => setConfirm(null)} onConfirm={() => { confirm?.onConfirm(); setConfirm(null) }} />
     </Layout>
   )
 }

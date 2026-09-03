@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 
@@ -91,6 +92,7 @@ export default function CuentaAmigos() {
   const [vista, setVista] = useState<Vista>('lista')
   const [sel, setSel] = useState<Cliente | null>(null)
   const [editando, setEditando] = useState<Cliente | null>(null)
+  const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
 
   useEffect(() => {
     void cargar()
@@ -132,7 +134,6 @@ export default function CuentaAmigos() {
   }
   async function borrarCliente(c: Cliente) {
     if (!supabase) return
-    if (!window.confirm(`¿Eliminar a "${c.nombre}"? Esta acción no se puede deshacer.`)) return
     const { error } = await supabase.from('cuentas_amigos').delete().eq('id', c.id)
     if (error) {
       alert(`No se pudo eliminar: ${error.message}`)
@@ -183,7 +184,7 @@ export default function CuentaAmigos() {
             )}
             {puedeBorrar && (
               <button
-                onClick={() => void borrarCliente(sel)}
+                onClick={() => { const c = sel; if (c) setConfirm({ message: `¿Eliminar a "${c.nombre}"? Esta acción no se puede deshacer.`, onConfirm: () => void borrarCliente(c) }) }}
                 className="btn-press inline-flex items-center gap-1.5 rounded-xl border border-brand-600/30 bg-brand-600/10 px-3 py-1.5 text-sm font-medium text-brand-400 hover:bg-brand-600/20"
               >
                 <Trash2 size={15} aria-hidden /> Eliminar
@@ -213,6 +214,7 @@ export default function CuentaAmigos() {
             <Row icon={UserRound} label="Titular de cuenta" value={sel.titular || '—'} />
           </dl>
         </article>
+        <ConfirmDialog open={!!confirm} message={confirm?.message ?? ''} onCancel={() => setConfirm(null)} onConfirm={() => { confirm?.onConfirm(); setConfirm(null) }} />
       </Layout>
     )
   }
@@ -312,7 +314,7 @@ export default function CuentaAmigos() {
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
-                              void borrarCliente(c)
+                              setConfirm({ message: `¿Eliminar a "${c.nombre}"? Esta acción no se puede deshacer.`, onConfirm: () => void borrarCliente(c) })
                             }}
                             aria-label={`Eliminar ${c.nombre}`}
                             className="rounded-lg p-1.5 text-sub transition-colors hover:bg-brand-600/20 hover:text-brand-400"
@@ -329,6 +331,7 @@ export default function CuentaAmigos() {
           </div>
         </div>
       )}
+      <ConfirmDialog open={!!confirm} message={confirm?.message ?? ''} onCancel={() => setConfirm(null)} onConfirm={() => { confirm?.onConfirm(); setConfirm(null) }} />
     </Layout>
   )
 }

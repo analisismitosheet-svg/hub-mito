@@ -4,6 +4,7 @@ import {
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 
@@ -79,6 +80,7 @@ export default function Guias() {
   const [sortAsc, setSortAsc] = useState(false)
   const [card, setCard] = useState<Guia | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
   const POR_PAGINA = 50
 
   const [clientes, setClientes] = useState<ClienteMini[]>([])
@@ -166,7 +168,6 @@ export default function Guias() {
   /* CRUD */
   async function eliminar(g: Guia) {
     if (!supabase) return
-    if (!window.confirm('Eliminar guia de "' + (g.razon_social || '-') + '"?')) return
     const { error: err } = await supabase.from('guias').delete().eq('id', g.id)
     if (err) { mostrarToast('Error al eliminar'); return }
     setSel(null); setCard(null); await cargar(); mostrarToast('Guia eliminada')
@@ -188,7 +189,6 @@ export default function Guias() {
   }
   async function eliminarSeleccionados() {
     if (!supabase || selected.size === 0) return
-    if (!window.confirm(`Eliminar ${selected.size} guia(s)?`)) return
     const ids = [...selected]
     const { error: err } = await supabase.from('guias').delete().in('id', ids)
     if (err) { mostrarToast('Error al eliminar'); return }
@@ -218,7 +218,7 @@ export default function Guias() {
         </div>
         <span className="text-[11px] text-sub/70">{lista.length} guias</span>
         {selected.size > 0 && puedeBorrar && (
-          <button onClick={() => void eliminarSeleccionados()} className="btn-press inline-flex items-center gap-1 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/20"><Trash2 size={13} aria-hidden /> Eliminar ({selected.size})</button>
+          <button onClick={() => setConfirm({ message: `Eliminar ${selected.size} guia(s)?`, onConfirm: () => void eliminarSeleccionados() })} className="btn-press inline-flex items-center gap-1 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/20"><Trash2 size={13} aria-hidden /> Eliminar ({selected.size})</button>
         )}
         {puedeCrear && (
           <div className="flex items-center gap-2">
@@ -288,7 +288,7 @@ export default function Guias() {
                     <td className="px-1 py-[2px] text-right">
                       <div className="flex items-center justify-end gap-px" onClick={(e) => e.stopPropagation()}>
                         {puedeEditar && <button onClick={() => { setSel(g); setModal('edit') }} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Editar"><Pencil size={10} aria-hidden /></button>}
-                        {puedeBorrar && <button onClick={() => void eliminar(g)} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Eliminar"><Trash2 size={10} aria-hidden /></button>}
+                        {puedeBorrar && <button onClick={() => setConfirm({ message: 'Eliminar guia de "' + (g.razon_social || '-') + '"?', onConfirm: () => void eliminar(g) })} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Eliminar"><Trash2 size={10} aria-hidden /></button>}
                       </div>
                     </td>
                   </tr>
@@ -356,6 +356,7 @@ export default function Guias() {
           onSaved={async () => { setModal(null); setSel(null); await cargar(); mostrarToast(modal === 'edit' ? 'Guia actualizada' : 'Guia creada') }}
         />
       )}
+      <ConfirmDialog open={!!confirm} message={confirm?.message ?? ''} onCancel={() => setConfirm(null)} onConfirm={() => { confirm?.onConfirm(); setConfirm(null) }} />
     </Layout>
   )
 }
