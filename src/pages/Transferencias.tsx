@@ -853,12 +853,25 @@ function EnviarTransferencia({ lote, items, usuariosLocales, onClose }: {
     return m
   }, [items])
 
-  // Variantes posibles de un local para matchear el mail del usuario, en AMBOS
-  // sentidos:
+  // Alias de local: agrupa nombres que corresponden al mismo local (depósito). El canónico es INDOD.
+  const ALIAS_LOCAL: Record<string, string> = {
+    DEPO: 'INDOD',
+    DEPOSITO: 'INDOD',
+    INDO: 'INDOD',
+    INDOD: 'INDOD',
+  }
+
+  // Normaliza el código de un local aplicando los alias (solo afecta depósito).
+  function canonLocal(local: string): string {
+    return ALIAS_LOCAL[(local ?? '').trim().toUpperCase()] ?? (local ?? '').trim().toUpperCase()
+  }
+
+  // Variantes posibles de un local para matchear el mail del usuario, sobre el
+  // canónico del local, en AMBOS sentidos:
   // - quita "d" final  (WALMARTD -> WALMART) y también agrega "d" (WALMART -> WALMARTD)
   // - quita "2" final  (RUTA9D2  -> RUTA9D)  y también agrega "2" (RUTA9D -> RUTA9D2)
   function variantesLocal(local: string): string[] {
-    const base = local.trim().toUpperCase()
+    const base = canonLocal(local)
     const out = [base]
     const ayadir = (s: string) => { if (!out.includes(s)) out.push(s) }
     if (base.endsWith('D') && base.length > 1) {
@@ -875,13 +888,13 @@ function EnviarTransferencia({ lote, items, usuariosLocales, onClose }: {
   }
 
   // Para cada origen, los emails de los usuarios aprobados con ese local
-  // (aceptando variantes con/sin "d"/"2" final).
+  // (aceptando variantes con/sin "d"/"2" final y alias de depósito).
   const origenes = useMemo(() => {
     const res: { origen: string; mails: string[]; preview: string }[] = []
     porOrigen.forEach((its, origen) => {
       const variantes = variantesLocal(origen)
       const mails = usuariosLocales
-        .filter((u) => variantes.includes(u.local.trim().toUpperCase()))
+        .filter((u) => variantes.includes(canonLocal(u.local)))
         .map((u) => u.email)
         .filter((e, i, ar) => e && ar.indexOf(e) === i)
       res.push({ origen, mails, preview: construirMailOrigen(origen, its, lote) })

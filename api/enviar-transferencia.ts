@@ -73,9 +73,22 @@ function serviceHeaders(): Record<string, string> | null {
   return { Authorization: `Bearer ${service}`, apikey: service }
 }
 
-/** Variantes de un local para matchear el mail del usuario (con/sin "d"/"2"). */
+/** Alias de local: agrupa nombres que corresponden al mismo local (depósito). El canónico es INDOD. */
+const ALIAS_LOCAL: Record<string, string> = {
+  DEPO: 'INDOD',
+  DEPOSITO: 'INDOD',
+  INDO: 'INDOD',
+  INDOD: 'INDOD',
+}
+
+/** Normaliza el código de un local aplicando los alias (solo afecta depósito). */
+function canonLocal(local: string): string {
+  return ALIAS_LOCAL[(local ?? '').trim().toUpperCase()] ?? (local ?? '').trim().toUpperCase()
+}
+
+/** Variantes de un local para matchear el mail del usuario (con/sin "d"/"2"), sobre el canónico. */
 function variantesLocal(local: string): string[] {
-  const base = local.trim().toUpperCase()
+  const base = canonLocal(local)
   const out = [base]
   const ayadir = (s: string) => { if (!out.includes(s)) out.push(s) }
   if (base.endsWith('D') && base.length > 1) ayadir(base.slice(0, -1))
@@ -275,7 +288,7 @@ export default async function handler(req: Req, res: Res) {
   for (const [origen, its] of porOrigen) {
     const variantes = variantesLocal(origen)
     const mails = usuarios
-      .filter((u) => u.local && variantes.includes(u.local.trim().toUpperCase()))
+      .filter((u) => u.local && variantes.includes(canonLocal(u.local)))
       .map((u) => u.email)
       .filter((e, i, ar) => e && ar.indexOf(e) === i)
 
