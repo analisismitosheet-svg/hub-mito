@@ -274,7 +274,7 @@ export default async function handler(req: Req, res: Res) {
   // Leer usuarios aprobados con local
   let usersResp: Response
   try {
-    usersResp = await fetch(`${base}/rest/v1/usuarios?estado=eq.aprobado&select=email,local&not.local=is.null`, { headers })
+    usersResp = await fetch(`${base}/rest/v1/usuarios?estado=eq.aprobado&select=email,local&local=not.is.null`, { headers })
   } catch {
     return res.status(502).json({ error: 'No se pudieron leer los usuarios' })
   }
