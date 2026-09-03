@@ -21,6 +21,8 @@ interface Guia {
   sucursal: string | null
   en_proceso: boolean
   finalizado: boolean
+  fecha: string | null
+  nro_remito: string | null
   observaciones: string | null
   created_at: string
 }
@@ -255,6 +257,8 @@ export default function Guias() {
                 <tr className="border-b border-line bg-zinc-800 text-left text-[9px] font-semibold uppercase tracking-wider text-zinc-300">
                   <th className="px-1 py-1 text-center"><input type="checkbox" checked={allSelected} onChange={toggleSelectAll} className="h-3 w-3 rounded border-line bg-surface2 accent-brand-600" /></th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('nro_pedido')}>N° Pedido{sortArrow('nro_pedido')}</th>
+                  <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('fecha')}>Fecha{sortArrow('fecha')}</th>
+                  <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('nro_remito')}>N° Remito{sortArrow('nro_remito')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('nro_cliente')}>N° Cl{sortArrow('nro_cliente')}</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('razon_social')}>Razon Social{sortArrow('razon_social')}</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('pedido')}>Pedido{sortArrow('pedido')}</th>
@@ -269,6 +273,8 @@ export default function Guias() {
                   <tr key={g.id} className={'transition hover:bg-line/20 cursor-pointer' + (selected.has(g.id) ? ' bg-brand-600/10' : '')} onClick={() => setCard(g)}>
                     <td className="px-1 py-[2px] text-center" onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={selected.has(g.id)} onChange={() => toggleSelect(g.id)} className="h-3 w-3 rounded border-line bg-surface2 accent-brand-600" /></td>
                     <td className="px-1 py-[2px]"><span className="block truncate font-medium text-ink" title={g.nro_pedido || ''}>{g.nro_pedido || '-'}</span></td>
+                    <td className="px-1 py-[2px] text-center text-sub">{g.fecha || '-'}</td>
+                    <td className="px-1 py-[2px] text-center text-sub">{g.nro_remito || '-'}</td>
                     <td className="px-1 py-[2px] text-center text-sub">{g.nro_cliente || '-'}</td>
                     <td className="px-1 py-[2px]"><span className="block truncate font-medium text-ink" title={g.razon_social || ''}>{g.razon_social || '-'}</span></td>
                     <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={g.pedido || ''}>{g.pedido || '-'}</span></td>
@@ -322,6 +328,8 @@ export default function Guias() {
                 <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-sub/70">Detalles</h3>
                 <dl className="space-y-2 text-[13px]">
                   <CRow label="N° Pedido" value={card.nro_pedido} />
+                  <CRow label="Fecha" value={card.fecha} />
+                  <CRow label="N° Remito" value={card.nro_remito} />
                   <CRow label="N° Cliente" value={card.nro_cliente} />
                   <CRow label="Razon Social" value={card.razon_social} />
                   <CRow label="Pedido" value={card.pedido} />
@@ -390,6 +398,7 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, onClose, 
   const [pedido, setPedido] = useState(guia?.pedido || '')
   const [sucursal, setSucursal] = useState(guia?.sucursal || '')
   const [estado, setEstado] = useState<EstadoGuia>(estadoDe(guia ?? { en_proceso: false, finalizado: false }))
+  const [nroRemito, setNroRemito] = useState(guia?.nro_remito || '')
   const [observaciones, setObservaciones] = useState(guia?.observaciones || '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -439,6 +448,8 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, onClose, 
       sucursal: sucursal || null,
       en_proceso: estado === 'en_proceso',
       finalizado: estado === 'finalizado',
+      nro_remito: nroRemito.trim() || null,
+      fecha: guia ? undefined : new Date().toISOString().slice(0, 10),
       observaciones: observaciones.trim() || null,
     }
 
@@ -478,8 +489,14 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, onClose, 
         <form onSubmit={(e) => void handleSubmit(e)} className="flex-1 overflow-y-auto px-5 py-4">
           {error && <p className="mb-3 rounded-xl border border-brand-600/30 bg-brand-600/10 p-2 text-xs text-brand-400">{error}</p>}
           <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+            {/* Fecha (automatica) */}
+            <label className="block">
+              <span className="mb-0.5 block text-[11px] font-medium text-sub">Fecha</span>
+              <input value={guia?.fecha ?? new Date().toISOString().slice(0, 10)} readOnly className={inputCls + ' cursor-default opacity-70'} />
+            </label>
+
             {/* Nro Pedido */}
-            <label className="block sm:col-span-2">
+            <label className="block">
               <span className="mb-0.5 block text-[11px] font-medium text-sub">Nro Pedido *</span>
               <input value={nroPedido} onChange={(e) => setNroPedido(e.target.value)} placeholder="874, 824, 682" className={inputCls} />
             </label>
@@ -539,6 +556,12 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, onClose, 
                   <button type="button" onClick={() => setShowSucursalCustom(false)} className="shrink-0 rounded-lg border border-line px-2 text-xs text-sub hover:bg-line">X</button>
                 </div>
               )}
+            </label>
+
+            {/* Nro Remito */}
+            <label className="block">
+              <span className="mb-0.5 block text-[11px] font-medium text-sub">N° Remito</span>
+              <input value={nroRemito} onChange={(e) => setNroRemito(e.target.value)} placeholder="Remito (opcional)..." className={inputCls} />
             </label>
 
             {/* Estado */}
@@ -605,6 +628,7 @@ function ImportGuias({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
     { key: 'razon_social', label: 'Razon Social' },
     { key: 'pedido', label: 'Pedido' },
     { key: 'sucursal', label: 'Sucursal' },
+    { key: 'nro_remito', label: 'N Remito' },
     { key: 'estado', label: 'Estado' },
     { key: 'observaciones', label: 'Observaciones' },
   ]
@@ -619,6 +643,7 @@ function ImportGuias({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
       else if (n.includes('razonsocial') || n.includes('razon')) m['razon_social'] = h
       else if (n === 'pedido' || n.includes('tipo')) m['pedido'] = h
       else if (n === 'sucursal' || n.includes('sucursal')) m['sucursal'] = h
+      else if (n.includes('remito') || n === 'nremito') m['nro_remito'] = h
       else if (n === 'estado' || n === 'enproceso' || n.includes('finalizado')) { if (!m['estado']) m['estado'] = h }
       else if (n.includes('observacion') || n === 'obs') m['observaciones'] = h
     })
@@ -671,6 +696,7 @@ function ImportGuias({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
       nr.razon_social = nr.razon_social ? cleanVal(String(nr.razon_social)) : null
       nr.pedido = nr.pedido ? normalizarPedido(String(nr.pedido)) : null
       nr.sucursal = nr.sucursal ? cleanVal(String(nr.sucursal)).toUpperCase() : null
+      nr.nro_remito = nr.nro_remito ? cleanVal(String(nr.nro_remito)) : null
       nr.observaciones = nr.observaciones ? cleanVal(String(nr.observaciones)) : null
 
       valid.push(nr)
@@ -692,6 +718,8 @@ function ImportGuias({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
         sucursal: r.sucursal || null,
         en_proceso: !!r.en_proceso,
         finalizado: !!r.finalizado,
+        nro_remito: r.nro_remito ? (r.nro_remito as string) : null,
+        fecha: new Date().toISOString().slice(0, 10),
         observaciones: r.observaciones || null,
       }))
       const { error } = await supabase.from('guias').insert(batch)
