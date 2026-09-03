@@ -259,23 +259,23 @@ export default function Guias() {
       ) : (
         <div className="w-full overflow-hidden rounded-2xl border border-line">
           <div className="w-full overflow-x-auto">
-            <table className="w-full table-fixed border-collapse text-[11px] leading-tight">
+            <table className="w-full table-auto border-collapse text-sm leading-tight">
               <colgroup>
-                <col className="w-[3%]" />  {/* Check */}
-                <col className="w-[11%]" /> {/* Nro Pedido */}
-                <col className="w-[7%]" />  {/* Fecha */}
-                <col className="w-[7%]" />  {/* Nro Remito */}
-                <col className="w-[5%]" />  {/* Bulto */}
-                <col className="w-[8%]" />  {/* Nro Cliente */}
-                <col className="w-[16%]" /> {/* Razon Social */}
-                <col className="w-[12%]" /> {/* Pedido */}
-                <col className="w-[8%]" />  {/* Sucursal */}
-                <col className="w-[12%]" /> {/* Estado */}
-                <col className="w-[9%]" />  {/* Observaciones */}
-                <col className="w-[7%]" />  {/* Acc */}
+                <col className="w-[28px]" />                    {/* Check */}
+                <col className="min-w-[80px]" />                {/* Nro Pedido */}
+                <col className="min-w-[80px]" />                {/* Fecha */}
+                <col className="min-w-[80px]" />                {/* Nro Remito */}
+                <col className="w-[56px]" />                    {/* Bulto */}
+                <col className="w-[64px]" />                    {/* Nro Cliente */}
+                <col className="min-w-[140px] max-w-[240px]" /> {/* Razon Social */}
+                <col className="min-w-[100px] max-w-[200px]" /> {/* Pedido */}
+                <col className="min-w-[90px]" />                {/* Sucursal */}
+                <col className="min-w-[110px]" />               {/* Estado */}
+                <col className="min-w-[120px] max-w-[220px]" /> {/* Observaciones */}
+                <col className="min-w-[110px]" />               {/* Acc */}
               </colgroup>
               <thead>
-                <tr className="border-b border-line bg-zinc-800 text-left text-[9px] font-semibold uppercase tracking-wider text-zinc-300">
+                <tr className="border-b border-line bg-zinc-800 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-300">
                   <th className="px-1 py-1 text-center"><input type="checkbox" checked={allSelected} onChange={toggleSelectAll} className="h-3 w-3 rounded border-line bg-surface2 accent-brand-600" /></th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('nro_pedido')}>N° Pedido{sortArrow('nro_pedido')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('fecha')}>Fecha{sortArrow('fecha')}</th>
@@ -294,14 +294,14 @@ export default function Guias() {
                 {listaPagina.map((g) => (
                   <tr key={g.id} className={'cursor-pointer transition ' + claseFila(g) + (selected.has(g.id) ? ' ring-2 ring-inset ring-brand-500' : ' hover:brightness-110')} onClick={() => setCard(g)}>
                     <td className="px-1 py-[2px] text-center" onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={selected.has(g.id)} onChange={() => toggleSelect(g.id)} className="h-3 w-3 rounded border-line bg-surface2 accent-brand-600" /></td>
-                    <td className="px-1 py-[2px]"><span className="block truncate font-medium text-ink" title={g.nro_pedido || ''}>{g.nro_pedido || '-'}</span></td>
+                    <td className="px-1 py-[2px]"><span className="block max-w-[180px] truncate font-medium text-ink" title={g.nro_pedido || ''}>{g.nro_pedido || '-'}</span></td>
                     <td className="px-1 py-[2px] text-center text-sub">{g.fecha || '-'}</td>
                     <td className="px-1 py-[2px] text-center text-sub">{g.nro_remito || '-'}</td>
                     <td className="px-1 py-[2px] text-center text-sub">{g.bulto != null ? g.bulto : '-'}</td>
                     <td className="px-1 py-[2px] text-center text-sub">{g.nro_cliente || '-'}</td>
-                    <td className="px-1 py-[2px]"><span className="block truncate font-medium text-ink" title={g.razon_social || ''}>{g.razon_social || '-'}</span></td>
-                    <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={g.pedido || ''}>{g.pedido || '-'}</span></td>
-                    <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={g.sucursal || ''}>{g.sucursal || '-'}</span></td>
+                    <td className="px-1 py-[2px]"><span className="block max-w-[240px] truncate font-medium text-ink" title={g.razon_social || ''}>{g.razon_social || '-'}</span></td>
+                    <td className="px-1 py-[2px]"><span className="block max-w-[200px] truncate text-sub" title={g.pedido || ''}>{g.pedido || '-'}</span></td>
+                    <td className="px-1 py-[2px]"><span className="block max-w-[150px] truncate text-sub" title={g.sucursal || ''}>{g.sucursal || '-'}</span></td>
                     <td className="px-1 py-[2px] text-center" onClick={(e) => e.stopPropagation()}>
                       <select
                         value={estadoDe(g)}
@@ -314,7 +314,7 @@ export default function Guias() {
                         <option value="FINALIZADO">Finalizado</option>
                       </select>
                     </td>
-                    <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={g.observaciones || ''}>{g.observaciones || '-'}</span></td>
+                    <td className="px-1 py-[2px]"><span className="block max-w-[220px] truncate text-sub" title={g.observaciones || ''}>{g.observaciones || '-'}</span></td>
                     <td className="px-1 py-[2px] text-right">
                       <div className="flex items-center justify-end gap-px" onClick={(e) => e.stopPropagation()}>
                         <button onClick={() => setEtiquetaSel(g)} className="rounded border border-line p-0.5 text-sub transition hover:text-amber-400" title="Etiquetas / Imprimir"><Printer size={10} aria-hidden /></button>
