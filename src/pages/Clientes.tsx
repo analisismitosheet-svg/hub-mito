@@ -50,6 +50,33 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('es-AR', { year: 'numeric', month: '2-digit', day: '2-digit' })
 }
 
+// Normaliza texto para búsqueda: sin acentos, sin símbolos raros, en mayúsculas.
+function normBusqueda(s: string): string {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim()
+}
+
+// Todos los valores textuales de un cliente (para buscar por cualquier columna).
+function camposBuscablesCliente(c: Cliente): string[] {
+  return [
+    c.n_cliente,
+    c.razon_social,
+    c.telefono,
+    c.telefono_2,
+    c.direccion_barrio,
+    c.direccion_barrio_2,
+    c.localidad_provincia,
+    c.transporte,
+    c.direccion_entrega,
+    c.direccion_entrega_2,
+    c.valor_declarado,
+    c.cuenta,
+    c.sucursal,
+    c.obs_membretes,
+    c.obs_facturacion,
+    c.estado,
+  ].filter((v): v is string => !!v)
+}
+
 function nextNCliente(todos: Cliente[]): string {
   const nums = todos.map((c) => c.n_cliente).filter(Boolean).map((n) => parseInt(n!, 10)).filter((n) => !isNaN(n))
   const max = nums.length ? Math.max(...nums) : 0
@@ -99,10 +126,22 @@ export default function Clientes() {
   useEffect(() => { void cargar() }, [cargar])
 
   const term = q.trim().toUpperCase()
+  const termNorm = normBusqueda(term)
+  const termDigitos = term.replace(/\D/g, '')
   const lista = useMemo(() => {
     let r = todos
     if (filtro !== 'todos') r = r.filter((c) => c.estado === filtro)
-    if (term) r = r.filter((c) => (c.razon_social || '').toUpperCase().includes(term) || String(c.n_cliente).includes(term.replace(/\D/g, '')) || (c.telefono || '').replace(/\D/g, '').includes(term.replace(/\D/g, '')))
+    if (term) {
+      r = r.filter((c) => {
+        if (termDigitos) {
+          // Si viene un número, comparalo contra n_cliente, teléfonos, sucursal, etc.
+          const numericos = camposBuscablesCliente(c).filter((v) => /\d/.test(v))
+          if (numericos.some((v) => v.replace(/\D/g, '').includes(termDigitos))) return true
+        }
+        // Búsqueda de texto en cualquier columna (sin acentos).
+        return camposBuscablesCliente(c).some((v) => normBusqueda(v).includes(termNorm))
+      })
+    }
     r = [...r].sort((a, b) => {
       const av = (a[sortKey] ?? '') as string
       const bv = (b[sortKey] ?? '') as string
@@ -110,7 +149,7 @@ export default function Clientes() {
       return sortAsc ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
     })
     return r
-  }, [todos, term, filtro, sortKey, sortAsc])
+  }, [todos, term, termNorm, termDigitos, filtro, sortKey, sortAsc])
   const totalPaginas = Math.max(1, Math.ceil(lista.length / POR_PAGINA))
   const paginaSegura = Math.min(pagina, totalPaginas)
   const listaPagina = lista.slice((paginaSegura - 1) * POR_PAGINA, paginaSegura * POR_PAGINA)
