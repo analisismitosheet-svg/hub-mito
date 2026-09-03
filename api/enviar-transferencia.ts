@@ -244,6 +244,8 @@ export default async function handler(req: Req, res: Res) {
   const loteId = typeof body.lote_id === 'string' ? body.lote_id.trim() : ''
   if (!loteId) return res.status(400).json({ error: 'Falta lote_id' })
 
+  const dryRun = body.dry_run === true || body.dry_run === 'true'
+
   const headers = serviceHeaders()
   if (!headers) return res.status(500).json({ error: 'Falta configurar SUPABASE_SERVICE_ROLE_KEY' })
   const base = process.env.SUPABASE_URL!
@@ -289,24 +291,42 @@ export default async function handler(req: Req, res: Res) {
     porOrigen.set(o, a)
   }
 
+  const enviados: string[] = []
+  const sinMail: string[] = []
+  const errores: string[] = []
+  const total = porOrigen.size
+
+  if (total === 0) return res.status(400).json({ error: 'El lote no tiene ítems con origen' })
+
+  // Calcula los destinatarios de cada origen (mismo matcheo que el envío real).
+  const detalle = Array.from(porOrigen.entries()).map(([origen, its]) => {
+    const variantes = variantesLocal(origen)
+    const mails = usuarios
+      .filter((u) => u.local && variantes.includes(canonLocal(u.local)))
+      .map((u) => u.email)
+      .filter((e, i, ar) => e && ar.indexOf(e) === i)
+    return { origen, mails, items: its }
+  })
+
+  // Modo "solo visión": resuelve los destinatarios sin enviar (para que la UI
+  // muestre a quién le llegaría, evitando la RLS de la tabla usuarios del front).
+  if (dryRun) {
+    return res.status(200).json({
+      dry: true,
+      destinatarios: detalle.map(({ origen, mails }) => ({ origen, mails, sinMail: mails.length === 0 })),
+      conMail: detalle.filter((d) => d.mails.length > 0).map((d) => d.origen),
+      sinMail: detalle.filter((d) => d.mails.length === 0).map((d) => d.origen),
+      resumen: `Destinos con mail ${detalle.filter((d) => d.mails.length > 0).length}, sin mail ${detalle.filter((d) => d.mails.length === 0).length} de ${total} locales`,
+    })
+  }
+
   const cfg = graphConfig()
   if (!cfg) return res.status(500).json({ error: 'Falta configurar Azure AD (tenant/client/secret) o MAIL_FROM' })
 
   const graphToken = await obtenerGraphToken(cfg)
   if (!graphToken) return res.status(502).json({ error: 'No se pudo autenticar en Microsoft Graph' })
 
-  const enviados: string[] = []
-  const sinMail: string[] = []
-  const errores: string[] = []
-  const total = porOrigen.size
-
-  for (const [origen, its] of porOrigen) {
-    const variantes = variantesLocal(origen)
-    const mails = usuarios
-      .filter((u) => u.local && variantes.includes(canonLocal(u.local)))
-      .map((u) => u.email)
-      .filter((e, i, ar) => e && ar.indexOf(e) === i)
-
+  for (const { origen, mails, items: its } of detalle) {
     if (mails.length === 0) {
       sinMail.push(origen)
       continue
@@ -321,8 +341,6 @@ export default async function handler(req: Req, res: Res) {
       errores.push(`${origen}: ${e instanceof Error ? e.message : String(e)}`)
     }
   }
-
-  if (total === 0) return res.status(400).json({ error: 'El lote no tiene ítems con origen' })
 
   return res.status(200).json({
     enviados,

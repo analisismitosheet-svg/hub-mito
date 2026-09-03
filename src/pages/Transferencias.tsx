@@ -853,6 +853,33 @@ function EnviarTransferencia({ lote, items, usuariosLocales, onClose }: {
     return m
   }, [items])
 
+  // Resolve los mails de cada origen desde el backend (service role, sin RLS).
+  // Esto evita que usuarios sin permiso de lectura a "usuarios" vean "Sin email".
+  const [destRemotos, setDestRemotos] = useState<Map<string, string[]> | null>(null)
+  useEffect(() => {
+    if (!supabase || !lote.id) return
+    let abortado = false
+    ;(async () => {
+      try {
+        const { data } = await supabase.auth.getSession()
+        const token = data.session?.access_token
+        if (!token) return
+        const r = await fetch('/api/enviar-transferencia', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ lote_id: lote.id, dry_run: true }),
+        })
+        if (!r.ok) return
+        const json = await r.json().catch(() => null) as { destinatarios?: { origen: string; mails: string[] }[] } | null
+        if (abortado || !json?.destinatarios) return
+        const m = new Map<string, string[]>()
+        for (const d of json.destinatarios) m.set(d.origen, d.mails)
+        setDestRemotos(m)
+      } catch { /* fallback a locales front */ }
+    })()
+    return () => { abortado = true }
+  }, [supabase, lote.id])
+
   // Alias de local: agrupa nombres que corresponden al mismo local (depósito). El canónico es INDOD.
   const ALIAS_LOCAL: Record<string, string> = {
     DEPO: 'INDOD',
@@ -887,20 +914,23 @@ function EnviarTransferencia({ lote, items, usuariosLocales, onClose }: {
     return out
   }
 
-  // Para cada origen, los emails de los usuarios aprobados con ese local
-  // (aceptando variantes con/sin "d"/"2" final y alias de depósito).
+  // Para cada origen, los emails de los usuarios aprobados con ese local.
+  // Si el backend devolvió los mails, los usa (sin RLS). Sino, fallback a usuariosLocales.
   const origenes = useMemo(() => {
     const res: { origen: string; mails: string[]; preview: string }[] = []
     porOrigen.forEach((its, origen) => {
-      const variantes = variantesLocal(origen)
-      const mails = usuariosLocales
-        .filter((u) => variantes.includes(canonLocal(u.local)))
-        .map((u) => u.email)
-        .filter((e, i, ar) => e && ar.indexOf(e) === i)
+      const mailsRemoto = destRemotos?.get(origen)
+      const mails = mailsRemoto ?? (() => {
+        const variantes = variantesLocal(origen)
+        return usuariosLocales
+          .filter((u) => variantes.includes(canonLocal(u.local)))
+          .map((u) => u.email)
+          .filter((e, i, ar) => e && ar.indexOf(e) === i)
+      })()
       res.push({ origen, mails, preview: construirMailOrigen(origen, its, lote) })
     })
     return res
-  }, [porOrigen, usuariosLocales, lote])
+  }, [porOrigen, usuariosLocales, destRemotos, lote])
 
   const conMail = origenes.filter((o) => o.mails.length > 0)
   const sinMail = origenes.filter((o) => o.mails.length === 0)
