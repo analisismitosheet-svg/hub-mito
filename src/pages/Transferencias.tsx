@@ -856,26 +856,28 @@ function EnviarTransferencia({ lote, items, usuariosLocales, onClose }: {
   // Resolve los mails de cada origen desde el backend (service role, sin RLS).
   // Esto evita que usuarios sin permiso de lectura a "usuarios" vean "Sin email".
   const [destRemotos, setDestRemotos] = useState<Map<string, string[]> | null>(null)
+  const [cargandoMails, setCargandoMails] = useState(true)
   useEffect(() => {
-    if (!supabase || !lote.id) return
+    if (!supabase || !lote.id) { setCargandoMails(false); return }
     let abortado = false
     ;(async () => {
       try {
         const { data } = await supabase.auth.getSession()
         const token = data.session?.access_token
-        if (!token) return
+        if (!token) { if (!abortado) setCargandoMails(false); return }
         const r = await fetch('/api/enviar-transferencia', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ lote_id: lote.id, dry_run: true }),
         })
-        if (!r.ok) return
+        if (!r.ok) { console.error('[dry-run] HTTP', r.status); if (!abortado) setCargandoMails(false); return }
         const json = await r.json().catch(() => null) as { destinatarios?: { origen: string; mails: string[] }[] } | null
-        if (abortado || !json?.destinatarios) return
+        if (abortado || !json?.destinatarios) { if (!abortado) setCargandoMails(false); return }
         const m = new Map<string, string[]>()
         for (const d of json.destinatarios) m.set(d.origen, d.mails)
-        setDestRemotos(m)
-      } catch { /* fallback a locales front */ }
+        console.log('[dry-run] ok:', json.destinatarios.length, 'orígenes con mails')
+        if (!abortado) { setDestRemotos(m); setCargandoMails(false) }
+      } catch (e) { console.error('[dry-run] error:', e); if (!abortado) setCargandoMails(false) }
     })()
     return () => { abortado = true }
   }, [supabase, lote.id])
@@ -985,7 +987,7 @@ function EnviarTransferencia({ lote, items, usuariosLocales, onClose }: {
         setResultado({ ok: false, mensaje: json.error ?? `Error ${res.status}` })
       }
     } catch {
-      setResultado({ ok: false, mensaje: 'No se pudo enviar. Revisá la configuración SMTP.' })
+      setResultado({ ok: false, mensaje: 'No se pudo enviar. Revisá la configuración de Graph.' })
     } finally {
       setEnviando(false)
     }
@@ -999,12 +1001,12 @@ function EnviarTransferencia({ lote, items, usuariosLocales, onClose }: {
           <div className="flex items-center gap-2">
             <button
               onClick={enviarTodo}
-              disabled={enviando || conMail.length === 0}
+              disabled={enviando || cargandoMails || conMail.length === 0}
               className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-40"
-              title="Envía automáticamente un mail a cada local con su hoja (SMTP Outlook)"
+              title={cargandoMails ? 'Cargando destinatarios…' : 'Envía automáticamente un mail a cada local con su hoja (Microsoft Graph)'}
             >
-              {enviando ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} aria-hidden />}
-              {enviando ? 'Enviando…' : `Enviar todo (${conMail.length})`}
+              {enviando || cargandoMails ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} aria-hidden />}
+              {enviando ? 'Enviando…' : cargandoMails ? 'Cargando mails…' : `Enviar todo (${conMail.length})`}
             </button>
             <button onClick={onClose} aria-label="Cerrar" className="rounded-lg p-1.5 text-sub hover:bg-line hover:text-ink">
               <X size={18} aria-hidden />
