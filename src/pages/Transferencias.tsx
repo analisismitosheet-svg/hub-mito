@@ -870,7 +870,12 @@ function EnviarTransferencia({ lote, items, usuariosLocales, onClose }: {
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ lote_id: lote.id, dry_run: true }),
         })
-        if (!r.ok) { console.error('[dry-run] HTTP', r.status); if (!abortado) setCargandoMails(false); return }
+        if (!r.ok) {
+          const cuerpo = await r.text().catch(() => '')
+          console.error('[dry-run] HTTP', r.status, cuerpo)
+          if (!abortado) setCargandoMails(false)
+          return
+        }
         const json = await r.json().catch(() => null) as { destinatarios?: { origen: string; mails: string[] }[] } | null
         if (abortado || !json?.destinatarios) { if (!abortado) setCargandoMails(false); return }
         const m = new Map<string, string[]>()
