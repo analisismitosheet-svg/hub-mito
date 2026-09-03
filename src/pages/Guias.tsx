@@ -57,6 +57,13 @@ function estadoDe(g: Pick<Guia, 'estado' | 'en_proceso' | 'finalizado'>): Estado
   return g.finalizado ? 'FINALIZADO' : 'EN_PROCESO'
 }
 
+function claseFila(g: Pick<Guia, 'estado' | 'en_proceso' | 'finalizado'>): string {
+  const e = estadoDe(g)
+  if (e === 'FINALIZADO') return 'bg-emerald-500/10'
+  if (e === 'NUEVO') return 'bg-red-500/10'
+  return 'bg-amber-500/10'
+}
+
 function cambiarEstadoEnTodos(todos: Guia[], id: string, estado: EstadoGuia): Guia[] {
   return todos.map((x) => x.id === id ? {
     ...x,
@@ -278,7 +285,7 @@ export default function Guias() {
               </thead>
               <tbody className="divide-y divide-line/50 bg-surface">
                 {listaPagina.map((g) => (
-                  <tr key={g.id} className={'transition hover:bg-line/20 cursor-pointer' + (selected.has(g.id) ? ' bg-brand-600/10' : '')} onClick={() => setCard(g)}>
+                  <tr key={g.id} className={'cursor-pointer transition ' + claseFila(g) + (selected.has(g.id) ? ' ring-2 ring-inset ring-brand-500' : ' hover:brightness-110')} onClick={() => setCard(g)}>
                     <td className="px-1 py-[2px] text-center" onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={selected.has(g.id)} onChange={() => toggleSelect(g.id)} className="h-3 w-3 rounded border-line bg-surface2 accent-brand-600" /></td>
                     <td className="px-1 py-[2px]"><span className="block truncate font-medium text-ink" title={g.nro_pedido || ''}>{g.nro_pedido || '-'}</span></td>
                     <td className="px-1 py-[2px] text-center text-sub">{g.fecha || '-'}</td>
