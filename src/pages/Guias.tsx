@@ -90,6 +90,11 @@ export default function Guias() {
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [q, setQ] = useState('')
+  const [fFechaDesde, setFFechaDesde] = useState('')
+  const [fFechaHasta, setFFechaHasta] = useState('')
+  const [fEstado, setFEstado] = useState('')
+  const [fPedido, setFPedido] = useState('')
+  const [fSucursal, setFSucursal] = useState('')
   const [modal, setModal] = useState<'new' | 'edit' | 'importar' | null>(null)
   const [sel, setSel] = useState<Guia | null>(null)
   const [toast, setToast] = useState<string | null>(null)
@@ -166,6 +171,11 @@ export default function Guias() {
       (g.pedido || '').toUpperCase().includes(term) ||
       (g.sucursal || '').toUpperCase().includes(term)
     )
+    if (fFechaDesde) r = r.filter((g) => (g.fecha || '') >= fFechaDesde)
+    if (fFechaHasta) r = r.filter((g) => (g.fecha || '') <= fFechaHasta)
+    if (fEstado) r = r.filter((g) => estadoDe(g) === fEstado)
+    if (fPedido) r = r.filter((g) => (g.pedido || '') === fPedido)
+    if (fSucursal) r = r.filter((g) => (g.sucursal || '') === fSucursal)
     r = [...r].sort((a, b) => {
       const av = a[sortKey] ?? ''
       const bv = b[sortKey] ?? ''
@@ -173,7 +183,7 @@ export default function Guias() {
       return sortAsc ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
     })
     return r
-  }, [todos, term, sortKey, sortAsc])
+  }, [todos, term, sortKey, sortAsc, fFechaDesde, fFechaHasta, fEstado, fPedido, fSucursal])
 
   const totalPaginas = Math.max(1, Math.ceil(lista.length / POR_PAGINA))
   const paginaSafe = Math.min(pagina, totalPaginas)
@@ -236,6 +246,22 @@ export default function Guias() {
           <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sub/70" aria-hidden />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por pedido, cliente, razon social..." className={inputCls + ' pl-8 text-xs'} />
         </div>
+        <input type="date" value={fFechaDesde} onChange={(e) => setFFechaDesde(e.target.value)} className={inputCls + ' w-auto text-xs'} title="Desde fecha" />
+        <input type="date" value={fFechaHasta} onChange={(e) => setFFechaHasta(e.target.value)} className={inputCls + ' w-auto text-xs'} title="Hasta fecha" />
+        <select value={fEstado} onChange={(e) => setFEstado(e.target.value)} className={selectCls + ' w-auto text-xs'} title="Filtrar por estado">
+          <option value="">Estado (todos)</option>
+          <option value="NUEVO">Nuevo</option>
+          <option value="EN_PROCESO">En Proceso</option>
+          <option value="FINALIZADO">Finalizado</option>
+        </select>
+        <select value={fPedido} onChange={(e) => setFPedido(e.target.value)} className={selectCls + ' w-auto text-xs'} title="Filtrar por pedido">
+          <option value="">Pedido (todos)</option>
+          {pedidoOpciones.map((o) => <option key={o} value={o}>{o}</option>)}
+        </select>
+        <select value={fSucursal} onChange={(e) => setFSucursal(e.target.value)} className={selectCls + ' w-auto text-xs'} title="Filtrar por sucursal">
+          <option value="">Sucursal (todas)</option>
+          {sucursalOpciones.map((o) => <option key={o} value={o}>{o}</option>)}
+        </select>
         <span className="text-[11px] text-sub/70">{lista.length} guias</span>
         {selected.size > 0 && puedeBorrar && (
           <button onClick={() => setConfirm({ message: `Eliminar ${selected.size} guia(s)?`, onConfirm: () => void eliminarSeleccionados() })} className="btn-press inline-flex items-center gap-1 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/20"><Trash2 size={13} aria-hidden /> Eliminar ({selected.size})</button>
@@ -498,6 +524,8 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, onClose, 
         await supabase.from('facturacion_fabrica').insert({
           n_cliente: nroCliente.trim() || null,
           razon_social: razonSocial.trim() || null,
+          n_remito: nroRemito.trim() || null,
+          bulto: bulto ? Number(bulto) || null : null,
           fecha_fact: new Date().toISOString().slice(0, 10),
           observaciones: obsFact || null,
         })

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BookmarkPlus, Printer, X } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
+import { supabase } from '@/lib/supabase'
 
 const inputCls = 'w-full rounded-xl border border-line bg-surface2 px-3 py-1.5 text-[13px] text-ink outline-none transition duration-250 placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40'
 
@@ -29,16 +30,28 @@ export interface EtiquetaCliente {
 }
 
 export async function fetchClienteEtiqueta(nCl: string, fallback: { razon_social: string | null; transporte: string | null; observaciones: string | null }): Promise<EtiquetaCliente> {
-  const data: Record<string, string> = {}
+  let data: Record<string, unknown> = {}
+  if (supabase) {
+    try {
+      const { data: rows, error } = await supabase
+        .from('clientes')
+        .select('n_cliente,razon_social,telefono,transporte,direccion_entrega,direccion_barrio,localidad_provincia,obs_membretes,obs_facturacion,localidad')
+        .eq('n_cliente', nCl)
+        .limit(1)
+      if (!error && rows && rows.length > 0) data = rows[0] as Record<string, unknown>
+    } catch { /* si falla, uso fallback */ }
+  }
+  const provinciaLocalidad = String(data.localidad_provincia ?? '')
+  const [local, provincia] = provinciaLocalidad.split(/[-–/]/).map((s) => s.trim())
   return {
     numeroCliente: nCl,
-    razonSocial: data.razonSocial ?? fallback.razon_social ?? '',
-    direccion: data.direccion ?? 'Direccion de ejemplo 123, Piso X - Dto Y',
-    localidad: data.localidad ?? 'Localidad de ejemplo',
-    provincia: data.provincia ?? 'Buenos Aires',
-    telefono: data.telefono ?? '(011) 5555-0000',
-    transporte: fallback.transporte ?? '',
-    observaciones: fallback.observaciones ?? '',
+    razonSocial: String(data.razon_social ?? '') || (fallback.razon_social ?? ''),
+    direccion: String(data.direccion_barrio ?? '') || String(data.direccion_entrega ?? '') || '',
+    localidad: String(data.localidad ?? '') || local || '',
+    provincia: provincia || '',
+    telefono: String(data.telefono ?? ''),
+    transporte: String(data.transporte ?? '') || (fallback.transporte ?? ''),
+    observaciones: String(data.obs_membretes ?? '') || (fallback.observaciones ?? ''),
   }
 }
 
