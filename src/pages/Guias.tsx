@@ -447,6 +447,18 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, onClose, 
       result = await supabase.from('guias').update(payload).eq('id', guia.id).select().single()
     } else {
       result = await supabase.from('guias').insert(payload).select().single()
+      if (!result.error && supabase) {
+        const obsFact = [
+          `Generado desde Guia N° ${payload.nro_pedido}`,
+          observaciones.trim() || null,
+        ].filter(Boolean).join(' | ')
+        await supabase.from('facturacion_fabrica').insert({
+          n_cliente: nroCliente.trim() || null,
+          razon_social: razonSocial.trim() || null,
+          fecha_fact: new Date().toISOString().slice(0, 10),
+          observaciones: obsFact || null,
+        })
+      }
     }
     setBusy(false)
     if (result.error) { setError(result.error.message); return }
