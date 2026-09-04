@@ -587,6 +587,7 @@ export default function FacturacionFabrica() {
                 <col className="w-[3%]" />  {/* Aut */}
                 <col className="w-[11%]" /> {/* Razon */}
                 <col className="w-[8%]" />  {/* F.Fact */}
+                <col className="w-[8%]" />  {/* F.Creacion (guia) */}
                 <col className="w-[8%]" />  {/* Remito */}
                 <col className="w-[3%]" />  {/* N Cl */}
                 <col className="w-[3%]" />  {/* Bulto */}
@@ -608,6 +609,7 @@ export default function FacturacionFabrica() {
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('autorizacion')}>Aut{sortArrow('autorizacion')}</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('razon_social')}>Razon Social{sortArrow('razon_social')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('fecha_fact')}>Fecha Facturacion{sortArrow('fecha_fact')}</th>
+                  <th className="px-1 py-1 text-center whitespace-nowrap text-sub/70" title="Fecha de creacion de la guia">Fecha Creacion</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('n_remito')}>N Remito{sortArrow('n_remito')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('n_cliente')}>N Cl{sortArrow('n_cliente')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('bulto')}>Bulto{sortArrow('bulto')}</th>
@@ -631,6 +633,7 @@ export default function FacturacionFabrica() {
                     {celdaSelect(r, 'autorizacion', r.autorizacion, ['SI', 'NO'], { alinear: ' text-center' })}
                     {celdaTexto(r, 'razon_social', r.razon_social)}
                     {celdaTexto(r, 'fecha_fact', r.fecha_fact, { type: 'date', alinear: ' text-center whitespace-nowrap' })}
+                    <td className="px-1 py-[2px] text-center whitespace-nowrap text-sub">{r.guia_id && guiasFecha[r.guia_id] ? fmtDateSlider(guiasFecha[r.guia_id]) : '-'}</td>
                     {celdaTexto(r, 'n_remito', r.n_remito)}
                     {celdaCliente(r)}
                     {celdaTexto(r, 'bulto', r.bulto != null ? String(r.bulto) : null, { type: 'number', alinear: ' text-center' })}
