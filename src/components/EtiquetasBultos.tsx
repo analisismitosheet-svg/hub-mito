@@ -83,8 +83,7 @@ export function EtiquetaBulto({ cliente, num, total, destino, origen, nRemito, a
       <div className="etq-razon">{cliente.razonSocial}</div>
       <div className="etq-line">TE: {cliente.telefono}</div>
       <div className="etq-dir"><b>DIR. ENTREGA:</b> {cliente.direccion}</div>
-      <div className="etq-line">{cliente.localidad} - {cliente.provincia}</div>
-      <div className="etq-line"><b>TEL CONTACTO:</b> {cliente.telefono}</div>
+      <div className="etq-line"><b>LOCALIDAD:</b> {cliente.localidad} - {cliente.provincia}</div>
       <div className="etq-obs">OBS: {cliente.observaciones || '-'}</div>
       <div className="etq-transp">TRANSPORTE: {cliente.transporte || '-'} · BULTOS {num}/{total}</div>
     </div>
