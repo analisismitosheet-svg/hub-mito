@@ -26,13 +26,11 @@ interface FactRegistro {
   transporte: string | null
   porcentaje_declarado: string | null
   solicitud_retiro: string | null
-  total_despachos: string | null
   empleado_id: string | null
   n_legajo: string | null
   quien_facturo: string | null
   polo52: boolean
   fecha_envio: string | null
-  quien_retira_fabrica: string | null
   observaciones: string | null
   created_at: string
 }
@@ -374,12 +372,10 @@ export default function FacturacionFabrica() {
                 <col className="w-[5%]" />  {/* Transp */}
                 <col className="w-[4%]" />  {/* %Decl */}
                 <col className="w-[5%]" />  {/* SolRetiro */}
-                <col className="w-[4%]" />  {/* TotDesp */}
-                <col className="w-[4%]" />  {/* Legajo */}
+                <col className="w-[5%]" />  {/* Legajo */}
                 <col className="w-[7%]" />  {/* Quien Fact */}
                 <col className="w-[4%]" />  {/* POLO52 */}
                 <col className="w-[5%]" />  {/* F.Envio */}
-                <col className="w-[5%]" />  {/* Retira */}
                 <col className="w-[6%]" />  {/* Obs */}
                 <col className="w-[4%]" />  {/* Acc */}
               </colgroup>
@@ -395,12 +391,10 @@ export default function FacturacionFabrica() {
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('transporte')}>Transporte{sortArrow('transporte')}</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('porcentaje_declarado')}>%Decl{sortArrow('porcentaje_declarado')}</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('solicitud_retiro')}>Sol.Retiro{sortArrow('solicitud_retiro')}</th>
-                  <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('total_despachos')}>Tot.Desp{sortArrow('total_despachos')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('n_legajo')}>Legajo{sortArrow('n_legajo')}</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('quien_facturo')}>Quien Fact{sortArrow('quien_facturo')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('polo52')}>Polo{sortArrow('polo52')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('fecha_envio')}>F.Envio{sortArrow('fecha_envio')}</th>
-                  <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('quien_retira_fabrica')}>Quien Retira{sortArrow('quien_retira_fabrica')}</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('observaciones')}>Observ{sortArrow('observaciones')}</th>
                   <th className="px-1 py-1 text-right whitespace-nowrap">Acc</th>
                 </tr>
@@ -418,12 +412,10 @@ export default function FacturacionFabrica() {
                     <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={r.transporte || ''}>{r.transporte || '-'}</span></td>
                     <td className="px-1 py-[2px] text-sub">{r.porcentaje_declarado || '-'}</td>
                     <td className="px-1 py-[2px]"><span className={'inline-block whitespace-nowrap rounded-full border px-1.5 py-px text-[9px] font-medium leading-tight ' + retiroStyle(r.solicitud_retiro)}>{r.solicitud_retiro || 'FALSO'}</span></td>
-                    <td className="px-1 py-[2px] text-center text-sub">{r.total_despachos || '-'}</td>
                     <td className="px-1 py-[2px] text-center text-[10px] font-medium text-sub">{r.n_legajo || '-'}</td>
                     <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={r.quien_facturo || ''}>{r.quien_facturo || '-'}</span></td>
                     <td className="px-1 py-[2px] text-center">{recibidos.has(normalizarRemito(r.n_remito)) ? <span className="inline-block whitespace-nowrap rounded-full border border-emerald-500/40 bg-emerald-500/15 px-1.5 py-px text-[9px] font-medium text-emerald-400"><Check size={8} className="mr-0.5 inline" aria-hidden />RECIBIDO</span> : (r.polo52 ? <span className="inline-block whitespace-nowrap rounded-full border border-amber-500/30 bg-amber-500/15 px-1.5 py-px text-[9px] font-medium text-amber-400"><Lock size={8} className="mr-0.5 inline" aria-hidden />POLO52</span> : <span className="text-sub/60">-</span>)}</td>
                     <td className="px-1 py-[2px] text-center text-sub whitespace-nowrap">{fmtDateSlider(r.fecha_envio) || '-'}</td>
-                    <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={r.quien_retira_fabrica || ''}>{r.quien_retira_fabrica || '-'}</span></td>
                     <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={r.observaciones || ''}>{r.observaciones || '-'}</span></td>
                     <td className="px-1 py-[2px] text-right">
                       <div className="flex items-center justify-end gap-px" onClick={(e) => e.stopPropagation()}>
@@ -509,7 +501,6 @@ function FactCard({ registro: r, onClose, onEdit, puedeEditar, empleados }: {
               <CRow label="Transporte" value={r.transporte} />
               <CRow label="% Declarado" value={r.porcentaje_declarado} />
               <CRow label="Bulto" value={fmtN(r.bulto)} />
-              <CRow label="Total Despachos" value={r.total_despachos} />
             </dl>
           </section>
           <section className="rounded-xl border border-line bg-surface2 p-4">
@@ -518,7 +509,6 @@ function FactCard({ registro: r, onClose, onEdit, puedeEditar, empleados }: {
               <CRow label="Solicitud Retiro" value={r.solicitud_retiro || 'FALSO'} badge badgeCls={retiroStyle(r.solicitud_retiro)} />
               <CRow label="POLO52" value={r.polo52 ? 'VERDADERO' : 'FALSO'} badge badgeCls={r.polo52 ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' : 'bg-surface2 text-sub border-line'} />
               <CRow label="Quien Facturo" value={empLabel ? `#${empLabel.legajo} - ${empLabel.nombre}` : r.quien_facturo} />
-              <CRow label="Quien Retira en Fabrica" value={r.quien_retira_fabrica} />
             </dl>
           </section>
           <section className="rounded-xl border border-line bg-surface2 p-4">
@@ -566,13 +556,11 @@ function FactModal({ modoPolo52, registro, clientes, empleados, onClose, onSaved
   const [transporte, setTransporte] = useState(registro?.transporte || '')
   const [porcentajeDeclarado, setPorcentajeDeclarado] = useState(registro?.porcentaje_declarado || '')
   const [solicitudRetiro, setSolicitudRetiro] = useState(registro?.solicitud_retiro || 'FALSO')
-  const [totalDespachos, setTotalDespachos] = useState(registro?.total_despachos || '')
   const [empleadoId, setEmpleadoId] = useState(registro?.empleado_id || '')
   const [nLegajo, setNLegajo] = useState(registro?.n_legajo || '')
   const [quienFacturo, setQuienFacturo] = useState(registro?.quien_facturo || '')
   const [polo52, setPolo52] = useState(registro?.polo52 ?? false)
   const [fechaEnvio, setFechaEnvio] = useState(registro?.fecha_envio || '')
-  const [quienRetiraFabrica, setQuienRetiraFabrica] = useState(registro?.quien_retira_fabrica || '')
   const [observaciones, setObservaciones] = useState(registro?.observaciones || '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -609,7 +597,7 @@ function FactModal({ modoPolo52, registro, clientes, empleados, onClose, onSaved
     if (modoPolo52 && registro) {
       setBusy(true); setError(null)
       const result = await supabase.from('facturacion_fabrica')
-        .update({ fecha_envio: fechaEnvio.trim() || null, quien_retira_fabrica: quienRetiraFabrica.trim() || null })
+        .update({ fecha_envio: fechaEnvio.trim() || null })
         .eq('id', registro.id).select().single()
       setBusy(false)
       if (result.error) { setError(result.error.message); return }
@@ -631,13 +619,11 @@ function FactModal({ modoPolo52, registro, clientes, empleados, onClose, onSaved
       transporte: transporte || null,
       porcentaje_declarado: porcentajeDeclarado || null,
       solicitud_retiro: solicitudRetiro || 'FALSO',
-      total_despachos: totalDespachos.trim() || null,
       empleado_id: empleadoId || null,
       n_legajo: nLegajo || null,
       quien_facturo: quienFacturo.trim() || null,
       polo52: modoPolo52 ? true : polo52,
       fecha_envio: fechaEnvio.trim() || null,
-      quien_retira_fabrica: quienRetiraFabrica.trim() || null,
       observaciones: observaciones.trim() || null,
     }
     let result
@@ -699,7 +685,6 @@ function FactModal({ modoPolo52, registro, clientes, empleados, onClose, onSaved
             <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Solicitud Retiro</span>
               <select value={solicitudRetiro} onChange={(e) => setSolicitudRetiro(e.target.value)} disabled={readonly} className={selectCls}>{RETIRO_OPCIONES.map((v) => <option key={v} value={v}>{v}</option>)}</select>
             </label>
-            <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Total Despachos</span><input value={totalDespachos} onChange={(e) => setTotalDespachos(e.target.value)} disabled={readonly} placeholder="-" className={inputCls} /></label>
 
             {/* Row 4 â€” Employee autocomplete */}
             <label className="block sm:col-span-2 relative">
@@ -726,7 +711,6 @@ function FactModal({ modoPolo52, registro, clientes, empleados, onClose, onSaved
             </label>
 
             {/* Row 5 */}
-            <label className="block sm:col-span-2"><span className="mb-1 block text-xs font-medium text-sub">Quien Retira en Fabrica</span><input value={quienRetiraFabrica} onChange={(e) => setQuienRetiraFabrica(e.target.value)} placeholder="Nombre completo" className={inputCls} /></label>
             <label className="block sm:col-span-2"><span className="mb-1 block text-xs font-medium text-sub">Observaciones</span><textarea value={observaciones} onChange={(e) => setObservaciones(e.target.value)} disabled={readonly} rows={2} className={inputCls + ' resize-none'} /></label>
           </div>
         </form>
@@ -773,10 +757,8 @@ function ImportFacturacion({ clientes, empleados, onClose, onSaved }: {
     { key: 'transporte', label: 'Transporte' },
     { key: 'porcentaje_declarado', label: '% Declarado' },
     { key: 'solicitud_retiro', label: 'Solicitud Retiro' },
-    { key: 'total_despachos', label: 'Total Despachos' },
     { key: 'polo52', label: 'POLO52' },
     { key: 'fecha_envio', label: 'Fecha Envio' },
-    { key: 'quien_retira_fabrica', label: 'Quien Retira Fabrica' },
     { key: 'observaciones', label: 'Observaciones' },
   ]
 
@@ -888,9 +870,9 @@ function ImportFacturacion({ clientes, empleados, onClose, onSaved }: {
         autorizacion: rest.autorizacion || null, cliente_id: _cliente_id || null, razon_social: rest.razon_social || null,
         fecha_fact: rest.fecha_fact || null, n_remito: rest.n_remito || null, n_cliente: rest.n_cliente ?? null,
         bulto: rest.bulto ? Number(rest.bulto) || null : null, transporte: rest.transporte || null, porcentaje_declarado: rest.porcentaje_declarado || null,
-        solicitud_retiro: rest.solicitud_retiro || 'FALSO', total_despachos: rest.total_despachos || null,
+        solicitud_retiro: rest.solicitud_retiro || 'FALSO',
         empleado_id: _empleado_id || null, n_legajo: rest.n_legajo || null, quien_facturo: rest.quien_facturo || null,
-        polo52: !!rest.polo52, fecha_envio: rest.fecha_envio || null, quien_retira_fabrica: rest.quien_retira_fabrica || null,
+        polo52: !!rest.polo52, fecha_envio: rest.fecha_envio || null,
         observaciones: rest.observaciones || null,
       }))
       const { error } = await supabase.from('facturacion_fabrica').insert(batch)
