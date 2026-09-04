@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+﻿import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
   Loader2, Search, SearchX, Plus, Pencil, Trash2, X, Upload, FileText, Lock, Printer, Check, Eye,
 } from 'lucide-react'
@@ -16,6 +16,7 @@ import { useAuth } from '@/context/AuthContext'
 
 interface FactRegistro {
   id: string
+  guia_id: string | null
   autorizacion: string | null
   cliente_id: string | null
   razon_social: string | null
@@ -93,11 +94,11 @@ function retiroStyle(v: string | null): string {
 }
 function cleanVal(s: string): string { return s.replace(/[\u200B\uFEFF\u00A0]/g, '').trim() }
 
-// Normaliza un número de remito para compararlo con los bultos recibidos de
+// Normaliza un nÃºmero de remito para compararlo con los bultos recibidos de
 // transporte (misma regla que la edge function bultos-recibidos):
 // - Reemplaza guiones "-" por "/".
-// - Quita el sufijo (n/total) que indica qué bulto dentro del remito.
-// - Cualquier otro símbolo se deja tal cual.
+// - Quita el sufijo (n/total) que indica quÃ© bulto dentro del remito.
+// - Cualquier otro sÃ­mbolo se deja tal cual.
 function normalizarRemito(raw: string | null | undefined): string {
   let s = (raw ?? '').trim().toUpperCase()
   s = s.replace(/-/g, '/')
@@ -217,9 +218,9 @@ export default function FacturacionFabrica() {
 
   useEffect(() => { void cargar() }, [cargar])
 
-  // Carga los números de remito que POLO marcó como RECIBIDO en la app de
+  // Carga los nÃºmeros de remito que POLO marcÃ³ como RECIBIDO en la app de
   // Transporte, para pintar la columna POLO en verde. No bloquea la tabla:
-  // si transporte está caído, la app sigue funcionando sin el marcado.
+  // si transporte estÃ¡ caÃ­do, la app sigue funcionando sin el marcado.
   useEffect(() => {
     let activo = true
     async function cargarRecibidos() {
@@ -283,7 +284,7 @@ export default function FacturacionFabrica() {
     if (sortKey === key) setSortAsc(!sortAsc)
     else { setSortKey(key); setSortAsc(true) }
   }
-  function sortArrow(key: SortKey) { return sortKey !== key ? null : sortAsc ? ' ▲' : ' ▼' }
+  function sortArrow(key: SortKey) { return sortKey !== key ? null : sortAsc ? ' â–²' : ' â–¼' }
 
   async function eliminar(r: FactRegistro) {
     if (!supabase) return
@@ -317,7 +318,7 @@ export default function FacturacionFabrica() {
   }
 
   function empezarEdicion(r: FactRegistro, campo: string, valorActual: unknown) {
-    if (!(modoPolo52 || puedeEditar)) return
+    if (!inlineEdit(r)) return
     setEditando({ id: r.id, campo })
     setEditandoValor(valorActual != null ? String(valorActual) : '')
   }
@@ -336,7 +337,7 @@ export default function FacturacionFabrica() {
     void guardarCampo(r, 'razon_social', c.razon_social)
   }
 
-  const inlineEdit = () => (modoPolo52 || puedeEditar)
+  const inlineEdit = (r: FactRegistro) => !r.guia_id && (modoPolo52 || puedeEditar)
 
   const clE = 'w-full rounded border border-brand-500 bg-surface2 px-1 py-[1px] text-[10px] text-ink outline-none'
   const tdBase = 'px-1 py-[2px]'
@@ -347,7 +348,7 @@ export default function FacturacionFabrica() {
   function celdaTexto(r: FactRegistro, campo: string, valor: string | null, opts?: { type?: string; alinear?: string; maxW?: string; guardarNull?: boolean }) {
     const activo = editarActivo(r, campo)
     const cls = tdBase + (opts?.alinear ?? '')
-    if (!inlineEdit()) return <td className={cls}>{spanSub(valor, opts?.maxW)}</td>
+    if (!inlineEdit(r)) return <td className={cls}>{spanSub(valor, opts?.maxW)}</td>
     if (activo) {
       return (
         <td className={cls} onClick={(e) => e.stopPropagation()}>
@@ -376,7 +377,7 @@ export default function FacturacionFabrica() {
   function celdaSelect(r: FactRegistro, campo: string, valor: string | null, opciones: string[], opts?: { alinear?: string; maxW?: string; badge?: boolean }) {
     const activo = editarActivo(r, campo)
     const cls = tdBase + (opts?.alinear ?? '')
-    if (!inlineEdit()) return <td className={cls}>{spanSub(valor, opts?.maxW)}</td>
+    if (!inlineEdit(r)) return <td className={cls}>{spanSub(valor, opts?.maxW)}</td>
     if (activo) {
       return (
         <td className={cls} onClick={(e) => e.stopPropagation()}>
@@ -403,7 +404,7 @@ export default function FacturacionFabrica() {
   function celdaEmpleado(r: FactRegistro) {
     const activo = editarActivo(r, 'quien_facturo')
     const cls = tdBase
-    if (!inlineEdit()) return <td className={cls}>{spanSub(r.quien_facturo)}</td>
+    if (!inlineEdit(r)) return <td className={cls}>{spanSub(r.quien_facturo)}</td>
     if (activo) {
       return (
         <td className={cls} onClick={(e) => e.stopPropagation()}>
@@ -434,7 +435,7 @@ export default function FacturacionFabrica() {
   function celdaCliente(r: FactRegistro) {
     const activo = editarActivo(r, 'n_cliente')
     const cls = tdBase
-    if (!inlineEdit()) return <td className={cls}>{spanSub(r.n_cliente)}</td>
+    if (!inlineEdit(r)) return <td className={cls}>{spanSub(r.n_cliente)}</td>
     if (activo) {
       return (
         <td className={cls} onClick={(e) => e.stopPropagation()}>
@@ -468,7 +469,7 @@ export default function FacturacionFabrica() {
     return (
       <td className={cls} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-center gap-1">
-          {inlineEdit() && (
+          {inlineEdit(r) && (
             <input
               type="checkbox"
               checked={!!r.polo52}
@@ -516,7 +517,7 @@ export default function FacturacionFabrica() {
         </select>
         <div className="flex items-center gap-1">
           <input type="date" value={filtroFechaDesde} onChange={(e) => setFiltroFechaDesde(e.target.value)} className={inputCls + ' w-auto text-xs'} title="Fecha desde" />
-          <span className="text-[10px] text-sub/50">—</span>
+          <span className="text-[10px] text-sub/50">â€”</span>
           <input type="date" value={filtroFechaHasta} onChange={(e) => setFiltroFechaHasta(e.target.value)} className={inputCls + ' w-auto text-xs'} title="Fecha hasta" />
         </div>
         <label className={`flex items-center gap-1.5 text-xs ${modoPolo52 ? 'text-sub/60' : 'text-sub'}`}>
@@ -613,7 +614,7 @@ export default function FacturacionFabrica() {
                       <div className="flex items-center justify-end gap-px" onClick={(e) => e.stopPropagation()}>
                         <button onClick={() => setCard(r)} className="rounded border border-line p-0.5 text-sub transition hover:text-amber-400" title="Ver tarjeta"><Eye size={10} aria-hidden /></button>
                         <button onClick={() => setEtiquetaSel(r)} className="rounded border border-line p-0.5 text-sub transition hover:text-amber-400" title="Etiquetas / Imprimir"><Printer size={10} aria-hidden /></button>
-                        {(modoPolo52 || puedeEditar) && <button onClick={() => { setSel(r); setModal('edit') }} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Editar"><Pencil size={10} aria-hidden /></button>}
+                        {(modoPolo52 || puedeEditar) && !r.guia_id && <button onClick={() => { setSel(r); setModal('edit') }} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Editar"><Pencil size={10} aria-hidden /></button>}
                         {puedeBorrar && <button onClick={() => setConfirm({ message: 'Eliminar registro de facturacion de "' + (r.razon_social || '-') + '"?', onConfirm: () => void eliminar(r) })} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Eliminar"><Trash2 size={10} aria-hidden /></button>}
                       </div>
                     </td>
@@ -626,11 +627,11 @@ export default function FacturacionFabrica() {
             <div className="flex items-center justify-between border-t border-line px-3 py-1.5 text-[11px] text-sub">
               <span>{lista.length} registros | Pag {paginaSegura} de {totalPaginas}</span>
               <div className="flex items-center gap-1">
-                <button onClick={() => setPagina(1)} disabled={paginaSegura <= 1} className="rounded border border-line px-1.5 py-0.5 text-[10px] hover:bg-line disabled:opacity-30">«</button>
-                <button onClick={() => setPagina((p) => Math.max(1, p - 1))} disabled={paginaSegura <= 1} className="rounded border border-line px-1.5 py-0.5 text-[10px] hover:bg-line disabled:opacity-30">‹</button>
+                <button onClick={() => setPagina(1)} disabled={paginaSegura <= 1} className="rounded border border-line px-1.5 py-0.5 text-[10px] hover:bg-line disabled:opacity-30">Â«</button>
+                <button onClick={() => setPagina((p) => Math.max(1, p - 1))} disabled={paginaSegura <= 1} className="rounded border border-line px-1.5 py-0.5 text-[10px] hover:bg-line disabled:opacity-30">â€¹</button>
                 <span className="px-1.5 text-[10px] font-medium text-ink">{paginaSegura}</span>
-                <button onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))} disabled={paginaSegura >= totalPaginas} className="rounded border border-line px-1.5 py-0.5 text-[10px] hover:bg-line disabled:opacity-30">›</button>
-                <button onClick={() => setPagina(totalPaginas)} disabled={paginaSegura >= totalPaginas} className="rounded border border-line px-1.5 py-0.5 text-[10px] hover:bg-line disabled:opacity-30">»</button>
+                <button onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))} disabled={paginaSegura >= totalPaginas} className="rounded border border-line px-1.5 py-0.5 text-[10px] hover:bg-line disabled:opacity-30">â€º</button>
+                <button onClick={() => setPagina(totalPaginas)} disabled={paginaSegura >= totalPaginas} className="rounded border border-line px-1.5 py-0.5 text-[10px] hover:bg-line disabled:opacity-30">Â»</button>
               </div>
             </div>
           )}
@@ -638,7 +639,7 @@ export default function FacturacionFabrica() {
       )}
 
       {/* Detail card */}
-      {card && <FactCard registro={card} onClose={() => setCard(null)} onEdit={() => { setSel(card); setModal('edit'); setCard(null) }} puedeEditar={modoPolo52 || puedeEditar} empleados={empleados} />}
+      {card && <FactCard registro={card} onClose={() => setCard(null)} onEdit={() => { setSel(card); setModal('edit'); setCard(null) }} puedeEditar={!card.guia_id && (modoPolo52 || puedeEditar)} empleados={empleados} />}
 
       {/* Etiquetas de bultos */}
       {etiquetaSel && <EtiquetasModal registro={etiquetaSel} onClose={() => setEtiquetaSel(null)} />}
@@ -722,7 +723,7 @@ function FactCard({ registro: r, onClose, onEdit, puedeEditar, empleados }: {
 }
 
 function CRow({ label, value, badge, badgeCls, pre }: { label: string; value: string | null | undefined; badge?: boolean; badgeCls?: string; pre?: boolean }) {
-  const txt = value?.trim() || '—'
+  const txt = value?.trim() || 'â€”'
   return (
     <div className="flex flex-col">
       <dt className="text-[11px] font-medium text-sub/70">{label}</dt>
@@ -758,7 +759,7 @@ function FactModal({ modoPolo52, registro, clientes, empleados, onClose, onSaved
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // En modo polo52, al crear nuevo registro completo se habilitan todos los campos;
-  // al editar un registro polo52 existente solo se permite fecha de envío / retiro.
+  // al editar un registro polo52 existente solo se permite fecha de envÃ­o / retiro.
   const readonly = modoPolo52 && !!registro
 
   /* Client dropdown */
@@ -797,7 +798,7 @@ function FactModal({ modoPolo52, registro, clientes, empleados, onClose, onSaved
       onSaved()
       return
     }
-    if (!nCliente) { setError('Debe seleccionar un N° Cliente.'); return }
+    if (!nCliente) { setError('Debe seleccionar un NÂ° Cliente.'); return }
     if (!autorizacion) { setError('Debe seleccionar Autorizacion (SI/NO).'); return }
     if (!quienFacturo.trim()) { setError('Debe seleccionar quien facturo.'); return }
     setBusy(true); setError(null)
@@ -831,7 +832,7 @@ function FactModal({ modoPolo52, registro, clientes, empleados, onClose, onSaved
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div className="relative flex w-[92vw] max-w-[1000px] flex-col rounded-2xl border border-line bg-surface shadow-2xl" style={{ maxHeight: '92vh' }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-line px-5 py-3">
-          <h2 className="flex items-center gap-2 text-lg font-semibold text-ink"><FileText size={18} className="text-amber-400" aria-hidden />{registro ? (modoPolo52 ? 'Actualizar envío / retiro' : 'Editar Registro') : (modoPolo52 ? 'Nuevo Registro Polo52' : 'Nuevo Registro')}</h2>
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-ink"><FileText size={18} className="text-amber-400" aria-hidden />{registro ? (modoPolo52 ? 'Actualizar envÃ­o / retiro' : 'Editar Registro') : (modoPolo52 ? 'Nuevo Registro Polo52' : 'Nuevo Registro')}</h2>
           <button onClick={onClose} className="rounded-lg border border-line p-1.5 text-sub transition hover:bg-line hover:text-ink"><X size={16} aria-hidden /></button>
         </div>
         {error && <p role="alert" className="mx-5 mt-3 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
@@ -841,11 +842,11 @@ function FactModal({ modoPolo52, registro, clientes, empleados, onClose, onSaved
             <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Autorizacion *</span>
               <select value={autorizacion} onChange={(e) => setAutorizacion(e.target.value)} disabled={readonly} className={selectCls}><option value="">--</option><option value="SI">SI</option><option value="NO">NO</option></select>
             </label>
-            {/* N° Cliente — searchable dropdown */}
+            {/* NÂ° Cliente â€” searchable dropdown */}
             <label className="block relative">
               <span className="mb-1 block text-xs font-medium text-sub">N Cliente *</span>
               <div className="relative">
-                <input value={openCliDrop ? busqCliente : (nCliente != null ? String(nCliente) : '')} onChange={(e) => { setBusqCliente(e.target.value); setOpenCliDrop(true) }} onFocus={() => setOpenCliDrop(true)} disabled={readonly} placeholder="Buscar por N° o nombre..." className={inputCls} />
+                <input value={openCliDrop ? busqCliente : (nCliente != null ? String(nCliente) : '')} onChange={(e) => { setBusqCliente(e.target.value); setOpenCliDrop(true) }} onFocus={() => setOpenCliDrop(true)} disabled={readonly} placeholder="Buscar por NÂ° o nombre..." className={inputCls} />
                 {openCliDrop && (
                   <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-line bg-surface shadow-xl">
                     <div className="sticky top-0 bg-surface p-1"><input autoFocus value={busqCliente} onChange={(e) => setBusqCliente(e.target.value)} placeholder="Buscar..." className={inputCls + ' text-xs'} /></div>
@@ -859,8 +860,8 @@ function FactModal({ modoPolo52, registro, clientes, empleados, onClose, onSaved
                 )}
               </div>
             </label>
-            {/* Razon Social — autocompletada (BUSCARV) */}
-            <label className="block sm:col-span-2"><span className="mb-1 block text-xs font-medium text-sub">Razon Social</span><input value={razonSocial} readOnly className={inputCls + ' bg-line/30 text-sub'} placeholder="Se autocompleta al seleccionar N° Cliente" /></label>
+            {/* Razon Social â€” autocompletada (BUSCARV) */}
+            <label className="block sm:col-span-2"><span className="mb-1 block text-xs font-medium text-sub">Razon Social</span><input value={razonSocial} readOnly className={inputCls + ' bg-line/30 text-sub'} placeholder="Se autocompleta al seleccionar NÂ° Cliente" /></label>
             <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Fecha Facturacion</span><input type="date" value={fechaFact} onChange={(e) => setFechaFact(e.target.value)} disabled={readonly} className={inputCls} /></label>
 
             {/* Row 2 */}
@@ -879,7 +880,7 @@ function FactModal({ modoPolo52, registro, clientes, empleados, onClose, onSaved
               <select value={solicitudRetiro} onChange={(e) => setSolicitudRetiro(e.target.value)} disabled={readonly} className={selectCls}>{RETIRO_OPCIONES.map((v) => <option key={v} value={v}>{v}</option>)}</select>
             </label>
 
-            {/* Row 4 — Employee autocomplete */}
+            {/* Row 4 â€” Employee autocomplete */}
             <label className="block sm:col-span-2 relative">
               <span className="mb-1 block text-xs font-medium text-sub">Quien Facturo *</span>
               <div className="relative">
@@ -941,8 +942,8 @@ function ImportFacturacion({ clientes, empleados, onClose, onSaved }: {
   const fileRef = useRef<HTMLInputElement>(null)
 
   const COLS_DESTINO = [
-    { key: 'n_cliente', label: '★ N Cliente (obligatorio)', req: true },
-    { key: 'quien_facturo', label: '★ Legajo / Quien Facturo (obligatorio)', req: true },
+    { key: 'n_cliente', label: 'â˜… N Cliente (obligatorio)', req: true },
+    { key: 'quien_facturo', label: 'â˜… Legajo / Quien Facturo (obligatorio)', req: true },
     { key: 'autorizacion', label: 'Autorizacion' },
     { key: 'fecha_fact', label: 'Fecha Fact' },
     { key: 'n_remito', label: 'N Remito' },
@@ -960,16 +961,16 @@ function ImportFacturacion({ clientes, empleados, onClose, onSaved }: {
     const norm = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]/g, '')
     hdrs.forEach((h) => {
       const n = norm(h)
-      // N° CLIENTE → n_cliente
+      // NÂ° CLIENTE â†’ n_cliente
       if (n.includes('ncliente') || n.includes('ncliente') || n === 'ncliente' || n.includes('nrocliente')) m['n_cliente'] = h
-      // Legajo / Quien Facturo → quien_facturo
+      // Legajo / Quien Facturo â†’ quien_facturo
       else if (n.includes('legajo') || n.includes('quienfacturo') || n.includes('quien')) m['quien_facturo'] = h
-      // Razon Social → ignorar
+      // Razon Social â†’ ignorar
       else if (n.includes('razonsocial') || n.includes('razon')) { /* ignorar */ }
-      // Nombre empleado → ignorar
+      // Nombre empleado â†’ ignorar
       else if (n.includes('nombreempleado') || n.includes('nombre')) { /* ignorar */ }
       else {
-        const found = COLS_DESTINO.find((c) => norm(c.label.replace('★ ', '').replace(' (obligatorio)', '')) === n || norm(c.key) === n)
+        const found = COLS_DESTINO.find((c) => norm(c.label.replace('â˜… ', '').replace(' (obligatorio)', '')) === n || norm(c.key) === n)
         if (found) m[found.key] = h
       }
     })
@@ -1006,13 +1007,13 @@ function ImportFacturacion({ clientes, empleados, onClose, onSaved }: {
       const nr: FileRow = {}
       Object.entries(map).forEach(([dest, src]) => { if (dest && src) nr[dest] = String(row[src] ?? '').trim() })
 
-      /* BUSCARV N° CLIENTE → cliente */
+      /* BUSCARV NÂ° CLIENTE â†’ cliente */
       const ncRaw = cleanVal(nr.n_cliente || '')
-      if (!ncRaw) { errs.push({ idx: i, err: `Fila ${i + 1}: N° Cliente vacio.` }); return }
+      if (!ncRaw) { errs.push({ idx: i, err: `Fila ${i + 1}: NÂ° Cliente vacio.` }); return }
       const cli = clientes.find((c) => String(c.n_cliente) === ncRaw)
       if (!cli) {
         // Cliente no existe en el sistema: se importa igual con FK null y el
-        // n° de cliente tal cual vino del Excel.
+        // nÂ° de cliente tal cual vino del Excel.
         nr._cliente_id = null
         nr.n_cliente = ncRaw
         nr.razon_social = nr.razon_social || null
@@ -1020,7 +1021,7 @@ function ImportFacturacion({ clientes, empleados, onClose, onSaved }: {
         nr._cliente_id = cli.id; nr.n_cliente = cli.n_cliente; nr.razon_social = cli.razon_social
       }
 
-      /* BUSCARV LEGAJO / NOMBRE → empleado */
+      /* BUSCARV LEGAJO / NOMBRE â†’ empleado */
       const empRaw = cleanVal(nr.quien_facturo || '')
       let emp: EmpleadoMini | undefined
       if (empRaw) {
@@ -1120,7 +1121,7 @@ function ImportFacturacion({ clientes, empleados, onClose, onSaved }: {
           )}
           {paso === 'map' && (
             <div className="space-y-2">
-              <p className="mb-2 text-xs text-sub">Mapea las columnas del archivo. Los campos con ★ son obligatorios. "Razon Social" y "Nombre Empleado" se ignoran (se autocompletan desde Clientes/Empleados).</p>
+              <p className="mb-2 text-xs text-sub">Mapea las columnas del archivo. Los campos con â˜… son obligatorios. "Razon Social" y "Nombre Empleado" se ignoran (se autocompletan desde Clientes/Empleados).</p>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {COLS_DESTINO.map((col) => (
                   <label key={col.key} className="flex items-center gap-2 text-xs">
