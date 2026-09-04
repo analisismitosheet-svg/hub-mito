@@ -525,14 +525,29 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, onClose, 
     let result
     if (guia) {
       result = await supabase.from('guias').update(payload).eq('id', guia.id).select().single()
+      if (!result.error && supabase) {
+        await supabase.from('facturacion_fabrica')
+          .update({
+            n_cliente: nroCliente.trim() || null,
+            razon_social: razonSocial.trim() || null,
+            n_remito: nroRemito.trim() || null,
+            bulto: bulto ? Number(bulto) || null : null,
+            observaciones: (guia?.observaciones && observaciones.trim() !== guia.observaciones)
+              ? (`Generado desde Guia N° ${payload.nro_pedido}` + (observaciones.trim() ? ` | ${observaciones.trim()}` : ''))
+              : undefined,
+          })
+          .eq('guia_id', guia.id)
+      }
     } else {
       result = await supabase.from('guias').insert(payload).select().single()
-      if (!result.error && supabase) {
+      if (!result.error && result.data && supabase) {
+        const guiaId = (result.data as { id: string }).id
         const obsFact = [
           `Generado desde Guia N° ${payload.nro_pedido}`,
           observaciones.trim() || null,
         ].filter(Boolean).join(' | ')
         await supabase.from('facturacion_fabrica').insert({
+          guia_id: guiaId,
           n_cliente: nroCliente.trim() || null,
           razon_social: razonSocial.trim() || null,
           n_remito: nroRemito.trim() || null,

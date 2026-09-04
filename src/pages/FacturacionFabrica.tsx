@@ -168,6 +168,8 @@ export default function FacturacionFabrica() {
   const [card, setCard] = useState<FactRegistro | null>(null)
   const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
   const [etiquetaSel, setEtiquetaSel] = useState<FactRegistro | null>(null)
+  const [editando, setEditando] = useState<{ id: string; campo: string } | null>(null)
+  const [editandoValor, setEditandoValor] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const POR_PAGINA = 50
 
@@ -304,6 +306,187 @@ export default function FacturacionFabrica() {
     setSelected(new Set()); await cargar(); mostrarToast(`${ids.length} registro(s) eliminados`)
   }
 
+  async function guardarCampo(r: FactRegistro, campo: string, valor: unknown) {
+    if (!supabase) return
+    setEditando(null)
+    const patch: Record<string, unknown> = { [campo]: valor }
+    const { error } = await supabase.from('facturacion_fabrica').update(patch).eq('id', r.id)
+    if (error) { mostrarToast('Error al guardar: ' + error.message); return }
+    setTodos((prev) => prev.map((x) => (x.id === r.id ? { ...x, [campo]: valor } : x)))
+    mostrarToast('Guardado')
+  }
+
+  function empezarEdicion(r: FactRegistro, campo: string, valorActual: unknown) {
+    if (!(modoPolo52 || puedeEditar)) return
+    setEditando({ id: r.id, campo })
+    setEditandoValor(valorActual != null ? String(valorActual) : '')
+  }
+
+  const editarActivo = (r: FactRegistro, campo: string) => editando?.id === r.id && editando?.campo === campo
+
+  function selectEmpleado(r: FactRegistro, emp: EmpleadoMini) {
+    void guardarCampo(r, 'empleado_id', emp.id)
+    void guardarCampo(r, 'n_legajo', emp.legajo || null)
+    void guardarCampo(r, 'quien_facturo', emp.nombre)
+  }
+
+  function selectClienteInline(r: FactRegistro, c: ClienteMini) {
+    void guardarCampo(r, 'cliente_id', c.id)
+    void guardarCampo(r, 'n_cliente', c.n_cliente)
+    void guardarCampo(r, 'razon_social', c.razon_social)
+  }
+
+  const inlineEdit = () => (modoPolo52 || puedeEditar)
+
+  const clE = 'w-full rounded border border-brand-500 bg-surface2 px-1 py-[1px] text-[10px] text-ink outline-none'
+  const tdBase = 'px-1 py-[2px]'
+  const spanSub = (v: string | null, maxW = '') => (
+    <span className={'block truncate text-sub' + (maxW ? ' ' + maxW : '')} title={v || ''}>{v || '-'}</span>
+  )
+
+  function celdaTexto(r: FactRegistro, campo: string, valor: string | null, opts?: { type?: string; alinear?: string; maxW?: string; guardarNull?: boolean }) {
+    const activo = editarActivo(r, campo)
+    const cls = tdBase + (opts?.alinear ?? '')
+    if (!inlineEdit()) return <td className={cls}>{spanSub(valor, opts?.maxW)}</td>
+    if (activo) {
+      return (
+        <td className={cls} onClick={(e) => e.stopPropagation()}>
+          <input
+            autoFocus
+            type={opts?.type ?? 'text'}
+            value={editandoValor}
+            onChange={(e) => setEditandoValor(e.target.value)}
+            onBlur={() => void guardarCampo(r, campo, opts?.guardarNull === false ? editandoValor : (editandoValor.trim() || null))}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.currentTarget.blur() }
+              if (e.key === 'Escape') { setEditando(null); setEditandoValor('') }
+            }}
+            className={clE}
+          />
+        </td>
+      )
+    }
+    return (
+      <td className={cls + ' cursor-pointer hover:bg-brand-600/5'} onClick={(e) => { e.stopPropagation(); empezarEdicion(r, campo, valor) }}>
+        {spanSub(valor, opts?.maxW)}
+      </td>
+    )
+  }
+
+  function celdaSelect(r: FactRegistro, campo: string, valor: string | null, opciones: string[], opts?: { alinear?: string; maxW?: string; badge?: boolean }) {
+    const activo = editarActivo(r, campo)
+    const cls = tdBase + (opts?.alinear ?? '')
+    if (!inlineEdit()) return <td className={cls}>{spanSub(valor, opts?.maxW)}</td>
+    if (activo) {
+      return (
+        <td className={cls} onClick={(e) => e.stopPropagation()}>
+          <select
+            autoFocus
+            value={valor ?? ''}
+            onChange={(e) => { void guardarCampo(r, campo, e.target.value || null); setEditando(null) }}
+            onKeyDown={(e) => { if (e.key === 'Escape') setEditando(null) }}
+            className={clE}
+          >
+            <option value="">-</option>
+            {opciones.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+        </td>
+      )
+    }
+    return (
+      <td className={cls + ' cursor-pointer hover:bg-brand-600/5'} onClick={(e) => { e.stopPropagation(); empezarEdicion(r, campo, valor) }}>
+        {spanSub(valor, opts?.maxW)}
+      </td>
+    )
+  }
+
+  function celdaEmpleado(r: FactRegistro) {
+    const activo = editarActivo(r, 'quien_facturo')
+    const cls = tdBase
+    if (!inlineEdit()) return <td className={cls}>{spanSub(r.quien_facturo)}</td>
+    if (activo) {
+      return (
+        <td className={cls} onClick={(e) => e.stopPropagation()}>
+          <select
+            autoFocus
+            value={r.empleado_id ?? ''}
+            onChange={(e) => {
+              const emp = empleados.find((x) => x.id === e.target.value)
+              if (emp) selectEmpleado(r, emp)
+              setEditando(null)
+            }}
+            onKeyDown={(e) => { if (e.key === 'Escape') setEditando(null) }}
+            className={clE}
+          >
+            <option value="">-</option>
+            {empleados.map((em) => <option key={em.id} value={em.id}>{em.legajo ? `#${em.legajo} - ${em.nombre}` : em.nombre}</option>)}
+          </select>
+        </td>
+      )
+    }
+    return (
+      <td className={cls + ' cursor-pointer hover:bg-brand-600/5'} onClick={(e) => { e.stopPropagation(); empezarEdicion(r, 'quien_facturo', r.quien_facturo) }}>
+        {spanSub(r.quien_facturo)}
+      </td>
+    )
+  }
+
+  function celdaCliente(r: FactRegistro) {
+    const activo = editarActivo(r, 'n_cliente')
+    const cls = tdBase
+    if (!inlineEdit()) return <td className={cls}>{spanSub(r.n_cliente)}</td>
+    if (activo) {
+      return (
+        <td className={cls} onClick={(e) => e.stopPropagation()}>
+          <select
+            autoFocus
+            value={r.n_cliente ?? ''}
+            onChange={(e) => {
+              const c = clientes.find((x) => (x.n_cliente ?? '') === e.target.value)
+              if (c) selectClienteInline(r, c)
+              setEditando(null)
+            }}
+            onKeyDown={(e) => { if (e.key === 'Escape') setEditando(null) }}
+            className={clE}
+          >
+            <option value="">-</option>
+            {clientes.map((c) => <option key={c.id} value={c.n_cliente ?? ''}>{c.n_cliente ? `${c.n_cliente} - ${c.razon_social}` : c.razon_social}</option>)}
+          </select>
+        </td>
+      )
+    }
+    return (
+      <td className={cls + ' cursor-pointer hover:bg-brand-600/5'} onClick={(e) => { e.stopPropagation(); empezarEdicion(r, 'n_cliente', r.n_cliente) }}>
+        {spanSub(r.n_cliente)}
+      </td>
+    )
+  }
+
+  function celdaPolo(r: FactRegistro) {
+    const cls = tdBase + ' text-center'
+    const recibido = recibidos.has(normalizarRemito(r.n_remito))
+    return (
+      <td className={cls} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-center gap-1">
+          {inlineEdit() && (
+            <input
+              type="checkbox"
+              checked={!!r.polo52}
+              onChange={() => void guardarCampo(r, 'polo52', !r.polo52)}
+              title="Marcar POLO52"
+              className="h-3.5 w-3.5 rounded border-line bg-surface2 accent-brand-600"
+            />
+          )}
+          {recibido ? (
+            <span className="inline-block whitespace-nowrap rounded-full border border-emerald-500/40 bg-emerald-500/15 px-1.5 py-px text-[9px] font-medium text-emerald-400"><Check size={8} className="mr-0.5 inline" aria-hidden />RECIBIDO</span>
+          ) : r.polo52 ? (
+            <span className="inline-block whitespace-nowrap rounded-full border border-amber-500/30 bg-amber-500/15 px-1.5 py-px text-[9px] font-medium text-amber-400"><Lock size={8} className="mr-0.5 inline" aria-hidden />POLO52</span>
+          ) : <span className="text-sub/60">-</span>}
+        </div>
+      </td>
+    )
+  }
+
   const polCount = todos.filter((f) => f.polo52).length
 
   const ToastEl = () => toast ? (
@@ -410,22 +593,22 @@ export default function FacturacionFabrica() {
               </thead>
               <tbody className="divide-y divide-line/50 bg-surface">
                 {listaPagina.map((r) => (
-                  <tr key={r.id} className={'transition hover:bg-line/20 cursor-pointer' + (selected.has(r.id) ? ' bg-brand-600/10' : '')} onClick={() => { if (modoPolo52 || puedeEditar) { setSel(r); setModal('edit') } else setCard(r) }}>
+                  <tr key={r.id} className={'transition hover:bg-line/20 cursor-pointer' + (selected.has(r.id) ? ' bg-brand-600/10' : '')} onClick={() => setCard(r)}>
                     <td className="px-1 py-[2px] text-center" onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} className="h-3 w-3 rounded border-line bg-surface2 accent-brand-600" /></td>
-                    <td className="px-1 py-[2px] text-center text-[10px] font-medium text-sub">{r.autorizacion || '-'}</td>
-                    <td className="px-1 py-[2px]"><span className="block truncate font-medium text-ink" title={r.razon_social || ''}>{r.razon_social || '-'}</span></td>
-                    <td className="px-1 py-[2px] text-center text-sub whitespace-nowrap">{fmtDateSlider(r.fecha_fact) || '-'}</td>
-                    <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={r.n_remito || ''}>{r.n_remito || '-'}</span></td>
-                    <td className="px-1 py-[2px] text-center text-sub">{fmtN(r.n_cliente)}</td>
-                    <td className="px-1 py-[2px] text-center text-sub">{fmtN(r.bulto)}</td>
-                    <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={r.transporte || ''}>{r.transporte || '-'}</span></td>
-                    <td className="px-1 py-[2px] text-sub">{r.porcentaje_declarado || '-'}</td>
-                    <td className="px-1 py-[2px]"><span className={'inline-block whitespace-nowrap rounded-full border px-1.5 py-px text-[9px] font-medium leading-tight ' + retiroStyle(r.solicitud_retiro)}>{fmtRetiro(r.solicitud_retiro)}</span></td>
-                    <td className="px-1 py-[2px] text-center text-[10px] font-medium text-sub">{r.n_legajo || '-'}</td>
-                    <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={r.quien_facturo || ''}>{r.quien_facturo || '-'}</span></td>
-                    <td className="px-1 py-[2px] text-center">{recibidos.has(normalizarRemito(r.n_remito)) ? <span className="inline-block whitespace-nowrap rounded-full border border-emerald-500/40 bg-emerald-500/15 px-1.5 py-px text-[9px] font-medium text-emerald-400"><Check size={8} className="mr-0.5 inline" aria-hidden />RECIBIDO</span> : (r.polo52 ? <span className="inline-block whitespace-nowrap rounded-full border border-amber-500/30 bg-amber-500/15 px-1.5 py-px text-[9px] font-medium text-amber-400"><Lock size={8} className="mr-0.5 inline" aria-hidden />POLO52</span> : <span className="text-sub/60">-</span>)}</td>
-                    <td className="px-1 py-[2px] text-center text-sub whitespace-nowrap">{fmtDateSlider(r.fecha_envio) || '-'}</td>
-                    <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={r.observaciones || ''}>{r.observaciones || '-'}</span></td>
+                    {celdaSelect(r, 'autorizacion', r.autorizacion, ['SI', 'NO'], { alinear: ' text-center' })}
+                    {celdaTexto(r, 'razon_social', r.razon_social)}
+                    {celdaTexto(r, 'fecha_fact', r.fecha_fact, { type: 'date', alinear: ' text-center whitespace-nowrap' })}
+                    {celdaTexto(r, 'n_remito', r.n_remito)}
+                    {celdaCliente(r)}
+                    {celdaTexto(r, 'bulto', r.bulto != null ? String(r.bulto) : null, { type: 'number', alinear: ' text-center' })}
+                    {celdaSelect(r, 'transporte', r.transporte, TRANSPORTE_OPCIONES)}
+                    {celdaSelect(r, 'porcentaje_declarado', r.porcentaje_declarado, VALOR_DEC_OPCIONES)}
+                    {celdaSelect(r, 'solicitud_retiro', r.solicitud_retiro ? fmtRetiro(r.solicitud_retiro) : null, RETIRO_OPCIONES, { alinear: ' text-center' })}
+                    {celdaTexto(r, 'n_legajo', r.n_legajo, { alinear: ' text-center' })}
+                    {celdaEmpleado(r)}
+                    {celdaPolo(r)}
+                    {celdaTexto(r, 'fecha_envio', r.fecha_envio, { type: 'date', alinear: ' text-center whitespace-nowrap' })}
+                    {celdaTexto(r, 'observaciones', r.observaciones)}
                     <td className="px-1 py-[2px] text-right">
                       <div className="flex items-center justify-end gap-px" onClick={(e) => e.stopPropagation()}>
                         <button onClick={() => setCard(r)} className="rounded border border-line p-0.5 text-sub transition hover:text-amber-400" title="Ver tarjeta"><Eye size={10} aria-hidden /></button>
