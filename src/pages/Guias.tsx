@@ -6,6 +6,8 @@ import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { EtiquetasModal } from '@/components/EtiquetasBultos'
+import HistorialLista from '@/components/HistorialLista'
+import { registrarHistorial } from '@/lib/historial'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 
@@ -81,7 +83,7 @@ function cambiarEstadoEnTodos(todos: Guia[], id: string, estado: EstadoGuia): Gu
 /* ------------------------------------------------------------------ */
 
 export default function Guias() {
-  const { can } = useAuth()
+  const { can, perfil } = useAuth()
   const puedeCrear = can('mayorista.guias.create')
   const puedeEditar = can('mayorista.guias.edit')
   const puedeBorrar = can('mayorista.guias.delete')
@@ -200,6 +202,7 @@ export default function Guias() {
     if (!supabase) return
     const { error: err } = await supabase.from('guias').delete().eq('id', g.id)
     if (err) { mostrarToast('Error al eliminar'); return }
+    void registrarHistorial('guia', g.id, 'borrado', { nombre: perfil?.nombre ?? null, email: perfil?.email ?? null }, `Guia N° ${g.nro_pedido ?? ''} - ${g.razon_social ?? ''}`)
     setSel(null); setCard(null); await cargar(); mostrarToast('Guia eliminada')
   }
 
@@ -208,7 +211,10 @@ export default function Guias() {
     setTodos((arr) => cambiarEstadoEnTodos(arr, g.id, estado))
     const { error: err } = await supabase.from('guias').update({ estado, en_proceso: estado === 'EN_PROCESO', finalizado: estado === 'FINALIZADO' }).eq('id', g.id)
     if (err) { mostrarToast('Error al actualizar estado'); await cargar() }
-    else mostrarToast(estado === 'FINALIZADO' ? 'Guia finalizada' : estado === 'NUEVO' ? 'Guia nueva' : 'Guia en proceso')
+    else {
+      void registrarHistorial('guia', g.id, 'modificacion', { nombre: perfil?.nombre ?? null, email: perfil?.email ?? null }, `Estado: ${estado}`)
+      mostrarToast(estado === 'FINALIZADO' ? 'Guia finalizada' : estado === 'NUEVO' ? 'Guia nueva' : 'Guia en proceso')
+    }
   }
 
   const toggleSelect = (id: string) => setSelected((prev) => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
@@ -222,6 +228,7 @@ export default function Guias() {
     const ids = [...selected]
     const { error: err } = await supabase.from('guias').delete().in('id', ids)
     if (err) { mostrarToast('Error al eliminar'); return }
+    for (const id of ids) void registrarHistorial('guia', id, 'borrado', { nombre: perfil?.nombre ?? null, email: perfil?.email ?? null }, 'Borrado masivo')
     setSelected(new Set()); await cargar(); mostrarToast(`${ids.length} guia(s) eliminadas`)
   }
 
@@ -401,6 +408,7 @@ export default function Guias() {
                   <CRow label="Observaciones" value={card.observaciones} />
                 </dl>
               </section>
+              <HistorialLista entidad="guia" registroId={card.id} />
             </div>
             {puedeEditar && (
               <div className="border-t border-line px-5 py-3">
@@ -426,6 +434,7 @@ export default function Guias() {
           clientes={clientes}
           pedidoOpciones={pedidoOpciones}
           sucursalOpciones={sucursalOpciones}
+          usuario={{ nombre: perfil?.nombre ?? null, email: perfil?.email ?? null }}
           onClose={() => { setModal(null); setSel(null) }}
           onSaved={async () => { setModal(null); setSel(null); await cargar(); mostrarToast(modal === 'edit' ? 'Guia actualizada' : 'Guia creada') }}
         />
@@ -454,9 +463,9 @@ function CRow({ label, value, badge, badgeCls }: { label: string; value: string 
 /*  Form Modal                                                         */
 /* ------------------------------------------------------------------ */
 
-function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, onClose, onSaved }: {
+function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, onClose, onSaved }: {
   guia: Guia | null; clientes: ClienteMini[]; pedidoOpciones: string[]; sucursalOpciones: string[]
-  onClose: () => void; onSaved: () => void
+  usuario: { nombre: string | null; email: string | null }; onClose: () => void; onSaved: () => void
 }) {
   const [nroPedido, setNroPedido] = useState(guia?.nro_pedido || '')
   const [nroCliente, setNroCliente] = useState(guia?.nro_cliente || '')
@@ -537,11 +546,13 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, onClose, 
               : undefined,
           })
           .eq('guia_id', guia.id)
+        void registrarHistorial('guia', guia.id, 'modificacion', usuario, `Guia N° ${payload.nro_pedido}`)
       }
     } else {
       result = await supabase.from('guias').insert(payload).select().single()
       if (!result.error && result.data && supabase) {
         const guiaId = (result.data as { id: string }).id
+        void registrarHistorial('guia', guiaId, 'creacion', usuario, `Guia N° ${payload.nro_pedido} - ${razonSocial || ''}`)
         const obsFact = [
           `Generado desde Guia N° ${payload.nro_pedido}`,
           observaciones.trim() || null,
