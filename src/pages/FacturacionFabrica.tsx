@@ -370,19 +370,24 @@ export default function FacturacionFabrica() {
     void guardarCampo(r, 'razon_social', c.razon_social)
   }
 
-  const inlineEdit = (r: FactRegistro, campo?: string) =>
-    (!r.guia_id || campo === 'fecha_fact' || campo === 'fecha_envio') && (modoPolo52 || puedeEditar)
+  const inlineEdit = (r: FactRegistro, campo?: string) => {
+    if (!(modoPolo52 || puedeEditar)) return false
+    if (!r.guia_id) return true
+    // Campos que vienen de Guías → bloqueados en Facturación
+    const camposDeGuia = ['n_cliente', 'cliente_id', 'razon_social', 'n_remito', 'bulto', 'observaciones']
+    return !camposDeGuia.includes(campo ?? '')
+  }
 
   const clE = 'w-full rounded border border-brand-500 bg-surface2 px-1 py-[1px] text-[10px] text-ink outline-none'
   const tdBase = 'px-1 py-[2px]'
-  const spanSub = (v: string | null, maxW = '') => (
-    <span className={'block truncate text-sub' + (maxW ? ' ' + maxW : '')} title={v || ''}>{v || '-'}</span>
+  const spanSub = (v: string | null, maxW = '', bloqueado = false) => (
+    <span className={'block truncate ' + (bloqueado ? 'text-sub/70' : 'text-sub') + (maxW ? ' ' + maxW : '')} title={(bloqueado ? 'Desde Guía (no editable): ' : '') + (v || '')}>{v || '-'}</span>
   )
 
   function celdaTexto(r: FactRegistro, campo: string, valor: string | null, opts?: { type?: string; alinear?: string; maxW?: string; guardarNull?: boolean }) {
     const activo = editarActivo(r, campo)
     const cls = tdBase + (opts?.alinear ?? '')
-    if (!inlineEdit(r, campo)) return <td className={cls}>{spanSub(valor, opts?.maxW)}</td>
+    if (!inlineEdit(r, campo)) return <td className={cls}>{spanSub(valor, opts?.maxW, !!r.guia_id)}</td>
     if (activo) {
       return (
         <td className={cls} onClick={(e) => e.stopPropagation()}>
@@ -411,7 +416,7 @@ export default function FacturacionFabrica() {
   function celdaSelect(r: FactRegistro, campo: string, valor: string | null, opciones: string[], opts?: { alinear?: string; maxW?: string; badge?: boolean }) {
     const activo = editarActivo(r, campo)
     const cls = tdBase + (opts?.alinear ?? '')
-    if (!inlineEdit(r, campo)) return <td className={cls}>{spanSub(valor, opts?.maxW)}</td>
+    if (!inlineEdit(r, campo)) return <td className={cls}>{spanSub(valor, opts?.maxW, !!r.guia_id)}</td>
     if (activo) {
       return (
         <td className={cls} onClick={(e) => e.stopPropagation()}>
@@ -438,7 +443,7 @@ export default function FacturacionFabrica() {
   function celdaEmpleado(r: FactRegistro) {
     const activo = editarActivo(r, 'quien_facturo')
     const cls = tdBase
-    if (!inlineEdit(r)) return <td className={cls}>{spanSub(r.quien_facturo)}</td>
+    if (!inlineEdit(r, 'quien_facturo')) return <td className={cls}>{spanSub(r.quien_facturo, '', !!r.guia_id)}</td>
     if (activo) {
       return (
         <td className={cls} onClick={(e) => e.stopPropagation()}>
@@ -469,7 +474,7 @@ export default function FacturacionFabrica() {
   function celdaCliente(r: FactRegistro) {
     const activo = editarActivo(r, 'n_cliente')
     const cls = tdBase
-    if (!inlineEdit(r)) return <td className={cls}>{spanSub(r.n_cliente)}</td>
+    if (!inlineEdit(r, 'n_cliente')) return <td className={cls}>{spanSub(r.n_cliente, '', !!r.guia_id)}</td>
     if (activo) {
       return (
         <td className={cls} onClick={(e) => e.stopPropagation()}>
@@ -503,7 +508,7 @@ export default function FacturacionFabrica() {
     return (
       <td className={cls} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-center gap-1">
-          {inlineEdit(r) && (
+          {inlineEdit(r, 'polo52') && (
             <input
               type="checkbox"
               checked={!!r.polo52}
