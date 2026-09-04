@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
-  Loader2, Search, SearchX, Plus, Pencil, Trash2, X, Upload, FileText, Lock, Printer, Check,
+  Loader2, Search, SearchX, Plus, Pencil, Trash2, X, Upload, FileText, Lock, Printer, Check, Eye,
 } from 'lucide-react'
 import { EtiquetasModal } from '@/components/EtiquetasBultos'
 import Layout from '@/components/Layout'
@@ -410,7 +410,7 @@ export default function FacturacionFabrica() {
               </thead>
               <tbody className="divide-y divide-line/50 bg-surface">
                 {listaPagina.map((r) => (
-                  <tr key={r.id} className={'transition hover:bg-line/20 cursor-pointer' + (selected.has(r.id) ? ' bg-brand-600/10' : '')} onClick={() => setCard(r)}>
+                  <tr key={r.id} className={'transition hover:bg-line/20 cursor-pointer' + (selected.has(r.id) ? ' bg-brand-600/10' : '')} onClick={() => { if (modoPolo52 || puedeEditar) { setSel(r); setModal('edit') } else setCard(r) }}>
                     <td className="px-1 py-[2px] text-center" onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} className="h-3 w-3 rounded border-line bg-surface2 accent-brand-600" /></td>
                     <td className="px-1 py-[2px] text-center text-[10px] font-medium text-sub">{r.autorizacion || '-'}</td>
                     <td className="px-1 py-[2px]"><span className="block truncate font-medium text-ink" title={r.razon_social || ''}>{r.razon_social || '-'}</span></td>
@@ -428,6 +428,7 @@ export default function FacturacionFabrica() {
                     <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={r.observaciones || ''}>{r.observaciones || '-'}</span></td>
                     <td className="px-1 py-[2px] text-right">
                       <div className="flex items-center justify-end gap-px" onClick={(e) => e.stopPropagation()}>
+                        <button onClick={() => setCard(r)} className="rounded border border-line p-0.5 text-sub transition hover:text-amber-400" title="Ver tarjeta"><Eye size={10} aria-hidden /></button>
                         <button onClick={() => setEtiquetaSel(r)} className="rounded border border-line p-0.5 text-sub transition hover:text-amber-400" title="Etiquetas / Imprimir"><Printer size={10} aria-hidden /></button>
                         {(modoPolo52 || puedeEditar) && <button onClick={() => { setSel(r); setModal('edit') }} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Editar"><Pencil size={10} aria-hidden /></button>}
                         {puedeBorrar && <button onClick={() => setConfirm({ message: 'Eliminar registro de facturacion de "' + (r.razon_social || '-') + '"?', onConfirm: () => void eliminar(r) })} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Eliminar"><Trash2 size={10} aria-hidden /></button>}
