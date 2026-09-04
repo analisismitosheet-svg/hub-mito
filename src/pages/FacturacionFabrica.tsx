@@ -346,7 +346,7 @@ export default function FacturacionFabrica() {
   }
 
   function empezarEdicion(r: FactRegistro, campo: string, valorActual: unknown) {
-    if (!inlineEdit(r)) return
+    if (!inlineEdit(r, campo)) return
     setEditando({ id: r.id, campo })
     setEditandoValor(valorActual != null ? String(valorActual) : '')
   }
@@ -365,7 +365,8 @@ export default function FacturacionFabrica() {
     void guardarCampo(r, 'razon_social', c.razon_social)
   }
 
-  const inlineEdit = (r: FactRegistro) => !r.guia_id && (modoPolo52 || puedeEditar)
+  const inlineEdit = (r: FactRegistro, campo?: string) =>
+    (!r.guia_id || campo === 'fecha_fact' || campo === 'fecha_envio') && (modoPolo52 || puedeEditar)
 
   const clE = 'w-full rounded border border-brand-500 bg-surface2 px-1 py-[1px] text-[10px] text-ink outline-none'
   const tdBase = 'px-1 py-[2px]'
@@ -376,7 +377,7 @@ export default function FacturacionFabrica() {
   function celdaTexto(r: FactRegistro, campo: string, valor: string | null, opts?: { type?: string; alinear?: string; maxW?: string; guardarNull?: boolean }) {
     const activo = editarActivo(r, campo)
     const cls = tdBase + (opts?.alinear ?? '')
-    if (!inlineEdit(r)) return <td className={cls}>{spanSub(valor, opts?.maxW)}</td>
+    if (!inlineEdit(r, campo)) return <td className={cls}>{spanSub(valor, opts?.maxW)}</td>
     if (activo) {
       return (
         <td className={cls} onClick={(e) => e.stopPropagation()}>
@@ -405,7 +406,7 @@ export default function FacturacionFabrica() {
   function celdaSelect(r: FactRegistro, campo: string, valor: string | null, opciones: string[], opts?: { alinear?: string; maxW?: string; badge?: boolean }) {
     const activo = editarActivo(r, campo)
     const cls = tdBase + (opts?.alinear ?? '')
-    if (!inlineEdit(r)) return <td className={cls}>{spanSub(valor, opts?.maxW)}</td>
+    if (!inlineEdit(r, campo)) return <td className={cls}>{spanSub(valor, opts?.maxW)}</td>
     if (activo) {
       return (
         <td className={cls} onClick={(e) => e.stopPropagation()}>
@@ -587,6 +588,7 @@ export default function FacturacionFabrica() {
                 <col className="w-[3%]" />  {/* Aut */}
                 <col className="w-[11%]" /> {/* Razon */}
                 <col className="w-[8%]" />  {/* F.Fact */}
+                <col className="w-[5%]" />  {/* Dias A Fact */}
                 <col className="w-[8%]" />  {/* F.Creacion (guia) */}
                 <col className="w-[8%]" />  {/* Remito */}
                 <col className="w-[3%]" />  {/* N Cl */}
@@ -598,7 +600,6 @@ export default function FacturacionFabrica() {
                 <col className="w-[7%]" />  {/* Quien Fact */}
                 <col className="w-[4%]" />  {/* POLO52 */}
                 <col className="w-[5%]" />  {/* F.Envio */}
-                <col className="w-[5%]" />  {/* Dias A Fact */}
                 <col className="w-[5%]" />  {/* Dias A Envio */}
                 <col className="w-[6%]" />  {/* Obs */}
                 <col className="w-[4%]" />  {/* Acc */}
@@ -609,6 +610,7 @@ export default function FacturacionFabrica() {
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('autorizacion')}>Aut{sortArrow('autorizacion')}</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('razon_social')}>Razon Social{sortArrow('razon_social')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('fecha_fact')}>Fecha Facturacion{sortArrow('fecha_fact')}</th>
+                  <th className="px-1 py-1 text-center whitespace-nowrap text-sub/70" title="Dias desde la creacion de la guia hasta la facturacion">Dias A Fact</th>
                   <th className="px-1 py-1 text-center whitespace-nowrap text-sub/70" title="Fecha de creacion de la guia">Fecha Creacion</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('n_remito')}>N Remito{sortArrow('n_remito')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('n_cliente')}>N Cl{sortArrow('n_cliente')}</th>
@@ -620,7 +622,6 @@ export default function FacturacionFabrica() {
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('quien_facturo')}>Quien Fact{sortArrow('quien_facturo')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('polo52')}>Polo{sortArrow('polo52')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('fecha_envio')}>F.Envio{sortArrow('fecha_envio')}</th>
-                  <th className="px-1 py-1 text-center whitespace-nowrap text-sub/70" title="Dias desde la creacion de la guia hasta la facturacion">Dias A Fact</th>
                   <th className="px-1 py-1 text-center whitespace-nowrap text-sub/70" title="Dias desde la facturacion hasta el envio">Dias A Envio</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('observaciones')}>Observ{sortArrow('observaciones')}</th>
                   <th className="px-1 py-1 text-right whitespace-nowrap">Acc</th>
@@ -633,6 +634,7 @@ export default function FacturacionFabrica() {
                     {celdaSelect(r, 'autorizacion', r.autorizacion, ['SI', 'NO'], { alinear: ' text-center' })}
                     {celdaTexto(r, 'razon_social', r.razon_social)}
                     {celdaTexto(r, 'fecha_fact', r.fecha_fact, { type: 'date', alinear: ' text-center whitespace-nowrap' })}
+                    <td className="px-1 py-[2px] text-center text-[10px] font-medium text-sub">{r.guia_id && guiasFecha[r.guia_id] ? (diasEntre(guiasFecha[r.guia_id], r.fecha_fact) ?? '-') : '-'}</td>
                     <td className="px-1 py-[2px] text-center whitespace-nowrap text-sub">{r.guia_id && guiasFecha[r.guia_id] ? fmtDateSlider(guiasFecha[r.guia_id]) : '-'}</td>
                     {celdaTexto(r, 'n_remito', r.n_remito)}
                     {celdaCliente(r)}
@@ -644,7 +646,6 @@ export default function FacturacionFabrica() {
                     {celdaEmpleado(r)}
                     {celdaPolo(r)}
                     {celdaTexto(r, 'fecha_envio', r.fecha_envio, { type: 'date', alinear: ' text-center whitespace-nowrap' })}
-                    <td className="px-1 py-[2px] text-center text-[10px] font-medium text-sub">{r.guia_id && guiasFecha[r.guia_id] ? (diasEntre(guiasFecha[r.guia_id], r.fecha_fact) ?? '-') : '-'}</td>
                     <td className="px-1 py-[2px] text-center text-[10px] font-medium text-sub">{diasEntre(r.fecha_fact, r.fecha_envio) ?? '-'}</td>
                     {celdaTexto(r, 'observaciones', r.observaciones)}
                     <td className="px-1 py-[2px] text-right">

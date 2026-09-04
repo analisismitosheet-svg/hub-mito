@@ -552,7 +552,6 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, onClose, 
           razon_social: razonSocial.trim() || null,
           n_remito: nroRemito.trim() || null,
           bulto: bulto ? Number(bulto) || null : null,
-          fecha_fact: new Date().toISOString().slice(0, 10),
           observaciones: obsFact || null,
         })
       }
