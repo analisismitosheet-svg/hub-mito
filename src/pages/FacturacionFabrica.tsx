@@ -182,6 +182,7 @@ export default function FacturacionFabrica() {
   const [filtroPol, setFiltroPol] = useState(modoPolo52)
   const [filtroFechaDesde, setFiltroFechaDesde] = useState('')
   const [filtroFechaHasta, setFiltroFechaHasta] = useState('')
+  const [filtroSinEnvio, setFiltroSinEnvio] = useState(false)
   const [modal, setModal] = useState<'new' | 'edit' | 'importar' | null>(null)
   const [sel, setSel] = useState<FactRegistro | null>(null)
   const [toast, setToast] = useState<string | null>(null)
@@ -293,6 +294,7 @@ export default function FacturacionFabrica() {
     if (filtroTransporte !== 'todos') r = r.filter((f) => f.transporte === filtroTransporte)
     if (filtroFechaDesde) r = r.filter((f) => (excelDate(f.fecha_fact) || '') >= filtroFechaDesde)
     if (filtroFechaHasta) r = r.filter((f) => (excelDate(f.fecha_fact) || '') <= filtroFechaHasta)
+    if (filtroSinEnvio) r = r.filter((f) => !f.fecha_envio)
     if (term) r = r.filter((f) => camposBuscables(f).some((c) => c.includes(term)))
     r = [...r].sort((a, b) => {
       const av = a[sortKey] ?? ''
@@ -302,13 +304,13 @@ export default function FacturacionFabrica() {
       return sortAsc ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
     })
     return r
-  }, [todos, term, filtroTransporte, filtroPol, filtroFechaDesde, filtroFechaHasta, modoPolo52, sortKey, sortAsc])
+  }, [todos, term, filtroTransporte, filtroPol, filtroFechaDesde, filtroFechaHasta, filtroSinEnvio, modoPolo52, sortKey, sortAsc])
 
   const totalPaginas = Math.max(1, Math.ceil(lista.length / POR_PAGINA))
   const paginaSegura = Math.min(pagina, totalPaginas)
   const listaPagina = lista.slice((paginaSegura - 1) * POR_PAGINA, paginaSegura * POR_PAGINA)
 
-  useEffect(() => { setPagina(1) }, [q, filtroTransporte, filtroPol, filtroFechaDesde, filtroFechaHasta])
+  useEffect(() => { setPagina(1) }, [q, filtroTransporte, filtroPol, filtroFechaDesde, filtroFechaHasta, filtroSinEnvio])
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortAsc(!sortAsc)
@@ -568,6 +570,15 @@ export default function FacturacionFabrica() {
             className="h-3.5 w-3.5 rounded border-line bg-surface2 accent-brand-600"
           />
           Solo POLO52
+        </label>
+        <label className="flex items-center gap-1.5 text-xs text-sub" title="Mostrar solo registros sin fecha de envío">
+          <input
+            type="checkbox"
+            checked={filtroSinEnvio}
+            onChange={(e) => setFiltroSinEnvio(e.target.checked)}
+            className="h-3.5 w-3.5 rounded border-line bg-surface2 accent-brand-600"
+          />
+          Sin fecha de envío
         </label>
         <span className="text-[11px] text-sub/70">{lista.length} registros {polCount > 0 && isAdmin ? `(${polCount} POLO52)` : ''}</span>
         {selected.size > 0 && puedeBorrar && (
