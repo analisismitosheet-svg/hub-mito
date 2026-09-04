@@ -43,7 +43,7 @@ interface EmpleadoMini { id: string; legajo: string | null; nombre: string }
 /* ------------------------------------------------------------------ */
 
 const TRANSPORTE_OPCIONES = ['RETIRA', 'COMISIONISTA', 'CADETERIA', 'CREDIFIN', 'OTRO']
-const RETIRO_OPCIONES = ['VERDADERO', 'FALSO']
+const RETIRO_OPCIONES = ['SI', 'NO']
 const VALOR_DEC_OPCIONES = ['Al neto', '75%', '80%', '85%', '90%', '100%']
 const inputCls = 'w-full rounded-xl border border-line bg-surface2 px-3 py-1.5 text-[13px] text-ink outline-none transition duration-250 placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40'
 const selectCls = inputCls + ' appearance-none'
@@ -77,8 +77,17 @@ function camposBuscables(f: FactRegistro): string[] {
   return arr
 }
 
+function esRetiroSi(v: string | null): boolean {
+  const t = (v || '').toUpperCase()
+  return t === 'SI' || t === 'VERDADERO' || t === 'TRUE' || t === '1'
+}
+
+function fmtRetiro(v: string | null): string {
+  return esRetiroSi(v) ? 'SI' : 'NO'
+}
+
 function retiroStyle(v: string | null): string {
-  return (v || '').toUpperCase() === 'VERDADERO'
+  return esRetiroSi(v)
     ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
     : 'bg-surface2 text-sub border-line'
 }
@@ -411,7 +420,7 @@ export default function FacturacionFabrica() {
                     <td className="px-1 py-[2px] text-center text-sub">{fmtN(r.bulto)}</td>
                     <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={r.transporte || ''}>{r.transporte || '-'}</span></td>
                     <td className="px-1 py-[2px] text-sub">{r.porcentaje_declarado || '-'}</td>
-                    <td className="px-1 py-[2px]"><span className={'inline-block whitespace-nowrap rounded-full border px-1.5 py-px text-[9px] font-medium leading-tight ' + retiroStyle(r.solicitud_retiro)}>{r.solicitud_retiro || 'FALSO'}</span></td>
+                    <td className="px-1 py-[2px]"><span className={'inline-block whitespace-nowrap rounded-full border px-1.5 py-px text-[9px] font-medium leading-tight ' + retiroStyle(r.solicitud_retiro)}>{fmtRetiro(r.solicitud_retiro)}</span></td>
                     <td className="px-1 py-[2px] text-center text-[10px] font-medium text-sub">{r.n_legajo || '-'}</td>
                     <td className="px-1 py-[2px]"><span className="block truncate text-sub" title={r.quien_facturo || ''}>{r.quien_facturo || '-'}</span></td>
                     <td className="px-1 py-[2px] text-center">{recibidos.has(normalizarRemito(r.n_remito)) ? <span className="inline-block whitespace-nowrap rounded-full border border-emerald-500/40 bg-emerald-500/15 px-1.5 py-px text-[9px] font-medium text-emerald-400"><Check size={8} className="mr-0.5 inline" aria-hidden />RECIBIDO</span> : (r.polo52 ? <span className="inline-block whitespace-nowrap rounded-full border border-amber-500/30 bg-amber-500/15 px-1.5 py-px text-[9px] font-medium text-amber-400"><Lock size={8} className="mr-0.5 inline" aria-hidden />POLO52</span> : <span className="text-sub/60">-</span>)}</td>
@@ -506,7 +515,7 @@ function FactCard({ registro: r, onClose, onEdit, puedeEditar, empleados }: {
           <section className="rounded-xl border border-line bg-surface2 p-4">
             <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-sub/70">Estados y Personas</h3>
             <dl className="space-y-2 text-[13px]">
-              <CRow label="Solicitud Retiro" value={r.solicitud_retiro || 'FALSO'} badge badgeCls={retiroStyle(r.solicitud_retiro)} />
+              <CRow label="Solicitud Retiro" value={fmtRetiro(r.solicitud_retiro)} badge badgeCls={retiroStyle(r.solicitud_retiro)} />
               <CRow label="POLO52" value={r.polo52 ? 'VERDADERO' : 'FALSO'} badge badgeCls={r.polo52 ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' : 'bg-surface2 text-sub border-line'} />
               <CRow label="Quien Facturo" value={empLabel ? `#${empLabel.legajo} - ${empLabel.nombre}` : r.quien_facturo} />
             </dl>
@@ -555,7 +564,7 @@ function FactModal({ modoPolo52, registro, clientes, empleados, onClose, onSaved
   const [bulto, setBulto] = useState(registro?.bulto != null ? String(registro.bulto) : '')
   const [transporte, setTransporte] = useState(registro?.transporte || '')
   const [porcentajeDeclarado, setPorcentajeDeclarado] = useState(registro?.porcentaje_declarado || '')
-  const [solicitudRetiro, setSolicitudRetiro] = useState(registro?.solicitud_retiro || 'FALSO')
+  const [solicitudRetiro, setSolicitudRetiro] = useState(registro?.solicitud_retiro ? fmtRetiro(registro.solicitud_retiro) : 'NO')
   const [empleadoId, setEmpleadoId] = useState(registro?.empleado_id || '')
   const [nLegajo, setNLegajo] = useState(registro?.n_legajo || '')
   const [quienFacturo, setQuienFacturo] = useState(registro?.quien_facturo || '')
@@ -618,7 +627,7 @@ function FactModal({ modoPolo52, registro, clientes, empleados, onClose, onSaved
       bulto: bulto ? Number(bulto) : null,
       transporte: transporte || null,
       porcentaje_declarado: porcentajeDeclarado || null,
-      solicitud_retiro: solicitudRetiro || 'FALSO',
+      solicitud_retiro: solicitudRetiro || 'NO',
       empleado_id: empleadoId || null,
       n_legajo: nLegajo || null,
       quien_facturo: quienFacturo.trim() || null,
@@ -870,7 +879,7 @@ function ImportFacturacion({ clientes, empleados, onClose, onSaved }: {
         autorizacion: rest.autorizacion || null, cliente_id: _cliente_id || null, razon_social: rest.razon_social || null,
         fecha_fact: rest.fecha_fact || null, n_remito: rest.n_remito || null, n_cliente: rest.n_cliente ?? null,
         bulto: rest.bulto ? Number(rest.bulto) || null : null, transporte: rest.transporte || null, porcentaje_declarado: rest.porcentaje_declarado || null,
-        solicitud_retiro: rest.solicitud_retiro || 'FALSO',
+        solicitud_retiro: fmtRetiro(rest.solicitud_retiro as string | null),
         empleado_id: _empleado_id || null, n_legajo: rest.n_legajo || null, quien_facturo: rest.quien_facturo || null,
         polo52: !!rest.polo52, fecha_envio: rest.fecha_envio || null,
         observaciones: rest.observaciones || null,
