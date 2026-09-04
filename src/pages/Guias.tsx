@@ -233,43 +233,44 @@ export default function Guias() {
     <Layout>
       <ToastEl />
       <BackButton />
-      <header className="mb-3 mt-2">
-        <h1 className="font-display text-2xl font-semibold text-ink">Guias <span className="text-sm font-normal text-sub">({todos.length})</span></h1>
-        <p className="text-xs text-sub/70">Gestion de guias de despacho y pedidos</p>
-      </header>
+      {/* Header + Filters: una sola fila */}
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <h1 className="whitespace-nowrap font-display text-[1.1rem] font-semibold text-ink">Guías <span className="text-xs font-normal text-sub">({todos.length})</span></h1>
 
-      {error && <p role="alert" className="mb-4 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
-
-      {/* Filters */}
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <div className="relative w-[220px] min-w-[180px] sm:w-[260px]">
-            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sub/70" aria-hidden />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar pedido, cliente..." className={inputCls + ' pl-8 text-xs'} />
-          </div>
-          <div className="flex items-center gap-1.5 rounded-xl border border-line bg-surface2 px-2 py-1.5">
-            <span className="text-[10px] font-medium uppercase tracking-wide text-sub/70">Fecha</span>
-            <input type="date" value={fFechaDesde} onChange={(e) => setFFechaDesde(e.target.value)} className="bg-transparent text-xs text-ink outline-none" title="Desde fecha" />
-            <span className="text-sub/50">–</span>
-            <input type="date" value={fFechaHasta} onChange={(e) => setFFechaHasta(e.target.value)} className="bg-transparent text-xs text-ink outline-none" title="Hasta fecha" />
-          </div>
-          <select value={fEstado} onChange={(e) => setFEstado(e.target.value)} className={selectCls + ' w-auto text-xs'} title="Filtrar por estado">
-            <option value="">Estado</option>
-            <option value="NUEVO">Nuevo</option>
-            <option value="EN_PROCESO">En Proceso</option>
-            <option value="FINALIZADO">Finalizado</option>
-          </select>
-          <select value={fPedido} onChange={(e) => setFPedido(e.target.value)} className={selectCls + ' w-auto text-xs'} title="Filtrar por pedido">
-            <option value="">Pedido</option>
-            {pedidoOpciones.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
-          <select value={fSucursal} onChange={(e) => setFSucursal(e.target.value)} className={selectCls + ' w-auto text-xs'} title="Filtrar por sucursal">
-            <option value="">Sucursal</option>
-            {sucursalOpciones.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
-          <span className="ml-1 text-[11px] text-sub/70">{lista.length} guias</span>
+        <div className="relative w-[200px] shrink-0">
+          <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sub/70" aria-hidden />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar pedido, cliente..." className="h-7 w-full shrink-0 rounded-lg border border-line bg-surface2 pl-8 pr-2 text-xs text-ink outline-none transition duration-250 placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40" />
         </div>
-        <div className="flex items-center gap-2">
+
+        <input type="date" value={fFechaDesde} onChange={(e) => setFFechaDesde(e.target.value)} title="Desde fecha" className="h-7 w-auto shrink-0 rounded-lg border border-line bg-surface2 px-2 text-xs text-ink outline-none transition duration-250 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40" />
+
+        <input type="date" value={fFechaHasta} onChange={(e) => setFFechaHasta(e.target.value)} title="Hasta fecha" className="h-7 w-auto shrink-0 rounded-lg border border-line bg-surface2 px-2 text-xs text-ink outline-none transition duration-250 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40" />
+
+        <select value={fEstado} onChange={(e) => setFEstado(e.target.value)} title="Filtrar por estado" className="h-7 w-auto shrink-0 appearance-none rounded-lg border border-line bg-surface2 px-2 text-xs text-ink outline-none transition duration-250 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40">
+          <option value="">Estado (todos)</option>
+          <option value="NUEVO">Nuevo</option>
+          <option value="EN_PROCESO">En Proceso</option>
+          <option value="FINALIZADO">Finalizado</option>
+        </select>
+
+        <select value={fPedido} onChange={(e) => setFPedido(e.target.value)} title="Filtrar por pedido" className="h-7 w-auto shrink-0 appearance-none rounded-lg border border-line bg-surface2 px-2 text-xs text-ink outline-none transition duration-250 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40">
+          <option value="">Pedido (todos)</option>
+          {pedidoOpciones.map((o) => <option key={o} value={o}>{o}</option>)}
+        </select>
+
+        <select value={fSucursal} onChange={(e) => setFSucursal(e.target.value)} title="Filtrar por sucursal" className="h-7 w-auto shrink-0 appearance-none rounded-lg border border-line bg-surface2 px-2 text-xs text-ink outline-none transition duration-250 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40">
+          <option value="">Sucursal (todos)</option>
+          {sucursalOpciones.map((o) => <option key={o} value={o}>{o}</option>)}
+        </select>
+
+        <span className="whitespace-nowrap text-[11px] text-sub/70">{lista.length} guías</span>
+
+        <button
+          onClick={() => { setQ(''); setFFechaDesde(''); setFFechaHasta(''); setFEstado(''); setFPedido(''); setFSucursal(''); setPagina(1) }}
+          className="h-7 shrink-0 whitespace-nowrap rounded-lg border border-line bg-surface2 px-2.5 text-xs font-medium text-sub transition hover:bg-line hover:text-ink"
+        >Limpiar filtros</button>
+
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           {selected.size > 0 && puedeBorrar && (
             <button onClick={() => setConfirm({ message: `Eliminar ${selected.size} guia(s)?`, onConfirm: () => void eliminarSeleccionados() })} className="btn-press inline-flex items-center gap-1 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/20"><Trash2 size={13} aria-hidden /> Eliminar ({selected.size})</button>
           )}
@@ -281,6 +282,8 @@ export default function Guias() {
           )}
         </div>
       </div>
+
+      {error && <p role="alert" className="mb-3 rounded-xl border border-brand-600/30 bg-brand-600/10 p-2.5 text-xs text-brand-400">{error}</p>}
 
       {/* Table */}
       {cargando ? (
