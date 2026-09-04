@@ -594,19 +594,19 @@ export default function FacturacionFabrica() {
           <div className="w-full overflow-x-auto">
             <table className="w-full table-fixed border-collapse text-[11px] leading-tight">
               <colgroup>
-                <col className="w-[3%]" />  {/* Check */}
+                {isAdmin && <col className="w-[3%]" />}  {/* Check */}
                 <col className="w-[3%]" />  {/* Aut */}
                 <col className="w-[11%]" /> {/* Razon */}
                 <col className="w-[8%]" />  {/* F.Fact */}
-                <col className="w-[5%]" />  {/* Dias A Fact */}
-                <col className="w-[8%]" />  {/* F.Creacion (guia) */}
+                {isAdmin && <col className="w-[5%]" />}  {/* Dias A Fact */}
+                {isAdmin && <col className="w-[8%]" />}  {/* F.Creacion (guia) */}
                 <col className="w-[8%]" />  {/* Remito */}
                 <col className="w-[3%]" />  {/* N Cl */}
                 <col className="w-[3%]" />  {/* Bulto */}
                 <col className="w-[5%]" />  {/* Transp */}
-                <col className="w-[4%]" />  {/* %Decl */}
+                {isAdmin && <col className="w-[4%]" />}  {/* %Decl */}
                 <col className="w-[5%]" />  {/* SolRetiro */}
-                <col className="w-[5%]" />  {/* Legajo */}
+                {isAdmin && <col className="w-[5%]" />}  {/* Legajo */}
                 <col className="w-[7%]" />  {/* Quien Fact */}
                 <col className="w-[4%]" />  {/* POLO52 */}
                 <col className="w-[5%]" />  {/* F.Envio */}
@@ -616,19 +616,19 @@ export default function FacturacionFabrica() {
               </colgroup>
               <thead>
                 <tr className="border-b border-line bg-zinc-800 text-left text-[9px] font-semibold uppercase tracking-wider text-zinc-300">
-                  <th className="px-1 py-1 text-center"><input type="checkbox" checked={allSelected} onChange={toggleSelectAll} className="h-3 w-3 rounded border-line bg-surface2 accent-brand-600" /></th>
+                  {isAdmin && <th className="px-1 py-1 text-center"><input type="checkbox" checked={allSelected} onChange={toggleSelectAll} className="h-3 w-3 rounded border-line bg-surface2 accent-brand-600" /></th>}
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('autorizacion')}>Aut{sortArrow('autorizacion')}</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('razon_social')}>Razon Social{sortArrow('razon_social')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('fecha_fact')}>Fecha Facturacion{sortArrow('fecha_fact')}</th>
-                  <th className="px-1 py-1 text-center whitespace-nowrap text-sub/70" title="Dias desde la creacion de la guia hasta la facturacion">Dias A Fact</th>
-                  <th className="px-1 py-1 text-center whitespace-nowrap text-sub/70" title="Fecha de creacion de la guia">Fecha Creacion</th>
+                  {isAdmin && <th className="px-1 py-1 text-center whitespace-nowrap text-sub/70" title="Dias desde la creacion de la guia hasta la facturacion">Dias A Fact</th>}
+                  {isAdmin && <th className="px-1 py-1 text-center whitespace-nowrap text-sub/70" title="Fecha de creacion de la guia">Fecha Creacion</th>}
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('n_remito')}>N Remito{sortArrow('n_remito')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('n_cliente')}>N Cl{sortArrow('n_cliente')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('bulto')}>Bulto{sortArrow('bulto')}</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('transporte')}>Transporte{sortArrow('transporte')}</th>
-                  <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('porcentaje_declarado')}>%Decl{sortArrow('porcentaje_declarado')}</th>
+                  {isAdmin && <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('porcentaje_declarado')}>%Decl{sortArrow('porcentaje_declarado')}</th>}
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('solicitud_retiro')}>Sol.Retiro{sortArrow('solicitud_retiro')}</th>
-                  <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('n_legajo')}>Legajo{sortArrow('n_legajo')}</th>
+                  {isAdmin && <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('n_legajo')}>Legajo{sortArrow('n_legajo')}</th>}
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('quien_facturo')}>Quien Fact{sortArrow('quien_facturo')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('polo52')}>Polo{sortArrow('polo52')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('fecha_envio')}>F.Envio{sortArrow('fecha_envio')}</th>
@@ -640,19 +640,19 @@ export default function FacturacionFabrica() {
               <tbody className="divide-y divide-line/50 bg-surface">
                 {listaPagina.map((r) => (
                   <tr key={r.id} className={'transition hover:bg-line/20 cursor-pointer' + (selected.has(r.id) ? ' bg-brand-600/10' : '') + (!r.fecha_fact ? ' bg-red-500/10 text-red-400' : '')} onClick={() => setCard(r)}>
-                    <td className="px-1 py-[2px] text-center" onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} className="h-3 w-3 rounded border-line bg-surface2 accent-brand-600" /></td>
+                    {isAdmin && <td className="px-1 py-[2px] text-center" onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} className="h-3 w-3 rounded border-line bg-surface2 accent-brand-600" /></td>}
                     {celdaSelect(r, 'autorizacion', r.autorizacion, ['SI', 'NO'], { alinear: ' text-center' })}
                     {celdaTexto(r, 'razon_social', r.razon_social)}
                     {celdaTexto(r, 'fecha_fact', r.fecha_fact, { type: 'date', alinear: ' text-center whitespace-nowrap' })}
-                    <td className="px-1 py-[2px] text-center text-[10px] font-medium text-sub">{r.guia_id && guiasFecha[r.guia_id] ? (diasEntre(guiasFecha[r.guia_id], r.fecha_fact) ?? '-') : '-'}</td>
-                    <td className="px-1 py-[2px] text-center whitespace-nowrap text-sub">{r.guia_id && guiasFecha[r.guia_id] ? fmtDateSlider(guiasFecha[r.guia_id]) : '-'}</td>
+                    {isAdmin && <td className="px-1 py-[2px] text-center text-[10px] font-medium text-sub">{r.guia_id && guiasFecha[r.guia_id] ? (diasEntre(guiasFecha[r.guia_id], r.fecha_fact) ?? '-') : '-'}</td>}
+                    {isAdmin && <td className="px-1 py-[2px] text-center whitespace-nowrap text-sub">{r.guia_id && guiasFecha[r.guia_id] ? fmtDateSlider(guiasFecha[r.guia_id]) : '-'}</td>}
                     {celdaTexto(r, 'n_remito', r.n_remito)}
                     {celdaCliente(r)}
                     {celdaTexto(r, 'bulto', r.bulto != null ? String(r.bulto) : null, { type: 'number', alinear: ' text-center' })}
                     {celdaSelect(r, 'transporte', r.transporte, TRANSPORTE_OPCIONES)}
-                    {celdaSelect(r, 'porcentaje_declarado', r.porcentaje_declarado, VALOR_DEC_OPCIONES)}
+                    {isAdmin && celdaSelect(r, 'porcentaje_declarado', r.porcentaje_declarado, VALOR_DEC_OPCIONES)}
                     {celdaSelect(r, 'solicitud_retiro', r.solicitud_retiro ? fmtRetiro(r.solicitud_retiro) : null, RETIRO_OPCIONES, { alinear: ' text-center' })}
-                    {celdaTexto(r, 'n_legajo', r.n_legajo, { alinear: ' text-center' })}
+                    {isAdmin && celdaTexto(r, 'n_legajo', r.n_legajo, { alinear: ' text-center' })}
                     {celdaEmpleado(r)}
                     {celdaPolo(r)}
                     {celdaTexto(r, 'fecha_envio', r.fecha_envio, { type: 'date', alinear: ' text-center whitespace-nowrap' })}
