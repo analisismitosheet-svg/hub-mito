@@ -139,6 +139,27 @@ function fmtDateSlider(iso: string | null): string {
   return fixed
 }
 
+/** Días entre dos fechas (ISO o dd/mm/yyyy). Devuelve null si falta alguna. */
+function diasEntre(a: string | null | undefined, b: string | null | undefined): number | null {
+  const na = parseFechaDias(a)
+  const nb = parseFechaDias(b)
+  if (na == null || nb == null) return null
+  return Math.round((nb - na) / 86400000)
+}
+
+function parseFechaDias(v: string | null | undefined): number | null {
+  if (!v) return null
+  const fixed = excelDate(v) || v
+  const m = fixed.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  const m2 = fixed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/)
+  let y = 0, mo = 0, d = 0
+  if (m) { y = +m[1]; mo = +m[2]; d = +m[3] }
+  else if (m2) { d = +m2[1]; mo = +m2[2]; y = +m2[3] }
+  else return null
+  const dt = new Date(y, mo - 1, d)
+  return dt.getTime()
+}
+
 /* ------------------------------------------------------------------ */
 /*  Main Component                                                     */
 /* ------------------------------------------------------------------ */
@@ -177,6 +198,7 @@ export default function FacturacionFabrica() {
   const [clientes, setClientes] = useState<ClienteMini[]>([])
   const [empleados, setEmpleados] = useState<EmpleadoMini[]>([])
   const [transportes, setTransportes] = useState<{ id: string; nombre: string }[]>([])
+  const [guiasFecha, setGuiasFecha] = useState<Record<string, string>>({})
   const [recibidos, setRecibidos] = useState<Set<string>>(new Set())
 
   const mostrarToast = useCallback((msg: string) => {
@@ -203,15 +225,21 @@ export default function FacturacionFabrica() {
       } catch (e) { setError(e instanceof Error ? e.message : 'Error de red') }
       return acc
     }
-    const [todosData, clData, emData, trData] = await Promise.all([
+    const [todosData, clData, emData, trData, guData] = await Promise.all([
       traerTodo((from, to) => sb.from('facturacion_fabrica').select('*').order('created_at', { ascending: false }).range(from, to)),
       traerTodo((from, to) => sb.from('clientes').select('id,n_cliente,razon_social').eq('estado', 'ACTIVO').order('razon_social').range(from, to)),
       traerTodo((from, to) => sb.from('empleados').select('id,legajo,nombre').order('nombre').range(from, to)),
       traerTodo((from, to) => sb.from('transportes').select('id,nombre').order('nombre').range(from, to)),
+      traerTodo((from, to) => sb.from('guias').select('id,fecha').range(from, to)),
     ])
     setTodos(todosData as FactRegistro[])
     setClientes(clData as ClienteMini[])
     setEmpleados(emData as EmpleadoMini[])
+    const gf: Record<string, string> = {}
+    for (const g of (guData as { id: string; fecha: string | null }[])) {
+      if (g.fecha) gf[g.id] = g.fecha
+    }
+    setGuiasFecha(gf)
     setTransportes(trData as { id: string; nombre: string }[])
     setCargando(false)
   }, [])
@@ -569,6 +597,8 @@ export default function FacturacionFabrica() {
                 <col className="w-[7%]" />  {/* Quien Fact */}
                 <col className="w-[4%]" />  {/* POLO52 */}
                 <col className="w-[5%]" />  {/* F.Envio */}
+                <col className="w-[5%]" />  {/* Dias A Fact */}
+                <col className="w-[5%]" />  {/* Dias A Envio */}
                 <col className="w-[6%]" />  {/* Obs */}
                 <col className="w-[4%]" />  {/* Acc */}
               </colgroup>
@@ -588,6 +618,8 @@ export default function FacturacionFabrica() {
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('quien_facturo')}>Quien Fact{sortArrow('quien_facturo')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('polo52')}>Polo{sortArrow('polo52')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('fecha_envio')}>F.Envio{sortArrow('fecha_envio')}</th>
+                  <th className="px-1 py-1 text-center whitespace-nowrap text-sub/70" title="Dias desde la creacion de la guia hasta la facturacion">Dias A Fact</th>
+                  <th className="px-1 py-1 text-center whitespace-nowrap text-sub/70" title="Dias desde la facturacion hasta el envio">Dias A Envio</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('observaciones')}>Observ{sortArrow('observaciones')}</th>
                   <th className="px-1 py-1 text-right whitespace-nowrap">Acc</th>
                 </tr>
@@ -609,6 +641,8 @@ export default function FacturacionFabrica() {
                     {celdaEmpleado(r)}
                     {celdaPolo(r)}
                     {celdaTexto(r, 'fecha_envio', r.fecha_envio, { type: 'date', alinear: ' text-center whitespace-nowrap' })}
+                    <td className="px-1 py-[2px] text-center text-[10px] font-medium text-sub">{r.guia_id && guiasFecha[r.guia_id] ? (diasEntre(guiasFecha[r.guia_id], r.fecha_fact) ?? '-') : '-'}</td>
+                    <td className="px-1 py-[2px] text-center text-[10px] font-medium text-sub">{diasEntre(r.fecha_fact, r.fecha_envio) ?? '-'}</td>
                     {celdaTexto(r, 'observaciones', r.observaciones)}
                     <td className="px-1 py-[2px] text-right">
                       <div className="flex items-center justify-end gap-px" onClick={(e) => e.stopPropagation()}>
