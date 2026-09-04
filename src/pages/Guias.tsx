@@ -241,37 +241,45 @@ export default function Guias() {
       {error && <p role="alert" className="mb-4 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
 
       {/* Filters */}
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[180px]">
-          <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sub/70" aria-hidden />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por pedido, cliente, razon social..." className={inputCls + ' pl-8 text-xs'} />
-        </div>
-        <input type="date" value={fFechaDesde} onChange={(e) => setFFechaDesde(e.target.value)} className={inputCls + ' w-auto text-xs'} title="Desde fecha" />
-        <input type="date" value={fFechaHasta} onChange={(e) => setFFechaHasta(e.target.value)} className={inputCls + ' w-auto text-xs'} title="Hasta fecha" />
-        <select value={fEstado} onChange={(e) => setFEstado(e.target.value)} className={selectCls + ' w-auto text-xs'} title="Filtrar por estado">
-          <option value="">Estado (todos)</option>
-          <option value="NUEVO">Nuevo</option>
-          <option value="EN_PROCESO">En Proceso</option>
-          <option value="FINALIZADO">Finalizado</option>
-        </select>
-        <select value={fPedido} onChange={(e) => setFPedido(e.target.value)} className={selectCls + ' w-auto text-xs'} title="Filtrar por pedido">
-          <option value="">Pedido (todos)</option>
-          {pedidoOpciones.map((o) => <option key={o} value={o}>{o}</option>)}
-        </select>
-        <select value={fSucursal} onChange={(e) => setFSucursal(e.target.value)} className={selectCls + ' w-auto text-xs'} title="Filtrar por sucursal">
-          <option value="">Sucursal (todas)</option>
-          {sucursalOpciones.map((o) => <option key={o} value={o}>{o}</option>)}
-        </select>
-        <span className="text-[11px] text-sub/70">{lista.length} guias</span>
-        {selected.size > 0 && puedeBorrar && (
-          <button onClick={() => setConfirm({ message: `Eliminar ${selected.size} guia(s)?`, onConfirm: () => void eliminarSeleccionados() })} className="btn-press inline-flex items-center gap-1 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/20"><Trash2 size={13} aria-hidden /> Eliminar ({selected.size})</button>
-        )}
-        {puedeCrear && (
-          <div className="flex items-center gap-2">
-            <button onClick={() => setModal('importar')} className="btn-press inline-flex items-center gap-1 rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line"><Upload size={13} aria-hidden /> Importar</button>
-            <button onClick={() => setModal('new')} className="btn-press inline-flex items-center gap-1 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-700"><Plus size={13} aria-hidden /> Nueva Guia</button>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <div className="relative w-[220px] min-w-[180px] sm:w-[260px]">
+            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sub/70" aria-hidden />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar pedido, cliente..." className={inputCls + ' pl-8 text-xs'} />
           </div>
-        )}
+          <div className="flex items-center gap-1.5 rounded-xl border border-line bg-surface2 px-2 py-1.5">
+            <span className="text-[10px] font-medium uppercase tracking-wide text-sub/70">Fecha</span>
+            <input type="date" value={fFechaDesde} onChange={(e) => setFFechaDesde(e.target.value)} className="bg-transparent text-xs text-ink outline-none" title="Desde fecha" />
+            <span className="text-sub/50">–</span>
+            <input type="date" value={fFechaHasta} onChange={(e) => setFFechaHasta(e.target.value)} className="bg-transparent text-xs text-ink outline-none" title="Hasta fecha" />
+          </div>
+          <select value={fEstado} onChange={(e) => setFEstado(e.target.value)} className={selectCls + ' w-auto text-xs'} title="Filtrar por estado">
+            <option value="">Estado</option>
+            <option value="NUEVO">Nuevo</option>
+            <option value="EN_PROCESO">En Proceso</option>
+            <option value="FINALIZADO">Finalizado</option>
+          </select>
+          <select value={fPedido} onChange={(e) => setFPedido(e.target.value)} className={selectCls + ' w-auto text-xs'} title="Filtrar por pedido">
+            <option value="">Pedido</option>
+            {pedidoOpciones.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+          <select value={fSucursal} onChange={(e) => setFSucursal(e.target.value)} className={selectCls + ' w-auto text-xs'} title="Filtrar por sucursal">
+            <option value="">Sucursal</option>
+            {sucursalOpciones.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+          <span className="ml-1 text-[11px] text-sub/70">{lista.length} guias</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {selected.size > 0 && puedeBorrar && (
+            <button onClick={() => setConfirm({ message: `Eliminar ${selected.size} guia(s)?`, onConfirm: () => void eliminarSeleccionados() })} className="btn-press inline-flex items-center gap-1 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/20"><Trash2 size={13} aria-hidden /> Eliminar ({selected.size})</button>
+          )}
+          {puedeCrear && (
+            <div className="flex items-center gap-2">
+              <button onClick={() => setModal('importar')} className="btn-press inline-flex items-center gap-1 rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line"><Upload size={13} aria-hidden /> Importar</button>
+              <button onClick={() => setModal('new')} className="btn-press inline-flex items-center gap-1 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-700"><Plus size={13} aria-hidden /> Nueva Guia</button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Table */}
