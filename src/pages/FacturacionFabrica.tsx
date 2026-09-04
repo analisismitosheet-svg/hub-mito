@@ -626,7 +626,7 @@ export default function FacturacionFabrica() {
               </thead>
               <tbody className="divide-y divide-line/50 bg-surface">
                 {listaPagina.map((r) => (
-                  <tr key={r.id} className={'transition hover:bg-line/20 cursor-pointer' + (selected.has(r.id) ? ' bg-brand-600/10' : '')} onClick={() => setCard(r)}>
+                  <tr key={r.id} className={'transition hover:bg-line/20 cursor-pointer' + (selected.has(r.id) ? ' bg-brand-600/10' : '') + (!r.fecha_fact ? ' bg-red-500/10 text-red-400' : '')} onClick={() => setCard(r)}>
                     <td className="px-1 py-[2px] text-center" onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} className="h-3 w-3 rounded border-line bg-surface2 accent-brand-600" /></td>
                     {celdaSelect(r, 'autorizacion', r.autorizacion, ['SI', 'NO'], { alinear: ' text-center' })}
                     {celdaTexto(r, 'razon_social', r.razon_social)}
