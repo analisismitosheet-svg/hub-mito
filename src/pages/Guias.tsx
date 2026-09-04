@@ -354,7 +354,7 @@ export default function Guias() {
                     <td className="px-1 py-[2px]"><span className="block max-w-[220px] truncate text-sub" title={g.observaciones || ''}>{g.observaciones || '-'}</span></td>
                     <td className="px-1 py-[2px] text-right">
                       <div className="flex items-center justify-end gap-px" onClick={(e) => e.stopPropagation()}>
-                        <button onClick={() => setEtiquetaSel(g)} className="rounded border border-line p-0.5 text-sub transition hover:text-amber-400" title="Etiquetas / Imprimir"><Printer size={10} aria-hidden /></button>
+                        <button onClick={() => setEtiquetaSel(g)} disabled={estadoDe(g) !== 'FINALIZADO'} title={estadoDe(g) === 'FINALIZADO' ? 'Etiquetas / Imprimir' : 'Se habilita al finalizar la guia'} className={'rounded border border-line p-0.5 transition ' + (estadoDe(g) === 'FINALIZADO' ? 'text-sub hover:text-amber-400' : 'cursor-not-allowed text-sub/30')}><Printer size={10} aria-hidden /></button>
                         {puedeEditar && <button onClick={() => { setSel(g); setModal('edit') }} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Editar"><Pencil size={10} aria-hidden /></button>}
                         {puedeBorrar && <button onClick={() => setConfirm({ message: 'Eliminar guia de "' + (g.razon_social || '-') + '"?', onConfirm: () => void eliminar(g) })} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Eliminar"><Trash2 size={10} aria-hidden /></button>}
                       </div>
