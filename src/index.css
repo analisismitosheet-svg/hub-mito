@@ -218,6 +218,15 @@ body {
   text-overflow: ellipsis;
 }
 
+.etiqueta-bulto .etq-dir {
+  font-weight: 700;
+  font-size: 1.05em;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
 .etiqueta-bulto .etq-obs {
   overflow: hidden;
   display: -webkit-box;

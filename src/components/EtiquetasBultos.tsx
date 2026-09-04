@@ -76,14 +76,13 @@ export function EtiquetaBulto({ cliente, num, total, destino, origen, nRemito, a
           <div className="etq-origen"><span>ORIGEN:</span> {origen || '-'}</div>
         </div>
         <div className="etq-qr-col">
-          <QRCodeSVG value={`${origen}-${remito}(${num}/${total})-${destino}`} size={qrSize} level="M" />
+          <QRCodeSVG value={`${origen}-${remito}(${num}/${total})${destino ? `-${destino}` : ''}`} size={qrSize} level="M" />
           <div className="etq-qr-txt">{origen}-{remito}({num}/{total}){destino ? `-${destino}` : ''}</div>
         </div>
       </div>
       <div className="etq-razon">{cliente.razonSocial}</div>
       <div className="etq-line">TE: {cliente.telefono}</div>
-      <div className="etq-line"><b>DESTINO:</b> {destino || '-'}</div>
-      <div className="etq-line"><b>DIR. ENTREGA:</b> {cliente.direccion}</div>
+      <div className="etq-dir"><b>DIR. ENTREGA:</b> {cliente.direccion}</div>
       <div className="etq-line">{cliente.localidad} - {cliente.provincia}</div>
       <div className="etq-line"><b>TEL CONTACTO:</b> {cliente.telefono}</div>
       <div className="etq-obs">OBS: {cliente.observaciones || '-'}</div>
@@ -103,7 +102,7 @@ interface PredefEtiqueta {
   destino: string
 }
 
-const ETQ_PRE_DEFECTO: PredefEtiqueta = { ancho: 80, alto: 50, fontSize: 8, qrSize: 30, origen: 'MITO', destino: 'POLO52-NO' }
+const ETQ_PRE_DEFECTO: PredefEtiqueta = { ancho: 80, alto: 50, fontSize: 8, qrSize: 30, origen: 'MITO', destino: '' }
 
 function leerPredef(): PredefEtiqueta {
   try {
