@@ -230,6 +230,17 @@ export const APPS: AppDef[] = [
     permiso: 'mayorista.guias.view',
   },
   {
+    id: 'mayorista-notas-credito',
+    areaId: 'mayorista',
+    title: 'Notas de Credito',
+    description: 'Notas de credito generadas desde guias.',
+    icon: FileText,
+    kind: 'internal',
+    target: '/mayorista/notas-credito',
+    color: '#f59e0b',
+    permiso: 'mayorista.notas_credito.view',
+  },
+  {
     id: 'polo52-facturacion',
     areaId: 'polo52',
     title: 'Facturacion Fabrica',

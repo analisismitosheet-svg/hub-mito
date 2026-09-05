@@ -553,18 +553,33 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
       if (!result.error && result.data && supabase) {
         const guiaId = (result.data as { id: string }).id
         void registrarHistorial('guia', guiaId, 'creacion', usuario, `Guia N° ${payload.nro_pedido} - ${razonSocial || ''}`)
-        const obsFact = [
-          `Generado desde Guia N° ${payload.nro_pedido}`,
-          observaciones.trim() || null,
-        ].filter(Boolean).join(' | ')
-        await supabase.from('facturacion_fabrica').insert({
-          guia_id: guiaId,
-          n_cliente: nroCliente.trim() || null,
-          razon_social: razonSocial.trim() || null,
-          n_remito: nroRemito.trim() || null,
-          bulto: bulto ? Number(bulto) || null : null,
-          observaciones: obsFact || null,
-        })
+        const esNotaCredito = (pedido || '').toUpperCase() === 'NOTA DE CREDITO'
+        if (esNotaCredito) {
+          await supabase.from('notas_credito').insert({
+            guia_id: guiaId,
+            nro_pedido: payload.nro_pedido as string,
+            n_cliente: nroCliente.trim() || null,
+            razon_social: razonSocial.trim() || null,
+            n_remito: nroRemito.trim() || null,
+            bulto: bulto ? Number(bulto) || null : null,
+            fecha: new Date().toISOString().slice(0, 10),
+            observaciones: observaciones.trim() || null,
+            estado: 'PENDIENTE',
+          })
+        } else {
+          const obsFact = [
+            `Generado desde Guia N° ${payload.nro_pedido}`,
+            observaciones.trim() || null,
+          ].filter(Boolean).join(' | ')
+          await supabase.from('facturacion_fabrica').insert({
+            guia_id: guiaId,
+            n_cliente: nroCliente.trim() || null,
+            razon_social: razonSocial.trim() || null,
+            n_remito: nroRemito.trim() || null,
+            bulto: bulto ? Number(bulto) || null : null,
+            observaciones: obsFact || null,
+          })
+        }
       }
     }
     setBusy(false)

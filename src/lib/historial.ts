@@ -2,7 +2,7 @@ import { supabase } from '@/lib/supabase'
 
 export interface HistorialEntry {
   id: string
-  entidad: 'guia' | 'facturacion'
+  entidad: 'guia' | 'facturacion' | 'nota_credito'
   registro_id: string
   accion: 'creacion' | 'modificacion' | 'borrado'
   usuario_nombre: string | null
@@ -13,7 +13,7 @@ export interface HistorialEntry {
 
 /** Registra un evento en el historial (creación, modificación o borrado). */
 export async function registrarHistorial(
-  entidad: 'guia' | 'facturacion',
+  entidad: 'guia' | 'facturacion' | 'nota_credito',
   registroId: string,
   accion: 'creacion' | 'modificacion' | 'borrado',
   usuario: { nombre: string | null; email: string | null },
@@ -35,7 +35,7 @@ export async function registrarHistorial(
 }
 
 /** Trae el historial de un registro específico. */
-export async function obtenerHistorial(entidad: 'guia' | 'facturacion', registroId: string): Promise<HistorialEntry[]> {
+export async function obtenerHistorial(entidad: 'guia' | 'facturacion' | 'nota_credito', registroId: string): Promise<HistorialEntry[]> {
   if (!supabase) return []
   const { data } = await supabase
     .from('historial')

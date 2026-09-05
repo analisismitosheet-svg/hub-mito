@@ -8,7 +8,7 @@ const ACCION_LABEL: Record<HistorialEntry['accion'], { label: string; cls: strin
   borrado: { label: 'Borrado', cls: 'bg-red-500/15 text-red-400 border-red-500/30' },
 }
 
-export default function HistorialLista({ entidad, registroId }: { entidad: 'guia' | 'facturacion'; registroId: string }) {
+export default function HistorialLista({ entidad, registroId }: { entidad: 'guia' | 'facturacion' | 'nota_credito'; registroId: string }) {
   const [items, setItems] = useState<HistorialEntry[]>([])
   const [cargando, setCargando] = useState(true)
 

@@ -30,6 +30,7 @@ import Transportes from '@/pages/Transportes'
 import Clientes from '@/pages/Clientes'
 import FacturacionFabrica from '@/pages/FacturacionFabrica'
 import Guias from '@/pages/Guias'
+import NotasCredito from '@/pages/NotasCredito'
 import DatosSql from '@/pages/DatosSql'
 import SqlConexion from '@/pages/SqlConexion'
 import ComingSoon from '@/pages/ComingSoon'
@@ -133,6 +134,14 @@ export default function App() {
             element={
               <PermissionRoute permiso="mayorista.guias.view">
                 <Guias />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/mayorista/notas-credito"
+            element={
+              <PermissionRoute permiso="mayorista.notas_credito.view">
+                <NotasCredito />
               </PermissionRoute>
             }
           />
