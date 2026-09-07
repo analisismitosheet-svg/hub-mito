@@ -189,7 +189,7 @@ export default function EstadisticasRendimiento() {
     for (const [key, diasEmp] of diasPorEmp) {
       const f = porEmpleado.get(key)
       if (f) {
-        f.dias = Array.from(diasEmp.values()).sort((a, b) => a.fecha.localeCompare(b.fecha))
+        f.dias = Array.from(diasEmp.values()).sort((a, b) => b.fecha.localeCompare(a.fecha))
       }
     }
 
