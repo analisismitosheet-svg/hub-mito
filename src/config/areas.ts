@@ -24,6 +24,7 @@ import {
   Star,
   Database,
   FileText,
+  TrendingUp,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -239,6 +240,17 @@ export const APPS: AppDef[] = [
     target: '/mayorista/notas-credito',
     color: '#f59e0b',
     permiso: 'mayorista.notas_credito.view',
+  },
+  {
+    id: 'mayorista-estadisticas',
+    areaId: 'mayorista',
+    title: 'Estadisticas / Rendimientos',
+    description: 'Rendimiento por empleado: items separados, unidades y tiempo.',
+    icon: TrendingUp,
+    kind: 'internal',
+    target: '/mayorista/estadisticas',
+    color: '#0d9488',
+    permiso: 'mayorista.estadisticas.view',
   },
   {
     id: 'polo52-facturacion',

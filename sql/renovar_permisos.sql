@@ -110,7 +110,8 @@ INSERT INTO public.permisos (clave, modulo, accion, label, orden) VALUES
   ('mayorista.notas_credito.view',   'mayorista', 'notas_credito.view',   'Ver notas de crédito',    730),
   ('mayorista.notas_credito.create', 'mayorista', 'notas_credito.create', 'Crear notas de crédito',  731),
   ('mayorista.notas_credito.edit',   'mayorista', 'notas_credito.edit',   'Editar notas de crédito', 732),
-  ('mayorista.notas_credito.delete', 'mayorista', 'notas_credito.delete', 'Eliminar notas de crédito', 733)
+  ('mayorista.notas_credito.delete', 'mayorista', 'notas_credito.delete', 'Eliminar notas de crédito', 733),
+  ('mayorista.estadisticas.view',    'mayorista', 'estadisticas.view',    'Ver estadísticas / rendimientos', 734)
 ON CONFLICT (clave) DO NOTHING;
 
 -- ---- Depósito ----

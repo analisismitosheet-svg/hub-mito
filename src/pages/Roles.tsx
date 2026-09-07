@@ -203,6 +203,7 @@ function RolPermisosModal({
       'mayorista.notas_credito.create': 'mayorista',
       'mayorista.notas_credito.edit': 'mayorista',
       'mayorista.notas_credito.delete': 'mayorista',
+      'mayorista.estadisticas.view': 'mayorista',
       'deposito.view': 'deposito',
       'deposito.import': 'deposito',
       'deposito.mark': 'deposito',
