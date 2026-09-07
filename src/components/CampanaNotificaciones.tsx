@@ -68,23 +68,20 @@ export default function CampanaNotificaciones() {
             notis.push({ id: `g-${g.id}`, tipo: 'guias', titulo: 'Guía sin finalizar', detalle: `N° ${g.nro_pedido || '-'} · ${g.razon_social || ''}`, ruta: `/mayorista/guias?abrir=${g.id}`, fecha: g.fecha || g.created_at, destinoId: g.id })
           }
         }
-        // Facturación sin fecha de envío — solo si la guía está finalizada o no tiene guía
-        const { data: sinEnvio } = await sb.from('facturacion_fabrica').select('id,guia_id,razon_social,n_remito,fecha_fact,created_at').is('fecha_envio', null)
-        if (activo && sinEnvio) {
-          for (const f of sinEnvio as { id: string; guia_id: string | null; razon_social: string | null; n_remito: string | null; fecha_fact: string | null; created_at: string }[]) {
+        // Facturación por etapas — solo si la guía está finalizada o no tiene guía
+        const { data: facturas } = await sb.from('facturacion_fabrica').select('id,guia_id,razon_social,n_remito,fecha_fact,fecha_envio,created_at')
+        if (activo && facturas) {
+          for (const f of facturas as { id: string; guia_id: string | null; razon_social: string | null; n_remito: string | null; fecha_fact: string | null; fecha_envio: string | null; created_at: string }[]) {
             const guiaFinalizada = f.guia_id ? estadoGuia.get(f.guia_id) === true : true
-            if (guiaFinalizada) {
-              notis.push({ id: `f-${f.id}`, tipo: 'facturacion', titulo: 'Facturación sin enviar', detalle: `${f.razon_social || ''}${f.n_remito ? ` · R. ${f.n_remito}` : ''}`, ruta: `/mayorista/facturacion-fabrica?abrir=${f.id}`, fecha: f.fecha_fact || f.created_at, destinoId: f.id })
-            }
-          }
-        }
-        // Facturación sin fecha de facturación — solo si la guía está finalizada o no tiene guía
-        const { data: sinFact } = await sb.from('facturacion_fabrica').select('id,guia_id,razon_social,n_remito,created_at').is('fecha_fact', null)
-        if (activo && sinFact) {
-          for (const f of sinFact as { id: string; guia_id: string | null; razon_social: string | null; n_remito: string | null; created_at: string }[]) {
-            const guiaFinalizada = f.guia_id ? estadoGuia.get(f.guia_id) === true : true
-            if (guiaFinalizada) {
+            if (!guiaFinalizada) continue
+            // Etapa 2: sin fecha de facturación
+            if (!f.fecha_fact) {
               notis.push({ id: `ff-${f.id}`, tipo: 'facturacion_sin_fact', titulo: 'Facturación sin fecha de facturación', detalle: `${f.razon_social || ''}${f.n_remito ? ` · R. ${f.n_remito}` : ''}`, ruta: `/mayorista/facturacion-fabrica?abrir=${f.id}`, fecha: f.created_at, destinoId: f.id })
+              continue
+            }
+            // Etapa 3: sin fecha de envío
+            if (!f.fecha_envio) {
+              notis.push({ id: `f-${f.id}`, tipo: 'facturacion', titulo: 'Facturación sin enviar', detalle: `${f.razon_social || ''}${f.n_remito ? ` · R. ${f.n_remito}` : ''}`, ruta: `/mayorista/facturacion-fabrica?abrir=${f.id}`, fecha: f.fecha_fact || f.created_at, destinoId: f.id })
             }
           }
         }
