@@ -39,7 +39,7 @@ interface FactRegistro {
   created_at: string
 }
 
-interface ClienteMini { id: string; n_cliente: string | null; razon_social: string }
+interface ClienteMini { id: string; n_cliente: string | null; razon_social: string; transporte: string | null }
 interface EmpleadoMini { id: string; legajo: string | null; nombre: string }
 
 /* ------------------------------------------------------------------ */
@@ -239,7 +239,7 @@ export default function FacturacionFabrica() {
     }
     const [todosData, clData, emData, trData, guData] = await Promise.all([
       traerTodo((from, to) => sb.from('facturacion_fabrica').select('*').order('created_at', { ascending: false }).range(from, to)),
-      traerTodo((from, to) => sb.from('clientes').select('id,n_cliente,razon_social').eq('estado', 'ACTIVO').order('razon_social').range(from, to)),
+      traerTodo((from, to) => sb.from('clientes').select('id,n_cliente,razon_social,transporte').eq('estado', 'ACTIVO').order('razon_social').range(from, to)),
       traerTodo((from, to) => sb.from('empleados').select('id,legajo,nombre').order('nombre').range(from, to)),
       traerTodo((from, to) => sb.from('transportes').select('id,nombre').order('nombre').range(from, to)),
       traerTodo((from, to) => sb.from('guias').select('id,fecha').range(from, to)),
@@ -312,6 +312,15 @@ export default function FacturacionFabrica() {
     const nombres = transportes.map((t) => t.nombre)
     return Array.from(new Set([...TRANSPORTE_OPCIONES, ...nombres])).sort((a, b) => a.localeCompare(b, 'es'))
   }, [transportes])
+
+  // Transporte de cada cliente (por n_cliente) para mostrarlo en la columna
+  const transportePorCliente = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const c of clientes) {
+      if (c.n_cliente && c.transporte) m.set(String(c.n_cliente), c.transporte)
+    }
+    return m
+  }, [clientes])
 
   const lista = useMemo(() => {
     let r = todos
@@ -395,6 +404,7 @@ export default function FacturacionFabrica() {
     void guardarCampo(r, 'cliente_id', c.id)
     void guardarCampo(r, 'n_cliente', c.n_cliente)
     void guardarCampo(r, 'razon_social', c.razon_social)
+    if (c.transporte) void guardarCampo(r, 'transporte', c.transporte)
   }
 
   const inlineEdit = (r: FactRegistro, campo?: string) => {
@@ -686,7 +696,7 @@ export default function FacturacionFabrica() {
                     {celdaTexto(r, 'n_remito', r.n_remito)}
                     {celdaCliente(r)}
                     {celdaTexto(r, 'bulto', r.bulto != null ? String(r.bulto) : null, { type: 'number', alinear: ' text-center' })}
-                    {celdaSelect(r, 'transporte', r.transporte, transporteOpciones)}
+                    {celdaSelect(r, 'transporte', r.transporte ?? (r.n_cliente ? transportePorCliente.get(String(r.n_cliente)) ?? null : null), transporteOpciones)}
                     {isAdmin && celdaSelect(r, 'porcentaje_declarado', r.porcentaje_declarado, VALOR_DEC_OPCIONES)}
                     {celdaSelect(r, 'solicitud_retiro', r.solicitud_retiro ? fmtRetiro(r.solicitud_retiro) : null, RETIRO_OPCIONES, { alinear: ' text-center' })}
                     {isAdmin && celdaTexto(r, 'n_legajo', r.n_legajo, { alinear: ' text-center' })}
@@ -868,7 +878,7 @@ function FactModal({ modoPolo52, registro, clientes, empleados, transporteOpcion
   }, [empleados, busqEmpleado])
 
   function seleccionarCliente(c: ClienteMini) {
-    setClienteId(c.id); setRazonSocial(c.razon_social); setNCliente(c.n_cliente); setOpenCliDrop(false); setBusqCliente('')
+    setClienteId(c.id); setRazonSocial(c.razon_social); setNCliente(c.n_cliente); setTransporte(c.transporte || ''); setOpenCliDrop(false); setBusqCliente('')
   }
   function seleccionarEmpleado(e: EmpleadoMini) {
     setEmpleadoId(e.id); setQuienFacturo(e.nombre); setNLegajo(e.legajo || ''); setOpenEmpDrop(false); setBusqEmpleado('')

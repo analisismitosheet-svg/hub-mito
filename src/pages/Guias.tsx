@@ -33,7 +33,7 @@ interface Guia {
   created_at: string
 }
 
-interface ClienteMini { id: string; n_cliente: string | null; razon_social: string }
+interface ClienteMini { id: string; n_cliente: string | null; razon_social: string; transporte: string | null }
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
@@ -142,7 +142,7 @@ export default function Guias() {
 
     const [gu, cl, opRes] = await Promise.all([
       traerTodo<Guia>((f, t) => supabase!.from('guias').select('*').order('created_at', { ascending: false }).range(f, t)),
-      traerTodo<ClienteMini>((f, t) => supabase!.from('clientes').select('id,n_cliente,razon_social').eq('estado', 'ACTIVO').order('razon_social').range(f, t)),
+      traerTodo<ClienteMini>((f, t) => supabase!.from('clientes').select('id,n_cliente,razon_social,transporte').eq('estado', 'ACTIVO').order('razon_social').range(f, t)),
       supabase.from('guias_opciones').select('tipo,valor').order('valor'),
     ])
     setTodos(gu)
@@ -481,6 +481,7 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
 }) {
   const [nroPedido, setNroPedido] = useState(guia?.nro_pedido || '')
   const [nroCliente, setNroCliente] = useState(guia?.nro_cliente || '')
+  const [clienteTransporte, setClienteTransporte] = useState<string | null>(null)
   const [razonSocial, setRazonSocial] = useState(guia?.razon_social || '')
   const [pedido, setPedido] = useState(guia?.pedido || '')
   const [sucursal, setSucursal] = useState(guia?.sucursal || '')
@@ -505,7 +506,7 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
   }, [clientes, busqCliente])
 
   function seleccionarCliente(c: ClienteMini) {
-    setNroCliente(c.n_cliente || ''); setRazonSocial(c.razon_social); setOpenCliDrop(false); setBusqCliente('')
+    setNroCliente(c.n_cliente || ''); setRazonSocial(c.razon_social); setClienteTransporte(c.transporte); setOpenCliDrop(false); setBusqCliente('')
   }
 
   async function agregarPedidoCustom() {
@@ -553,6 +554,7 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
             razon_social: razonSocial.trim() || null,
             n_remito: nroRemito.trim() || null,
             bulto: bulto ? Number(bulto) || null : null,
+            transporte: clienteTransporte || null,
             observaciones: (guia?.observaciones && observaciones.trim() !== guia.observaciones)
               ? (`Generado desde Guia N° ${payload.nro_pedido}` + (observaciones.trim() ? ` | ${observaciones.trim()}` : ''))
               : undefined,
@@ -589,6 +591,7 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
             razon_social: razonSocial.trim() || null,
             n_remito: nroRemito.trim() || null,
             bulto: bulto ? Number(bulto) || null : null,
+            transporte: clienteTransporte || null,
             observaciones: obsFact || null,
           })
         }
