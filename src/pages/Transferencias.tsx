@@ -193,8 +193,8 @@ function exportarExcelCascada(origen: string, items: Item[], lote: Lote) {
   const totalGeneral = filas.reduce((s, f) => s + f.total, 0)
 
   const esc = (v: unknown) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  const th = (t: unknown) => `<th>${esc(t)}</th>`
-  const td = (t: unknown) => `<td>${esc(t)}</td>`
+  const th = (t: unknown) => `<th style="mso-number-format:'\\@'">${esc(t)}</th>`
+  const td = (t: unknown) => `<td style="mso-number-format:'\\@'">${esc(t)}</td>`
   const encabezados = ['ARTICULO', 'DESC ADICIONAL MACRO', 'COLOR', 'TALLE', ...destinos, 'TOTAL'].map(th).join('')
   const cuerpo = filas
     .map((f) => [f.articulo, f.desc, f.color, f.talle, ...destinos.map((d) => f.porDestino[d] ?? ''), f.total].map(td).join(''))
