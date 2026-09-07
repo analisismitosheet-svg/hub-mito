@@ -63,9 +63,9 @@ function estadoDe(g: Pick<Guia, 'estado' | 'en_proceso' | 'finalizado'>): Estado
 
 function claseFila(g: Pick<Guia, 'estado' | 'en_proceso' | 'finalizado'>): string {
   const e = estadoDe(g)
-  if (e === 'FINALIZADO') return 'bg-emerald-500/10'
-  if (e === 'NUEVO') return 'bg-red-500/10'
-  return 'bg-amber-500/10'
+  if (e === 'FINALIZADO') return 'bg-emerald-500/5'
+  if (e === 'NUEVO') return 'bg-red-500/5'
+  return 'bg-amber-500/5'
 }
 
 function cambiarEstadoEnTodos(todos: Guia[], id: string, estado: EstadoGuia): Guia[] {
@@ -404,7 +404,7 @@ export default function Guias() {
                   <CRow label="Razon Social" value={card.razon_social} />
                   <CRow label="Pedido" value={card.pedido} />
                   <CRow label="Sucursal" value={card.sucursal} />
-                  <CRow label="Estado" value={estadoDe(card)} badge badgeCls={estadoDe(card) === 'FINALIZADO' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : estadoDe(card) === 'NUEVO' ? 'bg-sky-500/15 text-sky-400 border-sky-500/30' : 'bg-amber-500/15 text-amber-400 border-amber-500/30'} />
+                  <CRow label="Estado" value={estadoDe(card)} badge badgeCls={estadoDe(card) === 'FINALIZADO' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : estadoDe(card) === 'NUEVO' ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'} />
                   <CRow label="Observaciones" value={card.observaciones} />
                 </dl>
               </section>
