@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Loader2, TrendingUp, User } from 'lucide-react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { Loader2, TrendingUp, User, ChevronRight } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
@@ -25,6 +25,14 @@ interface FilaEmpleado {
   unidades: number
   lotes: number
   segundos: number
+  dias: FilaDia[]
+}
+
+interface FilaDia {
+  fecha: string
+  items: number
+  unidades: number
+  segundos: number
 }
 
 const inputCls = 'w-full rounded-xl border border-line bg-surface2 px-3 py-1.5 text-[13px] text-ink outline-none transition duration-250 placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40'
@@ -48,6 +56,11 @@ function fmtHora(iso: string | null): string {
   }
 }
 
+function fmtFecha(iso: string): string {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso
+}
+
 export default function EstadisticasRendimiento() {
   const { can } = useAuth()
   const [empleados, setEmpleados] = useState<Empleado[]>([])
@@ -57,6 +70,7 @@ export default function EstadisticasRendimiento() {
   const [error, setError] = useState<string | null>(null)
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
+  const [abierto, setAbierto] = useState<string | null>(null)
 
   const cargar = useCallback(async () => {
     if (!supabase) { setCargando(false); return }
@@ -111,6 +125,8 @@ export default function EstadisticasRendimiento() {
     const lapsosDia = new Map<string, { min: number; max: number }>()
     // Lotes únicos por empleado
     const lotesPorEmp = new Map<string, Set<string>>()
+    // Detalle por día por empleado
+    const diasPorEmp = new Map<string, Map<string, FilaDia>>()
 
     // Clave de agrupación: legajo (N° de empleado); si no tiene legajo, usa el nombre/id
     const claveEmp = (id: string): { key: string; nombre: string; legajo: string | null } => {
@@ -126,7 +142,7 @@ export default function EstadisticasRendimiento() {
       const { key, nombre, legajo } = claveEmp(empId)
       let f = porEmpleado.get(key)
       if (!f) {
-        f = { empleadoId: empId, nombre, legajo, items: 0, unidades: 0, lotes: 0, segundos: 0 }
+        f = { empleadoId: empId, nombre, legajo, items: 0, unidades: 0, lotes: 0, segundos: 0, dias: [] }
         porEmpleado.set(key, f)
       }
       f.items += 1
@@ -142,6 +158,13 @@ export default function EstadisticasRendimiento() {
       const lapso = lapsosDia.get(keyDia)
       if (lapso) { if (t < lapso.min) lapso.min = t; if (t > lapso.max) lapso.max = t }
       else lapsosDia.set(keyDia, { min: t, max: t })
+
+      // Detalle por día
+      let diasEmp = diasPorEmp.get(key)
+      if (!diasEmp) { diasEmp = new Map(); diasPorEmp.set(key, diasEmp) }
+      const d = diasEmp.get(dia)
+      if (d) { d.items += 1; d.unidades += i.cantidad || 1 }
+      else diasEmp.set(dia, { fecha: dia, items: 1, unidades: i.cantidad || 1, segundos: 0 })
     }
 
     for (const [key, lapso] of lapsosDia) {
@@ -150,11 +173,24 @@ export default function EstadisticasRendimiento() {
       if (f) {
         f.segundos += Math.max(0, (lapso.max - lapso.min) / 1000)
       }
+      const dia = key.split('|')[1]
+      const diasEmp = diasPorEmp.get(empId)
+      if (diasEmp) {
+        const d = diasEmp.get(dia)
+        if (d) d.segundos = Math.max(0, (lapso.max - lapso.min) / 1000)
+      }
     }
 
     for (const [empId, set] of lotesPorEmp) {
       const f = porEmpleado.get(empId)
       if (f) f.lotes = set.size
+    }
+
+    for (const [key, diasEmp] of diasPorEmp) {
+      const f = porEmpleado.get(key)
+      if (f) {
+        f.dias = Array.from(diasEmp.values()).sort((a, b) => a.fecha.localeCompare(b.fecha))
+      }
     }
 
     return Array.from(porEmpleado.values()).sort((a, b) => b.unidades - a.unidades)
@@ -218,17 +254,57 @@ export default function EstadisticasRendimiento() {
               <tbody className="divide-y divide-line/50 bg-surface">
                 {filas.map((f) => {
                   const unidHora = f.segundos > 0 ? (f.unidades / (f.segundos / 3600)) : 0
+                  const clave = f.legajo ?? f.empleadoId
+                  const esAbierto = abierto === clave
                   return (
-                    <tr key={f.legajo ?? f.empleadoId} className="transition hover:bg-line/20">
-                      <td className="px-3 py-2">
-                        <span className="flex items-center gap-2 font-medium text-ink"><User size={13} className="text-sub" aria-hidden /> {f.legajo ? `#${f.legajo}` : f.nombre} {f.legajo ? <span className="text-[10px] font-normal text-sub/70">{f.nombre}</span> : null}</span>
-                      </td>
-                      <td className="px-3 py-2 text-center text-sub">{f.items}</td>
-                      <td className="px-3 py-2 text-center font-semibold text-ink">{f.unidades}</td>
-                      <td className="px-3 py-2 text-center text-sub">{f.lotes}</td>
-                      <td className="px-3 py-2 text-center text-sub whitespace-nowrap">{fmtDuracion(f.segundos)}</td>
-                      <td className="px-3 py-2 text-center text-sub whitespace-nowrap">{unidHora ? unidHora.toFixed(1) : '—'}</td>
-                    </tr>
+                    <Fragment key={clave}>
+                      <tr className={'cursor-pointer transition hover:bg-line/20' + (esAbierto ? ' bg-line/20' : '')} onClick={() => setAbierto(esAbierto ? null : clave)}>
+                        <td className="px-3 py-2">
+                          <span className="flex items-center gap-2 font-medium text-ink">
+                            <ChevronRight size={14} aria-hidden className={'shrink-0 text-sub transition-transform ' + (esAbierto ? 'rotate-90' : '')} />
+                            <User size={13} className="text-sub" aria-hidden /> {f.legajo ? `#${f.legajo}` : f.nombre} {f.legajo ? <span className="text-[10px] font-normal text-sub/70">{f.nombre}</span> : null}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-center text-sub">{f.items}</td>
+                        <td className="px-3 py-2 text-center font-semibold text-ink">{f.unidades}</td>
+                        <td className="px-3 py-2 text-center text-sub">{f.lotes}</td>
+                        <td className="px-3 py-2 text-center text-sub whitespace-nowrap">{fmtDuracion(f.segundos)}</td>
+                        <td className="px-3 py-2 text-center text-sub whitespace-nowrap">{unidHora ? unidHora.toFixed(1) : '—'}</td>
+                      </tr>
+                      {esAbierto && (
+                        <tr>
+                          <td colSpan={6} className="bg-surface2/60 px-4 py-2">
+                            <div className="rounded-xl border border-line bg-surface">
+                              <table className="w-full table-auto border-collapse text-xs leading-tight">
+                                <thead>
+                                  <tr className="border-b border-line text-left text-[10px] font-semibold uppercase tracking-wider text-sub/70">
+                                    <th className="px-3 py-1.5">Fecha</th>
+                                    <th className="px-3 py-1.5 text-center">Items</th>
+                                    <th className="px-3 py-1.5 text-center">Unidades</th>
+                                    <th className="px-3 py-1.5 text-center">Tiempo</th>
+                                    <th className="px-3 py-1.5 text-center">Unid/h</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-line/50">
+                                  {f.dias.map((d) => {
+                                    const uh = d.segundos > 0 ? (d.unidades / (d.segundos / 3600)) : 0
+                                    return (
+                                      <tr key={d.fecha}>
+                                        <td className="px-3 py-1.5 font-medium text-ink">{fmtFecha(d.fecha)}</td>
+                                        <td className="px-3 py-1.5 text-center text-sub">{d.items}</td>
+                                        <td className="px-3 py-1.5 text-center text-ink">{d.unidades}</td>
+                                        <td className="px-3 py-1.5 text-center text-sub whitespace-nowrap">{fmtDuracion(d.segundos)}</td>
+                                        <td className="px-3 py-1.5 text-center text-sub whitespace-nowrap">{uh ? uh.toFixed(1) : '—'}</td>
+                                      </tr>
+                                    )
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   )
                 })}
               </tbody>
