@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
-  Loader2, Search, SearchX, Plus, Pencil, Trash2, X, Upload, FileText, Lock, Printer, Check, Eye,
+  Loader2, Search, SearchX, Plus, Pencil, Trash2, X, Upload, FileText, Lock, Printer, Check, Eye, Settings,
 } from 'lucide-react'
 import { EtiquetasModal } from '@/components/EtiquetasBultos'
+import GestionTransportes from '@/components/GestionTransportes'
 import HistorialLista from '@/components/HistorialLista'
 import { registrarHistorial } from '@/lib/historial'
 import Layout from '@/components/Layout'
@@ -208,6 +209,7 @@ export default function FacturacionFabrica() {
   const [clientes, setClientes] = useState<ClienteMini[]>([])
   const [empleados, setEmpleados] = useState<EmpleadoMini[]>([])
   const [transportes, setTransportes] = useState<{ id: string; nombre: string }[]>([])
+  const [gestionTransportes, setGestionTransportes] = useState(false)
   const [guiasFecha, setGuiasFecha] = useState<Record<string, string>>({})
   const [recibidos, setRecibidos] = useState<Set<string>>(new Set())
 
@@ -303,6 +305,12 @@ export default function FacturacionFabrica() {
   const term = q.trim().toUpperCase()
   const transporteFiltro = useMemo(() => {
     return [...transportes].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+  }, [transportes])
+
+  // Opciones de transporte: lista fija + las cargadas de la tabla transportes
+  const transporteOpciones = useMemo(() => {
+    const nombres = transportes.map((t) => t.nombre)
+    return Array.from(new Set([...TRANSPORTE_OPCIONES, ...nombres])).sort((a, b) => a.localeCompare(b, 'es'))
   }, [transportes])
 
   const lista = useMemo(() => {
@@ -605,6 +613,7 @@ export default function FacturacionFabrica() {
           <>
             {isAdmin && <button onClick={() => setModal('importar')} className="btn-press inline-flex items-center gap-1 rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line"><Upload size={13} aria-hidden /> Importar</button>}
             <button onClick={() => setModal('new')} className="btn-press inline-flex items-center gap-1 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-700"><Plus size={13} aria-hidden /> Nuevo Registro</button>
+            <button onClick={() => setGestionTransportes(true)} className="btn-press inline-flex items-center gap-1 rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line"><Settings size={13} aria-hidden /> Transportes</button>
           </>
         )}
       </div>
@@ -677,7 +686,7 @@ export default function FacturacionFabrica() {
                     {celdaTexto(r, 'n_remito', r.n_remito)}
                     {celdaCliente(r)}
                     {celdaTexto(r, 'bulto', r.bulto != null ? String(r.bulto) : null, { type: 'number', alinear: ' text-center' })}
-                    {celdaSelect(r, 'transporte', r.transporte, TRANSPORTE_OPCIONES)}
+                    {celdaSelect(r, 'transporte', r.transporte, transporteOpciones)}
                     {isAdmin && celdaSelect(r, 'porcentaje_declarado', r.porcentaje_declarado, VALOR_DEC_OPCIONES)}
                     {celdaSelect(r, 'solicitud_retiro', r.solicitud_retiro ? fmtRetiro(r.solicitud_retiro) : null, RETIRO_OPCIONES, { alinear: ' text-center' })}
                     {isAdmin && celdaTexto(r, 'n_legajo', r.n_legajo, { alinear: ' text-center' })}
@@ -720,12 +729,14 @@ export default function FacturacionFabrica() {
       {/* Etiquetas de bultos */}
       {etiquetaSel && <EtiquetasModal registro={etiquetaSel} onClose={() => setEtiquetaSel(null)} />}
 
+      {gestionTransportes && <GestionTransportes onClose={() => setGestionTransportes(false)} onSaved={async () => { await cargar() }} />}
+
       {/* Modals */}
       {modal === 'importar' && (
         <ImportFacturacion clientes={clientes} empleados={empleados} onClose={() => setModal(null)} onSaved={async () => { setModal(null); await cargar(); mostrarToast('Registros importados') }} />
       )}
       {modal && modal !== 'importar' && (
-        <FactModal modoPolo52={modoPolo52} registro={modal === 'edit' ? sel : null} clientes={clientes} empleados={empleados} usuario={{ nombre: perfil?.nombre ?? null, email: perfil?.email ?? null }} onClose={() => { setModal(null); setSel(null) }} onSaved={async () => { setModal(null); setSel(null); await cargar(); mostrarToast(modal === 'edit' ? 'Registro actualizado' : 'Registro creado') }} />
+        <FactModal modoPolo52={modoPolo52} registro={modal === 'edit' ? sel : null} clientes={clientes} empleados={empleados} transporteOpciones={transporteOpciones} usuario={{ nombre: perfil?.nombre ?? null, email: perfil?.email ?? null }} onClose={() => { setModal(null); setSel(null) }} onSaved={async () => { setModal(null); setSel(null); await cargar(); mostrarToast(modal === 'edit' ? 'Registro actualizado' : 'Registro creado') }} />
       )}
       <ConfirmDialog open={!!confirm} message={confirm?.message ?? ''} onCancel={() => setConfirm(null)} onConfirm={() => { confirm?.onConfirm(); setConfirm(null) }} />
     </Layout>
@@ -814,8 +825,8 @@ function CRow({ label, value, badge, badgeCls, pre }: { label: string; value: st
 /*  Form Modal                                                         */
 /* ------------------------------------------------------------------ */
 
-function FactModal({ modoPolo52, registro, clientes, empleados, usuario, onClose, onSaved }: {
-  modoPolo52: boolean; registro: FactRegistro | null; clientes: ClienteMini[]; empleados: EmpleadoMini[]
+function FactModal({ modoPolo52, registro, clientes, empleados, transporteOpciones, usuario, onClose, onSaved }: {
+  modoPolo52: boolean; registro: FactRegistro | null; clientes: ClienteMini[]; empleados: EmpleadoMini[]; transporteOpciones: string[]
   usuario: { nombre: string | null; email: string | null }; onClose: () => void; onSaved: () => void
 }) {
   const [autorizacion, setAutorizacion] = useState(registro?.autorizacion || '')
@@ -956,7 +967,7 @@ function FactModal({ modoPolo52, registro, clientes, empleados, usuario, onClose
             <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Bulto</span><input type="number" value={bulto} onChange={(e) => setBulto(e.target.value)} disabled={readonly} placeholder="0" className={inputCls} /></label>
             <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Transporte</span>
               <input list="transportes-list" value={transporte} onChange={(e) => setTransporte(e.target.value)} disabled={readonly} placeholder="Seleccionar o escribir..." className={inputCls} />
-              <datalist id="transportes-list">{TRANSPORTE_OPCIONES.map((v) => <option key={v} value={v} />)}</datalist>
+              <datalist id="transportes-list">{transporteOpciones.map((v) => <option key={v} value={v} />)}</datalist>
             </label>
 
             {/* Row 3 */}
