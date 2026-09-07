@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 
 interface Empleado { id: string; legajo: string | null; nombre: string }
+interface UsuarioMini { id: string; nombre: string | null }
 interface ItemSep {
   lote_id: string
   hecho_por: string | null
@@ -48,6 +49,7 @@ function fmtHora(iso: string | null): string {
 export default function EstadisticasRendimiento() {
   const { can } = useAuth()
   const [empleados, setEmpleados] = useState<Empleado[]>([])
+  const [usuarios, setUsuarios] = useState<UsuarioMini[]>([])
   const [items, setItems] = useState<ItemSep[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -71,11 +73,13 @@ export default function EstadisticasRendimiento() {
         }
         return acc
       }
-      const [empData, itemsData] = await Promise.all([
+      const [empData, usrData, itemsData] = await Promise.all([
         traerTodo<Empleado>((from, to) => sb.from('empleados').select('id,legajo,nombre').order('nombre').range(from, to)),
+        traerTodo<UsuarioMini>((from, to) => sb.from('usuarios').select('id,nombre').order('nombre').range(from, to)),
         traerTodo<ItemSep>((from, to) => sb.from('mayorista_items').select('lote_id,hecho_por,hecho_at,estado,cantidad').order('hecho_at', { ascending: true }).range(from, to)),
       ])
       setEmpleados(empData)
+      setUsuarios(usrData)
       setItems(itemsData)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error de red')
@@ -98,10 +102,20 @@ export default function EstadisticasRendimiento() {
     // Lapsos por (empleado, lote): primer y último hecho_at
     const lapsos = new Map<string, { min: number; max: number }>()
 
-    // Clave de agrupación: legajo (N° de empleado); si no tiene legajo, usa el id
+    // Clave de agrupación: legajo (N° de empleado); si no tiene legajo, usa el nombre/id
+    const norm = (s: string) => s.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     const claveEmp = (id: string): { key: string; nombre: string; legajo: string | null } => {
       const emp = empleados.find((e) => e.id === id)
-      return { key: emp?.legajo ?? id, nombre: emp?.nombre ?? 'Desconocido', legajo: emp?.legajo ?? null }
+      if (emp) return { key: emp.legajo ?? emp.nombre, nombre: emp.nombre, legajo: emp.legajo }
+      // hecho_por puede ser id de usuario (tabla usuarios)
+      const usr = usuarios.find((u) => u.id === id)
+      if (usr && usr.nombre) {
+        // Buscar el empleado cuyo nombre coincida con el del usuario
+        const empMatch = empleados.find((e) => norm(e.nombre) === norm(usr.nombre!))
+        if (empMatch) return { key: empMatch.legajo ?? empMatch.nombre, nombre: empMatch.nombre, legajo: empMatch.legajo }
+        return { key: usr.nombre, nombre: usr.nombre, legajo: null }
+      }
+      return { key: id, nombre: 'Desconocido', legajo: null }
     }
 
     for (const i of hechosFiltrados) {
@@ -132,7 +146,7 @@ export default function EstadisticasRendimiento() {
     }
 
     return Array.from(porEmpleado.values()).sort((a, b) => b.unidades - a.unidades)
-  }, [items, empleados, desde, hasta])
+  }, [items, empleados, usuarios, desde, hasta])
 
   const totalItems = filas.reduce((s, f) => s + f.items, 0)
   const totalUnidades = filas.reduce((s, f) => s + f.unidades, 0)
