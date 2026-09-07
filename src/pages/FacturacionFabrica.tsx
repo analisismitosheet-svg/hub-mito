@@ -46,14 +46,6 @@ interface EmpleadoMini { id: string; legajo: string | null; nombre: string }
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
 
-const TRANSPORTE_OPCIONES = [
-  'RETIRA', 'COMISIONISTA', 'CREDIFIN', 'VIA CARGO', 'LANCIONI', 'CRUZ DEL SUR', 'INTERPROVINCIAL',
-  'RAOSA', 'POLO 52- COMISIONISTA', 'COMISIONISTA MARCELO', 'CORREO ARGENTINO', 'DEMONTE',
-  'SEVILLANITA', 'ÑANDUBAY', 'SANTA ROSA', 'EXPRESO BILETTA', 'DELOG', 'CAMIONERA MENDOCINA',
-  'PULQUI PACK', 'CALCABRINI', 'BRIO', 'SEND BOX', 'MOSTTO', 'CENTRAL ARGENTINO', 'TOMASSINI',
-  'EXPRESO RIVADAVIA', 'MICROCARGAS', 'AG DISTRIBUCIONES', 'TRANSPORTE CONTE', 'LA CAMIONERA MENDOCINA',
-  'RETIRA EN POLO 52', 'VCP', 'BULL', 'RETIRA JULI', 'LLEVA SANTI', 'RETIRA EN POLO52',
-]
 const RETIRO_OPCIONES = ['SI', 'NO']
 const VALOR_DEC_OPCIONES = ['Al neto', '75%', '80%', '85%', '90%', '100%']
 const inputCls = 'w-full rounded-xl border border-line bg-surface2 px-3 py-1.5 text-[13px] text-ink outline-none transition duration-250 placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40'
@@ -307,10 +299,10 @@ export default function FacturacionFabrica() {
     return [...transportes].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
   }, [transportes])
 
-  // Opciones de transporte: lista fija + las cargadas de la tabla transportes
+  // Opciones de transporte: SOLO los transportes reales de la tabla
   const transporteOpciones = useMemo(() => {
     const nombres = transportes.map((t) => t.nombre)
-    return Array.from(new Set([...TRANSPORTE_OPCIONES, ...nombres])).sort((a, b) => a.localeCompare(b, 'es'))
+    return Array.from(new Set(nombres)).sort((a, b) => a.localeCompare(b, 'es'))
   }, [transportes])
 
   // Transporte de cada cliente (por n_cliente) para mostrarlo en la columna
@@ -465,6 +457,7 @@ export default function FacturacionFabrica() {
             className={clE}
           >
             <option value="">-</option>
+            {valor && !opciones.includes(valor) && <option value={valor}>{valor}</option>}
             {opciones.map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
         </td>
