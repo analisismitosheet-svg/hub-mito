@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { LogOut } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
+import CampanaNotificaciones from '@/components/CampanaNotificaciones'
 
 /**
  * Shell de la app. Por defecto usa un contenedor ancho (aprovecha toda la pantalla).
@@ -22,6 +23,7 @@ export default function Layout({ children, wide = true }: { children: ReactNode;
           </div>
           {configured && user && (
             <div className="flex items-center gap-3">
+              <CampanaNotificaciones />
               <span className="hidden text-sm text-sub sm:inline">{user.email}</span>
               <button
                 onClick={() => signOut()}
