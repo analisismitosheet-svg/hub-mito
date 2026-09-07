@@ -53,30 +53,39 @@ export default function CampanaNotificaciones() {
           }
         }
       }
-      // 2) Cada guía no finalizada (mayorista)
+      // 2) Guías y facturación (mayorista)
       if (esMayorista) {
-        const { data } = await sb.from('guias').select('id,nro_pedido,razon_social,fecha,created_at').eq('finalizado', false)
-        if (activo && data) {
-          for (const g of data as { id: string; nro_pedido: string | null; razon_social: string | null; fecha: string | null; created_at: string }[]) {
+        // Mapa guia_id -> finalizado
+        const { data: guias } = await sb.from('guias').select('id,finalizado')
+        const estadoGuia = new Map<string, boolean>()
+        if (guias) {
+          for (const g of guias as { id: string; finalizado: boolean }[]) estadoGuia.set(g.id, g.finalizado)
+        }
+        // Cada guía no finalizada
+        const { data: gNoFin } = await sb.from('guias').select('id,nro_pedido,razon_social,fecha,created_at').eq('finalizado', false)
+        if (activo && gNoFin) {
+          for (const g of gNoFin as { id: string; nro_pedido: string | null; razon_social: string | null; fecha: string | null; created_at: string }[]) {
             notis.push({ id: `g-${g.id}`, tipo: 'guias', titulo: 'Guía sin finalizar', detalle: `N° ${g.nro_pedido || '-'} · ${g.razon_social || ''}`, ruta: `/mayorista/guias?abrir=${g.id}`, fecha: g.fecha || g.created_at, destinoId: g.id })
           }
         }
-      }
-      // 3) Cada registro de facturación sin fecha de envío (mayorista)
-      if (esMayorista) {
-        const { data } = await sb.from('facturacion_fabrica').select('id,razon_social,n_remito,fecha_fact,created_at').is('fecha_envio', null)
-        if (activo && data) {
-          for (const f of data as { id: string; razon_social: string | null; n_remito: string | null; fecha_fact: string | null; created_at: string }[]) {
-            notis.push({ id: `f-${f.id}`, tipo: 'facturacion', titulo: 'Facturación sin enviar', detalle: `${f.razon_social || ''}${f.n_remito ? ` · R. ${f.n_remito}` : ''}`, ruta: `/mayorista/facturacion-fabrica?abrir=${f.id}`, fecha: f.fecha_fact || f.created_at, destinoId: f.id })
+        // Facturación sin fecha de envío — solo si la guía está finalizada o no tiene guía
+        const { data: sinEnvio } = await sb.from('facturacion_fabrica').select('id,guia_id,razon_social,n_remito,fecha_fact,created_at').is('fecha_envio', null)
+        if (activo && sinEnvio) {
+          for (const f of sinEnvio as { id: string; guia_id: string | null; razon_social: string | null; n_remito: string | null; fecha_fact: string | null; created_at: string }[]) {
+            const guiaFinalizada = f.guia_id ? estadoGuia.get(f.guia_id) === true : true
+            if (guiaFinalizada) {
+              notis.push({ id: `f-${f.id}`, tipo: 'facturacion', titulo: 'Facturación sin enviar', detalle: `${f.razon_social || ''}${f.n_remito ? ` · R. ${f.n_remito}` : ''}`, ruta: `/mayorista/facturacion-fabrica?abrir=${f.id}`, fecha: f.fecha_fact || f.created_at, destinoId: f.id })
+            }
           }
         }
-      }
-      // 4) Cada registro de facturación sin fecha de facturación (mayorista)
-      if (esMayorista) {
-        const { data } = await sb.from('facturacion_fabrica').select('id,razon_social,n_remito,created_at').is('fecha_fact', null)
-        if (activo && data) {
-          for (const f of data as { id: string; razon_social: string | null; n_remito: string | null; created_at: string }[]) {
-            notis.push({ id: `ff-${f.id}`, tipo: 'facturacion_sin_fact', titulo: 'Facturación sin fecha de facturación', detalle: `${f.razon_social || ''}${f.n_remito ? ` · R. ${f.n_remito}` : ''}`, ruta: `/mayorista/facturacion-fabrica?abrir=${f.id}`, fecha: f.created_at, destinoId: f.id })
+        // Facturación sin fecha de facturación — solo si la guía está finalizada o no tiene guía
+        const { data: sinFact } = await sb.from('facturacion_fabrica').select('id,guia_id,razon_social,n_remito,created_at').is('fecha_fact', null)
+        if (activo && sinFact) {
+          for (const f of sinFact as { id: string; guia_id: string | null; razon_social: string | null; n_remito: string | null; created_at: string }[]) {
+            const guiaFinalizada = f.guia_id ? estadoGuia.get(f.guia_id) === true : true
+            if (guiaFinalizada) {
+              notis.push({ id: `ff-${f.id}`, tipo: 'facturacion_sin_fact', titulo: 'Facturación sin fecha de facturación', detalle: `${f.razon_social || ''}${f.n_remito ? ` · R. ${f.n_remito}` : ''}`, ruta: `/mayorista/facturacion-fabrica?abrir=${f.id}`, fecha: f.created_at, destinoId: f.id })
+            }
           }
         }
       }
