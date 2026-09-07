@@ -446,7 +446,6 @@ function ClienteModal({ cliente, nCliente, transportes, onClose, onSaved }: { cl
               <select value={transporte} onChange={(e) => setTransporte(e.target.value)} className={inputCls}>
                 <option value="">— Sin transporte —</option>
                 {transportes.map((t) => <option key={t} value={t}>{t}</option>)}
-                {transporte && !transportes.includes(transporte) && <option value={transporte}>{transporte}</option>}
               </select>
             </label>
 

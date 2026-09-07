@@ -305,15 +305,6 @@ export default function FacturacionFabrica() {
     return Array.from(new Set(nombres)).sort((a, b) => a.localeCompare(b, 'es'))
   }, [transportes])
 
-  // Transporte de cada cliente (por n_cliente) para mostrarlo en la columna
-  const transportePorCliente = useMemo(() => {
-    const m = new Map<string, string>()
-    for (const c of clientes) {
-      if (c.n_cliente && c.transporte) m.set(String(c.n_cliente), c.transporte)
-    }
-    return m
-  }, [clientes])
-
   const lista = useMemo(() => {
     let r = todos
     if (filtroPol || modoPolo52) r = r.filter((f) => f.polo52)
@@ -457,7 +448,6 @@ export default function FacturacionFabrica() {
             className={clE}
           >
             <option value="">-</option>
-            {valor && !opciones.includes(valor) && <option value={valor}>{valor}</option>}
             {opciones.map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
         </td>
@@ -689,7 +679,7 @@ export default function FacturacionFabrica() {
                     {celdaTexto(r, 'n_remito', r.n_remito)}
                     {celdaCliente(r)}
                     {celdaTexto(r, 'bulto', r.bulto != null ? String(r.bulto) : null, { type: 'number', alinear: ' text-center' })}
-                    {celdaSelect(r, 'transporte', r.transporte ?? (r.n_cliente ? transportePorCliente.get(String(r.n_cliente)) ?? null : null), transporteOpciones)}
+                    {celdaSelect(r, 'transporte', r.transporte, transporteOpciones)}
                     {isAdmin && celdaSelect(r, 'porcentaje_declarado', r.porcentaje_declarado, VALOR_DEC_OPCIONES)}
                     {celdaSelect(r, 'solicitud_retiro', r.solicitud_retiro ? fmtRetiro(r.solicitud_retiro) : null, RETIRO_OPCIONES, { alinear: ' text-center' })}
                     {isAdmin && celdaTexto(r, 'n_legajo', r.n_legajo, { alinear: ' text-center' })}
