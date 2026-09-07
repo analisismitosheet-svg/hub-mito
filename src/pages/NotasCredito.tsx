@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Loader2, Search, SearchX, Trash2, X, FileText, Eye, Plus, ClipboardList,
 } from 'lucide-react'
@@ -42,6 +43,7 @@ function estadoCls(e: string | null): string {
 
 export default function NotasCredito() {
   const { can, perfil } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
   const puedeCrear = can('mayorista.notas_credito.create')
   const puedeBorrar = can('mayorista.notas_credito.delete')
 
@@ -76,6 +78,16 @@ export default function NotasCredito() {
   }, [])
 
   useEffect(() => { void cargar() }, [cargar])
+
+  useEffect(() => {
+    const id = searchParams.get('abrir')
+    if (!id) return
+    const n = todos.find((x) => x.id === id)
+    if (n) {
+      setCard(n)
+      setSearchParams({}, { replace: true })
+    }
+  }, [todos, searchParams, setSearchParams])
 
   const term = q.trim().toUpperCase()
   const lista = useMemo(() => {

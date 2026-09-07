@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Bell, UserCheck, ClipboardList, Truck, X } from 'lucide-react'
+import { Bell, UserCheck, ClipboardList, Truck, CalendarX, FileText, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 
 interface Notificacion {
   id: string
-  tipo: 'usuarios' | 'guias' | 'facturacion'
+  tipo: 'usuarios' | 'guias' | 'facturacion' | 'facturacion_sin_fact' | 'nota_credito'
   titulo: string
   detalle: string
   ruta: string
@@ -71,6 +71,24 @@ export default function CampanaNotificaciones() {
           }
         }
       }
+      // 4) Cada registro de facturación sin fecha de facturación (mayorista)
+      if (esMayorista) {
+        const { data } = await sb.from('facturacion_fabrica').select('id,razon_social,n_remito,created_at').is('fecha_fact', null)
+        if (activo && data) {
+          for (const f of data as { id: string; razon_social: string | null; n_remito: string | null; created_at: string }[]) {
+            notis.push({ id: `ff-${f.id}`, tipo: 'facturacion_sin_fact', titulo: 'Facturación sin fecha de facturación', detalle: `${f.razon_social || ''}${f.n_remito ? ` · R. ${f.n_remito}` : ''}`, ruta: `/mayorista/facturacion-fabrica?abrir=${f.id}`, fecha: f.created_at, destinoId: f.id })
+          }
+        }
+      }
+      // 5) Notas de crédito pendientes (mayorista)
+      if (esMayorista) {
+        const { data } = await sb.from('notas_credito').select('id,nro_pedido,razon_social,fecha,created_at').eq('estado', 'PENDIENTE')
+        if (activo && data) {
+          for (const n of data as { id: string; nro_pedido: string | null; razon_social: string | null; fecha: string | null; created_at: string }[]) {
+            notis.push({ id: `nc-${n.id}`, tipo: 'nota_credito', titulo: 'Nota de crédito pendiente', detalle: `N° ${n.nro_pedido || '-'} · ${n.razon_social || ''}`, ruta: `/mayorista/notas-credito?abrir=${n.id}`, fecha: n.fecha || n.created_at, destinoId: n.id })
+          }
+        }
+      }
       // Ordenar de más viejo a más nuevo
       if (activo) {
         notis.sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
@@ -91,11 +109,15 @@ export default function CampanaNotificaciones() {
     usuarios: <UserCheck size={15} aria-hidden />,
     guias: <ClipboardList size={15} aria-hidden />,
     facturacion: <Truck size={15} aria-hidden />,
+    facturacion_sin_fact: <CalendarX size={15} aria-hidden />,
+    nota_credito: <FileText size={15} aria-hidden />,
   }
   const colores = {
     usuarios: 'bg-amber-500/15 text-amber-400',
     guias: 'bg-sky-500/15 text-sky-400',
     facturacion: 'bg-emerald-500/15 text-emerald-400',
+    facturacion_sin_fact: 'bg-red-500/15 text-red-400',
+    nota_credito: 'bg-orange-500/15 text-orange-400',
   }
 
   return (
