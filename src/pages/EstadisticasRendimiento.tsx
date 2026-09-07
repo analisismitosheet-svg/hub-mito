@@ -98,22 +98,28 @@ export default function EstadisticasRendimiento() {
     // Lapsos por (empleado, lote): primer y último hecho_at
     const lapsos = new Map<string, { min: number; max: number }>()
 
+    // Clave de agrupación: legajo (N° de empleado); si no tiene legajo, usa el id
+    const claveEmp = (id: string): { key: string; nombre: string; legajo: string | null } => {
+      const emp = empleados.find((e) => e.id === id)
+      return { key: emp?.legajo ?? id, nombre: emp?.nombre ?? 'Desconocido', legajo: emp?.legajo ?? null }
+    }
+
     for (const i of hechosFiltrados) {
       const empId = i.hecho_por!
-      let f = porEmpleado.get(empId)
+      const { key, nombre, legajo } = claveEmp(empId)
+      let f = porEmpleado.get(key)
       if (!f) {
-        const emp = empleados.find((e) => e.id === empId)
-        f = { empleadoId: empId, nombre: emp?.nombre ?? 'Desconocido', legajo: emp?.legajo ?? null, items: 0, unidades: 0, lotes: 0, segundos: 0 }
-        porEmpleado.set(empId, f)
+        f = { empleadoId: empId, nombre, legajo, items: 0, unidades: 0, lotes: 0, segundos: 0 }
+        porEmpleado.set(key, f)
       }
       f.items += 1
       f.unidades += i.cantidad || 1
 
       const t = new Date(i.hecho_at!).getTime()
-      const key = `${empId}|${i.lote_id}`
-      const lapso = lapsos.get(key)
+      const keyLapso = `${key}|${i.lote_id}`
+      const lapso = lapsos.get(keyLapso)
       if (lapso) { if (t < lapso.min) lapso.min = t; if (t > lapso.max) lapso.max = t }
-      else lapsos.set(key, { min: t, max: t })
+      else lapsos.set(keyLapso, { min: t, max: t })
     }
 
     for (const [key, lapso] of lapsos) {
@@ -175,7 +181,7 @@ export default function EstadisticasRendimiento() {
             <table className="w-full table-auto border-collapse text-sm leading-tight">
               <thead>
                 <tr className="border-b border-line bg-zinc-800 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-300">
-                  <th className="px-3 py-2 whitespace-nowrap">Empleado</th>
+                  <th className="px-3 py-2 whitespace-nowrap">N° Empleado</th>
                   <th className="px-3 py-2 text-center whitespace-nowrap">Items</th>
                   <th className="px-3 py-2 text-center whitespace-nowrap">Unidades</th>
                   <th className="px-3 py-2 text-center whitespace-nowrap">Lotes</th>
@@ -187,9 +193,9 @@ export default function EstadisticasRendimiento() {
                 {filas.map((f) => {
                   const unidHora = f.segundos > 0 ? (f.unidades / (f.segundos / 3600)) : 0
                   return (
-                    <tr key={f.empleadoId} className="transition hover:bg-line/20">
+                    <tr key={f.legajo ?? f.empleadoId} className="transition hover:bg-line/20">
                       <td className="px-3 py-2">
-                        <span className="flex items-center gap-2 font-medium text-ink"><User size={13} className="text-sub" aria-hidden /> {f.nombre} {f.legajo ? <span className="text-[10px] text-sub/70">#{f.legajo}</span> : null}</span>
+                        <span className="flex items-center gap-2 font-medium text-ink"><User size={13} className="text-sub" aria-hidden /> {f.legajo ? `#${f.legajo}` : f.nombre} {f.legajo ? <span className="text-[10px] font-normal text-sub/70">{f.nombre}</span> : null}</span>
                       </td>
                       <td className="px-3 py-2 text-center text-sub">{f.items}</td>
                       <td className="px-3 py-2 text-center font-semibold text-ink">{f.unidades}</td>
