@@ -192,20 +192,27 @@ function exportarExcelCascada(origen: string, items: Item[], lote: Lote) {
   const filas = Array.from(mapa.values()).sort((a, b) => a.articulo.localeCompare(b.articulo, 'es'))
   const totalGeneral = filas.reduce((s, f) => s + f.total, 0)
 
-  const csv = (v: unknown) => {
-    const s = String(v ?? '')
-    return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
-  }
-  const encabezado = ['ARTICULO', 'DESC ADICIONAL MACRO', 'COLOR', 'TALLE', ...destinos, 'TOTAL']
-  const filasCsv = filas.map((f) => [f.articulo, f.desc, f.color, f.talle, ...destinos.map((d) => f.porDestino[d] ?? ''), f.total])
-  const pie = ['', '', '', '', ...destinos.map(() => ''), totalGeneral]
+  const esc = (v: unknown) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const th = (t: unknown) => `<th>${esc(t)}</th>`
+  const td = (t: unknown) => `<td>${esc(t)}</td>`
+  const encabezados = ['ARTICULO', 'DESC ADICIONAL MACRO', 'COLOR', 'TALLE', ...destinos, 'TOTAL'].map(th).join('')
+  const cuerpo = filas
+    .map((f) => [f.articulo, f.desc, f.color, f.talle, ...destinos.map((d) => f.porDestino[d] ?? ''), f.total].map(td).join(''))
+    .map((row) => `<tr>${row}</tr>`)
+    .join('')
+  const pie = `<tr>${['', '', '', '', ...destinos.map(() => ''), totalGeneral].map(td).join('')}</tr>`
 
-  const contenido = [encabezado, ...filasCsv, pie].map((row) => row.map(csv).join(',')).join('\n')
-  const blob = new Blob(['\ufeff' + contenido], { type: 'text/csv;charset=utf-8;' })
+  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Cascada</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head><body>
+  <h3>CASCADA — ${esc(origen)}</h3>
+  <p>${esc(lote.nombre)} · ${esc(fmtFechaCorta(lote.fecha))} · ${destinos.length} destinos · ${totalGeneral} unidades</p>
+  <table border="1"><thead><tr>${encabezados}</tr></thead><tbody>${cuerpo}${pie}</tbody></table>
+  </body></html>`
+
+  const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `CASCADA_${origen.replace(/[^\w\-]+/g, '_')}_${lote.nombre.replace(/[^\w\-]+/g, '_') || 'lote'}.csv`
+  a.download = `CASCADA_${origen.replace(/[^\w\-]+/g, '_')}_${lote.nombre.replace(/[^\w\-]+/g, '_') || 'lote'}.xls`
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)
