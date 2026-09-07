@@ -107,8 +107,10 @@ export default function EstadisticasRendimiento() {
 
     // Mapa por empleado: items y unidades
     const porEmpleado = new Map<string, FilaEmpleado>()
-    // Lapsos por (empleado, lote): primer y último hecho_at
-    const lapsos = new Map<string, { min: number; max: number }>()
+    // Lapsos por (empleado, día): primer y último hecho_at (tiempo real de trabajo)
+    const lapsosDia = new Map<string, { min: number; max: number }>()
+    // Lotes únicos por empleado
+    const lotesPorEmp = new Map<string, Set<string>>()
 
     // Clave de agrupación: legajo (N° de empleado); si no tiene legajo, usa el nombre/id
     const claveEmp = (id: string): { key: string; nombre: string; legajo: string | null } => {
@@ -130,20 +132,29 @@ export default function EstadisticasRendimiento() {
       f.items += 1
       f.unidades += i.cantidad || 1
 
+      const lotes = lotesPorEmp.get(key)
+      if (lotes) lotes.add(i.lote_id)
+      else lotesPorEmp.set(key, new Set([i.lote_id]))
+
       const t = new Date(i.hecho_at!).getTime()
-      const keyLapso = `${key}|${i.lote_id}`
-      const lapso = lapsos.get(keyLapso)
+      const dia = (i.hecho_at ?? '').slice(0, 10)
+      const keyDia = `${key}|${dia}`
+      const lapso = lapsosDia.get(keyDia)
       if (lapso) { if (t < lapso.min) lapso.min = t; if (t > lapso.max) lapso.max = t }
-      else lapsos.set(keyLapso, { min: t, max: t })
+      else lapsosDia.set(keyDia, { min: t, max: t })
     }
 
-    for (const [key, lapso] of lapsos) {
+    for (const [key, lapso] of lapsosDia) {
       const empId = key.split('|')[0]
       const f = porEmpleado.get(empId)
       if (f) {
-        f.lotes += 1
         f.segundos += Math.max(0, (lapso.max - lapso.min) / 1000)
       }
+    }
+
+    for (const [empId, set] of lotesPorEmp) {
+      const f = porEmpleado.get(empId)
+      if (f) f.lotes = set.size
     }
 
     return Array.from(porEmpleado.values()).sort((a, b) => b.unidades - a.unidades)
