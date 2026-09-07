@@ -10,6 +10,7 @@ import {
   X,
   Bookmark,
   Printer,
+  FileSpreadsheet,
   Send,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
@@ -173,6 +174,42 @@ function imprimirCascada(origen: string, items: Item[], lote: Lote) {
 </body></html>`,
   )
   w.document.close()
+}
+
+/** Exporta la cascada de un local a un archivo Excel (.csv con BOM UTF-8). */
+function exportarExcelCascada(origen: string, items: Item[], lote: Lote) {
+  const destinos = Array.from(new Set(items.map((i) => i.destino))).sort((a, b) => a.localeCompare(b, 'es'))
+  type Fila = { articulo: string; desc: string; color: string; talle: string; porDestino: Record<string, number>; total: number }
+  const mapa = new Map<string, Fila>()
+  for (const i of items) {
+    const key = [i.articulo ?? '', i.descripcion ?? '', i.color ?? '', i.talle ?? ''].join('¦')
+    let f = mapa.get(key)
+    if (!f) { f = { articulo: i.articulo ?? '', desc: i.descripcion ?? '', color: i.color ?? '', talle: i.talle ?? '', porDestino: {}, total: 0 }; mapa.set(key, f) }
+    const q = i.cantidad || 1
+    f.porDestino[i.destino] = (f.porDestino[i.destino] ?? 0) + q
+    f.total += q
+  }
+  const filas = Array.from(mapa.values()).sort((a, b) => a.articulo.localeCompare(b.articulo, 'es'))
+  const totalGeneral = filas.reduce((s, f) => s + f.total, 0)
+
+  const csv = (v: unknown) => {
+    const s = String(v ?? '')
+    return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
+  }
+  const encabezado = ['ARTICULO', 'DESC ADICIONAL MACRO', 'COLOR', 'TALLE', ...destinos, 'TOTAL']
+  const filasCsv = filas.map((f) => [f.articulo, f.desc, f.color, f.talle, ...destinos.map((d) => f.porDestino[d] ?? ''), f.total])
+  const pie = ['', '', '', '', ...destinos.map(() => ''), totalGeneral]
+
+  const contenido = [encabezado, ...filasCsv, pie].map((row) => row.map(csv).join(',')).join('\n')
+  const blob = new Blob(['\ufeff' + contenido], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `CASCADA_${origen.replace(/[^\w\-]+/g, '_')}_${lote.nombre.replace(/[^\w\-]+/g, '_') || 'lote'}.csv`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
 }
 
 /**
@@ -615,6 +652,16 @@ export default function Transferencias() {
                               className="btn-press shrink-0 rounded-lg border border-line p-1.5 text-sub hover:text-ink"
                             >
                               <Printer size={14} aria-hidden />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                exportarExcelCascada(origen, de, lote)
+                              }}
+                              title="Exportar a Excel"
+                              className="btn-press shrink-0 rounded-lg border border-line p-1.5 text-sub hover:text-emerald-400"
+                            >
+                              <FileSpreadsheet size={14} aria-hidden />
                             </button>
                             {(isAdmin || esMio) && (
                               <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-medium text-sub" title="Marcar todo el local">
