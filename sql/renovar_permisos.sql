@@ -105,6 +105,14 @@ INSERT INTO public.permisos (clave, modulo, accion, label, orden) VALUES
   ('mayorista.guias.delete', 'mayorista', 'guias.delete', 'Eliminar guías', 723)
 ON CONFLICT (clave) DO NOTHING;
 
+-- ---- Mayorista: Notas de Crédito ----
+INSERT INTO public.permisos (clave, modulo, accion, label, orden) VALUES
+  ('mayorista.notas_credito.view',   'mayorista', 'notas_credito.view',   'Ver notas de crédito',    730),
+  ('mayorista.notas_credito.create', 'mayorista', 'notas_credito.create', 'Crear notas de crédito',  731),
+  ('mayorista.notas_credito.edit',   'mayorista', 'notas_credito.edit',   'Editar notas de crédito', 732),
+  ('mayorista.notas_credito.delete', 'mayorista', 'notas_credito.delete', 'Eliminar notas de crédito', 733)
+ON CONFLICT (clave) DO NOTHING;
+
 -- ---- Depósito ----
 INSERT INTO public.permisos (clave, modulo, accion, label, orden) VALUES
   ('deposito.view',   'deposito', 'view',   'Ver depósito',        810),
