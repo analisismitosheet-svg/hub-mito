@@ -6,16 +6,26 @@ import { useAuth } from '@/context/AuthContext'
 
 interface Notificacion {
   id: string
-  icono: 'usuarios' | 'guias' | 'facturacion'
+  tipo: 'usuarios' | 'guias' | 'facturacion'
   titulo: string
   detalle: string
   ruta: string
+  fecha: string
+}
+
+function fmtFecha(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(iso))
+  } catch {
+    return iso
+  }
 }
 
 /**
- * Campana de notificaciones en el header.
+ * Campana de notificaciones en el header. Muestra cada evento individual,
+ * ordenado de más viejo a más nuevo.
  * - Administradores: usuarios pendientes de autorizar.
- * - Rol mayorista: guías no finalizadas y registros de facturación sin fecha de envío.
+ * - Rol mayorista: cada guía sin finalizar y cada registro de facturación sin fecha de envío.
  */
 export default function CampanaNotificaciones() {
   const { isAdmin, perfil } = useAuth()
@@ -33,22 +43,39 @@ export default function CampanaNotificaciones() {
     const sb = supabase
     async function cargar() {
       const notis: Notificacion[] = []
-      // 1) Usuarios pendientes (admin)
+      // 1) Usuarios pendientes (admin) — una por usuario
       if (isAdmin) {
-        const { count } = await sb.from('usuarios').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente')
-        if (activo && count) notis.push({ id: 'usuarios', icono: 'usuarios', titulo: 'Usuarios por autorizar', detalle: `${count} solicitud${count > 1 ? 'es' : ''} pendiente${count > 1 ? 's' : ''}.`, ruta: '/configuraciones' })
+        const { data } = await sb.from('usuarios').select('id,nombre,email,created_at').eq('estado', 'pendiente')
+        if (activo && data) {
+          for (const u of data as { id: string; nombre: string | null; email: string | null; created_at: string }[]) {
+            notis.push({ id: `u-${u.id}`, tipo: 'usuarios', titulo: 'Usuarios por autorizar', detalle: `${u.nombre || u.email || 'Solicitud'}`, ruta: '/configuraciones', fecha: u.created_at })
+          }
+        }
       }
-      // 2) Guías no finalizadas (mayorista)
+      // 2) Cada guía no finalizada (mayorista)
       if (esMayorista) {
-        const { count } = await sb.from('guias').select('id', { count: 'exact', head: true }).eq('finalizado', false)
-        if (activo && count) notis.push({ id: 'guias', icono: 'guias', titulo: 'Guías sin finalizar', detalle: `${count} guía${count > 1 ? 's' : ''} sin estado FINALIZADO.`, ruta: '/mayorista/guias' })
+        const { data } = await sb.from('guias').select('id,nro_pedido,razon_social,fecha,created_at').eq('finalizado', false)
+        if (activo && data) {
+          for (const g of data as { id: string; nro_pedido: string | null; razon_social: string | null; fecha: string | null; created_at: string }[]) {
+            notis.push({ id: `g-${g.id}`, tipo: 'guias', titulo: 'Guía sin finalizar', detalle: `N° ${g.nro_pedido || '-'} · ${g.razon_social || ''}`, ruta: '/mayorista/guias', fecha: g.fecha || g.created_at })
+          }
+        }
       }
-      // 3) Facturación sin fecha de envío (mayorista)
+      // 3) Cada registro de facturación sin fecha de envío (mayorista)
       if (esMayorista) {
-        const { count } = await sb.from('facturacion_fabrica').select('id', { count: 'exact', head: true }).is('fecha_envio', null)
-        if (activo && count) notis.push({ id: 'facturacion', icono: 'facturacion', titulo: 'Facturación sin enviar', detalle: `${count} registro${count > 1 ? 's' : ''} sin fecha de envío.`, ruta: '/mayorista/facturacion-fabrica' })
+        const { data } = await sb.from('facturacion_fabrica').select('id,razon_social,n_remito,fecha_fact,created_at').is('fecha_envio', null)
+        if (activo && data) {
+          for (const f of data as { id: string; razon_social: string | null; n_remito: string | null; fecha_fact: string | null; created_at: string }[]) {
+            notis.push({ id: `f-${f.id}`, tipo: 'facturacion', titulo: 'Facturación sin enviar', detalle: `${f.razon_social || ''}${f.n_remito ? ` · R. ${f.n_remito}` : ''}`, ruta: '/mayorista/facturacion-fabrica', fecha: f.fecha_fact || f.created_at })
+          }
+        }
       }
-      if (activo) { setItems(notis); setCargando(false) }
+      // Ordenar de más viejo a más nuevo
+      if (activo) {
+        notis.sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
+        setItems(notis)
+        setCargando(false)
+      }
     }
     void cargar()
     const intervalo = setInterval(cargar, 30000)
@@ -89,7 +116,7 @@ export default function CampanaNotificaciones() {
       {abierto && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setAbierto(false)} />
-          <div className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-2xl border border-line bg-surface shadow-soft-lg">
+          <div className="absolute right-0 top-full z-50 mt-2 w-96 overflow-hidden rounded-2xl border border-line bg-surface shadow-soft-lg">
             <div className="flex items-center justify-between border-b border-line px-4 py-3">
               <h3 className="flex items-center gap-2 text-sm font-semibold text-ink"><Bell size={15} aria-hidden /> Notificaciones</h3>
               <button onClick={() => setAbierto(false)} className="rounded-lg p-1 text-sub hover:bg-line hover:text-ink" aria-label="Cerrar"><X size={15} aria-hidden /></button>
@@ -100,21 +127,25 @@ export default function CampanaNotificaciones() {
               ) : items.length === 0 ? (
                 <p className="px-4 py-8 text-center text-sm text-sub">Sin notificaciones.</p>
               ) : (
-                items.map((n) => (
-                  <button
-                    key={n.id}
-                    onClick={() => { setAbierto(false); navigate(n.ruta) }}
-                    className="flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-line/30"
-                  >
-                    <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${colores[n.icono]}`}>
-                      {iconos[n.icono]}
-                    </span>
-                    <span>
-                      <span className="block text-sm font-medium text-ink">{n.titulo}</span>
-                      <span className="block text-xs text-sub">{n.detalle}</span>
-                    </span>
-                  </button>
-                ))
+                <ul className="divide-y divide-line/50">
+                  {items.map((n) => (
+                    <li key={n.id}>
+                      <button
+                        onClick={() => { setAbierto(false); navigate(n.ruta) }}
+                        className="flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-line/30"
+                      >
+                        <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${colores[n.tipo]}`}>
+                          {iconos[n.tipo]}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium text-ink">{n.titulo}</span>
+                          <span className="block truncate text-xs text-sub">{n.detalle}</span>
+                        </span>
+                        <span className="shrink-0 text-[10px] text-sub/70">{fmtFecha(n.fecha)}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
           </div>
