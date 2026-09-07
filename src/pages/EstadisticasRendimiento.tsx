@@ -78,7 +78,7 @@ export default function EstadisticasRendimiento() {
       const [empData, respData, itemsData] = await Promise.all([
         traerTodo<Empleado>((from, to) => sb.from('empleados').select('id,legajo,nombre').order('nombre').range(from, to)),
         traerTodo<Responsable>((from, to) => sb.from('mayorista_responsables').select('lote_id,local,empleado_id').range(from, to)),
-        traerTodo<ItemSep>((from, to) => sb.from('mayorista_items').select('lote_id,local,hecho_por,hecho_at,estado,cantidad').order('hecho_at', { ascending: true }).range(from, to)),
+        traerTodo<ItemSep>((from, to) => sb.from('mayorista_items').select('lote_id,local,hecho_por,hecho_at,estado,cantidad').eq('estado', 'hecho').range(from, to)),
       ])
       setEmpleados(empData)
       setResponsables(respData)
