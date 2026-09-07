@@ -1,36 +1,74 @@
 import { useEffect, useState } from 'react'
-import { Bell, UserCheck, X } from 'lucide-react'
+import { Bell, UserCheck, ClipboardList, Truck, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 
+interface Notificacion {
+  id: string
+  icono: 'usuarios' | 'guias' | 'facturacion'
+  titulo: string
+  detalle: string
+  ruta: string
+}
+
 /**
- * Campana de notificaciones en el header. Por ahora muestra a los
- * administradores cuántos usuarios hay pendientes de autorizar.
+ * Campana de notificaciones en el header.
+ * - Administradores: usuarios pendientes de autorizar.
+ * - Rol mayorista: guías no finalizadas y registros de facturación sin fecha de envío.
  */
 export default function CampanaNotificaciones() {
-  const { isAdmin } = useAuth()
+  const { isAdmin, perfil } = useAuth()
   const navigate = useNavigate()
-  const [pendientes, setPendientes] = useState(0)
   const [abierto, setAbierto] = useState(false)
+  const [items, setItems] = useState<Notificacion[]>([])
+  const [cargando, setCargando] = useState(true)
+
+  const esMayorista = String(perfil?.rol) === 'mayorista' || (perfil?.roles ?? []).includes('mayorista')
+  const visible = isAdmin || esMayorista
 
   useEffect(() => {
-    if (!supabase || !isAdmin) { setPendientes(0); return }
+    if (!supabase || !visible) { setItems([]); setCargando(false); return }
     let activo = true
     const sb = supabase
-    async function contar() {
-      const { count } = await sb
-        .from('usuarios')
-        .select('id', { count: 'exact', head: true })
-        .eq('estado', 'pendiente')
-      if (activo) setPendientes(count ?? 0)
+    async function cargar() {
+      const notis: Notificacion[] = []
+      // 1) Usuarios pendientes (admin)
+      if (isAdmin) {
+        const { count } = await sb.from('usuarios').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente')
+        if (activo && count) notis.push({ id: 'usuarios', icono: 'usuarios', titulo: 'Usuarios por autorizar', detalle: `${count} solicitud${count > 1 ? 'es' : ''} pendiente${count > 1 ? 's' : ''}.`, ruta: '/configuraciones' })
+      }
+      // 2) Guías no finalizadas (mayorista)
+      if (esMayorista) {
+        const { count } = await sb.from('guias').select('id', { count: 'exact', head: true }).eq('finalizado', false)
+        if (activo && count) notis.push({ id: 'guias', icono: 'guias', titulo: 'Guías sin finalizar', detalle: `${count} guía${count > 1 ? 's' : ''} sin estado FINALIZADO.`, ruta: '/mayorista/guias' })
+      }
+      // 3) Facturación sin fecha de envío (mayorista)
+      if (esMayorista) {
+        const { count } = await sb.from('facturacion_fabrica').select('id', { count: 'exact', head: true }).is('fecha_envio', null)
+        if (activo && count) notis.push({ id: 'facturacion', icono: 'facturacion', titulo: 'Facturación sin enviar', detalle: `${count} registro${count > 1 ? 's' : ''} sin fecha de envío.`, ruta: '/mayorista/facturacion-fabrica' })
+      }
+      if (activo) { setItems(notis); setCargando(false) }
     }
-    void contar()
-    const intervalo = setInterval(contar, 30000)
+    void cargar()
+    const intervalo = setInterval(cargar, 30000)
     return () => { activo = false; clearInterval(intervalo) }
-  }, [isAdmin])
+  }, [isAdmin, esMayorista, visible])
 
-  if (!isAdmin || !supabase) return null
+  if (!visible || !supabase) return null
+
+  const total = items.length
+
+  const iconos = {
+    usuarios: <UserCheck size={15} aria-hidden />,
+    guias: <ClipboardList size={15} aria-hidden />,
+    facturacion: <Truck size={15} aria-hidden />,
+  }
+  const colores = {
+    usuarios: 'bg-amber-500/15 text-amber-400',
+    guias: 'bg-sky-500/15 text-sky-400',
+    facturacion: 'bg-emerald-500/15 text-emerald-400',
+  }
 
   return (
     <div className="relative">
@@ -41,9 +79,9 @@ export default function CampanaNotificaciones() {
         aria-label="Notificaciones"
       >
         <Bell size={16} aria-hidden />
-        {pendientes > 0 && (
+        {total > 0 && (
           <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
-            {pendientes > 99 ? '99+' : pendientes}
+            {total > 99 ? '99+' : total}
           </span>
         )}
       </button>
@@ -57,21 +95,26 @@ export default function CampanaNotificaciones() {
               <button onClick={() => setAbierto(false)} className="rounded-lg p-1 text-sub hover:bg-line hover:text-ink" aria-label="Cerrar"><X size={15} aria-hidden /></button>
             </div>
             <div className="max-h-96 overflow-y-auto">
-              {pendientes === 0 ? (
+              {cargando ? (
+                <p className="px-4 py-8 text-center text-sm text-sub">Cargando...</p>
+              ) : items.length === 0 ? (
                 <p className="px-4 py-8 text-center text-sm text-sub">Sin notificaciones.</p>
               ) : (
-                <button
-                  onClick={() => { setAbierto(false); navigate('/configuraciones') }}
-                  className="flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-line/30"
-                >
-                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-400">
-                    <UserCheck size={15} aria-hidden />
-                  </span>
-                  <span>
-                    <span className="block text-sm font-medium text-ink">Usuarios por autorizar</span>
-                    <span className="block text-xs text-sub">Tenés {pendientes} solicitud{pendientes > 1 ? 'es' : ''} pendiente{pendientes > 1 ? 's' : ''}.</span>
-                  </span>
-                </button>
+                items.map((n) => (
+                  <button
+                    key={n.id}
+                    onClick={() => { setAbierto(false); navigate(n.ruta) }}
+                    className="flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-line/30"
+                  >
+                    <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${colores[n.icono]}`}>
+                      {iconos[n.icono]}
+                    </span>
+                    <span>
+                      <span className="block text-sm font-medium text-ink">{n.titulo}</span>
+                      <span className="block text-xs text-sub">{n.detalle}</span>
+                    </span>
+                  </button>
+                ))
               )}
             </div>
           </div>
