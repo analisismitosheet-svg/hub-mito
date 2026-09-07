@@ -90,6 +90,7 @@ export default function Clientes() {
   const puedeEditar = can('mayorista.clientes.edit')
   const puedeBorrar = can('mayorista.clientes.delete')
   const [todos, setTodos] = useState<Cliente[]>([])
+  const [transportes, setTransportes] = useState<string[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [q, setQ] = useState('')
@@ -122,6 +123,8 @@ export default function Clientes() {
       .limit(2000)
     if (err) setError(err.message)
     setTodos((data as Cliente[]) ?? [])
+    const { data: tr } = await supabase.from('transportes').select('nombre').order('nombre', { ascending: true })
+    setTransportes(((tr as { nombre: string }[] | null) ?? []).map((t) => t.nombre))
     setCargando(false)
   }, [])
 
@@ -332,14 +335,14 @@ export default function Clientes() {
         <ImportarClientes todos={todos} onClose={() => setModal(null)} onSaved={async () => { setModal(null); await cargar(); mostrarToast('Clientes importados') }} />
       )}
       {modal && modal !== 'importar' && (
-        <ClienteModal cliente={modal === 'edit' ? sel : null} nCliente={modal === 'new' ? nextNCliente(todos) : sel?.n_cliente ?? null} onClose={() => { setModal(null); setSel(null) }} onSaved={async () => { setModal(null); setSel(null); await cargar(); mostrarToast(modal === 'edit' ? 'Cliente actualizado' : 'Cliente creado') }} />
+        <ClienteModal cliente={modal === 'edit' ? sel : null} nCliente={modal === 'new' ? nextNCliente(todos) : sel?.n_cliente ?? null} transportes={transportes} onClose={() => { setModal(null); setSel(null) }} onSaved={async () => { setModal(null); setSel(null); await cargar(); mostrarToast(modal === 'edit' ? 'Cliente actualizado' : 'Cliente creado') }} />
       )}
       <ConfirmDialog open={!!confirm} message={confirm?.message ?? ''} onCancel={() => setConfirm(null)} onConfirm={() => { confirm?.onConfirm(); setConfirm(null) }} />
     </Layout>
   )
 }
 
-function ClienteModal({ cliente, nCliente, onClose, onSaved }: { cliente: Cliente | null; nCliente: string | null; onClose: () => void; onSaved: () => void }) {
+function ClienteModal({ cliente, nCliente, transportes, onClose, onSaved }: { cliente: Cliente | null; nCliente: string | null; transportes: string[]; onClose: () => void; onSaved: () => void }) {
   const [nClienteVal, setNClienteVal] = useState<string>(nCliente != null ? String(nCliente) : '')
   const [razonSocial, setRazonSocial] = useState(cliente?.razon_social || '')
   const [telefono, setTelefono] = useState(cliente?.telefono || '')
@@ -440,7 +443,11 @@ function ClienteModal({ cliente, nCliente, onClose, onSaved }: { cliente: Client
             </label>
             <label className="block">
               <span className="mb-0.5 block text-[11px] font-medium text-sub">Transporte</span>
-              <input value={transporte} onChange={(e) => setTransporte(e.target.value)} placeholder="Ej: CREDIFIN" className={inputCls} />
+              <select value={transporte} onChange={(e) => setTransporte(e.target.value)} className={inputCls}>
+                <option value="">— Sin transporte —</option>
+                {transportes.map((t) => <option key={t} value={t}>{t}</option>)}
+                {transporte && !transportes.includes(transporte) && <option value={transporte}>{transporte}</option>}
+              </select>
             </label>
 
             <label className="block">
