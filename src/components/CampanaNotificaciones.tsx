@@ -11,6 +11,7 @@ interface Notificacion {
   detalle: string
   ruta: string
   fecha: string
+  destinoId: string | null
 }
 
 function fmtFecha(iso: string): string {
@@ -48,7 +49,7 @@ export default function CampanaNotificaciones() {
         const { data } = await sb.from('usuarios').select('id,nombre,email,created_at').eq('estado', 'pendiente')
         if (activo && data) {
           for (const u of data as { id: string; nombre: string | null; email: string | null; created_at: string }[]) {
-            notis.push({ id: `u-${u.id}`, tipo: 'usuarios', titulo: 'Usuarios por autorizar', detalle: `${u.nombre || u.email || 'Solicitud'}`, ruta: '/configuraciones', fecha: u.created_at })
+            notis.push({ id: `u-${u.id}`, tipo: 'usuarios', titulo: 'Usuarios por autorizar', detalle: `${u.nombre || u.email || 'Solicitud'}`, ruta: '/configuraciones', fecha: u.created_at, destinoId: u.id })
           }
         }
       }
@@ -57,7 +58,7 @@ export default function CampanaNotificaciones() {
         const { data } = await sb.from('guias').select('id,nro_pedido,razon_social,fecha,created_at').eq('finalizado', false)
         if (activo && data) {
           for (const g of data as { id: string; nro_pedido: string | null; razon_social: string | null; fecha: string | null; created_at: string }[]) {
-            notis.push({ id: `g-${g.id}`, tipo: 'guias', titulo: 'Guía sin finalizar', detalle: `N° ${g.nro_pedido || '-'} · ${g.razon_social || ''}`, ruta: '/mayorista/guias', fecha: g.fecha || g.created_at })
+            notis.push({ id: `g-${g.id}`, tipo: 'guias', titulo: 'Guía sin finalizar', detalle: `N° ${g.nro_pedido || '-'} · ${g.razon_social || ''}`, ruta: `/mayorista/guias?abrir=${g.id}`, fecha: g.fecha || g.created_at, destinoId: g.id })
           }
         }
       }
@@ -66,7 +67,7 @@ export default function CampanaNotificaciones() {
         const { data } = await sb.from('facturacion_fabrica').select('id,razon_social,n_remito,fecha_fact,created_at').is('fecha_envio', null)
         if (activo && data) {
           for (const f of data as { id: string; razon_social: string | null; n_remito: string | null; fecha_fact: string | null; created_at: string }[]) {
-            notis.push({ id: `f-${f.id}`, tipo: 'facturacion', titulo: 'Facturación sin enviar', detalle: `${f.razon_social || ''}${f.n_remito ? ` · R. ${f.n_remito}` : ''}`, ruta: '/mayorista/facturacion-fabrica', fecha: f.fecha_fact || f.created_at })
+            notis.push({ id: `f-${f.id}`, tipo: 'facturacion', titulo: 'Facturación sin enviar', detalle: `${f.razon_social || ''}${f.n_remito ? ` · R. ${f.n_remito}` : ''}`, ruta: `/mayorista/facturacion-fabrica?abrir=${f.id}`, fecha: f.fecha_fact || f.created_at, destinoId: f.id })
           }
         }
       }

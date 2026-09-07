@@ -168,7 +168,7 @@ function parseFechaDias(v: string | null | undefined): number | null {
 
 export default function FacturacionFabrica() {
   const { can, isAdmin, perfil } = useAuth()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const modoPolo52 = searchParams.get('polo52') === '1'
   const puedeCrear = can('mayorista.facturacion.create')
   const puedeEditar = can('mayorista.facturacion.edit')
@@ -248,6 +248,16 @@ export default function FacturacionFabrica() {
   }, [])
 
   useEffect(() => { void cargar() }, [cargar])
+
+  useEffect(() => {
+    const id = searchParams.get('abrir')
+    if (!id) return
+    const r = todos.find((x) => x.id === id)
+    if (r) {
+      setCard(r)
+      setSearchParams({}, { replace: true })
+    }
+  }, [todos, searchParams, setSearchParams])
 
   // Carga los números de remito que POLO marcó como RECIBIDO en la app de
   // Transporte, para pintar la columna POLO en verde. No bloquea la tabla:

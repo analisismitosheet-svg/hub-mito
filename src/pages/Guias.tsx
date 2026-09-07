@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Loader2, Search, SearchX, Plus, Pencil, Trash2, X, ClipboardList, Upload, FileText, Printer,
 } from 'lucide-react'
@@ -84,6 +85,7 @@ function cambiarEstadoEnTodos(todos: Guia[], id: string, estado: EstadoGuia): Gu
 
 export default function Guias() {
   const { can, perfil } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
   const puedeCrear = can('mayorista.guias.create')
   const puedeEditar = can('mayorista.guias.edit')
   const puedeBorrar = can('mayorista.guias.delete')
@@ -154,6 +156,16 @@ export default function Guias() {
   }, [])
 
   useEffect(() => { void cargar() }, [cargar])
+
+  useEffect(() => {
+    const id = searchParams.get('abrir')
+    if (!id) return
+    const g = todos.find((x) => x.id === id)
+    if (g) {
+      setCard(g)
+      setSearchParams({}, { replace: true })
+    }
+  }, [todos, searchParams, setSearchParams])
 
   useEffect(() => {
     if (!card) return
