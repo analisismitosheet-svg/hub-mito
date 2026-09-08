@@ -9,6 +9,30 @@
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
 }
 
+/* Tema oscuro (default) */
+:root,
+.dark {
+  --paper: #0a0a0a;
+  --surface: #161616;
+  --surface2: #1f1f1f;
+  --line: #262626;
+  --line2: #333333;
+  --ink: #f4f4f5;
+  --sub: #a1a1aa;
+}
+
+/* Tema claro */
+:root.light {
+  color-scheme: light;
+  --paper: #f5f5f5;
+  --surface: #ffffff;
+  --surface2: #f0f0f0;
+  --line: #e5e5e5;
+  --line2: #d4d4d4;
+  --ink: #111111;
+  --sub: #525252;
+}
+
 html,
 body,
 #root {
@@ -18,9 +42,19 @@ body,
 body {
   margin: 0;
   font-family: 'Open Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  color: #f4f4f5;
-  background-color: #0a0a0a;
+  color: var(--ink);
+  background-color: var(--paper);
   -webkit-font-smoothing: antialiased;
+}
+
+/* Encabezado de tabla que sigue el tema (oscuro/claro) */
+.table-head {
+  background-color: var(--surface2);
+  color: var(--ink);
+}
+.table-head td,
+.table-head th {
+  color: var(--sub);
 }
 
 @layer components {

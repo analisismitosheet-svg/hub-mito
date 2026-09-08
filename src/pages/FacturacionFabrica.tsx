@@ -645,7 +645,7 @@ export default function FacturacionFabrica() {
                 <col className="w-[4%]" />  {/* Acc */}
               </colgroup>
               <thead>
-                <tr className="bg-zinc-800 text-left text-[9px] font-semibold uppercase tracking-wider text-zinc-300">
+                <tr className="table-head text-left text-[9px] font-semibold uppercase tracking-wider">
                   {isAdmin && <th className="px-1 py-1 text-center"><input type="checkbox" checked={allSelected} onChange={toggleSelectAll} className="h-3 w-3 rounded border-line bg-surface2 accent-brand-600" /></th>}
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('autorizacion')}>Aut{sortArrow('autorizacion')}</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('razon_social')}>Razon Social{sortArrow('razon_social')}</th>

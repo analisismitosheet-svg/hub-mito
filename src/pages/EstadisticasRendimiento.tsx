@@ -242,7 +242,7 @@ export default function EstadisticasRendimiento() {
           <div className="w-full overflow-x-auto">
             <table className="w-full table-auto border-collapse text-sm leading-tight">
               <thead>
-                <tr className="bg-zinc-800 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-300">
+                <tr className="table-head text-left text-[11px] font-semibold uppercase tracking-wider">
                   <th className="px-3 py-2 whitespace-nowrap">N° Empleado</th>
                   <th className="px-3 py-2 text-center whitespace-nowrap">Items</th>
                   <th className="px-3 py-2 text-center whitespace-nowrap">Unidades</th>
@@ -309,7 +309,7 @@ export default function EstadisticasRendimiento() {
                 })}
               </tbody>
               <tfoot>
-                <tr className="border-t border-line bg-zinc-800/60 font-semibold text-ink">
+                <tr className="border-t border-line table-head font-semibold text-ink">
                   <td className="px-3 py-2">Total</td>
                   <td className="px-3 py-2 text-center">{totalItems}</td>
                   <td className="px-3 py-2 text-center">{totalUnidades}</td>

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
-import { LogOut } from 'lucide-react'
+import { LogOut, Sun, Moon } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
+import { useTheme } from '@/context/ThemeContext'
 import CampanaNotificaciones from '@/components/CampanaNotificaciones'
 
 /**
@@ -9,6 +10,7 @@ import CampanaNotificaciones from '@/components/CampanaNotificaciones'
  */
 export default function Layout({ children, wide = true }: { children: ReactNode; wide?: boolean }) {
   const { user, signOut, configured } = useAuth()
+  const { tema, toggle } = useTheme()
   const maxW = wide ? 'max-w-[1600px]' : 'max-w-5xl'
 
   return (
@@ -23,6 +25,14 @@ export default function Layout({ children, wide = true }: { children: ReactNode;
           </div>
           {configured && user && (
             <div className="flex items-center gap-3">
+              <button
+                onClick={toggle}
+                className="btn-press flex cursor-pointer items-center justify-center rounded-xl border border-line bg-surface p-2 text-ink outline-none hover:border-line2 hover:bg-surface2 focus-visible:ring-2 focus-visible:ring-brand-500/50"
+                title={tema === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+                aria-label="Cambiar tema"
+              >
+                {tema === 'dark' ? <Sun size={16} aria-hidden /> : <Moon size={16} aria-hidden />}
+              </button>
               <CampanaNotificaciones />
               <span className="hidden text-sm text-sub sm:inline">{user.email}</span>
               <button

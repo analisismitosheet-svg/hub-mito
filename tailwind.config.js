@@ -25,13 +25,13 @@ export default {
           600: '#ea580c',
           700: '#c2410c',
         },
-        paper: '#0a0a0a', // fondo de página
-        surface: '#161616', // tarjetas
-        surface2: '#1f1f1f', // elevado / hover
-        line: '#262626', // borde
-        line2: '#333333', // borde hover
-        ink: '#f4f4f5', // texto principal
-        sub: '#a1a1aa', // texto secundario
+        paper: 'var(--paper)', // fondo de página
+        surface: 'var(--surface)', // tarjetas
+        surface2: 'var(--surface2)', // elevado / hover
+        line: 'var(--line)', // borde
+        line2: 'var(--line2)', // borde hover
+        ink: 'var(--ink)', // texto principal
+        sub: 'var(--sub)', // texto secundario
       },
       fontFamily: {
         sans: ['Open Sans', 'system-ui', '-apple-system', 'sans-serif'],

@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Loader2,
   Check,
@@ -228,7 +228,7 @@ export default function Usuarios() {
       <div className="rounded-2xl border border-line overflow-hidden">
         <table className="w-full text-[13px] leading-tight">
           <thead>
-            <tr className="border-b border-line bg-zinc-800 text-left text-[10px] font-semibold uppercase tracking-wider text-zinc-300">
+            <tr className="table-head text-left text-[10px] font-semibold uppercase tracking-wider">
               <th className="w-[15%] px-2 py-2 whitespace-nowrap">Nombre</th>
               <th className="w-[25%] px-2 py-2 whitespace-nowrap">Email</th>
               <th className="w-[12%] px-2 py-2 whitespace-nowrap">Roles</th>
