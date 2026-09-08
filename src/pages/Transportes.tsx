@@ -165,12 +165,11 @@ export default function Transportes() {
             {sel.web && <a href={sel.web} target="_blank" rel="noopener noreferrer" className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line"><Globe size={13} aria-hidden /> Web</a>}
           </div>
           {sel.web && <div className="border-b border-line"><dl><Row icon={Globe} label="Web" value={sel.web} /></dl></div>}
-          {(sel.retiro_calera || sel.retiro_polo52 || sel.via_solicitud_retiro) && (
+          {(sel.telefono || sel.via_solicitud_retiro) && (
             <div className="border-b border-line px-4 py-3">
               <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-sub">Contactos de retiro</p>
               <dl className="divide-y divide-line/70">
-                {sel.retiro_calera && <Row icon={Phone} label="Retiro Calera" value={sel.retiro_calera} />}
-                {sel.retiro_polo52 && <Row icon={Phone} label="Retiro Polo 52" value={sel.retiro_polo52} />}
+                {sel.telefono && <Row icon={Phone} label="Telefono" value={sel.telefono} />}
                 {sel.via_solicitud_retiro && <Row label="Via de solicitud" value={sel.via_solicitud_retiro} />}
               </dl>
             </div>
@@ -320,8 +319,7 @@ export default function Transportes() {
 function TransporteForm({ inicial, onCancel, onSaved }: { inicial: Transporte | null; onCancel: () => void; onSaved: (t: Transporte) => void }) {
   const [nombre, setNombre] = useState(inicial?.nombre || '')
   const [web, setWeb] = useState(inicial?.web || '')
-  const [retiroCalera, setRetiroCalera] = useState(inicial?.retiro_calera || '')
-  const [retiroPolo52, setRetiroPolo52] = useState(inicial?.retiro_polo52 || '')
+  const [telefono, setTelefono] = useState(inicial?.telefono || '')
   const [viaSolicitud, setViaSolicitud] = useState(inicial?.via_solicitud_retiro || 'WhatsApp')
   const [etiquetas, setEtiquetas] = useState(inicial?.etiquetas || '')
   const [estado, setEstado] = useState(inicial?.estado || 'ACTIVO')
@@ -344,8 +342,7 @@ function TransporteForm({ inicial, onCancel, onSaved }: { inicial: Transporte | 
     if (!nombre.trim()) { setError('El nombre es obligatorio.'); return }
     setBusy(true); setError(null)
     const payload = {
-      nombre: nombre.trim(), web: web.trim() || null,
-      retiro_calera: retiroCalera.trim() || null, retiro_polo52: retiroPolo52.trim() || null,
+      nombre: nombre.trim(), web: web.trim() || null, telefono: telefono.trim() || null,
       via_solicitud_retiro: viaSolicitud || null, etiquetas: etiquetas.trim() || null,
       estado, observaciones: obs.trim() || null,
       requiere_remitente: reqRemitente, requiere_telefono: reqTelefono,
@@ -378,8 +375,7 @@ function TransporteForm({ inicial, onCancel, onSaved }: { inicial: Transporte | 
         <fieldset className="rounded-2xl border border-line bg-surface p-4">
           <legend className="flex items-center gap-2 px-1 text-xs font-semibold uppercase tracking-wider text-sub"><Phone size={14} aria-hidden /> Contactos de retiro</legend>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Retiro Calera</span><input value={retiroCalera} onChange={(e) => setRetiroCalera(e.target.value)} placeholder="+54 9 351 123-4567" className={inputCls} /></label>
-            <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Retiro Polo 52</span><input value={retiroPolo52} onChange={(e) => setRetiroPolo52(e.target.value)} placeholder="+54 9 351 765-4321" className={inputCls} /></label>
+            <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Telefono</span><input value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder="+54 9 351 123-4567" className={inputCls} /></label>
             <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Via de solicitud de retiro</span>
               <select value={viaSolicitud} onChange={(e) => setViaSolicitud(e.target.value)} className={inputCls}>{VIA_OPCIONES.map((v) => <option key={v} value={v}>{v}</option>)}</select>
             </label>
