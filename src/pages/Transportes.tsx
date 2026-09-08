@@ -247,8 +247,7 @@ export default function Transportes() {
             <thead>
               <tr className="table-head text-left text-[10px] font-semibold uppercase tracking-wider">
                 <th className="px-2 py-2 whitespace-nowrap">Transporte</th>
-                <th className="px-2 py-2 whitespace-nowrap">Calera</th>
-                <th className="px-2 py-2 whitespace-nowrap">Polo 52</th>
+                <th className="px-2 py-2 whitespace-nowrap">Telefono</th>
                 <th className="px-2 py-2 whitespace-nowrap">Via</th>
                 <th className="px-2 py-2 whitespace-nowrap">Web</th>
                 <th className="px-2 py-2">Datos que piden</th>
@@ -279,13 +278,8 @@ export default function Transportes() {
                       </div>
                     </td>
                     <td className="px-2 py-1.5">
-                      {t.retiro_calera ? (
-                        <button onClick={() => { clip(t.retiro_calera!); mostrarToast('Telefono copiado') }} className="rounded border border-line bg-surface2 px-1.5 py-0.5 text-[11px] font-medium text-ink transition hover:bg-line" title="Copiar">{t.retiro_calera}</button>
-                      ) : <span className="text-sub/40">-</span>}
-                    </td>
-                    <td className="px-2 py-1.5">
-                      {t.retiro_polo52 ? (
-                        <button onClick={() => { clip(t.retiro_polo52!); mostrarToast('Telefono copiado') }} className="rounded border border-line bg-surface2 px-1.5 py-0.5 text-[11px] font-medium text-ink transition hover:bg-line" title="Copiar">{t.retiro_polo52}</button>
+                      {t.telefono ? (
+                        <button onClick={() => { clip(t.telefono!); mostrarToast('Telefono copiado') }} className="rounded border border-line bg-surface2 px-1.5 py-0.5 text-[11px] font-medium text-ink transition hover:bg-line" title="Copiar">{t.telefono}</button>
                       ) : <span className="text-sub/40">-</span>}
                     </td>
                     <td className="px-2 py-1.5 whitespace-nowrap text-[11px] font-medium uppercase text-sub">{t.via_solicitud_retiro || <span className="text-sub/40">-</span>}</td>
