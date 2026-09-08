@@ -309,6 +309,7 @@ export default function Transportes() {
                         <button onClick={() => abrirFicha(t)} className="rounded border border-line p-1 text-sub transition hover:text-ink" title="Ver"><Search size={11} aria-hidden /></button>
                         {puedeEditar && <button onClick={() => abrirEditar(t)} className="rounded border border-line p-1 text-sub transition hover:text-ink" title="Editar"><Pencil size={11} aria-hidden /></button>}
                         <button onClick={() => void toggleEstado(t)} className="rounded border border-line p-1 text-sub transition hover:text-ink" title={t.estado === 'ACTIVO' ? 'Desactivar' : 'Activar'}>{t.estado === 'ACTIVO' ? <EyeOff size={11} aria-hidden /> : <Eye size={11} aria-hidden />}</button>
+                        {puedeBorrar && <button onClick={() => setConfirm({ message: 'Eliminar "' + t.nombre + '"?', onConfirm: () => void eliminar(t) })} className="rounded border border-line p-1 text-sub transition hover:text-red-400" title="Eliminar"><Trash2 size={11} aria-hidden /></button>}
                       </div>
                     </td>
                   </tr>
