@@ -55,7 +55,7 @@ export async function fetchClienteEtiqueta(nCl: string, fallback: { razon_social
   }
 }
 
-export function EtiquetaBulto({ cliente, num, total, destino, origen, nRemito, ancho, alto, fontSize, qrSize }: {
+export function EtiquetaBulto({ cliente, num, total, destino, origen, nRemito, ancho, alto, fontSize, qrSize, copia }: {
   cliente: EtiquetaCliente
   num: number
   total: number
@@ -66,6 +66,7 @@ export function EtiquetaBulto({ cliente, num, total, destino, origen, nRemito, a
   alto: number
   fontSize: number
   qrSize: number
+  copia?: boolean
 }) {
   const remito = nRemito.replace(/-/g, '/')
   return (
@@ -75,17 +76,19 @@ export function EtiquetaBulto({ cliente, num, total, destino, origen, nRemito, a
           <div className="etq-num">Nº {cliente.numeroCliente}</div>
           <div className="etq-origen"><span>ORIGEN:</span> {origen || '-'}</div>
         </div>
-        <div className="etq-qr-col">
-          <QRCodeSVG value={`${origen}-${remito}(${num}/${total})${destino ? `-${destino}` : ''}`} size={qrSize} level="M" />
-          <div className="etq-qr-txt">{origen}-{remito}({num}/{total}){destino ? `-${destino}` : ''}</div>
-        </div>
+        {!copia && (
+          <div className="etq-qr-col">
+            <QRCodeSVG value={`${origen}-${remito}(${num}/${total})${destino ? `-${destino}` : ''}`} size={qrSize} level="M" />
+            <div className="etq-qr-txt">{origen}-{remito}({num}/{total}){destino ? `-${destino}` : ''}</div>
+          </div>
+        )}
       </div>
       <div className="etq-razon">{cliente.razonSocial}</div>
       <div className="etq-line">TE: {cliente.telefono}</div>
       <div className="etq-dir"><b>DIR. ENTREGA:</b> {cliente.direccion}</div>
       <div className="etq-line"><b>LOCALIDAD:</b> {cliente.localidad} - {cliente.provincia}</div>
       <div className="etq-obs">OBS: {cliente.observaciones || '-'}</div>
-      <div className="etq-transp">TRANSPORTE: {cliente.transporte || '-'} · BULTOS {num}/{total}</div>
+      <div className="etq-transp">TRANSPORTE: {cliente.transporte || '-'}{copia ? ' · COPIA' : ` · BULTOS ${num}/${total}`}</div>
     </div>
   )
 }
@@ -236,13 +239,14 @@ export function EtiquetasModal({ registro, onClose }: { registro: EtiquetaRegist
               {nums.map((n) => (
                 <EtiquetaBulto key={n} cliente={cliente} num={n} total={total} destino={destino} origen={origen} nRemito={registro?.n_remito || ''} ancho={ancho} alto={alto} fontSize={fontSize} qrSize={qrSize} />
               ))}
+              {nums.length > 0 && <EtiquetaBulto copia cliente={cliente} num={1} total={total} destino={destino} origen={origen} nRemito={registro?.n_remito || ''} ancho={ancho} alto={alto} fontSize={fontSize} qrSize={qrSize} />}
             </div>
           )}
         </div>
 
         {/* Footer */}
         <div className="flex items-center justify-between gap-2 border-t border-line px-5 py-3">
-          <p className="text-xs text-sub">Tamaño: {ancho} × {alto} mm · {nums.length || total} etiquetas</p>
+          <p className="text-xs text-sub">Tamaño: {ancho} × {alto} mm · {nums.length || total} bultos + 1 copia</p>
           <div className="flex gap-2">
             <button onClick={onClose} className="btn-press rounded-xl border border-line bg-surface2 px-4 py-2 text-sm font-medium text-ink hover:bg-line">Cerrar</button>
             <button onClick={imprimir} disabled={!generadas || nums.length === 0} className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"><Printer size={15} aria-hidden /> Imprimir</button>
@@ -254,6 +258,7 @@ export function EtiquetasModal({ registro, onClose }: { registro: EtiquetaRegist
           {nums.map((n) => (
             <EtiquetaBulto key={`p${n}`} cliente={cliente!} num={n} total={total} destino={destino} origen={origen} nRemito={registro?.n_remito || ''} ancho={ancho} alto={alto} fontSize={fontSize} qrSize={qrSize} />
           ))}
+          {nums.length > 0 && <EtiquetaBulto copia cliente={cliente!} num={1} total={total} destino={destino} origen={origen} nRemito={registro?.n_remito || ''} ancho={ancho} alto={alto} fontSize={fontSize} qrSize={qrSize} />}
         </div>
       </div>
     </div>
