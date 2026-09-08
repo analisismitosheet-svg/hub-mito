@@ -54,17 +54,18 @@ const selectCls = inputCls + ' appearance-none'
 
 type SortKey = keyof Guia
 
-type EstadoGuia = 'NUEVO' | 'EN_PROCESO' | 'FINALIZADO'
+type EstadoGuia = 'NUEVO' | 'EN_PROCESO' | 'FINALIZADO_FACT' | 'FINALIZADO_A_CAJA'
 
 function estadoDe(g: Pick<Guia, 'estado' | 'en_proceso' | 'finalizado'>): EstadoGuia {
   const e = (g.estado || '').toUpperCase()
-  if (e === 'NUEVO' || e === 'EN_PROCESO' || e === 'FINALIZADO') return e as EstadoGuia
-  return g.finalizado ? 'FINALIZADO' : 'EN_PROCESO'
+  if (e === 'NUEVO' || e === 'EN_PROCESO' || e === 'FINALIZADO_FACT' || e === 'FINALIZADO_A_CAJA') return e as EstadoGuia
+  return g.finalizado ? 'FINALIZADO_FACT' : 'EN_PROCESO'
 }
 
 function claseFila(g: Pick<Guia, 'estado' | 'en_proceso' | 'finalizado'>): string {
   const e = estadoDe(g)
-  if (e === 'FINALIZADO') return 'bg-emerald-500/20 text-emerald-300'
+  if (e === 'FINALIZADO_FACT') return 'bg-emerald-500/20 text-emerald-300'
+  if (e === 'FINALIZADO_A_CAJA') return 'bg-violet-500/20 text-violet-300'
   if (e === 'NUEVO') return 'bg-red-500/20 text-red-300'
   return 'bg-amber-500/20 text-amber-300'
 }
@@ -74,7 +75,7 @@ function cambiarEstadoEnTodos(todos: Guia[], id: string, estado: EstadoGuia): Gu
     ...x,
     estado,
     en_proceso: estado === 'EN_PROCESO',
-    finalizado: estado === 'FINALIZADO',
+    finalizado: estado === 'FINALIZADO_FACT' || estado === 'FINALIZADO_A_CAJA',
   } : x)
 }
 
@@ -221,11 +222,31 @@ export default function Guias() {
   async function cambiarEstado(g: Guia, estado: EstadoGuia) {
     if (!supabase) return
     setTodos((arr) => cambiarEstadoEnTodos(arr, g.id, estado))
-    const { error: err } = await supabase.from('guias').update({ estado, en_proceso: estado === 'EN_PROCESO', finalizado: estado === 'FINALIZADO' }).eq('id', g.id)
+    const { error: err } = await supabase.from('guias').update({ estado, en_proceso: estado === 'EN_PROCESO', finalizado: estado === 'FINALIZADO_FACT' || estado === 'FINALIZADO_A_CAJA' }).eq('id', g.id)
     if (err) { mostrarToast('Error al actualizar estado'); await cargar() }
     else {
       void registrarHistorial('guia', g.id, 'modificacion', { nombre: perfil?.nombre ?? null, email: perfil?.email ?? null }, `Estado: ${estado}`)
-      mostrarToast(estado === 'FINALIZADO' ? 'Guia finalizada' : estado === 'NUEVO' ? 'Guia nueva' : 'Guia en proceso')
+      // Si pasa a FINALIZADO_FACT y no tenía facturación, se crea el registro
+      if (estado === 'FINALIZADO_FACT') {
+        const { data: existente } = await supabase.from('facturacion_fabrica').select('id').eq('guia_id', g.id).limit(1)
+        if (existente && existente.length === 0) {
+          const obsFact = [
+            `Generado desde Guia N° ${g.nro_pedido}`,
+            g.observaciones || null,
+          ].filter(Boolean).join(' | ')
+          const cli = clientes.find((c) => c.n_cliente === g.nro_cliente)
+          await supabase.from('facturacion_fabrica').insert({
+            guia_id: g.id,
+            n_cliente: g.nro_cliente,
+            razon_social: g.razon_social,
+            n_remito: g.nro_remito,
+            bulto: g.bulto,
+            transporte: cli?.transporte || null,
+            observaciones: obsFact || null,
+          })
+        }
+      }
+      mostrarToast(estado === 'FINALIZADO_FACT' ? 'Guia finalizada y enviada a facturacion' : estado === 'FINALIZADO_A_CAJA' ? 'Guia finalizada a caja' : estado === 'NUEVO' ? 'Guia nueva' : 'Guia en proceso')
     }
   }
 
@@ -269,7 +290,8 @@ export default function Guias() {
           <option value="">Estado (todos)</option>
           <option value="NUEVO">Nuevo</option>
           <option value="EN_PROCESO">En Proceso</option>
-          <option value="FINALIZADO">Finalizado</option>
+          <option value="FINALIZADO_FACT">Finalizado Fact</option>
+          <option value="FINALIZADO_A_CAJA">Finalizado a Caja</option>
         </select>
 
         <select value={fPedido} onChange={(e) => setFPedido(e.target.value)} title="Filtrar por pedido" className="h-7 w-auto shrink-0 appearance-none rounded-lg border border-line bg-surface2 px-2 text-xs text-ink outline-none transition duration-250 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40">
@@ -367,13 +389,14 @@ export default function Guias() {
                       >
                         <option value="NUEVO">Nuevo</option>
                         <option value="EN_PROCESO">En Proceso</option>
-                        <option value="FINALIZADO">Finalizado</option>
+                        <option value="FINALIZADO_FACT">Finalizado Fact</option>
+                        <option value="FINALIZADO_A_CAJA">Finalizado a Caja</option>
                       </select>
                     </td>
                     <td className="px-1 py-[2px]"><span className="block max-w-[220px] truncate text-sub" title={g.observaciones || ''}>{g.observaciones || '-'}</span></td>
                     <td className="px-1 py-[2px] text-right">
                       <div className="flex items-center justify-end gap-px" onClick={(e) => e.stopPropagation()}>
-                        <button onClick={() => setEtiquetaSel(g)} disabled={estadoDe(g) !== 'FINALIZADO'} title={estadoDe(g) === 'FINALIZADO' ? 'Etiquetas / Imprimir' : 'Se habilita al finalizar la guia'} className={'rounded border border-line p-0.5 transition ' + (estadoDe(g) === 'FINALIZADO' ? 'text-sub hover:text-amber-400' : 'cursor-not-allowed text-sub/30')}><Printer size={10} aria-hidden /></button>
+                        <button onClick={() => setEtiquetaSel(g)} disabled={estadoDe(g) !== 'FINALIZADO_FACT' && estadoDe(g) !== 'FINALIZADO_A_CAJA'} title={estadoDe(g) === 'FINALIZADO_FACT' || estadoDe(g) === 'FINALIZADO_A_CAJA' ? 'Etiquetas / Imprimir' : 'Se habilita al finalizar la guia'} className={'rounded border border-line p-0.5 transition ' + (estadoDe(g) === 'FINALIZADO_FACT' || estadoDe(g) === 'FINALIZADO_A_CAJA' ? 'text-sub hover:text-amber-400' : 'cursor-not-allowed text-sub/30')}><Printer size={10} aria-hidden /></button>
                         {puedeEditar && <button onClick={() => { setSel(g); setModal('edit') }} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Editar"><Pencil size={10} aria-hidden /></button>}
                         {puedeBorrar && <button onClick={() => setConfirm({ message: 'Eliminar guia de "' + (g.razon_social || '-') + '"?', onConfirm: () => void eliminar(g) })} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Eliminar"><Trash2 size={10} aria-hidden /></button>}
                       </div>
@@ -416,7 +439,7 @@ export default function Guias() {
                   <CRow label="Razon Social" value={card.razon_social} />
                   <CRow label="Pedido" value={card.pedido} />
                   <CRow label="Sucursal" value={card.sucursal} />
-                  <CRow label="Estado" value={estadoDe(card)} badge badgeCls={estadoDe(card) === 'FINALIZADO' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : estadoDe(card) === 'NUEVO' ? 'bg-red-500/20 text-red-300 border-red-500/40' : 'bg-amber-500/20 text-amber-300 border-amber-500/40'} />
+                  <CRow label="Estado" value={estadoDe(card)} badge badgeCls={estadoDe(card) === 'FINALIZADO_FACT' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : estadoDe(card) === 'FINALIZADO_A_CAJA' ? 'bg-violet-500/20 text-violet-300 border-violet-500/40' : estadoDe(card) === 'NUEVO' ? 'bg-red-500/20 text-red-300 border-red-500/40' : 'bg-amber-500/20 text-amber-300 border-amber-500/40'} />
                   <CRow label="Observaciones" value={card.observaciones} />
                 </dl>
               </section>
@@ -536,7 +559,7 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
       pedido: pedido || null,
       sucursal: sucursal || null,
       en_proceso: estado === 'EN_PROCESO',
-      finalizado: estado === 'FINALIZADO',
+      finalizado: estado === 'FINALIZADO_FACT' || estado === 'FINALIZADO_A_CAJA',
       estado,
       nro_remito: nroRemito.trim() || null,
       bulto: bulto ? Number(bulto) || null : null,
@@ -580,7 +603,7 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
             observaciones: observaciones.trim() || null,
             estado: 'PENDIENTE',
           })
-        } else {
+        } else if (estado === 'FINALIZADO_FACT') {
           const obsFact = [
             `Generado desde Guia N° ${payload.nro_pedido}`,
             observaciones.trim() || null,
@@ -702,7 +725,8 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
               <select value={estado} onChange={(e) => setEstado(e.target.value as EstadoGuia)} className={selectCls}>
                 <option value="NUEVO">Nuevo</option>
                 <option value="EN_PROCESO">En Proceso</option>
-                <option value="FINALIZADO">Finalizado</option>
+                <option value="FINALIZADO_FACT">Finalizado Fact</option>
+                <option value="FINALIZADO_A_CAJA">Finalizado a Caja</option>
               </select>
             </label>
 
@@ -823,11 +847,12 @@ function ImportGuias({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
       const stRaw = cleanVal(String(nr.estado ?? '')).toUpperCase()
       let st: EstadoGuia
       if (stRaw === 'NUEVO') st = 'NUEVO'
-      else if (stRaw === 'FINALIZADO' || stRaw === 'VERDADERO' || stRaw === 'TRUE' || stRaw === '1') st = 'FINALIZADO'
+      else if (stRaw === 'FINALIZADO_FACT' || stRaw === 'FINALIZADO' || stRaw === 'VERDADERO' || stRaw === 'TRUE' || stRaw === '1') st = 'FINALIZADO_FACT'
+      else if (stRaw === 'FINALIZADO_A_CAJA') st = 'FINALIZADO_A_CAJA'
       else st = 'EN_PROCESO'
       nr.estado = st
       nr.en_proceso = st === 'EN_PROCESO'
-      nr.finalizado = st === 'FINALIZADO'
+      nr.finalizado = st === 'FINALIZADO_FACT' || st === 'FINALIZADO_A_CAJA'
 
       nr.nro_cliente = nr.nro_cliente ? cleanVal(String(nr.nro_cliente)) : null
       nr.nro_pedido = nr.nro_pedido ? cleanVal(String(nr.nro_pedido)) : null
