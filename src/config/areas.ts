@@ -166,7 +166,7 @@ export const APPS: AppDef[] = [
   {
     id: 'transporte',
     areaId: 'locales',
-    areaIds: ['locales', 'deposito', 'polo52'],
+    areaIds: ['locales', 'deposito', 'polo52', 'mayorista'],
     title: 'Transporte',
     description: 'Bultos, sesiones, remitos y stock entre bases.',
     icon: Truck,
