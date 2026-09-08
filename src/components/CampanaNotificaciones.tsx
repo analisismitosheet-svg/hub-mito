@@ -1,12 +1,12 @@
-import { useEffect, useState } from 'react'
-import { Bell, UserCheck, ClipboardList, Truck, CalendarX, FileText, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Bell, UserCheck, ClipboardList, Truck, CalendarX, FileText, ArrowRightLeft, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 
 interface Notificacion {
   id: string
-  tipo: 'usuarios' | 'guias' | 'facturacion' | 'facturacion_sin_fact' | 'nota_credito'
+  tipo: 'usuarios' | 'guias' | 'facturacion' | 'facturacion_sin_fact' | 'nota_credito' | 'transferencias'
   titulo: string
   detalle: string
   ruta: string
@@ -36,7 +36,19 @@ export default function CampanaNotificaciones() {
   const [cargando, setCargando] = useState(true)
 
   const esMayorista = String(perfil?.rol) === 'mayorista' || (perfil?.roles ?? []).includes('mayorista')
-  const visible = isAdmin || esMayorista
+  const esLocal = (perfil?.roles ?? []).includes('locales') || String(perfil?.rol) === 'locales'
+  const visible = isAdmin || esMayorista || esLocal
+
+  // Variantes del local del usuario (misma lógica que Transferencias)
+  const origenesUsuario = useMemo(() => {
+    const base = (perfil?.local ?? '').toUpperCase()
+    if (!base) return []
+    const out: string[] = [base]
+    if (base.endsWith('2')) { const alt = base.slice(0, -1); if (!out.includes(alt)) out.push(alt) }
+    if (base.endsWith('D') && base.length > 1) { const alt = base.slice(0, -1); if (!out.includes(alt)) out.push(alt) }
+    else { const alt = base + 'D'; if (!out.includes(alt)) out.push(alt) }
+    return out
+  }, [perfil?.local])
 
   useEffect(() => {
     if (!supabase || !visible) { setItems([]); setCargando(false); return }
@@ -95,6 +107,15 @@ export default function CampanaNotificaciones() {
           }
         }
       }
+      // 6) Reposiciones / Transferencias sin marcar (rol local)
+      if (esLocal && origenesUsuario.length > 0) {
+        const { data } = await sb.from('transfer_items').select('id,lote_id,origen,articulo,cantidad,created_at').eq('estado', 'pendiente').in('origen', origenesUsuario)
+        if (activo && data) {
+          for (const i of data as { id: string; lote_id: string; origen: string; articulo: string | null; cantidad: number; created_at: string }[]) {
+            notis.push({ id: `tf-${i.id}`, tipo: 'transferencias', titulo: 'Artículo sin marcar', detalle: `${i.articulo || 'Sin artículo'} · ${i.cantidad}u`, ruta: '/transferencias', fecha: i.created_at, destinoId: i.id })
+          }
+        }
+      }
       // Ordenar de más viejo a más nuevo
       if (activo) {
         notis.sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
@@ -105,7 +126,7 @@ export default function CampanaNotificaciones() {
     void cargar()
     const intervalo = setInterval(cargar, 30000)
     return () => { activo = false; clearInterval(intervalo) }
-  }, [isAdmin, esMayorista, visible])
+  }, [isAdmin, esMayorista, esLocal, origenesUsuario, visible])
 
   if (!visible || !supabase) return null
 
@@ -117,6 +138,7 @@ export default function CampanaNotificaciones() {
     facturacion: <Truck size={15} aria-hidden />,
     facturacion_sin_fact: <CalendarX size={15} aria-hidden />,
     nota_credito: <FileText size={15} aria-hidden />,
+    transferencias: <ArrowRightLeft size={15} aria-hidden />,
   }
   const colores = {
     usuarios: 'bg-amber-500/15 text-amber-400',
@@ -124,6 +146,7 @@ export default function CampanaNotificaciones() {
     facturacion: 'bg-emerald-500/15 text-emerald-400',
     facturacion_sin_fact: 'bg-red-500/15 text-red-400',
     nota_credito: 'bg-orange-500/15 text-orange-400',
+    transferencias: 'bg-violet-500/15 text-violet-400',
   }
 
   return (
