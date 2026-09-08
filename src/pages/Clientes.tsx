@@ -243,7 +243,7 @@ export default function Clientes() {
           <p className="text-sm text-sub">{term || filtro !== 'todos' ? 'No se encontraron clientes.' : 'Todavia no hay clientes cargados.'}</p>
         </div>
       ) : (
-        <div className="w-full overflow-hidden rounded-2xl border border-gray-200 tabla-clara">
+        <div className="w-full overflow-hidden rounded-2xl border border-line">
           <div className="w-full overflow-x-auto">
             <table className="w-full table-fixed border-collapse text-[11px] leading-tight">
               <colgroup>
@@ -261,7 +261,7 @@ export default function Clientes() {
                 <col className="w-[6%]" />
               </colgroup>
               <thead>
-                <tr className="bg-white text-left text-[9px] font-semibold uppercase tracking-wider text-gray-900 border-b border-gray-200">
+                <tr className="bg-zinc-800 text-left text-[9px] font-semibold uppercase tracking-wider text-zinc-300">
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('n_cliente')}>N°{sortArrow('n_cliente')}</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('razon_social')}>Razon Social{sortArrow('razon_social')}</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('telefono')}>Telefono{sortArrow('telefono')}</th>
@@ -910,7 +910,7 @@ function ImportarClientes({ todos, onClose, onSaved }: { todos: Cliente[]; onClo
                   <p className="mb-2 text-xs font-semibold text-sub">Vista previa (primeras 5 filas):</p>
                   <div className="overflow-x-auto rounded-xl border border-line">
                     <table className="w-full text-[11px]">
-                      <thead><tr className="bg-white text-left text-[9px] uppercase tracking-wider text-gray-900 border-b border-gray-200">
+                      <thead><tr className="bg-zinc-800 text-left text-[9px] uppercase tracking-wider text-zinc-300">
                         {(Object.keys(FIELD_LABELS) as (keyof Mapping)[]).map((f) => <th key={f} className="px-2 py-1.5 whitespace-nowrap">{FIELD_LABELS[f]}</th>)}
                       </tr></thead>
                       <tbody className="divide-y divide-line/50 bg-surface">
@@ -938,7 +938,7 @@ function ImportarClientes({ todos, onClose, onSaved }: { todos: Cliente[]; onClo
               </div>
               <div className="overflow-auto rounded-xl border border-line" style={{ maxHeight: '55vh' }}>
                 <table className="w-full text-[11px]">
-                  <thead className="sticky top-0 z-10"><tr className="bg-white text-left text-[9px] uppercase tracking-wider text-gray-900 border-b border-gray-200">
+                  <thead className="sticky top-0 z-10"><tr className="bg-zinc-800 text-left text-[9px] uppercase tracking-wider text-zinc-300">
                     <th className="w-[4%] px-1.5 py-1.5 text-center">#</th>
                     {(Object.keys(FIELD_LABELS) as (keyof Mapping)[]).map((f) => <th key={f} className="px-1.5 py-1.5 whitespace-nowrap">{FIELD_LABELS[f]}</th>)}
                     <th className="w-[12%] px-1.5 py-1.5">Estado</th>

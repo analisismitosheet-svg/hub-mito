@@ -242,10 +242,10 @@ export default function Transportes() {
       ) : lista.length === 0 ? (
         <div className="rounded-2xl border border-line bg-surface p-6 text-center"><SearchX size={32} className="mx-auto mb-2 text-sub/40" aria-hidden /><p className="text-sm text-sub">{term || filtro !== 'todos' ? 'No se encontraron transportes.' : 'Todavia no hay transportes cargados.'}</p></div>
       ) : (
-        <div className="rounded-2xl border border-line overflow-hidden tabla-clara">
+        <div className="rounded-2xl border border-line overflow-hidden">
           <table className="w-full text-[12px] leading-tight">
             <thead>
-              <tr className="bg-white text-left text-[10px] font-semibold uppercase tracking-wider text-gray-900 border-b border-gray-200">
+              <tr className="bg-zinc-800 text-left text-[10px] font-semibold uppercase tracking-wider text-zinc-300">
                 <th className="px-2 py-2 whitespace-nowrap">Transporte</th>
                 <th className="px-2 py-2 whitespace-nowrap">Calera</th>
                 <th className="px-2 py-2 whitespace-nowrap">Polo 52</th>

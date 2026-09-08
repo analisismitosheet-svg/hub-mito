@@ -620,7 +620,7 @@ export default function FacturacionFabrica() {
           <p className="text-sm text-sub">{term || filtroTransporte !== 'todos' ? 'No se encontraron registros.' : 'Todavia no hay registros de facturacion.'}</p>
         </div>
       ) : (
-        <div className="w-full overflow-hidden rounded-2xl border border-gray-200 tabla-clara">
+        <div className="w-full overflow-hidden rounded-2xl border border-line">
           <div className="w-full overflow-x-auto">
             <table className="w-full table-fixed border-collapse text-[11px] leading-tight">
               <colgroup>
@@ -645,7 +645,7 @@ export default function FacturacionFabrica() {
                 <col className="w-[4%]" />  {/* Acc */}
               </colgroup>
               <thead>
-                <tr className="bg-white text-left text-[9px] font-semibold uppercase tracking-wider text-gray-900 border-b border-gray-200">
+                <tr className="bg-zinc-800 text-left text-[9px] font-semibold uppercase tracking-wider text-zinc-300">
                   {isAdmin && <th className="px-1 py-1 text-center"><input type="checkbox" checked={allSelected} onChange={toggleSelectAll} className="h-3 w-3 rounded border-line bg-surface2 accent-brand-600" /></th>}
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('autorizacion')}>Aut{sortArrow('autorizacion')}</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('razon_social')}>Razon Social{sortArrow('razon_social')}</th>

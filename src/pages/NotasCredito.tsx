@@ -173,11 +173,11 @@ export default function NotasCredito() {
           <p className="text-sm text-sub">{term ? 'No se encontraron notas de credito.' : 'Todavia no hay notas de credito.'}</p>
         </div>
       ) : (
-        <div className="w-full overflow-hidden rounded-2xl border border-gray-200 tabla-clara">
+        <div className="w-full overflow-hidden rounded-2xl border border-line">
           <div className="w-full overflow-x-auto">
             <table className="w-full table-auto border-collapse text-sm leading-tight">
               <thead>
-                <tr className="bg-white text-left text-[11px] font-semibold uppercase tracking-wider text-gray-900 border-b border-gray-200">
+                <tr className="bg-zinc-800 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-300">
                   <th className="px-2 py-1 whitespace-nowrap">Nro Pedido</th>
                   <th className="px-2 py-1 text-center whitespace-nowrap">Fecha</th>
                   <th className="px-2 py-1 text-center whitespace-nowrap">N Cl</th>
