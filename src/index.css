@@ -270,7 +270,7 @@ body {
 
 .tabla-clara thead th {
   color: #fff;
-  border-bottom: 1px solid #333;
+  border: 1px solid #000;
 }
 
 .tabla-clara tbody {
@@ -278,7 +278,7 @@ body {
 }
 
 .tabla-clara tbody tr {
-  color: #111;
+  color: #000;
 }
 
 .tabla-clara tbody tr:hover {
@@ -286,39 +286,56 @@ body {
 }
 
 .tabla-clara td {
-  color: #111;
-  border-bottom: 1px solid #e5e5e5;
+  color: #000;
+  border: 1px solid #000;
 }
 
 .tabla-clara tfoot tr {
   background: #f3f4f6;
-  color: #111;
+  color: #000;
 }
 
 .tabla-clara tfoot td {
-  color: #111;
+  color: #000;
+  border: 1px solid #000;
 }
 
-/* Mantener los colores de estado (rojo/verde/amarillo) visibles sobre blanco */
+/* Mantener los colores de estado (rojo/verde/amarillo) fluorescentes sobre blanco */
 .tabla-clara .text-sub {
-  color: #4b5563;
+  color: #000;
 }
 .tabla-clara .text-ink {
-  color: #111;
+  color: #000;
 }
 .tabla-clara .bg-red-500\/10,
 .tabla-clara .bg-red-500\/20 {
-  background: rgba(239, 68, 68, 0.14);
-  color: #b91c1c;
+  background: rgba(255, 45, 45, 0.22);
+  color: #ff0033;
 }
 .tabla-clara .bg-emerald-500\/10,
 .tabla-clara .bg-emerald-500\/20 {
-  background: rgba(16, 185, 129, 0.16);
-  color: #047857;
+  background: rgba(0, 230, 118, 0.25);
+  color: #00b32a;
 }
 .tabla-clara .bg-amber-500\/10,
 .tabla-clara .bg-amber-500\/20 {
-  background: rgba(245, 158, 11, 0.18);
-  color: #b45309;
+  background: rgba(255, 234, 0, 0.3);
+  color: #d1a600;
+}
+.tabla-clara .text-red-300,
+.tabla-clara .text-red-400 {
+  color: #ff0033;
+}
+.tabla-clara .text-emerald-300,
+.tabla-clara .text-emerald-400 {
+  color: #00b32a;
+}
+.tabla-clara .text-amber-300,
+.tabla-clara .text-amber-400 {
+  color: #d1a600;
+}
+.tabla-clara .text-sky-300,
+.tabla-clara .text-sky-400 {
+  color: #0284c7;
 }
 
