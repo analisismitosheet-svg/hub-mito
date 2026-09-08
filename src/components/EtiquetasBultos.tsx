@@ -51,7 +51,7 @@ export async function fetchClienteEtiqueta(nCl: string, fallback: { razon_social
     provincia: provincia || '',
     telefono: String(data.telefono ?? ''),
     transporte: (fallback.transporte ?? '') || String(data.transporte ?? ''),
-    observaciones: String(data.obs_membretes ?? '') || (fallback.observaciones ?? ''),
+    observaciones: String(data.obs_membretes ?? '') || String(data.obs_facturacion ?? '') || '',
   }
 }
 
