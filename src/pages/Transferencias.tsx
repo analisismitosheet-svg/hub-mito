@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Upload,
   Loader2,
@@ -288,6 +289,7 @@ function Barra({ items }: { items: Item[] }) {
 
 export default function Transferencias() {
   const { can, perfil, isAdmin } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
   const puedeImportar = can('transferencias.import')
   const verTodo = isAdmin || puedeImportar || can('transferencias.ver_todo')
   const miLocal = (perfil?.local ?? '').toUpperCase()
@@ -367,6 +369,16 @@ export default function Transferencias() {
   useEffect(() => {
     void cargar()
   }, [cargar])
+
+  // Abrir un lote puntual vía ?abrir=<id> (desde notificaciones)
+  useEffect(() => {
+    const id = searchParams.get('abrir')
+    if (!id) return
+    if (lotes.some((l) => l.id === id)) {
+      setLoteAbierto(id)
+      setSearchParams({}, { replace: true })
+    }
+  }, [lotes, searchParams, setSearchParams])
 
   // ¿Este origen es el local del usuario? (para tildar sus propios artículos)
   const esMiLocal = useCallback(

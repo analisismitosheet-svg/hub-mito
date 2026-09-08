@@ -107,12 +107,26 @@ export default function CampanaNotificaciones() {
           }
         }
       }
-      // 6) Reposiciones / Transferencias sin marcar (rol local)
+      // 6) Reposiciones / Transferencias sin marcar (rol local) — agrupado por archivo/lote
       if (esLocal && origenesUsuario.length > 0) {
-        const { data } = await sb.from('transfer_items').select('id,lote_id,origen,articulo,cantidad,created_at').eq('estado', 'pendiente').in('origen', origenesUsuario)
+        const { data } = await sb.from('transfer_items').select('id,lote_id,origen,cantidad,created_at').eq('estado', 'pendiente').in('origen', origenesUsuario)
         if (activo && data) {
-          for (const i of data as { id: string; lote_id: string; origen: string; articulo: string | null; cantidad: number; created_at: string }[]) {
-            notis.push({ id: `tf-${i.id}`, tipo: 'transferencias', titulo: 'Artículo sin marcar', detalle: `${i.articulo || 'Sin artículo'} · ${i.cantidad}u`, ruta: '/transferencias', fecha: i.created_at, destinoId: i.id })
+          const pendientes = data as { id: string; lote_id: string; origen: string; cantidad: number; created_at: string }[]
+          // Nombres de los lotes (archivos)
+          const loteIds = Array.from(new Set(pendientes.map((i) => i.lote_id)))
+          const { data: lotes } = loteIds.length ? await sb.from('transfer_lotes').select('id,nombre').in('id', loteIds) : { data: [] }
+          const nombreLote = new Map<string, string>()
+          if (lotes) { for (const l of lotes as { id: string; nombre: string }[]) nombreLote.set(l.id, l.nombre) }
+          // Agrupar por lote
+          const porLote = new Map<string, { count: number; fecha: string }>()
+          for (const i of pendientes) {
+            const g = porLote.get(i.lote_id)
+            if (g) { g.count += 1; if (i.created_at < g.fecha) g.fecha = i.created_at }
+            else porLote.set(i.lote_id, { count: 1, fecha: i.created_at })
+          }
+          for (const [loteId, g] of porLote) {
+            const nombre = nombreLote.get(loteId) ?? 'Archivo cargado'
+            notis.push({ id: `tf-${loteId}`, tipo: 'transferencias', titulo: nombre, detalle: `${g.count} artículo${g.count > 1 ? 's' : ''} sin marcar`, ruta: `/transferencias?abrir=${loteId}`, fecha: g.fecha, destinoId: loteId })
           }
         }
       }
