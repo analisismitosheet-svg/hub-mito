@@ -331,7 +331,7 @@ export default function Guias() {
                 <col className="min-w-[110px]" />               {/* Acc */}
               </colgroup>
               <thead>
-                <tr className="border-b border-line bg-zinc-800 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-300">
+                <tr className="bg-white text-left text-[11px] font-semibold uppercase tracking-wider text-gray-900 border-b border-gray-200">
                   <th className="px-1 py-1 text-center"><input type="checkbox" checked={allSelected} onChange={toggleSelectAll} className="h-3 w-3 rounded border-line bg-surface2 accent-brand-600" /></th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('nro_pedido')}>N° Pedido{sortArrow('nro_pedido')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('fecha')}>Fecha{sortArrow('fecha')}</th>
