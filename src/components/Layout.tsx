@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { LogOut, Sun, Moon } from 'lucide-react'
+import { LogOut, Sun, Moon, RefreshCw } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { useTheme } from '@/context/ThemeContext'
 import CampanaNotificaciones from '@/components/CampanaNotificaciones'
@@ -25,6 +25,14 @@ export default function Layout({ children, wide = true }: { children: ReactNode;
           </div>
           {configured && user && (
             <div className="flex items-center gap-3">
+              <button
+                onClick={() => window.location.reload()}
+                className="btn-press flex cursor-pointer items-center justify-center rounded-xl border border-line bg-surface p-2 text-ink outline-none hover:border-line2 hover:bg-surface2 focus-visible:ring-2 focus-visible:ring-brand-500/50"
+                title="Recargar pagina y datos"
+                aria-label="Recargar pagina y datos"
+              >
+                <RefreshCw size={16} aria-hidden />
+              </button>
               <button
                 onClick={toggle}
                 className="btn-press flex cursor-pointer items-center justify-center rounded-xl border border-line bg-surface p-2 text-ink outline-none hover:border-line2 hover:bg-surface2 focus-visible:ring-2 focus-visible:ring-brand-500/50"
