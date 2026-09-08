@@ -183,6 +183,7 @@ export default function Mayorista() {
   const puedeAsignar = isAdmin || puedeImportar || puedeMarcar
   const [loteAbierto, setLoteAbierto] = useState<string | null>(null)
   const [localAbierto, setLocalAbierto] = useState<string | null>(null)
+  const [busquedaArticulo, setBusquedaArticulo] = useState<Record<string, string>>({})
   const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
   const [subAbierto, setSubAbierto] = useState<string | null>(null)
   const [empleados, setEmpleados] = useState<Empleado[]>([])
@@ -635,8 +636,24 @@ export default function Mayorista() {
                             )}
                           </div>
                           {lAbierto && (
+                            <div className="border-b border-line bg-surface px-3 py-2">
+                              <input
+                                value={busquedaArticulo[key] ?? ''}
+                                onChange={(e) => setBusquedaArticulo((prev) => ({ ...prev, [key]: e.target.value }))}
+                                placeholder="Buscar artículo en este local..."
+                                className="w-full rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs text-ink outline-none placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40"
+                              />
+                            </div>
+                          )}
+                          {lAbierto && (
                             <ul className="divide-y divide-line/70 bg-surface/40">
-                              {lItems.map((it) => {
+                              {lItems
+                                .filter((it) => {
+                                  const t = (busquedaArticulo[key] ?? '').trim().toUpperCase()
+                                  if (!t) return true
+                                  return [it.codigo, it.articulo, it.color, it.talle].some((v) => (v ?? '').toUpperCase().includes(t))
+                                })
+                                .map((it) => {
                                 const esHecho = it.estado === 'hecho'
                                 const esFaltante = it.estado === 'faltante'
                                 return (

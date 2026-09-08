@@ -19,6 +19,7 @@ import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
+import { cargarVistaSalidas, leerVista } from '@/lib/sqlApi'
 
 interface Lote {
   id: string
@@ -324,6 +325,7 @@ export default function Transferencias() {
   const [loteAbierto, setLoteAbierto] = useState<string | null>(null)
   const [origenAbierto, setOrigenAbierto] = useState<string | null>(null)
   const [destinoAbierto, setDestinoAbierto] = useState<string | null>(null)
+  const [busquedaArticulo, setBusquedaArticulo] = useState<Record<string, string>>({})
   const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
   const [modal, setModal] = useState(false)
   const [modalEnvio, setModalEnvio] = useState<Lote | null>(null)
@@ -332,6 +334,11 @@ export default function Transferencias() {
   const [nombreNuevo, setNombreNuevo] = useState('')
   const [motivoNuevo, setMotivoNuevo] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+  // Autorrelleno desde el SQL local: la vista de salidas reporta qué artículos ya
+  // se remitieron; se consulta en bucle y se marcan solos los que coinciden.
+  const [vistaSalidas, setVistaSalidas] = useState('')
+  const [sinconexionSql, setSinconexionSql] = useState(false)
+  const [autoMarca, setAutoMarca] = useState(true)
 
   const cargar = useCallback(async () => {
     if (!supabase) {
@@ -370,6 +377,17 @@ export default function Transferencias() {
     void cargar()
   }, [cargar])
 
+  // Carga la vista de salidas configurada (si existe) para el auto-marcado.
+  useEffect(() => {
+    let activo = true
+    void cargarVistaSalidas().then((v) => {
+      if (activo) setVistaSalidas(v)
+    })
+    return () => {
+      activo = false
+    }
+  }, [])
+
   // Abrir un lote puntual vía ?abrir=<id> (desde notificaciones)
   useEffect(() => {
     const id = searchParams.get('abrir')
@@ -385,6 +403,75 @@ export default function Transferencias() {
     (origen: string) => origenesUsuario.length > 0 && origenesUsuario.includes(origen.toUpperCase()),
     [origenesUsuario],
   )
+
+  // Ref que siempre apunta a los items actuales (evita re-arrancar el polling
+  // cuando el auto-marcado cambia el estado de items).
+  const itemsRef = useRef(items)
+  itemsRef.current = items
+
+  /**
+   * Auto-marcado desde el SQL local: consulta la vista de salidas en bucle y
+   * marca como "hecho" los artículos del Excel que ya figuran como remitidos
+   * en el SQL (cruce por origen + articulo + color + talle).
+   */
+  useEffect(() => {
+    if (!vistaSalidas || !autoMarca) return
+    let abortado = false
+    const INTERVALO = 15000 // cada 15 s
+    let enCurso = false
+
+    const ejecutar = async () => {
+      if (enCurso || abortado) return
+      enCurso = true
+      try {
+        const filas = await leerVista(vistaSalidas)
+        if (abortado) return
+        setSinconexionSql(false)
+        if (!filas.length) return
+        const ahora = new Date().toISOString()
+        const norm = (s: unknown) => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase()
+        // Conjunto de claves "origen|articulo|color|talle" que ya salieron
+        const salidas = new Set<string>()
+        for (const f of filas) {
+          const rec = f as Record<string, unknown>
+          const origen = norm(rec.origen ?? rec.local ?? '')
+          const articulo = norm(rec.articulo ?? '')
+          const color = norm(rec.color ?? '')
+          const talle = norm(rec.talle ?? '')
+          if (!origen || !articulo) continue
+          salidas.add([origen, articulo, color, talle].join('|'))
+        }
+        if (!salidas.size) return
+
+        const actual = itemsRef.current
+        const aMarcar = actual.filter((i) => i.estado === 'pendiente' && salidas.has(
+          [norm(i.origen), norm(i.articulo ?? ''), norm(i.color ?? ''), norm(i.talle ?? '')].join('|'),
+        ))
+        if (!aMarcar.length) return
+
+        const ids = aMarcar.map((i) => i.id)
+        setItems((arr) => arr.map((x) => (ids.includes(x.id) ? { ...x, estado: 'hecho' as EstadoItem, hecho_at: ahora } : x)))
+        if (supabase) {
+          await supabase
+            .from('transfer_items')
+            .update({ estado: 'hecho', hecho: true, hecho_at: ahora, hecho_por: perfil?.id ?? null })
+            .in('id', ids)
+        }
+      } catch {
+        setSinconexionSql(true)
+      } finally {
+        enCurso = false
+      }
+    }
+
+    void ejecutar()
+    const timer = setInterval(ejecutar, INTERVALO)
+    return () => {
+      abortado = true
+      clearInterval(timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vistaSalidas, autoMarca])
 
   async function marcar(item: Item, estado: EstadoItem) {
     if (!supabase) return
@@ -567,6 +654,32 @@ export default function Transferencias() {
         </p>
       )}
 
+      {vistaSalidas && (
+        <div
+          className={`mb-4 flex items-center gap-3 rounded-xl border px-3 py-2 text-sm ${
+            sinconexionSql
+              ? 'border-brand-600/30 bg-brand-600/10 text-brand-400'
+              : 'border-emerald-600/30 bg-emerald-600/10 text-emerald-500'
+          }`}
+        >
+          <Loader2 size={14} className={`animate-spin ${sinconexionSql ? 'text-brand-400' : ''}`} aria-hidden />
+          <span className="min-w-0 flex-1">
+            {sinconexionSql
+              ? 'No se pudo consultar el SQL local. Revisá la conexión para el auto-marcado.'
+              : `Auto-marcado desde SQL (${vistaSalidas}): se tildan solos los artículos ya remitidos.`}
+          </span>
+          <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs font-medium text-sub" title="Activar/desactivar auto-marcado">
+            <input
+              type="checkbox"
+              checked={autoMarca}
+              onChange={(e) => setAutoMarca(e.target.checked)}
+              className="h-4 w-4 accent-emerald-600"
+            />
+            auto
+          </label>
+        </div>
+      )}
+
       {cargando ? (
         <div className="flex items-center justify-center gap-2 py-16 text-sub">
           <Loader2 size={18} className="animate-spin" aria-hidden /> Cargando…
@@ -704,9 +817,25 @@ export default function Transferencias() {
                             )}
                           </div>
                           {oAbierto && (
+                            <div className="border-b border-line bg-surface px-3 py-2">
+                              <input
+                                value={busquedaArticulo[key] ?? ''}
+                                onChange={(e) => setBusquedaArticulo((prev) => ({ ...prev, [key]: e.target.value }))}
+                                placeholder="Buscar artículo en este local..."
+                                className="w-full rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs text-ink outline-none placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40"
+                              />
+                            </div>
+                          )}
+                          {oAbierto && (
                             <div className="divide-y divide-line/70">
                               {Array.from(
-                                de.reduce((m, i) => {
+                                de
+                                  .filter((i) => {
+                                    const t = (busquedaArticulo[key] ?? '').trim().toUpperCase()
+                                    if (!t) return true
+                                    return [i.articulo, i.color, i.talle, i.descripcion].some((v) => (v ?? '').toUpperCase().includes(t))
+                                  })
+                                  .reduce((m, i) => {
                                   const a = m.get(i.destino) ?? []
                                   a.push(i)
                                   m.set(i.destino, a)
