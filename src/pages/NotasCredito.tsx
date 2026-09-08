@@ -173,7 +173,7 @@ export default function NotasCredito() {
           <p className="text-sm text-sub">{term ? 'No se encontraron notas de credito.' : 'Todavia no hay notas de credito.'}</p>
         </div>
       ) : (
-        <div className="w-full overflow-hidden rounded-2xl border border-line">
+        <div className="w-full overflow-hidden rounded-2xl border border-gray-200 tabla-clara">
           <div className="w-full overflow-x-auto">
             <table className="w-full table-auto border-collapse text-sm leading-tight">
               <thead>

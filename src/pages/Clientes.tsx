@@ -243,7 +243,7 @@ export default function Clientes() {
           <p className="text-sm text-sub">{term || filtro !== 'todos' ? 'No se encontraron clientes.' : 'Todavia no hay clientes cargados.'}</p>
         </div>
       ) : (
-        <div className="w-full overflow-hidden rounded-2xl border border-line">
+        <div className="w-full overflow-hidden rounded-2xl border border-gray-200 tabla-clara">
           <div className="w-full overflow-x-auto">
             <table className="w-full table-fixed border-collapse text-[11px] leading-tight">
               <colgroup>

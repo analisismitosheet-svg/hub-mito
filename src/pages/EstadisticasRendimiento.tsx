@@ -238,7 +238,7 @@ export default function EstadisticasRendimiento() {
           <p className="text-sm text-sub">Todavía no hay separaciones registradas.</p>
         </div>
       ) : (
-        <div className="w-full overflow-hidden rounded-2xl border border-line">
+        <div className="w-full overflow-hidden rounded-2xl border border-gray-200 tabla-clara">
           <div className="w-full overflow-x-auto">
             <table className="w-full table-auto border-collapse text-sm leading-tight">
               <thead>
