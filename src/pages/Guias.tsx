@@ -571,18 +571,38 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
     if (guia) {
       result = await supabase.from('guias').update(payload).eq('id', guia.id).select().single()
       if (!result.error && supabase) {
-        await supabase.from('facturacion_fabrica')
-          .update({
+        const esFact = estado === 'FINALIZADO_FACT'
+        const obsFact = [
+          `Generado desde Guia N° ${payload.nro_pedido}`,
+          observaciones.trim() || null,
+        ].filter(Boolean).join(' | ')
+        const { data: existente } = await supabase.from('facturacion_fabrica').select('id').eq('guia_id', guia.id).limit(1)
+        if (esFact && (!existente || existente.length === 0)) {
+          // No tenía facturación: crear
+          await supabase.from('facturacion_fabrica').insert({
+            guia_id: guia.id,
             n_cliente: nroCliente.trim() || null,
             razon_social: razonSocial.trim() || null,
             n_remito: nroRemito.trim() || null,
             bulto: bulto ? Number(bulto) || null : null,
             transporte: clienteTransporte || null,
-            observaciones: (guia?.observaciones && observaciones.trim() !== guia.observaciones)
-              ? (`Generado desde Guia N° ${payload.nro_pedido}` + (observaciones.trim() ? ` | ${observaciones.trim()}` : ''))
-              : undefined,
+            observaciones: obsFact || null,
           })
-          .eq('guia_id', guia.id)
+        } else if (existente && existente.length > 0) {
+          // Ya tenía facturación: actualizar
+          await supabase.from('facturacion_fabrica')
+            .update({
+              n_cliente: nroCliente.trim() || null,
+              razon_social: razonSocial.trim() || null,
+              n_remito: nroRemito.trim() || null,
+              bulto: bulto ? Number(bulto) || null : null,
+              transporte: clienteTransporte || null,
+              observaciones: (guia?.observaciones && observaciones.trim() !== guia.observaciones)
+                ? obsFact
+                : undefined,
+            })
+            .eq('guia_id', guia.id)
+        }
         void registrarHistorial('guia', guia.id, 'modificacion', usuario, `Guia N° ${payload.nro_pedido}`)
       }
     } else {
