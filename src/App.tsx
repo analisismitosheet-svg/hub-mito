@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AuthProvider } from '@/context/AuthContext'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import PermissionRoute from '@/components/PermissionRoute'
@@ -34,6 +34,7 @@ import NotasCredito from '@/pages/NotasCredito'
 import EstadisticasRendimiento from '@/pages/EstadisticasRendimiento'
 import CargaNovedades from '@/pages/CargaNovedades'
 import ResumenNovedades from '@/pages/ResumenNovedades'
+import CarpetaArea from '@/pages/CarpetaArea'
 import DatosSql from '@/pages/DatosSql'
 import SqlConexion from '@/pages/SqlConexion'
 import ComingSoon from '@/pages/ComingSoon'
@@ -156,8 +157,14 @@ export default function App() {
               </PermissionRoute>
             }
           />
-          <Route path="/rrhh/novedades" element={<Navigate to="/rrhh/novedades/resumen" replace />} />
-          <Route path="/rrhh/novedades/" element={<Navigate to="/rrhh/novedades/resumen" replace />} />
+          <Route
+            path="/rrhh/novedades"
+            element={
+              <PermissionRoute permiso="rrhh.novedades.view">
+                <CarpetaArea carpetaId="rrhh-novedades" />
+              </PermissionRoute>
+            }
+          />
           <Route
             path="/rrhh/novedades/carga"
             element={

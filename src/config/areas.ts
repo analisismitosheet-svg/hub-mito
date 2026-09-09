@@ -25,6 +25,7 @@ import {
   Database,
   FileText,
   TrendingUp,
+  FolderOpen,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -256,8 +257,19 @@ export const APPS: AppDef[] = [
     permiso: 'mayorista.estadisticas.view',
   },
   {
-    id: 'rrhh-novedades-carga',
+    id: 'rrhh-novedades',
     areaId: 'rrhh',
+    title: 'Novedades',
+    description: 'Carga y resumen de novedades de empleados.',
+    icon: FolderOpen,
+    kind: 'internal',
+    target: '/rrhh/novedades',
+    color: '#7c3aed',
+    permiso: 'rrhh.novedades.view',
+  },
+  {
+    id: 'rrhh-novedades-carga',
+    areaId: 'rrhh-novedades',
     title: 'Carga Novedades',
     description: 'Cargar o editar novedades de empleados.',
     icon: Megaphone,
@@ -265,11 +277,10 @@ export const APPS: AppDef[] = [
     target: '/rrhh/novedades/carga',
     color: '#7c3aed',
     permiso: 'rrhh.novedades.create',
-    grupo: 'Novedades',
   },
   {
     id: 'rrhh-novedades-resumen',
-    areaId: 'rrhh',
+    areaId: 'rrhh-novedades',
     title: 'Resumen Novedades',
     description: 'Resumen y filtros de novedades de empleados.',
     icon: Megaphone,
@@ -277,7 +288,6 @@ export const APPS: AppDef[] = [
     target: '/rrhh/novedades/resumen',
     color: '#7c3aed',
     permiso: 'rrhh.novedades.view',
-    grupo: 'Novedades',
   },
   {
     id: 'rrhh-empleados',
