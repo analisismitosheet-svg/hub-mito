@@ -244,6 +244,7 @@ export const APPS: AppDef[] = [
   {
     id: 'mayorista-estadisticas',
     areaId: 'mayorista',
+    areaIds: ['rrhh'],
     title: 'Estadisticas / Rendimientos',
     description: 'Rendimiento por empleado: items separados, unidades y tiempo.',
     icon: TrendingUp,
