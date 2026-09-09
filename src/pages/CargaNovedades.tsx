@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Loader2, Pencil, Trash2, Megaphone, Check } from 'lucide-react'
+import { Loader2, Pencil, Trash2, Megaphone, Check, Upload } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
@@ -48,6 +48,9 @@ export default function CargaNovedades() {
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
+  const [importando, setImportando] = useState(false)
+  const [importMsg, setImportMsg] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   // Formulario
   const [editId, setEditId] = useState<string | null>(null)
@@ -126,15 +129,118 @@ export default function CargaNovedades() {
     if (!err) await cargar()
   }
 
+  /** Detecta la columna en el Excel por nombre normalizado (el formato del archivo "Novedades rrhh"). */
+  function detectarCol(headers: string[]): Record<string, string> {
+    const norm = (s: string) => s.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '')
+    const m: Record<string, string> = {}
+    const defs: Record<string, string[]> = {
+      anio: ['año', 'anio', 'ano', 'añ'],
+      mes_liquidacion: ['mesliquidacion', 'mes', 'mesliqui', 'periodo'],
+      numero: ['n°', 'numero', 'nro', 'n'],
+      nombre_completo: ['nombrecompleto', 'nombre', 'apellido', 'nombres'],
+      tipo: ['tipo'],
+      fecha: ['fecha'],
+      desde: ['desde'],
+      hasta: ['hasta'],
+      local: ['local'],
+      motivo: ['motivo'],
+      novedad: ['novedad'],
+      minutos: ['minutos', 'min'],
+      control: ['controlcertificado', 'control', 'certificado', 'notificacion'],
+    }
+    for (const h of headers) {
+      const n = norm(h)
+      for (const [key, keywords] of Object.entries(defs)) {
+        if (m[key]) continue
+        if (keywords.some((k) => n.includes(k)) || (key === 'numero' && n === 'n')) {
+          m[key] = h
+          break
+        }
+      }
+    }
+    return m
+  }
+
+  async function importarExcel(file: File) {
+    if (!supabase) return
+    setImportando(true); setImportMsg(null); setError(null)
+    try {
+      const XLSX = await import('xlsx')
+      const data = new Uint8Array(await file.arrayBuffer())
+      const wb = XLSX.read(data, { type: 'array', raw: false })
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' })
+      if (json.length === 0) { setError('El archivo está vacío.'); setImportando(false); return }
+
+      const headers = Object.keys(json[0])
+      const map = detectarCol(headers)
+      if (!map.nombre_completo) { setError('No se detectó la columna "NOMBRE COMPLETO". Asegurate de usar el formato del archivo Novedades rrhh.'); setImportando(false); return }
+
+      const val = (row: Record<string, unknown>, key: string): string => {
+        const col = map[key]
+        if (!col) return ''
+        return String(row[col] ?? '').trim()
+      }
+
+      const batch: Record<string, unknown>[] = []
+      for (const row of json) {
+        const nombre = val(row, 'nombre_completo')
+        if (!nombre) continue
+        batch.push({
+          anio: val(row, 'anio') || null,
+          mes_liquidacion: val(row, 'mes_liquidacion') || null,
+          numero: val(row, 'numero') || null,
+          nombre_completo: nombre,
+          tipo: val(row, 'tipo') || null,
+          fecha: val(row, 'fecha') || null,
+          desde: val(row, 'desde') || null,
+          hasta: val(row, 'hasta') || null,
+          local: val(row, 'local') || null,
+          motivo: val(row, 'motivo') || null,
+          novedad: val(row, 'novedad') || null,
+          minutos: val(row, 'minutos') || null,
+          control: val(row, 'control') || null,
+        })
+      }
+      if (batch.length === 0) { setError('No se encontraron filas con nombre.'); setImportando(false); return }
+
+      const BATCH = 200
+      let insertados = 0
+      for (let i = 0; i < batch.length; i += BATCH) {
+        const { error: err } = await supabase.from('novedades').insert(batch.slice(i, i + BATCH))
+        if (err) { setError(err.message); setImportando(false); return }
+        insertados += Math.min(BATCH, batch.length - i)
+      }
+      setImportMsg(`${insertados} novedades importadas.`)
+      await cargar()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al leer el archivo')
+    }
+    setImportando(false)
+  }
+
   return (
     <Layout>
       <BackButton />
       <header className="mb-3 mt-2">
-        <h1 className="flex items-center gap-2 font-display text-2xl font-semibold text-ink"><Megaphone size={20} className="text-violet-500" aria-hidden /> Carga Novedades</h1>
-        <p className="text-xs text-sub/70">Cargar o editar novedades de empleados</p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="flex items-center gap-2 font-display text-2xl font-semibold text-ink"><Megaphone size={20} className="text-violet-500" aria-hidden /> Carga Novedades</h1>
+            <p className="text-xs text-sub/70">Cargar o editar novedades de empleados</p>
+          </div>
+          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void importarExcel(f); e.target.value = '' }} />
+          <button
+            onClick={() => fileRef.current?.click()}
+            disabled={importando}
+            className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-3 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+          >
+            {importando ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Upload size={15} aria-hidden />} Importar Excel
+          </button>
+        </div>
       </header>
 
       {error && <p role="alert" className="mb-4 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
+      {importMsg && <p className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-400">{importMsg}</p>}
 
       {/* Formulario */}
       <form onSubmit={(e) => void handleSubmit(e)} className="mb-6 rounded-2xl border border-line bg-surface p-4 shadow-soft">
