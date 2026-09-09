@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+﻿import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   Loader2, Search, SearchX, Plus, Pencil, Trash2, X, ClipboardList, Upload, FileText, Printer,
@@ -208,14 +208,14 @@ export default function Guias() {
     if (sortKey === key) setSortAsc(!sortAsc)
     else { setSortKey(key); setSortAsc(true) }
   }
-  function sortArrow(key: SortKey) { return sortKey !== key ? null : sortAsc ? ' ▲' : ' ▼' }
+  function sortArrow(key: SortKey) { return sortKey !== key ? null : sortAsc ? ' â–²' : ' â–¼' }
 
   /* CRUD */
   async function eliminar(g: Guia) {
     if (!supabase) return
     const { error: err } = await supabase.from('guias').delete().eq('id', g.id)
     if (err) { mostrarToast('Error al eliminar'); return }
-    void registrarHistorial('guia', g.id, 'borrado', { nombre: perfil?.nombre ?? null, email: perfil?.email ?? null }, `Guia N° ${g.nro_pedido ?? ''} - ${g.razon_social ?? ''}`)
+    void registrarHistorial('guia', g.id, 'borrado', { nombre: perfil?.nombre ?? null, email: perfil?.email ?? null }, `Guia NÂ° ${g.nro_pedido ?? ''} - ${g.razon_social ?? ''}`)
     setSel(null); setCard(null); await cargar(); mostrarToast('Guia eliminada')
   }
 
@@ -226,12 +226,12 @@ export default function Guias() {
     if (err) { mostrarToast('Error al actualizar estado'); await cargar() }
     else {
       void registrarHistorial('guia', g.id, 'modificacion', { nombre: perfil?.nombre ?? null, email: perfil?.email ?? null }, `Estado: ${estado}`)
-      // Si pasa a FINALIZADO_FACT y no tenía facturación, se crea el registro
+      // Si pasa a FINALIZADO_FACT y no tenÃ­a facturaciÃ³n, se crea el registro
       if (estado === 'FINALIZADO_FACT') {
         const { data: existente } = await supabase.from('facturacion_fabrica').select('id').eq('guia_id', g.id).limit(1)
         if (existente && existente.length === 0) {
           const obsFact = [
-            `Generado desde Guia N° ${g.nro_pedido}`,
+            `Generado desde Guia NÂ° ${g.nro_pedido}`,
             g.observaciones || null,
           ].filter(Boolean).join(' | ')
           const cli = clientes.find((c) => c.n_cliente === g.nro_cliente)
@@ -275,7 +275,7 @@ export default function Guias() {
       <BackButton />
       {/* Header + Filters: una sola fila */}
       <div className="mb-3 flex flex-wrap items-center gap-3">
-        <h1 className="whitespace-nowrap font-display text-[1.1rem] font-semibold text-ink">Guías <span className="text-xs font-normal text-sub">({todos.length})</span></h1>
+        <h1 className="whitespace-nowrap font-display text-[1.1rem] font-semibold text-ink">GuÃ­as <span className="text-xs font-normal text-sub">({todos.length})</span></h1>
 
         <div className="relative w-[200px] shrink-0">
           <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sub/70" aria-hidden />
@@ -304,7 +304,7 @@ export default function Guias() {
           {sucursalOpciones.map((o) => <option key={o} value={o}>{o}</option>)}
         </select>
 
-        <span className="whitespace-nowrap text-[11px] text-sub/70">{lista.length} guías</span>
+        <span className="whitespace-nowrap text-[11px] text-sub/70">{lista.length} guÃ­as</span>
 
         <button
           onClick={() => { setQ(''); setFFechaDesde(''); setFFechaHasta(''); setFEstado(''); setFPedido(''); setFSucursal(''); setPagina(1) }}
@@ -355,11 +355,11 @@ export default function Guias() {
               <thead>
                 <tr className="table-head text-left text-[11px] font-semibold uppercase tracking-wider">
                   <th className="px-1 py-1 text-center"><input type="checkbox" checked={allSelected} onChange={toggleSelectAll} className="h-3 w-3 rounded border-line bg-surface2 accent-brand-600" /></th>
-                  <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('nro_pedido')}>N° Pedido{sortArrow('nro_pedido')}</th>
+                  <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('nro_pedido')}>NÂ° Pedido{sortArrow('nro_pedido')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('fecha')}>Fecha{sortArrow('fecha')}</th>
-                  <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('nro_remito')}>N° Remito{sortArrow('nro_remito')}</th>
+                  <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('nro_remito')}>NÂ° Remito{sortArrow('nro_remito')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('bulto')}>Bulto{sortArrow('bulto')}</th>
-                  <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('nro_cliente')}>N° Cl{sortArrow('nro_cliente')}</th>
+                  <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('nro_cliente')}>NÂ° Cl{sortArrow('nro_cliente')}</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('razon_social')}>Razon Social{sortArrow('razon_social')}</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('pedido')}>Pedido{sortArrow('pedido')}</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('sucursal')}>Sucursal{sortArrow('sucursal')}</th>
@@ -408,11 +408,11 @@ export default function Guias() {
           </div>
           {totalPaginas > 1 && (
             <div className="flex items-center justify-between border-t border-line px-3 py-1.5 text-[11px] text-sub">
-              <span>{(paginaSafe - 1) * POR_PAGINA + 1}–{Math.min(paginaSafe * POR_PAGINA, lista.length)} de {lista.length}</span>
+              <span>{(paginaSafe - 1) * POR_PAGINA + 1}â€“{Math.min(paginaSafe * POR_PAGINA, lista.length)} de {lista.length}</span>
               <div className="flex gap-1">
-                <button disabled={paginaSafe <= 1} onClick={() => setPagina((p) => p - 1)} className="rounded border border-line px-2 py-0.5 text-[10px] hover:bg-line disabled:opacity-40">←</button>
+                <button disabled={paginaSafe <= 1} onClick={() => setPagina((p) => p - 1)} className="rounded border border-line px-2 py-0.5 text-[10px] hover:bg-line disabled:opacity-40">â†</button>
                 <span className="px-2 py-0.5 text-[10px] font-medium text-ink">{paginaSafe}/{totalPaginas}</span>
-                <button disabled={paginaSafe >= totalPaginas} onClick={() => setPagina((p) => p + 1)} className="rounded border border-line px-2 py-0.5 text-[10px] hover:bg-line disabled:opacity-40">→</button>
+                <button disabled={paginaSafe >= totalPaginas} onClick={() => setPagina((p) => p + 1)} className="rounded border border-line px-2 py-0.5 text-[10px] hover:bg-line disabled:opacity-40">â†’</button>
               </div>
             </div>
           )}
@@ -431,11 +431,11 @@ export default function Guias() {
               <section className="rounded-xl border border-line bg-surface2 p-4">
                 <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-sub/70">Detalles</h3>
                 <dl className="space-y-2 text-[13px]">
-                  <CRow label="N° Pedido" value={card.nro_pedido} />
+                  <CRow label="NÂ° Pedido" value={card.nro_pedido} />
                   <CRow label="Fecha" value={card.fecha} />
-                  <CRow label="N° Remito" value={card.nro_remito} />
+                  <CRow label="NÂ° Remito" value={card.nro_remito} />
                   <CRow label="Bulto" value={card.bulto != null ? String(card.bulto) : null} />
-                  <CRow label="N° Cliente" value={card.nro_cliente} />
+                  <CRow label="NÂ° Cliente" value={card.nro_cliente} />
                   <CRow label="Razon Social" value={card.razon_social} />
                   <CRow label="Pedido" value={card.pedido} />
                   <CRow label="Sucursal" value={card.sucursal} />
@@ -505,6 +505,10 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
   const [nroPedido, setNroPedido] = useState(guia?.nro_pedido || '')
   const [nroCliente, setNroCliente] = useState(guia?.nro_cliente || '')
   const [clienteTransporte, setClienteTransporte] = useState<string | null>(null)
+  const transporteDelCliente = useMemo(() => {
+    const c = clientes.find((cl) => cl.n_cliente === nroCliente.trim())
+    return c?.transporte || clienteTransporte || null
+  }, [clientes, nroCliente, clienteTransporte])
   const [razonSocial, setRazonSocial] = useState(guia?.razon_social || '')
   const [pedido, setPedido] = useState(guia?.pedido || '')
   const [sucursal, setSucursal] = useState(guia?.sucursal || '')
@@ -573,43 +577,43 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
       if (!result.error && supabase) {
         const esFact = estado === 'FINALIZADO_FACT'
         const obsFact = [
-          `Generado desde Guia N° ${payload.nro_pedido}`,
+          `Generado desde Guia NÂ° ${payload.nro_pedido}`,
           observaciones.trim() || null,
         ].filter(Boolean).join(' | ')
         const { data: existente } = await supabase.from('facturacion_fabrica').select('id').eq('guia_id', guia.id).limit(1)
         if (esFact && (!existente || existente.length === 0)) {
-          // No tenía facturación: crear
+          // No tenÃ­a facturaciÃ³n: crear
           await supabase.from('facturacion_fabrica').insert({
             guia_id: guia.id,
             n_cliente: nroCliente.trim() || null,
             razon_social: razonSocial.trim() || null,
             n_remito: nroRemito.trim() || null,
             bulto: bulto ? Number(bulto) || null : null,
-            transporte: clienteTransporte || null,
+            transporte: transporteDelCliente,
             observaciones: obsFact || null,
           })
         } else if (existente && existente.length > 0) {
-          // Ya tenía facturación: actualizar
+          // Ya tenÃ­a facturaciÃ³n: actualizar
           await supabase.from('facturacion_fabrica')
             .update({
               n_cliente: nroCliente.trim() || null,
               razon_social: razonSocial.trim() || null,
               n_remito: nroRemito.trim() || null,
               bulto: bulto ? Number(bulto) || null : null,
-              transporte: clienteTransporte || null,
+              transporte: transporteDelCliente,
               observaciones: (guia?.observaciones && observaciones.trim() !== guia.observaciones)
                 ? obsFact
                 : undefined,
             })
             .eq('guia_id', guia.id)
         }
-        void registrarHistorial('guia', guia.id, 'modificacion', usuario, `Guia N° ${payload.nro_pedido}`)
+        void registrarHistorial('guia', guia.id, 'modificacion', usuario, `Guia NÂ° ${payload.nro_pedido}`)
       }
     } else {
       result = await supabase.from('guias').insert(payload).select().single()
       if (!result.error && result.data && supabase) {
         const guiaId = (result.data as { id: string }).id
-        void registrarHistorial('guia', guiaId, 'creacion', usuario, `Guia N° ${payload.nro_pedido} - ${razonSocial || ''}`)
+        void registrarHistorial('guia', guiaId, 'creacion', usuario, `Guia NÂ° ${payload.nro_pedido} - ${razonSocial || ''}`)
         const esNotaCredito = (pedido || '').toUpperCase() === 'NOTA DE CREDITO'
         if (esNotaCredito) {
           await supabase.from('notas_credito').insert({
@@ -625,7 +629,7 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
           })
         } else if (estado === 'FINALIZADO_FACT') {
           const obsFact = [
-            `Generado desde Guia N° ${payload.nro_pedido}`,
+            `Generado desde Guia NÂ° ${payload.nro_pedido}`,
             observaciones.trim() || null,
           ].filter(Boolean).join(' | ')
           await supabase.from('facturacion_fabrica').insert({
@@ -634,7 +638,7 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
             razon_social: razonSocial.trim() || null,
             n_remito: nroRemito.trim() || null,
             bulto: bulto ? Number(bulto) || null : null,
-            transporte: clienteTransporte || null,
+            transporte: transporteDelCliente,
             observaciones: obsFact || null,
           })
         }
@@ -673,12 +677,12 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
             {/* Nro Cliente + Razon Social */}
             <label className="block relative">
               <span className="mb-0.5 block text-[11px] font-medium text-sub">Nro Cliente *</span>
-              <input value={openCliDrop ? busqCliente : (nroCliente || '')} onChange={(e) => { setBusqCliente(e.target.value); setOpenCliDrop(true) }} onFocus={() => setOpenCliDrop(true)} placeholder="Buscar por N° o nombre..." className={inputCls} />
+              <input value={openCliDrop ? busqCliente : (nroCliente || '')} onChange={(e) => { setBusqCliente(e.target.value); setOpenCliDrop(true) }} onFocus={() => setOpenCliDrop(true)} placeholder="Buscar por NÂ° o nombre..." className={inputCls} />
               {openCliDrop && (
                 <ul className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-line bg-surface shadow-lg">
                   <li><button type="button" onClick={() => setOpenCliDrop(false)} className="w-full px-3 py-1.5 text-left text-[11px] text-sub hover:bg-line">Cerrar</button></li>
                   {filteredClientes.slice(0, 50).map((c) => (
-                    <li key={c.id}><button type="button" onClick={() => seleccionarCliente(c)} className="w-full px-3 py-1.5 text-left text-[12px] text-ink hover:bg-line truncate">{c.n_cliente} — {c.razon_social}</button></li>
+                    <li key={c.id}><button type="button" onClick={() => seleccionarCliente(c)} className="w-full px-3 py-1.5 text-left text-[12px] text-ink hover:bg-line truncate">{c.n_cliente} â€” {c.razon_social}</button></li>
                   ))}
                   {filteredClientes.length === 0 && <li className="px-3 py-2 text-[11px] text-sub">Sin resultados</li>}
                 </ul>
@@ -729,7 +733,7 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
 
             {/* Nro Remito */}
             <label className="block">
-              <span className="mb-0.5 block text-[11px] font-medium text-sub">N° Remito</span>
+              <span className="mb-0.5 block text-[11px] font-medium text-sub">NÂ° Remito</span>
               <input value={nroRemito} onChange={(e) => setNroRemito(e.target.value)} placeholder="Remito (opcional)..." className={inputCls} />
             </label>
 
@@ -857,13 +861,13 @@ function ImportGuias({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
     const valid: FileRow[] = []
     rows.forEach((row) => {
       const mapeo = Object.entries(map)
-      /* Fila completamente vacia → se ignora */
+      /* Fila completamente vacia â†’ se ignora */
       if (mapeo.every(([, src]) => !String(row[src] ?? '').trim())) return
 
       const nr: FileRow = {}
       mapeo.forEach(([dest, src]) => { if (dest && src) nr[dest] = String(row[src] ?? '').trim() })
 
-      /* Estado → estado + en_proceso/finalizado */
+      /* Estado â†’ estado + en_proceso/finalizado */
       const stRaw = cleanVal(String(nr.estado ?? '')).toUpperCase()
       let st: EstadoGuia
       if (stRaw === 'NUEVO') st = 'NUEVO'
