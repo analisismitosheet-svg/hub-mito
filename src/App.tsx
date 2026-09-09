@@ -32,6 +32,7 @@ import FacturacionFabrica from '@/pages/FacturacionFabrica'
 import Guias from '@/pages/Guias'
 import NotasCredito from '@/pages/NotasCredito'
 import EstadisticasRendimiento from '@/pages/EstadisticasRendimiento'
+import Novedades from '@/pages/Novedades'
 import DatosSql from '@/pages/DatosSql'
 import SqlConexion from '@/pages/SqlConexion'
 import ComingSoon from '@/pages/ComingSoon'
@@ -151,6 +152,14 @@ export default function App() {
             element={
               <PermissionRoute permiso="mayorista.estadisticas.view">
                 <EstadisticasRendimiento />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/rrhh/novedades"
+            element={
+              <PermissionRoute permiso="rrhh.novedades.view">
+                <Novedades />
               </PermissionRoute>
             }
           />

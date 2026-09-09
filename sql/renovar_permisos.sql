@@ -114,6 +114,14 @@ INSERT INTO public.permisos (clave, modulo, accion, label, orden) VALUES
   ('mayorista.estadisticas.view',    'mayorista', 'estadisticas.view',    'Ver estadísticas / rendimientos', 734)
 ON CONFLICT (clave) DO NOTHING;
 
+-- ---- RR.HH.: Novedades ----
+INSERT INTO public.permisos (clave, modulo, accion, label, orden) VALUES
+  ('rrhh.novedades.view',   'rrhh', 'novedades.view',   'Ver novedades',        850),
+  ('rrhh.novedades.create', 'rrhh', 'novedades.create', 'Crear novedades',      851),
+  ('rrhh.novedades.edit',   'rrhh', 'novedades.edit',   'Editar novedades',     852),
+  ('rrhh.novedades.delete', 'rrhh', 'novedades.delete', 'Eliminar novedades',   853)
+ON CONFLICT (clave) DO NOTHING;
+
 -- ---- Depósito ----
 INSERT INTO public.permisos (clave, modulo, accion, label, orden) VALUES
   ('deposito.view',   'deposito', 'view',   'Ver depósito',        810),

@@ -254,6 +254,17 @@ export const APPS: AppDef[] = [
     permiso: 'mayorista.estadisticas.view',
   },
   {
+    id: 'rrhh-novedades',
+    areaId: 'rrhh',
+    title: 'Novedades',
+    description: 'Novedades de empleados: ausencias, tardanzas, vacaciones, etc.',
+    icon: Megaphone,
+    kind: 'internal',
+    target: '/rrhh/novedades',
+    color: '#7c3aed',
+    permiso: 'rrhh.novedades.view',
+  },
+  {
     id: 'polo52-facturacion',
     areaId: 'polo52',
     title: 'Facturacion Fabrica',
