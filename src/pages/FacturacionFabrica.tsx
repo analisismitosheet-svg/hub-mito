@@ -881,8 +881,7 @@ function FactModal({ modoPolo52, registro, clientes, empleados, transporteOpcion
       onSaved()
       return
     }
-    if (!nCliente) { setError('Debe seleccionar un N� Cliente.'); return }
-    if (!autorizacion) { setError('Debe seleccionar Autorizacion (SI/NO).'); return }
+    if (!nCliente) { setError('Debe seleccionar un N° Cliente.'); return }
     if (!quienFacturo.trim()) { setError('Debe seleccionar quien facturo.'); return }
     setBusy(true); setError(null)
     const payload: Record<string, unknown> = {
@@ -930,7 +929,7 @@ function FactModal({ modoPolo52, registro, clientes, empleados, transporteOpcion
         <form onSubmit={(e) => void handleSubmit(e)} className="flex-1 overflow-y-auto p-5">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
             {/* Row 1 */}
-            <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Autorizacion *</span>
+            <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Autorizacion</span>
               <select value={autorizacion} onChange={(e) => setAutorizacion(e.target.value)} disabled={readonly} className={selectCls}><option value="">--</option><option value="SI">SI</option><option value="NO">NO</option></select>
             </label>
             {/* N° Cliente — searchable dropdown */}
