@@ -3,7 +3,7 @@ import { FolderOpen, ArrowRight } from 'lucide-react'
 import Layout from '@/components/Layout'
 import AppCard from '@/components/AppCard'
 import BackButton from '@/components/BackButton'
-import { appsDeArea, getArea, type AppDef } from '@/config/areas'
+import { appsDeArea, getArea } from '@/config/areas'
 import { useAuth } from '@/context/AuthContext'
 
 export default function Area() {
@@ -16,9 +16,6 @@ export default function Area() {
     .filter((a) => !a.permiso || can(a.permiso))
     .sort((a, b) => a.title.localeCompare(b.title, 'es', { sensitivity: 'base' }))
   const verArchivos = can('documentos.view')
-
-  // Agrupar apps con "grupo" definido; las que no tienen grupo van al final sin encabezado
-  const grupos = useMemoAgrupar(apps)
 
   if (!area) {
     return (
@@ -35,7 +32,6 @@ export default function Area() {
   return (
     <Layout>
       <BackButton />
-
 
       <div className="mb-6 flex items-center gap-3">
         <div
@@ -56,71 +52,61 @@ export default function Area() {
           Todavía no hay aplicaciones en esta área.
         </div>
       ) : (
-        <div className="space-y-8">
-          {grupos.map((g) => (
-            <section key={g.grupo ?? '__sin__'}>
-              {g.grupo && (
-                <h2 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-sub/70">
-                  <span className="h-px w-4 bg-line2" aria-hidden /> {g.grupo}
-                </h2>
-              )}
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {g.apps.map((app, i) => (
-                  <AppCard key={app.id} app={app} index={i} areaId={areaId} />
-                ))}
-              </div>
-            </section>
-          ))}
-          {verArchivos && (
-            <section>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <button
-                  onClick={() => navigate(`/archivos/${areaId}`)}
-                  className="hub-card animate-enter group relative flex flex-col items-start gap-3 overflow-hidden rounded-2xl border border-line bg-surface p-5 text-left shadow-soft outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {intercalarArchivos(apps, verArchivos).map((item, i) => (
+            item.tipo === 'app' ? (
+              <AppCard key={item.app!.id} app={item.app!} index={i} areaId={areaId} />
+            ) : (
+              <button
+                key="archivos"
+                onClick={() => navigate(`/archivos/${areaId}`)}
+                className="hub-card animate-enter group relative flex flex-col items-start gap-3 overflow-hidden rounded-2xl border border-line bg-surface p-5 text-left shadow-soft outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
+              >
+                <span
+                  aria-hidden
+                  className="absolute inset-x-0 top-0 h-[3px] origin-left scale-x-0 transition-transform duration-300 ease-out-strong group-hover:scale-x-100"
+                  style={{ backgroundColor: area.color }}
+                />
+                <div
+                  className="rounded-xl border p-3 transition-transform duration-300 ease-out-strong group-hover:scale-110"
+                  style={{ color: area.color, backgroundColor: `${area.color}24`, borderColor: `${area.color}40` }}
                 >
-                  <span
-                    aria-hidden
-                    className="absolute inset-x-0 top-0 h-[3px] origin-left scale-x-0 transition-transform duration-300 ease-out-strong group-hover:scale-x-100"
-                    style={{ backgroundColor: area.color }}
-                  />
-                  <div
-                    className="rounded-xl border p-3 transition-transform duration-300 ease-out-strong group-hover:scale-110"
-                    style={{ color: area.color, backgroundColor: `${area.color}24`, borderColor: `${area.color}40` }}
-                  >
-                    <FolderOpen size={24} aria-hidden />
-                  </div>
-                  <div>
-                    <h3 className="font-display font-semibold text-ink">Archivos</h3>
-                    <p className="mt-1 text-sm text-sub">Fotos, PDF, Excel y documentos del área.</p>
-                  </div>
-                  <span className="mt-auto flex items-center gap-1.5 text-sm font-medium" style={{ color: area.color }}>
-                    Abrir
-                    <ArrowRight size={14} aria-hidden className="transition-transform duration-300 ease-out-strong group-hover:translate-x-1" />
-                  </span>
-                </button>
-              </div>
-            </section>
-          )}
+                  <FolderOpen size={24} aria-hidden />
+                </div>
+                <div>
+                  <h3 className="font-display font-semibold text-ink">Archivos</h3>
+                  <p className="mt-1 text-sm text-sub">Fotos, PDF, Excel y documentos del área.</p>
+                </div>
+                <span className="mt-auto flex items-center gap-1.5 text-sm font-medium" style={{ color: area.color }}>
+                  Abrir
+                  <ArrowRight size={14} aria-hidden className="transition-transform duration-300 ease-out-strong group-hover:translate-x-1" />
+                </span>
+              </button>
+            )
+          ))}
         </div>
       )}
     </Layout>
   )
 }
 
-function useMemoAgrupar(apps: AppDef[]): { grupo: string | null; apps: AppDef[] }[] {
-  const conGrupo = new Map<string, AppDef[]>()
-  const sinGrupo: AppDef[] = []
-  for (const a of apps) {
-    if (a.grupo) {
-      const arr = conGrupo.get(a.grupo) ?? []
-      arr.push(a)
-      conGrupo.set(a.grupo, arr)
-    } else {
-      sinGrupo.push(a)
+/** Mezcla la tarjeta "Archivos" en la posición alfabética correcta entre las apps. */
+function intercalarArchivos(
+  apps: ReturnType<typeof appsDeArea>,
+  verArchivos: boolean,
+): ({ tipo: 'app'; app: ReturnType<typeof appsDeArea>[number] } | { tipo: 'archivos' })[] {
+  const out: ({ tipo: 'app'; app: ReturnType<typeof appsDeArea>[number] } | { tipo: 'archivos' })[] = []
+  const sorted = [...apps].sort((a, b) => a.title.localeCompare(b.title, 'es', { sensitivity: 'base' }))
+  if (!verArchivos) return sorted.map((app) => ({ tipo: 'app', app }))
+
+  let insertado = false
+  for (const app of sorted) {
+    if (!insertado && 'Archivos'.localeCompare(app.title, 'es', { sensitivity: 'base' }) < 0) {
+      out.push({ tipo: 'archivos' })
+      insertado = true
     }
+    out.push({ tipo: 'app', app })
   }
-  const grupos = Array.from(conGrupo.entries()).sort((a, b) => a[0].localeCompare(b[0], 'es'))
-  const out: { grupo: string | null; apps: AppDef[] }[] = grupos.map(([g, arr]) => ({ grupo: g, apps: arr }))
-  if (sinGrupo.length) out.push({ grupo: null, apps: sinGrupo })
+  if (!insertado) out.push({ tipo: 'archivos' })
   return out
 }
