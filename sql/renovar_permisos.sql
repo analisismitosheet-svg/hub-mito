@@ -119,7 +119,11 @@ INSERT INTO public.permisos (clave, modulo, accion, label, orden) VALUES
   ('rrhh.novedades.view',   'rrhh', 'novedades.view',   'Ver novedades',        850),
   ('rrhh.novedades.create', 'rrhh', 'novedades.create', 'Crear novedades',      851),
   ('rrhh.novedades.edit',   'rrhh', 'novedades.edit',   'Editar novedades',     852),
-  ('rrhh.novedades.delete', 'rrhh', 'novedades.delete', 'Eliminar novedades',   853)
+  ('rrhh.novedades.delete', 'rrhh', 'novedades.delete', 'Eliminar novedades',   853),
+  ('rrhh.empleados.view',   'rrhh', 'empleados.view',   'Ver empleados',        854),
+  ('rrhh.empleados.create', 'rrhh', 'empleados.create', 'Crear empleados',      855),
+  ('rrhh.empleados.edit',   'rrhh', 'empleados.edit',   'Editar empleados',     856),
+  ('rrhh.empleados.delete', 'rrhh', 'empleados.delete', 'Eliminar empleados',   857)
 ON CONFLICT (clave) DO NOTHING;
 
 -- ---- Depósito ----

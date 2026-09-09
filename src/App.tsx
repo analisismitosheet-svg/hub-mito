@@ -268,11 +268,11 @@ export default function App() {
             }
           />
           <Route
-            path="/empleados"
+            path="/rrhh/empleados"
             element={
-              <AdminRoute>
+              <PermissionRoute permiso="rrhh.empleados.view">
                 <EmpleadosPage />
-              </AdminRoute>
+              </PermissionRoute>
             }
           />
           <Route

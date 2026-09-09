@@ -265,6 +265,17 @@ export const APPS: AppDef[] = [
     permiso: 'rrhh.novedades.view',
   },
   {
+    id: 'rrhh-empleados',
+    areaId: 'rrhh',
+    title: 'Empleados',
+    description: 'Alta, edición y baja de empleados.',
+    icon: Users,
+    kind: 'internal',
+    target: '/rrhh/empleados',
+    color: '#7c3aed',
+    permiso: 'rrhh.empleados.view',
+  },
+  {
     id: 'polo52-facturacion',
     areaId: 'polo52',
     title: 'Facturacion Fabrica',
