@@ -38,6 +38,30 @@ function fmtFecha(iso: string | null): string {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso
 }
 
+/** Convierte un valor de celda Excel (numero de serie o dd/mm/yyyy) a fecha ISO (YYYY-MM-DD). */
+function fechaExcelAISO(v: unknown): string | null {
+  if (v == null || v === '') return null
+  // Si es numero de serie de Excel (dias desde 1899-12-30)
+  if (typeof v === 'number' && v > 0) {
+    const ms = Math.round((v - 25569) * 86400 * 1000)
+    const d = new Date(ms)
+    if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10)
+    return null
+  }
+  const s = String(v).trim()
+  if (!s) return null
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/)
+  if (m) {
+    let y = +m[3]
+    if (y < 100) y += 2000
+    const mm = String(+m[2]).padStart(2, '0')
+    const dd = String(+m[1]).padStart(2, '0')
+    return `${y}-${mm}-${dd}`
+  }
+  return null
+}
+
 export default function CargaNovedades() {
   const { can } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -186,15 +210,18 @@ export default function CargaNovedades() {
       for (const row of json) {
         const nombre = val(row, 'nombre_completo')
         if (!nombre) continue
+        const fechaRaw = row[map.fecha]
+        const desdeRaw = row[map.desde]
+        const hastaRaw = row[map.hasta]
         batch.push({
           anio: val(row, 'anio') || null,
           mes_liquidacion: val(row, 'mes_liquidacion') || null,
           numero: val(row, 'numero') || null,
           nombre_completo: nombre,
           tipo: val(row, 'tipo') || null,
-          fecha: val(row, 'fecha') || null,
-          desde: val(row, 'desde') || null,
-          hasta: val(row, 'hasta') || null,
+          fecha: map.fecha ? fechaExcelAISO(fechaRaw) : null,
+          desde: map.desde ? fechaExcelAISO(desdeRaw) : null,
+          hasta: map.hasta ? fechaExcelAISO(hastaRaw) : null,
           local: val(row, 'local') || null,
           motivo: val(row, 'motivo') || null,
           novedad: val(row, 'novedad') || null,
