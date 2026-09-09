@@ -67,6 +67,8 @@ export interface AppDef {
   permiso?: string
   /** áreas adicionales donde también aparece la app (además de areaId) */
   areaIds?: string[]
+  /** grupo/encabezado opcional dentro del área (ej. 'Novedades') para agrupar apps visualmente */
+  grupo?: string
 }
 
 // accent: color de nivel 600 para contraste AA sobre superficies claras (Soft UI)
@@ -263,6 +265,7 @@ export const APPS: AppDef[] = [
     target: '/rrhh/novedades/carga',
     color: '#7c3aed',
     permiso: 'rrhh.novedades.create',
+    grupo: 'Novedades',
   },
   {
     id: 'rrhh-novedades-resumen',
@@ -274,6 +277,7 @@ export const APPS: AppDef[] = [
     target: '/rrhh/novedades/resumen',
     color: '#7c3aed',
     permiso: 'rrhh.novedades.view',
+    grupo: 'Novedades',
   },
   {
     id: 'rrhh-empleados',
