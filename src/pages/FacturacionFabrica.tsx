@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
-  Loader2, Search, SearchX, Plus, Pencil, Trash2, X, Upload, FileText, Lock, Printer, Check, Eye, Settings,
+  Loader2, Search, SearchX, Plus, Pencil, Trash2, X, Upload, FileText, Lock, Printer, Check, Eye, Settings, Filter,
 } from 'lucide-react'
 import { EtiquetasModal } from '@/components/EtiquetasBultos'
 import GestionTransportes from '@/components/GestionTransportes'
@@ -178,7 +178,8 @@ export default function FacturacionFabrica() {
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [q, setQ] = useState('')
-  const [filtroTransporte, setFiltroTransporte] = useState('todos')
+  const [filtroTransporte, setFiltroTransporte] = useState<Set<string>>(new Set())
+  const [abiertoTransp, setAbiertoTransp] = useState(false)
   const [filtroPol, setFiltroPol] = useState(modoPolo52)
   const [filtroFechaDesde, setFiltroFechaDesde] = useState('')
   const [filtroFechaHasta, setFiltroFechaHasta] = useState('')
@@ -308,7 +309,7 @@ export default function FacturacionFabrica() {
   const lista = useMemo(() => {
     let r = todos
     if (filtroPol || modoPolo52) r = r.filter((f) => f.polo52)
-    if (filtroTransporte !== 'todos') r = r.filter((f) => f.transporte === filtroTransporte)
+    if (filtroTransporte.size > 0) r = r.filter((f) => filtroTransporte.has(f.transporte ?? ''))
     if (filtroFechaDesde) r = r.filter((f) => (excelDate(f.fecha_fact) || '') >= filtroFechaDesde)
     if (filtroFechaHasta) r = r.filter((f) => (excelDate(f.fecha_fact) || '') <= filtroFechaHasta)
     if (filtroSinEnvio) r = r.filter((f) => !f.fecha_envio)
@@ -570,10 +571,44 @@ export default function FacturacionFabrica() {
           <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sub/70" aria-hidden />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por razon social, remito, autorizacion..." className={inputCls + ' pl-8 text-xs'} />
         </div>
-        <select value={filtroTransporte} onChange={(e) => setFiltroTransporte(e.target.value)} className={selectCls + ' w-auto text-xs'}>
-          <option value="todos">Todos transportes</option>
-          {transporteFiltro.map((t) => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}
-        </select>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setAbiertoTransp((o) => !o)}
+            className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line"
+          >
+            <Filter size={13} aria-hidden />
+            Transportes {filtroTransporte.size > 0 ? `(${filtroTransporte.size})` : ''}
+          </button>
+          {abiertoTransp && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setAbiertoTransp(false)} />
+              <div className="absolute left-0 top-full z-40 mt-1 max-h-72 w-64 overflow-y-auto rounded-xl border border-line bg-surface p-2 shadow-lg">
+                <label className="flex cursor-pointer items-center gap-1.5 rounded-lg px-1.5 py-1 text-xs font-medium text-ink hover:bg-line/40">
+                  <input type="checkbox" checked={filtroTransporte.size === 0} onChange={() => setFiltroTransporte(new Set())} className="h-3.5 w-3.5 rounded border-line bg-surface2 accent-brand-600" />
+                  Todos
+                </label>
+                <div className="my-1 border-t border-line" />
+                {transporteFiltro.map((t) => (
+                  <label key={t.id} className="flex cursor-pointer items-center gap-1.5 rounded-lg px-1.5 py-1 text-xs text-ink hover:bg-line/40">
+                    <input
+                      type="checkbox"
+                      checked={filtroTransporte.has(t.nombre)}
+                      onChange={(e) => {
+                        const nuevo = new Set(filtroTransporte)
+                        if (e.target.checked) nuevo.add(t.nombre)
+                        else nuevo.delete(t.nombre)
+                        setFiltroTransporte(nuevo)
+                      }}
+                      className="h-3.5 w-3.5 rounded border-line bg-surface2 accent-brand-600"
+                    />
+                    <span className="truncate">{t.nombre}</span>
+                  </label>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
         <div className="flex items-center gap-1">
           <input type="date" value={filtroFechaDesde} onChange={(e) => setFiltroFechaDesde(e.target.value)} className={inputCls + ' w-auto text-xs'} title="Fecha desde" />
           <span className="text-[10px] text-sub/50">—</span>
@@ -617,7 +652,7 @@ export default function FacturacionFabrica() {
       ) : lista.length === 0 ? (
         <div className="rounded-2xl border border-line bg-surface p-6 text-center">
           <SearchX size={32} className="mx-auto mb-2 text-sub/40" aria-hidden />
-          <p className="text-sm text-sub">{term || filtroTransporte !== 'todos' ? 'No se encontraron registros.' : 'Todavia no hay registros de facturacion.'}</p>
+          <p className="text-sm text-sub">{term || filtroTransporte.size > 0 ? 'No se encontraron registros.' : 'Todavia no hay registros de facturacion.'}</p>
         </div>
       ) : (
         <div className="w-full overflow-hidden rounded-2xl border border-line">
