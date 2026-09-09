@@ -32,7 +32,8 @@ import FacturacionFabrica from '@/pages/FacturacionFabrica'
 import Guias from '@/pages/Guias'
 import NotasCredito from '@/pages/NotasCredito'
 import EstadisticasRendimiento from '@/pages/EstadisticasRendimiento'
-import Novedades from '@/pages/Novedades'
+import CargaNovedades from '@/pages/CargaNovedades'
+import ResumenNovedades from '@/pages/ResumenNovedades'
 import DatosSql from '@/pages/DatosSql'
 import SqlConexion from '@/pages/SqlConexion'
 import ComingSoon from '@/pages/ComingSoon'
@@ -156,10 +157,18 @@ export default function App() {
             }
           />
           <Route
-            path="/rrhh/novedades"
+            path="/rrhh/novedades/carga"
+            element={
+              <PermissionRoute permiso="rrhh.novedades.create">
+                <CargaNovedades />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/rrhh/novedades/resumen"
             element={
               <PermissionRoute permiso="rrhh.novedades.view">
-                <Novedades />
+                <ResumenNovedades />
               </PermissionRoute>
             }
           />
