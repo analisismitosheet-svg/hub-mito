@@ -7,15 +7,13 @@ import { useAuth } from '@/context/AuthContext'
 
 interface Empleado { id: string; legajo: string | null; nombre: string }
 interface ItemSep {
-  lote_id: string
-  local: string
-  hecho_por: string | null
-  hecho_at: string | null
-  estado: string
-  cantidad: number
+  empleado_id: string | null
+  fecha: string
+  items: number
+  unidades: number
+  lotes: number
+  segundos: number
 }
-
-interface Responsable { lote_id: string; local: string; empleado_id: string | null }
 
 interface FilaEmpleado {
   empleadoId: string
@@ -47,15 +45,6 @@ function fmtDuracion(seg: number): string {
   return `${s}s`
 }
 
-function fmtHora(iso: string | null): string {
-  if (!iso) return '—'
-  try {
-    return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(iso))
-  } catch {
-    return iso
-  }
-}
-
 function fmtFecha(iso: string): string {
   const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/)
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso
@@ -64,7 +53,6 @@ function fmtFecha(iso: string): string {
 export default function EstadisticasRendimiento() {
   const { can } = useAuth()
   const [empleados, setEmpleados] = useState<Empleado[]>([])
-  const [responsables, setResponsables] = useState<Responsable[]>([])
   const [items, setItems] = useState<ItemSep[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -77,43 +65,20 @@ export default function EstadisticasRendimiento() {
     const sb = supabase
     setCargando(true); setError(null)
     try {
-      const PAGE = 1000
-      async function traerTodo<T>(build: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>): Promise<T[]> {
-        const acc: T[] = []
-        for (let from = 0; ; from += PAGE) {
-          const { data, error } = await build(from, from + PAGE - 1)
-          if (error) { setError(error.message); break }
-          const d = (data as T[] | null) ?? []
-          acc.push(...d)
-          if (d.length < PAGE) break
-        }
-        return acc
-      }
-
-      // Filtro de fechas aplicado EN EL SERVER (no en memoria): así solo se
-      // bajan los items hechos del rango pedido y no todo el histórico.
-      // Sin rango, se acota a los últimos 90 días para no traer toda la tabla.
+      // Filtro de fechas aplicado EN EL SERVER sobre la vista agregada
+      // vw_estadisticas_rendimiento (agrupación hecha en Postgres, no en el navegador).
       const hace90dias = new Date(Date.now() - 90 * 24 * 3600 * 1000).toISOString().slice(0, 10)
       const desdeQ = desdeF || hace90dias
-      const hastaQ = hastaF ? hastaF + 'T23:59:59.999' : new Date().toISOString().slice(0, 10) + 'T23:59:59.999'
+      const hastaQ = hastaF || new Date().toISOString().slice(0, 10)
 
-      const [empData, respData, itemsData] = await Promise.all([
-        traerTodo<Empleado>((from, to) => sb.from('empleados').select('id,legajo,nombre').order('nombre').range(from, to)),
-        traerTodo<Responsable>((from, to) => sb.from('mayorista_responsables').select('lote_id,local,empleado_id').range(from, to)),
-        traerTodo<ItemSep>((from, to) =>
-          sb
-            .from('mayorista_items')
-            .select('lote_id,local,hecho_por,hecho_at,estado,cantidad')
-            .eq('estado', 'hecho')
-            .gte('hecho_at', desdeQ)
-            .lte('hecho_at', hastaQ)
-            .order('hecho_at', { ascending: true })
-            .range(from, to),
-        ),
+      const [empData, itemsData] = await Promise.all([
+        sb.from('empleados').select('id,legajo,nombre').order('nombre'),
+        sb.from('vw_estadisticas_rendimiento').select('empleado_id,fecha,items,unidades,lotes,segundos').gte('fecha', desdeQ).lte('fecha', hastaQ).order('fecha', { ascending: false }),
       ])
-      setEmpleados(empData)
-      setResponsables(respData)
-      setItems(itemsData)
+      setEmpleados((empData.data as Empleado[] | null) ?? [])
+      setItems((itemsData.data as ItemSep[] | null) ?? [])
+      if (empData.error) setError(empData.error.message)
+      if (itemsData.error) setError(itemsData.error.message)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error de red')
     }
@@ -123,84 +88,37 @@ export default function EstadisticasRendimiento() {
   useEffect(() => { void cargar(desde, hasta) }, [cargar, desde, hasta])
 
   const filas = useMemo<FilaEmpleado[]>(() => {
-    // Solo items hechos con timestamp
-    const hechos = items.filter((i) => i.estado === 'hecho' && i.hecho_at)
-    // Filtrar por rango de fechas (hecho_at)
-    let hechosFiltrados = hechos
-    if (desde) hechosFiltrados = hechosFiltrados.filter((i) => (i.hecho_at ?? '') >= desde)
-    if (hasta) hechosFiltrados = hechosFiltrados.filter((i) => (i.hecho_at ?? '') <= hasta + 'T23:59:59')
+    // Los items ya vienen agrupados por (empleado, día) desde la vista SQL.
+    const hechos = items.filter((i) => i.empleado_id && i.fecha)
 
-    // Empleado responsable de cada (lote, local): el que separa esa localidad
-    const respMap = new Map<string, string>()
-    for (const r of responsables) {
-      if (r.empleado_id) respMap.set(`${r.lote_id}|${r.local}`, r.empleado_id)
-    }
-
-    // Mapa por empleado: items y unidades
+    // Mapa por empleado: items, unidades, lotes, segundos y detalle por día
     const porEmpleado = new Map<string, FilaEmpleado>()
-    // Lapsos por (empleado, día): primer y último hecho_at (tiempo real de trabajo)
-    const lapsosDia = new Map<string, { min: number; max: number }>()
-    // Lotes únicos por empleado
-    const lotesPorEmp = new Map<string, Set<string>>()
-    // Detalle por día por empleado
     const diasPorEmp = new Map<string, Map<string, FilaDia>>()
 
-    // Clave de agrupación: legajo (N° de empleado); si no tiene legajo, usa el nombre/id
     const claveEmp = (id: string): { key: string; nombre: string; legajo: string | null } => {
       const emp = empleados.find((e) => e.id === id)
       if (emp) return { key: emp.legajo ?? emp.nombre, nombre: emp.nombre, legajo: emp.legajo }
       return { key: id, nombre: 'Sin asignar', legajo: null }
     }
 
-    for (const i of hechosFiltrados) {
-      // Empleado que separa el local de este item
-      const empId = respMap.get(`${i.lote_id}|${i.local}`) ?? i.hecho_por
-      if (!empId) continue
+    for (const i of hechos) {
+      const empId = i.empleado_id!
       const { key, nombre, legajo } = claveEmp(empId)
       let f = porEmpleado.get(key)
       if (!f) {
         f = { empleadoId: empId, nombre, legajo, items: 0, unidades: 0, lotes: 0, segundos: 0, dias: [] }
         porEmpleado.set(key, f)
       }
-      f.items += 1
-      f.unidades += i.cantidad || 1
+      f.items += i.items
+      f.unidades += i.unidades
+      f.lotes += i.lotes
+      f.segundos += i.segundos
 
-      const lotes = lotesPorEmp.get(key)
-      if (lotes) lotes.add(i.lote_id)
-      else lotesPorEmp.set(key, new Set([i.lote_id]))
-
-      const t = new Date(i.hecho_at!).getTime()
-      const dia = (i.hecho_at ?? '').slice(0, 10)
-      const keyDia = `${key}|${dia}`
-      const lapso = lapsosDia.get(keyDia)
-      if (lapso) { if (t < lapso.min) lapso.min = t; if (t > lapso.max) lapso.max = t }
-      else lapsosDia.set(keyDia, { min: t, max: t })
-
-      // Detalle por día
       let diasEmp = diasPorEmp.get(key)
       if (!diasEmp) { diasEmp = new Map(); diasPorEmp.set(key, diasEmp) }
-      const d = diasEmp.get(dia)
-      if (d) { d.items += 1; d.unidades += i.cantidad || 1 }
-      else diasEmp.set(dia, { fecha: dia, items: 1, unidades: i.cantidad || 1, segundos: 0 })
-    }
-
-    for (const [key, lapso] of lapsosDia) {
-      const empId = key.split('|')[0]
-      const f = porEmpleado.get(empId)
-      if (f) {
-        f.segundos += Math.max(0, (lapso.max - lapso.min) / 1000)
-      }
-      const dia = key.split('|')[1]
-      const diasEmp = diasPorEmp.get(empId)
-      if (diasEmp) {
-        const d = diasEmp.get(dia)
-        if (d) d.segundos = Math.max(0, (lapso.max - lapso.min) / 1000)
-      }
-    }
-
-    for (const [empId, set] of lotesPorEmp) {
-      const f = porEmpleado.get(empId)
-      if (f) f.lotes = set.size
+      const prev = diasEmp.get(i.fecha)
+      if (prev) { prev.items += i.items; prev.unidades += i.unidades; prev.segundos += i.segundos }
+      else diasEmp.set(i.fecha, { fecha: i.fecha, items: i.items, unidades: i.unidades, segundos: i.segundos })
     }
 
     for (const [key, diasEmp] of diasPorEmp) {
@@ -211,7 +129,7 @@ export default function EstadisticasRendimiento() {
     }
 
     return Array.from(porEmpleado.values()).sort((a, b) => b.unidades - a.unidades)
-  }, [items, empleados, responsables, desde, hasta])
+  }, [items, empleados])
 
   const totalItems = filas.reduce((s, f) => s + f.items, 0)
   const totalUnidades = filas.reduce((s, f) => s + f.unidades, 0)
@@ -338,7 +256,7 @@ export default function EstadisticasRendimiento() {
             </table>
           </div>
           <div className="border-t border-line px-3 py-2 text-[11px] text-sub">
-            <span>Última separación registrada: {fmtHora(items.filter((i) => i.hecho_at).map((i) => i.hecho_at).sort().pop() ?? null)}</span>
+            <span>Última separación registrada: {fmtFecha(items.map((i) => i.fecha).sort().pop() ?? '')}</span>
           </div>
         </div>
       )}
