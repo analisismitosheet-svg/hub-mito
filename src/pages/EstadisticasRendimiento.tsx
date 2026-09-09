@@ -72,7 +72,7 @@ export default function EstadisticasRendimiento() {
   const [hasta, setHasta] = useState('')
   const [abierto, setAbierto] = useState<string | null>(null)
 
-  const cargar = useCallback(async () => {
+  const cargar = useCallback(async (desdeF: string, hastaF: string) => {
     if (!supabase) { setCargando(false); return }
     const sb = supabase
     setCargando(true); setError(null)
@@ -89,10 +89,27 @@ export default function EstadisticasRendimiento() {
         }
         return acc
       }
+
+      // Filtro de fechas aplicado EN EL SERVER (no en memoria): así solo se
+      // bajan los items hechos del rango pedido y no todo el histórico.
+      // Sin rango, se acota a los últimos 90 días para no traer toda la tabla.
+      const hace90dias = new Date(Date.now() - 90 * 24 * 3600 * 1000).toISOString().slice(0, 10)
+      const desdeQ = desdeF || hace90dias
+      const hastaQ = hastaF ? hastaF + 'T23:59:59.999' : new Date().toISOString().slice(0, 10) + 'T23:59:59.999'
+
       const [empData, respData, itemsData] = await Promise.all([
         traerTodo<Empleado>((from, to) => sb.from('empleados').select('id,legajo,nombre').order('nombre').range(from, to)),
         traerTodo<Responsable>((from, to) => sb.from('mayorista_responsables').select('lote_id,local,empleado_id').range(from, to)),
-        traerTodo<ItemSep>((from, to) => sb.from('mayorista_items').select('lote_id,local,hecho_por,hecho_at,estado,cantidad').eq('estado', 'hecho').range(from, to)),
+        traerTodo<ItemSep>((from, to) =>
+          sb
+            .from('mayorista_items')
+            .select('lote_id,local,hecho_por,hecho_at,estado,cantidad')
+            .eq('estado', 'hecho')
+            .gte('hecho_at', desdeQ)
+            .lte('hecho_at', hastaQ)
+            .order('hecho_at', { ascending: true })
+            .range(from, to),
+        ),
       ])
       setEmpleados(empData)
       setResponsables(respData)
@@ -103,7 +120,7 @@ export default function EstadisticasRendimiento() {
     setCargando(false)
   }, [])
 
-  useEffect(() => { void cargar() }, [cargar])
+  useEffect(() => { void cargar(desde, hasta) }, [cargar, desde, hasta])
 
   const filas = useMemo<FilaEmpleado[]>(() => {
     // Solo items hechos con timestamp
