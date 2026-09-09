@@ -154,7 +154,7 @@ export const APPS: AppDef[] = [
   {
     id: 'control-locales',
     areaId: 'locales',
-    areaIds: ['locales', 'deposito'],
+    areaIds: ['locales', 'deposito', 'rrhh'],
     title: 'Control de Locales',
     description: 'Auditorías, inspectores, sectores y reportes.',
     icon: Store,
