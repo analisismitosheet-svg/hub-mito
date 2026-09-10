@@ -62,6 +62,35 @@ function fechaExcelAISO(v: unknown): string | null {
   return null
 }
 
+/** Color de fondo por motivo (formato del archivo Novedades rrhh). */
+const COLOR_MOTIVO: Record<string, string> = {
+  'INGRESO': '#00BFFF',
+  'AUSENTE': '#FF4500',
+  'TARDANZA': '#FFD700',
+  'APERCIBIM': '#4B0082',
+  'APERCIBIMIENTO': '#4B0082',
+  'EMBARGO': '#FF00FF',
+  'CARPETA MÉDICA': '#FFA07A',
+  'CAMBIO COMISIÓN': '#008000',
+  'RESTAR': '#6495ED',
+  'SUSPENSION': '#FF0000',
+  'CAMBIO LOCAL': '#32CD32',
+  'CAMBIO': '#DDA0DD',
+  'VACACIONES': '#7FFFD4',
+  'BAJA': '#00008B',
+  'LICENCIA': '#FFDAB9',
+  'OTROS': '#6A5ACD',
+  'RECUPERAR': '#FF8C00',
+  'SIN NOVEDADES': '#FFFFFF',
+}
+
+/** Devuelve color de fondo (con alpha) y color de texto legible según el motivo. */
+function colorFila(motivo: string | null): { bg: string; fg: string } | null {
+  const c = COLOR_MOTIVO[(motivo ?? '').trim().toUpperCase()]
+  if (!c) return null
+  return { bg: c + '22', fg: c }
+}
+
 export default function CargaNovedades() {
   const { can } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -324,29 +353,31 @@ export default function CargaNovedades() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-line/50 bg-surface">
-                {todos.map((n) => (
-                  <tr key={n.id} className="transition hover:bg-line/20">
-                    <td className="px-2 py-1.5 text-sub">{n.anio || '-'}</td>
-                    <td className="px-2 py-1.5 text-sub">{n.mes_liquidacion || '-'}</td>
-                    <td className="px-2 py-1.5 text-sub">{n.numero || '-'}</td>
-                    <td className="px-2 py-1.5 font-medium text-ink">{n.nombre_completo || '-'}</td>
-                    <td className="px-2 py-1.5 text-sub">{n.tipo || '-'}</td>
-                    <td className="px-2 py-1.5 text-center text-sub">{fmtFecha(n.fecha)}</td>
-                    <td className="px-2 py-1.5 text-center text-sub">{fmtFecha(n.desde)}</td>
-                    <td className="px-2 py-1.5 text-center text-sub">{fmtFecha(n.hasta)}</td>
-                    <td className="px-2 py-1.5 text-sub">{n.local || '-'}</td>
-                    <td className="px-2 py-1.5"><span className="inline-block whitespace-nowrap rounded-full border border-violet-500/30 bg-violet-500/15 px-1.5 py-px text-[10px] font-medium text-violet-400">{n.motivo || '-'}</span></td>
-                    <td className="px-2 py-1.5"><span className="block max-w-[200px] truncate text-sub" title={n.novedad || ''}>{n.novedad || '-'}</span></td>
-                    <td className="px-2 py-1.5 text-center text-sub">{n.minutos || '-'}</td>
-                    <td className="px-2 py-1.5 text-sub">{n.control || '-'}</td>
-                    <td className="px-2 py-1.5 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        {puedeEditar && <button onClick={() => editar(n)} className="rounded border border-line p-1 text-sub transition hover:text-ink" title="Editar"><Pencil size={12} aria-hidden /></button>}
-                        {puedeBorrar && <button onClick={() => setConfirm({ message: `¿Eliminar la novedad de "${n.nombre_completo || '-'}"?`, onConfirm: () => void eliminar(n) })} className="rounded border border-line p-1 text-sub transition hover:text-red-400" title="Eliminar"><Trash2 size={12} aria-hidden /></button>}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {todos.map((n) => {
+                  const col = colorFila(n.motivo)
+                  return (
+                    <tr key={n.id} style={col ? { backgroundColor: col.bg, color: col.fg } : undefined} className={'transition hover:brightness-110' + (col ? '' : ' hover:bg-line/20')}>
+                      <td className="px-2 py-1.5 text-sub">{n.anio || '-'}</td>
+                      <td className="px-2 py-1.5 text-sub">{n.mes_liquidacion || '-'}</td>
+                      <td className="px-2 py-1.5 text-sub">{n.numero || '-'}</td>
+                      <td className="px-2 py-1.5 font-medium">{n.nombre_completo || '-'}</td>
+                      <td className="px-2 py-1.5 text-sub">{n.tipo || '-'}</td>
+                      <td className="px-2 py-1.5 text-center">{fmtFecha(n.fecha)}</td>
+                      <td className="px-2 py-1.5 text-center">{fmtFecha(n.desde)}</td>
+                      <td className="px-2 py-1.5 text-center">{fmtFecha(n.hasta)}</td>
+                      <td className="px-2 py-1.5">{n.local || '-'}</td>
+                    <td className="px-2 py-1.5"><span className="inline-block whitespace-nowrap rounded-full border px-1.5 py-px text-[10px] font-medium" style={col ? { borderColor: col.fg + '66', backgroundColor: col.fg + '22', color: col.fg } : { borderColor: 'rgba(167,139,250,0.3)', backgroundColor: 'rgba(167,139,250,0.15)', color: '#a78bfa' }}>{n.motivo || '-'}</span></td>
+                      <td className="px-2 py-1.5"><span className="block max-w-[200px] truncate" title={n.novedad || ''}>{n.novedad || '-'}</span></td>
+                      <td className="px-2 py-1.5 text-center">{n.minutos || '-'}</td>
+                      <td className="px-2 py-1.5">{n.control || '-'}</td>
+                      <td className="px-2 py-1.5 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          {puedeEditar && <button onClick={() => editar(n)} className="rounded border border-line p-1 transition hover:text-ink" title="Editar"><Pencil size={12} aria-hidden /></button>}
+                          {puedeBorrar && <button onClick={() => setConfirm({ message: `¿Eliminar la novedad de "${n.nombre_completo || '-'}"?`, onConfirm: () => void eliminar(n) })} className="rounded border border-line p-1 transition hover:text-red-400" title="Eliminar"><Trash2 size={12} aria-hidden /></button>}
+                        </div>
+                      </td>
+                    </tr>
+                  )})}
               </tbody>
             </table>
           </div>
