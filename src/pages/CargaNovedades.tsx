@@ -307,26 +307,38 @@ export default function CargaNovedades() {
             <table className="w-full table-auto border-collapse text-sm leading-tight">
               <thead>
                 <tr className="bg-zinc-800 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-300">
+                  <th className="px-2 py-2 whitespace-nowrap">Año</th>
+                  <th className="px-2 py-2 whitespace-nowrap">Mes</th>
                   <th className="px-2 py-2 whitespace-nowrap">N°</th>
                   <th className="px-2 py-2 whitespace-nowrap">Nombre</th>
                   <th className="px-2 py-2 whitespace-nowrap">Tipo</th>
                   <th className="px-2 py-2 text-center whitespace-nowrap">Fecha</th>
+                  <th className="px-2 py-2 text-center whitespace-nowrap">Desde</th>
+                  <th className="px-2 py-2 text-center whitespace-nowrap">Hasta</th>
                   <th className="px-2 py-2 whitespace-nowrap">Local</th>
                   <th className="px-2 py-2 whitespace-nowrap">Motivo</th>
                   <th className="px-2 py-2 whitespace-nowrap">Novedad</th>
+                  <th className="px-2 py-2 text-center whitespace-nowrap">Min</th>
+                  <th className="px-2 py-2 whitespace-nowrap">Control</th>
                   <th className="px-2 py-2 text-right whitespace-nowrap">Acc</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line/50 bg-surface">
                 {todos.map((n) => (
                   <tr key={n.id} className="transition hover:bg-line/20">
+                    <td className="px-2 py-1.5 text-sub">{n.anio || '-'}</td>
+                    <td className="px-2 py-1.5 text-sub">{n.mes_liquidacion || '-'}</td>
                     <td className="px-2 py-1.5 text-sub">{n.numero || '-'}</td>
                     <td className="px-2 py-1.5 font-medium text-ink">{n.nombre_completo || '-'}</td>
                     <td className="px-2 py-1.5 text-sub">{n.tipo || '-'}</td>
                     <td className="px-2 py-1.5 text-center text-sub">{fmtFecha(n.fecha)}</td>
+                    <td className="px-2 py-1.5 text-center text-sub">{fmtFecha(n.desde)}</td>
+                    <td className="px-2 py-1.5 text-center text-sub">{fmtFecha(n.hasta)}</td>
                     <td className="px-2 py-1.5 text-sub">{n.local || '-'}</td>
                     <td className="px-2 py-1.5"><span className="inline-block whitespace-nowrap rounded-full border border-violet-500/30 bg-violet-500/15 px-1.5 py-px text-[10px] font-medium text-violet-400">{n.motivo || '-'}</span></td>
                     <td className="px-2 py-1.5"><span className="block max-w-[200px] truncate text-sub" title={n.novedad || ''}>{n.novedad || '-'}</span></td>
+                    <td className="px-2 py-1.5 text-center text-sub">{n.minutos || '-'}</td>
+                    <td className="px-2 py-1.5 text-sub">{n.control || '-'}</td>
                     <td className="px-2 py-1.5 text-right">
                       <div className="flex items-center justify-end gap-1">
                         {puedeEditar && <button onClick={() => editar(n)} className="rounded border border-line p-1 text-sub transition hover:text-ink" title="Editar"><Pencil size={12} aria-hidden /></button>}
