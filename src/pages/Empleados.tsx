@@ -75,6 +75,8 @@ export default function Empleados() {
   const [error, setError] = useState<string | null>(null)
   const [busqueda, setBusqueda] = useState('')
   const [filtros, setFiltros] = useState<Record<string, string[]>>({})
+  const [sortKey, setSortKey] = useState<string>('nombre')
+  const [sortAsc, setSortAsc] = useState(true)
   const [modal, setModal] = useState<'new' | 'edit' | null>(null)
   const [sel, setSel] = useState<Empleado | null>(null)
   const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
@@ -111,7 +113,7 @@ export default function Empleados() {
 
   const filtrados = useMemo(() => {
     const t = busqueda.trim().toUpperCase()
-    return empleados.filter((e) => {
+    const out = empleados.filter((e) => {
       for (const [clave, valores] of Object.entries(filtros)) {
         if (!valores || valores.length === 0) continue
         const actual = String((e as unknown as Record<string, unknown>)[clave] ?? '')
@@ -125,9 +127,29 @@ export default function Empleados() {
         (e.area_sector ?? '').toUpperCase().includes(t)
       )
     })
-  }, [empleados, busqueda, filtros])
+    out.sort((a, b) => {
+      const av = (a as unknown as Record<string, unknown>)[sortKey]
+      const bv = (b as unknown as Record<string, unknown>)[sortKey]
+      const sa = String(av ?? '').trim()
+      const sb = String(bv ?? '').trim()
+      if (sortKey === 'legajo' || sortKey === 'horas' || sortKey === 'antiguedad_2025' || sortKey === 'dias_vacaciones_2025') {
+        const na = Number(sa.replace(',', '.'))
+        const nb = Number(sb.replace(',', '.'))
+        if (!isNaN(na) && !isNaN(nb)) return sortAsc ? na - nb : nb - na
+      }
+      const cmp = sa.localeCompare(sb, 'es', { numeric: true })
+      return sortAsc ? cmp : -cmp
+    })
+    return out
+  }, [empleados, busqueda, filtros, sortKey, sortAsc])
 
   const hayFiltros = Object.values(filtros).some((v) => v.length > 0) || !!busqueda
+
+  function toggleSort(clave: string) {
+    if (sortKey === clave) setSortAsc((a) => !a)
+    else { setSortKey(clave); setSortAsc(true) }
+  }
+  const sortArrow = (clave: string) => sortKey === clave ? (sortAsc ? ' ↑' : ' ↓') : ''
 
   // Valores únicos por campo (para el autocomplete del modal)
   const opcionesEmpleado = useMemo(() => {
@@ -287,14 +309,14 @@ export default function Empleados() {
           <table className="w-full table-auto text-[12px]">
             <thead className="bg-surface2/60 text-left text-[11px] uppercase tracking-wide text-sub">
               <tr>
-                <th className={tdBase + ' py-2'}>Legajo</th>
-                <th className={tdBase + ' py-2'}>Nombre</th>
-                <th className={tdBase + ' py-2'}>Lugar</th>
-                <th className={tdBase + ' py-2'}>Área / Sector</th>
-                <th className={tdBase + ' py-2'}>Categoría</th>
-                <th className={tdBase + ' py-2'}>Puesto</th>
-                <th className={tdBase + ' py-2 text-center'}>Horas</th>
-                <th className={tdBase + ' py-2'}>Teléfono</th>
+                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('legajo')} className="font-semibold uppercase text-sub hover:text-ink">Legajo{sortArrow('legajo')}</button></th>
+                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('nombre')} className="font-semibold uppercase text-sub hover:text-ink">Nombre{sortArrow('nombre')}</button></th>
+                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('lugar')} className="font-semibold uppercase text-sub hover:text-ink">Lugar{sortArrow('lugar')}</button></th>
+                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('area_sector')} className="font-semibold uppercase text-sub hover:text-ink">Área / Sector{sortArrow('area_sector')}</button></th>
+                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('categoria')} className="font-semibold uppercase text-sub hover:text-ink">Categoría{sortArrow('categoria')}</button></th>
+                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('puesto')} className="font-semibold uppercase text-sub hover:text-ink">Puesto{sortArrow('puesto')}</button></th>
+                <th className={tdBase + ' py-2 text-center'}><button type="button" onClick={() => toggleSort('horas')} className="font-semibold uppercase text-sub hover:text-ink">Horas{sortArrow('horas')}</button></th>
+                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('telefono')} className="font-semibold uppercase text-sub hover:text-ink">Teléfono{sortArrow('telefono')}</button></th>
                 <th className={tdBase + ' py-2 text-right'}>Acciones</th>
               </tr>
               <tr className="bg-surface/60">
