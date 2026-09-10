@@ -727,7 +727,7 @@ export default function FacturacionFabrica() {
                       <div className="flex items-center justify-end gap-px" onClick={(e) => e.stopPropagation()}>
                         <button onClick={() => setCard(r)} className="rounded border border-line p-0.5 text-sub transition hover:text-amber-400" title="Ver tarjeta"><Eye size={10} aria-hidden /></button>
                         <button onClick={() => setEtiquetaSel(r)} className="rounded border border-line p-0.5 text-sub transition hover:text-amber-400" title="Etiquetas / Imprimir"><Printer size={10} aria-hidden /></button>
-                        {(modoPolo52 || puedeEditar) && !r.guia_id && <button onClick={() => { setSel(r); setModal('edit') }} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Editar"><Pencil size={10} aria-hidden /></button>}
+                        <button onClick={() => { setSel(r); setModal('edit') }} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Editar"><Pencil size={10} aria-hidden /></button>
                         {puedeBorrar && <button onClick={() => setConfirm({ message: 'Eliminar registro de facturacion de "' + (r.razon_social || '-') + '"?', onConfirm: () => void eliminar(r) })} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Eliminar"><Trash2 size={10} aria-hidden /></button>}
                       </div>
                     </td>
