@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
-  Loader2, Search, SearchX, Plus, Pencil, Trash2, X, Upload, FileText, Lock, Printer, Check, Eye, Settings,
+  Loader2, Search, SearchX, Plus, Pencil, Trash2, X, Upload, FileText, Lock, Printer, Eye, Settings,
 } from 'lucide-react'
 import { EtiquetasModal } from '@/components/EtiquetasBultos'
 import GestionTransportes from '@/components/GestionTransportes'
@@ -545,7 +545,6 @@ export default function FacturacionFabrica() {
 
   function celdaPolo(r: FactRegistro) {
     const cls = tdBase + ' text-center'
-    const recibido = recibidos.has(normalizarRemito(r.n_remito))
     return (
       <td className={cls} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-center gap-1">
@@ -558,9 +557,7 @@ export default function FacturacionFabrica() {
               className="h-3.5 w-3.5 rounded border-line bg-surface2 accent-brand-600"
             />
           )}
-          {recibido ? (
-            <span className="inline-block whitespace-nowrap rounded-full border border-emerald-500/40 bg-emerald-500/15 px-1.5 py-px text-[9px] font-medium text-emerald-400"><Check size={8} className="mr-0.5 inline" aria-hidden />RECIBIDO</span>
-          ) : r.polo52 ? (
+          {r.polo52 ? (
             <span className="inline-block whitespace-nowrap rounded-full border border-amber-500/30 bg-amber-500/15 px-1.5 py-px text-[9px] font-medium text-amber-400"><Lock size={8} className="mr-0.5 inline" aria-hidden />POLO52</span>
           ) : <span className="text-sub/60">-</span>}
         </div>
