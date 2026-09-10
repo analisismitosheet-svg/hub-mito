@@ -5,7 +5,7 @@ import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { usePermisosArea } from '@/hooks/usePermisosArea'
-import { SelectBuscar } from '@/components/MultiselectFiltro'
+import { SelectBuscar, AutocompleteCampo } from '@/components/MultiselectFiltro'
 
 /** Convierte una fecha de Excel (serie o texto) a ISO yyyy-mm-dd. */
 function fechaExcelAISO(v: unknown): string | null {
@@ -65,8 +65,6 @@ const CAMPOS =
 const inputCls = 'w-full rounded-xl border border-line bg-surface2 px-3 py-1.5 text-[13px] text-ink outline-none transition duration-250 placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40'
 const selectCls = inputCls + ' appearance-none'
 const tdBase = 'px-2 py-[3px] whitespace-nowrap'
-
-const LUGARES = ['FABRICA', 'LOCALES', 'NMO', 'POLO 52', 'SOCIO']
 
 export default function Empleados() {
   const { crear: puedeCrear, editar: puedeEditar, borrar: puedeBorrar } = usePermisosArea('rrhh.empleados')
@@ -131,6 +129,18 @@ export default function Empleados() {
   }, [empleados, busqueda, filtros])
 
   const hayFiltros = Object.values(filtros).some(Boolean) || !!busqueda
+
+  // Valores únicos por campo (para el autocomplete del modal)
+  const opcionesEmpleado = useMemo(() => {
+    const campos = ['lugar', 'area_sector', 'convenio', 'categoria', 'puesto', 'prepaga', 'tipo_contrato'] as const
+    const out: Record<string, string[]> = {}
+    for (const c of campos) {
+      out[c] = Array.from(
+        new Set(empleados.map((e) => String((e as unknown as Record<string, unknown>)[c] ?? '')).filter((v) => v !== '')),
+      ).sort((a, b) => a.localeCompare(b, 'es'))
+    }
+    return out
+  }, [empleados])
 
   async function borrar(id: string) {
     if (!supabase) return
@@ -327,6 +337,7 @@ export default function Empleados() {
       {modal && (
         <EmpleadoModal
           registro={modal === 'edit' ? sel : null}
+          opciones={opcionesEmpleado}
           onClose={() => { setModal(null); setSel(null) }}
           onSaved={async () => { setModal(null); setSel(null); await cargar() }}
         />
@@ -337,7 +348,12 @@ export default function Empleados() {
   )
 }
 
-function EmpleadoModal({ registro, onClose, onSaved }: { registro: Empleado | null; onClose: () => void; onSaved: () => void }) {
+function EmpleadoModal({ registro, opciones, onClose, onSaved }: {
+  registro: Empleado | null
+  opciones: Record<string, string[]>
+  onClose: () => void
+  onSaved: () => void
+}) {
   const [f, setF] = useState<Record<string, string>>(() => {
     const s = (v: unknown) => (v == null ? '' : String(v))
     return {
@@ -412,12 +428,12 @@ function EmpleadoModal({ registro, onClose, onSaved }: { registro: Empleado | nu
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
             <Campo label="N° Legajo"><input value={f.legajo} onChange={(e) => set('legajo', e.target.value)} className={inputCls} /></Campo>
             <Campo label="Apellido y Nombre *" span2><input value={f.nombre} onChange={(e) => set('nombre', e.target.value)} className={inputCls} /></Campo>
-            <Campo label="Lugar"><select value={f.lugar} onChange={(e) => set('lugar', e.target.value)} className={selectCls}><option value="">--</option>{LUGARES.map((l) => <option key={l} value={l}>{l}</option>)}</select></Campo>
-            <Campo label="Área / Sector"><input value={f.area_sector} onChange={(e) => set('area_sector', e.target.value)} className={inputCls} /></Campo>
+            <Campo label="Lugar"><AutocompleteCampo label="Lugar" opciones={(opciones.lugar ?? []).map((v) => ({ id: v, label: v }))} valor={f.lugar} onChange={(v) => set('lugar', v)} placeholder="Buscar lugar..." /></Campo>
+            <AutocompleteCampo label="Área / Sector" opciones={(opciones.area_sector ?? []).map((v) => ({ id: v, label: v }))} valor={f.area_sector} onChange={(v) => set('area_sector', v)} />
             <Campo label="Horas"><input value={f.horas} onChange={(e) => set('horas', e.target.value)} className={inputCls} /></Campo>
-            <Campo label="Convenio"><input value={f.convenio} onChange={(e) => set('convenio', e.target.value)} className={inputCls} /></Campo>
-            <Campo label="Categoría"><input value={f.categoria} onChange={(e) => set('categoria', e.target.value)} className={inputCls} /></Campo>
-            <Campo label="Puesto"><input value={f.puesto} onChange={(e) => set('puesto', e.target.value)} className={inputCls} /></Campo>
+            <AutocompleteCampo label="Convenio" opciones={(opciones.convenio ?? []).map((v) => ({ id: v, label: v }))} valor={f.convenio} onChange={(v) => set('convenio', v)} />
+            <AutocompleteCampo label="Categoría" opciones={(opciones.categoria ?? []).map((v) => ({ id: v, label: v }))} valor={f.categoria} onChange={(v) => set('categoria', v)} />
+            <AutocompleteCampo label="Puesto" opciones={(opciones.puesto ?? []).map((v) => ({ id: v, label: v }))} valor={f.puesto} onChange={(v) => set('puesto', v)} />
             <Campo label="Comisión"><input value={f.comision} onChange={(e) => set('comision', e.target.value)} className={inputCls} /></Campo>
             <Campo label="Reingreso"><input value={f.reingreso} onChange={(e) => set('reingreso', e.target.value)} className={inputCls} /></Campo>
             <Campo label="Fecha de ingreso"><input type="date" value={f.fecha_ingreso} onChange={(e) => set('fecha_ingreso', e.target.value)} className={inputCls} /></Campo>
@@ -431,8 +447,8 @@ function EmpleadoModal({ registro, onClose, onSaved }: { registro: Empleado | nu
             <Campo label="Email"><input value={f.email} onChange={(e) => set('email', e.target.value)} className={inputCls} /></Campo>
             <Campo label="Domicilio" span3><input value={f.domicilio} onChange={(e) => set('domicilio', e.target.value)} className={inputCls} /></Campo>
             <Campo label="Código OS"><input value={f.codigo_os} onChange={(e) => set('codigo_os', e.target.value)} className={inputCls} /></Campo>
-            <Campo label="Prepaga"><input value={f.prepaga} onChange={(e) => set('prepaga', e.target.value)} className={inputCls} /></Campo>
-            <Campo label="Tipo de contrato"><input value={f.tipo_contrato} onChange={(e) => set('tipo_contrato', e.target.value)} className={inputCls} /></Campo>
+            <Campo label="Prepaga"><input value={f.prepaga} onChange={(e) => set('prepaga', e.target.value)} className={inputCls} list="prepaga-list" /><datalist id="prepaga-list">{(opciones.prepaga ?? []).map((v) => <option key={v} value={v} />)}</datalist></Campo>
+            <Campo label="Tipo de contrato"><input value={f.tipo_contrato} onChange={(e) => set('tipo_contrato', e.target.value)} className={inputCls} list="contrato-list" /><datalist id="contrato-list">{(opciones.tipo_contrato ?? []).map((v) => <option key={v} value={v} />)}</datalist></Campo>
             <Campo label="Contacto emergencia" span2><input value={f.contacto_emergencia} onChange={(e) => set('contacto_emergencia', e.target.value)} className={inputCls} /></Campo>
             <Campo label="Parentesco"><input value={f.parentesco} onChange={(e) => set('parentesco', e.target.value)} className={inputCls} /></Campo>
             <Campo label="Teléfono emergencia"><input value={f.telefono_emergencia} onChange={(e) => set('telefono_emergencia', e.target.value)} className={inputCls} /></Campo>

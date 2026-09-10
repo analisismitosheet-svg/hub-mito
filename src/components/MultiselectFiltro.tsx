@@ -7,6 +7,75 @@ export interface OpcionMulti {
 }
 
 /**
+ * Campo con autocomplete (como el selector de cliente/empleado de Facturación).
+ * Al enfocar escribe, filtra las opciones en vivo y permite seleccionar con click.
+ * También permite escribir un valor que no esté en la lista (onChange recibe el texto).
+ */
+export function AutocompleteCampo({
+  label,
+  opciones,
+  valor,
+  onChange,
+  disabled,
+  placeholder,
+  className,
+}: {
+  label: string
+  opciones: OpcionMulti[]
+  valor: string
+  onChange: (v: string) => void
+  disabled?: boolean
+  placeholder?: string
+  className?: string
+}) {
+  const [abierto, setAbierto] = useState(false)
+  const [texto, setTexto] = useState('')
+
+  const filtradas = useMemo(() => {
+    const t = texto.trim().toUpperCase()
+    if (!t) return opciones.slice(0, 30)
+    return opciones.filter((o) => o.label.toUpperCase().includes(t)).slice(0, 30)
+  }, [opciones, texto])
+
+  const elegida = opciones.find((o) => o.id === valor)
+
+  return (
+    <label className={'block relative ' + (className ?? '')}>
+      <span className="mb-1 block text-xs font-medium text-sub">{label}</span>
+      <div className="relative">
+        <input
+          value={abierto ? texto : (elegida?.label ?? valor)}
+          onChange={(e) => { setTexto(e.target.value); setAbierto(true); onChange(e.target.value) }}
+          onFocus={() => { setTexto(valor); setAbierto(true) }}
+          onBlur={() => setTimeout(() => setAbierto(false), 150)}
+          disabled={disabled}
+          placeholder={placeholder ?? `Buscar ${label.toLowerCase()}...`}
+          className="w-full rounded-xl border border-line bg-surface2 px-3 py-1.5 text-[13px] text-ink outline-none transition duration-250 placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40"
+        />
+        {abierto && !disabled && (
+          <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-line bg-surface shadow-xl">
+            {filtradas.length === 0 ? (
+              <p className="p-2 text-xs text-sub">Sin resultados. Podés escribir un valor nuevo.</p>
+            ) : (
+              filtradas.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  onMouseDown={(e) => { e.preventDefault(); onChange(o.id); setAbierto(false) }}
+                  className={'w-full px-3 py-1.5 text-left text-xs hover:bg-line/30 ' + (o.id === valor ? 'bg-brand-600/10 text-brand-400' : 'text-ink')}
+                >
+                  <span className="block truncate">{o.label}</span>
+                </button>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+    </label>
+  )
+}
+
+/**
  * Select con buscador (selección única). Muestra un botón con el valor elegido
  * y, al abrir, un dropdown con input de búsqueda para no desplazar la barra.
  */
