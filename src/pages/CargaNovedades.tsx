@@ -345,32 +345,32 @@ export default function CargaNovedades() {
       {importMsg && <p className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-400">{importMsg}</p>}
 
       {/* Filtros */}
-      <div className="mb-3 flex items-center gap-1.5 overflow-x-auto pb-1">
-        <div className="relative w-[180px] shrink-0">
+      <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <div className="relative">
           <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sub/70" aria-hidden />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="N° o nombre..." className={inputCls + ' h-7 pl-7 pr-2 text-xs'} />
         </div>
-        <select value={fAnio} onChange={(e) => setFAnio(e.target.value)} className={selectCls + ' h-7 w-auto shrink-0 px-2 py-0 text-xs'}>
+        <select value={fAnio} onChange={(e) => setFAnio(e.target.value)} className={selectCls + ' h-7 w-full px-2 py-0 text-xs'}>
           <option value="">Año</option>
           {aniosDisponibles.map((a) => <option key={a} value={a}>{a}</option>)}
         </select>
-        <select value={fMes} onChange={(e) => setFMes(e.target.value)} className={selectCls + ' h-7 w-auto shrink-0 px-2 py-0 text-xs'}>
+        <select value={fMes} onChange={(e) => setFMes(e.target.value)} className={selectCls + ' h-7 w-full px-2 py-0 text-xs'}>
           <option value="">Mes</option>
           {MESES_LIQUIDACION.map((m) => <option key={m} value={m}>{m}</option>)}
         </select>
-        <select value={fMotivo} onChange={(e) => setFMotivo(e.target.value)} className={selectCls + ' h-7 w-auto shrink-0 px-2 py-0 text-xs'}>
+        <select value={fMotivo} onChange={(e) => setFMotivo(e.target.value)} className={selectCls + ' h-7 w-full px-2 py-0 text-xs'}>
           <option value="">Motivo</option>
           {MOTIVOS.map((m) => <option key={m} value={m}>{m}</option>)}
         </select>
-        <select value={fLocal} onChange={(e) => setFLocal(e.target.value)} className={selectCls + ' h-7 w-auto shrink-0 px-2 py-0 text-xs'}>
+        <select value={fLocal} onChange={(e) => setFLocal(e.target.value)} className={selectCls + ' h-7 w-full px-2 py-0 text-xs'}>
           <option value="">Local</option>
           {LOCALES.map((l) => <option key={l} value={l}>{l}</option>)}
         </select>
-        <select value={fTipo} onChange={(e) => setFTipo(e.target.value)} className={selectCls + ' h-7 w-auto shrink-0 px-2 py-0 text-xs'}>
+        <select value={fTipo} onChange={(e) => setFTipo(e.target.value)} className={selectCls + ' h-7 w-full px-2 py-0 text-xs'}>
           <option value="">Tipo</option>
           {TIPOS.map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
-        <span className="shrink-0 text-[11px] text-sub/70">{lista.length}/{todos.length}</span>
+        <span className="flex items-center text-[11px] text-sub/70">{lista.length}/{todos.length}</span>
       </div>
 
       {/* Lista */}
