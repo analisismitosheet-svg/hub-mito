@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Loader2, Pencil, Trash2, Megaphone, Check, Upload } from 'lucide-react'
+import { Loader2, Pencil, Trash2, Megaphone, Check, Upload, Plus, X, Search } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
@@ -41,7 +41,6 @@ function fmtFecha(iso: string | null): string {
 /** Convierte un valor de celda Excel (numero de serie o dd/mm/yyyy) a fecha ISO (YYYY-MM-DD). */
 function fechaExcelAISO(v: unknown): string | null {
   if (v == null || v === '') return null
-  // Si es numero de serie de Excel (dias desde 1899-12-30)
   if (typeof v === 'number' && v > 0) {
     const ms = Math.round((v - 25569) * 86400 * 1000)
     const d = new Date(ms)
@@ -91,6 +90,13 @@ function colorFila(motivo: string | null): { bg: string; fg: string } | null {
   return { bg: c + '22', fg: c }
 }
 
+/** Nombre corto del mes de liquidación (primera palabra, ej. "ENERO (26/12...)" -> "ENERO"). */
+function mesCorto(mes: string | null): string {
+  return (mes ?? '').split(/[ (]/)[0] || ''
+}
+
+const MESES_LIQUIDACION = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE']
+
 export default function CargaNovedades() {
   const { can } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -105,7 +111,8 @@ export default function CargaNovedades() {
   const [importMsg, setImportMsg] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  // Formulario
+  // Modal de carga (a pantalla completa)
+  const [modalAbierto, setModalAbierto] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [anio, setAnio] = useState('')
   const [mes, setMes] = useState('')
@@ -122,10 +129,18 @@ export default function CargaNovedades() {
   const [control, setControl] = useState('')
   const [busy, setBusy] = useState(false)
 
+  // Filtros
+  const [q, setQ] = useState('')
+  const [fAnio, setFAnio] = useState('')
+  const [fMes, setFMes] = useState('')
+  const [fMotivo, setFMotivo] = useState('')
+  const [fLocal, setFLocal] = useState('')
+  const [fTipo, setFTipo] = useState('')
+
   const cargar = useCallback(async () => {
     if (!supabase) { setCargando(false); return }
     setCargando(true); setError(null)
-    const { data, error: err } = await supabase.from('novedades').select('*').order('created_at', { ascending: false }).limit(200)
+    const { data, error: err } = await supabase.from('novedades').select('*').order('created_at', { ascending: false }).limit(500)
     if (err) { setError(err.message); setCargando(false); return }
     setTodos((data as Novedad[] | null) ?? [])
     setCargando(false)
@@ -139,7 +154,7 @@ export default function CargaNovedades() {
     if (!id) return
     const n = todos.find((x) => x.id === id)
     if (n) {
-      editar(n)
+      abrirModal(n)
       setSearchParams({}, { replace: true })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -150,11 +165,15 @@ export default function CargaNovedades() {
     setDesde(''); setHasta(''); setLocal(''); setMotivo(''); setNovedadTxt(''); setMinutos(''); setControl('')
   }
 
-  function editar(n: Novedad) {
-    setEditId(n.id); setAnio(n.anio || ''); setMes(n.mes_liquidacion || ''); setNumero(n.numero || ''); setNombre(n.nombre_completo || '')
-    setTipo(n.tipo || ''); setFecha(n.fecha || ''); setDesde(n.desde || ''); setHasta(n.hasta || '')
-    setLocal(n.local || ''); setMotivo(n.motivo || ''); setNovedadTxt(n.novedad || ''); setMinutos(n.minutos || ''); setControl(n.control || '')
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+  function abrirModal(n: Novedad | null = null) {
+    if (n) {
+      setEditId(n.id); setAnio(n.anio || ''); setMes(n.mes_liquidacion || ''); setNumero(n.numero || ''); setNombre(n.nombre_completo || '')
+      setTipo(n.tipo || ''); setFecha(n.fecha || ''); setDesde(n.desde || ''); setHasta(n.hasta || '')
+      setLocal(n.local || ''); setMotivo(n.motivo || ''); setNovedadTxt(n.novedad || ''); setMinutos(n.minutos || ''); setControl(n.control || '')
+    } else {
+      reset()
+    }
+    setModalAbierto(true)
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -173,7 +192,7 @@ export default function CargaNovedades() {
       : await supabase.from('novedades').insert(payload)
     setBusy(false)
     if (result.error) { setError(result.error.message); return }
-    reset(); await cargar()
+    setModalAbierto(false); reset(); await cargar()
   }
 
   async function eliminar(n: Novedad) {
@@ -275,6 +294,25 @@ export default function CargaNovedades() {
     setImportando(false)
   }
 
+  // Años disponibles en los datos
+  const aniosDisponibles = useMemo(() => {
+    const set = new Set<string>()
+    for (const n of todos) { const a = (n.anio || '').trim(); if (a) set.add(a) }
+    return Array.from(set).sort((a, b) => b.localeCompare(a))
+  }, [todos])
+
+  const lista = useMemo(() => {
+    let r = todos
+    if (fAnio) r = r.filter((n) => (n.anio || '').trim() === fAnio)
+    if (fMes) r = r.filter((n) => mesCorto(n.mes_liquidacion) === fMes)
+    if (fMotivo) r = r.filter((n) => (n.motivo || '') === fMotivo)
+    if (fLocal) r = r.filter((n) => (n.local || '') === fLocal)
+    if (fTipo) r = r.filter((n) => (n.tipo || '') === fTipo)
+    const t = q.trim().toUpperCase()
+    if (t) r = r.filter((n) => (n.nombre_completo || '').toUpperCase().includes(t) || (n.numero || '').toUpperCase().includes(t))
+    return r
+  }, [todos, fAnio, fMes, fMotivo, fLocal, fTipo, q])
+
   return (
     <Layout>
       <BackButton />
@@ -284,52 +322,63 @@ export default function CargaNovedades() {
             <h1 className="flex items-center gap-2 font-display text-2xl font-semibold text-ink"><Megaphone size={20} className="text-violet-500" aria-hidden /> Carga Novedades</h1>
             <p className="text-xs text-sub/70">Cargar o editar novedades de empleados</p>
           </div>
-          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void importarExcel(f); e.target.value = '' }} />
-          <button
-            onClick={() => fileRef.current?.click()}
-            disabled={importando}
-            className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-3 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
-          >
-            {importando ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Upload size={15} aria-hidden />} Importar Excel
-          </button>
+          <div className="flex items-center gap-2">
+            <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void importarExcel(f); e.target.value = '' }} />
+            <button
+              onClick={() => fileRef.current?.click()}
+              disabled={importando}
+              className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-surface2 px-3 py-2 text-sm font-medium text-ink hover:bg-line disabled:opacity-50"
+            >
+              {importando ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Upload size={15} aria-hidden />} Importar
+            </button>
+            <button
+              onClick={() => abrirModal(null)}
+              className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-3 py-2 text-sm font-medium text-white hover:bg-violet-700"
+            >
+              <Plus size={15} aria-hidden /> Nueva Novedad
+            </button>
+          </div>
         </div>
       </header>
 
       {error && <p role="alert" className="mb-4 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
       {importMsg && <p className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-400">{importMsg}</p>}
 
-      {/* Formulario */}
-      <form onSubmit={(e) => void handleSubmit(e)} className="mb-6 rounded-2xl border border-line bg-surface p-4 shadow-soft">
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-ink"><Megaphone size={15} className="text-violet-500" aria-hidden /> {editId ? 'Editar novedad' : 'Nueva novedad'}</h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Año</span><input value={anio} onChange={(e) => setAnio(e.target.value)} placeholder="2025" className={inputCls} /></label>
-          <label className="block sm:col-span-2"><span className="mb-0.5 block text-[11px] font-medium text-sub">Mes liquidación</span><input value={mes} onChange={(e) => setMes(e.target.value)} placeholder="ENERO (26/12 AL 25/01)" className={inputCls} /></label>
-          <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">N°</span><input value={numero} onChange={(e) => setNumero(e.target.value)} placeholder="935" className={inputCls} /></label>
-          <label className="block sm:col-span-2"><span className="mb-0.5 block text-[11px] font-medium text-sub">Nombre completo *</span><input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="APELLIDO NOMBRE" className={inputCls} /></label>
-          <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Tipo</span><select value={tipo} onChange={(e) => setTipo(e.target.value)} className={selectCls}><option value="">--</option>{TIPOS.map((t) => <option key={t} value={t}>{t}</option>)}</select></label>
-          <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Fecha</span><input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className={inputCls} /></label>
-          <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Desde</span><input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className={inputCls} /></label>
-          <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Hasta</span><input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className={inputCls} /></label>
-          <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Local</span><select value={local} onChange={(e) => setLocal(e.target.value)} className={selectCls}><option value="">--</option>{LOCALES.map((l) => <option key={l} value={l}>{l}</option>)}</select></label>
-          <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Motivo</span><select value={motivo} onChange={(e) => setMotivo(e.target.value)} className={selectCls}><option value="">--</option>{MOTIVOS.map((m) => <option key={m} value={m}>{m}</option>)}</select></label>
-          <label className="block sm:col-span-3"><span className="mb-0.5 block text-[11px] font-medium text-sub">Novedad</span><input value={novedadTxt} onChange={(e) => setNovedadTxt(e.target.value)} placeholder="Detalle..." className={inputCls} /></label>
-          <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Minutos</span><input value={minutos} onChange={(e) => setMinutos(e.target.value)} placeholder="30" className={inputCls} /></label>
-          <label className="block sm:col-span-4"><span className="mb-0.5 block text-[11px] font-medium text-sub">Control certificado / notificación</span><input value={control} onChange={(e) => setControl(e.target.value)} placeholder="OK / NO ENVIA CERTIFICADO" className={inputCls} /></label>
+      {/* Filtros */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[180px]">
+          <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sub/70" aria-hidden />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por N° legajo o nombre..." className={inputCls + ' pl-8 text-xs'} />
         </div>
-        <div className="mt-3 flex items-center gap-2">
-          <button type="submit" disabled={busy} className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">
-            {busy ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Check size={15} aria-hidden />}{editId ? 'Guardar cambios' : 'Cargar novedad'}
-          </button>
-          {editId && <button type="button" onClick={reset} className="btn-press rounded-xl border border-line bg-surface2 px-4 py-2 text-sm font-medium text-ink hover:bg-line">Cancelar edición</button>}
-        </div>
-      </form>
+        <select value={fAnio} onChange={(e) => setFAnio(e.target.value)} className={selectCls + ' w-auto text-xs'}>
+          <option value="">Año (todos)</option>
+          {aniosDisponibles.map((a) => <option key={a} value={a}>{a}</option>)}
+        </select>
+        <select value={fMes} onChange={(e) => setFMes(e.target.value)} className={selectCls + ' w-auto text-xs'}>
+          <option value="">Mes (todos)</option>
+          {MESES_LIQUIDACION.map((m) => <option key={m} value={m}>{m}</option>)}
+        </select>
+        <select value={fMotivo} onChange={(e) => setFMotivo(e.target.value)} className={selectCls + ' w-auto text-xs'}>
+          <option value="">Motivo (todos)</option>
+          {MOTIVOS.map((m) => <option key={m} value={m}>{m}</option>)}
+        </select>
+        <select value={fLocal} onChange={(e) => setFLocal(e.target.value)} className={selectCls + ' w-auto text-xs'}>
+          <option value="">Local (todos)</option>
+          {LOCALES.map((l) => <option key={l} value={l}>{l}</option>)}
+        </select>
+        <select value={fTipo} onChange={(e) => setFTipo(e.target.value)} className={selectCls + ' w-auto text-xs'}>
+          <option value="">Tipo (todos)</option>
+          {TIPOS.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <span className="text-[11px] text-sub/70">{lista.length} de {todos.length}</span>
+      </div>
 
-      {/* Lista reciente */}
-      <h2 className="mb-2 text-sm font-semibold text-ink">Últimas novedades cargadas</h2>
+      {/* Lista */}
+      <h2 className="mb-2 text-sm font-semibold text-ink">Novedades cargadas</h2>
       {cargando ? (
         <div className="flex items-center justify-center gap-2 py-6 text-sub"><Loader2 size={16} className="animate-spin" aria-hidden /> Cargando...</div>
-      ) : todos.length === 0 ? (
-        <p className="rounded-2xl border border-line bg-surface p-6 text-center text-sm text-sub">Todavía no hay novedades cargadas.</p>
+      ) : lista.length === 0 ? (
+        <p className="rounded-2xl border border-line bg-surface p-6 text-center text-sm text-sub">No se encontraron novedades con esos filtros.</p>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-line">
           <div className="overflow-x-auto">
@@ -353,7 +402,7 @@ export default function CargaNovedades() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-line/50 bg-surface">
-                {todos.map((n) => {
+                {lista.map((n) => {
                   const col = colorFila(n.motivo)
                   return (
                     <tr key={n.id} style={col ? { backgroundColor: col.bg, color: col.fg } : undefined} className={'transition hover:brightness-110' + (col ? '' : ' hover:bg-line/20')}>
@@ -366,13 +415,13 @@ export default function CargaNovedades() {
                       <td className="px-2 py-1.5 text-center">{fmtFecha(n.desde)}</td>
                       <td className="px-2 py-1.5 text-center">{fmtFecha(n.hasta)}</td>
                       <td className="px-2 py-1.5">{n.local || '-'}</td>
-                    <td className="px-2 py-1.5"><span className="inline-block whitespace-nowrap rounded-full border px-1.5 py-px text-[10px] font-medium" style={col ? { borderColor: col.fg + '66', backgroundColor: col.fg + '22', color: col.fg } : { borderColor: 'rgba(167,139,250,0.3)', backgroundColor: 'rgba(167,139,250,0.15)', color: '#a78bfa' }}>{n.motivo || '-'}</span></td>
+                      <td className="px-2 py-1.5"><span className="inline-block whitespace-nowrap rounded-full border px-1.5 py-px text-[10px] font-medium" style={col ? { borderColor: col.fg + '66', backgroundColor: col.fg + '22', color: col.fg } : { borderColor: 'rgba(167,139,250,0.3)', backgroundColor: 'rgba(167,139,250,0.15)', color: '#a78bfa' }}>{n.motivo || '-'}</span></td>
                       <td className="px-2 py-1.5"><span className="block max-w-[200px] truncate" title={n.novedad || ''}>{n.novedad || '-'}</span></td>
                       <td className="px-2 py-1.5 text-center">{n.minutos || '-'}</td>
                       <td className="px-2 py-1.5">{n.control || '-'}</td>
                       <td className="px-2 py-1.5 text-right">
                         <div className="flex items-center justify-end gap-1">
-                          {puedeEditar && <button onClick={() => editar(n)} className="rounded border border-line p-1 transition hover:text-ink" title="Editar"><Pencil size={12} aria-hidden /></button>}
+                          {puedeEditar && <button onClick={() => abrirModal(n)} className="rounded border border-line p-1 transition hover:text-ink" title="Editar"><Pencil size={12} aria-hidden /></button>}
                           {puedeBorrar && <button onClick={() => setConfirm({ message: `¿Eliminar la novedad de "${n.nombre_completo || '-'}"?`, onConfirm: () => void eliminar(n) })} className="rounded border border-line p-1 transition hover:text-red-400" title="Eliminar"><Trash2 size={12} aria-hidden /></button>}
                         </div>
                       </td>
@@ -380,6 +429,42 @@ export default function CargaNovedades() {
                   )})}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de carga a pantalla completa */}
+      {modalAbierto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4" onClick={() => !busy && setModalAbierto(false)}>
+          <div className="flex h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-line px-5 py-3">
+              <h2 className="flex items-center gap-2 text-lg font-semibold text-ink"><Megaphone size={18} className="text-violet-500" aria-hidden /> {editId ? 'Editar Novedad' : 'Nueva Novedad'}</h2>
+              <button onClick={() => setModalAbierto(false)} className="rounded-lg border border-line p-1.5 text-sub transition hover:bg-line hover:text-ink" aria-label="Cerrar"><X size={16} aria-hidden /></button>
+            </div>
+            <form onSubmit={(e) => void handleSubmit(e)} className="flex-1 overflow-y-auto px-5 py-4">
+              {error && <p role="alert" className="mb-3 rounded-xl border border-brand-600/30 bg-brand-600/10 p-2 text-xs text-brand-400">{error}</p>}
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Año</span><input value={anio} onChange={(e) => setAnio(e.target.value)} placeholder="2025" className={inputCls} /></label>
+                <label className="block sm:col-span-2"><span className="mb-0.5 block text-[11px] font-medium text-sub">Mes liquidación</span><input value={mes} onChange={(e) => setMes(e.target.value)} placeholder="ENERO (26/12 AL 25/01)" className={inputCls} /></label>
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">N° legajo</span><input value={numero} onChange={(e) => setNumero(e.target.value)} placeholder="935" className={inputCls} /></label>
+                <label className="block sm:col-span-2"><span className="mb-0.5 block text-[11px] font-medium text-sub">Nombre completo *</span><input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="APELLIDO NOMBRE" className={inputCls} /></label>
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Tipo</span><select value={tipo} onChange={(e) => setTipo(e.target.value)} className={selectCls}><option value="">--</option>{TIPOS.map((t) => <option key={t} value={t}>{t}</option>)}</select></label>
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Fecha</span><input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className={inputCls} /></label>
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Desde</span><input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className={inputCls} /></label>
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Hasta</span><input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className={inputCls} /></label>
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Local</span><select value={local} onChange={(e) => setLocal(e.target.value)} className={selectCls}><option value="">--</option>{LOCALES.map((l) => <option key={l} value={l}>{l}</option>)}</select></label>
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Motivo</span><select value={motivo} onChange={(e) => setMotivo(e.target.value)} className={selectCls}><option value="">--</option>{MOTIVOS.map((m) => <option key={m} value={m}>{m}</option>)}</select></label>
+                <label className="block sm:col-span-3"><span className="mb-0.5 block text-[11px] font-medium text-sub">Novedad</span><input value={novedadTxt} onChange={(e) => setNovedadTxt(e.target.value)} placeholder="Detalle..." className={inputCls} /></label>
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Minutos</span><input value={minutos} onChange={(e) => setMinutos(e.target.value)} placeholder="30" className={inputCls} /></label>
+                <label className="block sm:col-span-4"><span className="mb-0.5 block text-[11px] font-medium text-sub">Control certificado / notificación</span><input value={control} onChange={(e) => setControl(e.target.value)} placeholder="OK / NO ENVIA CERTIFICADO" className={inputCls} /></label>
+              </div>
+            </form>
+            <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3">
+              <button onClick={() => setModalAbierto(false)} disabled={busy} className="btn-press rounded-xl border border-line bg-surface2 px-4 py-2 text-sm font-medium text-ink hover:bg-line">Cancelar</button>
+              <button onClick={(e) => void handleSubmit(e)} disabled={busy} className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">
+                {busy ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Check size={15} aria-hidden />}{editId ? 'Guardar cambios' : 'Cargar novedad'}
+              </button>
+            </div>
           </div>
         </div>
       )}
