@@ -534,6 +534,8 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
 
   function seleccionarCliente(c: ClienteMini) {
     setNroCliente(c.n_cliente || ''); setRazonSocial(c.razon_social); setClienteTransporte(c.transporte); setOpenCliDrop(false); setBusqCliente('')
+    // Si la guía no tiene observaciones todavía, trae las de facturación del cliente
+    setObservaciones((prev) => (prev && prev.trim() ? prev : (c.obs_facturacion || '')))
   }
 
   async function agregarPedidoCustom() {
