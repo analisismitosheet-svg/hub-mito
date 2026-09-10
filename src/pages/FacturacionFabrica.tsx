@@ -39,7 +39,7 @@ interface FactRegistro {
   created_at: string
 }
 
-interface ClienteMini { id: string; n_cliente: string | null; razon_social: string; transporte: string | null }
+interface ClienteMini { id: string; n_cliente: string | null; razon_social: string; transporte: string | null; obs_facturacion: string | null }
 interface EmpleadoMini { id: string; legajo: string | null; nombre: string }
 
 /* ------------------------------------------------------------------ */
@@ -232,7 +232,7 @@ export default function FacturacionFabrica() {
     }
     const [todosData, clData, emData, trData, guData] = await Promise.all([
       traerTodo((from, to) => sb.from('facturacion_fabrica').select('*').order('created_at', { ascending: false }).range(from, to)),
-      traerTodo((from, to) => sb.from('clientes').select('id,n_cliente,razon_social,transporte').eq('estado', 'ACTIVO').order('razon_social').range(from, to)),
+      traerTodo((from, to) => sb.from('clientes').select('id,n_cliente,razon_social,transporte,obs_facturacion').eq('estado', 'ACTIVO').order('razon_social').range(from, to)),
       traerTodo((from, to) => sb.from('empleados').select('id,legajo,nombre').order('nombre').range(from, to)),
       traerTodo((from, to) => sb.from('transportes').select('id,nombre').order('nombre').range(from, to)),
       traerTodo((from, to) => sb.from('guias').select('id,fecha').range(from, to)),
@@ -897,6 +897,8 @@ function FactModal({ modoPolo52, registro, clientes, empleados, transporteOpcion
 
   function seleccionarCliente(c: ClienteMini) {
     setClienteId(c.id); setRazonSocial(c.razon_social); setNCliente(c.n_cliente); setTransporte(c.transporte || ''); setOpenCliDrop(false); setBusqCliente('')
+    // Si el registro no tiene observaciones (ej. viene de guía sin datos), trae las de facturación del cliente
+    setObservaciones((prev) => (prev && prev.trim() ? prev : (c.obs_facturacion || '')))
   }
   function seleccionarEmpleado(e: EmpleadoMini) {
     setEmpleadoId(e.id); setQuienFacturo(e.nombre); setNLegajo(e.legajo || ''); setOpenEmpDrop(false); setBusqEmpleado('')

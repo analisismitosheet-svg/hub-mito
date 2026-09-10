@@ -33,7 +33,7 @@ interface Guia {
   created_at: string
 }
 
-interface ClienteMini { id: string; n_cliente: string | null; razon_social: string; transporte: string | null }
+interface ClienteMini { id: string; n_cliente: string | null; razon_social: string; transporte: string | null; obs_facturacion: string | null }
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
@@ -143,7 +143,7 @@ export default function Guias() {
 
     const [gu, cl, opRes] = await Promise.all([
       traerTodo<Guia>((f, t) => supabase!.from('guias').select('*').order('created_at', { ascending: false }).range(f, t)),
-      traerTodo<ClienteMini>((f, t) => supabase!.from('clientes').select('id,n_cliente,razon_social,transporte').eq('estado', 'ACTIVO').order('razon_social').range(f, t)),
+      traerTodo<ClienteMini>((f, t) => supabase!.from('clientes').select('id,n_cliente,razon_social,transporte,obs_facturacion').eq('estado', 'ACTIVO').order('razon_social').range(f, t)),
       supabase.from('guias_opciones').select('tipo,valor').order('valor'),
     ])
     setTodos(gu)
@@ -576,9 +576,11 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
       result = await supabase.from('guias').update(payload).eq('id', guia.id).select().single()
       if (!result.error && supabase) {
         const esFact = estado === 'FINALIZADO_FACT'
+        const obsCliente = clientes.find((cl) => cl.n_cliente === nroCliente.trim())?.obs_facturacion || null
+        const obsGuia = observaciones.trim() || null
         const obsFact = [
           `Generado desde Guia N° ${payload.nro_pedido}`,
-          observaciones.trim() || null,
+          obsGuia || obsCliente,
         ].filter(Boolean).join(' | ')
         const { data: existente } = await supabase.from('facturacion_fabrica').select('id').eq('guia_id', guia.id).limit(1)
         if (esFact && (!existente || existente.length === 0)) {
@@ -628,9 +630,11 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
             estado: 'PENDIENTE',
           })
         } else if (estado === 'FINALIZADO_FACT') {
+          const obsCliente = clientes.find((cl) => cl.n_cliente === nroCliente.trim())?.obs_facturacion || null
+          const obsGuia = observaciones.trim() || null
           const obsFact = [
             `Generado desde Guia N° ${payload.nro_pedido}`,
-            observaciones.trim() || null,
+            obsGuia || obsCliente,
           ].filter(Boolean).join(' | ')
           await supabase.from('facturacion_fabrica').insert({
             guia_id: guiaId,
