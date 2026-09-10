@@ -179,6 +179,8 @@ export default function FacturacionFabrica() {
   const [q, setQ] = useState('')
   const [filtroTransporte, setFiltroTransporte] = useState<Set<string>>(new Set())
   const [abiertoTransp, setAbiertoTransp] = useState(false)
+  const [filtroCliente, setFiltroCliente] = useState<Set<string>>(new Set())
+  const [abiertoCli, setAbiertoCli] = useState(false)
   const [filtroPol, setFiltroPol] = useState(modoPolo52)
   const [filtroFechaDesde, setFiltroFechaDesde] = useState('')
   const [filtroFechaHasta, setFiltroFechaHasta] = useState('')
@@ -299,6 +301,17 @@ export default function FacturacionFabrica() {
     return [...transportes].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
   }, [transportes])
 
+  // Clientes únicos presentes en los registros (para el filtro multiselect)
+  const clientesFiltro = useMemo(() => {
+    const map = new Map<string, { id: string; n_cliente: string | null; razon_social: string }>()
+    for (const r of todos) {
+      if (!r.razon_social && !r.n_cliente) continue
+      const clave = `${r.n_cliente ?? ''}|${r.razon_social ?? ''}`
+      if (!map.has(clave)) map.set(clave, { id: clave, n_cliente: r.n_cliente, razon_social: r.razon_social ?? '' })
+    }
+    return Array.from(map.values()).sort((a, b) => (a.razon_social || a.n_cliente || '').localeCompare(b.razon_social || b.n_cliente || '', 'es'))
+  }, [todos])
+
   // Opciones de transporte: SOLO los transportes reales de la tabla
   const transporteOpciones = useMemo(() => {
     const nombres = transportes.map((t) => t.nombre)
@@ -309,6 +322,7 @@ export default function FacturacionFabrica() {
     let r = todos
     if (filtroPol || modoPolo52) r = r.filter((f) => f.polo52)
     if (filtroTransporte.size > 0) r = r.filter((f) => filtroTransporte.has(f.transporte ?? ''))
+    if (filtroCliente.size > 0) r = r.filter((f) => filtroCliente.has(f.razon_social ?? '') || filtroCliente.has(String(f.n_cliente ?? '')))
     if (filtroFechaDesde) r = r.filter((f) => (excelDate(f.fecha_fact) || '') >= filtroFechaDesde)
     if (filtroFechaHasta) r = r.filter((f) => (excelDate(f.fecha_fact) || '') <= filtroFechaHasta)
     if (filtroSinEnvio) r = r.filter((f) => !f.fecha_envio)
@@ -321,13 +335,13 @@ export default function FacturacionFabrica() {
       return sortAsc ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
     })
     return r
-  }, [todos, term, filtroTransporte, filtroPol, filtroFechaDesde, filtroFechaHasta, filtroSinEnvio, modoPolo52, sortKey, sortAsc])
+  }, [todos, term, filtroTransporte, filtroCliente, filtroPol, filtroFechaDesde, filtroFechaHasta, filtroSinEnvio, modoPolo52, sortKey, sortAsc])
 
   const totalPaginas = Math.max(1, Math.ceil(lista.length / POR_PAGINA))
   const paginaSegura = Math.min(pagina, totalPaginas)
   const listaPagina = lista.slice((paginaSegura - 1) * POR_PAGINA, paginaSegura * POR_PAGINA)
 
-  useEffect(() => { setPagina(1) }, [q, filtroTransporte, filtroPol, filtroFechaDesde, filtroFechaHasta, filtroSinEnvio])
+  useEffect(() => { setPagina(1) }, [q, filtroTransporte, filtroCliente, filtroPol, filtroFechaDesde, filtroFechaHasta, filtroSinEnvio])
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortAsc(!sortAsc)
@@ -604,6 +618,53 @@ export default function FacturacionFabrica() {
                     <span className="truncate">{t.nombre}</span>
                   </label>
                 ))}
+              </div>
+            </>
+          )}
+        </div>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setAbiertoCli((o) => !o)}
+            className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line"
+          >
+            <Filter size={13} aria-hidden />
+            Clientes {filtroCliente.size > 0 ? `(${filtroCliente.size})` : ''}
+          </button>
+          {abiertoCli && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setAbiertoCli(false)} />
+              <div className="absolute left-0 top-full z-40 mt-1 max-h-72 w-64 overflow-y-auto rounded-xl border border-line bg-surface p-2 shadow-lg">
+                <label className="flex cursor-pointer items-center gap-1.5 rounded-lg px-1.5 py-1 text-xs font-medium text-ink hover:bg-line/40">
+                  <input type="checkbox" checked={filtroCliente.size === 0} onChange={() => setFiltroCliente(new Set())} className="h-3.5 w-3.5 rounded border-line bg-surface2 accent-brand-600" />
+                  Todos
+                </label>
+                <div className="my-1 border-t border-line" />
+                {clientesFiltro.map((c) => {
+                  const clave = String(c.n_cliente ?? '')
+                  const marcado = filtroCliente.has(clave) || filtroCliente.has(c.razon_social)
+                  return (
+                    <label key={c.id} className="flex cursor-pointer items-center gap-1.5 rounded-lg px-1.5 py-1 text-xs text-ink hover:bg-line/40">
+                      <input
+                        type="checkbox"
+                        checked={marcado}
+                        onChange={(e) => {
+                          const nuevo = new Set(filtroCliente)
+                          const setClave = (c.n_cliente != null ? String(c.n_cliente) : '') || c.razon_social
+                          if (e.target.checked) {
+                            nuevo.delete(clave); nuevo.delete(c.razon_social)
+                            if (setClave) nuevo.add(setClave)
+                          } else {
+                            nuevo.delete(clave); nuevo.delete(c.razon_social)
+                          }
+                          setFiltroCliente(nuevo)
+                        }}
+                        className="h-3.5 w-3.5 rounded border-line bg-surface2 accent-brand-600"
+                      />
+                      <span className="truncate">{c.n_cliente ? `${c.n_cliente} - ${c.razon_social}` : c.razon_social}</span>
+                    </label>
+                  )
+                })}
               </div>
             </>
           )}
