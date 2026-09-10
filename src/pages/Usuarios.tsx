@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Loader2,
   Check,
@@ -12,12 +12,12 @@ import {
   AlertTriangle,
   Copy,
   Pencil,
-  ChevronDown,
   Trash2,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import MultiselectFiltro from '@/components/MultiselectFiltro'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 
@@ -475,22 +475,6 @@ function EditarUsuarioModal({
   const [estado, setEstado] = useState(usuario.estado)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [dropdownOpen, setDropdownOpen] = useState(false)
-  const dropRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (dropRef.current && !dropRef.current.contains(e.target as Node)) setDropdownOpen(false)
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [])
-
-  function toggleRol(codigo: string) {
-    setRolesSel((prev) =>
-      prev.includes(codigo) ? prev.filter((r) => r !== codigo) : [...prev, codigo],
-    )
-  }
 
   function removeRol(codigo: string) {
     setRolesSel((prev) => prev.filter((r) => r !== codigo))
@@ -569,35 +553,12 @@ function EditarUsuarioModal({
               ))}
               {rolesSel.length === 0 && <span className="text-xs text-sub/50">Ningún rol seleccionado</span>}
             </div>
-            <div ref={dropRef} className="relative">
-              <button
-                type="button"
-                onClick={() => setDropdownOpen(!dropdownOpen)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface2 px-3 py-2 text-xs font-medium text-ink transition hover:bg-line"
-              >
-                Seleccionar roles <ChevronDown size={13} aria-hidden />
-              </button>
-              {dropdownOpen && (
-                <div className="absolute z-10 mt-1 w-full rounded-xl border border-line bg-surface shadow-lg">
-                  <div className="max-h-48 overflow-y-auto p-1">
-                    {roles.map((r) => (
-                      <label
-                        key={r.codigo}
-                        className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm transition hover:bg-line/50"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={rolesSel.includes(r.codigo)}
-                          onChange={() => toggleRol(r.codigo)}
-                          className="h-4 w-4 accent-brand-600"
-                        />
-                        <span className="text-ink">{r.nombre}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+            <MultiselectFiltro
+              label="Roles"
+              opciones={roles.map((r) => ({ id: r.codigo, label: r.nombre }))}
+              seleccionadas={new Set(rolesSel)}
+              onChange={(s) => setRolesSel(Array.from(s))}
+            />
           </div>
 
           {/* Local / Area */}

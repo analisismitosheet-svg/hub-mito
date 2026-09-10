@@ -6,6 +6,7 @@ import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { usePermisosArea } from '@/hooks/usePermisosArea'
+import { SelectBuscar } from '@/components/MultiselectFiltro'
 
 interface Novedad {
   id: string
@@ -356,18 +357,9 @@ export default function CargaNovedades() {
           <option value="">Mes</option>
           {MESES_LIQUIDACION.map((m) => <option key={m} value={m}>{m}</option>)}
         </select>
-        <select value={fMotivo} onChange={(e) => setFMotivo(e.target.value)} className={selectCls + ' h-7 w-full px-2 py-0 text-xs'}>
-          <option value="">Motivo</option>
-          {MOTIVOS.map((m) => <option key={m} value={m}>{m}</option>)}
-        </select>
-        <select value={fLocal} onChange={(e) => setFLocal(e.target.value)} className={selectCls + ' h-7 w-full px-2 py-0 text-xs'}>
-          <option value="">Local</option>
-          {LOCALES.map((l) => <option key={l} value={l}>{l}</option>)}
-        </select>
-        <select value={fTipo} onChange={(e) => setFTipo(e.target.value)} className={selectCls + ' h-7 w-full px-2 py-0 text-xs'}>
-          <option value="">Tipo</option>
-          {TIPOS.map((t) => <option key={t} value={t}>{t}</option>)}
-        </select>
+        <SelectBuscar label="Motivo" opciones={MOTIVOS.map((m) => ({ id: m, label: m }))} valor={fMotivo} onChange={setFMotivo} className="h-7 w-full" />
+        <SelectBuscar label="Local" opciones={LOCALES.map((l) => ({ id: l, label: l }))} valor={fLocal} onChange={setFLocal} className="h-7 w-full" />
+        <SelectBuscar label="Tipo" opciones={TIPOS.map((t) => ({ id: t, label: t }))} valor={fTipo} onChange={setFTipo} className="h-7 w-full" />
         <span className="flex items-center text-[11px] text-sub/70">{lista.length}/{todos.length}</span>
       </div>
 

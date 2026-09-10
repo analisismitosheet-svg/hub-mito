@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
-  Loader2, Search, SearchX, Plus, Pencil, Trash2, X, Upload, FileText, Lock, Printer, Check, Eye, Settings, Filter,
+  Loader2, Search, SearchX, Plus, Pencil, Trash2, X, Upload, FileText, Lock, Printer, Check, Eye, Settings,
 } from 'lucide-react'
 import { EtiquetasModal } from '@/components/EtiquetasBultos'
 import GestionTransportes from '@/components/GestionTransportes'
+import MultiselectFiltro from '@/components/MultiselectFiltro'
 import HistorialLista from '@/components/HistorialLista'
 import { registrarHistorial } from '@/lib/historial'
 import Layout from '@/components/Layout'
@@ -178,9 +179,7 @@ export default function FacturacionFabrica() {
   const [error, setError] = useState<string | null>(null)
   const [q, setQ] = useState('')
   const [filtroTransporte, setFiltroTransporte] = useState<Set<string>>(new Set())
-  const [abiertoTransp, setAbiertoTransp] = useState(false)
   const [filtroCliente, setFiltroCliente] = useState<Set<string>>(new Set())
-  const [abiertoCli, setAbiertoCli] = useState(false)
   const [filtroPol, setFiltroPol] = useState(modoPolo52)
   const [filtroFechaDesde, setFiltroFechaDesde] = useState('')
   const [filtroFechaHasta, setFiltroFechaHasta] = useState('')
@@ -584,91 +583,21 @@ export default function FacturacionFabrica() {
           <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sub/70" aria-hidden />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por razon social, remito, autorizacion..." className={inputCls + ' pl-8 text-xs'} />
         </div>
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setAbiertoTransp((o) => !o)}
-            className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line"
-          >
-            <Filter size={13} aria-hidden />
-            Transportes {filtroTransporte.size > 0 ? `(${filtroTransporte.size})` : ''}
-          </button>
-          {abiertoTransp && (
-            <>
-              <div className="fixed inset-0 z-30" onClick={() => setAbiertoTransp(false)} />
-              <div className="absolute left-0 top-full z-40 mt-1 max-h-72 w-64 overflow-y-auto rounded-xl border border-line bg-surface p-2 shadow-lg">
-                <label className="flex cursor-pointer items-center gap-1.5 rounded-lg px-1.5 py-1 text-xs font-medium text-ink hover:bg-line/40">
-                  <input type="checkbox" checked={filtroTransporte.size === 0} onChange={() => setFiltroTransporte(new Set())} className="h-3.5 w-3.5 rounded border-line bg-surface2 accent-brand-600" />
-                  Todos
-                </label>
-                <div className="my-1 border-t border-line" />
-                {transporteFiltro.map((t) => (
-                  <label key={t.id} className="flex cursor-pointer items-center gap-1.5 rounded-lg px-1.5 py-1 text-xs text-ink hover:bg-line/40">
-                    <input
-                      type="checkbox"
-                      checked={filtroTransporte.has(t.nombre)}
-                      onChange={(e) => {
-                        const nuevo = new Set(filtroTransporte)
-                        if (e.target.checked) nuevo.add(t.nombre)
-                        else nuevo.delete(t.nombre)
-                        setFiltroTransporte(nuevo)
-                      }}
-                      className="h-3.5 w-3.5 rounded border-line bg-surface2 accent-brand-600"
-                    />
-                    <span className="truncate">{t.nombre}</span>
-                  </label>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setAbiertoCli((o) => !o)}
-            className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line"
-          >
-            <Filter size={13} aria-hidden />
-            Clientes {filtroCliente.size > 0 ? `(${filtroCliente.size})` : ''}
-          </button>
-          {abiertoCli && (
-            <>
-              <div className="fixed inset-0 z-30" onClick={() => setAbiertoCli(false)} />
-              <div className="absolute left-0 top-full z-40 mt-1 max-h-72 w-64 overflow-y-auto rounded-xl border border-line bg-surface p-2 shadow-lg">
-                <label className="flex cursor-pointer items-center gap-1.5 rounded-lg px-1.5 py-1 text-xs font-medium text-ink hover:bg-line/40">
-                  <input type="checkbox" checked={filtroCliente.size === 0} onChange={() => setFiltroCliente(new Set())} className="h-3.5 w-3.5 rounded border-line bg-surface2 accent-brand-600" />
-                  Todos
-                </label>
-                <div className="my-1 border-t border-line" />
-                {clientesFiltro.map((c) => {
-                  const clave = String(c.n_cliente ?? '')
-                  const marcado = filtroCliente.has(clave) || filtroCliente.has(c.razon_social)
-                  return (
-                    <label key={c.id} className="flex cursor-pointer items-center gap-1.5 rounded-lg px-1.5 py-1 text-xs text-ink hover:bg-line/40">
-                      <input
-                        type="checkbox"
-                        checked={marcado}
-                        onChange={(e) => {
-                          const nuevo = new Set(filtroCliente)
-                          const setClave = (c.n_cliente != null ? String(c.n_cliente) : '') || c.razon_social
-                          if (e.target.checked) {
-                            nuevo.delete(clave); nuevo.delete(c.razon_social)
-                            if (setClave) nuevo.add(setClave)
-                          } else {
-                            nuevo.delete(clave); nuevo.delete(c.razon_social)
-                          }
-                          setFiltroCliente(nuevo)
-                        }}
-                        className="h-3.5 w-3.5 rounded border-line bg-surface2 accent-brand-600"
-                      />
-                      <span className="truncate">{c.n_cliente ? `${c.n_cliente} - ${c.razon_social}` : c.razon_social}</span>
-                    </label>
-                  )
-                })}
-              </div>
-            </>
-          )}
-        </div>
+        <MultiselectFiltro
+          label="Transportes"
+          opciones={transporteFiltro.map((t) => ({ id: t.nombre, label: t.nombre }))}
+          seleccionadas={filtroTransporte}
+          onChange={setFiltroTransporte}
+        />
+        <MultiselectFiltro
+          label="Clientes"
+          opciones={clientesFiltro.map((c) => ({
+            id: (c.n_cliente != null ? String(c.n_cliente) : '') || c.razon_social,
+            label: c.n_cliente ? `${c.n_cliente} - ${c.razon_social}` : c.razon_social,
+          }))}
+          seleccionadas={filtroCliente}
+          onChange={setFiltroCliente}
+        />
         <div className="flex items-center gap-1">
           <input type="date" value={filtroFechaDesde} onChange={(e) => setFiltroFechaDesde(e.target.value)} className={inputCls + ' w-auto text-xs'} title="Fecha desde" />
           <span className="text-[10px] text-sub/50">—</span>

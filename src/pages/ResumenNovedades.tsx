@@ -6,6 +6,7 @@ import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { usePermisosArea } from '@/hooks/usePermisosArea'
+import { SelectBuscar } from '@/components/MultiselectFiltro'
 
 interface Novedad {
   id: string
@@ -26,7 +27,6 @@ interface Novedad {
 }
 
 const inputCls = 'w-full rounded-xl border border-line bg-surface2 px-3 py-1.5 text-[13px] text-ink outline-none transition duration-250 placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40'
-const selectCls = inputCls + ' appearance-none'
 
 const MOTIVOS = ['INGRESO', 'AUSENTE', 'TARDANZA', 'APERCIBIM', 'EMBARGO', 'CARPETA MÉDICA', 'CAMBIO COMISIÓN', 'RESTAR', 'SUSPENSION', 'CAMBIO LOCAL', 'CAMBIO', 'VACACIONES', 'BAJA', 'LICENCIA', 'OTROS', 'RECUPERAR', 'SIN NOVEDADES']
 const TIPOS = ['MITO', 'PPP', 'MAS26', 'PFOMENTAR']
@@ -96,14 +96,8 @@ export default function ResumenNovedades() {
           <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sub/70" aria-hidden />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nombre, N°, local..." className={inputCls + ' pl-8 text-xs'} />
         </div>
-        <select value={fMotivo} onChange={(e) => setFMotivo(e.target.value)} className={selectCls + ' w-auto text-xs'}>
-          <option value="">Motivo (todos)</option>
-          {MOTIVOS.map((m) => <option key={m} value={m}>{m}</option>)}
-        </select>
-        <select value={fTipo} onChange={(e) => setFTipo(e.target.value)} className={selectCls + ' w-auto text-xs'}>
-          <option value="">Tipo (todos)</option>
-          {TIPOS.map((t) => <option key={t} value={t}>{t}</option>)}
-        </select>
+        <SelectBuscar label="Motivo" opciones={MOTIVOS.map((m) => ({ id: m, label: m }))} valor={fMotivo} onChange={setFMotivo} className="w-40" />
+        <SelectBuscar label="Tipo" opciones={TIPOS.map((t) => ({ id: t, label: t }))} valor={fTipo} onChange={setFTipo} className="w-40" />
       </div>
 
       {cargando ? (

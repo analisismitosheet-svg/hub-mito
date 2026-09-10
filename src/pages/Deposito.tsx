@@ -5,6 +5,7 @@ import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
+import { SelectBuscar } from '@/components/MultiselectFiltro'
 
 type EstadoM = 'pendiente' | 'hecho' | 'faltante'
 interface Lote {
@@ -780,14 +781,20 @@ export default function Deposito() {
                   <div className="border-t border-line">
                     <div className="flex items-center gap-3 border-b border-line px-4 py-2">
                       <span className="text-[11px] font-medium text-sub">Responsables:</span>
-                      <select value={lote.responsable1 ?? ''} onChange={(e) => guardarResponsable(lote.id, 'responsable1', e.target.value || null)} className="max-w-[9rem] rounded-lg border border-line bg-surface2 px-2 py-1 text-xs text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40">
-                        <option value="">—</option>
-                        {empleados.map((em) => <option key={em.id} value={em.id}>{em.nombre}</option>)}
-                      </select>
-                      <select value={lote.responsable2 ?? ''} onChange={(e) => guardarResponsable(lote.id, 'responsable2', e.target.value || null)} className="max-w-[9rem] rounded-lg border border-line bg-surface2 px-2 py-1 text-xs text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40">
-                        <option value="">—</option>
-                        {empleados.map((em) => <option key={em.id} value={em.id}>{em.nombre}</option>)}
-                      </select>
+                      <SelectBuscar
+                        label="Responsable"
+                        opciones={empleados.map((em) => ({ id: em.id, label: em.nombre }))}
+                        valor={lote.responsable1 ?? ''}
+                        onChange={(v) => void guardarResponsable(lote.id, 'responsable1', v || null)}
+                        className="w-44"
+                      />
+                      <SelectBuscar
+                        label="Responsable 2"
+                        opciones={empleados.map((em) => ({ id: em.id, label: em.nombre }))}
+                        valor={lote.responsable2 ?? ''}
+                        onChange={(v) => void guardarResponsable(lote.id, 'responsable2', v || null)}
+                        className="w-44"
+                      />
                     </div>
                     <div className="border-b border-line">
                       <button

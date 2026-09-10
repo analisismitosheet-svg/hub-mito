@@ -5,6 +5,7 @@ import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { usePermisosArea } from '@/hooks/usePermisosArea'
+import { SelectBuscar } from '@/components/MultiselectFiltro'
 
 /** Convierte una fecha de Excel (serie o texto) a ISO yyyy-mm-dd. */
 function fechaExcelAISO(v: unknown): string | null {
@@ -459,14 +460,12 @@ function Campo({ label, children, span2, span3 }: { label: string; children: Rea
 
 function FiltroCol({ d, valor, onChange }: { d: { clave: string; label: string; valores: string[] }; valor: string; onChange: (v: string) => void }) {
   return (
-    <select
-      value={valor}
-      onChange={(e) => onChange(e.target.value)}
-      className={'w-full max-w-[140px] rounded border bg-surface2 px-1 py-0.5 text-[10px] font-normal normal-case tracking-normal text-ink outline-none focus-visible:ring-1 focus-visible:ring-brand-500/40 ' + (valor ? 'border-brand-500/50 text-brand-400' : 'border-line')}
-      title={d.label}
-    >
-      <option value="">{d.label}</option>
-      {d.valores.map((v) => <option key={v} value={v}>{v}</option>)}
-    </select>
+    <SelectBuscar
+      label={d.label}
+      opciones={d.valores.map((v) => ({ id: v, label: v }))}
+      valor={valor}
+      onChange={onChange}
+      className={valor ? 'border-brand-500/50' : ''}
+    />
   )
 }

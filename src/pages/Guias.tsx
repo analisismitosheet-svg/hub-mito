@@ -8,6 +8,7 @@ import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { EtiquetasModal } from '@/components/EtiquetasBultos'
 import HistorialLista from '@/components/HistorialLista'
+import { SelectBuscar } from '@/components/MultiselectFiltro'
 import { registrarHistorial } from '@/lib/historial'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
@@ -293,15 +294,9 @@ export default function Guias() {
           <option value="FINALIZADO_A_CAJA">Finalizado a Caja</option>
         </select>
 
-        <select value={fPedido} onChange={(e) => setFPedido(e.target.value)} title="Filtrar por pedido" className="h-7 w-auto shrink-0 appearance-none rounded-lg border border-line bg-surface2 px-2 text-xs text-ink outline-none transition duration-250 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40">
-          <option value="">Pedido (todos)</option>
-          {pedidoOpciones.map((o) => <option key={o} value={o}>{o}</option>)}
-        </select>
+        <SelectBuscar label="Pedido" opciones={pedidoOpciones.map((o) => ({ id: o, label: o }))} valor={fPedido} onChange={setFPedido} className="w-40 h-7" />
 
-        <select value={fSucursal} onChange={(e) => setFSucursal(e.target.value)} title="Filtrar por sucursal" className="h-7 w-auto shrink-0 appearance-none rounded-lg border border-line bg-surface2 px-2 text-xs text-ink outline-none transition duration-250 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40">
-          <option value="">Sucursal (todos)</option>
-          {sucursalOpciones.map((o) => <option key={o} value={o}>{o}</option>)}
-        </select>
+        <SelectBuscar label="Sucursal" opciones={sucursalOpciones.map((o) => ({ id: o, label: o }))} valor={fSucursal} onChange={setFSucursal} className="w-40 h-7" />
 
         <span className="whitespace-nowrap text-[11px] text-sub/70">{lista.length} guías</span>
 
