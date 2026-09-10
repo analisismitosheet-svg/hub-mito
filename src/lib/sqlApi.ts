@@ -88,6 +88,40 @@ export async function guardarVistas(vistas: VistaDef[]): Promise<{ error: string
   return { error: error?.message ?? null }
 }
 
+/**
+ * Nombre de la vista que reporta qué artículos YA salieron/remitieron del
+ * SQL Server local. Se guarda en config_app bajo la clave 'sql_vista_salidas'
+ * (configurable desde Configuraciones > Conexión SQL, sin redeploy).
+ *
+ * Fallback a la variable de entorno VITE_SQL_VISTA_SALIDAS.
+ *
+ * Columnas esperadas (case-insensitive):
+ *   origen (local), articulo, color, talle
+ */
+export async function cargarVistaSalidas(): Promise<string> {
+  if (!supabase) return import.meta.env.VITE_SQL_VISTA_SALIDAS as string | undefined ?? ''
+  const { data } = await supabase
+    .from('config_app')
+    .select('valor')
+    .eq('clave', 'sql_vista_salidas')
+    .maybeSingle()
+  const deDb = (data as { valor?: unknown } | null)?.valor
+  const nombre = typeof deDb === 'string' ? deDb.trim() : ''
+  if (nombre && /^[A-Za-z0-9_]+$/.test(nombre)) return nombre
+  return (import.meta.env.VITE_SQL_VISTA_SALIDAS as string | undefined)?.trim() ?? ''
+}
+
+/** Guarda el nombre de la vista de salidas en config_app (admin por RLS). */
+export async function guardarVistaSalidas(nombre: string): Promise<{ error: string | null }> {
+  if (!supabase) return { error: 'Supabase no está configurado.' }
+  const limpio = nombre.trim()
+  if (limpio && !/^[A-Za-z0-9_]+$/.test(limpio)) return { error: 'Nombre de vista inválido.' }
+  const { error } = await supabase
+    .from('config_app')
+    .upsert({ clave: 'sql_vista_salidas', valor: limpio }, { onConflict: 'clave' })
+  return { error: error?.message ?? null }
+}
+
 /** Estado server-side de la conexión (api/sql/status). */
 export interface EstadoSql {
   logicApp: boolean
