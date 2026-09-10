@@ -594,7 +594,7 @@ export default function FacturacionFabrica() {
         )
       }
       return (
-        <td className={cls + ' cursor-pointer hover:bg-brand-600/5'} onClick={(e) => { e.stopPropagation(); empezarEdicion(r, 'fecha_recepcion_polo', valor) }}>
+        <td className={cls + ' cursor-pointer hover:bg-brand-600/5'} onClick={(e) => { e.stopPropagation(); setEditando({ id: r.id, campo: 'fecha_recepcion_polo' }); setEditandoValor(valor ?? '') }}>
           <span className={'block truncate ' + (recibido ? 'text-emerald-400' : 'text-sub')} title={valor ? `Recibido en polo: ${fmtDateSlider(valor)}` : 'Sin recepción'}>{valor ? fmtDateSlider(valor) : '-'}</span>
         </td>
       )
