@@ -259,14 +259,6 @@ export default function Empleados() {
         {hayFiltros && (
           <button onClick={() => { setBusqueda(''); setFiltros({}) }} className="btn-press rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line">Limpiar filtros</button>
         )}
-        {columnasFiltro.map((c) => (
-          <FiltroCol
-            key={c.clave}
-            d={c}
-            filtros={filtros[c.clave] ?? []}
-            onChange={(v) => setFiltros((prev) => ({ ...prev, [c.clave]: v }))}
-          />
-        ))}
         {puedeCrear && (
           <button onClick={() => { setSel(null); setModal('new') }} className="btn-press ml-auto inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700">
             <Plus size={15} aria-hidden /> Nuevo empleado
@@ -304,6 +296,17 @@ export default function Empleados() {
                 <th className={tdBase + ' py-2 text-center'}>Horas</th>
                 <th className={tdBase + ' py-2'}>Teléfono</th>
                 <th className={tdBase + ' py-2 text-right'}>Acciones</th>
+              </tr>
+              <tr className="bg-surface/60">
+                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={columnasFiltro[0]!} filtros={filtros.legajo ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, legajo: v }))} /></th>
+                <th className={tdBase + ' py-1 align-top'} />
+                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={columnasFiltro[1]!} filtros={filtros.lugar ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, lugar: v }))} /></th>
+                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={columnasFiltro[2]!} filtros={filtros.area_sector ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, area_sector: v }))} /></th>
+                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={columnasFiltro[3]!} filtros={filtros.categoria ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, categoria: v }))} /></th>
+                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={columnasFiltro[4]!} filtros={filtros.puesto ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, puesto: v }))} /></th>
+                <th className={tdBase + ' py-1 align-top'} />
+                <th className={tdBase + ' py-1 align-top'} />
+                <th className={tdBase + ' py-1 align-top'} />
               </tr>
             </thead>
             <tbody className="divide-y divide-line/60">
@@ -474,6 +477,7 @@ function FiltroCol({ d, filtros, onChange }: { d: { clave: string; label: string
   return (
     <MultiselectFiltro
       label={d.label}
+      compacto
       opciones={d.valores.map((v) => ({ id: v, label: v }))}
       seleccionadas={new Set(filtros)}
       onChange={(s) => onChange(Array.from(s))}

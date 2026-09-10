@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Filter, Search, X, ChevronDown } from 'lucide-react'
 
 export interface OpcionMulti {
@@ -168,14 +169,18 @@ export default function MultiselectFiltro({
   opciones,
   seleccionadas,
   onChange,
+  compacto = false,
 }: {
   label: string
   opciones: OpcionMulti[]
   seleccionadas: Set<string>
   onChange: (s: Set<string>) => void
+  compacto?: boolean
 }) {
   const [abierto, setAbierto] = useState(false)
   const [busq, setBusq] = useState('')
+  const botonRef = useRef<HTMLButtonElement>(null)
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null)
 
   const filtradas = useMemo(() => {
     const t = busq.trim().toUpperCase()
@@ -191,24 +196,58 @@ export default function MultiselectFiltro({
   }
 
   function abrir() {
+    if (!abierto) {
+      const el = botonRef.current
+      if (el) {
+        const r = el.getBoundingClientRect()
+        const width = 256
+        let left = r.left
+        if (left + width > window.innerWidth - 8) left = Math.max(8, window.innerWidth - width - 8)
+        setPos({ top: r.bottom + 4, left, width })
+      }
+    }
     setAbierto((o) => !o)
     setBusq('')
   }
 
+  // Recalcular posición al hacer scroll/resize mientras está abierto
+  useLayoutEffect(() => {
+    if (!abierto) return
+    function update() {
+      const el = botonRef.current
+      if (!el) return
+      const r = el.getBoundingClientRect()
+      const width = 256
+      let left = r.left
+      if (left + width > window.innerWidth - 8) left = Math.max(8, window.innerWidth - width - 8)
+      setPos({ top: r.bottom + 4, left, width })
+    }
+    update()
+    window.addEventListener('scroll', update, true)
+    window.addEventListener('resize', update)
+    return () => {
+      window.removeEventListener('scroll', update, true)
+      window.removeEventListener('resize', update)
+    }
+  }, [abierto])
+
   return (
-    <div className="relative">
+    <div className="relative inline-block">
       <button
+        ref={botonRef}
         type="button"
         onClick={abrir}
-        className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line"
+        title={label + (seleccionadas.size > 0 ? ` (${seleccionadas.size} seleccionados)` : '')}
+        className={'btn-press inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line' + (compacto ? ' !px-1.5' : '')}
       >
         <Filter size={13} aria-hidden />
-        {label} {seleccionadas.size > 0 ? `(${seleccionadas.size})` : ''}
+        {!compacto && label}
+        {seleccionadas.size > 0 ? <span className={compacto ? 'text-[10px] text-brand-400' : ''}>{seleccionadas.size > 0 ? `(${seleccionadas.size})` : ''}</span> : null}
       </button>
-      {abierto && (
+      {abierto && pos && createPortal(
         <>
-          <div className="fixed inset-0 z-30" onClick={() => setAbierto(false)} />
-          <div className="absolute left-0 top-full z-40 mt-1 w-64 rounded-xl border border-line bg-surface p-2 shadow-lg">
+          <div className="fixed inset-0 z-[70]" onClick={() => setAbierto(false)} />
+          <div className="fixed z-[80] rounded-xl border border-line bg-surface p-2 shadow-xl" style={{ top: pos.top, left: pos.left, width: pos.width }}>
             <div className="flex items-center gap-1.5 border-b border-line pb-2">
               <Search size={13} className="shrink-0 text-sub/70" aria-hidden />
               <input
@@ -247,7 +286,8 @@ export default function MultiselectFiltro({
               )}
             </div>
           </div>
-        </>
+        </>,
+        document.body,
       )}
     </div>
   )
