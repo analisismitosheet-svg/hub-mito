@@ -64,11 +64,19 @@ export function usePermisosArea(modulo: string): PermisosArea {
 
   // Fallback: permisos por rol
   const fb = FALLBACK_CLAVES[modulo] ?? {}
+  // Sufijo real del permiso en rol_permisos (ej. 'mayorista.guias.edit')
+  const SUFIJO: Record<keyof PermisosArea, string> = {
+    ver: 'view',
+    crear: 'create',
+    editar: 'edit',
+    edicionUnica: 'edit',
+    borrar: 'delete',
+  }
   const clave = (accion: keyof PermisosArea) => {
     const c = fb[accion]
     if (c === '') return false
     if (c) return can(c)
-    return can(`${modulo}.${accion === 'edicionUnica' ? 'edit' : accion}`)
+    return can(`${modulo}.${SUFIJO[accion]}`)
   }
 
   return {
