@@ -184,7 +184,9 @@ export default function FacturacionFabrica() {
   const [filtroPol, setFiltroPol] = useState(modoPolo52)
   const [filtroFechaDesde, setFiltroFechaDesde] = useState('')
   const [filtroFechaHasta, setFiltroFechaHasta] = useState('')
+  const [filtroConEnvio, setFiltroConEnvio] = useState(false)
   const [filtroSinEnvio, setFiltroSinEnvio] = useState(false)
+  const [filtroConRecepcion, setFiltroConRecepcion] = useState(false)
   const [filtroSinRecepcion, setFiltroSinRecepcion] = useState(false)
   const [modal, setModal] = useState<'new' | 'edit' | 'importar' | null>(null)
   const [sel, setSel] = useState<FactRegistro | null>(null)
@@ -337,8 +339,10 @@ export default function FacturacionFabrica() {
     if (filtroCliente.size > 0) r = r.filter((f) => filtroCliente.has(f.razon_social ?? '') || filtroCliente.has(String(f.n_cliente ?? '')))
     if (filtroFechaDesde) r = r.filter((f) => (excelDate(f.fecha_fact) || '') >= filtroFechaDesde)
     if (filtroFechaHasta) r = r.filter((f) => (excelDate(f.fecha_fact) || '') <= filtroFechaHasta)
-    if (filtroSinEnvio) r = r.filter((f) => !f.fecha_envio)
-    if (filtroSinRecepcion) r = r.filter((f) => !f.fecha_recepcion_polo && !fechasRecibido[normalizarRemito(f.n_remito)])
+    if (filtroSinEnvio && !filtroConEnvio) r = r.filter((f) => !f.fecha_envio)
+    if (filtroConEnvio && !filtroSinEnvio) r = r.filter((f) => !!f.fecha_envio)
+    if (filtroSinRecepcion && !filtroConRecepcion) r = r.filter((f) => !f.fecha_recepcion_polo && !fechasRecibido[normalizarRemito(f.n_remito)])
+    if (filtroConRecepcion && !filtroSinRecepcion) r = r.filter((f) => !!f.fecha_recepcion_polo || !!fechasRecibido[normalizarRemito(f.n_remito)])
     if (term) r = r.filter((f) => camposBuscables(f).some((c) => c.includes(term)))
     r = [...r].sort((a, b) => {
       const av = a[sortKey] ?? ''
@@ -348,13 +352,13 @@ export default function FacturacionFabrica() {
       return sortAsc ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
     })
     return r
-  }, [todos, term, filtroTransporte, filtroCliente, filtroPol, filtroFechaDesde, filtroFechaHasta, filtroSinEnvio, filtroSinRecepcion, fechasRecibido, modoPolo52, sortKey, sortAsc])
+  }, [todos, term, filtroTransporte, filtroCliente, filtroPol, filtroFechaDesde, filtroFechaHasta, filtroConEnvio, filtroSinEnvio, filtroConRecepcion, filtroSinRecepcion, fechasRecibido, modoPolo52, sortKey, sortAsc])
 
   const totalPaginas = Math.max(1, Math.ceil(lista.length / POR_PAGINA))
   const paginaSegura = Math.min(pagina, totalPaginas)
   const listaPagina = lista.slice((paginaSegura - 1) * POR_PAGINA, paginaSegura * POR_PAGINA)
 
-  useEffect(() => { setPagina(1) }, [q, filtroTransporte, filtroCliente, filtroPol, filtroFechaDesde, filtroFechaHasta, filtroSinEnvio, filtroSinRecepcion])
+  useEffect(() => { setPagina(1) }, [q, filtroTransporte, filtroCliente, filtroPol, filtroFechaDesde, filtroFechaHasta, filtroConEnvio, filtroSinEnvio, filtroConRecepcion, filtroSinRecepcion])
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortAsc(!sortAsc)
@@ -669,24 +673,28 @@ export default function FacturacionFabrica() {
           />
           Solo POLO52
         </label>
-        <label className="flex items-center gap-1.5 text-xs text-sub" title="Mostrar solo registros sin fecha de recepción">
-          <input
-            type="checkbox"
-            checked={filtroSinRecepcion}
-            onChange={(e) => setFiltroSinRecepcion(e.target.checked)}
-            className="h-3.5 w-3.5 rounded border-line bg-surface2 accent-brand-600"
-          />
-          Sin fecha de recepción
-        </label>
-        <label className="flex items-center gap-1.5 text-xs text-sub" title="Mostrar solo registros sin fecha de envío">
-          <input
-            type="checkbox"
-            checked={filtroSinEnvio}
-            onChange={(e) => setFiltroSinEnvio(e.target.checked)}
-            className="h-3.5 w-3.5 rounded border-line bg-surface2 accent-brand-600"
-          />
-          Sin fecha de envío
-        </label>
+        <div className="flex items-center gap-2 rounded-lg border border-line bg-surface2/60 px-2 py-1">
+          <span className="text-[10px] font-medium text-sub/70">Envío:</span>
+          <label className="flex cursor-pointer items-center gap-1 text-[11px] text-sub">
+            <input type="checkbox" checked={filtroConEnvio} onChange={(e) => setFiltroConEnvio(e.target.checked)} className="h-3 w-3 accent-brand-600" />
+            Con fecha
+          </label>
+          <label className="flex cursor-pointer items-center gap-1 text-[11px] text-sub">
+            <input type="checkbox" checked={filtroSinEnvio} onChange={(e) => setFiltroSinEnvio(e.target.checked)} className="h-3 w-3 accent-brand-600" />
+            Sin fecha
+          </label>
+        </div>
+        <div className="flex items-center gap-2 rounded-lg border border-line bg-surface2/60 px-2 py-1">
+          <span className="text-[10px] font-medium text-sub/70">Recepción:</span>
+          <label className="flex cursor-pointer items-center gap-1 text-[11px] text-sub">
+            <input type="checkbox" checked={filtroConRecepcion} onChange={(e) => setFiltroConRecepcion(e.target.checked)} className="h-3 w-3 accent-brand-600" />
+            Con fecha
+          </label>
+          <label className="flex cursor-pointer items-center gap-1 text-[11px] text-sub">
+            <input type="checkbox" checked={filtroSinRecepcion} onChange={(e) => setFiltroSinRecepcion(e.target.checked)} className="h-3 w-3 accent-brand-600" />
+            Sin fecha
+          </label>
+        </div>
         <span className="text-[11px] text-sub/70">{lista.length} registros {polCount > 0 && isAdmin ? `(${polCount} POLO52)` : ''}</span>
         {selected.size > 0 && puedeBorrar && (
           <button onClick={() => setConfirm({ message: `Eliminar ${selected.size} registro(s)?`, onConfirm: () => void eliminarSeleccionados() })} className="btn-press inline-flex items-center gap-1 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/20"><Trash2 size={13} aria-hidden /> Eliminar ({selected.size})</button>
