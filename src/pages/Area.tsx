@@ -1,18 +1,27 @@
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { FolderOpen, ArrowRight } from 'lucide-react'
 import Layout from '@/components/Layout'
 import AppCard from '@/components/AppCard'
 import BackButton from '@/components/BackButton'
-import { appsDeArea, getArea } from '@/config/areas'
+import { getArea, cargarOverridesAreas, appsDeAreaConOverrides, type AppDef } from '@/config/areas'
 import { useAuth } from '@/context/AuthContext'
 
 export default function Area() {
   const { areaId = '' } = useParams()
   const navigate = useNavigate()
   const { can } = useAuth()
+  const [overrides, setOverrides] = useState<Record<string, string[]>>({})
   const area = getArea(areaId)
+
+  useEffect(() => {
+    let activo = true
+    void cargarOverridesAreas().then((m) => { if (activo) setOverrides(m) })
+    return () => { activo = false }
+  }, [])
+
   // Ocultar apps sin permiso y ordenar alfabéticamente por título
-  const apps = appsDeArea(areaId)
+  const apps = appsDeAreaConOverrides(areaId, overrides)
     .filter((a) => !a.permiso || can(a.permiso))
     .sort((a, b) => a.title.localeCompare(b.title, 'es', { sensitivity: 'base' }))
   const verArchivos = can('documentos.view')
@@ -92,10 +101,10 @@ export default function Area() {
 
 /** Mezcla la tarjeta "Archivos" en la posición alfabética correcta entre las apps. */
 function intercalarArchivos(
-  apps: ReturnType<typeof appsDeArea>,
+  apps: AppDef[],
   verArchivos: boolean,
-): ({ tipo: 'app'; app: ReturnType<typeof appsDeArea>[number] } | { tipo: 'archivos' })[] {
-  const out: ({ tipo: 'app'; app: ReturnType<typeof appsDeArea>[number] } | { tipo: 'archivos' })[] = []
+): ({ tipo: 'app'; app: AppDef } | { tipo: 'archivos' })[] {
+  const out: ({ tipo: 'app'; app: AppDef } | { tipo: 'archivos' })[] = []
   const sorted = [...apps].sort((a, b) => a.title.localeCompare(b.title, 'es', { sensitivity: 'base' }))
   if (!verArchivos) return sorted.map((app) => ({ tipo: 'app', app }))
 

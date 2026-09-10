@@ -28,6 +28,7 @@ import {
   FolderOpen,
   type LucideIcon,
 } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 
 /**
  * ===== ESTRUCTURA DEL HUB =====
@@ -375,4 +376,65 @@ export function appsDeArea(areaId: string): AppDef[] {
 
 export function getArea(areaId: string): AreaDef | undefined {
   return AREAS.find((a) => a.id === areaId)
+}
+
+/* ------------------------------------------------------------------ */
+/*  Overrides de ubicación por área (tabla app_areas)                  */
+/*  Permite tildar en qué áreas aparece cada app desde el panel Roles. */
+/* ------------------------------------------------------------------ */
+
+let overridesCache: Record<string, string[]> | null = null
+let loadPromise: Promise<void> | null = null
+
+/** Devuelve, para cada app, las áreas donde debe aparecer (override). */
+export function overridesAreas(): Record<string, string[]> {
+  return overridesCache ?? {}
+}
+
+/** Invalida el cache de overrides (se llama tras editar la ubicación desde Roles). */
+export function invalidarOverridesAreas(): void {
+  overridesCache = null
+  loadPromise = null
+}
+
+/**
+ * Carga la config de app_areas una sola vez. Idempotente.
+ * Devuelve un mapa app_id -> area_ids.
+ */
+export async function cargarOverridesAreas(): Promise<Record<string, string[]>> {
+  if (overridesCache) return overridesCache
+  if (!loadPromise) {
+    loadPromise = (async () => {
+      const map: Record<string, string[]> = {}
+      try {
+        if (!supabase) return
+        const { data } = await supabase.from('app_areas').select('app_id,area_id')
+        for (const r of (data as { app_id: string; area_id: string }[] | null) ?? []) {
+          const arr = map[r.app_id] ?? []
+          arr.push(r.area_id)
+          map[r.app_id] = arr
+        }
+      } catch { /* si falla, se mantiene la config estática */ }
+      overridesCache = map
+    })()
+  }
+  await loadPromise
+  return overridesCache ?? {}
+}
+
+/** Aplica los overrides a la lista de apps de un área. */
+export function appsDeAreaConOverrides(areaId: string, mapa: Record<string, string[]>): AppDef[] {
+  const base = appsDeArea(areaId)
+  const out = base.filter((a) => {
+    const areas = mapa[a.id]
+    if (!areas) return true // sin override: conserva el estático
+    return areas.includes(areaId)
+  })
+  // Apps que no estaban en el estático pero se marcaron en esta área
+  const idsBase = new Set(base.map((a) => a.id))
+  for (const app of APPS) {
+    if (idsBase.has(app.id)) continue
+    if ((mapa[app.id] ?? []).includes(areaId)) out.push(app)
+  }
+  return out
 }

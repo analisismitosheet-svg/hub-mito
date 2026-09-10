@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Loader2, Plus, Trash2, SlidersHorizontal, Check, X, ChevronRight } from 'lucide-react'
+import { Loader2, Plus, Trash2, SlidersHorizontal, Check, X, ChevronRight, MapPin } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
-import { AREAS } from '@/config/areas'
+import { AREAS, APPS, cargarOverridesAreas, invalidarOverridesAreas } from '@/config/areas'
 
 interface Rol {
   codigo: string
@@ -29,6 +29,8 @@ export default function Roles() {
   const [cargando, setCargando] = useState(true)
   const [rolGestion, setRolGestion] = useState<Rol | null>(null)
   const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
+  const [ubicacion, setUbicacion] = useState<Record<string, string[]>>({})
+  const [cargandoUbi, setCargandoUbi] = useState(false)
 
   const cargar = useCallback(async () => {
     if (!supabase) { setCargando(false); return }
@@ -39,7 +41,33 @@ export default function Roles() {
     setRoles((rl.data as Rol[]) ?? [])
     setPermisos((p.data as Permiso[]) ?? [])
     setCargando(false)
+    // Cargar ubicación de menús
+    setCargandoUbi(true)
+    try {
+      const mapa = await cargarOverridesAreas()
+      setUbicacion(mapa)
+    } finally {
+      setCargandoUbi(false)
+    }
   }, [])
+
+  async function guardarUbicacion(appId: string, areaId: string, marcado: boolean) {
+    if (!supabase) return
+    const nuevo = { ...ubicacion }
+    const arr = nuevo[appId] ?? []
+    if (marcado) {
+      if (!arr.includes(areaId)) nuevo[appId] = [...arr, areaId]
+    } else {
+      nuevo[appId] = arr.filter((a) => a !== areaId)
+    }
+    setUbicacion(nuevo)
+    invalidarOverridesAreas()
+    if (marcado) {
+      await supabase.from('app_areas').insert({ app_id: appId, area_id: areaId })
+    } else {
+      await supabase.from('app_areas').delete().eq('app_id', appId).eq('area_id', areaId)
+    }
+  }
 
   useEffect(() => { void cargar() }, [cargar])
 
@@ -114,6 +142,49 @@ export default function Roles() {
           </div>
         </div>
       )}
+
+      {/* Ubicación de menús por área */}
+      <section className="mt-8 rounded-2xl border border-line bg-surface p-4">
+        <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-ink"><MapPin size={15} className="text-brand-500" aria-hidden /> Ubicación de menús</h2>
+        <p className="mb-3 text-xs text-sub">Tildá en qué áreas debe aparecer cada submenú. Sin tilde, se usa la ubicación por defecto del código.</p>
+        {cargandoUbi ? (
+          <div className="flex items-center gap-2 py-6 text-sub"><Loader2 size={16} className="animate-spin" aria-hidden /> Cargando...</div>
+        ) : (
+          <div className="space-y-2">
+            {APPS.map((app) => {
+              const areasMarcadas = ubicacion[app.id] ?? []
+              const porDefecto = [app.areaId, ...(app.areaIds ?? [])]
+              return (
+                <details key={app.id} className="rounded-xl border border-line bg-surface2/60">
+                  <summary className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm font-medium text-ink">
+                    <span className="flex-1 truncate">{app.title}</span>
+                    <span className="text-[11px] text-sub/70">{areasMarcadas.length > 0 ? `${areasMarcadas.length} área(s)` : 'por defecto'}</span>
+                    <ChevronRight size={13} aria-hidden className="text-sub" />
+                  </summary>
+                  <div className="grid grid-cols-2 gap-1 border-t border-line px-3 py-2 sm:grid-cols-3">
+                    {AREAS.map((area) => {
+                      const marcado = areasMarcadas.includes(area.id)
+                      const esDefecto = porDefecto.includes(area.id)
+                      return (
+                        <label key={area.id} className="flex cursor-pointer items-center gap-1.5 rounded-md px-1.5 py-1 text-xs text-ink hover:bg-line/40">
+                          <input
+                            type="checkbox"
+                            checked={marcado}
+                            onChange={(e) => void guardarUbicacion(app.id, area.id, e.target.checked)}
+                            className="h-3.5 w-3.5 rounded border-line bg-surface2 accent-brand-600"
+                          />
+                          <span className="truncate">{area.name}</span>
+                          {esDefecto && !marcado && <span className="text-[10px] text-sub/60">def</span>}
+                        </label>
+                      )
+                    })}
+                  </div>
+                </details>
+              )
+            })}
+          </div>
+        )}
+      </section>
 
       {rolGestion && (
         <RolPermisosModal

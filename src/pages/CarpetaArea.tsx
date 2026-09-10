@@ -1,14 +1,23 @@
+import { useEffect, useState } from 'react'
 import { FolderOpen } from 'lucide-react'
 import Layout from '@/components/Layout'
 import AppCard from '@/components/AppCard'
 import BackButton from '@/components/BackButton'
-import { appsDeArea } from '@/config/areas'
+import { cargarOverridesAreas, appsDeAreaConOverrides } from '@/config/areas'
 import { useAuth } from '@/context/AuthContext'
 
 /** Sub-vista de una carpeta: lista las apps de una sub-área (ej. rrhh-novedades). */
 export default function CarpetaArea({ carpetaId = 'rrhh-novedades' }: { carpetaId?: string }) {
   const { can } = useAuth()
-  const apps = appsDeArea(carpetaId)
+  const [overrides, setOverrides] = useState<Record<string, string[]>>({})
+
+  useEffect(() => {
+    let activo = true
+    void cargarOverridesAreas().then((m) => { if (activo) setOverrides(m) })
+    return () => { activo = false }
+  }, [])
+
+  const apps = appsDeAreaConOverrides(carpetaId, overrides)
     .filter((a) => !a.permiso || can(a.permiso))
     .sort((a, b) => a.title.localeCompare(b.title, 'es', { sensitivity: 'base' }))
 
