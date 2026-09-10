@@ -345,32 +345,32 @@ export default function CargaNovedades() {
       {importMsg && <p className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-400">{importMsg}</p>}
 
       {/* Filtros */}
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[180px]">
-          <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sub/70" aria-hidden />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por N° legajo o nombre..." className={inputCls + ' pl-8 text-xs'} />
+      <div className="mb-3 flex items-center gap-1.5 overflow-x-auto pb-1">
+        <div className="relative w-[180px] shrink-0">
+          <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sub/70" aria-hidden />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="N° o nombre..." className={inputCls + ' h-7 pl-7 pr-2 text-xs'} />
         </div>
-        <select value={fAnio} onChange={(e) => setFAnio(e.target.value)} className={selectCls + ' w-auto text-xs'}>
-          <option value="">Año (todos)</option>
+        <select value={fAnio} onChange={(e) => setFAnio(e.target.value)} className={selectCls + ' h-7 w-auto shrink-0 px-2 py-0 text-xs'}>
+          <option value="">Año</option>
           {aniosDisponibles.map((a) => <option key={a} value={a}>{a}</option>)}
         </select>
-        <select value={fMes} onChange={(e) => setFMes(e.target.value)} className={selectCls + ' w-auto text-xs'}>
-          <option value="">Mes (todos)</option>
+        <select value={fMes} onChange={(e) => setFMes(e.target.value)} className={selectCls + ' h-7 w-auto shrink-0 px-2 py-0 text-xs'}>
+          <option value="">Mes</option>
           {MESES_LIQUIDACION.map((m) => <option key={m} value={m}>{m}</option>)}
         </select>
-        <select value={fMotivo} onChange={(e) => setFMotivo(e.target.value)} className={selectCls + ' w-auto text-xs'}>
-          <option value="">Motivo (todos)</option>
+        <select value={fMotivo} onChange={(e) => setFMotivo(e.target.value)} className={selectCls + ' h-7 w-auto shrink-0 px-2 py-0 text-xs'}>
+          <option value="">Motivo</option>
           {MOTIVOS.map((m) => <option key={m} value={m}>{m}</option>)}
         </select>
-        <select value={fLocal} onChange={(e) => setFLocal(e.target.value)} className={selectCls + ' w-auto text-xs'}>
-          <option value="">Local (todos)</option>
+        <select value={fLocal} onChange={(e) => setFLocal(e.target.value)} className={selectCls + ' h-7 w-auto shrink-0 px-2 py-0 text-xs'}>
+          <option value="">Local</option>
           {LOCALES.map((l) => <option key={l} value={l}>{l}</option>)}
         </select>
-        <select value={fTipo} onChange={(e) => setFTipo(e.target.value)} className={selectCls + ' w-auto text-xs'}>
-          <option value="">Tipo (todos)</option>
+        <select value={fTipo} onChange={(e) => setFTipo(e.target.value)} className={selectCls + ' h-7 w-auto shrink-0 px-2 py-0 text-xs'}>
+          <option value="">Tipo</option>
           {TIPOS.map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
-        <span className="text-[11px] text-sub/70">{lista.length} de {todos.length}</span>
+        <span className="shrink-0 text-[11px] text-sub/70">{lista.length}/{todos.length}</span>
       </div>
 
       {/* Lista */}
