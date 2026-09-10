@@ -1084,7 +1084,6 @@ function ImportFacturacion({ clientes, empleados, onClose, onSaved }: {
     { key: 'porcentaje_declarado', label: '% Declarado' },
     { key: 'solicitud_retiro', label: 'Solicitud Retiro' },
     { key: 'polo52', label: 'POLO52' },
-    { key: 'fecha_envio', label: 'Fecha Envio' },
     { key: 'observaciones', label: 'Observaciones' },
   ]
 
@@ -1179,7 +1178,7 @@ function ImportFacturacion({ clientes, empleados, onClose, onSaved }: {
       else nr.polo52 = false
       nr.bulto = nr.bulto ? Number(nr.bulto) || null : null
       nr.fecha_fact = excelDate(nr.fecha_fact)
-      nr.fecha_envio = excelDate(nr.fecha_envio)
+      nr.fecha_envio = null
 
       valid.push(nr)
     })
@@ -1198,7 +1197,7 @@ function ImportFacturacion({ clientes, empleados, onClose, onSaved }: {
         bulto: rest.bulto ? Number(rest.bulto) || null : null, transporte: rest.transporte || null, porcentaje_declarado: rest.porcentaje_declarado || null,
         solicitud_retiro: fmtRetiro(rest.solicitud_retiro as string | null),
         empleado_id: _empleado_id || null, n_legajo: rest.n_legajo || null, quien_facturo: rest.quien_facturo || null,
-        polo52: !!rest.polo52, fecha_envio: rest.fecha_envio || null,
+        polo52: !!rest.polo52,
         observaciones: rest.observaciones || null,
       }))
       const { error } = await supabase.from('facturacion_fabrica').insert(batch)
