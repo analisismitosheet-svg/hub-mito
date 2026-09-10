@@ -5,7 +5,8 @@ import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { usePermisosArea } from '@/hooks/usePermisosArea'
-import { SelectBuscar, AutocompleteCampo } from '@/components/MultiselectFiltro'
+import { AutocompleteCampo } from '@/components/MultiselectFiltro'
+import MultiselectFiltro from '@/components/MultiselectFiltro'
 
 /** Convierte una fecha de Excel (serie o texto) a ISO yyyy-mm-dd. */
 function fechaExcelAISO(v: unknown): string | null {
@@ -65,6 +66,7 @@ const CAMPOS =
 const inputCls = 'w-full rounded-xl border border-line bg-surface2 px-3 py-1.5 text-[13px] text-ink outline-none transition duration-250 placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40'
 const selectCls = inputCls + ' appearance-none'
 const tdBase = 'px-2 py-[3px] whitespace-nowrap'
+const tdBaseWrap = 'px-2 py-[3px]'
 
 export default function Empleados() {
   const { crear: puedeCrear, editar: puedeEditar, borrar: puedeBorrar } = usePermisosArea('rrhh.empleados')
@@ -72,7 +74,7 @@ export default function Empleados() {
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busqueda, setBusqueda] = useState('')
-  const [filtros, setFiltros] = useState<Record<string, string>>({})
+  const [filtros, setFiltros] = useState<Record<string, string[]>>({})
   const [modal, setModal] = useState<'new' | 'edit' | null>(null)
   const [sel, setSel] = useState<Empleado | null>(null)
   const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
@@ -98,9 +100,6 @@ export default function Empleados() {
       { clave: 'area_sector', label: 'Área / Sector', valores: [] },
       { clave: 'categoria', label: 'Categoría', valores: [] },
       { clave: 'puesto', label: 'Puesto', valores: [] },
-      { clave: 'sexo', label: 'Sexo', valores: [] },
-      { clave: 'prepaga', label: 'Prepaga', valores: [] },
-      { clave: 'tipo_contrato', label: 'Tipo de contrato', valores: [] },
     ]
     for (const d of defs) {
       d.valores = Array.from(
@@ -113,10 +112,10 @@ export default function Empleados() {
   const filtrados = useMemo(() => {
     const t = busqueda.trim().toUpperCase()
     return empleados.filter((e) => {
-      for (const [clave, valor] of Object.entries(filtros)) {
-        if (!valor) continue
+      for (const [clave, valores] of Object.entries(filtros)) {
+        if (!valores || valores.length === 0) continue
         const actual = String((e as unknown as Record<string, unknown>)[clave] ?? '')
-        if (actual !== valor) return false
+        if (!valores.includes(actual)) return false
       }
       if (!t) return true
       return (
@@ -128,7 +127,7 @@ export default function Empleados() {
     })
   }, [empleados, busqueda, filtros])
 
-  const hayFiltros = Object.values(filtros).some(Boolean) || !!busqueda
+  const hayFiltros = Object.values(filtros).some((v) => v.length > 0) || !!busqueda
 
   // Valores únicos por campo (para el autocomplete del modal)
   const opcionesEmpleado = useMemo(() => {
@@ -260,6 +259,14 @@ export default function Empleados() {
         {hayFiltros && (
           <button onClick={() => { setBusqueda(''); setFiltros({}) }} className="btn-press rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line">Limpiar filtros</button>
         )}
+        {columnasFiltro.map((c) => (
+          <FiltroCol
+            key={c.clave}
+            d={c}
+            filtros={filtros[c.clave] ?? []}
+            onChange={(v) => setFiltros((prev) => ({ ...prev, [c.clave]: v }))}
+          />
+        ))}
         {puedeCrear && (
           <button onClick={() => { setSel(null); setModal('new') }} className="btn-press ml-auto inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700">
             <Plus size={15} aria-hidden /> Nuevo empleado
@@ -298,29 +305,18 @@ export default function Empleados() {
                 <th className={tdBase + ' py-2'}>Teléfono</th>
                 <th className={tdBase + ' py-2 text-right'}>Acciones</th>
               </tr>
-              <tr className="bg-surface/70">
-                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={columnasFiltro.find((c) => c.clave === 'legajo')!} valor={filtros.legajo ?? ''} onChange={(v) => setFiltros((prev) => { const n = { ...prev }; if (v) n.legajo = v; else delete n.legajo; return n })} /></th>
-                <th className={tdBase + ' py-1 align-top'} />
-                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={columnasFiltro.find((c) => c.clave === 'lugar')!} valor={filtros.lugar ?? ''} onChange={(v) => setFiltros((prev) => { const n = { ...prev }; if (v) n.lugar = v; else delete n.lugar; return n })} /></th>
-                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={columnasFiltro.find((c) => c.clave === 'area_sector')!} valor={filtros.area_sector ?? ''} onChange={(v) => setFiltros((prev) => { const n = { ...prev }; if (v) n.area_sector = v; else delete n.area_sector; return n })} /></th>
-                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={columnasFiltro.find((c) => c.clave === 'categoria')!} valor={filtros.categoria ?? ''} onChange={(v) => setFiltros((prev) => { const n = { ...prev }; if (v) n.categoria = v; else delete n.categoria; return n })} /></th>
-                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={columnasFiltro.find((c) => c.clave === 'puesto')!} valor={filtros.puesto ?? ''} onChange={(v) => setFiltros((prev) => { const n = { ...prev }; if (v) n.puesto = v; else delete n.puesto; return n })} /></th>
-                <th className={tdBase + ' py-1 align-top'} />
-                <th className={tdBase + ' py-1 align-top'} />
-                <th className={tdBase + ' py-1 align-top'} />
-              </tr>
             </thead>
             <tbody className="divide-y divide-line/60">
               {filtrados.map((e) => (
                 <tr key={e.id} className="hover:bg-line/20">
                   <td className={tdBase + ' text-sub'}>{e.legajo ?? '-'}</td>
-                  <td className={tdBase + ' font-medium text-ink'}>{e.nombre}</td>
+                  <td className={tdBaseWrap + ' font-medium text-ink'}>{e.nombre}</td>
                   <td className={tdBase}>{e.lugar ?? '-'}</td>
-                  <td className={tdBase}>{e.area_sector ?? '-'}</td>
-                  <td className={tdBase}>{e.categoria ?? '-'}</td>
-                  <td className={tdBase}>{e.puesto ?? '-'}</td>
+                  <td className={tdBaseWrap}>{e.area_sector ?? '-'}</td>
+                  <td className={tdBaseWrap}>{e.categoria ?? '-'}</td>
+                  <td className={tdBaseWrap}>{e.puesto ?? '-'}</td>
                   <td className={tdBase + ' text-center'}>{e.horas ?? '-'}</td>
-                  <td className={tdBase}>{e.telefono ?? '-'}</td>
+                  <td className={tdBaseWrap}>{e.telefono ?? '-'}</td>
                   <td className={tdBase + ' text-right'}>
                     <div className="flex items-center justify-end gap-1">
                       {puedeEditar && <button onClick={() => { setSel(e); setModal('edit') }} className="rounded border border-line p-1 text-sub transition hover:text-ink" title="Editar"><Pencil size={11} aria-hidden /></button>}
@@ -474,14 +470,13 @@ function Campo({ label, children, span2, span3 }: { label: string; children: Rea
   )
 }
 
-function FiltroCol({ d, valor, onChange }: { d: { clave: string; label: string; valores: string[] }; valor: string; onChange: (v: string) => void }) {
+function FiltroCol({ d, filtros, onChange }: { d: { clave: string; label: string; valores: string[] }; filtros: string[]; onChange: (v: string[]) => void }) {
   return (
-    <SelectBuscar
+    <MultiselectFiltro
       label={d.label}
       opciones={d.valores.map((v) => ({ id: v, label: v }))}
-      valor={valor}
-      onChange={onChange}
-      className={valor ? 'border-brand-500/50' : ''}
+      seleccionadas={new Set(filtros)}
+      onChange={(s) => onChange(Array.from(s))}
     />
   )
 }
