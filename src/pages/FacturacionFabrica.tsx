@@ -37,6 +37,7 @@ interface FactRegistro {
   quien_facturo: string | null
   polo52: boolean
   fecha_envio: string | null
+  fecha_recepcion_polo: string | null
   observaciones: string | null
   created_at: string
 }
@@ -205,6 +206,7 @@ export default function FacturacionFabrica() {
   const [gestionTransportes, setGestionTransportes] = useState(false)
   const [guiasFecha, setGuiasFecha] = useState<Record<string, string>>({})
   const [recibidos, setRecibidos] = useState<Set<string>>(new Set())
+  const [fechasRecibido, setFechasRecibido] = useState<Record<string, string>>({})
 
   const mostrarToast = useCallback((msg: string) => {
     setToast(msg)
@@ -275,9 +277,10 @@ export default function FacturacionFabrica() {
         const res = await fetch('/api/bultos-recibidos', {
           headers: { Authorization: `Bearer ${token}` },
         })
-        const json = (await res.json().catch(() => ({}))) as { recibidos?: string[] }
+        const json = (await res.json().catch(() => ({}))) as { recibidos?: string[]; fechas?: Record<string, string> }
         if (activo && res.ok && Array.isArray(json.recibidos)) {
           setRecibidos(new Set(json.recibidos))
+          if (json.fechas && typeof json.fechas === 'object') setFechasRecibido(json.fechas)
         }
       } catch {
         /* silencioso: no bloquear la tabla */
@@ -565,6 +568,44 @@ export default function FacturacionFabrica() {
     )
   }
 
+  // Fecha de recepción en polo: la llena el sistema desde transporte (cruce);
+  // solo el administrador puede editarla a mano.
+  function celdaFechaRecepcion(r: FactRegistro) {
+    const cls = tdBase + ' text-center whitespace-nowrap'
+    const recibido = esRecibido(r)
+    const valor = r.fecha_recepcion_polo ?? fechasRecibido[normalizarRemito(r.n_remito)] ?? null
+    if (isAdmin) {
+      if (editarActivo(r, 'fecha_recepcion_polo')) {
+        return (
+          <td className={cls} onClick={(e) => e.stopPropagation()}>
+            <input
+              autoFocus
+              type="date"
+              value={editandoValor}
+              onChange={(e) => setEditandoValor(e.target.value)}
+              onBlur={() => void guardarCampo(r, 'fecha_recepcion_polo', editandoValor.trim() || null)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.currentTarget.blur() }
+                if (e.key === 'Escape') { setEditando(null); setEditandoValor('') }
+              }}
+              className={clE}
+            />
+          </td>
+        )
+      }
+      return (
+        <td className={cls + ' cursor-pointer hover:bg-brand-600/5'} onClick={(e) => { e.stopPropagation(); empezarEdicion(r, 'fecha_recepcion_polo', valor) }}>
+          <span className={'block truncate ' + (recibido ? 'text-emerald-400' : 'text-sub')} title={valor ? `Recibido en polo: ${fmtDateSlider(valor)}` : 'Sin recepción'}>{valor ? fmtDateSlider(valor) : '-'}</span>
+        </td>
+      )
+    }
+    return (
+      <td className={cls} onClick={(e) => e.stopPropagation()}>
+        <span className={'block truncate ' + (recibido ? 'text-emerald-400' : 'text-sub')} title={valor ? `Recibido en polo: ${fmtDateSlider(valor)}` : 'Sin recepción'}>{valor ? fmtDateSlider(valor) : '-'}</span>
+      </td>
+    )
+  }
+
   const esRecibido = (r: FactRegistro) => recibidos.has(normalizarRemito(r.n_remito))
 
   const rowCls = (r: FactRegistro) => {
@@ -679,6 +720,7 @@ export default function FacturacionFabrica() {
                 {isAdmin && <col className="w-[5%]" />}  {/* Legajo */}
                 <col className="w-[7%]" />  {/* Quien Fact */}
                 <col className="w-[4%]" />  {/* POLO52 */}
+                <col className="w-[5%]" />  {/* F.Recep */}
                 <col className="w-[5%]" />  {/* F.Envio */}
                 <col className="w-[5%]" />  {/* Dias A Envio */}
                 <col className="w-[6%]" />  {/* Obs */}
@@ -701,6 +743,7 @@ export default function FacturacionFabrica() {
                   {isAdmin && <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('n_legajo')}>Legajo{sortArrow('n_legajo')}</th>}
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('quien_facturo')}>Quien Fact{sortArrow('quien_facturo')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('polo52')}>Polo{sortArrow('polo52')}</th>
+                  <th className="px-1 py-1 text-center whitespace-nowrap text-sub/70" title="Fecha en que el remito fue recibido en polo (sistema/admin)">F.Recep</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('fecha_envio')}>F.Envio{sortArrow('fecha_envio')}</th>
                   <th className="px-1 py-1 text-center whitespace-nowrap text-sub/70" title="Dias desde la facturacion hasta el envio">Dias A Envio</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('observaciones')}>Observ{sortArrow('observaciones')}</th>
@@ -725,6 +768,7 @@ export default function FacturacionFabrica() {
                     {isAdmin && celdaTexto(r, 'n_legajo', r.n_legajo, { alinear: ' text-center' })}
                     {celdaEmpleado(r)}
                     {celdaPolo(r)}
+                    {celdaFechaRecepcion(r)}
                     {celdaTexto(r, 'fecha_envio', r.fecha_envio, { type: 'date', alinear: ' text-center whitespace-nowrap' })}
                     <td className="px-1 py-[2px] text-center text-[10px] font-medium text-sub">{diasEntre(r.fecha_fact, r.fecha_envio) ?? '-'}</td>
                     {celdaTexto(r, 'observaciones', r.observaciones)}
@@ -757,7 +801,7 @@ export default function FacturacionFabrica() {
       )}
 
       {/* Detail card */}
-      {card && <FactCard registro={card} onClose={() => setCard(null)} onEdit={() => { setSel(card); setModal('edit'); setCard(null) }} puedeEditar={modoPolo52 || puedeEditar} empleados={empleados} />}
+      {card && <FactCard registro={card} fechasRecibido={fechasRecibido} onClose={() => setCard(null)} onEdit={() => { setSel(card); setModal('edit'); setCard(null) }} puedeEditar={modoPolo52 || puedeEditar} empleados={empleados} />}
 
       {/* Etiquetas de bultos */}
       {etiquetaSel && <EtiquetasModal registro={etiquetaSel} onClose={() => setEtiquetaSel(null)} />}
@@ -780,10 +824,11 @@ export default function FacturacionFabrica() {
 /*  Detail Card                                                        */
 /* ------------------------------------------------------------------ */
 
-function FactCard({ registro: r, onClose, onEdit, puedeEditar, empleados }: {
-  registro: FactRegistro; onClose: () => void; onEdit: () => void; puedeEditar: boolean; empleados: EmpleadoMini[]
+function FactCard({ registro: r, fechasRecibido, onClose, onEdit, puedeEditar, empleados }: {
+  registro: FactRegistro; fechasRecibido: Record<string, string>; onClose: () => void; onEdit: () => void; puedeEditar: boolean; empleados: EmpleadoMini[]
 }) {
   const empLabel = empleados.find((e) => e.id === r.empleado_id)
+  const fechaRecepcion = r.fecha_recepcion_polo ?? fechasRecibido[normalizarRemito(r.n_remito)] ?? null
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
@@ -822,6 +867,7 @@ function FactCard({ registro: r, onClose, onEdit, puedeEditar, empleados }: {
             <dl className="space-y-2 text-[13px]">
               <CRow label="Solicitud Retiro" value={fmtRetiro(r.solicitud_retiro)} badge badgeCls={retiroStyle(r.solicitud_retiro)} />
               <CRow label="POLO52" value={r.polo52 ? 'VERDADERO' : 'FALSO'} badge badgeCls={r.polo52 ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' : 'bg-surface2 text-sub border-line'} />
+              <CRow label="Fecha Recepción Polo" value={fechaRecepcion ? fmtDateSlider(fechaRecepcion) : null} badge={!!fechaRecepcion} badgeCls={fechaRecepcion ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : ''} />
               <CRow label="Quien Facturo" value={empLabel ? `#${empLabel.legajo} - ${empLabel.nombre}` : r.quien_facturo} />
             </dl>
           </section>

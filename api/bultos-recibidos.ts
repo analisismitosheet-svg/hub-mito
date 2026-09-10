@@ -73,11 +73,11 @@ export default async function handler(req: Req, res: Res) {
       },
       body: JSON.stringify({}),
     })
-    const body = (await fnResp.json().catch(() => ({}))) as { ok?: boolean; recibidos?: string[]; error?: string }
+    const body = (await fnResp.json().catch(() => ({}))) as { ok?: boolean; recibidos?: string[]; fechas?: Record<string, string>; error?: string }
     if (!fnResp.ok) {
       return res.status(502).json({ error: body.error ?? `Error ${fnResp.status} llamando a transporte` })
     }
-    return res.status(200).json({ ok: true, recibidos: body.recibidos ?? [] })
+    return res.status(200).json({ ok: true, recibidos: body.recibidos ?? [], fechas: body.fechas ?? {} })
   } catch (e) {
     return res.status(502).json({ error: e instanceof Error ? e.message : String(e) })
   }
