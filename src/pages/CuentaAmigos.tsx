@@ -19,7 +19,7 @@ import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
-import { useAuth } from '@/context/AuthContext'
+import { usePermisosArea } from '@/hooks/usePermisosArea'
 
 interface Cliente {
   id: number
@@ -82,10 +82,7 @@ function FotoDni({ url }: { url: string | null }) {
 }
 
 export default function CuentaAmigos() {
-  const { can } = useAuth()
-  const puedeCrear = can('cuentas_amigos.create')
-  const puedeEditar = can('cuentas_amigos.edit')
-  const puedeBorrar = can('cuentas_amigos.delete')
+  const { crear: puedeCrear, editar: puedeEditar, borrar: puedeBorrar } = usePermisosArea('cuentas_amigos')
   const [todos, setTodos] = useState<Cliente[]>([])
   const [cargando, setCargando] = useState(true)
   const [q, setQ] = useState('')

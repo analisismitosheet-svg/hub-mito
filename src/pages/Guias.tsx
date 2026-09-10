@@ -11,6 +11,7 @@ import HistorialLista from '@/components/HistorialLista'
 import { registrarHistorial } from '@/lib/historial'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
+import { usePermisosArea } from '@/hooks/usePermisosArea'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -85,11 +86,9 @@ function cambiarEstadoEnTodos(todos: Guia[], id: string, estado: EstadoGuia): Gu
 /* ------------------------------------------------------------------ */
 
 export default function Guias() {
-  const { can, perfil } = useAuth()
+  const { perfil } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
-  const puedeCrear = can('mayorista.guias.create')
-  const puedeEditar = can('mayorista.guias.edit')
-  const puedeBorrar = can('mayorista.guias.delete')
+  const { crear: puedeCrear, editar: puedeEditar, borrar: puedeBorrar } = usePermisosArea('mayorista.guias')
 
   const [todos, setTodos] = useState<Guia[]>([])
   const [cargando, setCargando] = useState(true)

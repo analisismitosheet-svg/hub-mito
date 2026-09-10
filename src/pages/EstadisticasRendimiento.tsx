@@ -3,7 +3,7 @@ import { Loader2, TrendingUp, User, ChevronRight } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
-import { useAuth } from '@/context/AuthContext'
+import { usePermisosArea } from '@/hooks/usePermisosArea'
 
 interface Empleado { id: string; legajo: string | null; nombre: string }
 interface ItemSep {
@@ -51,7 +51,7 @@ function fmtFecha(iso: string): string {
 }
 
 export default function EstadisticasRendimiento() {
-  const { can } = useAuth()
+  const { ver: puedeVer } = usePermisosArea('mayorista.estadisticas')
   const [empleados, setEmpleados] = useState<Empleado[]>([])
   const [items, setItems] = useState<ItemSep[]>([])
   const [cargando, setCargando] = useState(true)
@@ -135,7 +135,7 @@ export default function EstadisticasRendimiento() {
   const totalUnidades = filas.reduce((s, f) => s + f.unidades, 0)
   const totalSegundos = filas.reduce((s, f) => s + f.segundos, 0)
 
-  const PuedeVer = () => can('mayorista.estadisticas.view')
+  const PuedeVer = () => puedeVer
 
   if (!PuedeVer()) {
     return (

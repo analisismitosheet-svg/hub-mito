@@ -4,7 +4,18 @@ import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
-import { AREAS, APPS, cargarOverridesAreas, invalidarOverridesAreas } from '@/config/areas'
+import {
+  AREAS,
+  APPS,
+  cargarOverridesAreas,
+  invalidarOverridesAreas,
+  cargarAccionesArea,
+  invalidarAccionesArea,
+  ACCIONES_AREA,
+  ACCIONES_AREA_LABEL,
+  moduloDePermiso,
+  type AccionArea,
+} from '@/config/areas'
 
 interface Rol {
   codigo: string
@@ -30,6 +41,7 @@ export default function Roles() {
   const [rolGestion, setRolGestion] = useState<Rol | null>(null)
   const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
   const [ubicacion, setUbicacion] = useState<Record<string, string[]>>({})
+  const [acciones, setAcciones] = useState<Record<string, string[]>>({})
   const [cargandoUbi, setCargandoUbi] = useState(false)
 
   const cargar = useCallback(async () => {
@@ -41,11 +53,12 @@ export default function Roles() {
     setRoles((rl.data as Rol[]) ?? [])
     setPermisos((p.data as Permiso[]) ?? [])
     setCargando(false)
-    // Cargar ubicación de menús
+    // Cargar ubicación de menús y acciones por área
     setCargandoUbi(true)
     try {
-      const mapa = await cargarOverridesAreas()
+      const [mapa, mapaAcciones] = await Promise.all([cargarOverridesAreas(), cargarAccionesArea()])
       setUbicacion(mapa)
+      setAcciones(mapaAcciones)
     } finally {
       setCargandoUbi(false)
     }
@@ -66,6 +79,26 @@ export default function Roles() {
       await supabase.from('app_areas').insert({ app_id: appId, area_id: areaId })
     } else {
       await supabase.from('app_areas').delete().eq('app_id', appId).eq('area_id', areaId)
+    }
+  }
+
+  // Guarda una acción permitida para (app, área). accionActiva: estado previo de esa acción.
+  async function guardarAccion(appId: string, areaId: string, accion: AccionArea, activa: boolean) {
+    if (!supabase) return
+    const clave = `${appId}|${areaId}`
+    const nuevo = { ...acciones }
+    const arr = nuevo[clave] ?? []
+    if (activa) {
+      nuevo[clave] = arr.filter((a) => a !== accion)
+    } else {
+      if (!arr.includes(accion)) nuevo[clave] = [...arr, accion]
+    }
+    setAcciones(nuevo)
+    invalidarAccionesArea()
+    if (activa) {
+      await supabase.from('app_area_acciones').delete().eq('app_id', appId).eq('area_id', areaId).eq('accion', accion)
+    } else {
+      await supabase.from('app_area_acciones').insert({ app_id: appId, area_id: areaId, accion })
     }
   }
 
@@ -146,7 +179,7 @@ export default function Roles() {
       {/* Ubicación de menús por área */}
       <section className="mt-8 rounded-2xl border border-line bg-surface p-4">
         <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-ink"><MapPin size={15} className="text-brand-500" aria-hidden /> Ubicación de menús</h2>
-        <p className="mb-3 text-xs text-sub">Tildá en qué áreas debe aparecer cada submenú. Sin tilde, se usa la ubicación por defecto del código.</p>
+        <p className="mb-3 text-xs text-sub">Tildá en qué áreas debe aparecer cada submenú y qué acciones se pueden hacer en cada una (ver, crear, editar, edición única, borrar). Sin tilde, se usa la ubicación y los permisos por rol por defecto.</p>
         {cargandoUbi ? (
           <div className="flex items-center gap-2 py-6 text-sub"><Loader2 size={16} className="animate-spin" aria-hidden /> Cargando...</div>
         ) : (
@@ -154,6 +187,7 @@ export default function Roles() {
             {APPS.map((app) => {
               const areasMarcadas = ubicacion[app.id] ?? []
               const porDefecto = [app.areaId, ...(app.areaIds ?? [])]
+              const modulo = moduloDePermiso(app.permiso)
               return (
                 <details key={app.id} className="rounded-xl border border-line bg-surface2/60">
                   <summary className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm font-medium text-ink">
@@ -161,21 +195,42 @@ export default function Roles() {
                     <span className="text-[11px] text-sub/70">{areasMarcadas.length > 0 ? `${areasMarcadas.length} área(s)` : 'por defecto'}</span>
                     <ChevronRight size={13} aria-hidden className="text-sub" />
                   </summary>
-                  <div className="grid grid-cols-2 gap-1 border-t border-line px-3 py-2 sm:grid-cols-3">
+                  <div className="grid grid-cols-1 gap-1 border-t border-line px-3 py-2 md:grid-cols-2">
                     {AREAS.map((area) => {
                       const marcado = areasMarcadas.includes(area.id)
                       const esDefecto = porDefecto.includes(area.id)
+                      const accionesDeEsta = acciones[`${app.id}|${area.id}`] ?? []
                       return (
-                        <label key={area.id} className="flex cursor-pointer items-center gap-1.5 rounded-md px-1.5 py-1 text-xs text-ink hover:bg-line/40">
-                          <input
-                            type="checkbox"
-                            checked={marcado}
-                            onChange={(e) => void guardarUbicacion(app.id, area.id, e.target.checked)}
-                            className="h-3.5 w-3.5 rounded border-line bg-surface2 accent-brand-600"
-                          />
-                          <span className="truncate">{area.name}</span>
-                          {esDefecto && !marcado && <span className="text-[10px] text-sub/60">def</span>}
-                        </label>
+                        <div key={area.id} className="rounded-lg border border-line/60 bg-surface/40 px-2 py-1.5">
+                          <label className="flex cursor-pointer items-center gap-1.5 text-xs text-ink">
+                            <input
+                              type="checkbox"
+                              checked={marcado}
+                              onChange={(e) => void guardarUbicacion(app.id, area.id, e.target.checked)}
+                              className="h-3.5 w-3.5 rounded border-line bg-surface2 accent-brand-600"
+                            />
+                            <span className="truncate font-medium">{area.name}</span>
+                            {esDefecto && !marcado && <span className="text-[10px] text-sub/60">def</span>}
+                          </label>
+                          {marcado && modulo && (
+                            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 border-t border-line/50 pl-5 pt-1">
+                              {ACCIONES_AREA.map((acc) => {
+                                const activa = accionesDeEsta.includes(acc)
+                                return (
+                                  <label key={acc} className="flex cursor-pointer items-center gap-1 text-[11px] text-sub">
+                                    <input
+                                      type="checkbox"
+                                      checked={activa}
+                                      onChange={(e) => void guardarAccion(app.id, area.id, acc, e.target.checked)}
+                                      className="h-3 w-3 rounded border-line bg-surface2 accent-brand-600"
+                                    />
+                                    {ACCIONES_AREA_LABEL[acc]}
+                                  </label>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
                       )
                     })}
                   </div>

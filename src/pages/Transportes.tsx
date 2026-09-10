@@ -7,7 +7,7 @@ import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
-import { useAuth } from '@/context/AuthContext'
+import { usePermisosArea } from '@/hooks/usePermisosArea'
 
 interface Transporte {
   id: string; nombre: string; web: string | null; telefono: string | null
@@ -68,10 +68,7 @@ function requisitosText(t: Transporte): string {
   ].filter(Boolean).join('\n')
 }
 export default function Transportes() {
-  const { can } = useAuth()
-  const puedeCrear = can('mayorista.transportes.create')
-  const puedeEditar = can('mayorista.transportes.edit')
-  const puedeBorrar = can('mayorista.transportes.delete')
+  const { crear: puedeCrear, editar: puedeEditar, borrar: puedeBorrar } = usePermisosArea('mayorista.transportes')
   const [todos, setTodos] = useState<Transporte[]>([])
   const [cargando, setCargando] = useState(true)
   const [q, setQ] = useState('')

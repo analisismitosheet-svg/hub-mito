@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { QrCode, Copy, Check, MessageSquare, ChevronDown, Trash2, ArrowDownUp, Printer, MapPin, Settings } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { useAuth } from '@/context/AuthContext'
+import { usePermisosArea } from '@/hooks/usePermisosArea'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
@@ -49,8 +49,7 @@ function prom(nums: number[]) {
 }
 
 export default function Opiniones() {
-  const { can } = useAuth()
-  const puedeBorrar = can('opiniones.borrar')
+  const { borrar: puedeBorrar } = usePermisosArea('opiniones')
   const [encuestas, setEncuestas] = useState<Encuesta[]>([])
   const [encuestaId, setEncuestaId] = useState<string>('')
   const [preguntas, setPreguntas] = useState<Pregunta[]>([])

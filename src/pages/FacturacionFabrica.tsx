@@ -12,6 +12,7 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
+import { usePermisosArea } from '@/hooks/usePermisosArea'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -167,12 +168,10 @@ function parseFechaDias(v: string | null | undefined): number | null {
 /* ------------------------------------------------------------------ */
 
 export default function FacturacionFabrica() {
-  const { can, isAdmin, perfil } = useAuth()
+  const { isAdmin, perfil } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const modoPolo52 = searchParams.get('polo52') === '1'
-  const puedeCrear = can('mayorista.facturacion.create')
-  const puedeEditar = can('mayorista.facturacion.edit')
-  const puedeBorrar = can('mayorista.facturacion.delete')
+  const { crear: puedeCrear, editar: puedeEditar, borrar: puedeBorrar } = usePermisosArea('mayorista.facturacion')
 
   const [todos, setTodos] = useState<FactRegistro[]>([])
   const [cargando, setCargando] = useState(true)

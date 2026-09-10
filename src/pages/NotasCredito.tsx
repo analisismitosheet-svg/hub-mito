@@ -10,6 +10,7 @@ import HistorialLista from '@/components/HistorialLista'
 import { registrarHistorial } from '@/lib/historial'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
+import { usePermisosArea } from '@/hooks/usePermisosArea'
 
 interface NotaCredito {
   id: string
@@ -42,10 +43,9 @@ function estadoCls(e: string | null): string {
 }
 
 export default function NotasCredito() {
-  const { can, perfil } = useAuth()
+  const { perfil } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
-  const puedeCrear = can('mayorista.notas_credito.create')
-  const puedeBorrar = can('mayorista.notas_credito.delete')
+  const { crear: puedeCrear, borrar: puedeBorrar } = usePermisosArea('mayorista.notas_credito')
 
   const [todos, setTodos] = useState<NotaCredito[]>([])
   const [cargando, setCargando] = useState(true)

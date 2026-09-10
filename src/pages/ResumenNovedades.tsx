@@ -5,7 +5,7 @@ import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
-import { useAuth } from '@/context/AuthContext'
+import { usePermisosArea } from '@/hooks/usePermisosArea'
 
 interface Novedad {
   id: string
@@ -38,10 +38,8 @@ function fmtFecha(iso: string | null): string {
 }
 
 export default function ResumenNovedades() {
-  const { can } = useAuth()
   const navigate = useNavigate()
-  const puedeEditar = can('rrhh.novedades.edit')
-  const puedeBorrar = can('rrhh.novedades.delete')
+  const { editar: puedeEditar, borrar: puedeBorrar } = usePermisosArea('rrhh.novedades')
 
   const [todos, setTodos] = useState<Novedad[]>([])
   const [cargando, setCargando] = useState(true)

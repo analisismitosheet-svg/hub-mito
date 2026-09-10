@@ -438,3 +438,76 @@ export function appsDeAreaConOverrides(areaId: string, mapa: Record<string, stri
   }
   return out
 }
+
+/* ------------------------------------------------------------------ */
+/*  Acciones por app+área (tabla app_area_acciones)                    */
+/*  Permite definir por área qué acciones se pueden hacer en cada app: */
+/*  ver, crear, editar, edicion_unica, borrar.                         */
+/* ------------------------------------------------------------------ */
+
+export type AccionArea = 'ver' | 'crear' | 'editar' | 'edicion_unica' | 'borrar'
+export const ACCIONES_AREA: AccionArea[] = ['ver', 'crear', 'editar', 'edicion_unica', 'borrar']
+export const ACCIONES_AREA_LABEL: Record<AccionArea, string> = {
+  ver: 'Ver',
+  crear: 'Crear',
+  editar: 'Editar',
+  edicion_unica: 'Edición única',
+  borrar: 'Borrar',
+}
+
+let accionesCache: Record<string, string[]> | null = null // clave: `${appId}|${areaId}`
+let accionesLoadPromise: Promise<void> | null = null
+
+/** Devuelve, para cada (app, área), la lista de acciones permitidas. */
+export function accionesArea(): Record<string, string[]> {
+  return accionesCache ?? {}
+}
+
+/** Invalida el cache de acciones (tras editar desde Roles). */
+export function invalidarAccionesArea(): void {
+  accionesCache = null
+  accionesLoadPromise = null
+}
+
+/**
+ * Carga app_area_acciones una sola vez. Idempotente.
+ * Clave del mapa: `${appId}|${areaId}` → acciones[].
+ */
+export async function cargarAccionesArea(): Promise<Record<string, string[]>> {
+  if (accionesCache) return accionesCache
+  if (!accionesLoadPromise) {
+    accionesLoadPromise = (async () => {
+      const map: Record<string, string[]> = {}
+      try {
+        if (!supabase) return
+        const { data } = await supabase.from('app_area_acciones').select('app_id,area_id,accion')
+        for (const r of (data as { app_id: string; area_id: string; accion: string }[] | null) ?? []) {
+          const k = `${r.app_id}|${r.area_id}`
+          const arr = map[k] ?? []
+          arr.push(r.accion)
+          map[k] = arr
+        }
+      } catch { /* si falla, se mantiene el comportamiento por rol */ }
+      accionesCache = map
+    })()
+  }
+  await accionesLoadPromise
+  return accionesCache ?? {}
+}
+
+/** Acciones permitidas para una (app, área) o undefined si no hay config. */
+export function accionesDe(appId: string, areaId: string | undefined): string[] | undefined {
+  if (!areaId) return undefined
+  return accionesCache?.[`${appId}|${areaId}`]
+}
+
+const SUFIJO_ACCION = new Set(['view', 'create', 'edit', 'delete', 'import', 'mark', 'ver_todo', 'regenerar', 'borrar'])
+
+/** Base de un permiso: quita el sufijo de acción (ej. 'cuentas_amigos.view' → 'cuentas_amigos'). */
+export function moduloDePermiso(permiso: string | undefined): string {
+  if (!permiso) return ''
+  const i = permiso.lastIndexOf('.')
+  if (i === -1) return permiso
+  const suf = permiso.slice(i + 1)
+  return SUFIJO_ACCION.has(suf) ? permiso.slice(0, i) : permiso
+}

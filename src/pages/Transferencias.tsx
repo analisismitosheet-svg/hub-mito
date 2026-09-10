@@ -19,6 +19,7 @@ import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
+import { usePermisosArea } from '@/hooks/usePermisosArea'
 import { cargarVistaSalidas, leerVista } from '@/lib/sqlApi'
 
 interface Lote {
@@ -291,7 +292,7 @@ function Barra({ items }: { items: Item[] }) {
 export default function Transferencias() {
   const { can, perfil, isAdmin } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
-  const puedeImportar = can('transferencias.import')
+  const { crear: puedeImportar, edicionUnica } = usePermisosArea('transferencias')
   const verTodo = isAdmin || puedeImportar || can('transferencias.ver_todo')
   const miLocal = (perfil?.local ?? '').toUpperCase()
   // Algunos bultos se cargaron con el origen sin el sufijo "2" (ej: RUTA9D en
@@ -475,6 +476,11 @@ export default function Transferencias() {
 
   async function marcar(item: Item, estado: EstadoItem) {
     if (!supabase) return
+    // Edición única: una vez marcado (hecho/señado/faltante), no se puede volver a tocar
+    if (edicionUnica && item.estado !== 'pendiente') {
+      setError('Este lote ya fue marcado y la edición única está activa para tu área: no se puede modificar.')
+      return
+    }
     const ahora = new Date().toISOString()
     const at = estado === 'pendiente' ? null : ahora
     setItems((arr) => arr.map((x) => (x.id === item.id ? { ...x, estado, hecho_at: at } : x)))
@@ -491,6 +497,11 @@ export default function Transferencias() {
   // Marca varios ítems de una (ej. todo un destino)
   async function marcarVarios(its: Item[], estado: EstadoItem) {
     if (!supabase || !its.length) return
+    // Edición única: no permitir modificar ítems ya marcados
+    if (edicionUnica && its.some((i) => i.estado !== 'pendiente')) {
+      setError('Este lote ya fue marcado y la edición única está activa para tu área: no se puede modificar.')
+      return
+    }
     const ids = its.map((i) => i.id)
     const ahora = new Date().toISOString()
     const at = estado === 'pendiente' ? null : ahora

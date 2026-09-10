@@ -6,7 +6,7 @@ import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
-import { useAuth } from '@/context/AuthContext'
+import { usePermisosArea } from '@/hooks/usePermisosArea'
 
 interface Cliente {
   id: string
@@ -85,10 +85,7 @@ function nextNCliente(todos: Cliente[]): string {
 }
 
 export default function Clientes() {
-  const { can } = useAuth()
-  const puedeCrear = can('mayorista.clientes.create')
-  const puedeEditar = can('mayorista.clientes.edit')
-  const puedeBorrar = can('mayorista.clientes.delete')
+  const { crear: puedeCrear, editar: puedeEditar, borrar: puedeBorrar } = usePermisosArea('mayorista.clientes')
   const [todos, setTodos] = useState<Cliente[]>([])
   const [transportes, setTransportes] = useState<string[]>([])
   const [cargando, setCargando] = useState(true)
