@@ -150,7 +150,7 @@ export default function EstadisticasRendimiento() {
     <Layout>
       <BackButton />
       <header className="mb-3 mt-2">
-        <h1 className="flex items-center gap-2 font-display text-2xl font-semibold text-ink"><TrendingUp size={20} className="text-brand-600" aria-hidden /> Estadísticas / Rendimientos</h1>
+        <h1 className="flex items-center gap-2 font-display text-2xl font-semibold text-ink"><TrendingUp size={20} className="text-brand-600" aria-hidden /> Eficiencia mayorista</h1>
         <p className="text-xs text-sub/70">Rendimiento por empleado: items separados, unidades y tiempo.</p>
       </header>
 
