@@ -438,15 +438,16 @@ function EmpleadoModal({ registro, opciones, onClose, onSaved }: {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4" onClick={onClose}>
-      <div className="my-4 w-[94vw] max-w-[900px] rounded-2xl border border-line bg-surface shadow-2xl" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex flex-col bg-black/60" onClick={onClose}>
+      <div className="flex h-full flex-col bg-surface" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-line px-5 py-3">
           <h2 className="text-lg font-semibold text-ink">{registro ? 'Editar empleado' : 'Nuevo empleado'}</h2>
           <button onClick={onClose} className="rounded-lg border border-line p-1.5 text-sub transition hover:bg-line hover:text-ink"><X size={16} aria-hidden /></button>
         </div>
         {error && <p role="alert" className="mx-5 mt-3 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
-        <form onSubmit={(e) => void guardar(e)} className="p-5">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+        <form onSubmit={(e) => void guardar(e)} className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 overflow-y-auto p-5">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             <Campo label="N° Legajo"><input value={f.legajo} onChange={(e) => set('legajo', e.target.value)} className={inputCls} /></Campo>
             <Campo label="Apellido y Nombre *" span2><input value={f.nombre} onChange={(e) => set('nombre', e.target.value)} className={inputCls} /></Campo>
             <Campo label="Lugar"><AutocompleteCampo label="Lugar" opciones={(opciones.lugar ?? []).map((v) => ({ id: v, label: v }))} valor={f.lugar} onChange={(v) => set('lugar', v)} placeholder="Buscar lugar..." /></Campo>
@@ -473,8 +474,9 @@ function EmpleadoModal({ registro, opciones, onClose, onSaved }: {
             <Campo label="Contacto emergencia" span2><input value={f.contacto_emergencia} onChange={(e) => set('contacto_emergencia', e.target.value)} className={inputCls} /></Campo>
             <Campo label="Parentesco"><input value={f.parentesco} onChange={(e) => set('parentesco', e.target.value)} className={inputCls} /></Campo>
             <Campo label="Teléfono emergencia"><input value={f.telefono_emergencia} onChange={(e) => set('telefono_emergencia', e.target.value)} className={inputCls} /></Campo>
+            </div>
           </div>
-          <div className="mt-5 flex justify-end gap-2">
+          <div className="flex justify-end gap-2 border-t border-line px-5 py-3">
             <button type="button" onClick={onClose} className="btn-press rounded-lg border border-line bg-surface2 px-4 py-2 text-sm font-medium text-ink hover:bg-line">Cancelar</button>
             <button type="submit" disabled={busy} className="btn-press rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">
               {busy ? 'Guardando…' : 'Guardar'}
@@ -488,7 +490,7 @@ function EmpleadoModal({ registro, opciones, onClose, onSaved }: {
 
 function Campo({ label, children, span2, span3 }: { label: string; children: React.ReactNode; span2?: boolean; span3?: boolean }) {
   return (
-    <label className={'block ' + (span3 ? 'sm:col-span-2 md:col-span-3' : span2 ? 'sm:col-span-2' : '')}>
+    <label className={'block ' + (span3 ? 'sm:col-span-2 lg:col-span-3 xl:col-span-4' : span2 ? 'sm:col-span-2' : '')}>
       <span className="mb-1 block text-xs font-medium text-sub">{label}</span>
       {children}
     </label>
