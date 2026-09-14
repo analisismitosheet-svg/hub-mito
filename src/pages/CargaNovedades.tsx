@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase'
 import { usePermisosArea } from '@/hooks/usePermisosArea'
 import { SelectBuscar } from '@/components/MultiselectFiltro'
 import { nombresMotivos, colorFilaMotivo } from '@/lib/motivos'
+import { nombresTipos, invalidarTipos, cargarTipos } from '@/lib/tipos'
 
 interface Novedad {
   id: string
@@ -30,7 +31,6 @@ interface Novedad {
 const inputCls = 'w-full rounded-xl border border-line bg-surface2 px-3 py-1.5 text-[13px] text-ink outline-none transition duration-250 placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40'
 const selectCls = inputCls + ' appearance-none'
 
-const TIPOS = ['MITO', 'PPP', 'MAS26', 'PFOMENTAR']
 const LOCALES = ['FABRICA', 'BUSTOS', 'HIPER', 'NVO CENTRO', 'DINO', 'POLO 52', 'GRAL PAZ', 'RIVERA', 'ESPINOSA', 'RUTA 9', 'NMO', 'CF RIVERA', '9 DE JULIO', 'MUÑOZ', 'WALMART', 'VCP', 'CF BUSTOS', 'CF OLMOS', 'CF RUTA 9', 'RIO 4']
 
 function fmtFecha(iso: string | null): string {
@@ -112,18 +112,22 @@ export default function CargaNovedades() {
   const [fLocal, setFLocal] = useState('')
   const [fTipo, setFTipo] = useState('')
   const [motivos, setMotivos] = useState<string[]>([])
+  const [tipos, setTipos] = useState<string[]>([])
+  const [abiertoTipos, setAbiertoTipos] = useState(false)
 
   const cargar = useCallback(async () => {
     if (!supabase) { setCargando(false); return }
     setCargando(true); setError(null)
-    const [nov, mts] = await Promise.all([
+    const [nov, mts, tps] = await Promise.all([
       supabase.from('novedades').select('*').order('created_at', { ascending: false }).limit(500),
       nombresMotivos(),
+      nombresTipos(),
     ])
     const err = nov.error
     if (err) { setError(err.message); setCargando(false); return }
     setTodos((nov.data as Novedad[] | null) ?? [])
     setMotivos(mts)
+    setTipos(tps)
     setCargando(false)
   }, [])
 
@@ -341,7 +345,7 @@ export default function CargaNovedades() {
         </select>
         <SelectBuscar label="Motivo" opciones={motivos.map((m) => ({ id: m, label: m }))} valor={fMotivo} onChange={setFMotivo} className="h-7 w-full" />
         <SelectBuscar label="Local" opciones={LOCALES.map((l) => ({ id: l, label: l }))} valor={fLocal} onChange={setFLocal} className="h-7 w-full" />
-        <SelectBuscar label="Tipo" opciones={TIPOS.map((t) => ({ id: t, label: t }))} valor={fTipo} onChange={setFTipo} className="h-7 w-full" />
+        <SelectBuscar label="Tipo" opciones={tipos.map((t) => ({ id: t, label: t }))} valor={fTipo} onChange={setFTipo} className="h-7 w-full" />
         <span className="flex items-center text-[11px] text-sub/70">{lista.length}/{todos.length}</span>
       </div>
 
@@ -420,7 +424,12 @@ export default function CargaNovedades() {
                 <label className="block sm:col-span-2"><span className="mb-0.5 block text-[11px] font-medium text-sub">Mes liquidación</span><input value={mes} onChange={(e) => setMes(e.target.value)} placeholder="ENERO (26/12 AL 25/01)" className={inputCls} /></label>
                 <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">N° legajo</span><input value={numero} onChange={(e) => setNumero(e.target.value)} placeholder="935" className={inputCls} /></label>
                 <label className="block sm:col-span-2"><span className="mb-0.5 block text-[11px] font-medium text-sub">Nombre completo *</span><input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="APELLIDO NOMBRE" className={inputCls} /></label>
-                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Tipo</span><select value={tipo} onChange={(e) => setTipo(e.target.value)} className={selectCls}><option value="">--</option>{TIPOS.map((t) => <option key={t} value={t}>{t}</option>)}</select></label>
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Tipo</span>
+                  <div className="flex gap-1">
+                    <select value={tipo} onChange={(e) => setTipo(e.target.value)} className={selectCls + ' flex-1'}><option value="">--</option>{tipos.map((t) => <option key={t} value={t}>{t}</option>)}</select>
+                    <button type="button" onClick={() => setAbiertoTipos((o) => !o)} className="btn-press inline-flex shrink-0 items-center justify-center rounded-lg border border-brand-600/40 bg-brand-600/10 px-2 text-base font-semibold text-brand-400 hover:bg-brand-600/20" title="Gestionar tipos"><Plus size={15} aria-hidden /></button>
+                  </div>
+                </label>
                 <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Fecha</span><input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className={inputCls} /></label>
                 <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Desde</span><input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className={inputCls} /></label>
                 <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Hasta</span><input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className={inputCls} /></label>
@@ -441,7 +450,106 @@ export default function CargaNovedades() {
         </div>
       )}
 
+      {abiertoTipos && (
+        <TarjetaTipos
+          onClose={() => setAbiertoTipos(false)}
+          onSaved={async () => { const t = await nombresTipos(); setTipos(t) }}
+        />
+      )}
+
       <ConfirmDialog open={!!confirm} message={confirm?.message ?? ''} onCancel={() => setConfirm(null)} onConfirm={() => { confirm?.onConfirm(); setConfirm(null) }} />
     </Layout>
+)
+}
+
+/** Tarjeta ABM de tipos: crear, editar, borrar tipos de novedad. */
+function TarjetaTipos({ onClose, onSaved }: { onClose: () => void; onSaved: () => Promise<void> }) {
+  const { crear: puedeCrear, editar: puedeEditar, borrar: puedeBorrar } = usePermisosArea('rrhh.novedades')
+  const [tipos, setTipos] = useState<{ id: string; nombre: string }[]>([])
+  const [nuevo, setNuevo] = useState('')
+  const [editId, setEditId] = useState<string | null>(null)
+  const [editNombre, setEditNombre] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
+
+  const cargar = useCallback(async () => {
+    const data = await cargarTipos()
+    setTipos(data)
+  }, [])
+
+  useEffect(() => { void cargar() }, [cargar])
+
+  async function crear(e: FormEvent) {
+    e.preventDefault()
+    if (!supabase) return
+    const nombre = nuevo.trim().toUpperCase()
+    if (!nombre) { setErr('Poné un nombre de tipo.'); return }
+    setBusy(true); setErr(null)
+    const { error } = await supabase.from('novedades_tipos').insert({ nombre })
+    setBusy(false)
+    if (error) { setErr(error.message); return }
+    setNuevo('')
+    invalidarTipos()
+    await cargar(); await onSaved()
+  }
+
+  async function guardarEdicion() {
+    if (!supabase || !editId) return
+    const nombre = editNombre.trim().toUpperCase()
+    if (!nombre) { setErr('El nombre no puede quedar vacío.'); return }
+    setBusy(true); setErr(null)
+    const { error } = await supabase.from('novedades_tipos').update({ nombre }).eq('id', editId)
+    setBusy(false)
+    if (error) { setErr(error.message); return }
+    setEditId(null)
+    invalidarTipos()
+    await cargar(); await onSaved()
+  }
+
+  async function borrar(t: { id: string }) {
+    if (!supabase) return
+    const { error } = await supabase.from('novedades_tipos').delete().eq('id', t.id)
+    if (error) { setErr(error.message); return }
+    invalidarTipos()
+    await cargar(); await onSaved()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-2 backdrop-blur-sm sm:p-4" onClick={onClose}>
+      <div className="flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-line px-5 py-3">
+          <h3 className="font-semibold text-ink">Tipos de Novedad</h3>
+          <button onClick={onClose} className="rounded-lg border border-line p-1.5 text-sub transition hover:bg-line hover:text-ink" aria-label="Cerrar"><X size={16} aria-hidden /></button>
+        </div>
+        {err && <p role="alert" className="mx-5 mt-3 rounded-xl border border-brand-600/30 bg-brand-600/10 p-2 text-xs text-brand-400">{err}</p>}
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+          {puedeCrear && (
+            <form onSubmit={crear} className="mb-3 flex gap-2">
+              <input value={nuevo} onChange={(e) => setNuevo(e.target.value)} placeholder="Nuevo tipo..." className={inputCls} />
+              <button type="submit" disabled={busy} className="btn-press shrink-0 rounded-lg bg-brand-600 px-3 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"><Plus size={14} aria-hidden /></button>
+            </form>
+          )}
+          <div className="divide-y divide-line/60">
+            {tipos.map((t) =>
+              editId === t.id ? (
+                <div key={t.id} className="flex items-center gap-2 py-2">
+                  <input value={editNombre} onChange={(e) => setEditNombre(e.target.value)} className={inputCls} />
+                  <button onClick={guardarEdicion} disabled={busy} className="btn-press rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-1.5 text-emerald-400 hover:bg-emerald-500/20"><Check size={13} aria-hidden /></button>
+                  <button onClick={() => setEditId(null)} className="btn-press rounded-lg border border-line p-1.5 text-sub hover:text-ink"><X size={13} aria-hidden /></button>
+                </div>
+              ) : (
+                <div key={t.id} className="flex items-center gap-2 py-2">
+                  <span className="flex-1 text-sm text-ink">{t.nombre}</span>
+                  {puedeEditar && <button onClick={() => { setEditId(t.id); setEditNombre(t.nombre) }} className="btn-press rounded-lg border border-line p-1.5 text-sub hover:text-ink"><Pencil size={12} aria-hidden /></button>}
+                  {puedeBorrar && <button onClick={() => setConfirm({ message: `¿Borrar el tipo "${t.nombre}"?`, onConfirm: () => void borrar(t) })} className="btn-press rounded-lg border border-brand-600/30 bg-brand-600/10 p-1.5 text-brand-400 hover:bg-brand-600/20"><Trash2 size={12} aria-hidden /></button>}
+                </div>
+              ),
+            )}
+          </div>
+        </div>
+      </div>
+      <ConfirmDialog open={!!confirm} message={confirm?.message ?? ''} onCancel={() => setConfirm(null)} onConfirm={() => { confirm?.onConfirm(); setConfirm(null) }} />
+    </div>
   )
 }
