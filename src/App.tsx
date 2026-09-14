@@ -34,6 +34,7 @@ import NotasCredito from '@/pages/NotasCredito'
 import EstadisticasRendimiento from '@/pages/EstadisticasRendimiento'
 import CargaNovedades from '@/pages/CargaNovedades'
 import ResumenNovedades from '@/pages/ResumenNovedades'
+import MotivosNovedades from '@/pages/MotivosNovedades'
 import CarpetaArea from '@/pages/CarpetaArea'
 import DatosSql from '@/pages/DatosSql'
 import SqlConexion from '@/pages/SqlConexion'
@@ -178,6 +179,14 @@ export default function App() {
             element={
               <PermissionRoute permiso="rrhh.novedades.view">
                 <ResumenNovedades />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/rrhh/novedades/motivos"
+            element={
+              <PermissionRoute permiso="rrhh.novedades.view">
+                <MotivosNovedades />
               </PermissionRoute>
             }
           />

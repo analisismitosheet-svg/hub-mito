@@ -7,6 +7,7 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { usePermisosArea } from '@/hooks/usePermisosArea'
 import { SelectBuscar } from '@/components/MultiselectFiltro'
+import { nombresMotivos, colorFilaMotivo } from '@/lib/motivos'
 
 interface Novedad {
   id: string
@@ -29,7 +30,6 @@ interface Novedad {
 const inputCls = 'w-full rounded-xl border border-line bg-surface2 px-3 py-1.5 text-[13px] text-ink outline-none transition duration-250 placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40'
 const selectCls = inputCls + ' appearance-none'
 
-const MOTIVOS = ['INGRESO', 'AUSENTE', 'TARDANZA', 'APERCIBIM', 'EMBARGO', 'CARPETA MÉDICA', 'CAMBIO COMISIÓN', 'RESTAR', 'SUSPENSION', 'CAMBIO LOCAL', 'CAMBIO', 'VACACIONES', 'BAJA', 'LICENCIA', 'OTROS', 'RECUPERAR', 'SIN NOVEDADES']
 const TIPOS = ['MITO', 'PPP', 'MAS26', 'PFOMENTAR']
 const LOCALES = ['FABRICA', 'BUSTOS', 'HIPER', 'NVO CENTRO', 'DINO', 'POLO 52', 'GRAL PAZ', 'RIVERA', 'ESPINOSA', 'RUTA 9', 'NMO', 'CF RIVERA', '9 DE JULIO', 'MUÑOZ', 'WALMART', 'VCP', 'CF BUSTOS', 'CF OLMOS', 'CF RUTA 9', 'RIO 4']
 
@@ -63,32 +63,8 @@ function fechaExcelAISO(v: unknown): string | null {
 }
 
 /** Color de fondo por motivo (formato del archivo Novedades rrhh). */
-const COLOR_MOTIVO: Record<string, string> = {
-  'INGRESO': '#00BFFF',
-  'AUSENTE': '#FF4500',
-  'TARDANZA': '#FFD700',
-  'APERCIBIM': '#4B0082',
-  'APERCIBIMIENTO': '#4B0082',
-  'EMBARGO': '#FF00FF',
-  'CARPETA MÉDICA': '#FFA07A',
-  'CAMBIO COMISIÓN': '#008000',
-  'RESTAR': '#6495ED',
-  'SUSPENSION': '#FF0000',
-  'CAMBIO LOCAL': '#32CD32',
-  'CAMBIO': '#DDA0DD',
-  'VACACIONES': '#7FFFD4',
-  'BAJA': '#00008B',
-  'LICENCIA': '#FFDAB9',
-  'OTROS': '#6A5ACD',
-  'RECUPERAR': '#FF8C00',
-  'SIN NOVEDADES': '#FFFFFF',
-}
-
-/** Devuelve color de fondo (con alpha) y color de texto legible según el motivo. */
 function colorFila(motivo: string | null): { bg: string; fg: string } | null {
-  const c = COLOR_MOTIVO[(motivo ?? '').trim().toUpperCase()]
-  if (!c) return null
-  return { bg: c + '22', fg: c }
+  return colorFilaMotivo(motivo)
 }
 
 /** Nombre corto del mes de liquidación (primera palabra, ej. "ENERO (26/12...)" -> "ENERO"). */
@@ -135,13 +111,19 @@ export default function CargaNovedades() {
   const [fMotivo, setFMotivo] = useState('')
   const [fLocal, setFLocal] = useState('')
   const [fTipo, setFTipo] = useState('')
+  const [motivos, setMotivos] = useState<string[]>([])
 
   const cargar = useCallback(async () => {
     if (!supabase) { setCargando(false); return }
     setCargando(true); setError(null)
-    const { data, error: err } = await supabase.from('novedades').select('*').order('created_at', { ascending: false }).limit(500)
+    const [nov, mts] = await Promise.all([
+      supabase.from('novedades').select('*').order('created_at', { ascending: false }).limit(500),
+      nombresMotivos(),
+    ])
+    const err = nov.error
     if (err) { setError(err.message); setCargando(false); return }
-    setTodos((data as Novedad[] | null) ?? [])
+    setTodos((nov.data as Novedad[] | null) ?? [])
+    setMotivos(mts)
     setCargando(false)
   }, [])
 
@@ -357,7 +339,7 @@ export default function CargaNovedades() {
           <option value="">Mes</option>
           {MESES_LIQUIDACION.map((m) => <option key={m} value={m}>{m}</option>)}
         </select>
-        <SelectBuscar label="Motivo" opciones={MOTIVOS.map((m) => ({ id: m, label: m }))} valor={fMotivo} onChange={setFMotivo} className="h-7 w-full" />
+        <SelectBuscar label="Motivo" opciones={motivos.map((m) => ({ id: m, label: m }))} valor={fMotivo} onChange={setFMotivo} className="h-7 w-full" />
         <SelectBuscar label="Local" opciones={LOCALES.map((l) => ({ id: l, label: l }))} valor={fLocal} onChange={setFLocal} className="h-7 w-full" />
         <SelectBuscar label="Tipo" opciones={TIPOS.map((t) => ({ id: t, label: t }))} valor={fTipo} onChange={setFTipo} className="h-7 w-full" />
         <span className="flex items-center text-[11px] text-sub/70">{lista.length}/{todos.length}</span>
@@ -443,7 +425,7 @@ export default function CargaNovedades() {
                 <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Desde</span><input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className={inputCls} /></label>
                 <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Hasta</span><input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className={inputCls} /></label>
                 <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Local</span><select value={local} onChange={(e) => setLocal(e.target.value)} className={selectCls}><option value="">--</option>{LOCALES.map((l) => <option key={l} value={l}>{l}</option>)}</select></label>
-                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Motivo</span><select value={motivo} onChange={(e) => setMotivo(e.target.value)} className={selectCls}><option value="">--</option>{MOTIVOS.map((m) => <option key={m} value={m}>{m}</option>)}</select></label>
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Motivo</span><select value={motivo} onChange={(e) => setMotivo(e.target.value)} className={selectCls}><option value="">--</option>{motivos.map((m) => <option key={m} value={m}>{m}</option>)}</select></label>
                 <label className="block sm:col-span-3"><span className="mb-0.5 block text-[11px] font-medium text-sub">Novedad</span><input value={novedadTxt} onChange={(e) => setNovedadTxt(e.target.value)} placeholder="Detalle..." className={inputCls} /></label>
                 <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Minutos</span><input value={minutos} onChange={(e) => setMinutos(e.target.value)} placeholder="30" className={inputCls} /></label>
                 <label className="block sm:col-span-4"><span className="mb-0.5 block text-[11px] font-medium text-sub">Control certificado / notificación</span><input value={control} onChange={(e) => setControl(e.target.value)} placeholder="OK / NO ENVIA CERTIFICADO" className={inputCls} /></label>

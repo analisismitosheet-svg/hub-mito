@@ -291,6 +291,17 @@ export const APPS: AppDef[] = [
     permiso: 'rrhh.novedades.view',
   },
   {
+    id: 'rrhh-novedades-motivos',
+    areaId: 'rrhh-novedades',
+    title: 'Motivos',
+    description: 'Crear, editar o borrar motivos de novedades y elegir su color.',
+    icon: Palette,
+    kind: 'internal',
+    target: '/rrhh/novedades/motivos',
+    color: '#7c3aed',
+    permiso: 'rrhh.novedades.view',
+  },
+  {
     id: 'rrhh-empleados',
     areaId: 'rrhh',
     title: 'Empleados',

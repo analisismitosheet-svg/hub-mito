@@ -7,6 +7,7 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { usePermisosArea } from '@/hooks/usePermisosArea'
 import { SelectBuscar } from '@/components/MultiselectFiltro'
+import { nombresMotivos } from '@/lib/motivos'
 
 interface Novedad {
   id: string
@@ -28,7 +29,6 @@ interface Novedad {
 
 const inputCls = 'w-full rounded-xl border border-line bg-surface2 px-3 py-1.5 text-[13px] text-ink outline-none transition duration-250 placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40'
 
-const MOTIVOS = ['INGRESO', 'AUSENTE', 'TARDANZA', 'APERCIBIM', 'EMBARGO', 'CARPETA MÉDICA', 'CAMBIO COMISIÓN', 'RESTAR', 'SUSPENSION', 'CAMBIO LOCAL', 'CAMBIO', 'VACACIONES', 'BAJA', 'LICENCIA', 'OTROS', 'RECUPERAR', 'SIN NOVEDADES']
 const TIPOS = ['MITO', 'PPP', 'MAS26', 'PFOMENTAR']
 
 function fmtFecha(iso: string | null): string {
@@ -47,14 +47,20 @@ export default function ResumenNovedades() {
   const [q, setQ] = useState('')
   const [fMotivo, setFMotivo] = useState('')
   const [fTipo, setFTipo] = useState('')
+  const [motivos, setMotivos] = useState<string[]>([])
   const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
 
   const cargar = useCallback(async () => {
     if (!supabase) { setCargando(false); return }
     setCargando(true); setError(null)
-    const { data, error: err } = await supabase.from('novedades').select('*').order('created_at', { ascending: false })
+    const [nov, mts] = await Promise.all([
+      supabase.from('novedades').select('*').order('created_at', { ascending: false }),
+      nombresMotivos(),
+    ])
+    const err = nov.error
     if (err) { setError(err.message); setCargando(false); return }
-    setTodos((data as Novedad[] | null) ?? [])
+    setTodos((nov.data as Novedad[] | null) ?? [])
+    setMotivos(mts)
     setCargando(false)
   }, [])
 
@@ -96,7 +102,7 @@ export default function ResumenNovedades() {
           <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sub/70" aria-hidden />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nombre, N°, local..." className={inputCls + ' pl-8 text-xs'} />
         </div>
-        <SelectBuscar label="Motivo" opciones={MOTIVOS.map((m) => ({ id: m, label: m }))} valor={fMotivo} onChange={setFMotivo} className="w-40" />
+        <SelectBuscar label="Motivo" opciones={motivos.map((m) => ({ id: m, label: m }))} valor={fMotivo} onChange={setFMotivo} className="w-40" />
         <SelectBuscar label="Tipo" opciones={TIPOS.map((t) => ({ id: t, label: t }))} valor={fTipo} onChange={setFTipo} className="w-40" />
       </div>
 
