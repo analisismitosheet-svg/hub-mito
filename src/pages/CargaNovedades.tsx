@@ -148,6 +148,15 @@ export default function CargaNovedades() {
   const [tipos, setTipos] = useState<string[]>([])
   const [abiertoTipos, setAbiertoTipos] = useState(false)
 
+  // Orden de la tabla
+  const [orden, setOrden] = useState<{ clave: string; dir: 1 | -1 } | null>(null)
+  const toggleOrden = (clave: string) =>
+    setOrden((o) =>
+      o?.clave === clave
+        ? { clave, dir: o.dir === 1 ? -1 : 1 }
+        : { clave, dir: 1 },
+    )
+
   const cargar = useCallback(async () => {
     if (!supabase) { setCargando(false); return }
     setCargando(true); setError(null)
@@ -337,8 +346,25 @@ export default function CargaNovedades() {
     if (fTipo) r = r.filter((n) => (n.tipo || '') === fTipo)
     const t = q.trim().toUpperCase()
     if (t) r = r.filter((n) => (n.nombre_completo || '').toUpperCase().includes(t) || (n.numero || '').toUpperCase().includes(t))
+    if (orden) {
+      r = [...r].sort((a, b) => {
+        const av = (a as unknown as Record<string, unknown>)[orden.clave]
+        const bv = (b as unknown as Record<string, unknown>)[orden.clave]
+        let c = 0
+        if (orden.clave === 'numero') {
+          c = (Number(av) || 0) - (Number(bv) || 0)
+        } else if (orden.clave === 'anio') {
+          c = ((av ?? '') as string).localeCompare((bv ?? '') as string, undefined, { numeric: true })
+        } else if (orden.clave === 'mes_liquidacion') {
+          c = (MESES.indexOf(mesCorto(av as string | null)) || 0) - (MESES.indexOf(mesCorto(bv as string | null)) || 0)
+        } else {
+          c = String(av ?? '').localeCompare(String(bv ?? ''), 'es', { sensitivity: 'base' })
+        }
+        return c === 0 ? 0 : c * orden.dir
+      })
+    }
     return r
-  }, [todos, fAnio, fMes, fMotivo, fLocal, fTipo, q])
+  }, [todos, fAnio, fMes, fMotivo, fLocal, fTipo, q, orden])
 
   return (
     <Layout>
@@ -403,19 +429,16 @@ export default function CargaNovedades() {
             <table className="w-full table-auto border-collapse text-sm leading-tight">
               <thead>
                 <tr className="bg-zinc-800 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-300">
-                  <th className="px-2 py-2 whitespace-nowrap">Año</th>
-                  <th className="px-2 py-2 whitespace-nowrap">Mes</th>
-                  <th className="px-2 py-2 whitespace-nowrap">N°</th>
-                  <th className="px-2 py-2 whitespace-nowrap">Nombre</th>
-                  <th className="px-2 py-2 whitespace-nowrap">Tipo</th>
-                  <th className="px-2 py-2 text-center whitespace-nowrap">Fecha</th>
-                  <th className="px-2 py-2 text-center whitespace-nowrap">Desde</th>
-                  <th className="px-2 py-2 text-center whitespace-nowrap">Hasta</th>
-                  <th className="px-2 py-2 whitespace-nowrap">Local</th>
-                  <th className="px-2 py-2 whitespace-nowrap">Motivo</th>
-                  <th className="px-2 py-2 whitespace-nowrap">Novedad</th>
-                  <th className="px-2 py-2 text-center whitespace-nowrap">Min</th>
-                  <th className="px-2 py-2 whitespace-nowrap">Control</th>
+                  {([['anio', 'Año'], ['mes_liquidacion', 'Mes'], ['numero', 'N°'], ['nombre_completo', 'Nombre'], ['tipo', 'Tipo'], ['fecha', 'Fecha'], ['desde', 'Desde'], ['hasta', 'Hasta'], ['local', 'Local'], ['motivo', 'Motivo'], ['novedad', 'Novedad'], ['minutos', 'Min'], ['control', 'Control']] as const).map(([clave, label]) => (
+                    <th key={clave} className="px-2 py-2 whitespace-nowrap">
+                      <button onClick={() => toggleOrden(clave)} className={'inline-flex items-center gap-1 uppercase tracking-wider transition hover:text-white ' + (orden?.clave === clave ? 'text-white' : '')} title={`Ordenar por ${label}`}>
+                        {label}
+                        <span className="text-[9px] leading-none">
+                          {orden?.clave === clave ? (orden.dir === 1 ? '▲' : '▼') : '▽'}
+                        </span>
+                      </button>
+                    </th>
+                  ))}
                   <th className="px-2 py-2 text-right whitespace-nowrap">Acc</th>
                 </tr>
               </thead>
