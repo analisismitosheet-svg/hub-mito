@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Loader2, Search, SearchX, Megaphone, List, LayoutDashboard, Clock, Users, BadgeAlert, CalendarDays, Pencil, Trash2 } from 'lucide-react'
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts'
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
@@ -35,6 +35,19 @@ const MESES = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', '
 const MESES_CORTOS = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC']
 
 const PALETA = ['#8b5cf6', '#22d3ee', '#f472b6', '#34d399', '#fbbf24', '#60a5fa', '#f87171', '#a3e635', '#e879f9', '#2dd4bf', '#fb923c', '#c084fc', '#94a3b8']
+
+/** Motivos que se miden en DÍAS (licencias, vacaciones, bajas...) vs en cantidad. */
+const MOTIVOS_DIAS = new Set(['VACACIONES', 'LICENCIA', 'CARPETA MÉDICA', 'CARPETA MEDICA', 'BAJA', 'AUSENTE', 'SUSPENSION', 'ACCIDENTE', 'ENFERMEDAD'])
+function esMotivoDias(motivo: string | null): boolean {
+  return !!motivo && MOTIVOS_DIAS.has(String(motivo).trim().toUpperCase())
+}
+function diasEntre(desde: string | null, hasta: string | null): number {
+  if (!desde || !hasta) return 1
+  const a = new Date(desde + 'T00:00:00').getTime()
+  const b = new Date(hasta + 'T00:00:00').getTime()
+  if (isNaN(a) || isNaN(b) || b < a) return 1
+  return Math.round((b - a) / 86400000) + 1
+}
 
 function mesNombre(mes: string | null): string {
   return (mes ?? '').split(/[ (]/)[0].trim().toUpperCase()
@@ -217,30 +230,41 @@ export default function ResumenNovedades() {
       .sort((a, b) => b.cant - a.cant)
   }, [lista])
 
-  const porTipo = useMemo(() => {
-    const m = new Map<string, number>()
-    for (const n of lista) {
-      const k = (n.tipo ?? 'SIN TIPO').trim() || 'SIN TIPO'
-      m.set(k, (m.get(k) ?? 0) + 1)
-    }
-    return Array.from(m.entries())
-      .map(([tipo, cant]) => ({ tipo, cant }))
-      .sort((a, b) => b.cant - a.cant)
-  }, [lista])
-
+  // Top 10 por legajo+nombre, ajustando la métrica según el motivo filtrado:
+  // - motivo de días (VACACIONES, LICENCIA, BAJA...) -> suma de días
+  // - motivo de cantidad (TARDANZA, APERCIBIM...) o sin motivo -> cantidad de novedades
   const topEmpleados = useMemo(() => {
-    const m = new Map<string, { lote: string; nombre: string; cant: number }>()
+    const m = new Map<string, { lote: string; nombre: string; cant: number; dias: number }>()
     for (const n of lista) {
       const clave = (n.numero || '') + '|' + (n.nombre_completo || '').trim()
       if (clave === '|') continue
-      const prev = m.get(clave) ?? { lote: n.numero || '', nombre: (n.nombre_completo || '').trim() || 'SIN NOMBRE', cant: 0 }
+      const prev = m.get(clave) ?? { lote: n.numero || '', nombre: (n.nombre_completo || '').trim() || 'SIN NOMBRE', cant: 0, dias: 0 }
       prev.cant++
+      if (fMotivo ? esMotivoDias(fMotivo) : false) prev.dias += diasEntre(n.desde, n.hasta)
+      m.set(clave, prev)
+    }
+    const usarDias = !!fMotivo && esMotivoDias(fMotivo)
+    return Array.from(m.values())
+      .map((e) => ({ nombre: (e.lote ? e.lote + ' · ' : '') + e.nombre, valor: usarDias ? e.dias : e.cant }))
+      .sort((a, b) => b.valor - a.valor)
+      .slice(0, 10)
+  }, [lista, fMotivo])
+
+  // Top 15 por días de ausencia (motivos de días, sin necesidad de filtro)
+  const topDias = useMemo(() => {
+    const m = new Map<string, { lote: string; nombre: string; dias: number }>()
+    for (const n of lista) {
+      if (!esMotivoDias(n.motivo)) continue
+      const clave = (n.numero || '') + '|' + (n.nombre_completo || '').trim()
+      if (clave === '|') continue
+      const prev = m.get(clave) ?? { lote: n.numero || '', nombre: (n.nombre_completo || '').trim() || 'SIN NOMBRE', dias: 0 }
+      prev.dias += diasEntre(n.desde, n.hasta)
       m.set(clave, prev)
     }
     return Array.from(m.values())
-      .sort((a, b) => b.cant - a.cant)
+      .map((e) => ({ nombre: (e.lote ? e.lote + ' · ' : '') + e.nombre, dias: e.dias }))
+      .sort((a, b) => b.dias - a.dias)
       .slice(0, 15)
-      .map((e) => ({ nombre: (e.lote ? e.lote + ' · ' : '') + e.nombre, cant: e.cant }))
   }, [lista])
 
   // Comparación mensual por motivo (top 6 + Otros), para ver evolución
@@ -375,25 +399,26 @@ export default function ResumenNovedades() {
             </div>
 
             <div className={cardCls}>
-              <p className="mb-2 text-xs font-semibold text-sub flex items-center gap-1.5"><BadgeAlert size={13} className="text-cyan-400" aria-hidden /> Distribución por tipo</p>
+              <p className="mb-2 text-xs font-semibold text-sub flex items-center gap-1.5"><Users size={13} className="text-cyan-400" aria-hidden /> Top 10 por empleado{fMotivo ? ` · ${fMotivo}` : ''} <button onClick={() => setFMotivo('')} title="Quitar motivo" className="rounded border border-line px-1 text-[10px] text-sub transition hover:text-ink">✕</button></p>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={porTipo} dataKey="cant" nameKey="tipo" cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={2} stroke="none">
-                      {porTipo.map((_, i) => <Cell key={i} fill={PALETA[i % PALETA.length]} />)}
-                    </Pie>
-                    <Tooltip content={<TooltipDark />} />
-                    <Legend verticalAlign="bottom" iconType="circle" iconSize={8} formatter={(v: any) => <span style={{ color: '#a1a1aa', fontSize: 11 }}>{v}</span>} />
-                  </PieChart>
+                  <BarChart data={topEmpleados} layout="vertical" margin={{ top: 0, right: 20, left: 8, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" horizontal={false} />
+                    <XAxis type="number" tick={{ fill: '#a1a1aa', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                    <YAxis type="category" dataKey="nombre" width={140} tick={{ fill: '#a1a1aa', fontSize: 10 }} axisLine={false} tickLine={false} />
+                    <Tooltip content={<TooltipDark formatter={(v: number) => (fMotivo && esMotivoDias(fMotivo) ? `${v} días` : v)} />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
+                    <Bar dataKey="valor" name={fMotivo ? fMotivo : 'Novedades'} fill="#22d3ee" radius={[0, 4, 4, 0]} maxBarSize={14} />
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
+              <p className="mt-1 text-[10px] text-sub/60">Hacé clic en un motivo en el gráfico "Top motivos" para ver el ranking de ese motivo.</p>
             </div>
           </div>
 
           {/* Fila 2: por motivo + por local */}
           <div className="grid gap-3 lg:grid-cols-2">
             <div className={cardCls}>
-              <p className="mb-2 text-xs font-semibold text-sub flex items-center gap-1.5"><BadgeAlert size={13} className="text-amber-400" aria-hidden /> Top motivos</p>
+              <p className="mb-2 text-xs font-semibold text-sub flex items-center gap-1.5"><BadgeAlert size={13} className="text-amber-400" aria-hidden /> Top motivos <span className="font-normal text-[10px] text-sub/60">(clic para filtrar)</span></p>
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={porMotivo.slice(0, 10)} layout="vertical" margin={{ top: 0, right: 10, left: 8, bottom: 0 }}>
@@ -401,10 +426,11 @@ export default function ResumenNovedades() {
                     <XAxis type="number" tick={{ fill: '#a1a1aa', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
                     <YAxis type="category" dataKey="motivo" width={110} tick={{ fill: '#a1a1aa', fontSize: 10 }} axisLine={false} tickLine={false} />
                     <Tooltip content={<TooltipDark />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
-                    <Bar dataKey="cant" name="Novedades" fill="#fbbf24" radius={[0, 4, 4, 0]} maxBarSize={18} />
+                    <Bar dataKey="cant" name="Novedades" fill={fMotivo ? '#fbbf24' : '#f59e0b'} radius={[0, 4, 4, 0]} maxBarSize={18} onClick={(d: any) => { const motivo = d?.['motivo'] as string | undefined; if (motivo) setFMotivo((m) => (m === motivo ? '' : motivo)) }} cursor="pointer" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
+              <p className="mt-1 text-[10px] text-sub/60">Clic en una barra: TARDANZA → ranking por cantidad · VACACIONES/LICENCIA → ranking por días.</p>
             </div>
 
             <div className={cardCls}>
@@ -444,15 +470,15 @@ export default function ResumenNovedades() {
             </div>
 
             <div className={cardCls}>
-              <p className="mb-2 text-xs font-semibold text-sub flex items-center gap-1.5"><Users size={13} className="text-indigo-400" aria-hidden /> Top empleados con más novedades</p>
+              <p className="mb-2 text-xs font-semibold text-sub flex items-center gap-1.5"><Users size={13} className="text-indigo-400" aria-hidden /> Top 15 · días ausentes (VACACIONES, LICENCIA, BAJA...)</p>
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={topEmpleados} layout="vertical" margin={{ top: 0, right: 10, left: 8, bottom: 0 }}>
+                  <BarChart data={topDias} layout="vertical" margin={{ top: 0, right: 10, left: 8, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.07)" horizontal={false} />
                     <XAxis type="number" tick={{ fill: '#a1a1aa', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
                     <YAxis type="category" dataKey="nombre" width={140} tick={{ fill: '#a1a1aa', fontSize: 10 }} axisLine={false} tickLine={false} />
-                    <Tooltip content={<TooltipDark />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
-                    <Bar dataKey="cant" name="Novedades" fill="#60a5fa" radius={[0, 4, 4, 0]} maxBarSize={14} />
+                    <Tooltip content={<TooltipDark formatter={(v: number) => `${v} días`} />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
+                    <Bar dataKey="dias" name="Días" fill="#60a5fa" radius={[0, 4, 4, 0]} maxBarSize={14} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
