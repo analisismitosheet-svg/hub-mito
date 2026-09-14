@@ -40,6 +40,20 @@ function mesNombre(mes: string | null): string {
 function mesIndex(mes: string | null): number {
   return MESES.indexOf(mesNombre(mes))
 }
+
+/** Ejecuta una query paginándola (Supabase limita a 1000 filas por request). */
+async function cargarTodas(query: any): Promise<{ data: Novedad[]; error: any }> {
+  const CHUNK = 1000
+  const acc: Novedad[] = []
+  let error: any = null
+  for (let i = 0; i < 20000; i += CHUNK) {
+    const { data, error: e } = await query.order('created_at', { ascending: false }).range(i, i + CHUNK - 1)
+    if (e) { error = e; break }
+    acc.push(...(data as Novedad[]))
+    if ((data?.length ?? 0) < CHUNK) break
+  }
+  return { data: acc, error }
+}
 function fmtFecha(iso: string | null): string {
   if (!iso) return '-'
   const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/)
@@ -81,14 +95,14 @@ export default function ResumenNovedades() {
     if (fTipo) query = query.eq('tipo', fTipo)
     const t = q.trim().toUpperCase()
     if (t) query = query.or(`nombre_completo.ilike.%${t}%,numero.ilike.%${t}%,local.ilike.%${t}%,novedad.ilike.%${t}%`)
-    const [nov, mts, tps] = await Promise.all([
-      query.order('created_at', { ascending: false }).limit(2000),
+    const [tes, mts, tps] = await Promise.all([
+      cargarTodas(query),
       nombresMotivos(),
       nombresTipos(),
     ])
-    const err = nov.error
+    const err = tes.error
     if (err) { setError(err.message); setCargando(false); return }
-    setTodos((nov.data as Novedad[] | null) ?? [])
+    setTodos(tes.data)
     setMotivos(mts)
     setTipos(tps)
     setCargando(false)
