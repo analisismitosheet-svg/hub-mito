@@ -33,6 +33,25 @@ const selectCls = inputCls + ' appearance-none'
 
 const LOCALES = ['FABRICA', 'BUSTOS', 'HIPER', 'NVO CENTRO', 'DINO', 'POLO 52', 'GRAL PAZ', 'RIVERA', 'ESPINOSA', 'RUTA 9', 'NMO', 'CF RIVERA', '9 DE JULIO', 'MUÑOZ', 'WALMART', 'VCP', 'CF BUSTOS', 'CF OLMOS', 'CF RUTA 9', 'RIO 4']
 
+/** Meses de liquidación (el período va del 26 del mes anterior al 25 del mes). */
+const MESES = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE']
+
+/** Nombre del mes a partir del texto de liquidación ("ENERO (26/12 AL 25/01)" -> "ENERO"). */
+function mesNombre(mes: string | null): string {
+  const n = (mes ?? '').split(/[ (]/)[0].trim().toUpperCase()
+  return MESES.includes(n) ? n : ''
+}
+
+/** Arma el texto de liquidación para un mes: "MES (26/mm AL 25/mm)". */
+function textoMes(mes: string): string {
+  const idx = MESES.indexOf(mes.toUpperCase())
+  if (idx < 0) return mes
+  // El período arranca el 26 del mes anterior
+  const dd = String(idx === 0 ? 12 : idx).padStart(2, '0')
+  const hh = String(idx + 1).padStart(2, '0')
+  return `${mes.toUpperCase()} (26/${dd} AL 25/${hh})`
+}
+
 function fmtFecha(iso: string | null): string {
   if (!iso) return '-'
   const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/)
@@ -421,7 +440,19 @@ export default function CargaNovedades() {
               {error && <p role="alert" className="mb-3 rounded-xl border border-brand-600/30 bg-brand-600/10 p-2 text-xs text-brand-400">{error}</p>}
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Año</span><input value={anio} onChange={(e) => setAnio(e.target.value)} placeholder="2025" className={inputCls} /></label>
-                <label className="block sm:col-span-2"><span className="mb-0.5 block text-[11px] font-medium text-sub">Mes liquidación</span><input value={mes} onChange={(e) => setMes(e.target.value)} placeholder="ENERO (26/12 AL 25/01)" className={inputCls} /></label>
+                <label className="block sm:col-span-2"><span className="mb-0.5 block text-[11px] font-medium text-sub">Mes liquidación</span>
+                  <div className="flex gap-1">
+                    <select
+                      value={mesNombre(mes)}
+                      onChange={(e) => setMes(e.target.value ? textoMes(e.target.value) : '')}
+                      className={selectCls + ' flex-1'}
+                    >
+                      <option value="">--</option>
+                      {MESES.map((m) => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                    {mes && <span className="shrink-0 self-center text-[11px] text-sub/70" title={mes}>{mes}</span>}
+                  </div>
+                </label>
                 <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">N° legajo</span><input value={numero} onChange={(e) => setNumero(e.target.value)} placeholder="935" className={inputCls} /></label>
                 <label className="block sm:col-span-2"><span className="mb-0.5 block text-[11px] font-medium text-sub">Nombre completo *</span><input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="APELLIDO NOMBRE" className={inputCls} /></label>
                 <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Tipo</span>
