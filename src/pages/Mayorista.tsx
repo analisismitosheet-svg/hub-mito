@@ -75,6 +75,22 @@ function Barra({ items }: { items: Item[] }) {
   )
 }
 
+// Barra desde el resumen por lote (sin traer los ítems, para el lote colapsado)
+function BarraResumen({ resumen }: { resumen: { items: number; total: number; hecho: number; faltante: number } }) {
+  const resueltos = resumen.hecho + resumen.faltante
+  const pct = resumen.total ? Math.round((resueltos / resumen.total) * 100) : 0
+  const w = (n: number) => (resumen.total ? `${(n / resumen.total) * 100}%` : '0%')
+  return (
+    <div className="flex shrink-0 items-center gap-2">
+      <div className="flex h-2 w-24 shrink-0 overflow-hidden rounded-full bg-surface2">
+        <div className="h-full bg-emerald-500 transition-all duration-300" style={{ width: w(resumen.hecho) }} />
+        <div className="h-full bg-red-500 transition-all duration-300" style={{ width: w(resumen.faltante) }} />
+      </div>
+      <span className="text-xs tabular-nums text-sub">{resueltos}/{resumen.total} · {pct}%</span>
+    </div>
+  )
+}
+
 function Celda({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="rounded-lg border border-line bg-surface2 px-2.5 py-1.5">
@@ -175,8 +191,10 @@ export default function Mayorista() {
   const puedeMarcar = isAdmin || can('mayorista.mark')
 
   const [lotes, setLotes] = useState<Lote[]>([])
-  const [items, setItems] = useState<Item[]>([])
+  const [itemsCache, setItemsCache] = useState<Record<string, Item[]>>({})
+  const [resumenes, setResumenes] = useState<Record<string, { items: number; total: number; hecho: number; faltante: number }>>({})
   const [cargando, setCargando] = useState(true)
+  const [cargandoLote, setCargandoLote] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [subiendo, setSubiendo] = useState(false)
   const puedeEditarStats = isAdmin || puedeImportar
@@ -200,25 +218,55 @@ export default function Mayorista() {
       return
     }
     setCargando(true)
-    const { data: ld } = await supabase
-      .from('mayorista_lotes')
-      .select('id,nombre,motivo,created_at,venta_fecha,cant_venta,horas,personas,observacion')
-      .order('created_at', { ascending: false })
-      .limit(60)
-    const lotesData = (ld as Lote[]) ?? []
+    // Lotes, empleados, responsables y resumen en paralelo (sin traer los ítems).
+    // Cada consulta tolera errores para no bloquear toda la pantalla.
+    const seguro = async <T,>(p: PromiseLike<{ data: T | null; error: unknown }>) => {
+      try {
+        const r = await p
+        return { data: r.error ? null : r.data, error: r.error }
+      } catch {
+        return { data: null as T | null, error: null }
+      }
+    }
+    const [ld, emp, respData, resData] = await Promise.all([
+      seguro(supabase
+        .from('mayorista_lotes')
+        .select('id,nombre,motivo,created_at,venta_fecha,cant_venta,horas,personas,observacion')
+        .order('created_at', { ascending: false })
+        .limit(60)),
+      seguro(supabase.from('empleados').select('id,legajo,nombre').order('nombre', { ascending: true })),
+      seguro(supabase.from('mayorista_responsables').select('lote_id,local,empleado_id')),
+      seguro(supabase.from('vw_mayorista_resumen').select('*')),
+    ])
+    const lotesData = (ld.data as Lote[]) ?? []
     setLotes(lotesData)
-    const { data: emp } = await supabase.from('empleados').select('id,legajo,nombre').order('nombre', { ascending: true })
-    setEmpleados((emp as Empleado[]) ?? [])
-    if (lotesData.length) {
-      const ids = lotesData.map((l) => l.id)
-      // Paginar los ítems: Supabase corta en 1000 filas por consulta
-      const all: Item[] = []
-      const PAGE = 1000
+    setEmpleados((emp.data as Empleado[]) ?? [])
+    const m: Record<string, string | null> = {}
+    for (const r of (respData.data as { lote_id: string; local: string; empleado_id: string | null }[]) ?? []) {
+      m[`${r.lote_id}|${r.local}`] = r.empleado_id
+    }
+    setResponsables(m)
+    const res: Record<string, { items: number; total: number; hecho: number; faltante: number }> = {}
+    for (const r of (resData.data as { lote_id: string; items: number; total: number; hecho: number; faltante: number }[]) ?? []) {
+      res[r.lote_id] = { items: r.items ?? 0, total: r.total ?? 0, hecho: r.hecho ?? 0, faltante: r.faltante ?? 0 }
+    }
+    setResumenes(res)
+    setCargando(false)
+  }, [])
+
+  // Trae los ítems de UN lote al abrirlo (cache por lote).
+  const cargarItemsLote = useCallback(async (loteId: string) => {
+    if (!supabase) return
+    if (itemsCache[loteId]) return
+    setCargandoLote(loteId)
+    const all: Item[] = []
+    const PAGE = 1000
+    try {
       for (let desde = 0; ; desde += PAGE) {
         const { data, error } = await supabase
           .from('mayorista_items')
           .select('id,lote_id,orden,prioridad,local,material,codigo,articulo,color,talle,cantidad,venta_local,estado,hecho_at')
-          .in('lote_id', ids)
+          .eq('lote_id', loteId)
           .order('lote_id', { ascending: true })
           .order('orden', { ascending: true })
           .range(desde, desde + PAGE - 1)
@@ -226,19 +274,11 @@ export default function Mayorista() {
         all.push(...chunk)
         if (error || chunk.length < PAGE) break
       }
-      setItems(all)
-      const { data: respData } = await supabase.from('mayorista_responsables').select('lote_id,local,empleado_id').in('lote_id', ids)
-      const m: Record<string, string | null> = {}
-      for (const r of (respData as { lote_id: string; local: string; empleado_id: string | null }[]) ?? []) {
-        m[`${r.lote_id}|${r.local}`] = r.empleado_id
-      }
-      setResponsables(m)
-    } else {
-      setItems([])
-      setResponsables({})
+      setItemsCache((prev) => ({ ...prev, [loteId]: all }))
+    } finally {
+      setCargandoLote(null)
     }
-    setCargando(false)
-  }, [])
+  }, [itemsCache])
 
   useEffect(() => {
     void cargar()
@@ -247,7 +287,10 @@ export default function Mayorista() {
   async function marcar(item: Item, estado: EstadoM) {
     if (!supabase) return
     const at = estado === 'pendiente' ? null : new Date().toISOString()
-    setItems((arr) => arr.map((x) => (x.id === item.id ? { ...x, estado, hecho_at: at } : x)))
+    setItemsCache((prev) => ({
+      ...prev,
+      [item.lote_id]: (prev[item.lote_id] ?? []).map((x) => (x.id === item.id ? { ...x, estado, hecho_at: at } : x)),
+    }))
     const { error } = await supabase
       .from('mayorista_items')
       .update({ estado, hecho_at: at, hecho_por: estado === 'pendiente' ? null : perfil?.id ?? null })
@@ -270,7 +313,11 @@ export default function Mayorista() {
     if (!supabase || !its.length) return
     const ids = its.map((i) => i.id)
     const at = estado === 'pendiente' ? null : new Date().toISOString()
-    setItems((arr) => arr.map((x) => (ids.includes(x.id) ? { ...x, estado, hecho_at: at } : x)))
+    const loteId = its[0].lote_id
+    setItemsCache((prev) => ({
+      ...prev,
+      [loteId]: (prev[loteId] ?? []).map((x) => (ids.includes(x.id) ? { ...x, estado, hecho_at: at } : x)),
+    }))
     const { error } = await supabase
       .from('mayorista_items')
       .update({ estado, hecho_at: at, hecho_por: estado === 'pendiente' ? null : perfil?.id ?? null })
@@ -446,14 +493,8 @@ export default function Mayorista() {
   }
 
   const itemsPorLote = useMemo(() => {
-    const m = new Map<string, Item[]>()
-    for (const it of items) {
-      const a = m.get(it.lote_id) ?? []
-      a.push(it)
-      m.set(it.lote_id, a)
-    }
-    return m
-  }, [items])
+    return new Map(Object.entries(itemsCache))
+  }, [itemsCache])
 
   return (
     <Layout>
@@ -495,8 +536,12 @@ export default function Mayorista() {
         <div className="space-y-3">
           {lotes.map((lote) => {
             const its = itemsPorLote.get(lote.id) ?? []
-            const loteTodoHecho = its.length > 0 && its.every((i) => i.estado === 'hecho')
+            const resumen = resumenes[lote.id]
+            const loteTodoHecho = its.length > 0
+              ? its.every((i) => i.estado === 'hecho')
+              : !!resumen && resumen.total > 0 && resumen.hecho === resumen.total
             const abierto = loteAbierto === lote.id
+            const cargandoEste = cargandoLote === lote.id
             // locales ordenados por prioridad (menor primero), luego alfabético
             const porLocal = new Map<string, Item[]>()
             for (const i of its) {
@@ -523,6 +568,7 @@ export default function Mayorista() {
                     setLoteAbierto(nuevo)
                     setLocalAbierto(null)
                     setSubAbierto(nuevo ? `${lote.id}|repo` : null)
+                    if (nuevo) void cargarItemsLote(nuevo)
                   }}
                   className={`flex w-full items-center gap-3 px-4 py-3 text-left ${loteTodoHecho ? 'bg-emerald-500/10 hover:bg-emerald-500/15' : 'hover:bg-surface2'}`}
                 >
@@ -530,11 +576,17 @@ export default function Mayorista() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium text-ink">{lote.nombre}</p>
                     <p className="truncate text-xs text-sub">
-                      Cargado {fmtFechaHora(lote.created_at)} · {locales.length} locales
+                      Cargado {fmtFechaHora(lote.created_at)} · {resumen ? `${resumen.items} ítems` : '…'}
                       {lote.motivo ? ` · ${lote.motivo}` : ''}
                     </p>
                   </div>
-                  <Barra items={its} />
+                  {cargandoEste ? (
+                    <Loader2 size={15} className="shrink-0 animate-spin text-sub" aria-hidden />
+                  ) : its.length > 0 ? (
+                    <Barra items={its} />
+                  ) : resumen ? (
+                    <BarraResumen resumen={resumen} />
+                  ) : null}
                   {puedeImportar && (
                     <span
                       role="button"
@@ -553,6 +605,11 @@ export default function Mayorista() {
 
                 {abierto && (
                   <div className="border-t border-line">
+                    {cargandoEste && (
+                      <div className="flex items-center justify-center gap-2 border-b border-line px-4 py-4 text-sm text-sub">
+                        <Loader2 size={16} className="animate-spin" aria-hidden /> Cargando ítems del lote…
+                      </div>
+                    )}
                     <div className="border-b border-line">
                       <button
                         onClick={() => setSubAbierto(subAbierto === `${lote.id}|stats` ? null : `${lote.id}|stats`)}
