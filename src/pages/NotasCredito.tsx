@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
-  Loader2, Search, SearchX, Trash2, X, FileText, Eye, Plus, ClipboardList,
+  Loader2, Search, SearchX, Trash2, X, FileText, Eye, Plus, ClipboardList, Pencil,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -49,7 +49,7 @@ function estadoCls(e: string | null): string {
 export default function NotasCredito() {
   const { perfil } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
-  const { crear: puedeCrear, borrar: puedeBorrar } = usePermisosArea('mayorista.notas_credito')
+  const { crear: puedeCrear, editar: puedeEditar, borrar: puedeBorrar } = usePermisosArea('mayorista.notas_credito')
 
   const [todos, setTodos] = useState<NotaCredito[]>([])
   const [cargando, setCargando] = useState(true)
@@ -58,7 +58,7 @@ export default function NotasCredito() {
   const [fEstado, setFEstado] = useState('')
   const [card, setCard] = useState<NotaCredito | null>(null)
   const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
-  const [crear, setCrear] = useState(false)
+  const [modal, setModal] = useState<{ nota: NotaCredito | null } | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [editando, setEditando] = useState<{ id: string; campo: string } | null>(null)
@@ -125,7 +125,7 @@ export default function NotasCredito() {
   }
 
   function empezarEdicion(n: NotaCredito, campo: string, _valorActual: unknown) {
-    if (!puedeBorrar) return
+    if (!puedeEditar) return
     setEditando({ id: n.id, campo })
   }
 
@@ -165,7 +165,7 @@ export default function NotasCredito() {
         </select>
         <span className="text-[11px] text-sub/70">{lista.length} notas</span>
         {puedeCrear && (
-          <button onClick={() => setCrear(true)} className="btn-press inline-flex items-center gap-1 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-700"><Plus size={13} aria-hidden /> Nueva Nota de Credito</button>
+          <button onClick={() => setModal({ nota: null })} className="btn-press inline-flex items-center gap-1 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-700"><Plus size={13} aria-hidden /> Nueva Nota de Credito</button>
         )}
       </div>
 
@@ -215,6 +215,7 @@ export default function NotasCredito() {
                       <td className="px-2 py-1 text-right">
                         <div className="flex items-center justify-end gap-px" onClick={(e) => e.stopPropagation()}>
                           <button onClick={() => setCard(n)} className="rounded border border-line p-0.5 text-sub transition hover:text-amber-400" title="Ver"><Eye size={10} aria-hidden /></button>
+                          {puedeEditar && <button onClick={() => setModal({ nota: n })} className="rounded border border-line p-0.5 text-sub transition hover:text-amber-400" title="Editar"><Pencil size={10} aria-hidden /></button>}
                           {puedeBorrar && <button onClick={() => setConfirm({ message: 'Eliminar nota de credito de "' + (n.razon_social || '-') + '"?', onConfirm: () => void eliminar(n) })} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Eliminar"><Trash2 size={10} aria-hidden /></button>}
                         </div>
                       </td>
@@ -250,31 +251,36 @@ export default function NotasCredito() {
               </section>
               <HistorialLista entidad="nota_credito" registroId={card.id} />
             </div>
+            {puedeEditar && (
+              <div className="flex justify-end border-t border-line px-5 py-3">
+                <button onClick={() => { setCard(null); setModal({ nota: card }) }} className="btn-press inline-flex items-center gap-1 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700"><Pencil size={12} aria-hidden /> Editar</button>
+              </div>
+            )}
           </div>
         </div>
       )}
 
       <ConfirmDialog open={!!confirm} message={confirm?.message ?? ''} onCancel={() => setConfirm(null)} onConfirm={() => { confirm?.onConfirm(); setConfirm(null) }} />
 
-      {crear && <NuevaNotaCredito onClose={() => setCrear(false)} onSaved={() => { setCrear(false); void cargar() }} />}
+      {modal && <NotaCreditoModal nota={modal.nota} onClose={() => setModal(null)} onSaved={() => { setModal(null); void cargar() }} />}
     </Layout>
   )
 }
 
 /* ------------------------------------------------------------------ */
-/*  Nueva Nota de Credito (alta manual)                                */
+/*  Nota de Credito (alta manual / edicion)                            */
 /* ------------------------------------------------------------------ */
 
-function NuevaNotaCredito({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+function NotaCreditoModal({ nota, onClose, onSaved }: { nota: NotaCredito | null; onClose: () => void; onSaved: () => void }) {
   const { perfil } = useAuth()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [nroPedido, setNroPedido] = useState('')
-  const [nCliente, setNCliente] = useState('')
-  const [razonSocial, setRazonSocial] = useState('')
-  const [nRemito, setNRemito] = useState('')
-  const [bulto, setBulto] = useState('')
-  const [observaciones, setObservaciones] = useState('')
+  const [nroPedido, setNroPedido] = useState(nota?.nro_pedido || '')
+  const [nCliente, setNCliente] = useState(nota?.n_cliente || '')
+  const [razonSocial, setRazonSocial] = useState(nota?.razon_social || '')
+  const [nRemito, setNRemito] = useState(nota?.n_remito || '')
+  const [estado, setEstado] = useState(nota?.estado || 'PENDIENTE')
+  const [observaciones, setObservaciones] = useState(nota?.observaciones || '')
 
   const hoy = new Date().toISOString().slice(0, 10)
 
@@ -285,29 +291,44 @@ function NuevaNotaCredito({ onClose, onSaved }: { onClose: () => void; onSaved: 
     if (!nCliente.trim()) { setError('El Nro Cliente es obligatorio.'); return }
     setBusy(true); setError(null)
 
-    const { data, error: err } = await supabase
-      .from('notas_credito')
-      .insert({
-        guia_id: null,
-        nro_pedido: nroPedido.trim(),
-        n_cliente: nCliente.trim() || null,
-        razon_social: razonSocial.trim() || null,
-        n_remito: nRemito.trim() || null,
-        bulto: bulto ? Number(bulto) || null : null,
-        fecha: hoy,
-        observaciones: observaciones.trim() || null,
-        estado: 'PENDIENTE',
-      })
-      .select()
-      .single()
-    if (err) { setBusy(false); setError(err.message); return }
-    if (data) void registrarHistorial(
-      'nota_credito',
-      (data as { id: string }).id,
-      'creacion',
-      { nombre: perfil?.nombre ?? null, email: perfil?.email ?? null },
-      `Nota de credito N° ${nroPedido.trim()} - ${razonSocial.trim() || ''}`,
-    )
+    const payload = {
+      nro_pedido: nroPedido.trim(),
+      n_cliente: nCliente.trim() || null,
+      razon_social: razonSocial.trim() || null,
+      n_remito: nRemito.trim() || null,
+      observaciones: observaciones.trim() || null,
+      estado,
+    }
+
+    if (nota) {
+      const { error: err } = await supabase.from('notas_credito').update(payload).eq('id', nota.id)
+      if (err) { setBusy(false); setError(err.message); return }
+      void registrarHistorial(
+        'nota_credito',
+        nota.id,
+        'modificacion',
+        { nombre: perfil?.nombre ?? null, email: perfil?.email ?? null },
+        `Nota de credito N° ${nroPedido.trim()} - ${razonSocial.trim() || ''}`,
+      )
+    } else {
+      const { data, error: err } = await supabase
+        .from('notas_credito')
+        .insert({
+          guia_id: null,
+          ...payload,
+          fecha: hoy,
+        })
+        .select()
+        .single()
+      if (err) { setBusy(false); setError(err.message); return }
+      if (data) void registrarHistorial(
+        'nota_credito',
+        (data as { id: string }).id,
+        'creacion',
+        { nombre: perfil?.nombre ?? null, email: perfil?.email ?? null },
+        `Nota de credito N° ${nroPedido.trim()} - ${razonSocial.trim() || ''}`,
+      )
+    }
     setBusy(false); onSaved()
   }
 
@@ -315,7 +336,7 @@ function NuevaNotaCredito({ onClose, onSaved }: { onClose: () => void; onSaved: 
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 sm:p-4" onClick={() => !busy && onClose()}>
       <div className="flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-soft-lg" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-line px-5 py-3">
-          <h2 className="flex items-center gap-2 font-display font-semibold text-ink"><ClipboardList size={16} aria-hidden /> Nueva Nota de Credito</h2>
+          <h2 className="flex items-center gap-2 font-display font-semibold text-ink"><ClipboardList size={16} aria-hidden /> {nota ? 'Editar Nota de Credito' : 'Nueva Nota de Credito'}</h2>
           <button onClick={onClose} aria-label="Cerrar" className="rounded-lg p-1.5 text-sub hover:bg-line hover:text-ink"><X size={16} aria-hidden /></button>
         </div>
 
@@ -339,8 +360,10 @@ function NuevaNotaCredito({ onClose, onSaved }: { onClose: () => void; onSaved: 
               <input value={nRemito} onChange={(e) => setNRemito(e.target.value)} placeholder="Remito (opcional)..." className={inputCls} />
             </label>
             <label className="block">
-              <span className="mb-0.5 block text-[11px] font-medium text-sub">Cant. Bultos</span>
-              <input type="number" min={0} value={bulto} onChange={(e) => setBulto(e.target.value)} placeholder="0" className={inputCls} />
+              <span className="mb-0.5 block text-[11px] font-medium text-sub">Estado</span>
+              <select value={estado} onChange={(e) => setEstado(e.target.value)} className={selectCls}>
+                {ESTADOS.map((e) => <option key={e} value={e}>{e}</option>)}
+              </select>
             </label>
             <label className="block sm:col-span-2">
               <span className="mb-0.5 block text-[11px] font-medium text-sub">Observaciones</span>
@@ -352,7 +375,7 @@ function NuevaNotaCredito({ onClose, onSaved }: { onClose: () => void; onSaved: 
             <button type="button" onClick={onClose} className="btn-press rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-sub hover:bg-line">Cancelar</button>
             <button type="submit" disabled={busy} className="btn-press inline-flex items-center gap-1 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700 disabled:opacity-50">
               {busy && <Loader2 size={12} className="animate-spin" aria-hidden />}
-              Crear nota de credito
+              {nota ? 'Guardar cambios' : 'Crear nota de credito'}
             </button>
           </div>
         </form>
