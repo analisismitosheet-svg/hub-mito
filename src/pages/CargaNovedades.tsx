@@ -137,8 +137,17 @@ export default function CargaNovedades() {
   const cargar = useCallback(async () => {
     if (!supabase) { setCargando(false); return }
     setCargando(true); setError(null)
+    // Filtros aplicados en el servidor (la tabla tiene ~11k filas; sin esto solo llegan las primeras 1000)
+    let query = supabase.from('novedades').select('*')
+    if (fAnio) query = query.eq('anio', fAnio)
+    if (fMes) query = query.like('mes_liquidacion', fMes + '%')
+    if (fMotivo) query = query.eq('motivo', fMotivo)
+    if (fLocal) query = query.eq('local', fLocal)
+    if (fTipo) query = query.eq('tipo', fTipo)
+    const t = q.trim().toUpperCase()
+    if (t) query = query.or(`nombre_completo.ilike.%${t}%,numero.ilike.%${t}%`)
     const [nov, mts, tps] = await Promise.all([
-      supabase.from('novedades').select('*').order('created_at', { ascending: false }).limit(500),
+      query.order('created_at', { ascending: false }).limit(2000),
       nombresMotivos(),
       nombresTipos(),
     ])
@@ -148,7 +157,7 @@ export default function CargaNovedades() {
     setMotivos(mts)
     setTipos(tps)
     setCargando(false)
-  }, [])
+  }, [fAnio, fMes, fMotivo, fLocal, fTipo, q])
 
   useEffect(() => { void cargar() }, [cargar])
 
