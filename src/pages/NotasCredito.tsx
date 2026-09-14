@@ -26,7 +26,7 @@ interface NotaCredito {
   created_at: string
 }
 
-const ESTADOS = ['PENDIENTE', 'APLICADA', 'ANULADA']
+const ESTADOS = ['PENDIENTE', 'APLICADA', 'ANULADA', 'NUEVO', 'EN_PROCESO', 'FINALIZADO_FACT', 'FINALIZADO_A_CAJA']
 const inputCls = 'w-full rounded-xl border border-line bg-surface2 px-3 py-1.5 text-[13px] text-ink outline-none transition duration-250 placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40'
 const selectCls = inputCls + ' appearance-none'
 
@@ -39,6 +39,10 @@ function fmtDate(iso: string | null): string {
 function estadoCls(e: string | null): string {
   if (e === 'APLICADA') return 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
   if (e === 'ANULADA') return 'bg-red-500/15 text-red-400 border-red-500/30'
+  if (e === 'FINALIZADO_FACT') return 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+  if (e === 'FINALIZADO_A_CAJA') return 'bg-violet-500/15 text-violet-400 border-violet-500/30'
+  if (e === 'NUEVO') return 'bg-red-500/15 text-red-400 border-red-500/30'
+  if (e === 'EN_PROCESO') return 'bg-amber-500/15 text-amber-400 border-amber-500/30'
   return 'bg-amber-500/15 text-amber-400 border-amber-500/30'
 }
 
@@ -183,7 +187,6 @@ export default function NotasCredito() {
                   <th className="px-2 py-1 text-center whitespace-nowrap">N Cl</th>
                   <th className="px-2 py-1 whitespace-nowrap">Razon Social</th>
                   <th className="px-2 py-1 text-center whitespace-nowrap">Remito</th>
-                  <th className="px-2 py-1 text-center whitespace-nowrap">Bulto</th>
                   <th className="px-2 py-1 text-center whitespace-nowrap">Estado</th>
                   <th className="px-2 py-1 whitespace-nowrap">Obs</th>
                   <th className="px-2 py-1 text-right whitespace-nowrap">Acc</th>
@@ -199,7 +202,6 @@ export default function NotasCredito() {
                       <td className="px-2 py-1 text-center text-sub">{n.n_cliente || '-'}</td>
                       <td className="px-2 py-1"><span className="block max-w-[240px] truncate text-sub" title={n.razon_social || ''}>{n.razon_social || '-'}</span></td>
                       <td className="px-2 py-1 text-center text-sub">{n.n_remito || '-'}</td>
-                      <td className="px-2 py-1 text-center text-sub">{n.bulto != null ? n.bulto : '-'}</td>
                       <td className="px-2 py-1 text-center" onClick={(e) => e.stopPropagation()}>
                         {activo ? (
                           <select autoFocus value={n.estado || 'PENDIENTE'} onChange={(e) => { void guardarCampo(n, 'estado', e.target.value); setEditando(null) }} className={selectCls + ' w-auto text-xs py-0.5'}>
@@ -242,7 +244,6 @@ export default function NotasCredito() {
                   <CRow label="N Cliente" value={card.n_cliente} />
                   <CRow label="Razon Social" value={card.razon_social} />
                   <CRow label="N Remito" value={card.n_remito} />
-                  <CRow label="Bulto" value={card.bulto != null ? String(card.bulto) : null} />
                   <CRow label="Estado" value={card.estado || 'PENDIENTE'} badge badgeCls={estadoCls(card.estado)} />
                   <CRow label="Observaciones" value={card.observaciones} />
                 </dl>

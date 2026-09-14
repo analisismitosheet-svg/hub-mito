@@ -545,6 +545,29 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
     setSucursal(val); setCustomSucursal(''); setShowSucursalCustom(false)
   }
 
+  async function sincronizarNotaCredito(guiaId: string) {
+    if (!supabase) return
+    const notaData = {
+      nro_pedido: nroPedido.trim(),
+      n_cliente: nroCliente.trim() || null,
+      razon_social: razonSocial.trim() || null,
+      n_remito: nroRemito.trim() || null,
+      bulto: bulto ? Number(bulto) || null : null,
+      observaciones: observaciones.trim() || null,
+      estado,
+    }
+    const { data: existente } = await supabase.from('notas_credito').select('id').eq('guia_id', guiaId).limit(1)
+    if (existente && existente.length > 0) {
+      await supabase.from('notas_credito').update(notaData).eq('id', existente[0].id)
+    } else {
+      await supabase.from('notas_credito').insert({
+        guia_id: guiaId,
+        ...notaData,
+        fecha: new Date().toISOString().slice(0, 10),
+      })
+    }
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     if (!supabase) return
@@ -605,6 +628,10 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
             })
             .eq('guia_id', guia.id)
         }
+        const esNotaCreditoEdit = (pedido || '').toUpperCase() === 'NOTA DE CREDITO'
+        if (esNotaCreditoEdit) {
+          await sincronizarNotaCredito(guia.id)
+        }
         void registrarHistorial('guia', guia.id, 'modificacion', usuario, `Guia N° ${payload.nro_pedido}`)
       }
     } else {
@@ -614,17 +641,7 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
         void registrarHistorial('guia', guiaId, 'creacion', usuario, `Guia N° ${payload.nro_pedido} - ${razonSocial || ''}`)
         const esNotaCredito = (pedido || '').toUpperCase() === 'NOTA DE CREDITO'
         if (esNotaCredito) {
-          await supabase.from('notas_credito').insert({
-            guia_id: guiaId,
-            nro_pedido: payload.nro_pedido as string,
-            n_cliente: nroCliente.trim() || null,
-            razon_social: razonSocial.trim() || null,
-            n_remito: nroRemito.trim() || null,
-            bulto: bulto ? Number(bulto) || null : null,
-            fecha: new Date().toISOString().slice(0, 10),
-            observaciones: observaciones.trim() || null,
-            estado: 'PENDIENTE',
-          })
+          await sincronizarNotaCredito(guiaId)
         } else if (estado === 'FINALIZADO_FACT') {
           const obsCliente = clientes.find((cl) => cl.n_cliente === nroCliente.trim())?.obs_facturacion || null
           const obsGuia = observaciones.trim() || null
