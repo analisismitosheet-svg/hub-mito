@@ -64,11 +64,33 @@ function fmtHora(iso: string | null) {
   }
 }
 
-// Duración legible entre la carga del lote y el último tilde del local
+// Duración hábil entre la carga del lote y el último tilde del local.
+// Solo cuenta lunes a viernes, de 09:00 a 17:00 (el depósito cierra a las 17).
+const INICIO_HABIL_H = 9
+const FIN_HABIL_H = 17
+
+function minutosHabiles(desdeIso: string, hastaIso: string): number {
+  const desde = new Date(desdeIso)
+  const hasta = new Date(hastaIso)
+  if (!Number.isFinite(desde.getTime()) || !Number.isFinite(hasta.getTime()) || hasta.getTime() <= desde.getTime()) return -1
+  let total = 0
+  const cursor = new Date(desde.getFullYear(), desde.getMonth(), desde.getDate(), INICIO_HABIL_H, 0, 0, 0)
+  while (cursor.getTime() < hasta.getTime()) {
+    const dow = cursor.getDay() // 0 = domingo, 6 = sábado
+    if (dow !== 0 && dow !== 6) {
+      const finDia = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate(), FIN_HABIL_H, 0, 0, 0)
+      const a = Math.max(desde.getTime(), cursor.getTime())
+      const b = Math.min(hasta.getTime(), finDia.getTime())
+      if (b > a) total += b - a
+    }
+    cursor.setDate(cursor.getDate() + 1)
+  }
+  return Math.round(total / 60000)
+}
+
 function fmtDuracion(desdeIso: string, hastaIso: string): string {
-  const ms = new Date(hastaIso).getTime() - new Date(desdeIso).getTime()
-  if (!Number.isFinite(ms) || ms < 0) return ''
-  const min = Math.round(ms / 60000)
+  const min = minutosHabiles(desdeIso, hastaIso)
+  if (min < 0) return ''
   if (min < 1) return 'menos de 1 min'
   if (min < 60) return `${min} min`
   const h = Math.floor(min / 60)
