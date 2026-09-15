@@ -8,7 +8,7 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { usePermisosArea } from '@/hooks/usePermisosArea'
 import { SelectBuscar } from '@/components/MultiselectFiltro'
-import { nombresMotivos } from '@/lib/motivos'
+import { nombresMotivos, colorFilaMotivo } from '@/lib/motivos'
 import { nombresTipos } from '@/lib/tipos'
 
 interface Novedad {
@@ -433,7 +433,11 @@ export default function ResumenNovedades() {
                     <YAxis type="category" dataKey="motivo" width={110} tick={{ fill: '#a1a1aa', fontSize: 10 }} axisLine={false} tickLine={false} />
                     <Tooltip content={<TooltipDark />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
                     <Bar dataKey="cant" name="Novedades" radius={[0, 4, 4, 0]} maxBarSize={18} onClick={(d: any) => { const motivo = d?.['motivo'] as string | undefined; if (motivo) setFMotivo((m) => (m === motivo ? '' : motivo)) }} cursor="pointer">
-                      {porMotivo.slice(0, 10).map((d, i) => <Cell key={d.motivo} fill={d.motivo === fMotivo ? '#fbbf24' : PALETA[(i + 5) % PALETA.length]} />)}
+                      {porMotivo.slice(0, 10).map((d, i) => {
+                        const col = colorFilaMotivo(d.motivo)?.fg
+                        const sel = d.motivo === fMotivo
+                        return <Cell key={d.motivo} fill={col || PALETA[(i + 5) % PALETA.length]} stroke={sel ? '#fbbf24' : undefined} strokeWidth={sel ? 2 : 0} />
+                      })}
                       <LabelList dataKey="cant" position="right" fill="#e4e4e7" fontSize={10} formatter={(v: unknown) => (typeof v === 'number' && v > 0 ? v : '')} />
                     </Bar>
                   </BarChart>
