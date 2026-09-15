@@ -171,6 +171,8 @@ function parseFechaDias(v: string | null | undefined): number | null {
 
 export default function FacturacionFabrica() {
   const { isAdmin, perfil } = useAuth()
+  const esMayorista = String(perfil?.rol) === 'mayorista' || (perfil?.roles ?? []).includes('mayorista')
+  const verLegajo = isAdmin || esMayorista
   const [searchParams, setSearchParams] = useSearchParams()
   const modoPolo52 = searchParams.get('polo52') === '1'
   const { crear: puedeCrear, editar: puedeEditar, borrar: puedeBorrar } = usePermisosArea('mayorista.facturacion')
@@ -821,7 +823,7 @@ export default function FacturacionFabrica() {
                 <col className="w-[5%]" />  {/* Transp */}
                 {isAdmin && <col className="w-[4%]" />}  {/* %Decl */}
                 <col className="w-[5%]" />  {/* SolRetiro */}
-                {isAdmin && <col className="w-[5%]" />}  {/* Legajo */}
+                {verLegajo && <col className="w-[5%]" />}  {/* Legajo */}
                 <col className="w-[7%]" />  {/* Quien Fact */}
                 <col className="w-[4%]" />  {/* POLO52 */}
                 <col className="w-[5%]" />  {/* F.Recep */}
@@ -844,7 +846,7 @@ export default function FacturacionFabrica() {
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('transporte')}>Transporte{sortArrow('transporte')}</th>
                   {isAdmin && <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('porcentaje_declarado')}>%Decl{sortArrow('porcentaje_declarado')}</th>}
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('solicitud_retiro')}>Sol.Retiro{sortArrow('solicitud_retiro')}</th>
-                  {isAdmin && <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('n_legajo')}>Legajo{sortArrow('n_legajo')}</th>}
+                  {verLegajo && <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('n_legajo')}>Legajo{sortArrow('n_legajo')}</th>}
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('quien_facturo')}>Quien Fact{sortArrow('quien_facturo')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('polo52')}>Polo{sortArrow('polo52')}</th>
                   <th className="px-1 py-1 text-center whitespace-nowrap text-sub/70" title="Fecha en que el remito fue recibido en polo (sistema/admin)">F.Recep</th>
@@ -869,7 +871,7 @@ export default function FacturacionFabrica() {
                     {celdaSelect(r, 'transporte', r.transporte, transporteOpciones)}
                     {isAdmin && celdaSelect(r, 'porcentaje_declarado', r.porcentaje_declarado, VALOR_DEC_OPCIONES)}
                     {celdaSelect(r, 'solicitud_retiro', r.solicitud_retiro ? fmtRetiro(r.solicitud_retiro) : null, RETIRO_OPCIONES, { alinear: ' text-center' })}
-                    {isAdmin && celdaLegajo(r)}
+                    {verLegajo && celdaLegajo(r)}
                     {celdaEmpleado(r)}
                     {celdaPolo(r)}
                     {celdaFechaRecepcion(r)}
