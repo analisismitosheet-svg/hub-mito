@@ -674,11 +674,21 @@ export default function FacturacionFabrica() {
       )
     }
     return (
-      <td className={cls} onClick={(e) => e.stopPropagation()}>
+      <td className={cls + ' cursor-pointer hover:bg-brand-600/5'} onClick={(e) => e.stopPropagation()}>
+        {isAdmin && (
+          <button
+            onClick={() => void guardarCampo(r, 'fecha_recepcion_polo', recibido ? null : new Date().toISOString().slice(0, 10))}
+            title={recibido ? 'Quitar recepción (solo admin)' : 'Marcar como recibido en polo (fecha de hoy, solo admin)'}
+            className={'mr-1.5 inline-block rounded border px-1 py-px text-[9px] font-medium transition ' + (recibido ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25' : 'border-line bg-surface2 text-sub hover:border-brand-500/50 hover:text-brand-400')}
+          >
+            {recibido ? 'Quitar' : 'Recibido'}
+          </button>
+        )}
         <span className={'block truncate ' + (recibido ? 'text-emerald-400' : 'text-sub')} title={valor ? `Recibido en polo: ${fmtDateSlider(valor)}` : 'Sin recepción'}>{valor ? fmtDateSlider(valor) : '-'}</span>
       </td>
     )
   }
+
 
   const esRecibido = (r: FactRegistro) => recibidos.has(normalizarRemito(r.n_remito))
 
