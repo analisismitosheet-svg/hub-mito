@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Loader2, Search, SearchX, Megaphone, List, LayoutDashboard, Clock, Users, BadgeAlert, CalendarDays, Pencil, Trash2 } from 'lucide-react'
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
+import { ResponsiveContainer, BarChart, Bar, Cell, LabelList, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
@@ -392,7 +392,10 @@ export default function ResumenNovedades() {
                     <XAxis dataKey="mes" tick={{ fill: '#a1a1aa', fontSize: 11 }} axisLine={{ stroke: 'rgba(255,255,255,0.12)' }} tickLine={false} />
                     <YAxis tick={{ fill: '#a1a1aa', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
                     <Tooltip content={<TooltipDark />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
-                    <Bar dataKey="total" name="Novedades" fill="#8b5cf6" radius={[4, 4, 0, 0]} maxBarSize={42} />
+                    <Bar dataKey="total" name="Novedades" radius={[4, 4, 0, 0]} maxBarSize={42}>
+                      {porMes.map((d, i) => <Cell key={d.mes} fill={PALETA[i % PALETA.length]} />)}
+                      <LabelList dataKey="total" position="top" fill="#e4e4e7" fontSize={10} formatter={(v: unknown) => (typeof v === 'number' && v > 0 ? v : '')} />
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -407,7 +410,10 @@ export default function ResumenNovedades() {
                     <XAxis type="number" tick={{ fill: '#a1a1aa', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
                     <YAxis type="category" dataKey="nombre" width={140} tick={{ fill: '#a1a1aa', fontSize: 10 }} axisLine={false} tickLine={false} />
                     <Tooltip content={<TooltipDark formatter={(v: number) => (fMotivo && esMotivoDias(fMotivo) ? `${v} días` : v)} />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
-                    <Bar dataKey="valor" name={fMotivo ? fMotivo : 'Novedades'} fill="#22d3ee" radius={[0, 4, 4, 0]} maxBarSize={14} />
+                    <Bar dataKey="valor" name={fMotivo ? fMotivo : 'Novedades'} radius={[0, 4, 4, 0]} maxBarSize={14}>
+                      {topEmpleados.map((d, i) => <Cell key={d.nombre} fill={PALETA[(i + 3) % PALETA.length]} />)}
+                      <LabelList dataKey="valor" position="right" fill="#e4e4e7" fontSize={10} formatter={(v: unknown) => (typeof v === 'number' && v > 0 ? v : '')} />
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -426,7 +432,10 @@ export default function ResumenNovedades() {
                     <XAxis type="number" tick={{ fill: '#a1a1aa', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
                     <YAxis type="category" dataKey="motivo" width={110} tick={{ fill: '#a1a1aa', fontSize: 10 }} axisLine={false} tickLine={false} />
                     <Tooltip content={<TooltipDark />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
-                    <Bar dataKey="cant" name="Novedades" fill={fMotivo ? '#fbbf24' : '#f59e0b'} radius={[0, 4, 4, 0]} maxBarSize={18} onClick={(d: any) => { const motivo = d?.['motivo'] as string | undefined; if (motivo) setFMotivo((m) => (m === motivo ? '' : motivo)) }} cursor="pointer" />
+                    <Bar dataKey="cant" name="Novedades" radius={[0, 4, 4, 0]} maxBarSize={18} onClick={(d: any) => { const motivo = d?.['motivo'] as string | undefined; if (motivo) setFMotivo((m) => (m === motivo ? '' : motivo)) }} cursor="pointer">
+                      {porMotivo.slice(0, 10).map((d, i) => <Cell key={d.motivo} fill={d.motivo === fMotivo ? '#fbbf24' : PALETA[(i + 5) % PALETA.length]} />)}
+                      <LabelList dataKey="cant" position="right" fill="#e4e4e7" fontSize={10} formatter={(v: unknown) => (typeof v === 'number' && v > 0 ? v : '')} />
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -442,7 +451,10 @@ export default function ResumenNovedades() {
                     <XAxis type="number" tick={{ fill: '#a1a1aa', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
                     <YAxis type="category" dataKey="local" width={100} tick={{ fill: '#a1a1aa', fontSize: 10 }} axisLine={false} tickLine={false} />
                     <Tooltip content={<TooltipDark />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
-                    <Bar dataKey="cant" name="Novedades" fill="#34d399" radius={[0, 4, 4, 0]} maxBarSize={18} />
+                    <Bar dataKey="cant" name="Novedades" radius={[0, 4, 4, 0]} maxBarSize={18}>
+                      {porLocal.slice(0, 12).map((d, i) => <Cell key={d.local} fill={PALETA[(i + 1) % PALETA.length]} />)}
+                      <LabelList dataKey="cant" position="right" fill="#e4e4e7" fontSize={10} formatter={(v: unknown) => (typeof v === 'number' && v > 0 ? v : '')} />
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -462,7 +474,9 @@ export default function ResumenNovedades() {
                     <Tooltip content={<TooltipDark />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
                     <Legend iconType="circle" iconSize={8} formatter={(v: any) => <span style={{ color: '#a1a1aa', fontSize: 11 }}>{v}</span>} />
                     {Object.keys(porMesMotivo[0] ?? {}).filter((k) => k !== 'mes').map((k, i) => (
-                      <Bar key={k} dataKey={k} name={k} stackId="a" fill={PALETA[i % PALETA.length]} />
+                      <Bar key={k} dataKey={k} name={k} stackId="a" fill={PALETA[i % PALETA.length]}>
+                        <LabelList dataKey={k} position="inside" fill="#e4e4e7" fontSize={9} formatter={(v: unknown) => (typeof v === 'number' && v > 0 ? v : '')} />
+                      </Bar>
                     ))}
                   </BarChart>
                 </ResponsiveContainer>
@@ -478,7 +492,10 @@ export default function ResumenNovedades() {
                     <XAxis type="number" tick={{ fill: '#a1a1aa', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
                     <YAxis type="category" dataKey="nombre" width={140} tick={{ fill: '#a1a1aa', fontSize: 10 }} axisLine={false} tickLine={false} />
                     <Tooltip content={<TooltipDark formatter={(v: number) => `${v} días`} />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
-                    <Bar dataKey="dias" name="Días" fill="#60a5fa" radius={[0, 4, 4, 0]} maxBarSize={14} />
+                    <Bar dataKey="dias" name="Días" radius={[0, 4, 4, 0]} maxBarSize={14}>
+                      {topDias.map((d, i) => <Cell key={d.nombre} fill={PALETA[(i + 2) % PALETA.length]} />)}
+                      <LabelList dataKey="dias" position="right" fill="#e4e4e7" fontSize={10} formatter={(v: unknown) => (typeof v === 'number' && v > 0 ? v : '')} />
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
