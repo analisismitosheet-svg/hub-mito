@@ -56,11 +56,11 @@ const selectCls = inputCls + ' appearance-none'
 
 type SortKey = keyof Guia
 
-type EstadoGuia = 'NUEVO' | 'EN_PROCESO' | 'FINALIZADO_FACT' | 'FINALIZADO_A_CAJA'
+type EstadoGuia = 'NUEVO' | 'EN_PROCESO' | 'FINALIZADO_FACT' | 'FINALIZADO_A_CAJA' | 'APLICADA'
 
 function estadoDe(g: Pick<Guia, 'estado' | 'en_proceso' | 'finalizado'>): EstadoGuia {
   const e = (g.estado || '').toUpperCase()
-  if (e === 'NUEVO' || e === 'EN_PROCESO' || e === 'FINALIZADO_FACT' || e === 'FINALIZADO_A_CAJA') return e as EstadoGuia
+  if (e === 'NUEVO' || e === 'EN_PROCESO' || e === 'FINALIZADO_FACT' || e === 'FINALIZADO_A_CAJA' || e === 'APLICADA') return e as EstadoGuia
   return g.finalizado ? 'FINALIZADO_FACT' : 'EN_PROCESO'
 }
 
@@ -355,7 +355,7 @@ export default function Guias() {
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('bulto')}>Bulto{sortArrow('bulto')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('nro_cliente')}>N° Cl{sortArrow('nro_cliente')}</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('razon_social')}>Razon Social{sortArrow('razon_social')}</th>
-                  <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('pedido')}>Pedido{sortArrow('pedido')}</th>
+                  <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('pedido')}>Tipo{sortArrow('pedido')}</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('sucursal')}>Sucursal{sortArrow('sucursal')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('finalizado')}>Estado{sortArrow('finalizado')}</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('observaciones')}>Obs{sortArrow('observaciones')}</th>
@@ -385,6 +385,7 @@ export default function Guias() {
                         <option value="EN_PROCESO">En Proceso</option>
                         <option value="FINALIZADO_FACT">Finalizado Fact</option>
                         <option value="FINALIZADO_A_CAJA">Finalizado a Caja</option>
+                        {((g.pedido || '').toUpperCase().startsWith('NOTA DE CREDITO') || estadoDe(g) === 'APLICADA') && <option value="APLICADA">Aplicada</option>}
                       </select>
                     </td>
                     <td className="px-1 py-[2px]"><span className="block max-w-[220px] truncate text-sub" title={g.observaciones || ''}>{g.observaciones || '-'}</span></td>
@@ -431,7 +432,7 @@ export default function Guias() {
                   <CRow label="Bulto" value={card.bulto != null ? String(card.bulto) : null} />
                   <CRow label="N° Cliente" value={card.nro_cliente} />
                   <CRow label="Razon Social" value={card.razon_social} />
-                  <CRow label="Pedido" value={card.pedido} />
+                    <CRow label="Tipo" value={card.pedido} />
                   <CRow label="Sucursal" value={card.sucursal} />
                   <CRow label="Estado" value={estadoDe(card)} badge badgeCls={estadoDe(card) === 'FINALIZADO_FACT' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : estadoDe(card) === 'FINALIZADO_A_CAJA' ? 'bg-violet-500/20 text-violet-300 border-violet-500/40' : estadoDe(card) === 'NUEVO' ? 'bg-red-500/20 text-red-300 border-red-500/40' : 'bg-amber-500/20 text-amber-300 border-amber-500/40'} />
                   <CRow label="Observaciones" value={card.observaciones} />
