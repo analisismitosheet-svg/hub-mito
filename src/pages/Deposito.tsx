@@ -84,6 +84,30 @@ function fmtFechaCorta(iso: string | null) {
   }
 }
 
+// Horas hábiles entre dos timestamps: solo lunes a viernes, de 09:00 a 17:00
+// (el depósito cierra a las 17). Devuelve horas decimales.
+const INICIO_HABIL_H = 9
+const FIN_HABIL_H = 17
+
+function horasHabilesEntre(desdeIso: string, hastaIso: string): number {
+  const desde = new Date(desdeIso)
+  const hasta = new Date(hastaIso)
+  if (!Number.isFinite(desde.getTime()) || !Number.isFinite(hasta.getTime()) || hasta.getTime() <= desde.getTime()) return 0
+  let total = 0
+  const cursor = new Date(desde.getFullYear(), desde.getMonth(), desde.getDate(), INICIO_HABIL_H, 0, 0, 0)
+  while (cursor.getTime() < hasta.getTime()) {
+    const dow = cursor.getDay() // 0 = domingo, 6 = sábado
+    if (dow !== 0 && dow !== 6) {
+      const finDia = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate(), FIN_HABIL_H, 0, 0, 0)
+      const a = Math.max(desde.getTime(), cursor.getTime())
+      const b = Math.min(hasta.getTime(), finDia.getTime())
+      if (b > a) total += b - a
+    }
+    cursor.setDate(cursor.getDate() + 1)
+  }
+  return total / 3600000
+}
+
 function Estadisticas({
   lote,
   items,
@@ -105,11 +129,12 @@ function Estadisticas({
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
-  // Horas: desde que se cargó hasta que se completó todo (o el tiempo transcurrido si sigue en curso)
+  // Horas: desde que se cargó hasta que se completó todo (o el tiempo transcurrido si sigue en curso).
+  // Solo cuenta lunes a viernes, de 09:00 a 17:00 (el depósito cierra a las 17).
   const allDone = total > 0 && items.every((i) => i.estado !== 'pendiente')
   const inicio = new Date(lote.created_at).getTime()
   const fin = allDone ? Math.max(...items.map((i) => (i.hecho_at ? new Date(i.hecho_at).getTime() : inicio))) : Date.now()
-  const horas = Math.max(0, (fin - inicio) / 3600000)
+  const horas = horasHabilesEntre(lote.created_at, new Date(fin).toISOString())
   const personas = personasCount
   const hsxper = horas * personas
   const prendasHs = hsxper ? total / hsxper : 0
