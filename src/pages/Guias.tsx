@@ -68,7 +68,7 @@ function claseFila(g: Pick<Guia, 'estado' | 'en_proceso' | 'finalizado'>): strin
   const e = estadoDe(g)
   if (e === 'FINALIZADO_FACT') return 'bg-emerald-500/20 text-emerald-300'
   if (e === 'FINALIZADO_A_CAJA') return 'bg-violet-500/20 text-violet-300'
-  if (e === 'APLICADA') return 'bg-lime-400/15 text-lime-200'
+  if (e === 'APLICADA') return 'bg-emerald-400/15 text-emerald-100'
   if (e === 'NUEVO') return 'bg-red-500/20 text-red-300'
   return 'bg-amber-500/20 text-amber-300'
 }
@@ -457,7 +457,7 @@ export default function Guias() {
                   <CRow label="Razon Social" value={card.razon_social} />
                     <CRow label="Tipo" value={card.pedido} />
                   <CRow label="Sucursal" value={card.sucursal} />
-                    <CRow label="Estado" value={estadoDe(card)} badge badgeCls={estadoDe(card) === 'FINALIZADO_FACT' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : estadoDe(card) === 'FINALIZADO_A_CAJA' ? 'bg-violet-500/20 text-violet-300 border-violet-500/40' : estadoDe(card) === 'APLICADA' ? 'bg-lime-400/15 text-lime-200 border-lime-400/40' : estadoDe(card) === 'NUEVO' ? 'bg-red-500/20 text-red-300 border-red-500/40' : 'bg-amber-500/20 text-amber-300 border-amber-500/40'} />
+                    <CRow label="Estado" value={estadoDe(card)} badge badgeCls={estadoDe(card) === 'FINALIZADO_FACT' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : estadoDe(card) === 'FINALIZADO_A_CAJA' ? 'bg-violet-500/20 text-violet-300 border-violet-500/40' : estadoDe(card) === 'APLICADA' ? 'bg-emerald-400/15 text-emerald-100 border-emerald-400/40' : estadoDe(card) === 'NUEVO' ? 'bg-red-500/20 text-red-300 border-red-500/40' : 'bg-amber-500/20 text-amber-300 border-amber-500/40'} />
                   <CRow label="Observaciones" value={card.observaciones} />
                 </dl>
               </section>
