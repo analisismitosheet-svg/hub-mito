@@ -200,6 +200,8 @@ export default function FacturacionFabrica() {
   const [etiquetaSel, setEtiquetaSel] = useState<FactRegistro | null>(null)
   const [editando, setEditando] = useState<{ id: string; campo: string } | null>(null)
   const [editandoValor, setEditandoValor] = useState('')
+  const [legajoBusq, setLegajoBusq] = useState<Record<string, string>>({})
+  const [legajoOpen, setLegajoOpen] = useState<Record<string, boolean>>({})
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const POR_PAGINA = 50
 
@@ -483,6 +485,75 @@ export default function FacturacionFabrica() {
     return (
       <td className={cls + ' cursor-pointer hover:bg-brand-600/5'} onClick={(e) => { e.stopPropagation(); empezarEdicion(r, campo, valor) }}>
         {spanSub(valor, opts?.maxW)}
+      </td>
+    )
+  }
+
+  function celdaLegajo(r: FactRegistro) {
+    const cls = tdBase + ' text-center'
+    const activo = editarActivo(r, 'n_legajo')
+    if (!inlineEdit(r, 'n_legajo')) return <td className={cls}>{spanSub(r.n_legajo)}</td>
+    if (activo) {
+      const busq = (legajoBusq[r.id] ?? '').toUpperCase()
+      const busqRaw = (legajoBusq[r.id] ?? '').trim()
+      const exacto = busqRaw ? empleados.find((e) => (e.legajo || '') === busqRaw) : undefined
+      const opcs = busqRaw
+        ? empleados.filter((e) => {
+            const l = (e.legajo || '').toUpperCase()
+            const n = (e.nombre || '').toUpperCase()
+            return (busq && (l.includes(busq) || n.includes(busq))) || (l === busq)
+          }).slice(0, 8)
+        : []
+      return (
+        <td className={cls} onClick={(e) => e.stopPropagation()}>
+          <div className="relative">
+            <input
+              autoFocus
+              value={legajoBusq[r.id] ?? ''}
+              onChange={(e) => { setLegajoBusq((p) => ({ ...p, [r.id]: e.target.value })); setLegajoOpen((p) => ({ ...p, [r.id]: true })) }}
+              onBlur={() => setLegajoOpen((p) => ({ ...p, [r.id]: false }))}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.currentTarget.blur(); setEditando(null) }
+                if (e.key === 'Escape') { setEditando(null); setLegajoBusq((p) => ({ ...p, [r.id]: r.n_legajo ?? '' })) }
+              }}
+              className={clE}
+              placeholder="#legajo"
+            />
+            {legajoOpen[r.id] && busqRaw && (
+              <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-lg border border-line bg-surface shadow-xl">
+                {exacto ? (
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => { selectEmpleado(r, exacto); setEditando(null); setLegajoBusq((p) => ({ ...p, [r.id]: exacto.legajo || '' })) }}
+                    className="block w-full px-2 py-1 text-left text-[10px] text-emerald-400 hover:bg-line"
+                  >
+                    Match exacto: #{exacto.legajo} - {exacto.nombre}
+                  </button>
+                ) : opcs.length > 0 ? (
+                  opcs.map((e) => (
+                    <button
+                      key={e.id}
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => { selectEmpleado(r, e); setEditando(null); setLegajoBusq((p) => ({ ...p, [r.id]: e.legajo || '' })) }}
+                      className="block w-full px-2 py-1 text-left text-[10px] text-ink hover:bg-line"
+                    >
+                      {e.legajo ? `#${e.legajo} - ${e.nombre}` : e.nombre}
+                    </button>
+                  ))
+                ) : (
+                  <p className="px-2 py-1 text-[10px] text-sub">Sin coincidencias</p>
+                )}
+              </div>
+            )}
+          </div>
+        </td>
+      )
+    }
+    return (
+      <td className={cls + ' cursor-pointer hover:bg-brand-600/5'} onClick={(e) => { e.stopPropagation(); empezarEdicion(r, 'n_legajo', r.n_legajo) }}>
+        {spanSub(r.n_legajo)}
       </td>
     )
   }
@@ -781,7 +852,7 @@ export default function FacturacionFabrica() {
                     {celdaSelect(r, 'transporte', r.transporte, transporteOpciones)}
                     {isAdmin && celdaSelect(r, 'porcentaje_declarado', r.porcentaje_declarado, VALOR_DEC_OPCIONES)}
                     {celdaSelect(r, 'solicitud_retiro', r.solicitud_retiro ? fmtRetiro(r.solicitud_retiro) : null, RETIRO_OPCIONES, { alinear: ' text-center' })}
-                    {isAdmin && celdaTexto(r, 'n_legajo', r.n_legajo, { alinear: ' text-center' })}
+                    {isAdmin && celdaLegajo(r)}
                     {celdaEmpleado(r)}
                     {celdaPolo(r)}
                     {celdaFechaRecepcion(r)}
