@@ -423,7 +423,8 @@ export default function FacturacionFabrica() {
     if (c.transporte) void guardarCampo(r, 'transporte', c.transporte)
   }
 
-  const inlineEdit = (_r: FactRegistro, _campo?: string) => {
+  const inlineEdit = (r: FactRegistro, _campo?: string) => {
+    if (estaCompleta(r) && !isAdmin) return false
     return modoPolo52 || puedeEditar
   }
 
@@ -692,12 +693,18 @@ export default function FacturacionFabrica() {
 
   const esRecibido = (r: FactRegistro) => recibidos.has(normalizarRemito(r.n_remito))
 
+  // Fila completa: recepcion en polo (por cruce o fecha manual) Y fecha de envio.
+  // Se pinta en verde y se bloquea la edicion, salvo para el administrador.
+  const estaCompleta = (r: FactRegistro) =>
+    (!!r.fecha_recepcion_polo || esRecibido(r)) && !!r.fecha_envio
+
   const rowCls = (r: FactRegistro) => {
+    const completa = estaCompleta(r)
     const rec = esRecibido(r)
+    const verde = completa || rec || !!r.fecha_recepcion_polo
     const sel = selected.has(r.id)
-    return 'transition hover:bg-line/20 cursor-pointer'
-      + (sel && !rec ? ' bg-brand-600/10' : '')
-      + (rec ? ' bg-emerald-400/25' : '')
+    return (completa ? ' bg-emerald-500/20 text-emerald-300' : (verde ? ' bg-emerald-400/25' : 'cursor-pointer transition hover:bg-line/20'))
+      + (sel && !verde ? ' bg-brand-600/10' : '')
       + (!rec && !r.fecha_fact ? ' bg-red-500/10 text-red-400' : '')
   }
 
@@ -849,7 +856,7 @@ export default function FacturacionFabrica() {
               </thead>
               <tbody className="divide-y divide-line/50 bg-surface">
                 {listaPagina.map((r) => (
-                  <tr key={r.id} className={rowCls(r)} onClick={() => setCard(r)}>
+                  <tr key={r.id} className={rowCls(r)} onClick={() => { if (isAdmin || !estaCompleta(r)) setCard(r) }}>
                     {isAdmin && <td className="px-1 py-[2px] text-center" onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} className="h-3 w-3 rounded border-line bg-surface2 accent-brand-600" /></td>}
                     {celdaSelect(r, 'autorizacion', r.autorizacion, ['SI', 'NO'], { alinear: ' text-center' })}
                     {celdaTexto(r, 'razon_social', r.razon_social)}
