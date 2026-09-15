@@ -179,7 +179,7 @@ export function EtiquetasModal({ registro, onClose }: { registro: EtiquetaRegist
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => !window.print && onClose()}>
-      <div className="flex w-[94vw] max-w-4xl flex-col rounded-2xl border border-line bg-surface shadow-2xl" style={{ maxHeight: '92vh' }} onClick={(e) => e.stopPropagation()}>
+      <div className="flex w-[95vw] max-w-[1400px] flex-col rounded-2xl border border-line bg-surface shadow-2xl" style={{ maxHeight: '92vh' }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-line px-5 py-3">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-ink"><Printer size={18} className="text-amber-400" aria-hidden /> Etiquetas de bultos — {registro.razon_social || 'Sin razon social'}</h2>
           <button onClick={onClose} className="rounded-lg border border-line p-1.5 text-sub transition hover:bg-line hover:text-ink"><X size={16} aria-hidden /></button>

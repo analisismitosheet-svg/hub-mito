@@ -477,7 +477,7 @@ export default function CargaNovedades() {
       {/* Modal de carga a pantalla completa */}
       {modalAbierto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4" onClick={() => !busy && setModalAbierto(false)}>
-          <div className="flex h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="flex h-[94vh] w-[95vw] max-w-[1400px] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-line px-5 py-3">
               <h2 className="flex items-center gap-2 text-lg font-semibold text-ink"><Megaphone size={18} className="text-violet-500" aria-hidden /> {editId ? 'Editar Novedad' : 'Nueva Novedad'}</h2>
               <button onClick={() => setModalAbierto(false)} className="rounded-lg border border-line p-1.5 text-sub transition hover:bg-line hover:text-ink" aria-label="Cerrar"><X size={16} aria-hidden /></button>
@@ -594,7 +594,7 @@ function TarjetaTipos({ onClose, onSaved }: { onClose: () => void; onSaved: () =
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-2 backdrop-blur-sm sm:p-4" onClick={onClose}>
-      <div className="flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="flex max-h-[85vh] w-[95vw] max-w-[1000px] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-line px-5 py-3">
           <h3 className="font-semibold text-ink">Tipos de Novedad</h3>
           <button onClick={onClose} className="rounded-lg border border-line p-1.5 text-sub transition hover:bg-line hover:text-ink" aria-label="Cerrar"><X size={16} aria-hidden /></button>

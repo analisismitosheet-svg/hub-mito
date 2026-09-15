@@ -190,7 +190,7 @@ export default function CuentaAmigos() {
           </div>
         </div>
 
-        <article className="mx-auto max-w-xl animate-enter overflow-hidden rounded-2xl border border-line bg-surface shadow-soft">
+        <article className="mx-auto w-[95vw] max-w-[1400px] animate-enter overflow-hidden rounded-2xl border border-line bg-surface shadow-soft">
           <FotoDni url={sel.foto_url} />
           <header className="flex items-center gap-3 border-b border-line p-4">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-600/15 font-display font-semibold text-brand-400">
@@ -437,7 +437,7 @@ function ClienteForm({
         {inicial ? 'Editar cliente' : 'Nuevo cliente'}
       </h1>
 
-      <form onSubmit={guardar} className="mx-auto max-w-xl space-y-4">
+      <form onSubmit={guardar} className="mx-auto w-[95vw] max-w-[1400px] space-y-4">
         {/* Foto */}
         <div className="rounded-2xl border border-line bg-surface p-4">
           <p className="mb-3 text-sm font-medium text-ink">Foto del DNI</p>

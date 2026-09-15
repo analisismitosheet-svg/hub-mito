@@ -440,7 +440,7 @@ export default function Guias() {
       {/* Detail Card */}
       {card && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 sm:p-4" onClick={() => setCard(null)}>
-          <div className="flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-soft-lg" onClick={(e) => e.stopPropagation()}>
+          <div className="flex w-[95vw] max-w-[1400px] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-soft-lg" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-line px-5 py-3">
               <h2 className="truncate text-lg font-semibold text-ink">{card.razon_social || 'Sin razon social'}</h2>
               <button onClick={() => setCard(null)} aria-label="Cerrar" className="rounded-lg p-1.5 text-sub hover:bg-line hover:text-ink"><X size={16} aria-hidden /></button>
@@ -692,7 +692,7 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 sm:p-4" onClick={() => !busy && onClose()}>
-      <div className="flex h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-soft-lg" onClick={(e) => e.stopPropagation()}>
+      <div className="flex h-[92vh] w-[95vw] max-w-[1400px] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-soft-lg" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-line px-5 py-3">
           <h2 className="flex items-center gap-2 font-display font-semibold text-ink">
             <ClipboardList size={16} aria-hidden /> {guia ? 'Editar guia' : 'Nueva Guia'}
@@ -989,7 +989,7 @@ function ImportGuias({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="flex w-[90vw] max-w-3xl flex-col rounded-2xl border border-line bg-surface shadow-2xl" style={{ maxHeight: '88vh' }}>
+      <div className="flex w-[95vw] max-w-[1400px] flex-col rounded-2xl border border-line bg-surface shadow-2xl" style={{ maxHeight: '88vh' }}>
         <div className="flex items-center justify-between border-b border-line px-5 py-3">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-ink"><Upload size={18} className="text-amber-400" aria-hidden /> Importar Guias</h2>
           <button onClick={onClose} className="rounded-lg border border-line p-1.5 text-sub transition hover:bg-line hover:text-ink"><X size={16} aria-hidden /></button>

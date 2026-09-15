@@ -146,7 +146,7 @@ export default function Transportes() {
             {puedeBorrar && <button onClick={() => { const t = sel; if (t) setConfirm({ message: 'Eliminar "' + t.nombre + '"?', onConfirm: () => void eliminar(t) }) }} className="btn-press inline-flex items-center gap-1.5 rounded-xl border border-brand-600/30 bg-brand-600/10 px-3 py-1.5 text-sm font-medium text-brand-400 hover:bg-brand-600/20"><Trash2 size={15} aria-hidden /> Eliminar</button>}
           </div>
         </div>
-        <article className="mx-auto max-w-xl animate-enter overflow-hidden rounded-2xl border border-line bg-surface shadow-soft">
+        <article className="mx-auto w-[95vw] max-w-[1400px] animate-enter overflow-hidden rounded-2xl border border-line bg-surface shadow-soft">
           <header className="flex items-center gap-3 border-b border-line p-4">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-500/15 font-display font-semibold text-amber-400">{iniciales(sel.nombre)}</div>
             <div className="min-w-0 flex-1"><h3 className="truncate font-display font-semibold text-ink">{sel.nombre}</h3></div>

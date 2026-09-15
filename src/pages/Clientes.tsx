@@ -399,7 +399,7 @@ function ClienteModal({ cliente, nCliente, transportes, onClose, onSaved }: { cl
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 sm:p-4" onClick={() => !busy && onClose()}>
-      <div className="flex h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-soft-lg" onClick={(e) => e.stopPropagation()}>
+      <div className="flex h-[92vh] w-[95vw] max-w-[1400px] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-soft-lg" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-line px-5 py-3">
           <h2 className="flex items-center gap-2 font-display font-semibold text-ink">
             <Hash size={16} aria-hidden /> {cliente ? 'Editar cliente' : 'Nuevo Cliente'}
@@ -508,7 +508,7 @@ function ClienteCard({ cliente, onClose, onEdit, puedeEditar }: { cliente: Clien
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="relative flex w-[92vw] max-w-[1100px] flex-col rounded-2xl border border-line bg-surface shadow-2xl"
+        className="relative flex w-[95vw] max-w-[1400px] flex-col rounded-2xl border border-line bg-surface shadow-2xl"
         style={{ maxHeight: '88vh' }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -829,7 +829,7 @@ function ImportarClientes({ todos, onClose, onSaved }: { todos: Cliente[]; onClo
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 sm:p-4" onClick={() => !busy && onClose()}>
-      <div className="flex h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-soft-lg" onClick={(e) => e.stopPropagation()}>
+      <div className="flex h-[90vh] w-[95vw] max-w-[1400px] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-soft-lg" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-line px-5 py-3">
           <h2 className="flex items-center gap-2 font-display font-semibold text-ink"><Upload size={16} aria-hidden /> Importar Clientes</h2>
           <div className="flex items-center gap-3">

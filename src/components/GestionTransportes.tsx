@@ -57,7 +57,7 @@ export default function GestionTransportes({ onClose, onSaved }: { onClose: () =
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="flex w-[92vw] max-w-md flex-col rounded-2xl border border-line bg-surface shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="flex w-[95vw] max-w-[1400px] flex-col rounded-2xl border border-line bg-surface shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-line px-5 py-3">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">Gestionar Transportes</h2>
           <button onClick={onClose} className="rounded-lg border border-line p-1.5 text-sub transition hover:bg-line hover:text-ink" aria-label="Cerrar"><X size={16} aria-hidden /></button>

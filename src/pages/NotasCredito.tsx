@@ -231,7 +231,7 @@ export default function NotasCredito() {
       {/* Detail card */}
       {card && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 sm:p-4" onClick={() => setCard(null)}>
-          <div className="flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-soft-lg" onClick={(e) => e.stopPropagation()}>
+<div className="flex w-[95vw] max-w-[1400px] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-soft-lg" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-line px-5 py-3">
               <h2 className="truncate text-lg font-semibold text-ink"><FileText size={16} className="mr-2 inline text-amber-400" aria-hidden />Nota de Credito</h2>
               <button onClick={() => setCard(null)} aria-label="Cerrar" className="rounded-lg p-1.5 text-sub hover:bg-line hover:text-ink"><X size={16} aria-hidden /></button>
@@ -334,7 +334,7 @@ function NotaCreditoModal({ nota, onClose, onSaved }: { nota: NotaCredito | null
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 sm:p-4" onClick={() => !busy && onClose()}>
-      <div className="flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-soft-lg" onClick={(e) => e.stopPropagation()}>
+      <div className="flex w-[95vw] max-w-[1400px] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-soft-lg" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-line px-5 py-3">
           <h2 className="flex items-center gap-2 font-display font-semibold text-ink"><ClipboardList size={16} aria-hidden /> {nota ? 'Editar Nota de Credito' : 'Nueva Nota de Credito'}</h2>
           <button onClick={onClose} aria-label="Cerrar" className="rounded-lg p-1.5 text-sub hover:bg-line hover:text-ink"><X size={16} aria-hidden /></button>

@@ -938,7 +938,7 @@ function FactCard({ registro: r, fechasRecibido, onClose, onEdit, puedeEditar, e
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="relative flex w-[92vw] max-w-[1100px] flex-col rounded-2xl border border-line bg-surface shadow-2xl" style={{ maxHeight: '88vh' }} onClick={(e) => e.stopPropagation()}>
+      <div className="relative flex w-[95vw] max-w-[1400px] flex-col rounded-2xl border border-line bg-surface shadow-2xl" style={{ maxHeight: '90vh' }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-ink">
@@ -956,7 +956,7 @@ function FactCard({ registro: r, fechasRecibido, onClose, onEdit, puedeEditar, e
           <button onClick={onClose} className="shrink-0 rounded-lg border border-line p-1.5 text-sub transition hover:bg-line hover:text-ink" title="Cerrar"><X size={16} aria-hidden /></button>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 overflow-y-auto p-5 md:grid-cols-3" style={{ maxHeight: 'calc(88vh - 120px)' }}>
+        <div className="grid grid-cols-1 gap-4 overflow-y-auto p-5 md:grid-cols-3" style={{ maxHeight: 'calc(90vh - 120px)' }}>
           <section className="rounded-xl border border-line bg-surface2 p-4">
             <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-sub/70">Datos Principales</h3>
             <dl className="space-y-2 text-[13px]">
@@ -977,7 +977,7 @@ function FactCard({ registro: r, fechasRecibido, onClose, onEdit, puedeEditar, e
               <CRow label="Quien Facturo" value={empLabel ? `#${empLabel.legajo} - ${empLabel.nombre}` : r.quien_facturo} />
             </dl>
           </section>
-          <section className="rounded-xl border border-line bg-surface2 p-4">
+          <section className="rounded-xl border border-line bg-surface2 p-4 md:col-span-3">
             <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-sub/70">Observaciones</h3>
             <dl className="space-y-2 text-[13px]">
               <CRow label="Observaciones" value={r.observaciones} pre />
@@ -1114,7 +1114,7 @@ function FactModal({ modoPolo52, registro, clientes, empleados, transporteOpcion
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="relative flex w-[92vw] max-w-[1000px] flex-col rounded-2xl border border-line bg-surface shadow-2xl" style={{ maxHeight: '92vh' }} onClick={(e) => e.stopPropagation()}>
+      <div className="relative flex w-[95vw] max-w-[1400px] flex-col rounded-2xl border border-line bg-surface shadow-2xl" style={{ maxHeight: '92vh' }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-line px-5 py-3">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-ink"><FileText size={18} className="text-amber-400" aria-hidden />{registro ? (modoPolo52 ? 'Actualizar envío / retiro' : 'Editar Registro') : (modoPolo52 ? 'Nuevo Registro Polo52' : 'Nuevo Registro')}</h2>
           <button onClick={onClose} className="rounded-lg border border-line p-1.5 text-sub transition hover:bg-line hover:text-ink"><X size={16} aria-hidden /></button>
@@ -1388,7 +1388,7 @@ function ImportFacturacion({ clientes, empleados, onClose, onSaved }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="flex w-[90vw] max-w-3xl flex-col rounded-2xl border border-line bg-surface shadow-2xl" style={{ maxHeight: '88vh' }}>
+      <div className="flex w-[95vw] max-w-[1400px] flex-col rounded-2xl border border-line bg-surface shadow-2xl" style={{ maxHeight: '88vh' }}>
         <div className="flex items-center justify-between border-b border-line px-5 py-3">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-ink"><Upload size={18} className="text-amber-400" aria-hidden /> Importar Facturacion</h2>
           <button onClick={onClose} className="rounded-lg border border-line p-1.5 text-sub transition hover:bg-line hover:text-ink"><X size={16} aria-hidden /></button>

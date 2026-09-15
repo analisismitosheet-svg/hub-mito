@@ -662,7 +662,7 @@ function VerQrModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm rounded-t-2xl border border-line bg-surface shadow-soft-lg sm:rounded-2xl"
+        className="w-[95vw] max-w-[1400px] rounded-t-2xl border border-line bg-surface shadow-soft-lg sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-line px-4 py-3">
@@ -722,7 +722,7 @@ function SectorFormModal({
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4" onClick={onCancel}>
       <form
         onSubmit={submit}
-        className="w-full max-w-sm rounded-t-2xl border border-line bg-surface shadow-soft-lg sm:rounded-2xl"
+        className="w-[95vw] max-w-[1400px] rounded-t-2xl border border-line bg-surface shadow-soft-lg sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-line px-4 py-3">

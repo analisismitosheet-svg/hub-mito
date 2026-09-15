@@ -508,7 +508,7 @@ function EditarUsuarioModal({
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4" onClick={() => !busy && onClose()}>
       <div
-        className="w-full max-w-md rounded-t-2xl border border-line bg-surface shadow-soft-lg sm:rounded-2xl"
+className="w-[95vw] max-w-[1400px] rounded-t-2xl border border-line bg-surface shadow-soft-lg sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-line px-4 py-3">
@@ -640,7 +640,7 @@ function PasswordModal({ usuario, onClose }: { usuario: UsuarioRow; onClose: () 
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4" onClick={() => !busy && onClose()}>
-      <div className="w-full max-w-md rounded-t-2xl border border-line bg-surface shadow-soft-lg sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="w-[95vw] max-w-[1400px] rounded-t-2xl border border-line bg-surface shadow-soft-lg sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-line px-4 py-3">
           <div className="min-w-0">
             <h2 className="font-display font-semibold text-ink">Cambiar contraseña</h2>
@@ -765,7 +765,7 @@ function PermisosModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4" onClick={onClose}>
-      <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-line bg-surface shadow-soft-lg sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="flex max-h-[90vh] w-[95vw] max-w-[1400px] flex-col overflow-hidden rounded-t-2xl border border-line bg-surface shadow-soft-lg sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-line px-4 py-3">
           <div className="min-w-0">
             <h2 className="font-display font-semibold text-ink">Permisos de {usuario.nombre}</h2>
