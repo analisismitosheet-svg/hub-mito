@@ -26,6 +26,7 @@ import {
   FileText,
   TrendingUp,
   FolderOpen,
+  RotateCcw,
   type LucideIcon,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -331,6 +332,17 @@ export const APPS: AppDef[] = [
     icon: Store,
     kind: 'internal',
     target: '/deposito',
+    color: '#ea580c',
+    permiso: 'deposito.view',
+  },
+  {
+    id: 'deposito-rma',
+    areaId: 'deposito',
+    title: 'RMA',
+    description: 'Gestión de RMA (devoluciones).',
+    icon: RotateCcw,
+    kind: 'internal',
+    target: '/deposito/rma',
     color: '#ea580c',
     permiso: 'deposito.view',
   },

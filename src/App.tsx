@@ -15,6 +15,7 @@ import Manuales from '@/pages/Manuales'
 import Transferencias from '@/pages/Transferencias'
 import Mayorista from '@/pages/Mayorista'
 import Deposito from '@/pages/Deposito'
+import Rma from '@/pages/Rma'
 import Opiniones from '@/pages/Opiniones'
 import Opinar from '@/pages/Opinar'
 import EncuestasAdmin from '@/pages/EncuestasAdmin'
@@ -195,6 +196,14 @@ export default function App() {
             element={
               <PermissionRoute permiso="deposito.view">
                 <Deposito />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/deposito/rma"
+            element={
+              <PermissionRoute permiso="deposito.view">
+                <Rma />
               </PermissionRoute>
             }
           />
