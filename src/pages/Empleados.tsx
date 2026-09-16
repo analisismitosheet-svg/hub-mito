@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { Loader2, Plus, Trash2, Pencil, Search, SearchX, X, Upload } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -83,6 +83,32 @@ export default function Empleados() {
   const [importando, setImportando] = useState(false)
   const [importMsg, setImportMsg] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const fabRef = useRef<HTMLButtonElement>(null)
+  const [fabPos, setFabPos] = useState<{ x: number; y: number } | null>(null)
+  const fabDrag = useRef<{ sx: number; sy: number; ox: number; oy: number; moved: boolean } | null>(null)
+
+  function fabDown(e: ReactMouseEvent) {
+    e.preventDefault()
+    const rect = fabRef.current?.getBoundingClientRect()
+    const ox = fabPos?.x ?? (rect ? rect.left : window.innerWidth - 190)
+    const oy = fabPos?.y ?? (rect ? rect.top : window.innerHeight - 70)
+    fabDrag.current = { sx: e.clientX, sy: e.clientY, ox, oy, moved: false }
+    const onMove = (ev: MouseEvent) => {
+      const d = fabDrag.current
+      if (!d) return
+      if (Math.abs(ev.clientX - d.sx) + Math.abs(ev.clientY - d.sy) > 4) d.moved = true
+      setFabPos({
+        x: Math.max(0, Math.min(window.innerWidth - 190, d.ox + (ev.clientX - d.sx))),
+        y: Math.max(0, Math.min(window.innerHeight - 56, d.oy + (ev.clientY - d.sy))),
+      })
+    }
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
 
   const cargar = useCallback(async () => {
     if (!supabase) { setCargando(false); return }
@@ -282,12 +308,7 @@ export default function Empleados() {
           <button onClick={() => { setBusqueda(''); setFiltros({}) }} className="btn-press rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line">Limpiar filtros</button>
         )}
         {puedeCrear && (
-          <button onClick={() => { setSel(null); setModal('new') }} className="btn-press ml-auto inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700">
-            <Plus size={15} aria-hidden /> Nuevo empleado
-          </button>
-        )}
-        {puedeCrear && (
-          <button onClick={() => fileRef.current?.click()} disabled={importando} className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface2 px-3 py-2 text-sm font-medium text-ink hover:bg-line disabled:opacity-50">
+          <button onClick={() => fileRef.current?.click()} disabled={importando} className="btn-press ml-auto inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface2 px-3 py-2 text-sm font-medium text-ink hover:bg-line disabled:opacity-50">
             <Upload size={15} aria-hidden /> {importando ? 'Importando…' : 'Importar nómina'}
           </button>
         )}
@@ -305,8 +326,8 @@ export default function Empleados() {
           <SearchX size={16} aria-hidden /> No hay empleados que coincidan.
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-line bg-surface">
-          <table className="w-full table-auto text-[12px]">
+<div className="overflow-x-auto rounded-2xl border border-line bg-surface" style={{ scrollbarWidth: 'thin' }}>
+        <table className="w-full min-w-max table-auto text-[12px]">
             <thead className="bg-surface2/60 text-left text-[11px] uppercase tracking-wide text-sub">
               <tr>
                 <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('legajo')} className="font-semibold uppercase text-sub hover:text-ink">Legajo{sortArrow('legajo')}</button></th>
@@ -365,6 +386,28 @@ export default function Empleados() {
       )}
 
       <ConfirmDialog open={!!confirm} message={confirm?.message ?? ''} onCancel={() => setConfirm(null)} onConfirm={() => { confirm?.onConfirm(); setConfirm(null) }} />
+
+      {puedeCrear && (
+        <button
+          ref={fabRef}
+          onMouseDown={fabDown}
+          onClick={() => { if (fabDrag.current?.moved) { fabDrag.current.moved = false; return } setSel(null); setModal('new') }}
+          style={{
+            position: 'fixed',
+            left: fabPos ? fabPos.x : undefined,
+            top: fabPos ? fabPos.y : undefined,
+            bottom: fabPos ? undefined : '1.5rem',
+            right: fabPos ? undefined : '1.5rem',
+            zIndex: 50,
+            touchAction: 'none',
+          }}
+          title="Nuevo empleado (arrastra para mover)"
+          aria-label="Nuevo empleado"
+          className="btn-press inline-flex cursor-grab select-none items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-medium text-white shadow-lg shadow-brand-600/30 hover:bg-brand-700 active:cursor-grabbing"
+        >
+          <Plus size={15} aria-hidden /> Nuevo empleado
+        </button>
+      )}
     </Layout>
   )
 }
