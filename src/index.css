@@ -288,3 +288,23 @@ body {
   }
 }
 
+/* Barra de scroll horizontal siempre visible (tablas anchas) */
+.scroll-always-x {
+  scrollbar-width: auto;
+  scrollbar-color: rgba(100, 116, 139, 0.6) transparent;
+}
+.scroll-always-x::-webkit-scrollbar {
+  height: 12px;
+}
+.scroll-always-x::-webkit-scrollbar-track {
+  background: rgba(100, 116, 139, 0.15);
+  border-radius: 6px;
+}
+.scroll-always-x::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.55);
+  border-radius: 6px;
+}
+.scroll-always-x::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.8);
+}
+

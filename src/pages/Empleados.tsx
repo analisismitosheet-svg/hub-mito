@@ -326,27 +326,63 @@ export default function Empleados() {
           <SearchX size={16} aria-hidden /> No hay empleados que coincidan.
         </p>
       ) : (
-<div className="overflow-x-auto rounded-2xl border border-line bg-surface" style={{ scrollbarWidth: 'thin' }}>
+<div className="scroll-always-x overflow-x-auto rounded-2xl border border-line bg-surface">
         <table className="w-full min-w-max table-auto text-[12px]">
             <thead className="bg-surface2/60 text-left text-[11px] uppercase tracking-wide text-sub">
               <tr>
                 <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('legajo')} className="font-semibold uppercase text-sub hover:text-ink">Legajo{sortArrow('legajo')}</button></th>
                 <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('nombre')} className="font-semibold uppercase text-sub hover:text-ink">Nombre{sortArrow('nombre')}</button></th>
+                <th className={tdBase + ' py-2'}>DNI</th>
+                <th className={tdBase + ' py-2'}>CUIL</th>
+                <th className={tdBase + ' py-2'}>Nacimiento</th>
+                <th className={tdBase + ' py-2'}>Sexo</th>
                 <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('lugar')} className="font-semibold uppercase text-sub hover:text-ink">Lugar{sortArrow('lugar')}</button></th>
                 <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('area_sector')} className="font-semibold uppercase text-sub hover:text-ink">Área / Sector{sortArrow('area_sector')}</button></th>
                 <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('categoria')} className="font-semibold uppercase text-sub hover:text-ink">Categoría{sortArrow('categoria')}</button></th>
                 <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('puesto')} className="font-semibold uppercase text-sub hover:text-ink">Puesto{sortArrow('puesto')}</button></th>
                 <th className={tdBase + ' py-2 text-center'}><button type="button" onClick={() => toggleSort('horas')} className="font-semibold uppercase text-sub hover:text-ink">Horas{sortArrow('horas')}</button></th>
-                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('telefono')} className="font-semibold uppercase text-sub hover:text-ink">Teléfono{sortArrow('telefono')}</button></th>
+                <th className={tdBase + ' py-2'}>Convenio</th>
+                <th className={tdBase + ' py-2'}>Comisión</th>
+                <th className={tdBase + ' py-2'}>Reingreso</th>
+                <th className={tdBase + ' py-2'}>Ingreso</th>
+                <th className={tdBase + ' py-2 text-center'}><button type="button" onClick={() => toggleSort('antiguedad_2025')} className="font-semibold uppercase text-sub hover:text-ink">Antig. 2025{sortArrow('antiguedad_2025')}</button></th>
+                <th className={tdBase + ' py-2 text-center'}><button type="button" onClick={() => toggleSort('dias_vacaciones_2025')} className="font-semibold uppercase text-sub hover:text-ink">Vac. 2025{sortArrow('dias_vacaciones_2025')}</button></th>
+                <th className={tdBase + ' py-2'}>Prepaga</th>
+                <th className={tdBase + ' py-2'}>Contrato</th>
+                <th className={tdBase + ' py-2'}>Código OS</th>
+                <th className={tdBase + ' py-2'}>Teléfono</th>
+                <th className={tdBase + ' py-2'}>Domicilio</th>
+                <th className={tdBase + ' py-2'}>Email</th>
+                <th className={tdBase + ' py-2'}>Contacto Emerg.</th>
+                <th className={tdBase + ' py-2'}>Parentesco</th>
+                <th className={tdBase + ' py-2'}>Tel Emerg.</th>
                 <th className={tdBase + ' py-2 text-right'}>Acciones</th>
               </tr>
               <tr className="bg-surface/60">
                 <th className={tdBase + ' py-1 align-top'}><FiltroCol d={columnasFiltro[0]!} filtros={filtros.legajo ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, legajo: v }))} /></th>
                 <th className={tdBase + ' py-1 align-top'} />
+                <th className={tdBase + ' py-1 align-top'} />
+                <th className={tdBase + ' py-1 align-top'} />
+                <th className={tdBase + ' py-1 align-top'} />
+                <th className={tdBase + ' py-1 align-top'} />
                 <th className={tdBase + ' py-1 align-top'}><FiltroCol d={columnasFiltro[1]!} filtros={filtros.lugar ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, lugar: v }))} /></th>
                 <th className={tdBase + ' py-1 align-top'}><FiltroCol d={columnasFiltro[2]!} filtros={filtros.area_sector ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, area_sector: v }))} /></th>
                 <th className={tdBase + ' py-1 align-top'}><FiltroCol d={columnasFiltro[3]!} filtros={filtros.categoria ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, categoria: v }))} /></th>
                 <th className={tdBase + ' py-1 align-top'}><FiltroCol d={columnasFiltro[4]!} filtros={filtros.puesto ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, puesto: v }))} /></th>
+                <th className={tdBase + ' py-1 align-top'} />
+                <th className={tdBase + ' py-1 align-top'} />
+                <th className={tdBase + ' py-1 align-top'} />
+                <th className={tdBase + ' py-1 align-top'} />
+                <th className={tdBase + ' py-1 align-top'} />
+                <th className={tdBase + ' py-1 align-top'} />
+                <th className={tdBase + ' py-1 align-top'} />
+                <th className={tdBase + ' py-1 align-top'} />
+                <th className={tdBase + ' py-1 align-top'} />
+                <th className={tdBase + ' py-1 align-top'} />
+                <th className={tdBase + ' py-1 align-top'} />
+                <th className={tdBase + ' py-1 align-top'} />
+                <th className={tdBase + ' py-1 align-top'} />
+                <th className={tdBase + ' py-1 align-top'} />
                 <th className={tdBase + ' py-1 align-top'} />
                 <th className={tdBase + ' py-1 align-top'} />
                 <th className={tdBase + ' py-1 align-top'} />
@@ -357,12 +393,30 @@ export default function Empleados() {
                 <tr key={e.id} className="hover:bg-line/20">
                   <td className={tdBase + ' text-sub'}>{e.legajo ?? '-'}</td>
                   <td className={tdBaseWrap + ' font-medium text-ink'}>{e.nombre}</td>
+                  <td className={tdBase}>{e.dni ?? '-'}</td>
+                  <td className={tdBase}>{e.cuil ?? '-'}</td>
+                  <td className={tdBase}>{e.fecha_nacimiento ?? '-'}</td>
+                  <td className={tdBase}>{e.sexo ?? '-'}</td>
                   <td className={tdBase}>{e.lugar ?? '-'}</td>
                   <td className={tdBaseWrap}>{e.area_sector ?? '-'}</td>
                   <td className={tdBaseWrap}>{e.categoria ?? '-'}</td>
                   <td className={tdBaseWrap}>{e.puesto ?? '-'}</td>
                   <td className={tdBase + ' text-center'}>{e.horas ?? '-'}</td>
+                  <td className={tdBase}>{e.convenio ?? '-'}</td>
+                  <td className={tdBase}>{e.comision ?? '-'}</td>
+                  <td className={tdBase}>{e.reingreso ?? '-'}</td>
+                  <td className={tdBase}>{e.fecha_ingreso ?? '-'}</td>
+                  <td className={tdBase + ' text-center'}>{e.antiguedad_2025 ?? '-'}</td>
+                  <td className={tdBase + ' text-center'}>{e.dias_vacaciones_2025 ?? '-'}</td>
+                  <td className={tdBase}>{e.prepaga ?? '-'}</td>
+                  <td className={tdBase}>{e.tipo_contrato ?? '-'}</td>
+                  <td className={tdBase}>{e.codigo_os ?? '-'}</td>
                   <td className={tdBaseWrap}>{e.telefono ?? '-'}</td>
+                  <td className={tdBaseWrap}>{e.domicilio ?? '-'}</td>
+                  <td className={tdBaseWrap}>{e.email ?? '-'}</td>
+                  <td className={tdBaseWrap}>{e.contacto_emergencia ?? '-'}</td>
+                  <td className={tdBase}>{e.parentesco ?? '-'}</td>
+                  <td className={tdBaseWrap}>{e.telefono_emergencia ?? '-'}</td>
                   <td className={tdBase + ' text-right'}>
                     <div className="flex items-center justify-end gap-1">
                       {puedeEditar && <button onClick={() => { setSel(e); setModal('edit') }} className="rounded border border-line p-1 text-sub transition hover:text-ink" title="Editar"><Pencil size={11} aria-hidden /></button>}
