@@ -389,7 +389,11 @@ export default function FacturacionFabrica() {
     else setSelected(new Set(listaPagina.map((r) => r.id)))
   }
   useEffect(() => {
-    const onUp = () => { dragRef.current.active = false; setDragging(false) }
+    const onUp = () => {
+      if (dragRef.current.moved) setSelected(new Set())
+      dragRef.current.active = false
+      setDragging(false)
+    }
     window.addEventListener('mouseup', onUp)
     return () => window.removeEventListener('mouseup', onUp)
   }, [])
