@@ -711,6 +711,7 @@ export default function FacturacionFabrica() {
   }
 
   const polCount = todos.filter((f) => f.polo52).length
+  const bultosSeleccionados = todos.filter((f) => selected.has(f.id)).reduce((s, f) => s + (f.bulto != null ? Number(f.bulto) || 0 : 0), 0)
 
   const ToastEl = () => toast ? (
     <div className="fixed left-1/2 top-4 z-50 -translate-x-1/2 animate-enter rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-400 shadow-lg backdrop-blur-sm">{toast}</div>
@@ -785,7 +786,7 @@ export default function FacturacionFabrica() {
             Sin fecha
           </label>
         </div>
-        <span className="text-[11px] text-sub/70">{lista.length} registros {polCount > 0 && isAdmin ? `(${polCount} POLO52)` : ''}</span>
+        <span className="text-[11px] text-sub/70">{lista.length} registros {polCount > 0 && isAdmin ? `(${polCount} POLO52)` : ''}{selected.size > 0 ? ` | Seleccionados: ${selected.size} | Bultos: ${bultosSeleccionados}` : ''}</span>
         {selected.size > 0 && puedeBorrar && (
           <button onClick={() => setConfirm({ message: `Eliminar ${selected.size} registro(s)?`, onConfirm: () => void eliminarSeleccionados() })} className="btn-press inline-flex items-center gap-1 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/20"><Trash2 size={13} aria-hidden /> Eliminar ({selected.size})</button>
         )}
@@ -867,7 +868,7 @@ export default function FacturacionFabrica() {
                     {isAdmin && <td className="px-1 py-[2px] text-center whitespace-nowrap text-sub">{r.guia_id && guiasFecha[r.guia_id] ? fmtDateSlider(guiasFecha[r.guia_id]) : '-'}</td>}
                     {celdaTexto(r, 'n_remito', r.n_remito)}
                     {celdaCliente(r)}
-                    {celdaTexto(r, 'bulto', r.bulto != null ? String(r.bulto) : null, { type: 'number', alinear: ' text-center' })}
+                    <td className={tdBase + ' text-center'}>{r.bulto != null ? r.bulto : '-'}</td>
                     {celdaSelect(r, 'transporte', r.transporte, transporteOpciones)}
                     {isAdmin && celdaSelect(r, 'porcentaje_declarado', r.porcentaje_declarado, VALOR_DEC_OPCIONES)}
                     {celdaSelect(r, 'solicitud_retiro', r.solicitud_retiro ? fmtRetiro(r.solicitud_retiro) : null, RETIRO_OPCIONES, { alinear: ' text-center' })}
