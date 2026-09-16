@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { LogOut, Sun, Moon, RefreshCw } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { useTheme } from '@/context/ThemeContext'
@@ -17,12 +18,17 @@ export default function Layout({ children, wide = true }: { children: ReactNode;
     <div className="min-h-screen bg-paper text-ink">
       <header className="sticky top-0 z-10 border-b border-line bg-paper/85 backdrop-blur">
         <div className={`mx-auto flex ${maxW} items-center justify-between px-4 py-3`}>
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 font-display text-sm font-bold text-white shadow-glow">
+          <Link
+            to="/"
+            title="Ir al menu"
+            aria-label="Ir al menu"
+            className="group flex cursor-pointer items-center gap-2.5 rounded-xl outline-none transition hover:opacity-80 focus-visible:ring-2 focus-visible:ring-brand-500/50"
+          >
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 font-display text-sm font-bold text-white shadow-glow transition-transform group-hover:scale-105">
               M
             </div>
             <span className="font-display font-semibold text-ink">Hub Mito</span>
-          </div>
+          </Link>
           {configured && user && (
             <div className="flex items-center gap-3">
               <button
