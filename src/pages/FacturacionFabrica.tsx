@@ -382,6 +382,12 @@ export default function FacturacionFabrica() {
   // Un click simple (sin arrastrar) abre la tarjeta como siempre.
   const dragRef = useRef<{ active: boolean; mode: 'add' | 'remove'; startId: string | null; moved: boolean }>({ active: false, mode: 'add', startId: null, moved: false })
   const [dragging, setDragging] = useState(false)
+  const toggleSelect = (id: string) => setSelected((prev) => { const s = new Set(prev); if (s.has(id)) s.delete(id); else s.add(id); return s })
+  const allSelected = listaPagina.length > 0 && listaPagina.every((r) => selected.has(r.id))
+  const toggleSelectAll = () => {
+    if (allSelected) setSelected(new Set())
+    else setSelected(new Set(listaPagina.map((r) => r.id)))
+  }
   useEffect(() => {
     const onUp = () => { dragRef.current.active = false; setDragging(false) }
     window.addEventListener('mouseup', onUp)
@@ -837,6 +843,7 @@ export default function FacturacionFabrica() {
           <div className="w-full overflow-x-auto">
             <table className="w-full table-fixed border-collapse text-[11px] leading-tight">
               <colgroup>
+                {isAdmin && <col className="w-[3%]" />}  {/* Check */}
                 <col className="w-[3%]" />  {/* Aut */}
                 <col className="w-[11%]" /> {/* Razon */}
                 <col className="w-[8%]" />  {/* F.Fact */}
@@ -859,6 +866,7 @@ export default function FacturacionFabrica() {
               </colgroup>
               <thead>
                 <tr className="table-head text-left text-[9px] font-semibold uppercase tracking-wider">
+                  {isAdmin && <th className="px-1 py-1 text-center"><input type="checkbox" checked={allSelected} onChange={toggleSelectAll} className="h-3 w-3 rounded border-line bg-surface2 accent-brand-600" /></th>}
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('autorizacion')}>Aut{sortArrow('autorizacion')}</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('razon_social')}>Razon Social{sortArrow('razon_social')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('fecha_fact')}>Fecha Facturacion{sortArrow('fecha_fact')}</th>
@@ -889,6 +897,7 @@ export default function FacturacionFabrica() {
                     onMouseEnter={() => dragOver(r)}
                     onClick={() => { if (dragRef.current.moved) return; if (isAdmin || !estaCompleta(r)) setCard(r) }}
                   >
+                    {isAdmin && <td className="px-1 py-[2px] text-center" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}><input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} className="h-3 w-3 rounded border-line bg-surface2 accent-brand-600" /></td>}
                     {celdaSelect(r, 'autorizacion', r.autorizacion, ['SI', 'NO'], { alinear: ' text-center' })}
                     {celdaTexto(r, 'razon_social', r.razon_social)}
                     {celdaTexto(r, 'fecha_fact', r.fecha_fact, { type: 'date', alinear: ' text-center whitespace-nowrap' })}
