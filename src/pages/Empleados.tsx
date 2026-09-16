@@ -326,9 +326,9 @@ export default function Empleados() {
           <SearchX size={16} aria-hidden /> No hay empleados que coincidan.
         </p>
       ) : (
-<div className="scroll-always-x overflow-x-auto rounded-2xl border border-line bg-surface">
+<div className="scroll-always-x overflow-auto rounded-2xl border border-line bg-surface" style={{ maxHeight: 'calc(100vh - 230px)' }}>
         <table className="w-full min-w-max table-auto text-[12px]">
-            <thead className="bg-surface2/60 text-left text-[11px] uppercase tracking-wide text-sub">
+            <thead className="sticky top-0 z-10 bg-surface2/95 text-left text-[11px] uppercase tracking-wide text-sub backdrop-blur">
               <tr>
                 <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('legajo')} className="font-semibold uppercase text-sub hover:text-ink">Legajo{sortArrow('legajo')}</button></th>
                 <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('nombre')} className="font-semibold uppercase text-sub hover:text-ink">Nombre{sortArrow('nombre')}</button></th>
