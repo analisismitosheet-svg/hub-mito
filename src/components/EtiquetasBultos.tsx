@@ -104,13 +104,15 @@ interface PredefEtiqueta {
   destino: string
 }
 
-const ETQ_PRE_DEFECTO: PredefEtiqueta = { ancho: 80, alto: 50, fontSize: 8, qrSize: 30, origen: 'MITO', destino: '' }
+const ETQ_PRE_DEFECTO: PredefEtiqueta = { ancho: 80, alto: 50, fontSize: 8, qrSize: 30, origen: 'MITO', destino: 'POLO52-NO' }
 
 function leerPredef(): PredefEtiqueta {
   try {
     const raw = localStorage.getItem(ETQ_PRE_KEY)
     if (!raw) return ETQ_PRE_DEFECTO
-    return { ...ETQ_PRE_DEFECTO, ...JSON.parse(raw) }
+    const parsed = JSON.parse(raw)
+    if (!parsed.destino) parsed.destino = ETQ_PRE_DEFECTO.destino
+    return { ...ETQ_PRE_DEFECTO, ...parsed }
   } catch {
     return ETQ_PRE_DEFECTO
   }
