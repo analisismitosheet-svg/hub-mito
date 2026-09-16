@@ -378,11 +378,29 @@ export default function FacturacionFabrica() {
     setSel(null); setCard(null); await cargar(); mostrarToast('Registro eliminado')
   }
 
-  const toggleSelect = (id: string) => setSelected((prev) => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
-  const allSelected = listaPagina.length > 0 && listaPagina.every((r) => selected.has(r.id))
-  const toggleSelectAll = () => {
-    if (allSelected) setSelected(new Set())
-    else setSelected(new Set(listaPagina.map((r) => r.id)))
+  // Seleccion por arrastre: mousedown inicia, mouseenter extiende el rango.
+  // Un click simple (sin arrastrar) abre la tarjeta como siempre.
+  const dragRef = useRef<{ active: boolean; mode: 'add' | 'remove'; startId: string | null; moved: boolean }>({ active: false, mode: 'add', startId: null, moved: false })
+  const [dragging, setDragging] = useState(false)
+  useEffect(() => {
+    const onUp = () => { dragRef.current.active = false; setDragging(false) }
+    window.addEventListener('mouseup', onUp)
+    return () => window.removeEventListener('mouseup', onUp)
+  }, [])
+  const dragStart = (r: FactRegistro) => {
+    dragRef.current = { active: true, mode: selected.has(r.id) ? 'remove' : 'add', startId: r.id, moved: false }
+    setDragging(true)
+  }
+  const dragOver = (r: FactRegistro) => {
+    if (!dragRef.current.active) return
+    dragRef.current.moved = true
+    const { mode, startId } = dragRef.current
+    const ids = [startId, r.id].filter((x): x is string => !!x)
+    setSelected((prev) => {
+      const s = new Set(prev)
+      ids.forEach((id) => { if (mode === 'add') s.add(id); else s.delete(id) })
+      return s
+    })
   }
   async function eliminarSeleccionados() {
     if (!supabase || selected.size === 0) return
@@ -720,6 +738,13 @@ export default function FacturacionFabrica() {
   return (
     <Layout wide>
       <ToastEl />
+      {dragging && dragRef.current.moved && (
+        <div className="pointer-events-none fixed left-1/2 top-6 z-[70] -translate-x-1/2 rounded-3xl border border-emerald-400/50 bg-emerald-500/90 px-12 py-7 text-center shadow-2xl backdrop-blur-sm">
+          <div className="text-[12px] font-semibold uppercase tracking-[0.2em] text-emerald-950/80">Total bultos</div>
+          <div className="font-display text-6xl font-bold leading-none text-white drop-shadow">{bultosSeleccionados}</div>
+          <div className="mt-1 text-[12px] font-medium text-emerald-950/80">{selected.size} fila(s) seleccionada(s)</div>
+        </div>
+      )}
       <BackButton />
       <header className="mb-3 mt-2">
         <h1 className="font-display text-2xl font-semibold text-ink">Facturacion Fabrica {modoPolo52 && <span className="ml-2 inline-block whitespace-nowrap rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-400">Polo 52</span>} <span className="text-sm font-normal text-sub">({todos.length})</span></h1>
@@ -812,7 +837,6 @@ export default function FacturacionFabrica() {
           <div className="w-full overflow-x-auto">
             <table className="w-full table-fixed border-collapse text-[11px] leading-tight">
               <colgroup>
-                <col className="w-[3%]" />  {/* Check */}
                 <col className="w-[3%]" />  {/* Aut */}
                 <col className="w-[11%]" /> {/* Razon */}
                 <col className="w-[8%]" />  {/* F.Fact */}
@@ -835,7 +859,6 @@ export default function FacturacionFabrica() {
               </colgroup>
               <thead>
                 <tr className="table-head text-left text-[9px] font-semibold uppercase tracking-wider">
-                  <th className="px-1 py-1 text-center"><input type="checkbox" checked={allSelected} onChange={toggleSelectAll} className="h-3 w-3 rounded border-line bg-surface2 accent-brand-600" /></th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('autorizacion')}>Aut{sortArrow('autorizacion')}</th>
                   <th className="cursor-pointer px-1 py-1 whitespace-nowrap hover:text-ink" onClick={() => toggleSort('razon_social')}>Razon Social{sortArrow('razon_social')}</th>
                   <th className="cursor-pointer px-1 py-1 text-center whitespace-nowrap hover:text-ink" onClick={() => toggleSort('fecha_fact')}>Fecha Facturacion{sortArrow('fecha_fact')}</th>
@@ -859,8 +882,13 @@ export default function FacturacionFabrica() {
               </thead>
               <tbody className="divide-y divide-line/50 bg-surface">
                 {listaPagina.map((r) => (
-                  <tr key={r.id} className={rowCls(r)} onClick={() => { if (isAdmin || !estaCompleta(r)) setCard(r) }}>
-                    <td className="px-1 py-[2px] text-center" onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} className="h-3 w-3 rounded border-line bg-surface2 accent-brand-600" /></td>
+                  <tr
+                    key={r.id}
+                    className={rowCls(r) + ' select-none'}
+                    onMouseDown={() => dragStart(r)}
+                    onMouseEnter={() => dragOver(r)}
+                    onClick={() => { if (dragRef.current.moved) return; if (isAdmin || !estaCompleta(r)) setCard(r) }}
+                  >
                     {celdaSelect(r, 'autorizacion', r.autorizacion, ['SI', 'NO'], { alinear: ' text-center' })}
                     {celdaTexto(r, 'razon_social', r.razon_social)}
                     {celdaTexto(r, 'fecha_fact', r.fecha_fact, { type: 'date', alinear: ' text-center whitespace-nowrap' })}
@@ -880,7 +908,7 @@ export default function FacturacionFabrica() {
                     <td className="px-1 py-[2px] text-center text-[10px] font-medium text-sub">{diasEntre(r.fecha_fact, r.fecha_envio) ?? '-'}</td>
                     {celdaTexto(r, 'observaciones', r.observaciones)}
                     <td className="px-1 py-[2px] text-right">
-                      <div className="flex items-center justify-end gap-px" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-px" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
                         <button onClick={() => setCard(r)} className="rounded border border-line p-0.5 text-sub transition hover:text-amber-400" title="Ver tarjeta"><Eye size={10} aria-hidden /></button>
                         <button onClick={() => setEtiquetaSel(r)} className="rounded border border-line p-0.5 text-sub transition hover:text-amber-400" title="Etiquetas / Imprimir"><Printer size={10} aria-hidden /></button>
                         <button onClick={() => { setSel(r); setModal('edit') }} className="rounded border border-line p-0.5 text-sub transition hover:text-ink" title="Editar"><Pencil size={10} aria-hidden /></button>
