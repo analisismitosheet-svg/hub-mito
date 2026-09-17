@@ -68,6 +68,14 @@ function diasDesdeHasta(desde: string | null, hasta: string | null): number | nu
   return dias > 0 ? dias : null
 }
 
+/** Motivos que cuentan días (vacaciones, carpeta médica, ausente, licencia, suspensión). */
+const MOTIVOS_CON_DIAS = new Set(['VACACIONES', 'CARPETA MEDICA', 'AUSENTE', 'LICENCIA', 'SUSPENSION'])
+function esMotivoConDias(motivo: string | null): boolean {
+  if (!motivo) return false
+  const n = motivo.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  return MOTIVOS_CON_DIAS.has(n)
+}
+
 /** Convierte un valor de celda Excel (numero de serie o dd/mm/yyyy) a fecha ISO (YYYY-MM-DD). */
 function fechaExcelAISO(v: unknown): string | null {
   if (v == null || v === '') return null
@@ -441,7 +449,9 @@ export default function CargaNovedades() {
         const bv = (b as unknown as Record<string, unknown>)[orden.clave]
         let c = 0
         if (orden.clave === 'dias') {
-          c = (diasDesdeHasta(a.desde, a.hasta) ?? -1) - (diasDesdeHasta(b.desde, b.hasta) ?? -1)
+          const da = esMotivoConDias(a.motivo) ? diasDesdeHasta(a.desde, a.hasta) ?? -1 : -1
+          const db = esMotivoConDias(b.motivo) ? diasDesdeHasta(b.desde, b.hasta) ?? -1 : -1
+          c = da - db
         } else if (orden.clave === 'numero') {
           c = (Number(av) || 0) - (Number(bv) || 0)
         } else if (orden.clave === 'anio') {
@@ -551,7 +561,7 @@ export default function CargaNovedades() {
                       <td className="px-2 py-1.5 text-center">{fmtFecha(n.fecha)}</td>
                       <td className="px-2 py-1.5 text-center">{fmtFecha(n.desde)}</td>
                       <td className="px-2 py-1.5 text-center">{fmtFecha(n.hasta)}</td>
-                      <td className="px-2 py-1.5 text-center">{diasDesdeHasta(n.desde, n.hasta) ?? '-'}</td>
+                      <td className="px-2 py-1.5 text-center">{esMotivoConDias(n.motivo) ? diasDesdeHasta(n.desde, n.hasta) ?? '-' : '-'}</td>
                       <td className="px-2 py-1.5">{n.local || '-'}</td>
                       <td className="px-2 py-1.5"><span className="inline-block whitespace-nowrap rounded-full border px-1.5 py-px text-[10px] font-medium" style={col ? { borderColor: col.fg + '66', backgroundColor: col.fg + '22', color: col.fg } : { borderColor: 'rgba(167,139,250,0.3)', backgroundColor: 'rgba(167,139,250,0.15)', color: '#a78bfa' }}>{n.motivo || '-'}</span></td>
                       <td className="px-2 py-1.5"><span className="block max-w-[200px] truncate" title={n.novedad || ''}>{n.novedad || '-'}</span></td>
