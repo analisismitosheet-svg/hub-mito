@@ -27,6 +27,7 @@ import {
   TrendingUp,
   FolderOpen,
   RotateCcw,
+  Cake,
   type LucideIcon,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -311,6 +312,17 @@ export const APPS: AppDef[] = [
     kind: 'internal',
     target: '/rrhh/empleados',
     color: '#7c3aed',
+    permiso: 'rrhh.empleados.view',
+  },
+  {
+    id: 'rrhh-cumpleanos',
+    areaId: 'rrhh',
+    title: 'Cumpleaños',
+    description: 'Calendario mensual de cumpleaños de empleados.',
+    icon: Cake,
+    kind: 'internal',
+    target: '/rrhh/cumpleanios',
+    color: '#ec4899',
     permiso: 'rrhh.empleados.view',
   },
   {

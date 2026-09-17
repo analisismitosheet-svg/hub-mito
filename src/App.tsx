@@ -27,6 +27,7 @@ import Usuarios from '@/pages/Usuarios'
 import Roles from '@/pages/Roles'
 import LocalesPage from '@/pages/Locales'
 import EmpleadosPage from '@/pages/Empleados'
+import Cumpleanios from '@/pages/Cumpleanios'
 import Transportes from '@/pages/Transportes'
 import Clientes from '@/pages/Clientes'
 import FacturacionFabrica from '@/pages/FacturacionFabrica'
@@ -308,6 +309,14 @@ export default function App() {
             element={
               <PermissionRoute permiso="rrhh.empleados.view">
                 <EmpleadosPage />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/rrhh/cumpleanios"
+            element={
+              <PermissionRoute permiso="rrhh.empleados.view">
+                <Cumpleanios />
               </PermissionRoute>
             }
           />
