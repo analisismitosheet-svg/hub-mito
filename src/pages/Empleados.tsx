@@ -572,6 +572,18 @@ function EmpleadoModal({ registro, opciones, onClose, onSaved }: {
       parentesco: f.parentesco.trim() || null,
       telefono_emergencia: f.telefono_emergencia.trim() || null,
     }
+    // Evita crear/editar con un legajo que ya usa otro empleado
+    const legajoTrim = f.legajo.trim()
+    if (legajoTrim) {
+      const { data: dup, error: errDup } = await supabase.from('empleados').select('id').eq('legajo', legajoTrim).limit(10)
+      if (errDup) { setBusy(false); setError(errDup.message); return }
+      const duplicado = ((dup as { id: string }[] | null) ?? []).find((d) => d.id !== registro?.id)
+      if (duplicado) {
+        setBusy(false)
+        setError(`El legajo ${legajoTrim} ya está asignado a otro empleado.`)
+        return
+      }
+    }
     const res = registro
       ? await supabase.from('empleados').update(payload).eq('id', registro.id)
       : await supabase.from('empleados').insert(payload)
@@ -593,7 +605,7 @@ function EmpleadoModal({ registro, opciones, onClose, onSaved }: {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             <Campo label="N° Legajo"><input value={f.legajo} onChange={(e) => set('legajo', e.target.value)} className={inputCls} /></Campo>
             <Campo label="Apellido y Nombre *" span2><input value={f.nombre} onChange={(e) => set('nombre', e.target.value)} className={inputCls} /></Campo>
-            <Campo label="Lugar"><AutocompleteCampo label="Lugar" opciones={(opciones.lugar ?? []).map((v) => ({ id: v, label: v }))} valor={f.lugar} onChange={(v) => set('lugar', v)} placeholder="Buscar lugar..." /></Campo>
+            <AutocompleteCampo label="Lugar" opciones={(opciones.lugar ?? []).map((v) => ({ id: v, label: v }))} valor={f.lugar} onChange={(v) => set('lugar', v)} placeholder="Buscar lugar..." />
             <AutocompleteCampo label="Área / Sector" opciones={(opciones.area_sector ?? []).map((v) => ({ id: v, label: v }))} valor={f.area_sector} onChange={(v) => set('area_sector', v)} />
             <Campo label="Horas"><input value={f.horas} onChange={(e) => set('horas', e.target.value)} className={inputCls} /></Campo>
             <AutocompleteCampo label="Convenio" opciones={(opciones.convenio ?? []).map((v) => ({ id: v, label: v }))} valor={f.convenio} onChange={(v) => set('convenio', v)} />
@@ -610,19 +622,22 @@ function EmpleadoModal({ registro, opciones, onClose, onSaved }: {
             <Campo label="Sexo"><select value={f.sexo} onChange={(e) => set('sexo', e.target.value)} className={selectCls}><option value="">--</option><option value="F">F</option><option value="M">M</option></select></Campo>
             <Campo label="Teléfono"><input value={f.telefono} onChange={(e) => set('telefono', e.target.value)} className={inputCls} /></Campo>
             <Campo label="Email"><input value={f.email} onChange={(e) => set('email', e.target.value)} className={inputCls} /></Campo>
-            <Campo label="Domicilio" span3>
-              <input value={f.domicilio} onChange={(e) => set('domicilio', e.target.value)} className={inputCls} />
-              {f.domicilio.trim() && (
-                <div className="mt-2 overflow-hidden rounded-xl border border-line">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:col-span-2 lg:col-span-3 xl:col-span-4">
+              <Campo label="Domicilio">
+                <input value={f.domicilio} onChange={(e) => set('domicilio', e.target.value)} placeholder="Calle, número, localidad..." className={inputCls} />
+              </Campo>
+              <div>
+                <span className="mb-1 block text-xs font-medium text-sub">Ubicación</span>
+                <div className="overflow-hidden rounded-xl border border-line">
                   <iframe
-                    title={`Mapa de ${f.domicilio}`}
-                    src={`https://maps.google.com/maps?q=${encodeURIComponent(f.domicilio.trim())}&t=m&z=15&ie=UTF8&iwloc=&markers=color:red%7C${encodeURIComponent(f.domicilio.trim())}&output=embed`}
-                    className="h-52 w-full border-0"
+                    title={`Mapa de ${f.domicilio.trim() || 'Argentina'}`}
+                    src={`https://maps.google.com/maps?q=${encodeURIComponent(f.domicilio.trim() || 'Argentina')}&t=m&z=15&ie=UTF8&iwloc=&markers=color:red%7C${encodeURIComponent(f.domicilio.trim() || 'Argentina')}&output=embed`}
+                    className="h-48 w-full border-0"
                     loading="lazy"
                     referrerPolicy="no-referrer-when-downgrade"
                   />
                   <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(f.domicilio.trim())}`}
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(f.domicilio.trim() || 'Argentina')}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center justify-center gap-1.5 border-t border-line bg-surface2 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-line hover:text-red-700"
@@ -630,8 +645,8 @@ function EmpleadoModal({ registro, opciones, onClose, onSaved }: {
                     <MapPin size={13} aria-hidden /> Abrir en Google Maps
                   </a>
                 </div>
-              )}
-            </Campo>
+              </div>
+            </div>
             <Campo label="Código OS"><input value={f.codigo_os} onChange={(e) => set('codigo_os', e.target.value)} className={inputCls} /></Campo>
             <Campo label="Prepaga"><input value={f.prepaga} onChange={(e) => set('prepaga', e.target.value)} className={inputCls} list="prepaga-list" /><datalist id="prepaga-list">{(opciones.prepaga ?? []).map((v) => <option key={v} value={v} />)}</datalist></Campo>
             <Campo label="Tipo de contrato"><input value={f.tipo_contrato} onChange={(e) => set('tipo_contrato', e.target.value)} className={inputCls} list="contrato-list" /><datalist id="contrato-list">{(opciones.tipo_contrato ?? []).map((v) => <option key={v} value={v} />)}</datalist></Campo>
