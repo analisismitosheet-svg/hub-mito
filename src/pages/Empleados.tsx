@@ -84,13 +84,11 @@ function aniosDesde(fechaIso: string | null): number {
   return Math.floor(mesesDesde(fechaIso) / 12)
 }
 
-/** Texto de antigüedad: "X años Y meses" si supera el año, "X meses" si no llega. */
+/** Texto de antigüedad: "X años" si supera el año, "X meses" si no llega. */
 function textoAntiguedad(fechaIso: string | null): string {
   const m = mesesDesde(fechaIso)
   if (m <= 0) return ''
   const a = aniosDesde(fechaIso)
-  const rm = m % 12
-  if (a >= 1 && rm > 0) return `${a} año${a > 1 ? 's' : ''} ${rm} mes${rm > 1 ? 'es' : ''}`
   if (a >= 1) return `${a} año${a > 1 ? 's' : ''}`
   return `${m} mes${m > 1 ? 'es' : ''}`
 }
