@@ -139,8 +139,15 @@ export default function CargaNovedades() {
 
   // Filtros
   const [q, setQ] = useState('')
-  const [fAnio, setFAnio] = useState('')
-  const [fMes, setFMes] = useState('')
+  const [fAnio, setFAnio] = useState(() => {
+    const hoy = new Date()
+    return String(hoy.getFullYear() + (hoy.getDate() >= 26 ? 1 : 0))
+  })
+  const [fMes, setFMes] = useState(() => {
+    const hoy = new Date()
+    const idx = hoy.getDate() >= 26 ? hoy.getMonth() + 1 : hoy.getMonth()
+    return MESES_LIQUIDACION[idx % 12]
+  })
   const [fMotivo, setFMotivo] = useState('')
   const [fLocal, setFLocal] = useState('')
   const [fTipo, setFTipo] = useState('')
