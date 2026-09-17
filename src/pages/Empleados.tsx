@@ -124,10 +124,15 @@ export default function Empleados() {
   const columnasFiltro = useMemo(() => {
     const defs: { clave: string; label: string; valores: string[] }[] = [
       { clave: 'legajo', label: 'Legajo', valores: [] },
+      { clave: 'sexo', label: 'Sexo', valores: [] },
       { clave: 'lugar', label: 'Lugar', valores: [] },
       { clave: 'area_sector', label: 'Área / Sector', valores: [] },
       { clave: 'categoria', label: 'Categoría', valores: [] },
       { clave: 'puesto', label: 'Puesto', valores: [] },
+      { clave: 'convenio', label: 'Convenio', valores: [] },
+      { clave: 'prepaga', label: 'Prepaga', valores: [] },
+      { clave: 'tipo_contrato', label: 'Contrato', valores: [] },
+      { clave: 'codigo_os', label: 'Código OS', valores: [] },
     ]
     for (const d of defs) {
       d.valores = Array.from(
@@ -136,6 +141,8 @@ export default function Empleados() {
     }
     return defs
   }, [empleados])
+
+  const filtroDef = (clave: string) => columnasFiltro.find((d) => d.clave === clave)!
 
   const filtrados = useMemo(() => {
     const t = busqueda.trim().toUpperCase()
@@ -332,53 +339,53 @@ export default function Empleados() {
               <tr>
                 <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('legajo')} className="font-semibold uppercase text-sub hover:text-ink">Legajo{sortArrow('legajo')}</button></th>
                 <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('nombre')} className="font-semibold uppercase text-sub hover:text-ink">Nombre{sortArrow('nombre')}</button></th>
-                <th className={tdBase + ' py-2'}>DNI</th>
-                <th className={tdBase + ' py-2'}>CUIL</th>
-                <th className={tdBase + ' py-2'}>Nacimiento</th>
-                <th className={tdBase + ' py-2'}>Sexo</th>
+                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('dni')} className="font-semibold uppercase text-sub hover:text-ink">DNI{sortArrow('dni')}</button></th>
+                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('cuil')} className="font-semibold uppercase text-sub hover:text-ink">CUIL{sortArrow('cuil')}</button></th>
+                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('fecha_nacimiento')} className="font-semibold uppercase text-sub hover:text-ink">Nacimiento{sortArrow('fecha_nacimiento')}</button></th>
+                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('sexo')} className="font-semibold uppercase text-sub hover:text-ink">Sexo{sortArrow('sexo')}</button></th>
                 <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('lugar')} className="font-semibold uppercase text-sub hover:text-ink">Lugar{sortArrow('lugar')}</button></th>
                 <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('area_sector')} className="font-semibold uppercase text-sub hover:text-ink">Área / Sector{sortArrow('area_sector')}</button></th>
                 <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('categoria')} className="font-semibold uppercase text-sub hover:text-ink">Categoría{sortArrow('categoria')}</button></th>
                 <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('puesto')} className="font-semibold uppercase text-sub hover:text-ink">Puesto{sortArrow('puesto')}</button></th>
                 <th className={tdBase + ' py-2 text-center'}><button type="button" onClick={() => toggleSort('horas')} className="font-semibold uppercase text-sub hover:text-ink">Horas{sortArrow('horas')}</button></th>
-                <th className={tdBase + ' py-2'}>Convenio</th>
-                <th className={tdBase + ' py-2'}>Comisión</th>
-                <th className={tdBase + ' py-2'}>Reingreso</th>
-                <th className={tdBase + ' py-2'}>Ingreso</th>
+                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('convenio')} className="font-semibold uppercase text-sub hover:text-ink">Convenio{sortArrow('convenio')}</button></th>
+                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('comision')} className="font-semibold uppercase text-sub hover:text-ink">Comisión{sortArrow('comision')}</button></th>
+                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('reingreso')} className="font-semibold uppercase text-sub hover:text-ink">Reingreso{sortArrow('reingreso')}</button></th>
+                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('fecha_ingreso')} className="font-semibold uppercase text-sub hover:text-ink">Ingreso{sortArrow('fecha_ingreso')}</button></th>
                 <th className={tdBase + ' py-2 text-center'}><button type="button" onClick={() => toggleSort('antiguedad_2025')} className="font-semibold uppercase text-sub hover:text-ink">Antig. 2025{sortArrow('antiguedad_2025')}</button></th>
                 <th className={tdBase + ' py-2 text-center'}><button type="button" onClick={() => toggleSort('dias_vacaciones_2025')} className="font-semibold uppercase text-sub hover:text-ink">Vac. 2025{sortArrow('dias_vacaciones_2025')}</button></th>
-                <th className={tdBase + ' py-2'}>Prepaga</th>
-                <th className={tdBase + ' py-2'}>Contrato</th>
-                <th className={tdBase + ' py-2'}>Código OS</th>
-                <th className={tdBase + ' py-2'}>Teléfono</th>
-                <th className={tdBase + ' py-2'}>Domicilio</th>
-                <th className={tdBase + ' py-2'}>Email</th>
-                <th className={tdBase + ' py-2'}>Contacto Emerg.</th>
-                <th className={tdBase + ' py-2'}>Parentesco</th>
-                <th className={tdBase + ' py-2'}>Tel Emerg.</th>
+                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('prepaga')} className="font-semibold uppercase text-sub hover:text-ink">Prepaga{sortArrow('prepaga')}</button></th>
+                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('tipo_contrato')} className="font-semibold uppercase text-sub hover:text-ink">Contrato{sortArrow('tipo_contrato')}</button></th>
+                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('codigo_os')} className="font-semibold uppercase text-sub hover:text-ink">Código OS{sortArrow('codigo_os')}</button></th>
+                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('telefono')} className="font-semibold uppercase text-sub hover:text-ink">Teléfono{sortArrow('telefono')}</button></th>
+                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('domicilio')} className="font-semibold uppercase text-sub hover:text-ink">Domicilio{sortArrow('domicilio')}</button></th>
+                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('email')} className="font-semibold uppercase text-sub hover:text-ink">Email{sortArrow('email')}</button></th>
+                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('contacto_emergencia')} className="font-semibold uppercase text-sub hover:text-ink">Contacto Emerg.{sortArrow('contacto_emergencia')}</button></th>
+                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('parentesco')} className="font-semibold uppercase text-sub hover:text-ink">Parentesco{sortArrow('parentesco')}</button></th>
+                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('telefono_emergencia')} className="font-semibold uppercase text-sub hover:text-ink">Tel Emerg.{sortArrow('telefono_emergencia')}</button></th>
                 <th className={tdBase + ' py-2 text-right'}>Acciones</th>
               </tr>
               <tr className="bg-surface/60">
-                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={columnasFiltro[0]!} filtros={filtros.legajo ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, legajo: v }))} /></th>
+                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={filtroDef('legajo')} filtros={filtros.legajo ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, legajo: v }))} /></th>
+                <th className={tdBase + ' py-1 align-top'} />
+                <th className={tdBase + ' py-1 align-top'} />
+                <th className={tdBase + ' py-1 align-top'} />
+                <th className={tdBase + ' py-1 align-top'} />
+                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={filtroDef('sexo')} filtros={filtros.sexo ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, sexo: v }))} /></th>
+                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={filtroDef('lugar')} filtros={filtros.lugar ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, lugar: v }))} /></th>
+                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={filtroDef('area_sector')} filtros={filtros.area_sector ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, area_sector: v }))} /></th>
+                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={filtroDef('categoria')} filtros={filtros.categoria ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, categoria: v }))} /></th>
+                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={filtroDef('puesto')} filtros={filtros.puesto ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, puesto: v }))} /></th>
+                <th className={tdBase + ' py-1 align-top'} />
+                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={filtroDef('convenio')} filtros={filtros.convenio ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, convenio: v }))} /></th>
                 <th className={tdBase + ' py-1 align-top'} />
                 <th className={tdBase + ' py-1 align-top'} />
                 <th className={tdBase + ' py-1 align-top'} />
                 <th className={tdBase + ' py-1 align-top'} />
                 <th className={tdBase + ' py-1 align-top'} />
-                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={columnasFiltro[1]!} filtros={filtros.lugar ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, lugar: v }))} /></th>
-                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={columnasFiltro[2]!} filtros={filtros.area_sector ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, area_sector: v }))} /></th>
-                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={columnasFiltro[3]!} filtros={filtros.categoria ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, categoria: v }))} /></th>
-                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={columnasFiltro[4]!} filtros={filtros.puesto ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, puesto: v }))} /></th>
-                <th className={tdBase + ' py-1 align-top'} />
-                <th className={tdBase + ' py-1 align-top'} />
-                <th className={tdBase + ' py-1 align-top'} />
-                <th className={tdBase + ' py-1 align-top'} />
-                <th className={tdBase + ' py-1 align-top'} />
-                <th className={tdBase + ' py-1 align-top'} />
-                <th className={tdBase + ' py-1 align-top'} />
-                <th className={tdBase + ' py-1 align-top'} />
-                <th className={tdBase + ' py-1 align-top'} />
-                <th className={tdBase + ' py-1 align-top'} />
+                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={filtroDef('prepaga')} filtros={filtros.prepaga ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, prepaga: v }))} /></th>
+                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={filtroDef('tipo_contrato')} filtros={filtros.tipo_contrato ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, tipo_contrato: v }))} /></th>
+                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={filtroDef('codigo_os')} filtros={filtros.codigo_os ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, codigo_os: v }))} /></th>
                 <th className={tdBase + ' py-1 align-top'} />
                 <th className={tdBase + ' py-1 align-top'} />
                 <th className={tdBase + ' py-1 align-top'} />
