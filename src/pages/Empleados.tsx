@@ -63,6 +63,13 @@ interface Empleado {
 }
 
 const ESTADO_LEGAJO_OPCIONES = ['NOMINA ACTIVA', 'PLANES ACTIVOS', 'BAJAS MITO', 'BAJAS PLANES']
+const ESTADO_POR_DEFECTO = 'NOMINA ACTIVA'
+
+/** Estado del legajo; los empleados sin estado cargado cuentan como nomina activa. */
+function estadoEfectivo(e: { estado_legajo: string | null }): string {
+  const s = (e.estado_legajo || '').toUpperCase().trim()
+  return ESTADO_LEGAJO_OPCIONES.includes(s) ? s : ESTADO_POR_DEFECTO
+}
 function estiloEstadoLegajo(s: string | null): string {
   switch ((s || '').toUpperCase()) {
     case 'NOMINA ACTIVA': return 'bg-emerald-500/15 text-emerald-400'
@@ -205,6 +212,10 @@ export default function Empleados() {
       { clave: 'estado_legajo', label: 'Estado', valores: [] },
     ]
     for (const d of defs) {
+      if (d.clave === 'estado_legajo') {
+        d.valores = [...ESTADO_LEGAJO_OPCIONES]
+        continue
+      }
       d.valores = Array.from(
         new Set(empleados.map((e) => String((e as unknown as Record<string, unknown>)[d.clave] ?? '')).filter((v) => v !== '')),
       ).sort((a, b) => a.localeCompare(b, 'es', { numeric: true }))
@@ -217,10 +228,12 @@ export default function Empleados() {
   const filtrados = useMemo(() => {
     const t = busqueda.trim().toUpperCase()
     const out = empleados.filter((e) => {
-      if (estado && (e.estado_legajo || '').toUpperCase() !== estado) return false
+      if (estado && estadoEfectivo(e) !== estado) return false
       for (const [clave, valores] of Object.entries(filtros)) {
         if (!valores || valores.length === 0) continue
-        const actual = String((e as unknown as Record<string, unknown>)[clave] ?? '')
+        const actual = clave === 'estado_legajo'
+          ? estadoEfectivo(e)
+          : String((e as unknown as Record<string, unknown>)[clave] ?? '')
         if (!valores.includes(actual)) return false
       }
       if (!t) return true
@@ -233,7 +246,8 @@ export default function Empleados() {
     })
     out.sort((a, b) => {
       const val = (e: Empleado) =>
-        sortKey === 'antiguedad_2025' ? mesesDesde(e.fecha_ingreso)
+        sortKey === 'estado_legajo' ? estadoEfectivo(e)
+        : sortKey === 'antiguedad_2025' ? mesesDesde(e.fecha_ingreso)
         : sortKey === 'dias_vacaciones_2025' ? vacacionesSegunAntiguedad(e.fecha_ingreso)
         : (e as unknown as Record<string, unknown>)[sortKey]
       const av = val(a)
@@ -345,6 +359,9 @@ export default function Empleados() {
             parentesco: val(row, 'parentesco') || null,
             telefono_emergencia: val(row, 'telefonico') || null,
           }
+          // Solo se toca el estado si el Excel trae la columna: asi no se pisan
+          // los legajos que ya fueron movidos a planes o bajas desde la app.
+          if (col('estado')) payload.estado_legajo = val(row, 'estado').toUpperCase() || null
           if (!payload.nombre) return null
           return payload
         }).filter((p): p is Record<string, unknown> => !!p)
@@ -385,7 +402,7 @@ export default function Empleados() {
         <aside className="shrink-0 lg:w-56">
           <div className="flex flex-row gap-1 overflow-x-auto rounded-2xl border border-line bg-surface p-2 lg:flex-col">
             {ESTADO_LEGAJO_OPCIONES.map((s) => {
-              const count = empleados.filter((e) => (e.estado_legajo || '').toUpperCase() === s).length
+              const count = empleados.filter((e) => estadoEfectivo(e) === s).length
               return (
                 <button
                   key={s}
@@ -518,7 +535,7 @@ export default function Empleados() {
                   <td className={tdBaseWrap}>{e.contacto_emergencia ?? '-'}</td>
                   <td className={tdBase}>{e.parentesco ?? '-'}</td>
                   <td className={tdBaseWrap}>{e.telefono_emergencia ?? '-'}</td>
-                  <td className={tdBaseWrap}><span className={'inline-block whitespace-nowrap rounded-full border px-2 py-px text-[10px] font-medium ' + estiloEstadoLegajo(e.estado_legajo)}>{e.estado_legajo || '-'}</span></td>
+                  <td className={tdBaseWrap}><span className={'inline-block whitespace-nowrap rounded-full border px-2 py-px text-[10px] font-medium ' + estiloEstadoLegajo(estadoEfectivo(e))}>{estadoEfectivo(e)}</span></td>
                   <td className={tdBase + ' text-right'}>
                     <div className="flex items-center justify-end gap-1">
                       {puedeEditar && <button onClick={() => { setSel(e); setModal('edit') }} className="rounded border border-line p-1 text-sub transition hover:text-ink" title="Editar"><Pencil size={11} aria-hidden /></button>}
