@@ -6,7 +6,7 @@ import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { usePermisosArea } from '@/hooks/usePermisosArea'
-import { SelectBuscar } from '@/components/MultiselectFiltro'
+import { SelectBuscar, AutocompleteCampo } from '@/components/MultiselectFiltro'
 import { nombresMotivos, colorFilaMotivo } from '@/lib/motivos'
 import { nombresTipos, invalidarTipos, cargarTipos } from '@/lib/tipos'
 
@@ -445,6 +445,16 @@ export default function CargaNovedades() {
     return r
   }, [todos, fAnio, fMes, fMotivo, fLocal, fTipo, q, orden, esMesEnCurso, empleadosLegajo])
 
+  // Autocompletar empleado (por nombre o N° de legajo) en el modal de novedad
+  const opcionesEmp = useMemo(
+    () => empleadosLegajo.map((e) => ({ id: `${e.legajo} - ${e.nombre}`, label: `${e.legajo} - ${e.nombre}` })),
+    [empleadosLegajo],
+  )
+  const elegirEmp = (v: string) => {
+    const emp = empleadosLegajo.find((e) => `${e.legajo} - ${e.nombre}` === v)
+    if (emp) { setNumero(emp.legajo); setNombre(emp.nombre) }
+  }
+
   return (
     <Layout>
       <BackButton />
@@ -575,8 +585,8 @@ export default function CargaNovedades() {
                     {mes && <span className="shrink-0 self-center text-[11px] text-sub/70" title={mes}>{mes}</span>}
                   </div>
                 </label>
-                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">N° legajo</span><input value={numero} onChange={(e) => setNumero(e.target.value)} placeholder="935" className={inputCls} /></label>
-                <label className="block sm:col-span-2"><span className="mb-0.5 block text-[11px] font-medium text-sub">Nombre completo *</span><input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="APELLIDO NOMBRE" className={inputCls} /></label>
+                <AutocompleteCampo label="N° legajo" opciones={opcionesEmp} valor={numero} onChange={(v) => { setNumero(v); elegirEmp(v) }} placeholder="935" className="block" />
+                <AutocompleteCampo label="Nombre completo *" opciones={opcionesEmp} valor={nombre} onChange={(v) => { setNombre(v); elegirEmp(v) }} placeholder="APELLIDO NOMBRE" className="block sm:col-span-2" />
                 <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Tipo</span>
                   <div className="flex gap-1">
                     <select value={tipo} onChange={(e) => setTipo(e.target.value)} className={selectCls + ' flex-1'}><option value="">--</option>{tipos.map((t) => <option key={t} value={t}>{t}</option>)}</select>
