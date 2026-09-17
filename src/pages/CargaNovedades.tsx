@@ -58,6 +58,16 @@ function fmtFecha(iso: string | null): string {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso
 }
 
+/** Días entre dos fechas ISO (inclusive). Devuelve null si falta alguna. */
+function diasDesdeHasta(desde: string | null, hasta: string | null): number | null {
+  if (!desde || !hasta) return null
+  const a = new Date(desde + 'T00:00:00')
+  const b = new Date(hasta + 'T00:00:00')
+  if (isNaN(a.getTime()) || isNaN(b.getTime())) return null
+  const dias = Math.round((b.getTime() - a.getTime()) / 86400000) + 1
+  return dias > 0 ? dias : null
+}
+
 /** Convierte un valor de celda Excel (numero de serie o dd/mm/yyyy) a fecha ISO (YYYY-MM-DD). */
 function fechaExcelAISO(v: unknown): string | null {
   if (v == null || v === '') return null
@@ -269,7 +279,7 @@ export default function CargaNovedades() {
       anio: anio.trim() || null, mes_liquidacion: mes.trim() || null, numero: numero.trim() || null,
       nombre_completo: nombre.trim() || null, tipo: tipo || null, fecha: fecha || null,
       desde: desde || null, hasta: hasta || null, local: local || null, motivo: motivo || null,
-      novedad: novedadTxt.trim() || null, minutos: minutos.trim() || null, control: control.trim() || null,
+      novedad: novedadTxt.trim() || null, minutos: motivo === 'TARDANZA' ? minutos.trim() || null : null, control: control.trim() || null,
     }
     const result = editId
       ? await supabase.from('novedades').update(payload).eq('id', editId)
@@ -430,7 +440,9 @@ export default function CargaNovedades() {
         const av = (a as unknown as Record<string, unknown>)[orden.clave]
         const bv = (b as unknown as Record<string, unknown>)[orden.clave]
         let c = 0
-        if (orden.clave === 'numero') {
+        if (orden.clave === 'dias') {
+          c = (diasDesdeHasta(a.desde, a.hasta) ?? -1) - (diasDesdeHasta(b.desde, b.hasta) ?? -1)
+        } else if (orden.clave === 'numero') {
           c = (Number(av) || 0) - (Number(bv) || 0)
         } else if (orden.clave === 'anio') {
           c = ((av ?? '') as string).localeCompare((bv ?? '') as string, undefined, { numeric: true })
@@ -512,7 +524,7 @@ export default function CargaNovedades() {
             <table className="w-full table-auto border-collapse text-sm leading-tight">
               <thead>
                 <tr className="bg-zinc-800 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-300">
-                  {([['anio', 'Año'], ['mes_liquidacion', 'Mes'], ['numero', 'N°'], ['nombre_completo', 'Nombre'], ['tipo', 'Tipo'], ['fecha', 'Fecha'], ['desde', 'Desde'], ['hasta', 'Hasta'], ['local', 'Local'], ['motivo', 'Motivo'], ['novedad', 'Novedad'], ['minutos', 'Min'], ['control', 'Control']] as const).map(([clave, label]) => (
+                  {([['anio', 'Año'], ['mes_liquidacion', 'Mes'], ['numero', 'N°'], ['nombre_completo', 'Nombre'], ['tipo', 'Tipo'], ['fecha', 'Fecha'], ['desde', 'Desde'], ['hasta', 'Hasta'], ['dias', 'Días'], ['local', 'Local'], ['motivo', 'Motivo'], ['novedad', 'Novedad'], ['minutos', 'Min'], ['control', 'Control']] as const).map(([clave, label]) => (
                     <th key={clave} className="px-2 py-2 whitespace-nowrap">
                       <button onClick={() => toggleOrden(clave)} className={'inline-flex items-center gap-1 uppercase tracking-wider transition hover:text-white ' + (orden?.clave === clave ? 'text-white' : '')} title={`Ordenar por ${label}`}>
                         {label}
@@ -539,6 +551,7 @@ export default function CargaNovedades() {
                       <td className="px-2 py-1.5 text-center">{fmtFecha(n.fecha)}</td>
                       <td className="px-2 py-1.5 text-center">{fmtFecha(n.desde)}</td>
                       <td className="px-2 py-1.5 text-center">{fmtFecha(n.hasta)}</td>
+                      <td className="px-2 py-1.5 text-center">{diasDesdeHasta(n.desde, n.hasta) ?? '-'}</td>
                       <td className="px-2 py-1.5">{n.local || '-'}</td>
                       <td className="px-2 py-1.5"><span className="inline-block whitespace-nowrap rounded-full border px-1.5 py-px text-[10px] font-medium" style={col ? { borderColor: col.fg + '66', backgroundColor: col.fg + '22', color: col.fg } : { borderColor: 'rgba(167,139,250,0.3)', backgroundColor: 'rgba(167,139,250,0.15)', color: '#a78bfa' }}>{n.motivo || '-'}</span></td>
                       <td className="px-2 py-1.5"><span className="block max-w-[200px] truncate" title={n.novedad || ''}>{n.novedad || '-'}</span></td>
@@ -599,7 +612,7 @@ export default function CargaNovedades() {
                 <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Local</span><select value={local} onChange={(e) => setLocal(e.target.value)} className={selectCls}><option value="">--</option>{LOCALES.map((l) => <option key={l} value={l}>{l}</option>)}</select></label>
                 <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Motivo</span><select value={motivo} onChange={(e) => setMotivo(e.target.value)} className={selectCls}><option value="">--</option>{motivos.map((m) => <option key={m} value={m}>{m}</option>)}</select></label>
                 <label className="block sm:col-span-3"><span className="mb-0.5 block text-[11px] font-medium text-sub">Novedad</span><input value={novedadTxt} onChange={(e) => setNovedadTxt(e.target.value)} placeholder="Detalle..." className={inputCls} /></label>
-                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Minutos</span><input value={minutos} onChange={(e) => setMinutos(e.target.value)} placeholder="30" className={inputCls} /></label>
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Minutos (solo TARDANZA)</span><input value={minutos} onChange={(e) => setMinutos(e.target.value)} disabled={motivo !== 'TARDANZA'} placeholder="30" className={inputCls + (motivo !== 'TARDANZA' ? ' cursor-not-allowed opacity-50' : '')} /></label>
                 <label className="block sm:col-span-4"><span className="mb-0.5 block text-[11px] font-medium text-sub">Control certificado / notificación</span><input value={control} onChange={(e) => setControl(e.target.value)} placeholder="OK / NO ENVIA CERTIFICADO" className={inputCls} /></label>
               </div>
             </form>
