@@ -68,6 +68,27 @@ const selectCls = inputCls + ' appearance-none'
 const tdBase = 'px-2 py-[3px] whitespace-nowrap'
 const tdBaseWrap = 'px-2 py-[3px]'
 
+/** Años completos desde una fecha ISO (yyyy-mm-dd) hasta hoy. */
+function aniosDesde(fechaIso: string | null): number {
+  if (!fechaIso) return 0
+  const d = new Date(fechaIso + 'T00:00:00')
+  if (isNaN(d.getTime())) return 0
+  const hoy = new Date()
+  let anios = hoy.getFullYear() - d.getFullYear()
+  const antes = hoy.getMonth() < d.getMonth() || (hoy.getMonth() === d.getMonth() && hoy.getDate() < d.getDate())
+  if (antes) anios--
+  return Math.max(0, anios)
+}
+
+/** Días de vacaciones según antigüedad: 1-4 años=14, 5-9=21, 10+=28. */
+function vacacionesSegunAntiguedad(fechaIso: string | null): number {
+  const a = aniosDesde(fechaIso)
+  if (a >= 10) return 28
+  if (a >= 5) return 21
+  if (a >= 1) return 14
+  return 0
+}
+
 export default function Empleados() {
   const { crear: puedeCrear, editar: puedeEditar, borrar: puedeBorrar } = usePermisosArea('rrhh.empleados')
   const [empleados, setEmpleados] = useState<Empleado[]>([])
@@ -161,8 +182,12 @@ export default function Empleados() {
       )
     })
     out.sort((a, b) => {
-      const av = (a as unknown as Record<string, unknown>)[sortKey]
-      const bv = (b as unknown as Record<string, unknown>)[sortKey]
+      const val = (e: Empleado) =>
+        sortKey === 'antiguedad_2025' ? aniosDesde(e.fecha_ingreso)
+        : sortKey === 'dias_vacaciones_2025' ? vacacionesSegunAntiguedad(e.fecha_ingreso)
+        : (e as unknown as Record<string, unknown>)[sortKey]
+      const av = val(a)
+      const bv = val(b)
       const sa = String(av ?? '').trim()
       const sb = String(bv ?? '').trim()
       if (sortKey === 'legajo' || sortKey === 'horas' || sortKey === 'antiguedad_2025' || sortKey === 'dias_vacaciones_2025') {
@@ -352,8 +377,8 @@ export default function Empleados() {
                 <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('comision')} className="font-semibold uppercase text-sub hover:text-ink">Comisión{sortArrow('comision')}</button></th>
                 <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('reingreso')} className="font-semibold uppercase text-sub hover:text-ink">Reingreso{sortArrow('reingreso')}</button></th>
                 <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('fecha_ingreso')} className="font-semibold uppercase text-sub hover:text-ink">Ingreso{sortArrow('fecha_ingreso')}</button></th>
-                <th className={tdBase + ' py-2 text-center'}><button type="button" onClick={() => toggleSort('antiguedad_2025')} className="font-semibold uppercase text-sub hover:text-ink">Antig. 2025{sortArrow('antiguedad_2025')}</button></th>
-                <th className={tdBase + ' py-2 text-center'}><button type="button" onClick={() => toggleSort('dias_vacaciones_2025')} className="font-semibold uppercase text-sub hover:text-ink">Vac. 2025{sortArrow('dias_vacaciones_2025')}</button></th>
+                <th className={tdBase + ' py-2 text-center'}><button type="button" onClick={() => toggleSort('antiguedad_2025')} className="font-semibold uppercase text-sub hover:text-ink">Antigüedad{sortArrow('antiguedad_2025')}</button></th>
+                <th className={tdBase + ' py-2 text-center'}><button type="button" onClick={() => toggleSort('dias_vacaciones_2025')} className="font-semibold uppercase text-sub hover:text-ink">Vacaciones{sortArrow('dias_vacaciones_2025')}</button></th>
                 <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('prepaga')} className="font-semibold uppercase text-sub hover:text-ink">Prepaga{sortArrow('prepaga')}</button></th>
                 <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('tipo_contrato')} className="font-semibold uppercase text-sub hover:text-ink">Contrato{sortArrow('tipo_contrato')}</button></th>
                 <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('codigo_os')} className="font-semibold uppercase text-sub hover:text-ink">Código OS{sortArrow('codigo_os')}</button></th>
@@ -413,8 +438,8 @@ export default function Empleados() {
                   <td className={tdBase}>{e.comision ?? '-'}</td>
                   <td className={tdBase}>{e.reingreso ?? '-'}</td>
                   <td className={tdBase}>{e.fecha_ingreso ?? '-'}</td>
-                  <td className={tdBase + ' text-center'}>{e.antiguedad_2025 ?? '-'}</td>
-                  <td className={tdBase + ' text-center'}>{e.dias_vacaciones_2025 ?? '-'}</td>
+                  <td className={tdBase + ' text-center'}>{aniosDesde(e.fecha_ingreso) || '-'}</td>
+                  <td className={tdBase + ' text-center'}>{vacacionesSegunAntiguedad(e.fecha_ingreso) || '-'}</td>
                   <td className={tdBase}>{e.prepaga ?? '-'}</td>
                   <td className={tdBase}>{e.tipo_contrato ?? '-'}</td>
                   <td className={tdBase}>{e.codigo_os ?? '-'}</td>
@@ -563,8 +588,8 @@ function EmpleadoModal({ registro, opciones, onClose, onSaved }: {
             <Campo label="Comisión"><input value={f.comision} onChange={(e) => set('comision', e.target.value)} className={inputCls} /></Campo>
             <Campo label="Reingreso"><input value={f.reingreso} onChange={(e) => set('reingreso', e.target.value)} className={inputCls} /></Campo>
             <Campo label="Fecha de ingreso"><input type="date" value={f.fecha_ingreso} onChange={(e) => set('fecha_ingreso', e.target.value)} className={inputCls} /></Campo>
-            <Campo label="Antigüedad 2025"><input value={f.antiguedad_2025} onChange={(e) => set('antiguedad_2025', e.target.value)} className={inputCls} /></Campo>
-            <Campo label="Días vacaciones 2025"><input value={f.dias_vacaciones_2025} onChange={(e) => set('dias_vacaciones_2025', e.target.value)} className={inputCls} /></Campo>
+            <Campo label="Antigüedad"><span className={inputCls + ' flex items-center text-sub'}>{aniosDesde(f.fecha_ingreso) ? `${aniosDesde(f.fecha_ingreso)} años` : '-'}</span></Campo>
+            <Campo label="Vacaciones"><span className={inputCls + ' flex items-center text-sub'}>{vacacionesSegunAntiguedad(f.fecha_ingreso) ? `${vacacionesSegunAntiguedad(f.fecha_ingreso)} días` : '-'}</span></Campo>
             <Campo label="CUIL"><input value={f.cuil} onChange={(e) => set('cuil', e.target.value)} className={inputCls} /></Campo>
             <Campo label="DNI"><input value={f.dni} onChange={(e) => set('dni', e.target.value)} className={inputCls} /></Campo>
             <Campo label="Fecha de nacimiento"><input type="date" value={f.fecha_nacimiento} onChange={(e) => set('fecha_nacimiento', e.target.value)} className={inputCls} /></Campo>
