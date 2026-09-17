@@ -58,10 +58,22 @@ interface Empleado {
   contacto_emergencia: string | null
   parentesco: string | null
   telefono_emergencia: string | null
+  estado_legajo: string | null
+}
+
+const ESTADO_LEGAJO_OPCIONES = ['NOMINA ACTIVA', 'PLANES ACTIVOS', 'BAJAS MITO', 'BAJAS PLANES']
+function estiloEstadoLegajo(s: string | null): string {
+  switch ((s || '').toUpperCase()) {
+    case 'NOMINA ACTIVA': return 'bg-emerald-500/15 text-emerald-400'
+    case 'PLANES ACTIVOS': return 'bg-sky-500/15 text-sky-400'
+    case 'BAJAS MITO': return 'bg-red-500/15 text-red-400'
+    case 'BAJAS PLANES': return 'bg-rose-500/15 text-rose-400'
+    default: return 'bg-line text-sub'
+  }
 }
 
 const CAMPOS =
-  'id,legajo,nombre,activo,lugar,area_sector,horas,convenio,categoria,puesto,comision,reingreso,fecha_ingreso,antiguedad_2025,dias_vacaciones_2025,cuil,dni,fecha_nacimiento,sexo,telefono,domicilio,email,codigo_os,prepaga,tipo_contrato,contacto_emergencia,parentesco,telefono_emergencia'
+  'id,legajo,nombre,activo,lugar,area_sector,horas,convenio,categoria,puesto,comision,reingreso,fecha_ingreso,antiguedad_2025,dias_vacaciones_2025,cuil,dni,fecha_nacimiento,sexo,telefono,domicilio,email,codigo_os,prepaga,tipo_contrato,contacto_emergencia,parentesco,telefono_emergencia,estado_legajo'
 
 const inputCls = 'w-full rounded-xl border border-line bg-surface2 px-3 py-1.5 text-[13px] text-ink outline-none transition duration-250 placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40'
 const selectCls = inputCls + ' appearance-none'
@@ -168,6 +180,7 @@ export default function Empleados() {
       { clave: 'prepaga', label: 'Prepaga', valores: [] },
       { clave: 'tipo_contrato', label: 'Contrato', valores: [] },
       { clave: 'codigo_os', label: 'Código OS', valores: [] },
+      { clave: 'estado_legajo', label: 'Estado', valores: [] },
     ]
     for (const d of defs) {
       d.valores = Array.from(
@@ -402,6 +415,7 @@ export default function Empleados() {
                 <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('contacto_emergencia')} className="font-semibold uppercase text-sub hover:text-ink">Contacto Emerg.{sortArrow('contacto_emergencia')}</button></th>
                 <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('parentesco')} className="font-semibold uppercase text-sub hover:text-ink">Parentesco{sortArrow('parentesco')}</button></th>
                 <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('telefono_emergencia')} className="font-semibold uppercase text-sub hover:text-ink">Tel Emerg.{sortArrow('telefono_emergencia')}</button></th>
+                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('estado_legajo')} className="font-semibold uppercase text-sub hover:text-ink">Estado{sortArrow('estado_legajo')}</button></th>
                 <th className={tdBase + ' py-2 text-right'}>Acciones</th>
               </tr>
               <tr className="bg-surface/60">
@@ -431,6 +445,7 @@ export default function Empleados() {
                 <th className={tdBase + ' py-1 align-top'} />
                 <th className={tdBase + ' py-1 align-top'} />
                 <th className={tdBase + ' py-1 align-top'} />
+                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={filtroDef('estado_legajo')} filtros={filtros.estado_legajo ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, estado_legajo: v }))} /></th>
                 <th className={tdBase + ' py-1 align-top'} />
               </tr>
             </thead>
@@ -463,6 +478,7 @@ export default function Empleados() {
                   <td className={tdBaseWrap}>{e.contacto_emergencia ?? '-'}</td>
                   <td className={tdBase}>{e.parentesco ?? '-'}</td>
                   <td className={tdBaseWrap}>{e.telefono_emergencia ?? '-'}</td>
+                  <td className={tdBaseWrap}><span className={'inline-block whitespace-nowrap rounded-full border px-2 py-px text-[10px] font-medium ' + estiloEstadoLegajo(e.estado_legajo)}>{e.estado_legajo || '-'}</span></td>
                   <td className={tdBase + ' text-right'}>
                     <div className="flex items-center justify-end gap-1">
                       {puedeEditar && <button onClick={() => { setSel(e); setModal('edit') }} className="rounded border border-line p-1 text-sub transition hover:text-ink" title="Editar"><Pencil size={11} aria-hidden /></button>}
@@ -531,6 +547,7 @@ function EmpleadoModal({ registro, opciones, onClose, onSaved }: {
       email: s(registro?.email), codigo_os: s(registro?.codigo_os), prepaga: s(registro?.prepaga),
       tipo_contrato: s(registro?.tipo_contrato), contacto_emergencia: s(registro?.contacto_emergencia),
       parentesco: s(registro?.parentesco), telefono_emergencia: s(registro?.telefono_emergencia),
+      estado_legajo: s(registro?.estado_legajo),
     }
   })
   const [busy, setBusy] = useState(false)
@@ -571,6 +588,7 @@ function EmpleadoModal({ registro, opciones, onClose, onSaved }: {
       contacto_emergencia: f.contacto_emergencia.trim() || null,
       parentesco: f.parentesco.trim() || null,
       telefono_emergencia: f.telefono_emergencia.trim() || null,
+      estado_legajo: f.estado_legajo.trim() || null,
     }
     // Evita crear/editar con un legajo que ya usa otro empleado
     const legajoTrim = f.legajo.trim()
@@ -654,6 +672,7 @@ function EmpleadoModal({ registro, opciones, onClose, onSaved }: {
             <Campo label="Contacto emergencia" span2><input value={f.contacto_emergencia} onChange={(e) => set('contacto_emergencia', e.target.value)} className={inputCls} /></Campo>
             <Campo label="Parentesco"><input value={f.parentesco} onChange={(e) => set('parentesco', e.target.value)} className={inputCls} /></Campo>
             <Campo label="Teléfono emergencia"><input value={f.telefono_emergencia} onChange={(e) => set('telefono_emergencia', e.target.value)} className={inputCls} /></Campo>
+            <Campo label="Estado legajo"><select value={f.estado_legajo} onChange={(e) => set('estado_legajo', e.target.value)} className={selectCls}><option value="">--</option>{ESTADO_LEGAJO_OPCIONES.map((o) => <option key={o} value={o}>{o}</option>)}</select></Campo>
             </div>
           </div>
           <div className="flex justify-end gap-2 border-t border-line px-5 py-3">
