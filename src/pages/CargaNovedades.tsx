@@ -220,7 +220,11 @@ export default function CargaNovedades() {
     if (fLocal) query = query.eq('local', fLocal)
     if (fTipo) query = query.eq('tipo', fTipo)
     const t = q.trim().toUpperCase()
-    if (t) query = query.or(`nombre_completo.ilike.%${t}%,numero.ilike.%${t}%`)
+    if (t) {
+      const m = t.match(/^(\d+)\s*-\s*.+$/)
+      if (m) query = query.eq('numero', m[1])
+      else query = query.or(`nombre_completo.ilike.%${t}%,numero.ilike.%${t}%`)
+    }
     const [tes, mts, tps] = await Promise.all([
       cargarTodas(query),
       nombresMotivos(),
@@ -421,9 +425,21 @@ export default function CargaNovedades() {
     if (fLocal) r = r.filter((n) => (n.local || '') === fLocal)
     if (fTipo) r = r.filter((n) => (n.tipo || '') === fTipo)
     const t = q.trim().toUpperCase()
-    if (t) r = r.filter((n) => (n.nombre_completo || '').toUpperCase().includes(t) || (n.numero || '').toUpperCase().includes(t))
-    // En el mes en curso: una fila por legajo aunque no tenga novedad cargada
-    if (esMesEnCurso) {
+    if (t) {
+      const m = t.match(/^(\d+)\s*-\s*.+$/)
+      const esNumero = /^\d+$/.test(t)
+      r = r.filter((n) => {
+        const num = (n.numero || '').trim()
+        const nom = (n.nombre_completo || '').toUpperCase()
+        if (m) return num === m[1]
+        if (esNumero) return num === t
+        return nom.includes(t) || num.includes(t)
+      })
+    }
+    // En el mes en curso: una fila por legajo aunque no tenga novedad cargada.
+    // Solo cuando no hay filtros de detalle (local/motivo/tipo/búsqueda), para no
+    // mezclar filas vacías con resultados filtrados.
+    if (esMesEnCurso && !fLocal && !fMotivo && !fTipo && !t) {
       const conNovedad = new Set(
         todos
           .filter((n) => mesCorto(n.mes_liquidacion) === fMes && (n.anio || '').trim() === fAnio)

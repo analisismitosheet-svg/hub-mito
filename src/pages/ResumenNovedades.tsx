@@ -185,12 +185,17 @@ export default function ResumenNovedades() {
     if (fMotivo) r = r.filter((n) => (n.motivo ?? '') === fMotivo)
     if (fLocal) r = r.filter((n) => (n.local ?? '') === fLocal)
     if (fTipo) r = r.filter((n) => (n.tipo ?? '') === fTipo)
-    if (term) r = r.filter((n) =>
-      (n.nombre_completo || '').toUpperCase().includes(term) ||
-      (n.numero || '').toUpperCase().includes(term) ||
-      (n.local || '').toUpperCase().includes(term) ||
-      (n.novedad || '').toUpperCase().includes(term)
-    )
+    if (term) {
+      const m = term.match(/^(\d+)\s*-\s*.+$/)
+      const esNumero = /^\d+$/.test(term)
+      r = r.filter((n) => {
+        const num = (n.numero || '').trim()
+        const nom = (n.nombre_completo || '').toUpperCase()
+        if (m) return num === m[1]
+        if (esNumero) return num === term
+        return nom.includes(term) || num.includes(term) || (n.local || '').toUpperCase().includes(term) || (n.novedad || '').toUpperCase().includes(term)
+      })
+    }
     return r
   }, [todos, fAnio, fMesDesde, fMesHasta, fMotivo, fLocal, fTipo, term])
 
