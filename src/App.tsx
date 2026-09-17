@@ -321,34 +321,10 @@ export default function App() {
             }
           />
           <Route
-            path="/rrhh/empleados/nomina-activa"
+            path="/rrhh/empleados/:estado"
             element={
               <PermissionRoute permiso="rrhh.empleados.view">
-                <EmpleadosPage estado="NOMINA ACTIVA" />
-              </PermissionRoute>
-            }
-          />
-          <Route
-            path="/rrhh/empleados/planes-activos"
-            element={
-              <PermissionRoute permiso="rrhh.empleados.view">
-                <EmpleadosPage estado="PLANES ACTIVOS" />
-              </PermissionRoute>
-            }
-          />
-          <Route
-            path="/rrhh/empleados/bajas-mito"
-            element={
-              <PermissionRoute permiso="rrhh.empleados.view">
-                <EmpleadosPage estado="BAJAS MITO" />
-              </PermissionRoute>
-            }
-          />
-          <Route
-            path="/rrhh/empleados/bajas-planes"
-            element={
-              <PermissionRoute permiso="rrhh.empleados.view">
-                <EmpleadosPage estado="BAJAS PLANES" />
+                <EmpleadosPage />
               </PermissionRoute>
             }
           />

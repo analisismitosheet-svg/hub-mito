@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Loader2, Plus, Trash2, Pencil, Search, SearchX, X, Upload, MapPin } from 'lucide-react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { Loader2, Plus, Trash2, Pencil, Search, SearchX, X, Upload, MapPin, Users } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
@@ -116,23 +116,28 @@ function vacacionesSegunAntiguedad(fechaIso: string | null): number {
   return Math.round((14 * m) / 12)
 }
 
-export default function Empleados({ estado = '' }: { estado?: string }) {
+const SLUG_ESTADO: Record<string, string> = {
+  'nomina-activa': 'NOMINA ACTIVA',
+  'planes-activos': 'PLANES ACTIVOS',
+  'bajas-mito': 'BAJAS MITO',
+  'bajas-planes': 'BAJAS PLANES',
+}
+const ESTADO_SLUG: Record<string, string> = {
+  'NOMINA ACTIVA': 'nomina-activa',
+  'PLANES ACTIVOS': 'planes-activos',
+  'BAJAS MITO': 'bajas-mito',
+  'BAJAS PLANES': 'bajas-planes',
+}
+
+export default function Empleados() {
   const navigate = useNavigate()
-  const RUTAS_ESTADO: Record<string, string> = {
-    '': '/rrhh/empleados',
-    'NOMINA ACTIVA': '/rrhh/empleados/nomina-activa',
-    'PLANES ACTIVOS': '/rrhh/empleados/planes-activos',
-    'BAJAS MITO': '/rrhh/empleados/bajas-mito',
-    'BAJAS PLANES': '/rrhh/empleados/bajas-planes',
-  }
+  const { estado: slug = '' } = useParams<{ estado?: string }>()
+  const estado = SLUG_ESTADO[slug] ?? ''
   const { crear: puedeCrear, editar: puedeEditar, borrar: puedeBorrar } = usePermisosArea('rrhh.empleados')
   const [empleados, setEmpleados] = useState<Empleado[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busqueda, setBusqueda] = useState('')
-  const [filtroEstado, setFiltroEstado] = useState(estado)
-
-  useEffect(() => { setFiltroEstado(estado) }, [estado])
   const [filtros, setFiltros] = useState<Record<string, string[]>>({})
   const [sortKey, setSortKey] = useState<string>('nombre')
   const [sortAsc, setSortAsc] = useState(true)
@@ -207,7 +212,7 @@ export default function Empleados({ estado = '' }: { estado?: string }) {
   const filtrados = useMemo(() => {
     const t = busqueda.trim().toUpperCase()
     const out = empleados.filter((e) => {
-      if (filtroEstado && (e.estado_legajo || '').toUpperCase() !== filtroEstado) return false
+      if (estado && (e.estado_legajo || '').toUpperCase() !== estado) return false
       for (const [clave, valores] of Object.entries(filtros)) {
         if (!valores || valores.length === 0) continue
         const actual = String((e as unknown as Record<string, unknown>)[clave] ?? '')
@@ -239,7 +244,7 @@ export default function Empleados({ estado = '' }: { estado?: string }) {
       return sortAsc ? cmp : -cmp
     })
     return out
-  }, [empleados, busqueda, filtros, sortKey, sortAsc, filtroEstado])
+  }, [empleados, busqueda, filtros, sortKey, sortAsc, estado])
 
   const hayFiltros = Object.values(filtros).some((v) => v.length > 0) || !!busqueda
 
@@ -365,48 +370,73 @@ export default function Empleados({ estado = '' }: { estado?: string }) {
     <Layout>
       <BackButton />
       <header className="mb-5 mt-2">
-        <h1 className="font-display text-2xl font-semibold text-ink">Empleados</h1>
-        <p className="mt-1 text-sm text-sub">Nómina de empleados: alta, edición y baja.</p>
+        <h1 className="font-display text-2xl font-semibold text-ink">Empleados {estado && <span className="text-lg font-normal text-sub">· {estado}</span>}</h1>
+        <p className="mt-1 text-sm text-sub">{estado ? `${estado}: alta, edición y baja.` : 'Seleccioná una categoría.'}</p>
       </header>
 
       {error && <p role="alert" className="mb-4 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
 
-      <div className="mb-3 flex flex-wrap items-end gap-2 rounded-2xl border border-line bg-surface p-3">
-        <label className="relative block flex-1 min-w-[200px]">
-          <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sub" aria-hidden />
-          <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar por nombre, legajo, DNI o área..." className={inputCls + ' pl-9'} />
-        </label>
-        {hayFiltros && (
-          <button onClick={() => { setBusqueda(''); setFiltros({}); navigate(RUTAS_ESTADO['']) }} className="btn-press rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line">Limpiar filtros</button>
-        )}
-        {puedeCrear && (
-          <button onClick={() => fileRef.current?.click()} disabled={importando} className="btn-press ml-auto inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface2 px-3 py-2 text-sm font-medium text-ink hover:bg-line disabled:opacity-50">
-            <Upload size={15} aria-hidden /> {importando ? 'Importando…' : 'Importar nómina'}
-          </button>
-        )}
-        <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void importarNomina(f); e.target.value = '' }} />
-      </div>
-
-      {importMsg && <p className="mb-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-400">{importMsg}</p>}
-
-      {/* Categorías de estado de legajo */}
-      <div className="mb-3 flex flex-wrap gap-2">
-        {['', ...ESTADO_LEGAJO_OPCIONES].map((s) => {
-          const etiqueta = s || 'TODOS'
-          const count = s
-            ? empleados.filter((e) => (e.estado_legajo || '').toUpperCase() === s).length
-            : empleados.length
-          return (
-            <button
-              key={s || 'todos'}
-              onClick={() => navigate(RUTAS_ESTADO[s])}
-              className={'rounded-xl border px-3 py-1.5 text-xs font-medium transition ' + (filtroEstado === s ? 'border-violet-600 bg-violet-600 text-white' : 'border-line bg-surface text-sub hover:bg-line')}
-            >
-              {etiqueta} <span className={'ml-1 ' + (filtroEstado === s ? 'text-white/70' : 'text-sub/60')}>({count})</span>
-            </button>
-          )
-        })}
-      </div>
+      {!estado ? (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {ESTADO_LEGAJO_OPCIONES.map((s) => {
+            const count = empleados.filter((e) => (e.estado_legajo || '').toUpperCase() === s).length
+            const estilo = {
+              'NOMINA ACTIVA': 'bg-emerald-500/15 text-emerald-600',
+              'PLANES ACTIVOS': 'bg-sky-500/15 text-sky-600',
+              'BAJAS MITO': 'bg-red-500/15 text-red-600',
+              'BAJAS PLANES': 'bg-rose-500/15 text-rose-600',
+            }[s]
+            return (
+              <button
+                key={s}
+                onClick={() => navigate(`/rrhh/empleados/${ESTADO_SLUG[s]}`)}
+                className="hub-card flex flex-col items-start gap-2 rounded-2xl border border-line bg-surface p-5 text-left shadow-soft transition hover:bg-line/20"
+              >
+                <div className={'flex h-10 w-10 items-center justify-center rounded-xl ' + estilo}><Users size={20} aria-hidden /></div>
+                <span className="font-display font-semibold text-ink">{s}</span>
+                <span className="text-sm text-sub">{count} empleado{count === 1 ? '' : 's'}</span>
+              </button>
+            )
+          })}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4 lg:flex-row">
+          <aside className="shrink-0 lg:w-56">
+            <div className="flex flex-row gap-1 overflow-x-auto rounded-2xl border border-line bg-surface p-2 lg:flex-col">
+              {['', ...ESTADO_LEGAJO_OPCIONES].map((s) => {
+                const etiqueta = s || 'TODOS'
+                const count = s
+                  ? empleados.filter((e) => (e.estado_legajo || '').toUpperCase() === s).length
+                  : empleados.length
+                return (
+                  <button
+                    key={s || 'todos'}
+                    onClick={() => navigate(s ? `/rrhh/empleados/${ESTADO_SLUG[s]}` : '/rrhh/empleados')}
+                    className={'whitespace-nowrap rounded-lg px-3 py-2 text-left text-xs font-medium transition ' + (estado === s ? 'bg-violet-600 text-white' : 'text-sub hover:bg-line hover:text-ink')}
+                  >
+                    {etiqueta} <span className={'ml-1 ' + (estado === s ? 'text-white/70' : 'text-sub/60')}>({count})</span>
+                  </button>
+                )
+              })}
+            </div>
+          </aside>
+          <div className="min-w-0 flex-1">
+            <div className="mb-3 flex flex-wrap items-end gap-2 rounded-2xl border border-line bg-surface p-3">
+              <label className="relative block flex-1 min-w-[200px]">
+                <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sub" aria-hidden />
+                <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar por nombre, legajo, DNI o área..." className={inputCls + ' pl-9'} />
+              </label>
+              {hayFiltros && (
+                <button onClick={() => { setBusqueda(''); setFiltros({}) }} className="btn-press rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line">Limpiar filtros</button>
+              )}
+              {puedeCrear && (
+                <button onClick={() => fileRef.current?.click()} disabled={importando} className="btn-press ml-auto inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface2 px-3 py-2 text-sm font-medium text-ink hover:bg-line disabled:opacity-50">
+                  <Upload size={15} aria-hidden /> {importando ? 'Importando…' : 'Importar nómina'}
+                </button>
+              )}
+              <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void importarNomina(f); e.target.value = '' }} />
+            </div>
+            {importMsg && <p className="mb-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-400">{importMsg}</p>}
 
       {cargando ? (
         <div className="flex items-center justify-center gap-2 py-10 text-sub">
@@ -521,6 +551,9 @@ export default function Empleados({ estado = '' }: { estado?: string }) {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+          </div>
         </div>
       )}
 
