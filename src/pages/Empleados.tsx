@@ -68,25 +68,41 @@ const selectCls = inputCls + ' appearance-none'
 const tdBase = 'px-2 py-[3px] whitespace-nowrap'
 const tdBaseWrap = 'px-2 py-[3px]'
 
-/** Años completos desde una fecha ISO (yyyy-mm-dd) hasta hoy. */
-function aniosDesde(fechaIso: string | null): number {
+/** Meses completos desde una fecha ISO (yyyy-mm-dd) hasta hoy. */
+function mesesDesde(fechaIso: string | null): number {
   if (!fechaIso) return 0
   const d = new Date(fechaIso + 'T00:00:00')
   if (isNaN(d.getTime())) return 0
   const hoy = new Date()
-  let anios = hoy.getFullYear() - d.getFullYear()
-  const antes = hoy.getMonth() < d.getMonth() || (hoy.getMonth() === d.getMonth() && hoy.getDate() < d.getDate())
-  if (antes) anios--
-  return Math.max(0, anios)
+  let meses = (hoy.getFullYear() - d.getFullYear()) * 12 + (hoy.getMonth() - d.getMonth())
+  if (hoy.getDate() < d.getDate()) meses--
+  return Math.max(0, meses)
 }
 
-/** Días de vacaciones según antigüedad: 1-4 años=14, 5-9=21, 10+=28. */
+/** Años completos desde una fecha ISO hasta hoy. */
+function aniosDesde(fechaIso: string | null): number {
+  return Math.floor(mesesDesde(fechaIso) / 12)
+}
+
+/** Texto de antigüedad: "X años Y meses" si supera el año, "X meses" si no llega. */
+function textoAntiguedad(fechaIso: string | null): string {
+  const m = mesesDesde(fechaIso)
+  if (m <= 0) return ''
+  const a = aniosDesde(fechaIso)
+  const rm = m % 12
+  if (a >= 1 && rm > 0) return `${a} año${a > 1 ? 's' : ''} ${rm} mes${rm > 1 ? 'es' : ''}`
+  if (a >= 1) return `${a} año${a > 1 ? 's' : ''}`
+  return `${m} mes${m > 1 ? 'es' : ''}`
+}
+
+/** Días de vacaciones: 1-4 años=14, 5-9=21, 10+=28; menos de 1 año = proporcional por meses. */
 function vacacionesSegunAntiguedad(fechaIso: string | null): number {
+  const m = mesesDesde(fechaIso)
   const a = aniosDesde(fechaIso)
   if (a >= 10) return 28
   if (a >= 5) return 21
   if (a >= 1) return 14
-  return 0
+  return Math.round((14 * m) / 12)
 }
 
 export default function Empleados() {
@@ -183,7 +199,7 @@ export default function Empleados() {
     })
     out.sort((a, b) => {
       const val = (e: Empleado) =>
-        sortKey === 'antiguedad_2025' ? aniosDesde(e.fecha_ingreso)
+        sortKey === 'antiguedad_2025' ? mesesDesde(e.fecha_ingreso)
         : sortKey === 'dias_vacaciones_2025' ? vacacionesSegunAntiguedad(e.fecha_ingreso)
         : (e as unknown as Record<string, unknown>)[sortKey]
       const av = val(a)
@@ -438,7 +454,7 @@ export default function Empleados() {
                   <td className={tdBase}>{e.comision ?? '-'}</td>
                   <td className={tdBase}>{e.reingreso ?? '-'}</td>
                   <td className={tdBase}>{e.fecha_ingreso ?? '-'}</td>
-                  <td className={tdBase + ' text-center'}>{aniosDesde(e.fecha_ingreso) || '-'}</td>
+                  <td className={tdBase + ' text-center'}>{textoAntiguedad(e.fecha_ingreso) || '-'}</td>
                   <td className={tdBase + ' text-center'}>{vacacionesSegunAntiguedad(e.fecha_ingreso) || '-'}</td>
                   <td className={tdBase}>{e.prepaga ?? '-'}</td>
                   <td className={tdBase}>{e.tipo_contrato ?? '-'}</td>
@@ -588,7 +604,7 @@ function EmpleadoModal({ registro, opciones, onClose, onSaved }: {
             <Campo label="Comisión"><input value={f.comision} onChange={(e) => set('comision', e.target.value)} className={inputCls} /></Campo>
             <Campo label="Reingreso"><input value={f.reingreso} onChange={(e) => set('reingreso', e.target.value)} className={inputCls} /></Campo>
             <Campo label="Fecha de ingreso"><input type="date" value={f.fecha_ingreso} onChange={(e) => set('fecha_ingreso', e.target.value)} className={inputCls} /></Campo>
-            <Campo label="Antigüedad"><span className={inputCls + ' flex items-center text-sub'}>{aniosDesde(f.fecha_ingreso) ? `${aniosDesde(f.fecha_ingreso)} años` : '-'}</span></Campo>
+            <Campo label="Antigüedad"><span className={inputCls + ' flex items-center text-sub'}>{textoAntiguedad(f.fecha_ingreso) || '-'}</span></Campo>
             <Campo label="Vacaciones"><span className={inputCls + ' flex items-center text-sub'}>{vacacionesSegunAntiguedad(f.fecha_ingreso) ? `${vacacionesSegunAntiguedad(f.fecha_ingreso)} días` : '-'}</span></Campo>
             <Campo label="CUIL"><input value={f.cuil} onChange={(e) => set('cuil', e.target.value)} className={inputCls} /></Campo>
             <Campo label="DNI"><input value={f.dni} onChange={(e) => set('dni', e.target.value)} className={inputCls} /></Campo>
