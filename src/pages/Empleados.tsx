@@ -121,6 +121,7 @@ export default function Empleados() {
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busqueda, setBusqueda] = useState('')
+  const [filtroEstado, setFiltroEstado] = useState('')
   const [filtros, setFiltros] = useState<Record<string, string[]>>({})
   const [sortKey, setSortKey] = useState<string>('nombre')
   const [sortAsc, setSortAsc] = useState(true)
@@ -195,6 +196,7 @@ export default function Empleados() {
   const filtrados = useMemo(() => {
     const t = busqueda.trim().toUpperCase()
     const out = empleados.filter((e) => {
+      if (filtroEstado && (e.estado_legajo || '').toUpperCase() !== filtroEstado) return false
       for (const [clave, valores] of Object.entries(filtros)) {
         if (!valores || valores.length === 0) continue
         const actual = String((e as unknown as Record<string, unknown>)[clave] ?? '')
@@ -226,7 +228,7 @@ export default function Empleados() {
       return sortAsc ? cmp : -cmp
     })
     return out
-  }, [empleados, busqueda, filtros, sortKey, sortAsc])
+  }, [empleados, busqueda, filtros, sortKey, sortAsc, filtroEstado])
 
   const hayFiltros = Object.values(filtros).some((v) => v.length > 0) || !!busqueda
 
@@ -364,7 +366,7 @@ export default function Empleados() {
           <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar por nombre, legajo, DNI o área..." className={inputCls + ' pl-9'} />
         </label>
         {hayFiltros && (
-          <button onClick={() => { setBusqueda(''); setFiltros({}) }} className="btn-press rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line">Limpiar filtros</button>
+          <button onClick={() => { setBusqueda(''); setFiltros({}); setFiltroEstado('') }} className="btn-press rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line">Limpiar filtros</button>
         )}
         {puedeCrear && (
           <button onClick={() => fileRef.current?.click()} disabled={importando} className="btn-press ml-auto inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface2 px-3 py-2 text-sm font-medium text-ink hover:bg-line disabled:opacity-50">
@@ -375,6 +377,26 @@ export default function Empleados() {
       </div>
 
       {importMsg && <p className="mb-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-400">{importMsg}</p>}
+
+      {/* Categorías de estado de legajo */}
+      <div className="mb-3 flex flex-wrap gap-2">
+        {['', ...ESTADO_LEGAJO_OPCIONES].map((s) => {
+          const etiqueta = s || 'TODOS'
+          const count = s
+            ? empleados.filter((e) => (e.estado_legajo || '').toUpperCase() === s).length
+            : empleados.length
+          const activo = filtroEstado === s
+          return (
+            <button
+              key={s || 'todos'}
+              onClick={() => setFiltroEstado(s)}
+              className={'rounded-xl border px-3 py-1.5 text-xs font-medium transition ' + (activo ? 'border-violet-600 bg-violet-600 text-white' : 'border-line bg-surface text-sub hover:bg-line')}
+            >
+              {etiqueta} <span className={'ml-1 ' + (activo ? 'text-white/70' : 'text-sub/60')}>({count})</span>
+            </button>
+          )
+        })}
+      </div>
 
       {cargando ? (
         <div className="flex items-center justify-center gap-2 py-10 text-sub">
