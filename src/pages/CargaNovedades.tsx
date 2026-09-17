@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Loader2, Pencil, Trash2, Megaphone, Check, Upload, Plus, X, Search, Download } from 'lucide-react'
+import { Loader2, Pencil, Trash2, Megaphone, Check, Upload, Plus, X, Download } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
@@ -535,18 +535,9 @@ export default function CargaNovedades() {
 
       {/* Filtros */}
       <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <div className="relative">
-          <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sub/70" aria-hidden />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="N° o nombre..." className={inputCls + ' h-7 pl-7 pr-2 text-xs'} />
-        </div>
-        <select value={fAnio} onChange={(e) => setFAnio(e.target.value)} className={selectCls + ' h-7 w-full px-2 py-0 text-xs'}>
-          <option value="">Año</option>
-          {aniosDisponibles.map((a) => <option key={a} value={a}>{a}</option>)}
-        </select>
-        <select value={fMes} onChange={(e) => setFMes(e.target.value)} className={selectCls + ' h-7 w-full px-2 py-0 text-xs'}>
-          <option value="">Mes</option>
-          {MESES_LIQUIDACION.map((m) => <option key={m} value={m}>{m}</option>)}
-        </select>
+        <AutocompleteCampo label="Legajo o nombre" opciones={opcionesEmp} valor={q} onChange={setQ} placeholder="Buscar por legajo o nombre..." className="block" />
+        <SelectBuscar label="Año" opciones={aniosDisponibles.map((a) => ({ id: a, label: a }))} valor={fAnio} onChange={setFAnio} className="h-7 w-full" />
+        <SelectBuscar label="Mes" opciones={MESES_LIQUIDACION.map((m) => ({ id: m, label: m }))} valor={fMes} onChange={setFMes} className="h-7 w-full" />
         <SelectBuscar label="Motivo" opciones={motivos.map((m) => ({ id: m, label: m }))} valor={fMotivo} onChange={setFMotivo} className="h-7 w-full" />
         <SelectBuscar label="Local" opciones={LOCALES.map((l) => ({ id: l, label: l }))} valor={fLocal} onChange={setFLocal} className="h-7 w-full" />
         <SelectBuscar label="Tipo" opciones={tipos.map((t) => ({ id: t, label: t }))} valor={fTipo} onChange={setFTipo} className="h-7 w-full" />

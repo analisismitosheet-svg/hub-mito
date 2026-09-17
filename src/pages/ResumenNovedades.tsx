@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Loader2, Search, SearchX, Megaphone, List, LayoutDashboard, Clock, Users, BadgeAlert, CalendarDays, Pencil, Trash2, Download } from 'lucide-react'
+import { Loader2, SearchX, Megaphone, List, LayoutDashboard, Clock, Users, BadgeAlert, CalendarDays, Pencil, Trash2, Download } from 'lucide-react'
 import { ResponsiveContainer, BarChart, Bar, Cell, LabelList, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { usePermisosArea } from '@/hooks/usePermisosArea'
-import { SelectBuscar } from '@/components/MultiselectFiltro'
+import { SelectBuscar, AutocompleteCampo } from '@/components/MultiselectFiltro'
 import { nombresMotivos, colorFilaMotivo } from '@/lib/motivos'
 import { nombresTipos } from '@/lib/tipos'
 
@@ -28,8 +28,6 @@ interface Novedad {
   control: string | null
   created_at: string
 }
-
-const inputCls = 'w-full rounded-xl border border-line bg-surface2 px-3 py-1.5 text-[13px] text-ink outline-none transition duration-250 placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40'
 
 const MESES = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE']
 const MESES_CORTOS = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC']
@@ -114,6 +112,7 @@ export default function ResumenNovedades() {
   const [motivos, setMotivos] = useState<string[]>([])
   const [tipos, setTipos] = useState<string[]>([])
   const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
+  const [empleadosResumen, setEmpleadosResumen] = useState<{ legajo: string; nombre: string }[]>([])
 
   const cargar = useCallback(async () => {
     if (!supabase) { setCargando(false); return }
@@ -146,6 +145,17 @@ export default function ResumenNovedades() {
 
   useEffect(() => { void cargar() }, [cargar])
 
+  // Empleados (legajo + nombre) para autocompletar el filtro por legajo o nombre
+  useEffect(() => {
+    if (!supabase) return
+    void supabase.from('empleados').select('legajo,nombre').not('legajo', 'is', null).then(({ data }) => {
+      const rows = ((data as { legajo: string | null; nombre: string | null }[] | null) ?? [])
+        .filter((e) => e.legajo && e.nombre)
+        .map((e) => ({ legajo: String(e.legajo), nombre: String(e.nombre) }))
+      setEmpleadosResumen(rows)
+    })
+  }, [])
+
   const anios = useMemo(
     () => Array.from(new Set(todos.map((n) => n.anio).filter((a): a is string => !!a))).sort((a, b) => b.localeCompare(a, 'es', { numeric: true })),
     [todos],
@@ -156,6 +166,11 @@ export default function ResumenNovedades() {
   )
 
   const term = q.trim().toUpperCase()
+
+  const opcionesResumen = useMemo(
+    () => empleadosResumen.map((e) => ({ id: `${e.legajo} - ${e.nombre}`, label: `${e.legajo} - ${e.nombre}` })),
+    [empleadosResumen],
+  )
   const lista = useMemo(() => {
     let r = todos
     if (fAnio) r = r.filter((n) => (n.anio ?? '') === fAnio)
@@ -369,13 +384,7 @@ export default function ResumenNovedades() {
           <span className="mb-0.5 block text-[11px] font-medium text-sub">Mes hasta</span>
           <SelectBuscar label="Mes" opciones={MESES.map((m) => ({ id: m, label: m }))} valor={fMesHasta} onChange={setFMesHasta} className="w-40" />
         </label>
-        <label className="block flex-1 min-w-[180px]">
-          <span className="mb-0.5 block text-[11px] font-medium text-sub">Legajo o nombre</span>
-          <div className="relative">
-            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sub/70" aria-hidden />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por legajo, nombre, novedad..." className={inputCls + ' pl-8 text-xs'} />
-          </div>
-        </label>
+        <AutocompleteCampo label="Legajo o nombre" opciones={opcionesResumen} valor={q} onChange={setQ} placeholder="Buscar por legajo o nombre..." className="w-72" />
         <label className="block">
           <span className="mb-0.5 block text-[11px] font-medium text-sub">Motivo</span>
           <SelectBuscar label="Motivo" opciones={motivos.map((m) => ({ id: m, label: m }))} valor={fMotivo} onChange={setFMotivo} className="w-44" />
