@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Loader2, Plus, Trash2, Pencil, Search, SearchX, X, Upload, MapPin } from 'lucide-react'
+import { Loader2, Plus, Trash2, Pencil, Search, SearchX, X, Upload, MapPin, Users, ClipboardList, UserMinus, UserX } from 'lucide-react'
 import Layout from '@/components/Layout'
+import AppCard from '@/components/AppCard'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
@@ -129,12 +130,13 @@ const SLUG_ESTADO: Record<string, string> = {
   'bajas-mito': 'BAJAS MITO',
   'bajas-planes': 'BAJAS PLANES',
 }
-const ESTADO_SLUG: Record<string, string> = {
-  'NOMINA ACTIVA': 'nomina-activa',
-  'PLANES ACTIVOS': 'planes-activos',
-  'BAJAS MITO': 'bajas-mito',
-  'BAJAS PLANES': 'bajas-planes',
-}
+/** Las 4 categorias se muestran como tarjetas, igual que las apps de un area. */
+const CATEGORIAS = [
+  { estado: 'NOMINA ACTIVA', slug: 'nomina-activa', titulo: 'Nómina Activa', detalle: 'Legajos activos de Mito.', icono: Users, color: '#10b981' },
+  { estado: 'PLANES ACTIVOS', slug: 'planes-activos', titulo: 'Planes Activos', detalle: 'Legajos de planes vigentes.', icono: ClipboardList, color: '#0ea5e9' },
+  { estado: 'BAJAS MITO', slug: 'bajas-mito', titulo: 'Bajas Mito', detalle: 'Legajos dados de baja en Mito.', icono: UserMinus, color: '#ef4444' },
+  { estado: 'BAJAS PLANES', slug: 'bajas-planes', titulo: 'Bajas Planes', detalle: 'Legajos de planes dados de baja.', icono: UserX, color: '#f43f5e' },
+]
 
 export default function Empleados() {
   const navigate = useNavigate()
@@ -190,11 +192,6 @@ export default function Empleados() {
   }, [])
 
   useEffect(() => { void cargar() }, [cargar])
-
-  // Si entrás a Empleados sin categoría, vas directo a Nómina Activa con el submenú lateral
-  useEffect(() => {
-    if (!estado) navigate('/rrhh/empleados/nomina-activa', { replace: true })
-  }, [estado, navigate])
 
   // Columnas filtrables y sus valores únicos (como los filtros de Excel)
   const columnasFiltro = useMemo(() => {
@@ -388,33 +385,64 @@ export default function Empleados() {
     }
   }
 
+  const conteo = (s: string) => empleados.filter((e) => estadoEfectivo(e) === s).length
+
+  // Portada: cada estado del legajo es una tarjeta a la que se entra
+  if (!estado) {
+    return (
+      <Layout>
+        <BackButton />
+        <div className="mb-6 flex items-center gap-3">
+          <div className="rounded-xl border p-3" style={{ color: '#7c3aed', backgroundColor: '#7c3aed24', borderColor: '#7c3aed40' }}>
+            <Users size={24} aria-hidden />
+          </div>
+          <h1 className="font-display text-2xl font-bold text-ink">Empleados</h1>
+        </div>
+
+        {error && <p role="alert" className="mb-4 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {CATEGORIAS.map((c, i) => {
+            const n = conteo(c.estado)
+            return (
+              <AppCard
+                key={c.slug}
+                index={i}
+                areaId="rrhh"
+                app={{
+                  id: c.slug,
+                  areaId: 'rrhh',
+                  title: c.titulo,
+                  description: cargando ? 'Cargando…' : `${n} legajo${n === 1 ? '' : 's'} · ${c.detalle}`,
+                  icon: c.icono,
+                  kind: 'internal',
+                  target: `/rrhh/empleados/${c.slug}`,
+                  color: c.color,
+                }}
+              />
+            )
+          })}
+        </div>
+      </Layout>
+    )
+  }
+
   return (
     <Layout>
       <BackButton />
-      <header className="mb-5 mt-2">
-        <h1 className="font-display text-2xl font-semibold text-ink">Empleados {estado && <span className="text-lg font-normal text-sub">· {estado}</span>}</h1>
-        <p className="mt-1 text-sm text-sub">{estado ? `${estado}: alta, edición y baja.` : 'Seleccioná una categoría.'}</p>
+      <header className="mb-5 mt-2 flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h1 className="font-display text-2xl font-semibold text-ink">Empleados <span className="text-lg font-normal text-sub">· {estado}</span></h1>
+          <p className="mt-1 text-sm text-sub">{estado}: alta, edición y baja.</p>
+        </div>
+        <button onClick={() => navigate('/rrhh/empleados')} className="btn-press rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-sub transition hover:text-ink">
+          Cambiar categoría
+        </button>
       </header>
 
       {error && <p role="alert" className="mb-4 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
 
-      <div className="flex flex-col gap-4 lg:flex-row">
-        <aside className="shrink-0 lg:w-56">
-          <div className="flex flex-row gap-1 overflow-x-auto rounded-2xl border border-line bg-surface p-2 lg:flex-col">
-            {ESTADO_LEGAJO_OPCIONES.map((s) => {
-              const count = empleados.filter((e) => estadoEfectivo(e) === s).length
-              return (
-                <button
-                  key={s}
-                  onClick={() => navigate(`/rrhh/empleados/${ESTADO_SLUG[s]}`)}
-                  className={'whitespace-nowrap rounded-lg px-3 py-2 text-left text-xs font-medium transition ' + (estado === s ? 'bg-violet-600 text-white' : 'text-sub hover:bg-line hover:text-ink')}
-                >
-                  {s} <span className={'ml-1 ' + (estado === s ? 'text-white/70' : 'text-sub/60')}>({count})</span>
-                </button>
-              )
-            })}
-          </div>
-        </aside>
+      <div className="flex flex-col gap-4">
         <div className="min-w-0 flex-1">
           <div className="mb-3 flex flex-wrap items-end gap-2 rounded-2xl border border-line bg-surface p-3">
             <label className="relative block flex-1 min-w-[200px]">
