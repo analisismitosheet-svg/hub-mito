@@ -424,7 +424,7 @@ export default function Empleados() {
               {filtrados.map((e) => (
                 <tr key={e.id} className="hover:bg-line/20">
                   <td className={tdBase + ' text-sub'}>{e.legajo ?? '-'}</td>
-                  <td className={tdBaseWrap + ' font-medium text-ink'}>{e.nombre}</td>
+                  <td className={tdBaseWrap + ' font-medium text-ink'}>{puedeEditar ? <button type="button" onClick={() => { setSel(e); setModal('edit') }} className="cursor-pointer text-left text-ink transition hover:text-brand-500" title="Editar empleado">{e.nombre}</button> : e.nombre}</td>
                   <td className={tdBase}>{e.dni ?? '-'}</td>
                   <td className={tdBase}>{e.cuil ?? '-'}</td>
                   <td className={tdBase}>{e.fecha_nacimiento ?? '-'}</td>
