@@ -535,6 +535,7 @@ function EmpleadoModal({ registro, opciones, onClose, onSaved }: {
   })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [mapaDir, setMapaDir] = useState(registro?.domicilio || '')
 
   const set = (k: string, v: string) => setF((prev) => ({ ...prev, [k]: v }))
 
@@ -610,7 +611,24 @@ function EmpleadoModal({ registro, opciones, onClose, onSaved }: {
             <Campo label="Sexo"><select value={f.sexo} onChange={(e) => set('sexo', e.target.value)} className={selectCls}><option value="">--</option><option value="F">F</option><option value="M">M</option></select></Campo>
             <Campo label="Teléfono"><input value={f.telefono} onChange={(e) => set('telefono', e.target.value)} className={inputCls} /></Campo>
             <Campo label="Email"><input value={f.email} onChange={(e) => set('email', e.target.value)} className={inputCls} /></Campo>
-            <Campo label="Domicilio" span3><input value={f.domicilio} onChange={(e) => set('domicilio', e.target.value)} className={inputCls} /></Campo>
+            <Campo label="Domicilio" span3>
+              <input value={f.domicilio} onChange={(e) => set('domicilio', e.target.value)} className={inputCls} />
+              <div className="mt-2 flex items-center gap-2">
+                <button type="button" onClick={() => setMapaDir(f.domicilio.trim())} className="btn-press rounded-lg border border-line bg-surface2 px-2.5 py-1 text-xs font-medium text-ink hover:bg-line">Ver en el mapa</button>
+                <span className="text-[10px] text-sub/70">{mapaDir ? `Mostrando: ${mapaDir}` : 'Escribí una dirección y tocá "Ver en el mapa".'}</span>
+              </div>
+              {mapaDir && (
+                <div className="mt-2 overflow-hidden rounded-xl border border-line">
+                  <iframe
+                    title={`Mapa de ${mapaDir}`}
+                    src={`https://maps.google.com/maps?q=${encodeURIComponent(mapaDir)}&t=&z=14&ie=UTF8&iwloc=&output=embed`}
+                    className="h-48 w-full border-0"
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                  />
+                </div>
+              )}
+            </Campo>
             <Campo label="Código OS"><input value={f.codigo_os} onChange={(e) => set('codigo_os', e.target.value)} className={inputCls} /></Campo>
             <Campo label="Prepaga"><input value={f.prepaga} onChange={(e) => set('prepaga', e.target.value)} className={inputCls} list="prepaga-list" /><datalist id="prepaga-list">{(opciones.prepaga ?? []).map((v) => <option key={v} value={v} />)}</datalist></Campo>
             <Campo label="Tipo de contrato"><input value={f.tipo_contrato} onChange={(e) => set('tipo_contrato', e.target.value)} className={inputCls} list="contrato-list" /><datalist id="contrato-list">{(opciones.tipo_contrato ?? []).map((v) => <option key={v} value={v} />)}</datalist></Campo>
