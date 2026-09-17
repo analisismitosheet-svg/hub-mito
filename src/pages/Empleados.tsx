@@ -622,18 +622,19 @@ function EmpleadoModal({ registro, opciones, onClose, onSaved }: {
             <Campo label="Sexo"><select value={f.sexo} onChange={(e) => set('sexo', e.target.value)} className={selectCls}><option value="">--</option><option value="F">F</option><option value="M">M</option></select></Campo>
             <Campo label="Teléfono"><input value={f.telefono} onChange={(e) => set('telefono', e.target.value)} className={inputCls} /></Campo>
             <Campo label="Email"><input value={f.email} onChange={(e) => set('email', e.target.value)} className={inputCls} /></Campo>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:col-span-2 lg:col-span-3 xl:col-span-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-5 sm:col-span-2 lg:col-span-3 xl:col-span-4">
               <Campo label="Domicilio">
                 <input value={f.domicilio} onChange={(e) => set('domicilio', e.target.value)} placeholder="Calle, número, localidad..." className={inputCls} />
               </Campo>
-              <div>
+              <div className="sm:col-span-4">
                 <span className="mb-1 block text-xs font-medium text-sub">Ubicación</span>
                 <div className="overflow-hidden rounded-xl border border-line">
                   <iframe
                     title={`Mapa de ${f.domicilio.trim() || 'Argentina'}`}
                     src={`https://maps.google.com/maps?q=${encodeURIComponent(f.domicilio.trim() || 'Argentina')}&t=m&z=15&ie=UTF8&iwloc=&markers=color:red%7C${encodeURIComponent(f.domicilio.trim() || 'Argentina')}&output=embed`}
-                    className="h-48 w-full border-0"
+                    className="h-64 w-full border-0"
                     loading="lazy"
+                    allowFullScreen
                     referrerPolicy="no-referrer-when-downgrade"
                   />
                   <a
