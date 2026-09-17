@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Loader2, Plus, Trash2, Pencil, Search, SearchX, X, Upload, MapPin, Users } from 'lucide-react'
+import { Loader2, Plus, Trash2, Pencil, Search, SearchX, X, Upload, MapPin } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
@@ -183,6 +183,11 @@ export default function Empleados() {
   }, [])
 
   useEffect(() => { void cargar() }, [cargar])
+
+  // Si entrás a Empleados sin categoría, vas directo a Nómina Activa con el submenú lateral
+  useEffect(() => {
+    if (!estado) navigate('/rrhh/empleados/nomina-activa', { replace: true })
+  }, [estado, navigate])
 
   // Columnas filtrables y sus valores únicos (como los filtros de Excel)
   const columnasFiltro = useMemo(() => {
@@ -376,67 +381,40 @@ export default function Empleados() {
 
       {error && <p role="alert" className="mb-4 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
 
-      {!estado ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {ESTADO_LEGAJO_OPCIONES.map((s) => {
-            const count = empleados.filter((e) => (e.estado_legajo || '').toUpperCase() === s).length
-            const estilo = {
-              'NOMINA ACTIVA': 'bg-emerald-500/15 text-emerald-600',
-              'PLANES ACTIVOS': 'bg-sky-500/15 text-sky-600',
-              'BAJAS MITO': 'bg-red-500/15 text-red-600',
-              'BAJAS PLANES': 'bg-rose-500/15 text-rose-600',
-            }[s]
-            return (
-              <button
-                key={s}
-                onClick={() => navigate(`/rrhh/empleados/${ESTADO_SLUG[s]}`)}
-                className="hub-card flex flex-col items-start gap-2 rounded-2xl border border-line bg-surface p-5 text-left shadow-soft transition hover:bg-line/20"
-              >
-                <div className={'flex h-10 w-10 items-center justify-center rounded-xl ' + estilo}><Users size={20} aria-hidden /></div>
-                <span className="font-display font-semibold text-ink">{s}</span>
-                <span className="text-sm text-sub">{count} empleado{count === 1 ? '' : 's'}</span>
-              </button>
-            )
-          })}
-        </div>
-      ) : (
-        <div className="flex flex-col gap-4 lg:flex-row">
-          <aside className="shrink-0 lg:w-56">
-            <div className="flex flex-row gap-1 overflow-x-auto rounded-2xl border border-line bg-surface p-2 lg:flex-col">
-              {['', ...ESTADO_LEGAJO_OPCIONES].map((s) => {
-                const etiqueta = s || 'TODOS'
-                const count = s
-                  ? empleados.filter((e) => (e.estado_legajo || '').toUpperCase() === s).length
-                  : empleados.length
-                return (
-                  <button
-                    key={s || 'todos'}
-                    onClick={() => navigate(s ? `/rrhh/empleados/${ESTADO_SLUG[s]}` : '/rrhh/empleados')}
-                    className={'whitespace-nowrap rounded-lg px-3 py-2 text-left text-xs font-medium transition ' + (estado === s ? 'bg-violet-600 text-white' : 'text-sub hover:bg-line hover:text-ink')}
-                  >
-                    {etiqueta} <span className={'ml-1 ' + (estado === s ? 'text-white/70' : 'text-sub/60')}>({count})</span>
-                  </button>
-                )
-              })}
-            </div>
-          </aside>
-          <div className="min-w-0 flex-1">
-            <div className="mb-3 flex flex-wrap items-end gap-2 rounded-2xl border border-line bg-surface p-3">
-              <label className="relative block flex-1 min-w-[200px]">
-                <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sub" aria-hidden />
-                <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar por nombre, legajo, DNI o área..." className={inputCls + ' pl-9'} />
-              </label>
-              {hayFiltros && (
-                <button onClick={() => { setBusqueda(''); setFiltros({}) }} className="btn-press rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line">Limpiar filtros</button>
-              )}
-              {puedeCrear && (
-                <button onClick={() => fileRef.current?.click()} disabled={importando} className="btn-press ml-auto inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface2 px-3 py-2 text-sm font-medium text-ink hover:bg-line disabled:opacity-50">
-                  <Upload size={15} aria-hidden /> {importando ? 'Importando…' : 'Importar nómina'}
+      <div className="flex flex-col gap-4 lg:flex-row">
+        <aside className="shrink-0 lg:w-56">
+          <div className="flex flex-row gap-1 overflow-x-auto rounded-2xl border border-line bg-surface p-2 lg:flex-col">
+            {ESTADO_LEGAJO_OPCIONES.map((s) => {
+              const count = empleados.filter((e) => (e.estado_legajo || '').toUpperCase() === s).length
+              return (
+                <button
+                  key={s}
+                  onClick={() => navigate(`/rrhh/empleados/${ESTADO_SLUG[s]}`)}
+                  className={'whitespace-nowrap rounded-lg px-3 py-2 text-left text-xs font-medium transition ' + (estado === s ? 'bg-violet-600 text-white' : 'text-sub hover:bg-line hover:text-ink')}
+                >
+                  {s} <span className={'ml-1 ' + (estado === s ? 'text-white/70' : 'text-sub/60')}>({count})</span>
                 </button>
-              )}
-              <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void importarNomina(f); e.target.value = '' }} />
-            </div>
-            {importMsg && <p className="mb-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-400">{importMsg}</p>}
+              )
+            })}
+          </div>
+        </aside>
+        <div className="min-w-0 flex-1">
+          <div className="mb-3 flex flex-wrap items-end gap-2 rounded-2xl border border-line bg-surface p-3">
+            <label className="relative block flex-1 min-w-[200px]">
+              <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sub" aria-hidden />
+              <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar por nombre, legajo, DNI o área..." className={inputCls + ' pl-9'} />
+            </label>
+            {hayFiltros && (
+              <button onClick={() => { setBusqueda(''); setFiltros({}) }} className="btn-press rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line">Limpiar filtros</button>
+            )}
+            {puedeCrear && (
+              <button onClick={() => fileRef.current?.click()} disabled={importando} className="btn-press ml-auto inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface2 px-3 py-2 text-sm font-medium text-ink hover:bg-line disabled:opacity-50">
+                <Upload size={15} aria-hidden /> {importando ? 'Importando…' : 'Importar nómina'}
+              </button>
+            )}
+            <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void importarNomina(f); e.target.value = '' }} />
+          </div>
+          {importMsg && <p className="mb-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-400">{importMsg}</p>}
 
       {cargando ? (
         <div className="flex items-center justify-center gap-2 py-10 text-sub">
@@ -555,7 +533,6 @@ export default function Empleados() {
       )}
           </div>
         </div>
-      )}
 
       {modal && (
         <EmpleadoModal
