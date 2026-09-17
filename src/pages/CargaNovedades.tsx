@@ -180,6 +180,7 @@ export default function CargaNovedades() {
   const [motivos, setMotivos] = useState<string[]>([])
   const [tipos, setTipos] = useState<string[]>([])
   const [abiertoTipos, setAbiertoTipos] = useState(false)
+  const [empleadosLegajo, setEmpleadosLegajo] = useState<{ legajo: string; nombre: string }[]>([])
 
   // Orden de la tabla
   const [orden, setOrden] = useState<{ clave: string; dir: 1 | -1 } | null>(null)
@@ -216,6 +217,17 @@ export default function CargaNovedades() {
   }, [fAnio, fMes, fMotivo, fLocal, fTipo, q])
 
   useEffect(() => { void cargar() }, [cargar])
+
+  // Empleados (legajo + nombre) para armar una fila por legajo en el mes en curso
+  useEffect(() => {
+    if (!supabase) return
+    void supabase.from('empleados').select('legajo,nombre').not('legajo', 'is', null).then(({ data }) => {
+      const rows = ((data as { legajo: string | null; nombre: string | null }[] | null) ?? [])
+        .filter((e) => e.legajo && e.nombre)
+        .map((e) => ({ legajo: String(e.legajo), nombre: String(e.nombre) }))
+      setEmpleadosLegajo(rows)
+    })
+  }, [])
 
   // Precargar novedad a editar desde ?editar=<id> (navegado desde Resumen)
   useEffect(() => {
@@ -370,6 +382,16 @@ export default function CargaNovedades() {
     return Array.from(set).sort((a, b) => b.localeCompare(a))
   }, [todos])
 
+  // Mes de liquidacion en curso (periodo del 26 al 25): las filas por legajo
+  // se arman solo cuando el filtro coincide con ese mes.
+  const mesEnCurso = useMemo(() => {
+    const hoy = new Date()
+    const anio = String(hoy.getFullYear() + (hoy.getDate() >= 26 ? 1 : 0))
+    const idx = (hoy.getDate() >= 26 ? hoy.getMonth() + 1 : hoy.getMonth()) % 12
+    return { anio, mes: MESES_LIQUIDACION[idx] }
+  }, [])
+  const esMesEnCurso = fAnio === mesEnCurso.anio && fMes === mesEnCurso.mes
+
   const lista = useMemo(() => {
     let r = todos
     if (fAnio) r = r.filter((n) => (n.anio || '').trim() === fAnio)
@@ -379,6 +401,27 @@ export default function CargaNovedades() {
     if (fTipo) r = r.filter((n) => (n.tipo || '') === fTipo)
     const t = q.trim().toUpperCase()
     if (t) r = r.filter((n) => (n.nombre_completo || '').toUpperCase().includes(t) || (n.numero || '').toUpperCase().includes(t))
+    // En el mes en curso: una fila por legajo aunque no tenga novedad cargada
+    if (esMesEnCurso) {
+      const conNovedad = new Set(
+        todos
+          .filter((n) => mesCorto(n.mes_liquidacion) === fMes && (n.anio || '').trim() === fAnio)
+          .map((n) => String(n.numero || '').trim()),
+      )
+      const vacias = empleadosLegajo
+        .filter((e) => !conNovedad.has(String(e.legajo).trim()))
+        .map((e): Novedad => ({
+          id: `vac-${e.legajo}`,
+          anio: fAnio,
+          mes_liquidacion: fMes,
+          numero: String(e.legajo),
+          nombre_completo: e.nombre,
+          tipo: null, fecha: null, desde: null, hasta: null, local: null,
+          motivo: null, novedad: null, minutos: null, control: null,
+          created_at: '',
+        }))
+      r = [...r, ...vacias]
+    }
     if (orden) {
       r = [...r].sort((a, b) => {
         const av = (a as unknown as Record<string, unknown>)[orden.clave]
@@ -397,7 +440,7 @@ export default function CargaNovedades() {
       })
     }
     return r
-  }, [todos, fAnio, fMes, fMotivo, fLocal, fTipo, q, orden])
+  }, [todos, fAnio, fMes, fMotivo, fLocal, fTipo, q, orden, esMesEnCurso, empleadosLegajo])
 
   return (
     <Layout>
@@ -472,8 +515,9 @@ export default function CargaNovedades() {
               <tbody className="divide-y divide-line/50 bg-surface">
                 {lista.map((n) => {
                   const col = colorFila(n.motivo)
+                  const esVacia = String(n.id).startsWith('vac-')
                   return (
-                    <tr key={n.id} style={col ? { backgroundColor: col.bg, color: col.fg } : undefined} className={'transition hover:brightness-110' + (col ? '' : ' hover:bg-line/20')}>
+                    <tr key={n.id} style={col ? { backgroundColor: col.bg, color: col.fg } : undefined} className={'transition ' + (esVacia ? 'opacity-50' : 'hover:brightness-110' + (col ? '' : ' hover:bg-line/20'))}>
                       <td className="px-2 py-1.5 text-sub">{n.anio || '-'}</td>
                       <td className="px-2 py-1.5 text-sub">{n.mes_liquidacion || '-'}</td>
                       <td className="px-2 py-1.5 text-sub">{n.numero || '-'}</td>
@@ -488,10 +532,12 @@ export default function CargaNovedades() {
                       <td className="px-2 py-1.5 text-center">{n.minutos || '-'}</td>
                       <td className="px-2 py-1.5">{n.control || '-'}</td>
                       <td className="px-2 py-1.5 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          {puedeEditar && <button onClick={() => abrirModal(n)} className="rounded border border-line p-1 transition hover:text-ink" title="Editar"><Pencil size={12} aria-hidden /></button>}
-                          {puedeBorrar && <button onClick={() => setConfirm({ message: `¿Eliminar la novedad de "${n.nombre_completo || '-'}"?`, onConfirm: () => void eliminar(n) })} className="rounded border border-line p-1 transition hover:text-red-400" title="Eliminar"><Trash2 size={12} aria-hidden /></button>}
-                        </div>
+                        {esVacia ? <span className="text-[10px] text-sub/50">Sin novedad</span> : (
+                          <div className="flex items-center justify-end gap-1">
+                            {puedeEditar && <button onClick={() => abrirModal(n)} className="rounded border border-line p-1 transition hover:text-ink" title="Editar"><Pencil size={12} aria-hidden /></button>}
+                            {puedeBorrar && <button onClick={() => setConfirm({ message: `¿Eliminar la novedad de "${n.nombre_completo || '-'}"?`, onConfirm: () => void eliminar(n) })} className="rounded border border-line p-1 transition hover:text-red-400" title="Eliminar"><Trash2 size={12} aria-hidden /></button>}
+                          </div>
+                        )}
                       </td>
                     </tr>
                   )})}
