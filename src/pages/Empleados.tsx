@@ -535,7 +535,6 @@ function EmpleadoModal({ registro, opciones, onClose, onSaved }: {
   })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [mapaDir, setMapaDir] = useState(registro?.domicilio || '')
 
   const set = (k: string, v: string) => setF((prev) => ({ ...prev, [k]: v }))
 
@@ -613,15 +612,11 @@ function EmpleadoModal({ registro, opciones, onClose, onSaved }: {
             <Campo label="Email"><input value={f.email} onChange={(e) => set('email', e.target.value)} className={inputCls} /></Campo>
             <Campo label="Domicilio" span3>
               <input value={f.domicilio} onChange={(e) => set('domicilio', e.target.value)} className={inputCls} />
-              <div className="mt-2 flex items-center gap-2">
-                <button type="button" onClick={() => setMapaDir(f.domicilio.trim())} className="btn-press rounded-lg border border-line bg-surface2 px-2.5 py-1 text-xs font-medium text-ink hover:bg-line">Ver en el mapa</button>
-                <span className="text-[10px] text-sub/70">{mapaDir ? `Mostrando: ${mapaDir}` : 'Escribí una dirección y tocá "Ver en el mapa".'}</span>
-              </div>
-              {mapaDir && (
+              {f.domicilio.trim() && (
                 <div className="mt-2 overflow-hidden rounded-xl border border-line">
                   <iframe
-                    title={`Mapa de ${mapaDir}`}
-                    src={`https://maps.google.com/maps?q=${encodeURIComponent(mapaDir)}&t=&z=14&ie=UTF8&iwloc=&output=embed`}
+                    title={`Mapa de ${f.domicilio}`}
+                    src={`https://maps.google.com/maps?q=${encodeURIComponent(f.domicilio.trim())}&t=&z=14&ie=UTF8&iwloc=&output=embed`}
                     className="h-48 w-full border-0"
                     loading="lazy"
                     referrerPolicy="no-referrer-when-downgrade"
