@@ -183,7 +183,7 @@ export default function CargaNovedades() {
   const [empleadosLegajo, setEmpleadosLegajo] = useState<{ legajo: string; nombre: string }[]>([])
 
   // Orden de la tabla
-  const [orden, setOrden] = useState<{ clave: string; dir: 1 | -1 } | null>(null)
+  const [orden, setOrden] = useState<{ clave: string; dir: 1 | -1 } | null>({ clave: 'nombre_completo', dir: 1 })
   const toggleOrden = (clave: string) =>
     setOrden((o) =>
       o?.clave === clave
