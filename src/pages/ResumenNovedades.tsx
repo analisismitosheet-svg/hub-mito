@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Loader2, Search, SearchX, Megaphone, List, LayoutDashboard, Clock, Users, BadgeAlert, CalendarDays, Pencil, Trash2 } from 'lucide-react'
+import { Loader2, Search, SearchX, Megaphone, List, LayoutDashboard, Clock, Users, BadgeAlert, CalendarDays, Pencil, Trash2, Download } from 'lucide-react'
 import { ResponsiveContainer, BarChart, Bar, Cell, LabelList, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -294,6 +294,30 @@ export default function ResumenNovedades() {
     setQ(''); setFAnio(''); setFMesDesde(''); setFMesHasta(''); setFMotivo(''); setFLocal(''); setFTipo('')
   }
 
+  async function exportarExcel() {
+    const XLSX = await import('xlsx')
+    const filas = lista.map((n) => ({
+      'Año': n.anio ?? '',
+      'Mes': n.mes_liquidacion ?? '',
+      'N°': n.numero ?? '',
+      'Nombre': n.nombre_completo ?? '',
+      'Tipo': n.tipo ?? '',
+      'Fecha': n.fecha ?? '',
+      'Desde': n.desde ?? '',
+      'Hasta': n.hasta ?? '',
+      'Días': esMotivoDias(n.motivo) ? diasEntre(n.desde, n.hasta) : '',
+      'Local': n.local ?? '',
+      'Motivo': n.motivo ?? '',
+      'Novedad': n.novedad ?? '',
+      'Minutos': n.minutos ?? '',
+      'Control': n.control ?? '',
+    }))
+    const ws = XLSX.utils.json_to_sheet(filas)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Novedades')
+    XLSX.writeFile(wb, `resumen_novedades_${fMesDesde || 'todas'}.xlsx`)
+  }
+
   async function eliminar(n: Novedad) {
     if (!supabase) return
     const { error: err } = await supabase.from('novedades').delete().eq('id', n.id)
@@ -318,6 +342,13 @@ export default function ResumenNovedades() {
             <button onClick={() => setVista('dashboard')} className={'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition ' + (vista === 'dashboard' ? 'bg-brand-600/25 text-brand-400' : 'text-sub hover:text-ink')}><LayoutDashboard size={13} aria-hidden /> Gráficos</button>
             <button onClick={() => setVista('tabla')} className={'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition ' + (vista === 'tabla' ? 'bg-brand-600/25 text-brand-400' : 'text-sub hover:text-ink')}><List size={13} aria-hidden /> Detalle</button>
           </div>
+          <button
+            onClick={() => void exportarExcel()}
+            className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+            title="Exportar a Excel las novedades filtradas"
+          >
+            <Download size={15} aria-hidden /> Exportar
+          </button>
         </div>
         <p className="text-xs text-sub/70">Estadísticas y comparativas de novedades (los meses van del 26 al 25).</p>
       </header>

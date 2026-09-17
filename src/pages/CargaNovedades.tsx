@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Loader2, Pencil, Trash2, Megaphone, Check, Upload, Plus, X, Search } from 'lucide-react'
+import { Loader2, Pencil, Trash2, Megaphone, Check, Upload, Plus, X, Search, Download } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
@@ -477,6 +477,30 @@ export default function CargaNovedades() {
     if (emp) { setNumero(emp.legajo); setNombre(emp.nombre) }
   }
 
+  async function exportarExcel() {
+    const XLSX = await import('xlsx')
+    const filas = lista.map((n) => ({
+      'Año': n.anio ?? '',
+      'Mes': n.mes_liquidacion ?? '',
+      'N°': n.numero ?? '',
+      'Nombre': n.nombre_completo ?? '',
+      'Tipo': n.tipo ?? '',
+      'Fecha': n.fecha ?? '',
+      'Desde': n.desde ?? '',
+      'Hasta': n.hasta ?? '',
+      'Días': esMotivoConDias(n.motivo) ? diasDesdeHasta(n.desde, n.hasta) ?? '' : '',
+      'Local': n.local ?? '',
+      'Motivo': n.motivo ?? '',
+      'Novedad': n.novedad ?? '',
+      'Minutos': n.minutos ?? '',
+      'Control': n.control ?? '',
+    }))
+    const ws = XLSX.utils.json_to_sheet(filas)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Novedades')
+    XLSX.writeFile(wb, `novedades_${fMes || 'todas'}_${fAnio || ''}.xlsx`)
+  }
+
   return (
     <Layout>
       <BackButton />
@@ -488,6 +512,13 @@ export default function CargaNovedades() {
           </div>
           <div className="flex items-center gap-2">
             <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void importarExcel(f); e.target.value = '' }} />
+            <button
+              onClick={() => void exportarExcel()}
+              className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+              title="Exportar a Excel las novedades filtradas"
+            >
+              <Download size={15} aria-hidden /> Exportar
+            </button>
             <button
               onClick={() => fileRef.current?.click()}
               disabled={importando}
