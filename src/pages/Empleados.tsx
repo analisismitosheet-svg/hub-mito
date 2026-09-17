@@ -448,7 +448,7 @@ export default function Empleados() {
 
       <ConfirmDialog open={!!confirm} message={confirm?.message ?? ''} onCancel={() => setConfirm(null)} onConfirm={() => { confirm?.onConfirm(); setConfirm(null) }} />
 
-      {puedeCrear && (
+      {puedeCrear && !modal && (
         <button
           ref={fabRef}
           onMouseDown={fabDown}

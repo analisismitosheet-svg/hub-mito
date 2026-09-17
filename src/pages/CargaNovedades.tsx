@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Loader2, Pencil, Trash2, Megaphone, Check, Upload, Plus, X, Search } from 'lucide-react'
 import Layout from '@/components/Layout'
@@ -118,6 +118,32 @@ export default function CargaNovedades() {
   const [importando, setImportando] = useState(false)
   const [importMsg, setImportMsg] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const fabRef = useRef<HTMLButtonElement>(null)
+  const [fabPos, setFabPos] = useState<{ x: number; y: number } | null>(null)
+  const fabDrag = useRef<{ sx: number; sy: number; ox: number; oy: number; moved: boolean } | null>(null)
+
+  function fabDown(e: ReactMouseEvent) {
+    e.preventDefault()
+    const rect = fabRef.current?.getBoundingClientRect()
+    const ox = fabPos?.x ?? (rect ? rect.left : window.innerWidth - 190)
+    const oy = fabPos?.y ?? (rect ? rect.top : window.innerHeight - 70)
+    fabDrag.current = { sx: e.clientX, sy: e.clientY, ox, oy, moved: false }
+    const onMove = (ev: MouseEvent) => {
+      const d = fabDrag.current
+      if (!d) return
+      if (Math.abs(ev.clientX - d.sx) + Math.abs(ev.clientY - d.sy) > 4) d.moved = true
+      setFabPos({
+        x: Math.max(0, Math.min(window.innerWidth - 190, d.ox + (ev.clientX - d.sx))),
+        y: Math.max(0, Math.min(window.innerHeight - 56, d.oy + (ev.clientY - d.sy))),
+      })
+    }
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
 
   // Modal de carga (a pantalla completa)
   const [modalAbierto, setModalAbierto] = useState(false)
@@ -391,12 +417,6 @@ export default function CargaNovedades() {
             >
               {importando ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Upload size={15} aria-hidden />} Importar
             </button>
-            <button
-              onClick={() => abrirModal(null)}
-              className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-3 py-2 text-sm font-medium text-white hover:bg-violet-700"
-            >
-              <Plus size={15} aria-hidden /> Nueva Novedad
-            </button>
           </div>
         </div>
       </header>
@@ -542,6 +562,28 @@ export default function CargaNovedades() {
       )}
 
       <ConfirmDialog open={!!confirm} message={confirm?.message ?? ''} onCancel={() => setConfirm(null)} onConfirm={() => { confirm?.onConfirm(); setConfirm(null) }} />
+
+      {!modalAbierto && (
+        <button
+          ref={fabRef}
+          onMouseDown={fabDown}
+          onClick={() => { if (fabDrag.current?.moved) { fabDrag.current.moved = false; return } abrirModal(null) }}
+          style={{
+            position: 'fixed',
+            left: fabPos ? fabPos.x : undefined,
+            top: fabPos ? fabPos.y : undefined,
+            bottom: fabPos ? undefined : '1.5rem',
+            right: fabPos ? undefined : '1.5rem',
+            zIndex: 50,
+            touchAction: 'none',
+          }}
+          title="Nueva Novedad (arrastra para mover)"
+          aria-label="Nueva Novedad"
+          className="btn-press inline-flex cursor-grab select-none items-center gap-1.5 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-medium text-white shadow-lg shadow-violet-600/30 hover:bg-violet-700 active:cursor-grabbing"
+        >
+          <Plus size={15} aria-hidden /> Nueva Novedad
+        </button>
+      )}
     </Layout>
 )
 }
