@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { Loader2, Cake, ChevronLeft, ChevronRight, ImagePlus } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
-import EditorCumple, { type CumpleFila } from '@/components/EditorCumple'
+import type { CumpleFila } from '@/components/EditorCumple'
 import { supabase } from '@/lib/supabase'
+const EditorCumple = lazy(() => import('@/components/EditorCumple'))
 
 interface EmpleadoCumple {
   id: string
@@ -147,11 +148,13 @@ export default function Cumpleanios() {
       )}
 
       {editorAbierto && (
-        <EditorCumple
-          titulo={`${nombreMes} ${anio}`}
-          filas={filasEditor}
-          onClose={() => setEditorAbierto(false)}
-        />
+        <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center gap-2 bg-black/70 text-sm text-white">Cargando editor... <Loader2 size={16} className="animate-spin" aria-hidden /></div>}>
+          <EditorCumple
+            titulo={`${nombreMes} ${anio}`}
+            filas={filasEditor}
+            onClose={() => setEditorAbierto(false)}
+          />
+        </Suspense>
       )}
     </Layout>
   )
