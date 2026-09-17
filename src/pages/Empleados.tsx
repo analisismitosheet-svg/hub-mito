@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Loader2, Plus, Trash2, Pencil, Search, SearchX, X, Upload, MapPin } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -115,13 +116,23 @@ function vacacionesSegunAntiguedad(fechaIso: string | null): number {
   return Math.round((14 * m) / 12)
 }
 
-export default function Empleados() {
+export default function Empleados({ estado = '' }: { estado?: string }) {
+  const navigate = useNavigate()
+  const RUTAS_ESTADO: Record<string, string> = {
+    '': '/rrhh/empleados',
+    'NOMINA ACTIVA': '/rrhh/empleados/nomina-activa',
+    'PLANES ACTIVOS': '/rrhh/empleados/planes-activos',
+    'BAJAS MITO': '/rrhh/empleados/bajas-mito',
+    'BAJAS PLANES': '/rrhh/empleados/bajas-planes',
+  }
   const { crear: puedeCrear, editar: puedeEditar, borrar: puedeBorrar } = usePermisosArea('rrhh.empleados')
   const [empleados, setEmpleados] = useState<Empleado[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busqueda, setBusqueda] = useState('')
-  const [filtroEstado, setFiltroEstado] = useState('')
+  const [filtroEstado, setFiltroEstado] = useState(estado)
+
+  useEffect(() => { setFiltroEstado(estado) }, [estado])
   const [filtros, setFiltros] = useState<Record<string, string[]>>({})
   const [sortKey, setSortKey] = useState<string>('nombre')
   const [sortAsc, setSortAsc] = useState(true)
@@ -366,7 +377,7 @@ export default function Empleados() {
           <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar por nombre, legajo, DNI o área..." className={inputCls + ' pl-9'} />
         </label>
         {hayFiltros && (
-          <button onClick={() => { setBusqueda(''); setFiltros({}); setFiltroEstado('') }} className="btn-press rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line">Limpiar filtros</button>
+          <button onClick={() => { setBusqueda(''); setFiltros({}); navigate(RUTAS_ESTADO['']) }} className="btn-press rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line">Limpiar filtros</button>
         )}
         {puedeCrear && (
           <button onClick={() => fileRef.current?.click()} disabled={importando} className="btn-press ml-auto inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface2 px-3 py-2 text-sm font-medium text-ink hover:bg-line disabled:opacity-50">
@@ -385,14 +396,13 @@ export default function Empleados() {
           const count = s
             ? empleados.filter((e) => (e.estado_legajo || '').toUpperCase() === s).length
             : empleados.length
-          const activo = filtroEstado === s
           return (
             <button
               key={s || 'todos'}
-              onClick={() => setFiltroEstado(s)}
-              className={'rounded-xl border px-3 py-1.5 text-xs font-medium transition ' + (activo ? 'border-violet-600 bg-violet-600 text-white' : 'border-line bg-surface text-sub hover:bg-line')}
+              onClick={() => navigate(RUTAS_ESTADO[s])}
+              className={'rounded-xl border px-3 py-1.5 text-xs font-medium transition ' + (filtroEstado === s ? 'border-violet-600 bg-violet-600 text-white' : 'border-line bg-surface text-sub hover:bg-line')}
             >
-              {etiqueta} <span className={'ml-1 ' + (activo ? 'text-white/70' : 'text-sub/60')}>({count})</span>
+              {etiqueta} <span className={'ml-1 ' + (filtroEstado === s ? 'text-white/70' : 'text-sub/60')}>({count})</span>
             </button>
           )
         })}
