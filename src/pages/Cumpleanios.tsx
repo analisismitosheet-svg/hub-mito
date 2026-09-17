@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Loader2, Cake, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Loader2, Cake, ChevronLeft, ChevronRight, ImagePlus } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
+import EditorCumple, { type CumpleFila } from '@/components/EditorCumple'
 import { supabase } from '@/lib/supabase'
 
 interface EmpleadoCumple {
@@ -22,6 +23,7 @@ export default function Cumpleanios() {
   const [empleados, setEmpleados] = useState<EmpleadoCumple[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [editorAbierto, setEditorAbierto] = useState(false)
 
   const cargar = useCallback(async () => {
     if (!supabase) { setCargando(false); return }
@@ -57,6 +59,13 @@ export default function Cumpleanios() {
     [delMes],
   )
 
+  // Filas ordenadas por día para el editor de imagen
+  const filasEditor = useMemo<CumpleFila[]>(() => {
+    const out: CumpleFila[] = []
+    for (const [dia, arr] of delMes) for (const e of arr) out.push({ nombre: (e.nombre || '').trim() || 'Sin nombre', dia, mes: mes + 1 })
+    return out.sort((a, b) => a.dia - b.dia)
+  }, [delMes, mes])
+
   // Celdas del calendario (días del mes + huecos iniciales)
   const celdas = useMemo(() => {
     const primerDia = new Date(anio, mes, 1)
@@ -87,6 +96,14 @@ export default function Cumpleanios() {
           <button onClick={irHoy} className="rounded-lg px-2 py-1 text-xs font-medium text-sub hover:text-ink" title="Ir al mes actual">{nombreMes} {anio}</button>
           <button onClick={mesSiguiente} className="rounded-lg p-1.5 text-sub transition hover:bg-line hover:text-ink" title="Mes siguiente"><ChevronRight size={16} aria-hidden /></button>
         </div>
+        <button
+          onClick={() => setEditorAbierto(true)}
+          disabled={filasEditor.length === 0}
+          className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+          title="Generar imagen del listado"
+        >
+          <ImagePlus size={15} aria-hidden /> Editor imagen
+        </button>
       </header>
 
       {error && <p role="alert" className="mb-4 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
@@ -127,6 +144,14 @@ export default function Cumpleanios() {
             </div>
           </div>
         </>
+      )}
+
+      {editorAbierto && (
+        <EditorCumple
+          titulo={`${nombreMes} ${anio}`}
+          filas={filasEditor}
+          onClose={() => setEditorAbierto(false)}
+        />
       )}
     </Layout>
   )
