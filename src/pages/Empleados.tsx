@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react'
-import { Loader2, Plus, Trash2, Pencil, Search, SearchX, X, Upload } from 'lucide-react'
+import { Loader2, Plus, Trash2, Pencil, Search, SearchX, X, Upload, MapPin } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
@@ -616,11 +616,19 @@ function EmpleadoModal({ registro, opciones, onClose, onSaved }: {
                 <div className="mt-2 overflow-hidden rounded-xl border border-line">
                   <iframe
                     title={`Mapa de ${f.domicilio}`}
-                    src={`https://maps.google.com/maps?q=${encodeURIComponent(f.domicilio.trim())}&t=&z=14&ie=UTF8&iwloc=&output=embed`}
-                    className="h-48 w-full border-0"
+                    src={`https://maps.google.com/maps?q=${encodeURIComponent(f.domicilio.trim())}&t=m&z=15&ie=UTF8&iwloc=&markers=color:red%7C${encodeURIComponent(f.domicilio.trim())}&output=embed`}
+                    className="h-52 w-full border-0"
                     loading="lazy"
                     referrerPolicy="no-referrer-when-downgrade"
                   />
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(f.domicilio.trim())}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-1.5 border-t border-line bg-surface2 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-line hover:text-red-700"
+                  >
+                    <MapPin size={13} aria-hidden /> Abrir en Google Maps
+                  </a>
                 </div>
               )}
             </Campo>
