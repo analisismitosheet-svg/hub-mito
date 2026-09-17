@@ -253,6 +253,9 @@ export default function CargaNovedades() {
       setLocal(n.local || ''); setMotivo(n.motivo || ''); setNovedadTxt(n.novedad || ''); setMinutos(n.minutos || ''); setControl(n.control || '')
     } else {
       reset()
+      // Nueva novedad: precarga el mes/año del filtro para que coincida con la fila vacía
+      setAnio(fAnio)
+      setMes(fMes ? textoMes(fMes) : '')
     }
     setModalAbierto(true)
   }
