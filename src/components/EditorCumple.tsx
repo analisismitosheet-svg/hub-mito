@@ -8,7 +8,7 @@ export interface CumpleFila { nombre: string; dia: number; mes: number }
 const W = 800
 const H = 1100
 const STORAGE_KEY = 'plantilla_cumple_url'
-const DEFAULT_URL = import.meta.env.VITE_URL_PLANTILLA_CUMPLE?.trim() || ''
+const DEFAULT_URL = import.meta.env.VITE_URL_PLANTILLA_CUMPLE?.trim() || '/plantilla-cumpleanos.jpeg'
 
 const ddmm = (dia: number, mes: number) => `${String(dia).padStart(2, '0')}/${String(mes).padStart(2, '0')}`
 
