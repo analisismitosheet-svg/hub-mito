@@ -4,6 +4,7 @@ import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import type { CumpleFila } from '@/components/EditorCumple'
 import { supabase } from '@/lib/supabase'
+import { FILTRO_EMPLEADOS_ACTIVOS } from '@/lib/empleadosActivos'
 const EditorCumple = lazy(() => import('@/components/EditorCumple'))
 
 interface EmpleadoCumple {
@@ -32,6 +33,7 @@ export default function Cumpleanios() {
       .from('empleados')
       .select('id,nombre,legajo,fecha_nacimiento,lugar,activo')
       .not('fecha_nacimiento', 'is', null)
+      .or(FILTRO_EMPLEADOS_ACTIVOS)
     if (error) { setError(error.message); setCargando(false); return }
     setEmpleados((data as EmpleadoCumple[]) ?? [])
     setCargando(false)

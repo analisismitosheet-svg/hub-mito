@@ -3,6 +3,7 @@ import { Loader2, TrendingUp, User, ChevronRight } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
+import { FILTRO_EMPLEADOS_ACTIVOS } from '@/lib/empleadosActivos'
 import { usePermisosArea } from '@/hooks/usePermisosArea'
 
 interface Empleado { id: string; legajo: string | null; nombre: string }
@@ -72,7 +73,7 @@ export default function EstadisticasRendimiento() {
       const hastaQ = hastaF || new Date().toISOString().slice(0, 10)
 
       const [empData, itemsData] = await Promise.all([
-        sb.from('empleados').select('id,legajo,nombre').order('nombre'),
+        sb.from('empleados').select('id,legajo,nombre').or(FILTRO_EMPLEADOS_ACTIVOS).order('nombre'),
         sb.from('vw_estadisticas_rendimiento').select('empleado_id,fecha,items,unidades,lotes,segundos').gte('fecha', desdeQ).lte('fecha', hastaQ).order('fecha', { ascending: false }),
       ])
       setEmpleados((empData.data as Empleado[] | null) ?? [])

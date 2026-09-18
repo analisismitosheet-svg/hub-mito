@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Loader2, Plus, Trash2, Pencil, Search, SearchX, X, Upload, MapPin, Users, ClipboardList, UserMinus, UserX } from 'lucide-react'
+import {
+  Loader2, Plus, Trash2, Pencil, Search, SearchX, X, Upload, MapPin,
+  Users, ClipboardList, UserMinus, UserX,
+} from 'lucide-react'
 import Layout from '@/components/Layout'
 import AppCard from '@/components/AppCard'
 import BackButton from '@/components/BackButton'
@@ -9,27 +12,8 @@ import { supabase } from '@/lib/supabase'
 import { usePermisosArea } from '@/hooks/usePermisosArea'
 import { AutocompleteCampo } from '@/components/MultiselectFiltro'
 import MultiselectFiltro from '@/components/MultiselectFiltro'
-
-/** Convierte una fecha de Excel (serie o texto) a ISO yyyy-mm-dd. */
-function fechaExcelAISO(v: unknown): string | null {
-  if (v == null || v === '') return null
-  if (typeof v === 'number' && v > 0) {
-    const ms = Math.round((v - 25569) * 86400 * 1000)
-    const d = new Date(ms)
-    if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10)
-    return null
-  }
-  const s = String(v).trim()
-  if (!s) return null
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
-  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/)
-  if (m) {
-    let y = +m[3]
-    if (y < 100) y += 2000
-    return `${y}-${String(+m[2]).padStart(2, '0')}-${String(+m[1]).padStart(2, '0')}`
-  }
-  return null
-}
+import { COLUMNAS, columnasDeEstado, camposDeEstado } from '@/config/columnasEmpleados'
+import { leerListado, claveBaja, soloDigitos } from '@/lib/importarListado'
 
 interface Empleado {
   id: string
@@ -61,16 +45,24 @@ interface Empleado {
   parentesco: string | null
   telefono_emergencia: string | null
   estado_legajo: string | null
+  fecha_egreso: string | null
+  motivo_baja: string | null
+  plan: string | null
+  obra_social: string | null
+  fin_plan: string | null
+  entrega_remeras: string | null
 }
 
 const ESTADO_LEGAJO_OPCIONES = ['NOMINA ACTIVA', 'PLANES ACTIVOS', 'BAJAS MITO', 'BAJAS PLANES']
+const ESTADOS_ACTIVOS = ['NOMINA ACTIVA', 'PLANES ACTIVOS']
 const ESTADO_POR_DEFECTO = 'NOMINA ACTIVA'
 
-/** Estado del legajo; los empleados sin estado cargado cuentan como nomina activa. */
+/** Estado del legajo; los empleados sin estado cargado cuentan como nómina activa. */
 function estadoEfectivo(e: { estado_legajo: string | null }): string {
   const s = (e.estado_legajo || '').toUpperCase().trim()
   return ESTADO_LEGAJO_OPCIONES.includes(s) ? s : ESTADO_POR_DEFECTO
 }
+
 function estiloEstadoLegajo(s: string | null): string {
   switch ((s || '').toUpperCase()) {
     case 'NOMINA ACTIVA': return 'bg-emerald-500/15 text-emerald-400'
@@ -82,12 +74,25 @@ function estiloEstadoLegajo(s: string | null): string {
 }
 
 const CAMPOS =
-  'id,legajo,nombre,activo,lugar,area_sector,horas,convenio,categoria,puesto,comision,reingreso,fecha_ingreso,antiguedad_2025,dias_vacaciones_2025,cuil,dni,fecha_nacimiento,sexo,telefono,domicilio,email,codigo_os,prepaga,tipo_contrato,contacto_emergencia,parentesco,telefono_emergencia,estado_legajo'
+  'id,legajo,nombre,activo,lugar,area_sector,horas,convenio,categoria,puesto,comision,reingreso,fecha_ingreso,antiguedad_2025,dias_vacaciones_2025,cuil,dni,fecha_nacimiento,sexo,telefono,domicilio,email,codigo_os,prepaga,tipo_contrato,contacto_emergencia,parentesco,telefono_emergencia,estado_legajo,fecha_egreso,motivo_baja,plan,obra_social,fin_plan,entrega_remeras'
 
 const inputCls = 'w-full rounded-xl border border-line bg-surface2 px-3 py-1.5 text-[13px] text-ink outline-none transition duration-250 placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40'
 const selectCls = inputCls + ' appearance-none'
 const tdBase = 'px-2 py-[3px] whitespace-nowrap'
 const tdBaseWrap = 'px-2 py-[3px]'
+
+/** Las 4 categorías se muestran como tarjetas, igual que las apps de un área. */
+const CATEGORIAS = [
+  { estado: 'NOMINA ACTIVA', slug: 'nomina-activa', titulo: 'Nómina Activa', detalle: 'Legajos activos de Mito.', icono: Users, color: '#10b981' },
+  { estado: 'PLANES ACTIVOS', slug: 'planes-activos', titulo: 'Planes Activos', detalle: 'Legajos de planes vigentes.', icono: ClipboardList, color: '#0ea5e9' },
+  { estado: 'BAJAS MITO', slug: 'bajas-mito', titulo: 'Bajas Mito', detalle: 'Legajos dados de baja en Mito.', icono: UserMinus, color: '#ef4444' },
+  { estado: 'BAJAS PLANES', slug: 'bajas-planes', titulo: 'Bajas Planes', detalle: 'Legajos de planes dados de baja.', icono: UserX, color: '#f43f5e' },
+]
+
+/** Nómina activa incluye a los legajos sin estado cargado. */
+const FILTRO_NOMINA = 'estado_legajo.eq."NOMINA ACTIVA",estado_legajo.is.null'
+
+const SLUG_ESTADO: Record<string, string> = Object.fromEntries(CATEGORIAS.map((c) => [c.slug, c.estado]))
 
 /** Meses completos desde una fecha ISO (yyyy-mm-dd) hasta hoy. */
 function mesesDesde(fechaIso: string | null): number {
@@ -100,7 +105,6 @@ function mesesDesde(fechaIso: string | null): number {
   return Math.max(0, meses)
 }
 
-/** Años completos desde una fecha ISO hasta hoy. */
 function aniosDesde(fechaIso: string | null): number {
   return Math.floor(mesesDesde(fechaIso) / 12)
 }
@@ -124,19 +128,25 @@ function vacacionesSegunAntiguedad(fechaIso: string | null): number {
   return Math.round((14 * m) / 12)
 }
 
-const SLUG_ESTADO: Record<string, string> = {
-  'nomina-activa': 'NOMINA ACTIVA',
-  'planes-activos': 'PLANES ACTIVOS',
-  'bajas-mito': 'BAJAS MITO',
-  'bajas-planes': 'BAJAS PLANES',
+/** yyyy-mm-dd -> dd/mm/yyyy */
+function fechaLinda(v: unknown): string {
+  const s = String(v ?? '')
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : s
 }
-/** Las 4 categorias se muestran como tarjetas, igual que las apps de un area. */
-const CATEGORIAS = [
-  { estado: 'NOMINA ACTIVA', slug: 'nomina-activa', titulo: 'Nómina Activa', detalle: 'Legajos activos de Mito.', icono: Users, color: '#10b981' },
-  { estado: 'PLANES ACTIVOS', slug: 'planes-activos', titulo: 'Planes Activos', detalle: 'Legajos de planes vigentes.', icono: ClipboardList, color: '#0ea5e9' },
-  { estado: 'BAJAS MITO', slug: 'bajas-mito', titulo: 'Bajas Mito', detalle: 'Legajos dados de baja en Mito.', icono: UserMinus, color: '#ef4444' },
-  { estado: 'BAJAS PLANES', slug: 'bajas-planes', titulo: 'Bajas Planes', detalle: 'Legajos de planes dados de baja.', icono: UserX, color: '#f43f5e' },
-]
+
+/** Trae todas las páginas de una consulta (PostgREST devuelve 1000 por vez). */
+async function traerTodo<T>(pagina: (desde: number, hasta: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>): Promise<{ filas: T[]; error: string | null }> {
+  const filas: T[] = []
+  for (let desde = 0; ; desde += 1000) {
+    const { data, error } = await pagina(desde, desde + 999)
+    if (error) return { filas, error: error.message }
+    const lote = (data as T[]) ?? []
+    filas.push(...lote)
+    if (lote.length < 1000) break
+  }
+  return { filas, error: null }
+}
 
 export default function Empleados() {
   const navigate = useNavigate()
@@ -144,6 +154,7 @@ export default function Empleados() {
   const estado = SLUG_ESTADO[slug] ?? ''
   const { crear: puedeCrear, editar: puedeEditar, borrar: puedeBorrar } = usePermisosArea('rrhh.empleados')
   const [empleados, setEmpleados] = useState<Empleado[]>([])
+  const [conteos, setConteos] = useState<Record<string, number>>({})
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busqueda, setBusqueda] = useState('')
@@ -159,6 +170,8 @@ export default function Empleados() {
   const fabRef = useRef<HTMLButtonElement>(null)
   const [fabPos, setFabPos] = useState<{ x: number; y: number } | null>(null)
   const fabDrag = useRef<{ sx: number; sy: number; ox: number; oy: number; moved: boolean } | null>(null)
+
+  const columnas = useMemo(() => columnasDeEstado(estado || ESTADO_POR_DEFECTO), [estado])
 
   function fabDown(e: ReactMouseEvent) {
     e.preventDefault()
@@ -183,75 +196,105 @@ export default function Empleados() {
     window.addEventListener('mouseup', onUp)
   }
 
-  const cargar = useCallback(async () => {
+  /** Portada: cuántos legajos hay en cada categoría. */
+  const cargarConteos = useCallback(async () => {
     if (!supabase) { setCargando(false); return }
-    const { data, error } = await supabase.from('empleados').select(CAMPOS).order('nombre')
-    if (error) setError(error.message)
-    setEmpleados((data as Empleado[]) ?? [])
+    setCargando(true)
+    const out: Record<string, number> = {}
+    for (const c of CATEGORIAS) {
+      const q = supabase.from('empleados').select('id', { count: 'exact', head: true })
+      const { count, error } = c.estado === ESTADO_POR_DEFECTO
+        ? await q.or(FILTRO_NOMINA)
+        : await q.eq('estado_legajo', c.estado)
+      if (error) { setError(error.message); break }
+      out[c.estado] = count ?? 0
+    }
+    setConteos(out)
     setCargando(false)
   }, [])
 
-  useEffect(() => { void cargar() }, [cargar])
+  /** Lista de una categoría (el histórico de bajas pasa de 1000 filas). */
+  const cargar = useCallback(async () => {
+    const sb = supabase
+    if (!sb || !estado) { setCargando(false); return }
+    setCargando(true)
+    setError(null)
+    const { filas, error: err } = await traerTodo<Empleado>((desde, hasta) => {
+      const q = sb.from('empleados').select(CAMPOS).order('nombre').range(desde, hasta)
+      return estado === ESTADO_POR_DEFECTO
+        ? q.or(FILTRO_NOMINA)
+        : q.eq('estado_legajo', estado)
+    })
+    if (err) setError(err)
+    setEmpleados(filas)
+    setCargando(false)
+  }, [estado])
 
-  // Columnas filtrables y sus valores únicos (como los filtros de Excel)
-  const columnasFiltro = useMemo(() => {
-    const defs: { clave: string; label: string; valores: string[] }[] = [
-      { clave: 'legajo', label: 'Legajo', valores: [] },
-      { clave: 'sexo', label: 'Sexo', valores: [] },
-      { clave: 'lugar', label: 'Lugar', valores: [] },
-      { clave: 'area_sector', label: 'Área / Sector', valores: [] },
-      { clave: 'categoria', label: 'Categoría', valores: [] },
-      { clave: 'puesto', label: 'Puesto', valores: [] },
-      { clave: 'convenio', label: 'Convenio', valores: [] },
-      { clave: 'prepaga', label: 'Prepaga', valores: [] },
-      { clave: 'tipo_contrato', label: 'Contrato', valores: [] },
-      { clave: 'codigo_os', label: 'Código OS', valores: [] },
-      { clave: 'estado_legajo', label: 'Estado', valores: [] },
-    ]
-    for (const d of defs) {
-      if (d.clave === 'estado_legajo') {
-        d.valores = [...ESTADO_LEGAJO_OPCIONES]
-        continue
-      }
-      d.valores = Array.from(
-        new Set(empleados.map((e) => String((e as unknown as Record<string, unknown>)[d.clave] ?? '')).filter((v) => v !== '')),
-      ).sort((a, b) => a.localeCompare(b, 'es', { numeric: true }))
+  useEffect(() => {
+    setBusqueda('')
+    setFiltros({})
+    if (estado) void cargar()
+    else void cargarConteos()
+  }, [estado, cargar, cargarConteos])
+
+  /** Valor crudo de una columna (para filtrar y ordenar). */
+  const valor = useCallback((e: Empleado, clave: string): unknown => {
+    if (clave === 'antiguedad') return mesesDesde(e.fecha_ingreso)
+    if (clave === 'vacaciones') return vacacionesSegunAntiguedad(e.fecha_ingreso)
+    if (clave === 'estado_legajo') return estadoEfectivo(e)
+    return (e as unknown as Record<string, unknown>)[clave]
+  }, [])
+
+  /** Texto que se muestra en la celda. */
+  const texto = useCallback((e: Empleado, clave: string): string => {
+    if (clave === 'antiguedad') return textoAntiguedad(e.fecha_ingreso) || '-'
+    if (clave === 'vacaciones') {
+      const d = vacacionesSegunAntiguedad(e.fecha_ingreso)
+      return d ? `${d} días` : '-'
     }
-    return defs
-  }, [empleados])
+    const v = valor(e, clave)
+    if (v == null || String(v).trim() === '') return '-'
+    if (COLUMNAS[clave]?.tipo === 'fecha') return fechaLinda(v)
+    return String(v)
+  }, [valor])
 
-  const filtroDef = (clave: string) => columnasFiltro.find((d) => d.clave === clave)!
+  // Columnas con filtro tipo Excel, con los valores que existen en esta categoría
+  const columnasFiltro = useMemo(() => {
+    return columnas
+      .filter((c) => COLUMNAS[c]?.filtrable)
+      .map((clave) => ({
+        clave,
+        label: COLUMNAS[clave].label,
+        valores: Array.from(new Set(empleados.map((e) => String(valor(e, clave) ?? '')).filter((v) => v !== '')))
+          .sort((a, b) => a.localeCompare(b, 'es', { numeric: true })),
+      }))
+  }, [columnas, empleados, valor])
+
+  const filtroDe = (clave: string) => columnasFiltro.find((d) => d.clave === clave)
 
   const filtrados = useMemo(() => {
     const t = busqueda.trim().toUpperCase()
     const out = empleados.filter((e) => {
-      if (estado && estadoEfectivo(e) !== estado) return false
       for (const [clave, valores] of Object.entries(filtros)) {
         if (!valores || valores.length === 0) continue
-        const actual = clave === 'estado_legajo'
-          ? estadoEfectivo(e)
-          : String((e as unknown as Record<string, unknown>)[clave] ?? '')
-        if (!valores.includes(actual)) return false
+        if (!valores.includes(String(valor(e, clave) ?? ''))) return false
       }
       if (!t) return true
       return (
         e.nombre.toUpperCase().includes(t) ||
         (e.legajo ?? '').includes(t) ||
         (e.dni ?? '').includes(t) ||
+        (e.cuil ?? '').includes(t) ||
         (e.area_sector ?? '').toUpperCase().includes(t)
       )
     })
+    const numericas = new Set(['legajo', 'horas', 'antiguedad', 'vacaciones', 'dni'])
     out.sort((a, b) => {
-      const val = (e: Empleado) =>
-        sortKey === 'estado_legajo' ? estadoEfectivo(e)
-        : sortKey === 'antiguedad_2025' ? mesesDesde(e.fecha_ingreso)
-        : sortKey === 'dias_vacaciones_2025' ? vacacionesSegunAntiguedad(e.fecha_ingreso)
-        : (e as unknown as Record<string, unknown>)[sortKey]
-      const av = val(a)
-      const bv = val(b)
+      const av = valor(a, sortKey)
+      const bv = valor(b, sortKey)
       const sa = String(av ?? '').trim()
       const sb = String(bv ?? '').trim()
-      if (sortKey === 'legajo' || sortKey === 'horas' || sortKey === 'antiguedad_2025' || sortKey === 'dias_vacaciones_2025') {
+      if (numericas.has(sortKey)) {
         const na = Number(sa.replace(',', '.'))
         const nb = Number(sb.replace(',', '.'))
         if (!isNaN(na) && !isNaN(nb)) return sortAsc ? na - nb : nb - na
@@ -260,7 +303,7 @@ export default function Empleados() {
       return sortAsc ? cmp : -cmp
     })
     return out
-  }, [empleados, busqueda, filtros, sortKey, sortAsc, estado])
+  }, [empleados, busqueda, filtros, sortKey, sortAsc, valor])
 
   const hayFiltros = Object.values(filtros).some((v) => v.length > 0) || !!busqueda
 
@@ -268,11 +311,11 @@ export default function Empleados() {
     if (sortKey === clave) setSortAsc((a) => !a)
     else { setSortKey(clave); setSortAsc(true) }
   }
-  const sortArrow = (clave: string) => sortKey === clave ? (sortAsc ? ' ↑' : ' ↓') : ''
+  const sortArrow = (clave: string) => (sortKey === clave ? (sortAsc ? ' ↑' : ' ↓') : '')
 
   // Valores únicos por campo (para el autocomplete del modal)
   const opcionesEmpleado = useMemo(() => {
-    const campos = ['lugar', 'area_sector', 'convenio', 'categoria', 'puesto', 'prepaga', 'tipo_contrato'] as const
+    const campos = ['lugar', 'area_sector', 'convenio', 'categoria', 'puesto', 'prepaga', 'tipo_contrato', 'plan', 'obra_social'] as const
     const out: Record<string, string[]> = {}
     for (const c of campos) {
       out[c] = Array.from(
@@ -289,95 +332,82 @@ export default function Empleados() {
     await cargar()
   }
 
-  /** Importa el Excel de nómina: detecta columnas por encabezado y hace upsert por legajo. */
-  async function importarNomina(file: File) {
-    if (!supabase) return
+  /** Guarda de a lotes: las filas con id se actualizan, las demás se insertan. */
+  async function guardarLotes(filas: Record<string, unknown>[]): Promise<string | null> {
+    if (!supabase || filas.length === 0) return null
+    const conId = filas.filter((f) => f.id)
+    const sinId = filas.filter((f) => !f.id)
+    for (let i = 0; i < conId.length; i += 300) {
+      const { error } = await supabase.from('empleados').upsert(conId.slice(i, i + 300))
+      if (error) return error.message
+    }
+    for (let i = 0; i < sinId.length; i += 300) {
+      const { error } = await supabase.from('empleados').insert(sinId.slice(i, i + 300))
+      if (error) return error.message
+    }
+    return null
+  }
+
+  /**
+   * Importa el Excel del listado. Reconoce una hoja por categoría; si el archivo
+   * trae una sola hoja, se carga con el mapeo de la categoría abierta.
+   */
+  async function importarArchivo(file: File) {
+    const sb = supabase
+    if (!sb) return
     setImportando(true); setImportMsg(null); setError(null)
     try {
-      const XLSX = await import('xlsx')
-      const data = new Uint8Array(await file.arrayBuffer())
-      const wb = XLSX.read(data, { type: 'array', raw: false })
-      const ws = wb.Sheets[wb.SheetNames[0]]
-      const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' })
-      if (json.length === 0) { setError('El archivo está vacío.'); return }
-
-      const headers = Object.keys(json[0])
-      const normal = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
-      const col = (name: string): string | null => {
-        const target = normal(name)
-        return headers.find((h) => normal(h).includes(target)) ?? null
-      }
-      const cLegajo = col('legajo')
-      const cNombre = col('apellido y nombre')
-      if (!cLegajo || !cNombre) { setError('No se detectaron las columnas "N LEGAJO" y "APELLIDO Y NOMBRE".'); return }
-
-      const val = (row: Record<string, unknown>, name: string): string => {
-        const k = col(name)
-        return k ? String(row[k] ?? '').trim() : ''
-      }
-      const num = (row: Record<string, unknown>, name: string): number | null => {
-        const s = val(row, name)
-        if (!s) return null
-        const n = Number(s.replace(',', '.'))
-        return isNaN(n) ? null : n
+      const { porEstado, avisos } = await leerListado(file, estado || ESTADO_POR_DEFECTO)
+      if (Object.keys(porEstado).length === 0) {
+        setError('No se reconoció ninguna hoja del archivo.')
+        return
       }
 
-      const BATCH = 200
-      let procesados = 0
-      let creados = 0
-      let actualizados = 0
-      for (let i = 0; i < json.length; i += BATCH) {
-        const filas = json.slice(i, i + BATCH).map((row) => {
-          const payload: Record<string, unknown> = {
-            legajo: val(row, 'legajo') || null,
-            nombre: val(row, 'apellido y nombre') || null,
-            lugar: val(row, 'lugar') || null,
-            area_sector: val(row, 'area/sector') || null,
-            horas: num(row, 'horas'),
-            convenio: val(row, 'convenio') || null,
-            categoria: val(row, 'categoria') || null,
-            puesto: val(row, 'puesto') || null,
-            comision: val(row, 'comision') || null,
-            reingreso: val(row, 'reingreso') || null,
-            fecha_ingreso: fechaExcelAISO(row[col('fecha de ingreso') ?? ''] ?? null),
-            antiguedad_2025: num(row, 'antiguedad 2025'),
-            dias_vacaciones_2025: num(row, 'dias de vacac 2025'),
-            cuil: val(row, 'cuil') || null,
-            dni: val(row, 'dni') || null,
-            fecha_nacimiento: fechaExcelAISO(row[col('fecha de nac') ?? ''] ?? null),
-            sexo: val(row, 'sexo') || null,
-            telefono: val(row, 'telefonos de contacto') || null,
-            domicilio: val(row, 'domicilio') || null,
-            email: val(row, 'email') || null,
-            codigo_os: val(row, 'codigo os') || null,
-            prepaga: val(row, 'prepaga') || null,
-            tipo_contrato: val(row, 'tipo de contrato') || null,
-            contacto_emergencia: val(row, 'contacto emergencia') || null,
-            parentesco: val(row, 'parentesco') || null,
-            telefono_emergencia: val(row, 'telefonico') || null,
-          }
-          // Solo se toca el estado si el Excel trae la columna: asi no se pisan
-          // los legajos que ya fueron movidos a planes o bajas desde la app.
-          if (col('estado')) payload.estado_legajo = val(row, 'estado').toUpperCase() || null
-          if (!payload.nombre) return null
-          return payload
-        }).filter((p): p is Record<string, unknown> => !!p)
+      // Activos: para actualizar por legajo y para no importar la baja de alguien que hoy trabaja
+      const { filas: activos, error: errAct } = await traerTodo<{ id: string; legajo: string | null; cuil: string | null; estado_legajo: string | null }>(
+        (desde, hasta) => sb.from('empleados').select('id,legajo,cuil,estado_legajo').in('estado_legajo', ESTADOS_ACTIVOS).range(desde, hasta),
+      )
+      if (errAct) { setError(errAct); return }
+      const cuilActivos = new Set(activos.map((a) => soloDigitos(a.cuil)).filter(Boolean))
+      // El legajo se busca dentro de la misma categoría: nómina y planes numeran por separado
+      const idPorLegajo = new Map(
+        activos.filter((a) => a.legajo).map((a) => [`${a.estado_legajo}|${a.legajo}`, a.id]),
+      )
 
-        if (filas.length === 0) continue
-        procesados += filas.length
-        const { error: err, data: res } = await supabase
-          .from('empleados')
-          .upsert(filas, { onConflict: 'legajo' })
-          .select('id,legajo')
-        if (err) { setError(err.message); setImportando(false); return }
-        // Conteo aproximado por legajo repetido vs nuevo
-        for (const r of (res as { legajo: string | null }[] | null) ?? []) {
-          if (r.legajo) actualizados++
-          else creados++
+      const resumen: string[] = []
+      for (const [est, filas] of Object.entries(porEstado)) {
+        if (ESTADOS_ACTIVOS.includes(est)) {
+          const conId = filas.map((f) => {
+            const id = f.legajo ? idPorLegajo.get(`${est}|${f.legajo}`) : undefined
+            return id ? { ...f, id } : f
+          })
+          const nuevos = conId.filter((f) => !f.id).length
+          const err = await guardarLotes(conId)
+          if (err) { setError(err); return }
+          resumen.push(`${est}: ${filas.length} (${nuevos} nuevos)`)
+        } else {
+          const { filas: previas, error: errPrev } = await traerTodo<{ cuil: string | null; nombre: string; fecha_ingreso: string | null; fecha_egreso: string | null }>(
+            (desde, hasta) => sb.from('empleados').select('cuil,nombre,fecha_ingreso,fecha_egreso').eq('estado_legajo', est).range(desde, hasta),
+          )
+          if (errPrev) { setError(errPrev); return }
+          const yaEstan = new Set(previas.map(claveBaja))
+          let salteadas = 0
+          const nuevas = filas.filter((f) => {
+            const c = soloDigitos(f.cuil)
+            if (c && cuilActivos.has(c)) { salteadas++; return false }
+            const k = claveBaja(f)
+            if (yaEstan.has(k)) { salteadas++; return false }
+            yaEstan.add(k)
+            return true
+          })
+          const err = await guardarLotes(nuevas)
+          if (err) { setError(err); return }
+          resumen.push(`${est}: ${nuevas.length} nuevas, ${salteadas} salteadas`)
         }
       }
-      setImportMsg(`Se importaron ${procesados} empleados (${creados} nuevos, ${actualizados} actualizados por legajo).`)
-      await cargar()
+      setImportMsg([`Listo. ${resumen.join(' · ')}`, ...avisos].join(' — '))
+      if (estado) await cargar()
+      else await cargarConteos()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al importar el archivo.')
     } finally {
@@ -385,25 +415,40 @@ export default function Empleados() {
     }
   }
 
-  const conteo = (s: string) => empleados.filter((e) => estadoEfectivo(e) === s).length
+  const entradaArchivo = (
+    <input
+      ref={fileRef}
+      type="file"
+      accept=".xlsx,.xls"
+      className="hidden"
+      onChange={(e) => { const f = e.target.files?.[0]; if (f) void importarArchivo(f); e.target.value = '' }}
+    />
+  )
 
-  // Portada: cada estado del legajo es una tarjeta a la que se entra
+  // ── Portada: cada estado del legajo es una tarjeta a la que se entra ──────
   if (!estado) {
     return (
       <Layout>
         <BackButton />
-        <div className="mb-6 flex items-center gap-3">
+        <div className="mb-6 flex flex-wrap items-center gap-3">
           <div className="rounded-xl border p-3" style={{ color: '#7c3aed', backgroundColor: '#7c3aed24', borderColor: '#7c3aed40' }}>
             <Users size={24} aria-hidden />
           </div>
           <h1 className="font-display text-2xl font-bold text-ink">Empleados</h1>
+          {puedeCrear && (
+            <button onClick={() => fileRef.current?.click()} disabled={importando} className="btn-press ml-auto inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface2 px-3 py-2 text-sm font-medium text-ink hover:bg-line disabled:opacity-50">
+              <Upload size={15} aria-hidden /> {importando ? 'Importando…' : 'Importar listado'}
+            </button>
+          )}
+          {entradaArchivo}
         </div>
 
         {error && <p role="alert" className="mb-4 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
+        {importMsg && <p className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-400">{importMsg}</p>}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {CATEGORIAS.map((c, i) => {
-            const n = conteo(c.estado)
+            const n = conteos[c.estado] ?? 0
             return (
               <AppCard
                 key={c.slug}
@@ -427,13 +472,16 @@ export default function Empleados() {
     )
   }
 
+  // ── Categoría abierta: tabla con las columnas de esa hoja ────────────────
   return (
     <Layout>
       <BackButton />
-      <header className="mb-5 mt-2 flex flex-wrap items-end justify-between gap-2">
+      <header className="mb-4 mt-2 flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h1 className="font-display text-2xl font-semibold text-ink">Empleados <span className="text-lg font-normal text-sub">· {estado}</span></h1>
-          <p className="mt-1 text-sm text-sub">{estado}: alta, edición y baja.</p>
+          <h1 className="font-display text-2xl font-semibold text-ink">
+            Empleados <span className="text-lg font-normal text-sub">· {estado}</span>
+          </h1>
+          <p className="mt-1 text-sm text-sub">{filtrados.length} de {empleados.length} legajos · alta, edición y baja.</p>
         </div>
         <button onClick={() => navigate('/rrhh/empleados')} className="btn-press rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-sub transition hover:text-ink">
           Cambiar categoría
@@ -442,24 +490,22 @@ export default function Empleados() {
 
       {error && <p role="alert" className="mb-4 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
 
-      <div className="flex flex-col gap-4">
-        <div className="min-w-0 flex-1">
-          <div className="mb-3 flex flex-wrap items-end gap-2 rounded-2xl border border-line bg-surface p-3">
-            <label className="relative block flex-1 min-w-[200px]">
-              <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sub" aria-hidden />
-              <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar por nombre, legajo, DNI o área..." className={inputCls + ' pl-9'} />
-            </label>
-            {hayFiltros && (
-              <button onClick={() => { setBusqueda(''); setFiltros({}) }} className="btn-press rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line">Limpiar filtros</button>
-            )}
-            {puedeCrear && (
-              <button onClick={() => fileRef.current?.click()} disabled={importando} className="btn-press ml-auto inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface2 px-3 py-2 text-sm font-medium text-ink hover:bg-line disabled:opacity-50">
-                <Upload size={15} aria-hidden /> {importando ? 'Importando…' : 'Importar nómina'}
-              </button>
-            )}
-            <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void importarNomina(f); e.target.value = '' }} />
-          </div>
-          {importMsg && <p className="mb-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-400">{importMsg}</p>}
+      <div className="mb-3 flex flex-wrap items-end gap-2 rounded-2xl border border-line bg-surface p-3">
+        <label className="relative block min-w-[200px] flex-1">
+          <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sub" aria-hidden />
+          <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar por nombre, legajo, DNI, CUIL o área..." className={inputCls + ' pl-9'} />
+        </label>
+        {hayFiltros && (
+          <button onClick={() => { setBusqueda(''); setFiltros({}) }} className="btn-press rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line">Limpiar filtros</button>
+        )}
+        {puedeCrear && (
+          <button onClick={() => fileRef.current?.click()} disabled={importando} className="btn-press ml-auto inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface2 px-3 py-2 text-sm font-medium text-ink hover:bg-line disabled:opacity-50">
+            <Upload size={15} aria-hidden /> {importando ? 'Importando…' : 'Importar listado'}
+          </button>
+        )}
+        {entradaArchivo}
+      </div>
+      {importMsg && <p className="mb-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-400">{importMsg}</p>}
 
       {cargando ? (
         <div className="flex items-center justify-center gap-2 py-10 text-sub">
@@ -470,100 +516,64 @@ export default function Empleados() {
           <SearchX size={16} aria-hidden /> No hay empleados que coincidan.
         </p>
       ) : (
-<div className="scroll-always-x overflow-auto rounded-2xl border border-line bg-surface" style={{ maxHeight: 'calc(100vh - 230px)' }}>
-        <table className="w-full min-w-max table-auto text-[12px]">
+        <div className="scroll-always-x overflow-auto rounded-2xl border border-line bg-surface" style={{ maxHeight: 'calc(100vh - 230px)' }}>
+          <table className="w-full min-w-max table-auto text-[12px]">
             <thead className="sticky top-0 z-10 bg-surface2/95 text-left text-[11px] uppercase tracking-wide text-sub backdrop-blur">
               <tr>
-                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('legajo')} className="font-semibold uppercase text-sub hover:text-ink">Legajo{sortArrow('legajo')}</button></th>
-                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('nombre')} className="font-semibold uppercase text-sub hover:text-ink">Nombre{sortArrow('nombre')}</button></th>
-                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('dni')} className="font-semibold uppercase text-sub hover:text-ink">DNI{sortArrow('dni')}</button></th>
-                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('cuil')} className="font-semibold uppercase text-sub hover:text-ink">CUIL{sortArrow('cuil')}</button></th>
-                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('fecha_nacimiento')} className="font-semibold uppercase text-sub hover:text-ink">Nacimiento{sortArrow('fecha_nacimiento')}</button></th>
-                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('sexo')} className="font-semibold uppercase text-sub hover:text-ink">Sexo{sortArrow('sexo')}</button></th>
-                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('lugar')} className="font-semibold uppercase text-sub hover:text-ink">Lugar{sortArrow('lugar')}</button></th>
-                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('area_sector')} className="font-semibold uppercase text-sub hover:text-ink">Área / Sector{sortArrow('area_sector')}</button></th>
-                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('categoria')} className="font-semibold uppercase text-sub hover:text-ink">Categoría{sortArrow('categoria')}</button></th>
-                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('puesto')} className="font-semibold uppercase text-sub hover:text-ink">Puesto{sortArrow('puesto')}</button></th>
-                <th className={tdBase + ' py-2 text-center'}><button type="button" onClick={() => toggleSort('horas')} className="font-semibold uppercase text-sub hover:text-ink">Horas{sortArrow('horas')}</button></th>
-                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('convenio')} className="font-semibold uppercase text-sub hover:text-ink">Convenio{sortArrow('convenio')}</button></th>
-                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('comision')} className="font-semibold uppercase text-sub hover:text-ink">Comisión{sortArrow('comision')}</button></th>
-                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('reingreso')} className="font-semibold uppercase text-sub hover:text-ink">Reingreso{sortArrow('reingreso')}</button></th>
-                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('fecha_ingreso')} className="font-semibold uppercase text-sub hover:text-ink">Ingreso{sortArrow('fecha_ingreso')}</button></th>
-                <th className={tdBase + ' py-2 text-center'}><button type="button" onClick={() => toggleSort('antiguedad_2025')} className="font-semibold uppercase text-sub hover:text-ink">Antigüedad{sortArrow('antiguedad_2025')}</button></th>
-                <th className={tdBase + ' py-2 text-center'}><button type="button" onClick={() => toggleSort('dias_vacaciones_2025')} className="font-semibold uppercase text-sub hover:text-ink">Vacaciones{sortArrow('dias_vacaciones_2025')}</button></th>
-                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('prepaga')} className="font-semibold uppercase text-sub hover:text-ink">Prepaga{sortArrow('prepaga')}</button></th>
-                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('tipo_contrato')} className="font-semibold uppercase text-sub hover:text-ink">Contrato{sortArrow('tipo_contrato')}</button></th>
-                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('codigo_os')} className="font-semibold uppercase text-sub hover:text-ink">Código OS{sortArrow('codigo_os')}</button></th>
-                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('telefono')} className="font-semibold uppercase text-sub hover:text-ink">Teléfono{sortArrow('telefono')}</button></th>
-                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('domicilio')} className="font-semibold uppercase text-sub hover:text-ink">Domicilio{sortArrow('domicilio')}</button></th>
-                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('email')} className="font-semibold uppercase text-sub hover:text-ink">Email{sortArrow('email')}</button></th>
-                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('contacto_emergencia')} className="font-semibold uppercase text-sub hover:text-ink">Contacto Emerg.{sortArrow('contacto_emergencia')}</button></th>
-                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('parentesco')} className="font-semibold uppercase text-sub hover:text-ink">Parentesco{sortArrow('parentesco')}</button></th>
-                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('telefono_emergencia')} className="font-semibold uppercase text-sub hover:text-ink">Tel Emerg.{sortArrow('telefono_emergencia')}</button></th>
-                <th className={tdBase + ' py-2'}><button type="button" onClick={() => toggleSort('estado_legajo')} className="font-semibold uppercase text-sub hover:text-ink">Estado{sortArrow('estado_legajo')}</button></th>
+                {columnas.map((clave) => (
+                  <th key={clave} className={tdBase + ' py-2'}>
+                    <button type="button" onClick={() => toggleSort(clave)} className="font-semibold uppercase text-sub hover:text-ink">
+                      {COLUMNAS[clave].label}{sortArrow(clave)}
+                    </button>
+                  </th>
+                ))}
                 <th className={tdBase + ' py-2 text-right'}>Acciones</th>
               </tr>
               <tr className="bg-surface/60">
-                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={filtroDef('legajo')} filtros={filtros.legajo ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, legajo: v }))} /></th>
-                <th className={tdBase + ' py-1 align-top'} />
-                <th className={tdBase + ' py-1 align-top'} />
-                <th className={tdBase + ' py-1 align-top'} />
-                <th className={tdBase + ' py-1 align-top'} />
-                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={filtroDef('sexo')} filtros={filtros.sexo ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, sexo: v }))} /></th>
-                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={filtroDef('lugar')} filtros={filtros.lugar ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, lugar: v }))} /></th>
-                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={filtroDef('area_sector')} filtros={filtros.area_sector ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, area_sector: v }))} /></th>
-                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={filtroDef('categoria')} filtros={filtros.categoria ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, categoria: v }))} /></th>
-                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={filtroDef('puesto')} filtros={filtros.puesto ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, puesto: v }))} /></th>
-                <th className={tdBase + ' py-1 align-top'} />
-                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={filtroDef('convenio')} filtros={filtros.convenio ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, convenio: v }))} /></th>
-                <th className={tdBase + ' py-1 align-top'} />
-                <th className={tdBase + ' py-1 align-top'} />
-                <th className={tdBase + ' py-1 align-top'} />
-                <th className={tdBase + ' py-1 align-top'} />
-                <th className={tdBase + ' py-1 align-top'} />
-                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={filtroDef('prepaga')} filtros={filtros.prepaga ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, prepaga: v }))} /></th>
-                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={filtroDef('tipo_contrato')} filtros={filtros.tipo_contrato ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, tipo_contrato: v }))} /></th>
-                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={filtroDef('codigo_os')} filtros={filtros.codigo_os ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, codigo_os: v }))} /></th>
-                <th className={tdBase + ' py-1 align-top'} />
-                <th className={tdBase + ' py-1 align-top'} />
-                <th className={tdBase + ' py-1 align-top'} />
-                <th className={tdBase + ' py-1 align-top'} />
-                <th className={tdBase + ' py-1 align-top'} />
-                <th className={tdBase + ' py-1 align-top'} />
-                <th className={tdBase + ' py-1 align-top'}><FiltroCol d={filtroDef('estado_legajo')} filtros={filtros.estado_legajo ?? []} onChange={(v) => setFiltros((prev) => ({ ...prev, estado_legajo: v }))} /></th>
+                {columnas.map((clave) => {
+                  const d = filtroDe(clave)
+                  return (
+                    <th key={clave} className={tdBase + ' py-1 align-top'}>
+                      {d && (
+                        <FiltroCol
+                          d={d}
+                          filtros={filtros[clave] ?? []}
+                          onChange={(v) => setFiltros((prev) => ({ ...prev, [clave]: v }))}
+                        />
+                      )}
+                    </th>
+                  )
+                })}
                 <th className={tdBase + ' py-1 align-top'} />
               </tr>
             </thead>
             <tbody className="divide-y divide-line/60">
               {filtrados.map((e) => (
                 <tr key={e.id} className="hover:bg-line/20">
-                  <td className={tdBase + ' text-sub'}>{e.legajo ?? '-'}</td>
-                  <td className={tdBaseWrap + ' font-medium text-ink'}>{puedeEditar ? <button type="button" onClick={() => { setSel(e); setModal('edit') }} className="cursor-pointer text-left text-ink transition hover:text-brand-500" title="Editar empleado">{e.nombre}</button> : e.nombre}</td>
-                  <td className={tdBase}>{e.dni ?? '-'}</td>
-                  <td className={tdBase}>{e.cuil ?? '-'}</td>
-                  <td className={tdBase}>{e.fecha_nacimiento ?? '-'}</td>
-                  <td className={tdBase}>{e.sexo ?? '-'}</td>
-                  <td className={tdBase}>{e.lugar ?? '-'}</td>
-                  <td className={tdBaseWrap}>{e.area_sector ?? '-'}</td>
-                  <td className={tdBaseWrap}>{e.categoria ?? '-'}</td>
-                  <td className={tdBaseWrap}>{e.puesto ?? '-'}</td>
-                  <td className={tdBase + ' text-center'}>{e.horas ?? '-'}</td>
-                  <td className={tdBase}>{e.convenio ?? '-'}</td>
-                  <td className={tdBase}>{e.comision ?? '-'}</td>
-                  <td className={tdBase}>{e.reingreso ?? '-'}</td>
-                  <td className={tdBase}>{e.fecha_ingreso ?? '-'}</td>
-                  <td className={tdBase + ' text-center'}>{textoAntiguedad(e.fecha_ingreso) || '-'}</td>
-                  <td className={tdBase + ' text-center'}>{vacacionesSegunAntiguedad(e.fecha_ingreso) || '-'}</td>
-                  <td className={tdBase}>{e.prepaga ?? '-'}</td>
-                  <td className={tdBase}>{e.tipo_contrato ?? '-'}</td>
-                  <td className={tdBase}>{e.codigo_os ?? '-'}</td>
-                  <td className={tdBaseWrap}>{e.telefono ?? '-'}</td>
-                  <td className={tdBaseWrap}>{e.domicilio ?? '-'}</td>
-                  <td className={tdBaseWrap}>{e.email ?? '-'}</td>
-                  <td className={tdBaseWrap}>{e.contacto_emergencia ?? '-'}</td>
-                  <td className={tdBase}>{e.parentesco ?? '-'}</td>
-                  <td className={tdBaseWrap}>{e.telefono_emergencia ?? '-'}</td>
-                  <td className={tdBaseWrap}><span className={'inline-block whitespace-nowrap rounded-full border px-2 py-px text-[10px] font-medium ' + estiloEstadoLegajo(estadoEfectivo(e))}>{estadoEfectivo(e)}</span></td>
+                  {columnas.map((clave) => {
+                    const cls = (COLUMNAS[clave].wrap ? tdBaseWrap : tdBase)
+                    if (clave === 'nombre') {
+                      return (
+                        <td key={clave} className={tdBaseWrap + ' font-medium text-ink'}>
+                          {puedeEditar ? (
+                            <button type="button" onClick={() => { setSel(e); setModal('edit') }} className="cursor-pointer text-left text-ink transition hover:text-brand-500" title="Editar empleado">
+                              {e.nombre}
+                            </button>
+                          ) : e.nombre}
+                        </td>
+                      )
+                    }
+                    if (clave === 'estado_legajo') {
+                      return (
+                        <td key={clave} className={tdBaseWrap}>
+                          <span className={'inline-block whitespace-nowrap rounded-full border px-2 py-px text-[10px] font-medium ' + estiloEstadoLegajo(estadoEfectivo(e))}>
+                            {estadoEfectivo(e)}
+                          </span>
+                        </td>
+                      )
+                    }
+                    return <td key={clave} className={cls + (clave === 'legajo' ? ' text-sub' : '')}>{texto(e, clave)}</td>
+                  })}
                   <td className={tdBase + ' text-right'}>
                     <div className="flex items-center justify-end gap-1">
                       {puedeEditar && <button onClick={() => { setSel(e); setModal('edit') }} className="rounded border border-line p-1 text-sub transition hover:text-ink" title="Editar"><Pencil size={11} aria-hidden /></button>}
@@ -576,12 +586,11 @@ export default function Empleados() {
           </table>
         </div>
       )}
-          </div>
-        </div>
 
       {modal && (
         <EmpleadoModal
           registro={modal === 'edit' ? sel : null}
+          estadoActual={estado}
           opciones={opcionesEmpleado}
           onClose={() => { setModal(null); setSel(null) }}
           onSaved={async () => { setModal(null); setSel(null); await cargar() }}
@@ -615,32 +624,29 @@ export default function Empleados() {
   )
 }
 
-function EmpleadoModal({ registro, opciones, onClose, onSaved }: {
+function EmpleadoModal({ registro, estadoActual, opciones, onClose, onSaved }: {
   registro: Empleado | null
+  estadoActual: string
   opciones: Record<string, string[]>
   onClose: () => void
   onSaved: () => void
 }) {
   const [f, setF] = useState<Record<string, string>>(() => {
     const s = (v: unknown) => (v == null ? '' : String(v))
-    return {
-      legajo: s(registro?.legajo), nombre: s(registro?.nombre), lugar: s(registro?.lugar),
-      area_sector: s(registro?.area_sector), horas: s(registro?.horas), convenio: s(registro?.convenio),
-      categoria: s(registro?.categoria), puesto: s(registro?.puesto), comision: s(registro?.comision),
-      reingreso: s(registro?.reingreso), fecha_ingreso: s(registro?.fecha_ingreso),
-      antiguedad_2025: s(registro?.antiguedad_2025), dias_vacaciones_2025: s(registro?.dias_vacaciones_2025),
-      cuil: s(registro?.cuil), dni: s(registro?.dni), fecha_nacimiento: s(registro?.fecha_nacimiento),
-      sexo: s(registro?.sexo), telefono: s(registro?.telefono), domicilio: s(registro?.domicilio),
-      email: s(registro?.email), codigo_os: s(registro?.codigo_os), prepaga: s(registro?.prepaga),
-      tipo_contrato: s(registro?.tipo_contrato), contacto_emergencia: s(registro?.contacto_emergencia),
-      parentesco: s(registro?.parentesco), telefono_emergencia: s(registro?.telefono_emergencia),
-      estado_legajo: s(registro?.estado_legajo),
-    }
+    const base: Record<string, string> = { estado_legajo: s(registro?.estado_legajo) || estadoActual }
+    for (const clave of Object.keys(COLUMNAS)) base[clave] = s((registro as unknown as Record<string, unknown>)?.[clave])
+    base.nombre = s(registro?.nombre)
+    return base
   })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const set = (k: string, v: string) => setF((prev) => ({ ...prev, [k]: v }))
+
+  // Los campos siguen al estado elegido: si lo pasás a una baja, quedan los de la hoja de bajas
+  const estadoElegido = ESTADO_LEGAJO_OPCIONES.includes(f.estado_legajo) ? f.estado_legajo : estadoActual
+  const campos = camposDeEstado(estadoElegido)
+  const esBaja = estadoElegido.startsWith('BAJAS')
 
   async function guardar(e: FormEvent) {
     e.preventDefault()
@@ -648,47 +654,29 @@ function EmpleadoModal({ registro, opciones, onClose, onSaved }: {
     if (!f.nombre.trim()) { setError('El nombre no puede quedar vacío.'); return }
     setBusy(true); setError(null)
     const num = (v: string) => (v.trim() === '' ? null : Number(v.replace(',', '.')))
-    const payload: Record<string, unknown> = {
-      legajo: f.legajo.trim() || null,
-      nombre: f.nombre.trim(),
-      lugar: f.lugar || null,
-      area_sector: f.area_sector.trim() || null,
-      horas: num(f.horas),
-      convenio: f.convenio.trim() || null,
-      categoria: f.categoria.trim() || null,
-      puesto: f.puesto.trim() || null,
-      comision: f.comision.trim() || null,
-      reingreso: f.reingreso.trim() || null,
-      fecha_ingreso: f.fecha_ingreso || null,
-      antiguedad_2025: num(f.antiguedad_2025),
-      dias_vacaciones_2025: num(f.dias_vacaciones_2025),
-      cuil: f.cuil.trim() || null,
-      dni: f.dni.trim() || null,
-      fecha_nacimiento: f.fecha_nacimiento || null,
-      sexo: f.sexo || null,
-      telefono: f.telefono.trim() || null,
-      domicilio: f.domicilio.trim() || null,
-      email: f.email.trim() || null,
-      codigo_os: f.codigo_os.trim() || null,
-      prepaga: f.prepaga.trim() || null,
-      tipo_contrato: f.tipo_contrato.trim() || null,
-      contacto_emergencia: f.contacto_emergencia.trim() || null,
-      parentesco: f.parentesco.trim() || null,
-      telefono_emergencia: f.telefono_emergencia.trim() || null,
-      estado_legajo: f.estado_legajo.trim() || null,
+    const payload: Record<string, unknown> = { estado_legajo: estadoElegido }
+    for (const clave of campos) {
+      const def = COLUMNAS[clave]
+      const v = (f[clave] ?? '').trim()
+      if (def?.tipo === 'numero') payload[clave] = num(v)
+      else payload[clave] = v || null
     }
-    // Evita crear/editar con un legajo que ya usa otro empleado
-    const legajoTrim = f.legajo.trim()
-    if (legajoTrim) {
-      const { data: dup, error: errDup } = await supabase.from('empleados').select('id').eq('legajo', legajoTrim).limit(10)
+    payload.nombre = f.nombre.trim()
+
+    // Entre los legajos activos el número no se puede repetir
+    const legajoTrim = (f.legajo ?? '').trim()
+    if (legajoTrim && ESTADOS_ACTIVOS.includes(estadoElegido)) {
+      const { data: dup, error: errDup } = await supabase
+        .from('empleados').select('id').eq('legajo', legajoTrim).in('estado_legajo', ESTADOS_ACTIVOS).limit(10)
       if (errDup) { setBusy(false); setError(errDup.message); return }
       const duplicado = ((dup as { id: string }[] | null) ?? []).find((d) => d.id !== registro?.id)
       if (duplicado) {
         setBusy(false)
-        setError(`El legajo ${legajoTrim} ya está asignado a otro empleado.`)
+        setError(`El legajo ${legajoTrim} ya está asignado a otro legajo activo.`)
         return
       }
     }
+
     const res = registro
       ? await supabase.from('empleados').update(payload).eq('id', registro.id)
       : await supabase.from('empleados').insert(payload)
@@ -697,69 +685,109 @@ function EmpleadoModal({ registro, opciones, onClose, onSaved }: {
     onSaved()
   }
 
+  function control(clave: string) {
+    const def = COLUMNAS[clave]
+    if (!def) return null
+    if (clave === 'sexo') {
+      return (
+        <Campo key={clave} label={def.label}>
+          <select value={f.sexo} onChange={(e) => set('sexo', e.target.value)} className={selectCls}>
+            <option value="">--</option><option value="F">F</option><option value="M">M</option>
+          </select>
+        </Campo>
+      )
+    }
+    if (def.campo === 'fecha') {
+      return (
+        <Campo key={clave} label={def.label}>
+          <input type="date" value={f[clave] ?? ''} onChange={(e) => set(clave, e.target.value)} className={inputCls} />
+        </Campo>
+      )
+    }
+    if (def.campo === 'autocomplete') {
+      return (
+        <AutocompleteCampo
+          key={clave}
+          label={def.label}
+          opciones={(opciones[clave] ?? []).map((v) => ({ id: v, label: v }))}
+          valor={f[clave] ?? ''}
+          onChange={(v) => set(clave, v)}
+        />
+      )
+    }
+    return (
+      <Campo key={clave} label={def.label} span2={clave === 'nombre' || clave === 'contacto_emergencia' || clave === 'motivo_baja'}>
+        <input value={f[clave] ?? ''} onChange={(e) => set(clave, e.target.value)} className={inputCls} />
+      </Campo>
+    )
+  }
+
+  const domicilio = (f.domicilio ?? '').trim()
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black/60" onClick={onClose}>
       <div className="flex h-full flex-col bg-surface" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-line px-5 py-3">
-          <h2 className="text-lg font-semibold text-ink">{registro ? 'Editar empleado' : 'Nuevo empleado'}</h2>
+          <h2 className="text-lg font-semibold text-ink">
+            {registro ? 'Editar empleado' : 'Nuevo empleado'}
+            <span className="ml-2 text-sm font-normal text-sub">· {estadoElegido}</span>
+          </h2>
           <button onClick={onClose} className="rounded-lg border border-line p-1.5 text-sub transition hover:bg-line hover:text-ink"><X size={16} aria-hidden /></button>
         </div>
         {error && <p role="alert" className="mx-5 mt-3 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
         <form onSubmit={(e) => void guardar(e)} className="flex min-h-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 overflow-y-auto p-5">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            <Campo label="N° Legajo"><input value={f.legajo} onChange={(e) => set('legajo', e.target.value)} className={inputCls} /></Campo>
-            <Campo label="Apellido y Nombre *" span2><input value={f.nombre} onChange={(e) => set('nombre', e.target.value)} className={inputCls} /></Campo>
-            <AutocompleteCampo label="Lugar" opciones={(opciones.lugar ?? []).map((v) => ({ id: v, label: v }))} valor={f.lugar} onChange={(v) => set('lugar', v)} placeholder="Buscar lugar..." />
-            <AutocompleteCampo label="Área / Sector" opciones={(opciones.area_sector ?? []).map((v) => ({ id: v, label: v }))} valor={f.area_sector} onChange={(v) => set('area_sector', v)} />
-            <Campo label="Horas"><input value={f.horas} onChange={(e) => set('horas', e.target.value)} className={inputCls} /></Campo>
-            <AutocompleteCampo label="Convenio" opciones={(opciones.convenio ?? []).map((v) => ({ id: v, label: v }))} valor={f.convenio} onChange={(v) => set('convenio', v)} />
-            <AutocompleteCampo label="Categoría" opciones={(opciones.categoria ?? []).map((v) => ({ id: v, label: v }))} valor={f.categoria} onChange={(v) => set('categoria', v)} />
-            <AutocompleteCampo label="Puesto" opciones={(opciones.puesto ?? []).map((v) => ({ id: v, label: v }))} valor={f.puesto} onChange={(v) => set('puesto', v)} />
-            <Campo label="Comisión"><input value={f.comision} onChange={(e) => set('comision', e.target.value)} className={inputCls} /></Campo>
-            <Campo label="Reingreso"><input value={f.reingreso} onChange={(e) => set('reingreso', e.target.value)} className={inputCls} /></Campo>
-            <Campo label="Fecha de ingreso"><input type="date" value={f.fecha_ingreso} onChange={(e) => set('fecha_ingreso', e.target.value)} className={inputCls} /></Campo>
-            <Campo label="Antigüedad"><span className={inputCls + ' flex items-center text-sub'}>{textoAntiguedad(f.fecha_ingreso) || '-'}</span></Campo>
-            <Campo label="Vacaciones"><span className={inputCls + ' flex items-center text-sub'}>{vacacionesSegunAntiguedad(f.fecha_ingreso) ? `${vacacionesSegunAntiguedad(f.fecha_ingreso)} días` : '-'}</span></Campo>
-            <Campo label="CUIL"><input value={f.cuil} onChange={(e) => set('cuil', e.target.value)} className={inputCls} /></Campo>
-            <Campo label="DNI"><input value={f.dni} onChange={(e) => set('dni', e.target.value)} className={inputCls} /></Campo>
-            <Campo label="Fecha de nacimiento"><input type="date" value={f.fecha_nacimiento} onChange={(e) => set('fecha_nacimiento', e.target.value)} className={inputCls} /></Campo>
-            <Campo label="Sexo"><select value={f.sexo} onChange={(e) => set('sexo', e.target.value)} className={selectCls}><option value="">--</option><option value="F">F</option><option value="M">M</option></select></Campo>
-            <Campo label="Teléfono"><input value={f.telefono} onChange={(e) => set('telefono', e.target.value)} className={inputCls} /></Campo>
-            <Campo label="Email"><input value={f.email} onChange={(e) => set('email', e.target.value)} className={inputCls} /></Campo>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-5 sm:col-span-2 lg:col-span-3 xl:col-span-4">
-              <Campo label="Domicilio">
-                <input value={f.domicilio} onChange={(e) => set('domicilio', e.target.value)} placeholder="Calle, número, localidad..." className={inputCls} />
+            <div className="mb-3 flex flex-wrap items-end gap-3 rounded-xl border border-line bg-surface2/60 p-3">
+              <Campo label="Estado del legajo">
+                <select value={f.estado_legajo} onChange={(e) => set('estado_legajo', e.target.value)} className={selectCls}>
+                  {ESTADO_LEGAJO_OPCIONES.map((o) => <option key={o} value={o}>{o}</option>)}
+                </select>
               </Campo>
-              <div className="sm:col-span-4">
-                <span className="mb-1 block text-xs font-medium text-sub">Ubicación</span>
-                <div className="overflow-hidden rounded-xl border border-line">
-                  <iframe
-                    title={`Mapa de ${f.domicilio.trim() || 'Argentina'}`}
-                    src={`https://maps.google.com/maps?q=${encodeURIComponent(f.domicilio.trim() || 'Argentina')}&t=m&z=15&ie=UTF8&iwloc=&markers=color:red%7C${encodeURIComponent(f.domicilio.trim() || 'Argentina')}&output=embed`}
-                    className="h-64 w-full border-0"
-                    loading="lazy"
-                    allowFullScreen
-                    referrerPolicy="no-referrer-when-downgrade"
-                  />
-                  <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(f.domicilio.trim() || 'Argentina')}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-1.5 border-t border-line bg-surface2 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-line hover:text-red-700"
-                  >
-                    <MapPin size={13} aria-hidden /> Abrir en Google Maps
-                  </a>
-                </div>
-              </div>
+              <p className="flex-1 text-xs leading-relaxed text-sub/80">
+                {esBaja
+                  ? 'Al pasarlo a una baja se piden los datos de la hoja de bajas (egreso y motivo). El resto de la ficha se conserva, solo deja de mostrarse.'
+                  : 'La ficha muestra los campos de esta categoría. Si lo pasás a una baja, cambian por los de la hoja de bajas.'}
+              </p>
             </div>
-            <Campo label="Código OS"><input value={f.codigo_os} onChange={(e) => set('codigo_os', e.target.value)} className={inputCls} /></Campo>
-            <Campo label="Prepaga"><input value={f.prepaga} onChange={(e) => set('prepaga', e.target.value)} className={inputCls} list="prepaga-list" /><datalist id="prepaga-list">{(opciones.prepaga ?? []).map((v) => <option key={v} value={v} />)}</datalist></Campo>
-            <Campo label="Tipo de contrato"><input value={f.tipo_contrato} onChange={(e) => set('tipo_contrato', e.target.value)} className={inputCls} list="contrato-list" /><datalist id="contrato-list">{(opciones.tipo_contrato ?? []).map((v) => <option key={v} value={v} />)}</datalist></Campo>
-            <Campo label="Contacto emergencia" span2><input value={f.contacto_emergencia} onChange={(e) => set('contacto_emergencia', e.target.value)} className={inputCls} /></Campo>
-            <Campo label="Parentesco"><input value={f.parentesco} onChange={(e) => set('parentesco', e.target.value)} className={inputCls} /></Campo>
-            <Campo label="Teléfono emergencia"><input value={f.telefono_emergencia} onChange={(e) => set('telefono_emergencia', e.target.value)} className={inputCls} /></Campo>
-            <Campo label="Estado legajo"><select value={f.estado_legajo} onChange={(e) => set('estado_legajo', e.target.value)} className={selectCls}><option value="">--</option>{ESTADO_LEGAJO_OPCIONES.map((o) => <option key={o} value={o}>{o}</option>)}</select></Campo>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {campos.filter((c) => c !== 'domicilio').map((c) => control(c))}
+
+              {estadoElegido === 'NOMINA ACTIVA' && (
+                <>
+                  <Campo label="Antigüedad"><span className={inputCls + ' flex items-center text-sub'}>{textoAntiguedad(f.fecha_ingreso) || '-'}</span></Campo>
+                  <Campo label="Vacaciones"><span className={inputCls + ' flex items-center text-sub'}>{vacacionesSegunAntiguedad(f.fecha_ingreso) ? `${vacacionesSegunAntiguedad(f.fecha_ingreso)} días` : '-'}</span></Campo>
+                </>
+              )}
+
+              {campos.includes('domicilio') && (
+                <div className="grid grid-cols-1 gap-3 sm:col-span-2 sm:grid-cols-5 lg:col-span-3 xl:col-span-4">
+                  <Campo label="Domicilio">
+                    <input value={f.domicilio ?? ''} onChange={(e) => set('domicilio', e.target.value)} placeholder="Calle, número, localidad..." className={inputCls} />
+                  </Campo>
+                  <div className="sm:col-span-4">
+                    <span className="mb-1 block text-xs font-medium text-sub">Ubicación</span>
+                    <div className="overflow-hidden rounded-xl border border-line">
+                      <iframe
+                        title={`Mapa de ${domicilio || 'Argentina'}`}
+                        src={`https://maps.google.com/maps?q=${encodeURIComponent(domicilio || 'Argentina')}&t=m&z=15&ie=UTF8&iwloc=&markers=color:red%7C${encodeURIComponent(domicilio || 'Argentina')}&output=embed`}
+                        className="h-64 w-full border-0"
+                        loading="lazy"
+                        allowFullScreen
+                        referrerPolicy="no-referrer-when-downgrade"
+                      />
+                      <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(domicilio || 'Argentina')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center gap-1.5 border-t border-line bg-surface2 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-line hover:text-red-700"
+                      >
+                        <MapPin size={13} aria-hidden /> Abrir en Google Maps
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           <div className="flex justify-end gap-2 border-t border-line px-5 py-3">

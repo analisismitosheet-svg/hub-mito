@@ -12,6 +12,7 @@ import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
+import { FILTRO_EMPLEADOS_ACTIVOS } from '@/lib/empleadosActivos'
 import { useAuth } from '@/context/AuthContext'
 import { usePermisosArea } from '@/hooks/usePermisosArea'
 
@@ -242,7 +243,7 @@ export default function FacturacionFabrica() {
     const [todosData, clData, emData, trData, guData] = await Promise.all([
       traerTodo((from, to) => sb.from('facturacion_fabrica').select('*').order('created_at', { ascending: false }).range(from, to)),
       traerTodo((from, to) => sb.from('clientes').select('id,n_cliente,razon_social,transporte,obs_facturacion').eq('estado', 'ACTIVO').order('razon_social').range(from, to)),
-      traerTodo((from, to) => sb.from('empleados').select('id,legajo,nombre').order('nombre').range(from, to)),
+      traerTodo((from, to) => sb.from('empleados').select('id,legajo,nombre').or(FILTRO_EMPLEADOS_ACTIVOS).order('nombre').range(from, to)),
       traerTodo((from, to) => sb.from('transportes').select('id,nombre').order('nombre').range(from, to)),
       traerTodo((from, to) => sb.from('guias').select('id,fecha').range(from, to)),
     ])

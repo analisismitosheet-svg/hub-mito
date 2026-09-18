@@ -4,6 +4,7 @@ import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
+import { FILTRO_EMPLEADOS_ACTIVOS } from '@/lib/empleadosActivos'
 import { useAuth } from '@/context/AuthContext'
 import { SelectBuscar } from '@/components/MultiselectFiltro'
 
@@ -235,7 +236,7 @@ export default function Deposito() {
       .limit(60)
     const lotesData = (ld as Lote[]) ?? []
     setLotes(lotesData)
-    const { data: emp } = await supabase.from('empleados').select('id,nombre').order('nombre')
+    const { data: emp } = await supabase.from('empleados').select('id,nombre').or(FILTRO_EMPLEADOS_ACTIVOS).order('nombre')
     setEmpleados((emp as { id: string; nombre: string }[]) ?? [])
     if (lotesData.length) {
       const ids = lotesData.map((l) => l.id)

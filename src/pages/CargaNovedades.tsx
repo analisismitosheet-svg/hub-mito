@@ -5,6 +5,7 @@ import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
+import { FILTRO_EMPLEADOS_ACTIVOS } from '@/lib/empleadosActivos'
 import { usePermisosArea } from '@/hooks/usePermisosArea'
 import { SelectBuscar, AutocompleteCampo } from '@/components/MultiselectFiltro'
 import { nombresMotivos, colorFilaMotivo } from '@/lib/motivos'
@@ -243,7 +244,7 @@ export default function CargaNovedades() {
   // Empleados (legajo + nombre) para armar una fila por legajo en el mes en curso
   useEffect(() => {
     if (!supabase) return
-    void supabase.from('empleados').select('legajo,nombre').not('legajo', 'is', null).then(({ data }) => {
+    void supabase.from('empleados').select('legajo,nombre').not('legajo', 'is', null).or(FILTRO_EMPLEADOS_ACTIVOS).then(({ data }) => {
       const rows = ((data as { legajo: string | null; nombre: string | null }[] | null) ?? [])
         .filter((e) => e.legajo && e.nombre)
         .map((e) => ({ legajo: String(e.legajo), nombre: String(e.nombre) }))
