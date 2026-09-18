@@ -261,7 +261,6 @@ export default function Empleados() {
   // Columnas con filtro tipo Excel, con los valores que existen en esta categoría
   const columnasFiltro = useMemo(() => {
     return columnas
-      .filter((c) => COLUMNAS[c]?.filtrable)
       .map((clave) => ({
         clave,
         label: COLUMNAS[clave].label,
