@@ -7,11 +7,19 @@ import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
 
-interface ItemTf { id: string; lote_id: string; origen: string; destino: string; articulo: string | null; cantidad: number; estado: string; created_at?: string }
+interface ItemTf { id: string; lote_id: string; origen: string; destino: string; articulo: string | null; cantidad: number; estado: string; created_at?: string; hecho_at?: string | null }
 interface LoteTf { id: string; nombre: string; motivo: string | null; fecha: string; created_at: string }
 
 const PALETA = ['#8b5cf6', '#22d3ee', '#f472b6', '#34d399', '#fbbf24', '#60a5fa', '#f87171', '#a3e635', '#e879f9', '#fb923c', '#c084fc', '#94a3b8']
 const NOMBRES_ESTADO: Record<string, string> = { pendiente: 'Pendiente', hecho: 'Hecho', faltante: 'Faltante', senado: 'Señado' }
+
+function horasEntre(a: string, b: string): number | null {
+  const t1 = new Date(a).getTime()
+  const t2 = new Date(b).getTime()
+  if (isNaN(t1) || isNaN(t2)) return null
+  const ms = t2 - t1
+  return ms > 0 ? ms / 3600000 : null
+}
 
 async function traerTodo<T>(fn: (desde: number, hasta: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>): Promise<{ filas: T[]; error: string | null }> {
   const out: T[] = []
@@ -45,7 +53,7 @@ export default function EstadisticasTransferencias() {
     const its: ItemTf[] = []
     if (ids.length > 0) {
       const { filas, error: e2 } = await traerTodo<ItemTf>((d, h) =>
-        sb.from('transfer_items').select('id,lote_id,origen,destino,articulo,cantidad,estado,created_at')
+        sb.from('transfer_items').select('id,lote_id,origen,destino,articulo,cantidad,estado,created_at,hecho_at')
           .in('lote_id', ids).order('created_at', { ascending: false }).range(d, h))
       if (e2) { setError(e2); setCargando(false); return }
       its.push(...filas)
@@ -84,6 +92,27 @@ export default function EstadisticasTransferencias() {
     const totalUnidades = visibles.reduce((s, i) => s + uni(i), 0)
     const hechos = visibles.filter((i) => i.estado === 'hecho' || i.estado === 'senado').length
 
+    // Tiempo de transferencia: desde que se crea el ítem hasta que el local lo marca hecho
+    const tiempos = new Map<string, { sum: number; n: number }>()
+    for (const i of visibles) {
+      if (i.estado !== 'hecho' && i.estado !== 'senado') continue
+      if (!i.hecho_at || !i.created_at) continue
+      const h = horasEntre(i.created_at, i.hecho_at)
+      if (h == null) continue
+      const acc = tiempos.get(i.origen) ?? { sum: 0, n: 0 }
+      acc.sum += h; acc.n++
+      tiempos.set(i.origen, acc)
+    }
+    const tiempoLocal = Array.from(tiempos.entries()).map(([local, a]) => ({
+      local,
+      promedioHs: Math.round((a.sum / a.n) * 10) / 10,
+      promedioDias: Math.round((a.sum / a.n / 24) * 100) / 100,
+      n: a.n,
+    })).sort((a, b) => b.promedioHs - a.promedioHs)
+    const promGral = tiempoLocal.length
+      ? Math.round((tiempoLocal.reduce((s, t) => s + t.promedioHs, 0) / tiempoLocal.length) * 10) / 10
+      : 0
+
     return {
       totalItems: visibles.length,
       totalUnidades,
@@ -95,6 +124,8 @@ export default function EstadisticasTransferencias() {
       porMotivo: top(porMotivo, 8),
       porEstado: Array.from(porEstado.entries()).map(([name, valor]) => ({ name, valor })),
       porMes: Array.from(porMes.entries()).sort().map(([name, valor]) => ({ name, valor })),
+      tiempoLocal,
+      promGral,
       tabla: Array.from(new Set([...porDestino.keys(), ...porOrigen.keys()]))
         .map((local) => ({ local, enviado: porOrigen.get(local) ?? 0, recibido: porDestino.get(local) ?? 0 }))
         .sort((a, b) => (b.enviado + b.recibido) - (a.enviado + a.recibido)),
@@ -120,12 +151,13 @@ export default function EstadisticasTransferencias() {
       ) : (
         <div className="flex flex-col gap-4">
           {/* KPIs */}
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
             <div className={kpi}><div className="flex items-center gap-2"><Boxes size={16} className="text-violet-500" /><span className={kpiLbl}>Ítems</span></div><div className={kpiVal}>{datos.totalItems.toLocaleString('es-AR')}</div></div>
             <div className={kpi}><div className="flex items-center gap-2"><TrendingUp size={16} className="text-emerald-500" /><span className={kpiLbl}>Unidades</span></div><div className={kpiVal}>{datos.totalUnidades.toLocaleString('es-AR')}</div></div>
             <div className={kpi}><div className="flex items-center gap-2"><Timer size={16} className="text-sky-500" /><span className={kpiLbl}>Lotes</span></div><div className={kpiVal}>{datos.totalLotes}</div></div>
             <div className={kpi}><div className="flex items-center gap-2"><Building2 size={16} className="text-amber-500" /><span className={kpiLbl}>Locales</span></div><div className={kpiVal}>{datos.totalDestinos}</div></div>
             <div className={kpi}><div className="flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500" /><span className={kpiLbl}>Cumplido</span></div><div className={kpiVal}>{datos.cumplido}%</div></div>
+            <div className={kpi}><div className="flex items-center gap-2"><Timer size={16} className="text-orange-500" /><span className={kpiLbl}>T. prom.</span></div><div className={kpiVal}>{datos.promGral} hs</div></div>
           </div>
 
           {/* Por destino y origen */}
@@ -196,6 +228,43 @@ export default function EstadisticasTransferencias() {
                 <Bar dataKey="valor" fill="#34d399" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
+          </div>
+
+          {/* Tiempo promedio por local */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="rounded-2xl border border-line bg-surface p-4">
+              <h3 className="mb-1 text-sm font-semibold text-ink">Tiempo promedio de transferencia por local</h3>
+              <p className="mb-3 text-xs text-sub/70">Desde que se crea el ítem hasta que el local lo marca hecho · {datos.promGral} hs en promedio general.</p>
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={datos.tiempoLocal} margin={{ left: -12, right: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.2)" />
+                  <XAxis dataKey="local" tick={{ fontSize: 10 }} interval={0} angle={-30} textAnchor="end" height={60} />
+                  <YAxis tick={{ fontSize: 10 }} unit=" hs" />
+                  <Tooltip formatter={(v) => [`${Number(v)} hs`, 'Promedio']} />
+                  <Bar dataKey="promedioHs" fill="#fb923c" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="overflow-hidden rounded-2xl border border-line bg-surface">
+              <div className="border-b border-line px-4 py-3"><h3 className="text-sm font-semibold text-ink">Detalle de tiempos por local</h3></div>
+              <div className="max-h-[420px] overflow-y-auto">
+                <table className="w-full text-[13px]">
+                  <thead className="sticky top-0 bg-surface2 text-left text-[11px] uppercase tracking-wider text-sub">
+                    <tr><th className="px-4 py-2">Local</th><th className="px-4 py-2 text-right">Prom. hs</th><th className="px-4 py-2 text-right">Prom. días</th><th className="px-4 py-2 text-right">Ítems</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-line/50">
+                    {datos.tiempoLocal.map((r) => (
+                      <tr key={r.local} className="hover:bg-line/20">
+                        <td className="px-4 py-2 font-medium text-ink">{r.local}</td>
+                        <td className="px-4 py-2 text-right text-orange-600">{r.promedioHs}</td>
+                        <td className="px-4 py-2 text-right text-sub">{r.promedioDias}</td>
+                        <td className="px-4 py-2 text-right text-sub">{r.n}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
 
           {/* Tabla por local */}
