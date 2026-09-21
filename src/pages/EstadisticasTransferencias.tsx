@@ -54,9 +54,11 @@ export default function EstadisticasTransferencias() {
   useEffect(() => { void cargar() }, [cargar])
 
   const datos = useMemo(() => {
+    const fechaPorLote = new Map(lotes.map((l) => [l.id, (l.fecha || l.created_at || '').slice(0, 10)]))
+    const fechaDe = (i: ItemTf) => fechaPorLote.get(i.lote_id) || (i.created_at || '').slice(0, 10)
     let visibles = items
-    if (fechaDesde) visibles = visibles.filter((i) => (i.created_at || '').slice(0, 10) >= fechaDesde)
-    if (fechaHasta) visibles = visibles.filter((i) => (i.created_at || '').slice(0, 10) <= fechaHasta)
+    if (fechaDesde) visibles = visibles.filter((i) => fechaDe(i) >= fechaDesde)
+    if (fechaHasta) visibles = visibles.filter((i) => fechaDe(i) <= fechaHasta)
     if (filtroLocal) visibles = visibles.filter((i) => i.origen === filtroLocal || i.destino === filtroLocal)
     const motivoPorLote = new Map(lotes.map((l) => [l.id, l.motivo || 'SIN MOTIVO']))
     const uni = (i: ItemTf) => Number(i.cantidad) || 1
@@ -75,7 +77,7 @@ export default function EstadisticasTransferencias() {
       porMotivo.set(m, (porMotivo.get(m) ?? 0) + q)
       const es = NOMBRES_ESTADO[i.estado] || i.estado
       porEstado.set(es, (porEstado.get(es) ?? 0) + q)
-      const f = i.created_at || ''
+      const f = fechaDe(i)
       porMes.set(f.slice(0, 7), (porMes.get(f.slice(0, 7)) ?? 0) + q)
     }
 
