@@ -371,6 +371,17 @@ export const APPS: AppDef[] = [
     permiso: 'transferencias.view',
   },
   {
+    id: 'transferencias-estadisticas',
+    areaId: 'compras',
+    title: 'Estadísticas Transferencias',
+    description: 'Dashboard de reposiciones/transferencias por local.',
+    icon: TrendingUp,
+    kind: 'internal',
+    target: '/transferencias/estadisticas',
+    color: '#65a30d',
+    permiso: 'transferencias.view',
+  },
+  {
     id: 'opiniones',
     areaId: 'locales',
     title: 'Opiniones',

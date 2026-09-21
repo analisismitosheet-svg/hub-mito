@@ -13,6 +13,7 @@ import CuentaAmigos from '@/pages/CuentaAmigos'
 import Documentos from '@/pages/Documentos'
 import Manuales from '@/pages/Manuales'
 import Transferencias from '@/pages/Transferencias'
+import EstadisticasTransferencias from '@/pages/EstadisticasTransferencias'
 import Mayorista from '@/pages/Mayorista'
 import Deposito from '@/pages/Deposito'
 import Rma from '@/pages/Rma'
@@ -101,6 +102,14 @@ export default function App() {
             element={
               <PermissionRoute permiso="transferencias.view">
                 <Transferencias />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/transferencias/estadisticas"
+            element={
+              <PermissionRoute permiso="transferencias.view">
+                <EstadisticasTransferencias />
               </PermissionRoute>
             }
           />
