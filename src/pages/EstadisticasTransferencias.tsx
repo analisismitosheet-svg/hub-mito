@@ -13,6 +13,19 @@ interface LoteTf { id: string; nombre: string; motivo: string | null; fecha: str
 const PALETA = ['#8b5cf6', '#22d3ee', '#f472b6', '#34d399', '#fbbf24', '#60a5fa', '#f87171', '#a3e635', '#e879f9', '#fb923c', '#c084fc', '#94a3b8']
 const NOMBRES_ESTADO: Record<string, string> = { pendiente: 'Pendiente', hecho: 'Hecho', faltante: 'Faltante', senado: 'Señado' }
 
+async function traerTodo<T>(fn: (desde: number, hasta: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>): Promise<{ filas: T[]; error: string | null }> {
+  const out: T[] = []
+  const B = 1000
+  for (let from = 0; from < 100000; from += B) {
+    const { data, error } = await fn(from, from + B - 1)
+    if (error) return { filas: out, error: error.message }
+    if (!data || data.length === 0) break
+    out.push(...data)
+    if (data.length < B) break
+  }
+  return { filas: out, error: null }
+}
+
 function horasEntre(a: string, b: string): number | null {
   const t1 = new Date(a).getTime()
   const t2 = new Date(b).getTime()
@@ -47,11 +60,11 @@ export default function EstadisticasTransferencias() {
     if (ids.length > 0) {
       let qItems = sb.from('transfer_items')
         .select('id,lote_id,origen,destino,articulo,cantidad,estado,created_at,hecho_at')
-        .in('lote_id', ids).order('created_at', { ascending: false }).limit(8000)
+        .in('lote_id', ids).order('created_at', { ascending: false })
       if (filtroLocal) qItems = qItems.or(`origen.eq.${filtroLocal},destino.eq.${filtroLocal}`)
-      const { data, error: e2 } = await qItems
-      if (e2) { setError(e2.message); setCargando(false); return }
-      its = (data as ItemTf[]) ?? []
+      const { filas, error: e2 } = await traerTodo<ItemTf>((d, h) => qItems.range(d, h))
+      if (e2) { setError(e2); setCargando(false); return }
+      its = filas
     }
     setLotes(lotesList); setItems(its); setCargando(false)
   }, [fechaDesde, fechaHasta, filtroLocal])
