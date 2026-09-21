@@ -21,19 +21,6 @@ function horasEntre(a: string, b: string): number | null {
   return ms > 0 ? ms / 3600000 : null
 }
 
-async function traerTodo<T>(fn: (desde: number, hasta: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>): Promise<{ filas: T[]; error: string | null }> {
-  const out: T[] = []
-  const B = 1000
-  for (let from = 0; from < 50000; from += B) {
-    const { data, error } = await fn(from, from + B - 1)
-    if (error) return { filas: out, error: error.message }
-    if (!data || data.length === 0) break
-    out.push(...data)
-    if (data.length < B) break
-  }
-  return { filas: out, error: null }
-}
-
 export default function EstadisticasTransferencias() {
   const [items, setItems] = useState<ItemTf[]>([])
   const [lotes, setLotes] = useState<LoteTf[]>([])
@@ -44,19 +31,19 @@ export default function EstadisticasTransferencias() {
     const sb = supabase
     if (!sb) { setCargando(false); return }
     setCargando(true); setError(null)
-    // Solo los lotes más recientes y sus ítems, para no pasarse del timeout
+    // Solo los últimos lotes y un tope de ítems, para no pasarse del timeout
     const { data: lts, error: e1 } = await sb.from('transfer_lotes')
-      .select('id,nombre,motivo,fecha,created_at').order('created_at', { ascending: false }).limit(150)
+      .select('id,nombre,motivo,fecha,created_at').order('created_at', { ascending: false }).limit(60)
     if (e1) { setError(e1.message); setCargando(false); return }
     const lotesList = (lts as LoteTf[]) ?? []
     const ids = lotesList.map((l) => l.id)
-    const its: ItemTf[] = []
+    let its: ItemTf[] = []
     if (ids.length > 0) {
-      const { filas, error: e2 } = await traerTodo<ItemTf>((d, h) =>
-        sb.from('transfer_items').select('id,lote_id,origen,destino,articulo,cantidad,estado,created_at,hecho_at')
-          .in('lote_id', ids).order('created_at', { ascending: false }).range(d, h))
-      if (e2) { setError(e2); setCargando(false); return }
-      its.push(...filas)
+      const { data, error: e2 } = await sb.from('transfer_items')
+        .select('id,lote_id,origen,destino,articulo,cantidad,estado,created_at,hecho_at')
+        .in('lote_id', ids).order('created_at', { ascending: false }).limit(3000)
+      if (e2) { setError(e2.message); setCargando(false); return }
+      its = (data as ItemTf[]) ?? []
     }
     setLotes(lotesList); setItems(its); setCargando(false)
   }, [])
