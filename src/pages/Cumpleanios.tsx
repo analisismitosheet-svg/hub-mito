@@ -33,6 +33,7 @@ export default function Cumpleanios() {
       .from('empleados')
       .select('id,nombre,legajo,fecha_nacimiento,lugar,activo')
       .not('fecha_nacimiento', 'is', null)
+      .or('estado_legajo.in.(NOMINA ACTIVA,PLANES ACTIVOS),estado_legajo.is.null')
       .or(FILTRO_EMPLEADOS_ACTIVOS)
     if (error) { setError(error.message); setCargando(false); return }
     setEmpleados((data as EmpleadoCumple[]) ?? [])
