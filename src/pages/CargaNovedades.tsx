@@ -7,7 +7,7 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { FILTRO_EMPLEADOS_ACTIVOS } from '@/lib/empleadosActivos'
 import { usePermisosArea } from '@/hooks/usePermisosArea'
-import { SelectBuscar, AutocompleteCampo } from '@/components/MultiselectFiltro'
+import MultiselectFiltro, { SelectBuscar, AutocompleteCampo } from '@/components/MultiselectFiltro'
 import { nombresMotivos, colorFilaMotivo } from '@/lib/motivos'
 import { nombresTipos, invalidarTipos, cargarTipos } from '@/lib/tipos'
 
@@ -201,14 +201,22 @@ export default function CargaNovedades() {
   const [abiertoTipos, setAbiertoTipos] = useState(false)
   const [empleadosLegajo, setEmpleadosLegajo] = useState<{ legajo: string; nombre: string }[]>([])
 
-  // Orden de la tabla
-  const [orden, setOrden] = useState<{ clave: string; dir: 1 | -1 } | null>({ clave: 'nombre_completo', dir: 1 })
+  // Orden y filtros por columna de la tabla (multifiltro + multisort)
+  const [sortKeys, setSortKeys] = useState<{ clave: string; dir: 1 | -1 }[]>([{ clave: 'nombre_completo', dir: 1 }])
+  const [filtrosCol, setFiltrosCol] = useState<Record<string, string[]>>({})
   const toggleOrden = (clave: string) =>
-    setOrden((o) =>
-      o?.clave === clave
-        ? { clave, dir: o.dir === 1 ? -1 : 1 }
-        : { clave, dir: 1 },
-    )
+    setSortKeys((prev) => {
+      if (prev[0]?.clave === clave) {
+        return prev.map((s, i) => (i === 0 ? { ...s, dir: s.dir === 1 ? -1 : 1 } : s))
+      }
+      return [{ clave, dir: 1 }, ...prev.filter((s) => s.clave !== clave)]
+    })
+  const sortArrow = (clave: string) => {
+    const i = sortKeys.findIndex((s) => s.clave === clave)
+    if (i < 0) return '▽'
+    const s = sortKeys[i]
+    return s.dir === 1 ? `▲${i > 0 ? String(i + 1) : ''}` : `▼${i > 0 ? String(i + 1) : ''}`
+  }
 
   const cargar = useCallback(async () => {
     if (!supabase) { setCargando(false); return }
@@ -418,6 +426,12 @@ export default function CargaNovedades() {
   }, [])
   const esMesEnCurso = fAnio === mesEnCurso.anio && fMes === mesEnCurso.mes
 
+  const colVal = useCallback((n: Novedad, clave: string): unknown => {
+    if (clave === 'dias') return esMotivoConDias(n.motivo) ? diasDesdeHasta(n.desde, n.hasta) ?? '' : ''
+    if (clave === 'mes_liquidacion') return mesCorto(n.mes_liquidacion)
+    return (n as unknown as Record<string, unknown>)[clave]
+  }, [])
+
   const lista = useMemo(() => {
     let r = todos
     if (fAnio) r = r.filter((n) => (n.anio || '').trim() === fAnio)
@@ -460,29 +474,42 @@ export default function CargaNovedades() {
         }))
       r = [...r, ...vacias]
     }
-    if (orden) {
+    for (const [clave, vals] of Object.entries(filtrosCol)) {
+      if (!vals || vals.length === 0) continue
+      r = r.filter((n) => vals.includes(String(colVal(n, clave) ?? '')))
+    }
+    if (sortKeys.length) {
       r = [...r].sort((a, b) => {
-        const av = (a as unknown as Record<string, unknown>)[orden.clave]
-        const bv = (b as unknown as Record<string, unknown>)[orden.clave]
-        let c = 0
-        if (orden.clave === 'dias') {
-          const da = esMotivoConDias(a.motivo) ? diasDesdeHasta(a.desde, a.hasta) ?? -1 : -1
-          const db = esMotivoConDias(b.motivo) ? diasDesdeHasta(b.desde, b.hasta) ?? -1 : -1
-          c = da - db
-        } else if (orden.clave === 'numero') {
-          c = (Number(av) || 0) - (Number(bv) || 0)
-        } else if (orden.clave === 'anio') {
-          c = ((av ?? '') as string).localeCompare((bv ?? '') as string, undefined, { numeric: true })
-        } else if (orden.clave === 'mes_liquidacion') {
-          c = (MESES.indexOf(mesCorto(av as string | null)) || 0) - (MESES.indexOf(mesCorto(bv as string | null)) || 0)
-        } else {
-          c = String(av ?? '').localeCompare(String(bv ?? ''), 'es', { sensitivity: 'base' })
+        for (const k of sortKeys) {
+          const av = colVal(a, k.clave)
+          const bv = colVal(b, k.clave)
+          const sa = String(av ?? '').trim()
+          const sb = String(bv ?? '').trim()
+          let c = 0
+          if (k.clave === 'dias' || k.clave === 'numero' || k.clave === 'anio' || k.clave === 'minutos') {
+            c = (Number(sa.replace(',', '.')) || 0) - (Number(sb.replace(',', '.')) || 0)
+          } else if (k.clave === 'mes_liquidacion') {
+            c = (MESES.indexOf(mesCorto(av as string | null)) || 0) - (MESES.indexOf(mesCorto(bv as string | null)) || 0)
+          } else {
+            c = sa.localeCompare(sb, 'es', { sensitivity: 'base' })
+          }
+          if (c !== 0) return c * k.dir
         }
-        return c === 0 ? 0 : c * orden.dir
+        return 0
       })
     }
     return r
-  }, [todos, fAnio, fMes, fMotivo, fLocal, fTipo, q, orden, esMesEnCurso, empleadosLegajo])
+  }, [todos, fAnio, fMes, fMotivo, fLocal, fTipo, q, sortKeys, filtrosCol, esMesEnCurso, empleadosLegajo])
+
+  const columnasNov = ['anio', 'mes_liquidacion', 'numero', 'nombre_completo', 'tipo', 'fecha', 'desde', 'hasta', 'dias', 'local', 'motivo', 'novedad', 'minutos', 'control']
+  const valoresCol = useMemo(() => {
+    const out: Record<string, string[]> = {}
+    for (const clave of columnasNov) {
+      out[clave] = Array.from(new Set(lista.map((n) => String(colVal(n, clave) ?? '')))).filter(Boolean)
+        .sort((a, b) => a.localeCompare(b, 'es', { numeric: true }))
+    }
+    return out
+  }, [lista, colVal])
 
   // Autocompletar empleado (por nombre o N° de legajo) en el modal de novedad
   const opcionesEmp = useMemo(
@@ -575,15 +602,30 @@ export default function CargaNovedades() {
                 <tr className="bg-zinc-800 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-300">
                   {([['anio', 'Año'], ['mes_liquidacion', 'Mes'], ['numero', 'N°'], ['nombre_completo', 'Nombre'], ['tipo', 'Tipo'], ['fecha', 'Fecha'], ['desde', 'Desde'], ['hasta', 'Hasta'], ['dias', 'Días'], ['local', 'Local'], ['motivo', 'Motivo'], ['novedad', 'Novedad'], ['minutos', 'Min'], ['control', 'Control']] as const).map(([clave, label]) => (
                     <th key={clave} className="px-2 py-2 whitespace-nowrap">
-                      <button onClick={() => toggleOrden(clave)} className={'inline-flex items-center gap-1 uppercase tracking-wider transition hover:text-white ' + (orden?.clave === clave ? 'text-white' : '')} title={`Ordenar por ${label}`}>
+                      <button onClick={() => toggleOrden(clave)} className={'inline-flex items-center gap-1 uppercase tracking-wider transition hover:text-white ' + (sortKeys[0]?.clave === clave ? 'text-white' : '')} title={`Ordenar por ${label}`}>
                         {label}
-                        <span className="text-[9px] leading-none">
-                          {orden?.clave === clave ? (orden.dir === 1 ? '▲' : '▼') : '▽'}
-                        </span>
+                        <span className="text-[9px] leading-none">{sortArrow(clave)}</span>
                       </button>
                     </th>
                   ))}
                   <th className="px-2 py-2 text-right whitespace-nowrap">Acc</th>
+                </tr>
+                <tr className="bg-zinc-800/40">
+                  {columnasNov.map((clave, i) => {
+                    const [, label] = [['anio', 'Año'], ['mes_liquidacion', 'Mes'], ['numero', 'N°'], ['nombre_completo', 'Nombre'], ['tipo', 'Tipo'], ['fecha', 'Fecha'], ['desde', 'Desde'], ['hasta', 'Hasta'], ['dias', 'Días'], ['local', 'Local'], ['motivo', 'Motivo'], ['novedad', 'Novedad'], ['minutos', 'Min'], ['control', 'Control']][i]
+                    return (
+                      <th key={clave} className="px-1 py-1 align-top">
+                        <MultiselectFiltro
+                          compacto
+                          label={label}
+                          opciones={(valoresCol[clave] ?? []).map((v) => ({ id: v, label: v }))}
+                          seleccionadas={new Set(filtrosCol[clave] ?? [])}
+                          onChange={(s) => setFiltrosCol((prev) => ({ ...prev, [clave]: Array.from(s) }))}
+                        />
+                      </th>
+                    )
+                  })}
+                  <th className="px-1 py-1 align-top" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-line/50 bg-surface">

@@ -159,8 +159,7 @@ export default function Empleados() {
   const [error, setError] = useState<string | null>(null)
   const [busqueda, setBusqueda] = useState('')
   const [filtros, setFiltros] = useState<Record<string, string[]>>({})
-  const [sortKey, setSortKey] = useState<string>('nombre')
-  const [sortAsc, setSortAsc] = useState(true)
+  const [sortKeys, setSortKeys] = useState<{ clave: string; dir: 1 | -1 }[]>([{ clave: 'nombre', dir: 1 }])
   const [modal, setModal] = useState<'new' | 'edit' | null>(null)
   const [sel, setSel] = useState<Empleado | null>(null)
   const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
@@ -289,28 +288,41 @@ export default function Empleados() {
     })
     const numericas = new Set(['legajo', 'horas', 'antiguedad', 'vacaciones', 'dni'])
     out.sort((a, b) => {
-      const av = valor(a, sortKey)
-      const bv = valor(b, sortKey)
-      const sa = String(av ?? '').trim()
-      const sb = String(bv ?? '').trim()
-      if (numericas.has(sortKey)) {
-        const na = Number(sa.replace(',', '.'))
-        const nb = Number(sb.replace(',', '.'))
-        if (!isNaN(na) && !isNaN(nb)) return sortAsc ? na - nb : nb - na
+      for (const k of sortKeys) {
+        const av = valor(a, k.clave)
+        const bv = valor(b, k.clave)
+        const sa = String(av ?? '').trim()
+        const sb = String(bv ?? '').trim()
+        let c = 0
+        if (numericas.has(k.clave)) {
+          const na = Number(sa.replace(',', '.'))
+          const nb = Number(sb.replace(',', '.'))
+          if (!isNaN(na) && !isNaN(nb)) c = na - nb
+        }
+        if (c === 0) c = sa.localeCompare(sb, 'es', { numeric: true })
+        if (c !== 0) return c * k.dir
       }
-      const cmp = sa.localeCompare(sb, 'es', { numeric: true })
-      return sortAsc ? cmp : -cmp
+      return 0
     })
     return out
-  }, [empleados, busqueda, filtros, sortKey, sortAsc, valor])
+  }, [empleados, busqueda, filtros, sortKeys, valor])
 
   const hayFiltros = Object.values(filtros).some((v) => v.length > 0) || !!busqueda
 
   function toggleSort(clave: string) {
-    if (sortKey === clave) setSortAsc((a) => !a)
-    else { setSortKey(clave); setSortAsc(true) }
+    setSortKeys((prev) => {
+      if (prev[0]?.clave === clave) {
+        return prev.map((s, i) => (i === 0 ? { ...s, dir: s.dir === 1 ? -1 : 1 } : s))
+      }
+      return [{ clave, dir: 1 }, ...prev.filter((s) => s.clave !== clave)]
+    })
   }
-  const sortArrow = (clave: string) => (sortKey === clave ? (sortAsc ? ' ↑' : ' ↓') : '')
+  const sortArrow = (clave: string) => {
+    const i = sortKeys.findIndex((s) => s.clave === clave)
+    if (i < 0) return ''
+    const s = sortKeys[i]
+    return s.dir === 1 ? ` ↑${i > 0 ? String(i + 1) : ''}` : ` ↓${i > 0 ? String(i + 1) : ''}`
+  }
 
   // Valores únicos por campo (para el autocomplete del modal)
   const opcionesEmpleado = useMemo(() => {

@@ -8,7 +8,7 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { FILTRO_EMPLEADOS_ACTIVOS } from '@/lib/empleadosActivos'
 import { usePermisosArea } from '@/hooks/usePermisosArea'
-import { SelectBuscar, AutocompleteCampo } from '@/components/MultiselectFiltro'
+import MultiselectFiltro, { SelectBuscar, AutocompleteCampo } from '@/components/MultiselectFiltro'
 import { nombresMotivos, colorFilaMotivo } from '@/lib/motivos'
 import { nombresTipos } from '@/lib/tipos'
 
@@ -110,6 +110,8 @@ export default function ResumenNovedades() {
   const [fMotivo, setFMotivo] = useState('')
   const [fLocal, setFLocal] = useState('')
   const [fTipo, setFTipo] = useState('')
+  const [sortKeys, setSortKeys] = useState<{ clave: string; dir: 1 | -1 }[]>([{ clave: 'nombre_completo', dir: 1 }])
+  const [filtrosCol, setFiltrosCol] = useState<Record<string, string[]>>({})
   const [motivos, setMotivos] = useState<string[]>([])
   const [tipos, setTipos] = useState<string[]>([])
   const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
@@ -199,6 +201,57 @@ export default function ResumenNovedades() {
     }
     return r
   }, [todos, fAnio, fMesDesde, fMesHasta, fMotivo, fLocal, fTipo, term])
+
+  const colVal = useCallback((n: Novedad, clave: string): unknown => {
+    if (clave === 'mes') return mesNombre(n.mes_liquidacion)
+    return (n as unknown as Record<string, unknown>)[clave]
+  }, [])
+
+  const columnasRes = ['mes', 'numero', 'nombre_completo', 'tipo', 'fecha', 'local', 'motivo', 'novedad', 'minutos']
+  const valoresCol = useMemo(() => {
+    const out: Record<string, string[]> = {}
+    for (const clave of columnasRes) {
+      out[clave] = Array.from(new Set(lista.map((n) => String(colVal(n, clave) ?? '')))).filter(Boolean)
+        .sort((a, b) => a.localeCompare(b, 'es', { numeric: true }))
+    }
+    return out
+  }, [lista, colVal])
+
+  const listaTabla = useMemo(() => {
+    let r = lista
+    for (const [clave, vals] of Object.entries(filtrosCol)) {
+      if (!vals || vals.length === 0) continue
+      r = r.filter((n) => vals.includes(String(colVal(n, clave) ?? '')))
+    }
+    if (sortKeys.length) {
+      r = [...r].sort((a, b) => {
+        for (const k of sortKeys) {
+          const av = colVal(a, k.clave)
+          const bv = colVal(b, k.clave)
+          let c = 0
+          if (k.clave === 'numero' || k.clave === 'minutos') {
+            c = (Number(String(av ?? '').replace(',', '.')) || 0) - (Number(String(bv ?? '').replace(',', '.')) || 0)
+          } else {
+            c = String(av ?? '').localeCompare(String(bv ?? ''), 'es', { numeric: true })
+          }
+          if (c !== 0) return c * k.dir
+        }
+        return 0
+      })
+    }
+    return r
+  }, [lista, filtrosCol, sortKeys, colVal])
+
+  const toggleOrden = (clave: string) => setSortKeys((prev) => {
+    if (prev[0]?.clave === clave) return prev.map((s, i) => (i === 0 ? { ...s, dir: s.dir === 1 ? -1 : 1 } : s))
+    return [{ clave, dir: 1 }, ...prev.filter((s) => s.clave !== clave)]
+  })
+  const sortArrow = (clave: string) => {
+    const i = sortKeys.findIndex((s) => s.clave === clave)
+    if (i < 0) return '▽'
+    const s = sortKeys[i]
+    return s.dir === 1 ? `▲${i > 0 ? String(i + 1) : ''}` : `▼${i > 0 ? String(i + 1) : ''}`
+  }
 
   // ---- KPIs ----
   const kpis = useMemo(() => {
@@ -558,20 +611,36 @@ export default function ResumenNovedades() {
             <table className="w-full table-auto border-collapse text-sm leading-tight">
               <thead>
                 <tr className="bg-zinc-800 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-300">
-                  <th className="px-2 py-2 whitespace-nowrap">Mes</th>
-                  <th className="px-2 py-2 whitespace-nowrap">N°</th>
-                  <th className="px-2 py-2 whitespace-nowrap">Nombre</th>
-                  <th className="px-2 py-2 whitespace-nowrap">Tipo</th>
-                  <th className="px-2 py-2 text-center whitespace-nowrap">Fecha</th>
-                  <th className="px-2 py-2 whitespace-nowrap">Local</th>
-                  <th className="px-2 py-2 whitespace-nowrap">Motivo</th>
-                  <th className="px-2 py-2 whitespace-nowrap">Novedad</th>
-                  <th className="px-2 py-2 text-center whitespace-nowrap">Min</th>
+                  {([['mes', 'Mes'], ['numero', 'N°'], ['nombre_completo', 'Nombre'], ['tipo', 'Tipo'], ['fecha', 'Fecha'], ['local', 'Local'], ['motivo', 'Motivo'], ['novedad', 'Novedad'], ['minutos', 'Min']] as const).map(([clave, label]) => (
+                    <th key={clave} className="px-2 py-2 whitespace-nowrap">
+                      <button onClick={() => toggleOrden(clave)} className={'inline-flex items-center gap-1 uppercase tracking-wider transition hover:text-white ' + (sortKeys[0]?.clave === clave ? 'text-white' : '')} title={`Ordenar por ${label}`}>
+                        {label}
+                        <span className="text-[9px] leading-none">{sortArrow(clave)}</span>
+                      </button>
+                    </th>
+                  ))}
                   <th className="px-2 py-2 text-right whitespace-nowrap">Acc</th>
+                </tr>
+                <tr className="bg-zinc-800/40">
+                  {columnasRes.map((clave, i) => {
+                    const label = [['mes', 'Mes'], ['numero', 'N°'], ['nombre_completo', 'Nombre'], ['tipo', 'Tipo'], ['fecha', 'Fecha'], ['local', 'Local'], ['motivo', 'Motivo'], ['novedad', 'Novedad'], ['minutos', 'Min']][i][1]
+                    return (
+                      <th key={clave} className="px-1 py-1 align-top">
+                        <MultiselectFiltro
+                          compacto
+                          label={label}
+                          opciones={(valoresCol[clave] ?? []).map((v) => ({ id: v, label: v }))}
+                          seleccionadas={new Set(filtrosCol[clave] ?? [])}
+                          onChange={(s) => setFiltrosCol((prev) => ({ ...prev, [clave]: Array.from(s) }))}
+                        />
+                      </th>
+                    )
+                  })}
+                  <th className="px-1 py-1 align-top" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-line/50 bg-surface">
-                {lista.map((n) => (
+                {listaTabla.map((n) => (
                   <tr key={n.id} className="transition hover:bg-line/20">
                     <td className="px-2 py-1.5 text-sub">{n.mes_liquidacion || '-'}</td>
                     <td className="px-2 py-1.5 text-sub">{n.numero || '-'}</td>
