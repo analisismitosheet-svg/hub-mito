@@ -31,22 +31,32 @@ export default function EstadisticasTransferencias() {
   const [lotes, setLotes] = useState<LoteTf[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [limite, setLimite] = useState(4000)
 
   const cargar = useCallback(async () => {
     const sb = supabase
     if (!sb) { setCargando(false); return }
     setCargando(true); setError(null)
-    const { filas: lts, error: e1 } = await traerTodo<LoteTf>((d, h) => sb.from('transfer_lotes').select('id,nombre,motivo,fecha,created_at').order('created_at', { ascending: false }).range(d, h))
-    const { filas: its, error: e2 } = await traerTodo<ItemTf>((d, h) => sb.from('transfer_items').select('id,lote_id,origen,destino,articulo,cantidad,estado,created_at').order('created_at', { ascending: false }).range(d, h))
-    if (e1 || e2) { setError(e1 || e2 || 'Error'); setCargando(false); return }
-    setLotes(lts); setItems(its); setCargando(false)
+    // Solo los lotes más recientes y sus ítems, para no pasarse del timeout
+    const { data: lts, error: e1 } = await sb.from('transfer_lotes')
+      .select('id,nombre,motivo,fecha,created_at').order('created_at', { ascending: false }).limit(150)
+    if (e1) { setError(e1.message); setCargando(false); return }
+    const lotesList = (lts as LoteTf[]) ?? []
+    const ids = lotesList.map((l) => l.id)
+    const its: ItemTf[] = []
+    if (ids.length > 0) {
+      const { filas, error: e2 } = await traerTodo<ItemTf>((d, h) =>
+        sb.from('transfer_items').select('id,lote_id,origen,destino,articulo,cantidad,estado,created_at')
+          .in('lote_id', ids).order('created_at', { ascending: false }).range(d, h))
+      if (e2) { setError(e2); setCargando(false); return }
+      its.push(...filas)
+    }
+    setLotes(lotesList); setItems(its); setCargando(false)
   }, [])
 
   useEffect(() => { void cargar() }, [cargar])
 
   const datos = useMemo(() => {
-    const visibles = items.slice(0, limite)
+    const visibles = items
     const motivoPorLote = new Map(lotes.map((l) => [l.id, l.motivo || 'SIN MOTIVO']))
     const uni = (i: ItemTf) => Number(i.cantidad) || 1
 
@@ -89,7 +99,7 @@ export default function EstadisticasTransferencias() {
         .map((local) => ({ local, enviado: porOrigen.get(local) ?? 0, recibido: porDestino.get(local) ?? 0 }))
         .sort((a, b) => (b.enviado + b.recibido) - (a.enviado + a.recibido)),
     }
-  }, [items, lotes, limite])
+  }, [items, lotes])
 
   const kpi = 'rounded-2xl border border-line bg-surface p-4'
   const kpiVal = 'font-display text-2xl font-bold text-ink'
@@ -98,20 +108,9 @@ export default function EstadisticasTransferencias() {
   return (
     <Layout wide>
       <BackButton />
-      <header className="mb-3 mt-2 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 font-display text-2xl font-semibold text-ink"><TrendingUp size={22} className="text-lime-500" aria-hidden /> Estadísticas Transferencias</h1>
-          <p className="text-xs text-sub/70">Reposiciones / transferencias por local (dashboard).</p>
-        </div>
-        <div className="flex items-center gap-2 rounded-xl border border-line bg-surface px-3 py-2">
-          <span className="text-xs text-sub">Ver</span>
-          <select value={limite} onChange={(e) => setLimite(Number(e.target.value))} className="rounded-lg border border-line bg-surface2 px-2 py-1 text-xs">
-            <option value={1000}>1.000 ítems</option>
-            <option value={4000}>4.000 ítems</option>
-            <option value={10000}>10.000 ítems</option>
-            <option value={100000}>Todos</option>
-          </select>
-        </div>
+      <header className="mb-3 mt-2">
+        <h1 className="flex items-center gap-2 font-display text-2xl font-semibold text-ink"><TrendingUp size={22} className="text-lime-500" aria-hidden /> Estadísticas Transferencias</h1>
+        <p className="text-xs text-sub/70">Reposiciones / transferencias por local · últimos lotes ({items.length.toLocaleString('es-AR')} ítems).</p>
       </header>
 
       {error && <p role="alert" className="mb-4 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
