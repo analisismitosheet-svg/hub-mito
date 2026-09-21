@@ -34,22 +34,27 @@ export default function EstadisticasTransferencias() {
     const sb = supabase
     if (!sb) { setCargando(false); return }
     setCargando(true); setError(null)
-    // Solo los últimos lotes y un tope de ítems, para no pasarse del timeout
-    const { data: lts, error: e1 } = await sb.from('transfer_lotes')
-      .select('id,nombre,motivo,fecha,created_at').order('created_at', { ascending: false }).limit(60)
+    // La fecha es la que limita: si hay desde/hasta, se filtran los lotes en el servidor
+    let qLotes = sb.from('transfer_lotes').select('id,nombre,motivo,fecha,created_at').order('created_at', { ascending: false })
+    if (fechaDesde) qLotes = qLotes.gte('fecha', fechaDesde)
+    if (fechaHasta) qLotes = qLotes.lte('fecha', fechaHasta)
+    if (!fechaDesde && !fechaHasta) qLotes = qLotes.limit(200)
+    const { data: lts, error: e1 } = await qLotes
     if (e1) { setError(e1.message); setCargando(false); return }
     const lotesList = (lts as LoteTf[]) ?? []
     const ids = lotesList.map((l) => l.id)
     let its: ItemTf[] = []
     if (ids.length > 0) {
-      const { data, error: e2 } = await sb.from('transfer_items')
+      let qItems = sb.from('transfer_items')
         .select('id,lote_id,origen,destino,articulo,cantidad,estado,created_at,hecho_at')
-        .in('lote_id', ids).order('created_at', { ascending: false }).limit(3000)
+        .in('lote_id', ids).order('created_at', { ascending: false }).limit(8000)
+      if (filtroLocal) qItems = qItems.or(`origen.eq.${filtroLocal},destino.eq.${filtroLocal}`)
+      const { data, error: e2 } = await qItems
       if (e2) { setError(e2.message); setCargando(false); return }
       its = (data as ItemTf[]) ?? []
     }
     setLotes(lotesList); setItems(its); setCargando(false)
-  }, [])
+  }, [fechaDesde, fechaHasta, filtroLocal])
 
   useEffect(() => { void cargar() }, [cargar])
 
@@ -136,7 +141,7 @@ export default function EstadisticasTransferencias() {
       <BackButton />
       <header className="mb-3 mt-2">
         <h1 className="flex items-center gap-2 font-display text-2xl font-semibold text-ink"><TrendingUp size={22} className="text-lime-500" aria-hidden /> Estadísticas Transferencias</h1>
-        <p className="text-xs text-sub/70">Reposiciones / transferencias por local · últimos lotes ({items.length.toLocaleString('es-AR')} ítems cargados).</p>
+        <p className="text-xs text-sub/70">Reposiciones / transferencias por local · {items.length.toLocaleString('es-AR')} ítems {fechaDesde || fechaHasta ? 'según el rango de fechas' : 'cargados'}.</p>
         <div className="mt-3 flex flex-wrap items-end gap-2 rounded-2xl border border-line bg-surface p-3">
           <label className="block">
             <span className="mb-0.5 block text-[11px] font-medium text-sub">Desde</span>
