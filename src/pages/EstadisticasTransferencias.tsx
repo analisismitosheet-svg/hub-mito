@@ -26,6 +26,9 @@ export default function EstadisticasTransferencias() {
   const [lotes, setLotes] = useState<LoteTf[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [fechaDesde, setFechaDesde] = useState('')
+  const [fechaHasta, setFechaHasta] = useState('')
+  const [filtroLocal, setFiltroLocal] = useState('')
 
   const cargar = useCallback(async () => {
     const sb = supabase
@@ -51,7 +54,10 @@ export default function EstadisticasTransferencias() {
   useEffect(() => { void cargar() }, [cargar])
 
   const datos = useMemo(() => {
-    const visibles = items
+    let visibles = items
+    if (fechaDesde) visibles = visibles.filter((i) => (i.created_at || '').slice(0, 10) >= fechaDesde)
+    if (fechaHasta) visibles = visibles.filter((i) => (i.created_at || '').slice(0, 10) <= fechaHasta)
+    if (filtroLocal) visibles = visibles.filter((i) => i.origen === filtroLocal || i.destino === filtroLocal)
     const motivoPorLote = new Map(lotes.map((l) => [l.id, l.motivo || 'SIN MOTIVO']))
     const uni = (i: ItemTf) => Number(i.cantidad) || 1
 
@@ -117,7 +123,7 @@ export default function EstadisticasTransferencias() {
         .map((local) => ({ local, enviado: porOrigen.get(local) ?? 0, recibido: porDestino.get(local) ?? 0 }))
         .sort((a, b) => (b.enviado + b.recibido) - (a.enviado + a.recibido)),
     }
-  }, [items, lotes])
+  }, [items, lotes, fechaDesde, fechaHasta, filtroLocal])
 
   const kpi = 'rounded-2xl border border-line bg-surface p-4'
   const kpiVal = 'font-display text-2xl font-bold text-ink'
@@ -128,7 +134,28 @@ export default function EstadisticasTransferencias() {
       <BackButton />
       <header className="mb-3 mt-2">
         <h1 className="flex items-center gap-2 font-display text-2xl font-semibold text-ink"><TrendingUp size={22} className="text-lime-500" aria-hidden /> Estadísticas Transferencias</h1>
-        <p className="text-xs text-sub/70">Reposiciones / transferencias por local · últimos lotes ({items.length.toLocaleString('es-AR')} ítems).</p>
+        <p className="text-xs text-sub/70">Reposiciones / transferencias por local · últimos lotes ({items.length.toLocaleString('es-AR')} ítems cargados).</p>
+        <div className="mt-3 flex flex-wrap items-end gap-2 rounded-2xl border border-line bg-surface p-3">
+          <label className="block">
+            <span className="mb-0.5 block text-[11px] font-medium text-sub">Desde</span>
+            <input type="date" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)} className="h-8 rounded-lg border border-line bg-surface2 px-2 text-xs" />
+          </label>
+          <label className="block">
+            <span className="mb-0.5 block text-[11px] font-medium text-sub">Hasta</span>
+            <input type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} className="h-8 rounded-lg border border-line bg-surface2 px-2 text-xs" />
+          </label>
+          <label className="block">
+            <span className="mb-0.5 block text-[11px] font-medium text-sub">Local</span>
+            <select value={filtroLocal} onChange={(e) => setFiltroLocal(e.target.value)} className="h-8 rounded-lg border border-line bg-surface2 px-2 text-xs">
+              <option value="">Todos</option>
+              {Array.from(new Set(items.flatMap((i) => [i.origen, i.destino]))).sort((a, b) => a.localeCompare(b, 'es')).map((l) => <option key={l} value={l}>{l}</option>)}
+            </select>
+          </label>
+          {(fechaDesde || fechaHasta || filtroLocal) && (
+            <button onClick={() => { setFechaDesde(''); setFechaHasta(''); setFiltroLocal('') }} className="btn-press h-8 rounded-lg border border-line bg-surface2 px-2.5 text-xs font-medium text-ink hover:bg-line">Limpiar</button>
+          )}
+          <span className="ml-auto self-center text-[11px] text-sub/70">{datos.totalItems.toLocaleString('es-AR')} ítems en el filtro</span>
+        </div>
       </header>
 
       {error && <p role="alert" className="mb-4 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
