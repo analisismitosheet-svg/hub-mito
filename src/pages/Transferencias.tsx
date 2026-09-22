@@ -378,23 +378,21 @@ export default function Transferencias() {
     setUsuariosLocales((uRes.data as { email: string; local: string }[]) ?? [])
     const lotesData = (ld.data as Lote[]) ?? []
     setLotes(lotesData)
-    if (lotesData.length) {
-      const ids = lotesData.map((l) => l.id)
-      // Usamos la RPC SECURITY DEFINER listar_transfer_items: valida los
-      // permisos UNA sola vez (no por fila) y evita que la RLS por-fila con
-      // funciones no inmutables baje a timeout con tablas grandes.
-      const origenes = !verTodo && origenesUsuario.length ? origenesUsuario : null
-      const { data: its, error: itemsErr } = await supabase.rpc('listar_transfer_items', {
-        p_lotes: ids,
+    // Cargamos las líneas lote por lote (la RPC con todos los lotes a la vez
+    // corta en archivos grandes). Cada lote devuelve su jsonb completo.
+    const acc: Item[] = []
+    const origenes = !verTodo && origenesUsuario.length ? origenesUsuario : null
+    for (const l of lotesData) {
+      const { data, error } = await supabase.rpc('listar_transfer_items', {
+        p_lotes: [l.id],
         p_origenes: origenes,
       })
-      if (itemsErr) setError(`No se pudieron cargar las líneas: ${itemsErr.message}`)
-      setItems((its as Item[]) ?? [])
-    } else {
-      setItems([])
+      if (error) { setError(`No se pudieron cargar las líneas: ${error.message}`); break }
+      if (data) acc.push(...(data as Item[]))
     }
+    setItems(acc)
     setCargando(false)
-  }, [])
+  }, [verTodo, origenesUsuario])
 
   useEffect(() => {
     void cargar()
