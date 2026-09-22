@@ -294,7 +294,7 @@ export default async function handler(req: Req, res: Res) {
 
   const enviados: string[] = []
   const sinMail: string[] = []
-  const errores: string[] = []
+  const errores: { origen: string; mensaje: string }[] = []
   const total = porOrigen.size
 
   if (total === 0) return res.status(400).json({ error: 'El lote no tiene ítems con origen' })
