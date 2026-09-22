@@ -262,15 +262,24 @@ export default async function handler(req: Req, res: Res) {
   const lote = ((await loteResp.json()) as Lote[])?.[0]
   if (!lote) return res.status(404).json({ error: 'Lote no encontrado' })
 
-  // Leer ítems
-  let itemsResp: Response
+  // Leer ítems (paginar: PostgREST limita cada respuesta a 1000 filas)
+  const items: TransItem[] = []
   try {
-    itemsResp = await fetch(`${base}/rest/v1/transfer_items?lote_id=eq.${loteId}&select=id,lote_id,origen,destino,articulo,descripcion,color,talle,cantidad`, { headers })
-  } catch {
-    return res.status(502).json({ error: 'No se pudieron leer los ítems' })
+    let desde = 0
+    for (;;) {
+      const resp = await fetch(
+        `${base}/rest/v1/transfer_items?lote_id=eq.${loteId}&select=id,lote_id,origen,destino,articulo,descripcion,color,talle,cantidad`,
+        { headers: { ...serviceHeaders()!, 'Range-Unit': 'items', 'Range': `${desde}-${desde + 999}` } },
+      )
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+      const chunk = (await resp.json()) as TransItem[]
+      items.push(...chunk)
+      if (chunk.length < 1000) break
+      desde += 1000
+    }
+  } catch (e) {
+    return res.status(502).json({ error: `No se pudieron leer los ítems: ${e instanceof Error ? e.message : String(e)}` })
   }
-  if (!itemsResp.ok) return res.status(502).json({ error: 'No se pudieron leer los ítems' })
-  const items = (await itemsResp.json()) as TransItem[]
 
   // Leer usuarios aprobados con local
   let usersResp: Response
