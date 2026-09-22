@@ -245,6 +245,7 @@ export default async function handler(req: Req, res: Res) {
   if (!loteId) return res.status(400).json({ error: 'Falta lote_id' })
 
   const dryRun = body.dry_run === true || body.dry_run === 'true'
+  const soloOrigenes = Array.isArray(body.origenes) ? (body.origenes as string[]).map((o) => String(o).trim()).filter(Boolean) : null
 
   const headers = serviceHeaders()
   if (!headers) return res.status(500).json({ error: 'Falta configurar SUPABASE_SERVICE_ROLE_KEY' })
@@ -299,7 +300,7 @@ export default async function handler(req: Req, res: Res) {
   if (total === 0) return res.status(400).json({ error: 'El lote no tiene ítems con origen' })
 
   // Calcula los destinatarios de cada origen (mismo matcheo que el envío real).
-  const detalle = Array.from(porOrigen.entries()).map(([origen, its]) => {
+  let detalle = Array.from(porOrigen.entries()).map(([origen, its]) => {
     const variantes = variantesLocal(origen)
     const mails = usuarios
       .filter((u) => u.local && variantes.includes(canonLocal(u.local)))
@@ -307,6 +308,13 @@ export default async function handler(req: Req, res: Res) {
       .filter((e, i, ar) => e && ar.indexOf(e) === i)
     return { origen, mails, items: its }
   })
+
+  // Si viene una lista de orígenes, solo se envían esos (reenvío de pendientes).
+  if (soloOrigenes) {
+    detalle = detalle.filter((d) => soloOrigenes.includes(d.origen))
+  }
+
+  if (detalle.length === 0) return res.status(400).json({ error: 'No hay orígenes para enviar' })
 
   // Modo "solo visión": resuelve los destinatarios sin enviar (para que la UI
   // muestre a quién le llegaría, evitando la RLS de la tabla usuarios del front).
@@ -338,7 +346,7 @@ export default async function handler(req: Req, res: Res) {
       await enviarMailGraph(graphToken, cfg, mails, `TRANSFERENCIA — ${origen} — ${lote.nombre ?? ''}`, contenido, autor.email)
       enviados.push(`${origen}→${mails.join(',')}`)
     } catch (e) {
-      errores.push(`${origen}: ${e instanceof Error ? e.message : String(e)}`)
+      errores.push({ origen, mensaje: e instanceof Error ? e.message : String(e) })
     }
   }
 

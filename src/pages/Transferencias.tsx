@@ -13,6 +13,7 @@ import {
   Printer,
   FileSpreadsheet,
   Send,
+  RefreshCw,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -1171,6 +1172,7 @@ function EnviarTransferencia({ lote, items, usuariosLocales, onClose }: {
   const sinMail = origenes.filter((o) => o.mails.length === 0)
 
   const [enviando, setEnviando] = useState(false)
+  const [pendientes, setPendientes] = useState<string[]>([])
   const [resultado, setResultado] = useState<{
     ok: boolean
     mensaje: string
@@ -1192,13 +1194,15 @@ function EnviarTransferencia({ lote, items, usuariosLocales, onClose }: {
 
   // Envía TODAS las hojas automáticamente desde el backend (SMTP Outlook).
   // No depende del navegador: manda un mail real a cada local con su hoja.
-  async function enviarTodo() {
+  // Si se pasa `soloOrigenes`, reenvía únicamente esos locales.
+  async function enviarTodo(soloOrigenes?: string[]) {
     if (enviando) return
-    if (conMail.length === 0) {
+    const target = soloOrigenes ?? conMail.map((o) => o.origen)
+    if (target.length === 0) {
       window.confirm('Ningún local tiene mail registrado.')
       return
     }
-    if (!window.confirm(`¿Enviar automáticamente ${conMail.length} mail(s) a los locales?`)) return
+    if (!window.confirm(`¿Enviar automáticamente ${target.length} mail(s) a los locales?`)) return
     setEnviando(true)
     setResultado(null)
     try {
@@ -1211,11 +1215,15 @@ function EnviarTransferencia({ lote, items, usuariosLocales, onClose }: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ lote_id: lote.id }),
+        body: JSON.stringify({ lote_id: lote.id, ...(soloOrigenes?.length ? { origenes: soloOrigenes } : {}) }),
       })
       const json = await res.json().catch(() => ({}))
       if (res.ok) {
         setResultado({ ok: true, mensaje: json.resumen ?? 'Enviado' })
+        const errs = (json.errores ?? [])
+          .map((e: { origen?: string } | string) => (typeof e === 'string' ? e.split(':')[0].trim() : e.origen ?? ''))
+          .filter(Boolean)
+        setPendientes(errs)
       } else {
         setResultado({ ok: false, mensaje: json.error ?? `Error ${res.status}` })
       }
@@ -1233,7 +1241,7 @@ function EnviarTransferencia({ lote, items, usuariosLocales, onClose }: {
           <h2 className="font-display font-semibold text-ink">Enviar transferencia</h2>
           <div className="flex items-center gap-2">
             <button
-              onClick={enviarTodo}
+              onClick={() => void enviarTodo()}
               disabled={enviando || cargandoMails || conMail.length === 0}
               className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-40"
               title={cargandoMails ? 'Cargando destinatarios…' : 'Envía automáticamente un mail a cada local con su hoja (Microsoft Graph)'}
@@ -1241,6 +1249,16 @@ function EnviarTransferencia({ lote, items, usuariosLocales, onClose }: {
               {enviando || cargandoMails ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} aria-hidden />}
               {enviando ? 'Enviando…' : cargandoMails ? 'Cargando mails…' : `Enviar todo (${conMail.length})`}
             </button>
+            {pendientes.length > 0 && (
+              <button
+                onClick={() => void enviarTodo(pendientes)}
+                disabled={enviando}
+                className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-amber-600 px-3 py-2 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-40"
+                title="Reenviar solo los locales que fallaron"
+              >
+                <RefreshCw size={13} aria-hidden /> Reenviar ({pendientes.length})
+              </button>
+            )}
             <button onClick={onClose} aria-label="Cerrar" className="rounded-lg p-1.5 text-sub hover:bg-line hover:text-ink">
               <X size={18} aria-hidden />
             </button>
