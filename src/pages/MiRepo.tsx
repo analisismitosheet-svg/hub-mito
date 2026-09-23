@@ -97,6 +97,18 @@ function fmtReloj(seg: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`
 }
 
+/** Talle numérico con "T" (T38); de letra tal cual (M, L, U) */
+function fmtTalle(talle: string | null): string | null {
+  if (!talle) return null
+  return /^\d/.test(talle) ? `T${talle}` : talle
+}
+
+/** "ZH000200 · color 02 · XL" para los mensajes de escaneo */
+function etiquetaDe(i: Item | undefined): string | null {
+  if (!i) return null
+  return [i.codigo, i.color ? `color ${i.color}` : null, fmtTalle(i.talle)].filter(Boolean).join(' · ')
+}
+
 function filaDe<T>(data: unknown): T | null {
   return ((Array.isArray(data) ? data[0] : data) ?? null) as T | null
 }
@@ -112,6 +124,11 @@ export default function MiRepo() {
   const [asignaciones, setAsignaciones] = useState<Asignacion[]>([])
   const [lotes, setLotes] = useState<Record<string, Lote>>({})
   const [items, setItems] = useState<Item[]>([])
+  // Copia para leer los ítems dentro de callbacks sin re-crearlos en cada escaneo
+  const itemsRef = useRef<Item[]>([])
+  useEffect(() => {
+    itemsRef.current = items
+  }, [items])
 
   const [sel, setSel] = useState<string | null>(null)
   const [mensaje, setMensaje] = useState<{ ok: boolean; texto: string } | null>(null)
@@ -409,13 +426,15 @@ export default function MiRepo() {
           if (!fila) throw new Error('La base no confirmó el escaneo. Probá de nuevo.')
 
           aplicarFila(fila)
-          setDeshacer({ id: fila.item_id, codigo: cod })
+          // Etiqueta legible del artículo (el lector manda "zh000200!02!xl")
+          const etiqueta = etiquetaDe(itemsRef.current.find((x) => x.id === fila.item_id)) ?? fila.item_codigo ?? cod
+          setDeshacer({ id: fila.item_id, codigo: etiqueta })
           setMensaje({
             ok: true,
             texto:
               fila.item_escaneadas >= fila.item_cantidad
-                ? `${cod} · completado (${fila.item_cantidad} u.)`
-                : `${cod} · ${fila.item_escaneadas} de ${fila.item_cantidad}`,
+                ? `${etiqueta} · completado (${fila.item_cantidad} u.)`
+                : `${etiqueta} · ${fila.item_escaneadas} de ${fila.item_cantidad}`,
           })
         } catch (e) {
           setMensaje({
@@ -794,8 +813,7 @@ export default function MiRepo() {
             ) : (
               <ul className="divide-y divide-line/60">
                 {pendientesDeSel.map((i) => {
-                  // Talle numérico con "T" (T38); de letra tal cual (M, L, U)
-                  const talle = i.talle ? (/^\d/.test(i.talle) ? `T${i.talle}` : i.talle) : null
+                  const talle = fmtTalle(i.talle)
                   return (
                     <li key={i.id} className="flex items-center gap-3 px-4 py-3">
                       <span className="min-w-0 flex-1">
