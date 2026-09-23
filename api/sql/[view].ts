@@ -138,6 +138,15 @@ export default async function handler(req: Req, res: Res) {
     return res.status(500).json({ error: 'Falta configurar la URL del Logic App (BD o env)' })
   }
 
+  // El Logic App de Azure no usa token; cualquier otro destino es el Puente SQL local,
+  // que rechaza todo si no le llega el mismo valor que su PUENTE_TOKEN.
+  const esPuente = !/\.logic\.azure\.com/i.test(logicUrl)
+  if (esPuente && !process.env.SQL_BRIDGE_TOKEN) {
+    return res.status(500).json({
+      error: 'Falta la variable SQL_BRIDGE_TOKEN en Vercel (tiene que ser igual al PUENTE_TOKEN del Puente SQL)',
+    })
+  }
+
   const maxRowsBase = Number(conexion?.max_rows) > 0 ? Number(conexion!.max_rows) : MAX_ROWS
   const pedido = parseInt(primerQuery(req.query.limit), 10)
   const top = Math.min(Number.isFinite(pedido) && pedido > 0 ? pedido : maxRowsBase, maxRowsBase)
@@ -156,6 +165,11 @@ export default async function handler(req: Req, res: Res) {
     return res.status(504).json({ error: 'No se pudo contactar la Logic App / Puente SQL' })
   }
 
+  if (esPuente && la.status === 401) {
+    return res.status(502).json({
+      error: 'El Puente SQL rechazó el token: SQL_BRIDGE_TOKEN en Vercel no coincide con el PUENTE_TOKEN del puente',
+    })
+  }
   if (!la.ok) {
     const detalle = (await la.text().catch(() => '')).slice(0, 300)
     return res.status(502).json({ error: `Logic App respondió ${la.status}`, detalle })

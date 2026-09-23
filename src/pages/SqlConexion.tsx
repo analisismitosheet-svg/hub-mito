@@ -249,6 +249,19 @@ export default function SqlConexion() {
                       : 'configurada (variable de entorno)'}
                 </span>
               </li>
+              {estado.esPuente && (
+                <li className="flex items-center gap-2">
+                  {estado.tokenPuente ? (
+                    <CheckCircle2 size={15} className="shrink-0 text-emerald-500" aria-hidden />
+                  ) : (
+                    <XCircle size={15} className="shrink-0 text-brand-500" aria-hidden />
+                  )}
+                  <span className="text-ink">Token del Puente SQL:</span>
+                  <span className={estado.tokenPuente ? 'text-emerald-500' : 'text-brand-400'}>
+                    {estado.tokenPuente ? 'cargado en Vercel' : 'falta SQL_BRIDGE_TOKEN en Vercel'}
+                  </span>
+                </li>
+              )}
               <li className="flex items-center gap-2 text-sub">
                 <Database size={15} aria-hidden className="shrink-0" />
                 Filas máximas por consulta: <strong className="text-ink">{estado.maxRows ?? 1000}</strong>

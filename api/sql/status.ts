@@ -5,6 +5,8 @@
  * GET /api/sql/status -> {
  *   logicApp: boolean,                    // ¿hay URL efectiva (BD o env)?
  *   origen: 'db' | 'env' | null,          // de dónde sale la URL
+ *   esPuente: boolean,                    // el destino es el Puente SQL local (no Azure)
+ *   tokenPuente: boolean,                 // ¿está cargada SQL_BRIDGE_TOKEN? (sin el valor)
  *   maxRows: number | null,               // tope de filas efectivo (BD > env)
  *   vistasEnv: string[],                  // whitelist fija por env (SQL_VIEWS)
  *   vistasDb: { vista, label }[],         // vistas guardadas en config_app
@@ -112,10 +114,14 @@ export default async function handler(req: Req, res: Res) {
   const conexion = await conexionDeDb()
   const urlDb = conexion?.logicapp_url?.trim() || ''
   const urlEnv = process.env.SQL_LOGICAPP_URL ?? ''
+  const urlEfectiva = urlDb || urlEnv
 
   return res.status(200).json({
-    logicApp: Boolean(urlDb || urlEnv),
+    logicApp: Boolean(urlEfectiva),
     origen: urlDb ? 'db' : urlEnv ? 'env' : null,
+    // Solo si el destino es el Puente SQL (no Azure) y si el token está cargado; nunca su valor
+    esPuente: Boolean(urlEfectiva) && !/\.logic\.azure\.com/i.test(urlEfectiva),
+    tokenPuente: Boolean(process.env.SQL_BRIDGE_TOKEN),
     maxRows: Number(conexion?.max_rows) > 0 ? Number(conexion!.max_rows) : MAX_ROWS_ENV,
     vistasEnv: VISTAS_ENV,
     vistasDb: await vistasDeDb(),

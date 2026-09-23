@@ -126,6 +126,9 @@ export async function guardarVistaSalidas(nombre: string): Promise<{ error: stri
 export interface EstadoSql {
   logicApp: boolean
   origen: 'db' | 'env' | null
+  /** Opcionales: una versión vieja del endpoint no los manda */
+  esPuente?: boolean
+  tokenPuente?: boolean
   maxRows: number | null
   vistasEnv: string[]
   vistasDb: VistaDef[]
