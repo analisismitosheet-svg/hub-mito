@@ -293,6 +293,17 @@ export default function MiRepo() {
     [itemsDe],
   )
 
+  // Momento de la última lectura de cada ítem (en esta pantalla): los escaneados recientes van arriba
+  const [ultimoEscaneo, setUltimoEscaneo] = useState<Record<string, number>>({})
+
+  /** Artículos ya completos del repo abierto (cuadro "Escaneados"), lo último arriba. */
+  const escaneadosDeSel = useMemo(() => {
+    if (!asignacionSel) return []
+    return itemsDe(asignacionSel)
+      .filter((i) => i.estado === 'hecho')
+      .sort((a, b) => (ultimoEscaneo[b.id] ?? 0) - (ultimoEscaneo[a.id] ?? 0) || a.orden - b.orden)
+  }, [asignacionSel, itemsDe, ultimoEscaneo])
+
   const pendientesDeSel = useMemo(() => {
     if (!asignacionSel) return []
     return itemsDe(asignacionSel)
@@ -382,7 +393,7 @@ export default function MiRepo() {
     const faltaron = fila.pendientes_fin ?? 0
     setResumen(
       `Repo finalizado en ${fmtReloj(fila.segundos)} · ${fila.unidades} u. escaneadas` +
-        (faltaron > 0 ? ` · quedaron ${faltaron} u. sin escanear` : ''),
+        (faltaron > 0 ? ` · ${faltaron} u. marcadas como faltantes (✕)` : ''),
     )
     setSel(null)
     setDeshacer(null)
@@ -426,6 +437,7 @@ export default function MiRepo() {
           if (!fila) throw new Error('La base no confirmó el escaneo. Probá de nuevo.')
 
           aplicarFila(fila)
+          setUltimoEscaneo((prev) => ({ ...prev, [fila.item_id]: Date.now() }))
           // Etiqueta legible del artículo (el lector manda "zh000200!02!xl")
           const etiqueta = etiquetaDe(itemsRef.current.find((x) => x.id === fila.item_id)) ?? fila.item_codigo ?? cod
           setDeshacer({ id: fila.item_id, codigo: etiqueta })
@@ -852,6 +864,46 @@ export default function MiRepo() {
             )}
           </div>
 
+          {/* Escaneados: lo que ya se completó, lo último arriba */}
+          {escaneadosDeSel.length > 0 && (
+            <div className="overflow-hidden rounded-2xl border border-emerald-500/25 bg-surface">
+              <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+                <span className="flex items-center gap-1.5 font-display text-sm font-semibold text-ink">
+                  <Check size={15} className="text-emerald-500" aria-hidden /> Escaneados
+                </span>
+                <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-semibold tabular-nums text-emerald-500">
+                  {escaneadosDeSel.reduce((s, i) => s + i.cantidad, 0)} u.
+                </span>
+              </div>
+              <ul className="divide-y divide-line/60">
+                {escaneadosDeSel.map((i) => {
+                  const talle = fmtTalle(i.talle)
+                  return (
+                    <li key={i.id} className="flex items-center gap-3 px-4 py-2 opacity-80">
+                      <span className="min-w-0 flex-1">
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-sm font-semibold text-ink">{i.codigo}</span>
+                          {i.color && (
+                            <span className="rounded-md bg-sky-500/15 px-1.5 py-0.5 text-[11px] font-semibold text-sky-400">{i.color}</span>
+                          )}
+                          {talle && (
+                            <span className="rounded-md bg-violet-500/15 px-1.5 py-0.5 text-[11px] font-semibold text-violet-400">{talle}</span>
+                          )}
+                        </span>
+                        {i.articulo && (
+                          <span className="block truncate text-xs text-sub">{i.articulo.replace(/^\(\)\s*/, '')}</span>
+                        )}
+                      </span>
+                      <span className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-emerald-500/15 px-2 py-1 text-xs font-bold tabular-nums text-emerald-500">
+                        <Check size={12} aria-hidden /> {i.cantidad}
+                      </span>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )}
+
           {/* Finalizar: siempre al final. En celular deja lugar a la izquierda para el ícono M flotante. */}
           {sesion && (
             <button
@@ -874,7 +926,7 @@ export default function MiRepo() {
         title={progresoSel && progresoSel.pendientes > 0 ? '¿Finalizar con faltantes?' : '¿Finalizar el repo?'}
         message={
           progresoSel && progresoSel.pendientes > 0
-            ? `Quedan ${progresoSel.pendientes} unidades sin escanear.\nSe guarda tu tiempo (${fmtReloj(segundosSesion)}) y queda registrado lo que faltó.`
+            ? `Quedan ${progresoSel.pendientes} unidades sin escanear: se van a marcar como faltantes (✕).\nSe guarda tu tiempo (${fmtReloj(segundosSesion)}).`
             : `Se guarda tu tiempo: ${fmtReloj(segundosSesion)}.`
         }
         confirmLabel="Finalizar"
