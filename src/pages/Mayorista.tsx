@@ -36,6 +36,7 @@ interface Item {
   color: string | null
   talle: string | null
   cantidad: number
+  escaneadas: number
   venta_local: number | null
   estado: EstadoM
   hecho_at: string | null
@@ -291,7 +292,7 @@ export default function Mayorista() {
       for (let desde = 0; ; desde += PAGE) {
         const { data, error } = await supabase
           .from('mayorista_items')
-          .select('id,lote_id,orden,prioridad,local,material,codigo,articulo,color,talle,cantidad,venta_local,estado,hecho_at')
+          .select('id,lote_id,orden,prioridad,local,material,codigo,articulo,color,talle,cantidad,escaneadas,venta_local,estado,hecho_at')
           .eq('lote_id', loteId)
           .order('lote_id', { ascending: true })
           .order('orden', { ascending: true })
@@ -372,7 +373,7 @@ export default function Mayorista() {
     try {
       const XLSX = await import('xlsx')
       const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' })
-      const nuevos: Omit<Item, 'id' | 'lote_id' | 'estado' | 'hecho_at' | 'venta_local'>[] = []
+      const nuevos: Omit<Item, 'id' | 'lote_id' | 'estado' | 'hecho_at' | 'venta_local' | 'escaneadas'>[] = []
       let orden = 0
       // normaliza encabezados: mayúsculas, sin acentos, espacios colapsados
       const norm = (c: unknown) =>
@@ -747,6 +748,9 @@ export default function Mayorista() {
                                         {it.color ? ` · ${it.color}` : ''}
                                         {it.talle ? ` · T${it.talle}` : ''}
                                         {it.cantidad > 1 ? ` · x${it.cantidad}` : ''}
+                                        {it.escaneadas > 0 && it.escaneadas < it.cantidad
+                                          ? ` · ${it.escaneadas}/${it.cantidad} escaneado`
+                                          : ''}
                                       </span>
                                       {it.articulo && <span className="block truncate text-xs text-sub">{it.articulo}</span>}
                                     </span>

@@ -9,6 +9,7 @@ import {
   KeyRound,
   UserCheck,
   UserX,
+  UserPlus,
   AlertTriangle,
   Copy,
   Pencil,
@@ -18,8 +19,11 @@ import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import MultiselectFiltro from '@/components/MultiselectFiltro'
+import { AutocompleteCampo } from '@/components/MultiselectFiltro'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
+import { FILTRO_EMPLEADOS_ACTIVOS } from '@/lib/empleadosActivos'
+import { emailDeLegajo, legajoLimpio } from '@/lib/loginEmpleado'
 
 interface UsuarioRow {
   id: string
@@ -30,6 +34,7 @@ interface UsuarioRow {
   created_at: string
   motivo_rechazo: string | null
   local: string | null
+  legajo: string | null
 }
 interface Permiso {
   clave: string
@@ -47,6 +52,11 @@ interface Rol {
   nombre: string
   es_admin: boolean
   protegido: boolean
+}
+interface EmpleadoNomina {
+  id: string
+  legajo: string
+  nombre: string
 }
 
 const ESTADO_STYLE: Record<string, string> = {
@@ -71,31 +81,35 @@ function fmtFecha(iso: string): string {
 }
 
 export default function Usuarios() {
-  const { perfil } = useAuth()
+  const { perfil, session } = useAuth()
   const [usuarios, setUsuarios] = useState<UsuarioRow[]>([])
   const [usuarioRoles, setUsuarioRoles] = useState<Map<string, string[]>>(new Map())
   const [permisos, setPermisos] = useState<Permiso[]>([])
   const [rolPermisos, setRolPermisos] = useState<Set<string>>(new Set())
   const [locales, setLocales] = useState<Local[]>([])
   const [roles, setRoles] = useState<Rol[]>([])
+  const [nominas, setNominas] = useState<EmpleadoNomina[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [gestion, setGestion] = useState<UsuarioRow | null>(null)
   const [pwUser, setPwUser] = useState<UsuarioRow | null>(null)
   const [editUser, setEditUser] = useState<UsuarioRow | null>(null)
+  const [altaAbierta, setAltaAbierta] = useState(false)
   const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
 
   const cargar = useCallback(async () => {
     if (!supabase) { setCargando(false); return }
     setCargando(true)
     setError(null)
-    const [u, p, rp, lc, rl, ur] = await Promise.all([
-      supabase.from('usuarios').select('id,email,nombre,rol,estado,created_at,motivo_rechazo,local').order('nombre', { ascending: true }),
+    const [u, p, rp, lc, rl, ur, no] = await Promise.all([
+      supabase.from('usuarios').select('id,email,nombre,rol,estado,created_at,motivo_rechazo,local,legajo').order('nombre', { ascending: true }),
       supabase.from('permisos').select('clave,modulo,accion,label,orden').order('orden'),
       supabase.from('rol_permisos').select('rol,permiso_clave'),
       supabase.from('locales').select('codigo,nombre').order('codigo', { ascending: true }),
       supabase.from('roles').select('codigo,nombre,es_admin,protegido').order('orden', { ascending: true }),
       supabase.from('usuario_roles').select('usuario_id,rol_codigo'),
+      // Nómina: solo la gente activa y con legajo, para dar de alta el ingreso.
+      supabase.from('empleados').select('id,legajo,nombre').not('legajo', 'is', null).or(FILTRO_EMPLEADOS_ACTIVOS).order('nombre', { ascending: true }),
     ])
     if (u.error) setError(u.error.message)
     setUsuarios((u.data as UsuarioRow[]) ?? [])
@@ -105,6 +119,7 @@ export default function Usuarios() {
     )
     setLocales((lc.data as Local[]) ?? [])
     setRoles((rl.data as Rol[]) ?? [])
+    setNominas(((no.data as EmpleadoNomina[] | null) ?? []).filter((e) => e.legajo && e.nombre))
 
     const mapa = new Map<string, string[]>()
     for (const row of (ur.data as { usuario_id: string; rol_codigo: string }[]) ?? []) {
@@ -185,14 +200,20 @@ export default function Usuarios() {
     <Layout>
       <BackButton />
 
-      <div className="mb-6 flex items-center gap-3">
+      <div className="mb-6 flex flex-wrap items-center gap-3">
         <div className="rounded-xl border border-brand-600/40 bg-brand-600/15 p-3 text-brand-500">
           <UserCheck size={26} aria-hidden />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <h1 className="font-display text-2xl font-bold text-ink">Usuarios</h1>
           <p className="text-sm text-sub">Gestión de usuarios, aprobación de solicitudes y permisos.</p>
         </div>
+        <button
+          onClick={() => setAltaAbierta(true)}
+          className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-3.5 py-2 text-sm font-medium text-white shadow-soft hover:bg-brand-700"
+        >
+          <UserPlus size={16} aria-hidden /> Alta de empleado
+        </button>
       </div>
 
       {error && (
@@ -366,6 +387,27 @@ export default function Usuarios() {
       )}
 
       {pwUser && <PasswordModal usuario={pwUser} onClose={() => setPwUser(null)} />}
+
+      {altaAbierta && (
+        <AltaEmpleadoModal
+          nominas={nominas}
+          usuarios={usuarios}
+          token={session?.access_token ?? null}
+          onClose={() => setAltaAbierta(false)}
+          onCreado={async (uid) => {
+            setAltaAbierta(false)
+            await cargar()
+            if (!supabase) return
+            const { data } = await supabase
+              .from('usuarios')
+              .select('id,email,nombre,rol,estado,created_at,motivo_rechazo,local,legajo')
+              .eq('id', uid)
+              .single()
+            // Directo a los permisos: así eligís qué pantallas va a ver.
+            if (data) setGestion(data as UsuarioRow)
+          }}
+        />
+      )}
 
       {editUser && (
         <EditarUsuarioModal
@@ -604,6 +646,176 @@ className="w-[95vw] max-w-[1400px] rounded-t-2xl border border-line bg-surface s
             {busy ? 'Guardando...' : 'Guardar cambios'}
           </button>
           <button onClick={onClose} disabled={busy} className="btn-press rounded-xl border border-line bg-surface2 px-4 py-2.5 text-sm font-medium text-ink hover:bg-line disabled:opacity-50">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Alta de la cuenta de ingreso de un empleado (legajo + contraseña asignada).
+ *
+ * Todo el trabajo sensible (crear el usuario en Supabase Auth) lo hace la
+ * función de Vercel `api/admin-empleado.ts`, porque necesita la service role
+ * key. Acá solo validamos que el admin haya elegido a alguien y una clave.
+ */
+function AltaEmpleadoModal({
+  nominas,
+  usuarios,
+  token,
+  onClose,
+  onCreado,
+}: {
+  nominas: EmpleadoNomina[]
+  usuarios: UsuarioRow[]
+  token: string | null
+  onClose: () => void
+  onCreado: (uid: string) => Promise<void>
+}) {
+  const [legajo, setLegajo] = useState('')
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const opciones = useMemo(
+    () => nominas.map((e) => ({ id: e.legajo, label: `${e.legajo} · ${e.nombre}` })),
+    [nominas],
+  )
+
+  const legajoSel = legajoLimpio(legajo)
+  const empleadoSel = nominas.find((e) => legajoLimpio(e.legajo) === legajoSel)
+  const yaTieneCuenta = usuarios.find((u) => legajoLimpio(u.legajo ?? '') === legajoSel)
+
+  function generar() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
+    let s = ''
+    for (let i = 0; i < 8; i++) s += chars[Math.floor(Math.random() * chars.length)]
+    setPassword(s)
+  }
+
+  async function crear() {
+    setError(null)
+    if (!token) { setError('Sesión expirada. Volvé a entrar.'); return }
+    if (!empleadoSel) { setError('Elegí un empleado de la nómina.'); return }
+    if (yaTieneCuenta) { setError('Ese legajo ya tiene una cuenta de ingreso.'); return }
+    if (password.length < 6) { setError('La contraseña debe tener al menos 6 caracteres.'); return }
+
+    setBusy(true)
+    try {
+      const r = await fetch('/api/admin-empleado', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          accion: 'crear',
+          legajo: empleadoSel.legajo,
+          nombre: empleadoSel.nombre,
+          password,
+        }),
+      })
+      const data = (await r.json().catch(() => ({}))) as { uid?: string; error?: string }
+      if (!r.ok || !data.uid) {
+        setError(data.error ?? `No se pudo crear la cuenta (HTTP ${r.status}).`)
+        return
+      }
+      await onCreado(data.uid)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo crear la cuenta.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const inputCls =
+    'w-full rounded-xl border border-line bg-surface2 px-3 py-2 text-sm text-ink outline-none transition placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center sm:p-4" onClick={() => !busy && onClose()}>
+      <div className="w-[95vw] max-w-md rounded-t-2xl border border-line bg-surface shadow-soft-lg sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-line px-4 py-3">
+          <div className="min-w-0">
+            <h2 className="flex items-center gap-2 font-display font-semibold text-ink">
+              <UserPlus size={16} className="text-brand-500" aria-hidden /> Alta de empleado
+            </h2>
+            <p className="truncate text-xs text-sub">Genera su ingreso por legajo y contraseña</p>
+          </div>
+          <button onClick={onClose} aria-label="Cerrar" className="rounded-lg p-1.5 text-sub hover:bg-line hover:text-ink">
+            <X size={18} aria-hidden />
+          </button>
+        </div>
+
+        <div className="space-y-3 p-4">
+          <AutocompleteCampo
+            label="Empleado (de la nómina)"
+            opciones={opciones}
+            valor={legajo}
+            onChange={setLegajo}
+            disabled={busy}
+            placeholder="Buscar por legajo o nombre…"
+          />
+
+          {empleadoSel && (
+            <p className="rounded-lg bg-brand-600/10 px-2.5 py-1.5 text-xs text-brand-400">
+              Se va a crear <span className="font-medium">{emailDeLegajo(empleadoSel.legajo)}</span>.
+              Ese email no recibe mail: es solo el usuario con el que entra.
+            </p>
+          )}
+
+          <label className="block">
+            <span className="mb-1 flex items-center justify-between text-xs font-medium text-sub">
+              Contraseña a asignar
+              <button
+                type="button"
+                onClick={generar}
+                disabled={busy}
+                className="font-medium text-brand-500 hover:underline disabled:opacity-50"
+              >
+                Generar
+              </button>
+            </span>
+            <input
+              type="text"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={busy}
+              autoComplete="new-password"
+              spellCheck={false}
+              className={inputCls}
+              placeholder="Mínimo 6 caracteres"
+            />
+          </label>
+
+          <p className="text-xs leading-relaxed text-sub">
+            Después de crearlo vas a poder elegirle <strong className="font-medium text-ink">qué pantallas ve</strong> y asignarle
+            sus locales en Mayorista &gt; Reposición.
+          </p>
+
+          {yaTieneCuenta && (
+            <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-400">
+              Ese legajo ya está asociado a <span className="font-medium">{yaTieneCuenta.email}</span>.
+            </p>
+          )}
+
+          {error && (
+            <p role="alert" aria-live="polite" className="text-sm text-brand-400">{error}</p>
+          )}
+        </div>
+
+        <div className="flex gap-2 border-t border-line px-4 py-3">
+          <button
+            onClick={() => void crear()}
+            disabled={busy || !empleadoSel || !!yaTieneCuenta}
+            className="btn-press inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand-600 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+          >
+            {busy ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <UserPlus size={16} aria-hidden />}
+            {busy ? 'Creando...' : 'Crear cuenta'}
+          </button>
+          <button
+            onClick={onClose}
+            disabled={busy}
+            className="btn-press rounded-xl border border-line bg-surface2 px-4 py-2.5 text-sm font-medium text-ink hover:bg-line disabled:opacity-50"
+          >
             Cancelar
           </button>
         </div>

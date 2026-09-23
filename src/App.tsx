@@ -4,6 +4,7 @@ import ProtectedRoute from '@/components/ProtectedRoute'
 import PermissionRoute from '@/components/PermissionRoute'
 import AdminRoute from '@/components/AdminRoute'
 import Login from '@/pages/Login'
+import Ingreso from '@/pages/Ingreso'
 import Register from '@/pages/Register'
 import Acceso from '@/pages/Acceso'
 import Denegado from '@/pages/Denegado'
@@ -15,6 +16,7 @@ import Manuales from '@/pages/Manuales'
 import Transferencias from '@/pages/Transferencias'
 import EstadisticasTransferencias from '@/pages/EstadisticasTransferencias'
 import Mayorista from '@/pages/Mayorista'
+import MiRepo from '@/pages/MiRepo'
 import Deposito from '@/pages/Deposito'
 import Rma from '@/pages/Rma'
 import Opiniones from '@/pages/Opiniones'
@@ -51,6 +53,8 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
+          {/* Ingreso de empleados: legajo + contraseña asignada por el admin */}
+          <Route path="/ingreso" element={<Ingreso />} />
           <Route path="/register" element={<Register />} />
           {/* Enlace público para que los clientes puntúen un local (compatibilidad) */}
           <Route path="/opinar/:local" element={<Opinar />} />
@@ -120,6 +124,15 @@ export default function App() {
             element={
               <PermissionRoute permiso="mayorista.view">
                 <Mayorista />
+              </PermissionRoute>
+            }
+          />
+          {/* Vista de piso: el empleado solo ve los (lote, local) que le asignaron */}
+          <Route
+            path="/mayorista/mi-repo"
+            element={
+              <PermissionRoute permiso="mayorista.repos_piso">
+                <MiRepo />
               </PermissionRoute>
             }
           />

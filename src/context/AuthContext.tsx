@@ -24,6 +24,8 @@ export interface Perfil {
   motivo_rechazo: string | null
   local: string | null
   roles: string[]
+  /** N° de legajo: liga esta cuenta con la fila de `empleados` (ingreso de piso). */
+  legajo: string | null
 }
 
 interface AuthState {
@@ -69,7 +71,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       supabase.rpc('mis_permisos'),
     ])
     const p = Array.isArray(perfilData) ? (perfilData[0] as Perfil | undefined) : null
-    setPerfil(p ? { ...p, roles: p.roles ?? (p.rol ? [p.rol] : []) } : null)
+    setPerfil(
+      p
+        ? // `legajo` puede no existir si todavía no se corrió sql/empleados_piso.sql
+          { ...p, legajo: p.legajo ?? null, roles: p.roles ?? (p.rol ? [p.rol] : []) }
+        : null,
+    )
     const claves = Array.isArray(permisosData)
       ? (permisosData as { clave: string }[]).map((r) => r.clave)
       : []

@@ -28,6 +28,7 @@ import {
   FolderOpen,
   RotateCcw,
   Cake,
+  ScanLine,
   type LucideIcon,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -191,6 +192,17 @@ export const APPS: AppDef[] = [
     target: '/mayorista',
     color: '#d97706',
     permiso: 'mayorista.view',
+  },
+  {
+    id: 'mayorista-mi-repo',
+    areaId: 'mayorista',
+    title: 'Mi repo',
+    description: 'Escaneo en piso: tus locales asignados, artículo por artículo.',
+    icon: ScanLine,
+    kind: 'internal',
+    target: '/mayorista/mi-repo',
+    color: '#d97706',
+    permiso: 'mayorista.repos_piso',
   },
   {
     id: 'mayorista-transportes',
