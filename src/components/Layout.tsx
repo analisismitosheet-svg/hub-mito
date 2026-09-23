@@ -1,6 +1,6 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { LogOut, Sun, Moon, RefreshCw } from 'lucide-react'
+import { LogOut, Sun, Moon, RefreshCw, Home } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { useTheme } from '@/context/ThemeContext'
 import CampanaNotificaciones from '@/components/CampanaNotificaciones'
@@ -9,15 +9,50 @@ import ChatAgentes from '@/components/ChatAgentes'
 /**
  * Shell de la app. Por defecto usa un contenedor ancho (aprovecha toda la pantalla).
  * Pasar `wide={false}` para volver a un ancho centrado y angosto en una página puntual.
+ *
+ * En celular no hay barra fija: solo el ícono rojo "M", que abre un menú con
+ * recargar, tema, avisos y salir (así la pantalla queda para el contenido).
  */
 export default function Layout({ children, wide = true }: { children: ReactNode; wide?: boolean }) {
-  const { user, signOut, configured } = useAuth()
+  const { user, signOut, configured, soloPiso } = useAuth()
   const { tema, toggle } = useTheme()
   const maxW = wide ? 'max-w-[1600px]' : 'max-w-5xl'
+  const logueado = configured && Boolean(user)
+
+  const [menuAbierto, setMenuAbierto] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!menuAbierto) return
+    const cerrar = (e: MouseEvent | TouchEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuAbierto(false)
+    }
+    const conEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuAbierto(false)
+    }
+    document.addEventListener('mousedown', cerrar)
+    document.addEventListener('touchstart', cerrar)
+    document.addEventListener('keydown', conEsc)
+    return () => {
+      document.removeEventListener('mousedown', cerrar)
+      document.removeEventListener('touchstart', cerrar)
+      document.removeEventListener('keydown', conEsc)
+    }
+  }, [menuAbierto])
+
+  const logo = (
+    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 font-display text-sm font-bold text-white shadow-glow transition-transform group-hover:scale-105">
+      M
+    </div>
+  )
+
+  const itemMenu =
+    'flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-ink outline-none transition hover:bg-surface2 focus-visible:bg-surface2'
 
   return (
     <div className="min-h-screen bg-paper text-ink">
-      <header className="sticky top-0 z-10 border-b border-line bg-paper/85 backdrop-blur">
+      {/* ---------- Computadora: barra completa ---------- */}
+      <header className="sticky top-0 z-10 hidden border-b border-line bg-paper/85 backdrop-blur sm:block">
         <div className={`mx-auto flex ${maxW} items-center justify-between px-4 py-3`}>
           <Link
             to="/"
@@ -25,12 +60,10 @@ export default function Layout({ children, wide = true }: { children: ReactNode;
             aria-label="Ir al menu"
             className="group flex cursor-pointer items-center gap-2.5 rounded-xl outline-none transition hover:opacity-80 focus-visible:ring-2 focus-visible:ring-brand-500/50"
           >
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 font-display text-sm font-bold text-white shadow-glow transition-transform group-hover:scale-105">
-              M
-            </div>
+            {logo}
             <span className="font-display font-semibold text-ink">Hub Mito</span>
           </Link>
-          {configured && user && (
+          {logueado && user && (
             <div className="flex items-center gap-3">
               <button
                 onClick={() => window.location.reload()}
@@ -49,7 +82,7 @@ export default function Layout({ children, wide = true }: { children: ReactNode;
                 {tema === 'dark' ? <Sun size={16} aria-hidden /> : <Moon size={16} aria-hidden />}
               </button>
               <CampanaNotificaciones />
-              <span className="hidden text-sm text-sub sm:inline">{user.email}</span>
+              <span className="text-sm text-sub">{user.email}</span>
               <button
                 onClick={() => signOut()}
                 className="btn-press flex cursor-pointer items-center gap-1.5 rounded-xl border border-line bg-surface px-3 py-1.5 text-sm font-medium text-ink outline-none hover:border-line2 hover:bg-surface2 focus-visible:ring-2 focus-visible:ring-brand-500/50"
@@ -60,8 +93,74 @@ export default function Layout({ children, wide = true }: { children: ReactNode;
           )}
         </div>
       </header>
-      <main className={`mx-auto ${maxW} px-4 py-8`}>{children}</main>
-      {configured && user && <ChatAgentes />}
+
+      {/* ---------- Celular: solo el ícono rojo, que abre el menú ---------- */}
+      <div className="relative px-4 pt-3 sm:hidden" ref={menuRef}>
+        {logueado ? (
+          <button
+            type="button"
+            onClick={() => setMenuAbierto((a) => !a)}
+            aria-haspopup="menu"
+            aria-expanded={menuAbierto}
+            aria-label="Abrir menú"
+            className="group rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
+          >
+            {logo}
+          </button>
+        ) : (
+          <Link to="/" aria-label="Ir al inicio" className="group inline-block rounded-xl">
+            {logo}
+          </Link>
+        )}
+
+        {menuAbierto && logueado && user && (
+          <div
+            role="menu"
+            className="absolute left-4 top-full z-50 mt-2 w-64 rounded-2xl border border-line bg-surface p-1.5 shadow-soft-lg"
+          >
+            <div className="flex items-center justify-between gap-2 border-b border-line px-3 pb-2 pt-1.5">
+              <div className="min-w-0">
+                <p className="font-display text-sm font-semibold text-ink">Hub Mito</p>
+                <p className="truncate text-xs text-sub">{user.email}</p>
+              </div>
+              <CampanaNotificaciones />
+            </div>
+            <div className="pt-1">
+              {!soloPiso && (
+                <Link to="/" role="menuitem" onClick={() => setMenuAbierto(false)} className={itemMenu}>
+                  <Home size={16} aria-hidden /> Ir al menú
+                </Link>
+              )}
+              <button type="button" role="menuitem" onClick={() => window.location.reload()} className={itemMenu}>
+                <RefreshCw size={16} aria-hidden /> Recargar
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  toggle()
+                  setMenuAbierto(false)
+                }}
+                className={itemMenu}
+              >
+                {tema === 'dark' ? <Sun size={16} aria-hidden /> : <Moon size={16} aria-hidden />}
+                {tema === 'dark' ? 'Modo claro' : 'Modo oscuro'}
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => signOut()}
+                className={`${itemMenu} text-brand-400`}
+              >
+                <LogOut size={16} aria-hidden /> Salir
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <main className={`mx-auto ${maxW} px-4 pb-8 pt-3 sm:py-8`}>{children}</main>
+      {logueado && <ChatAgentes />}
     </div>
   )
 }

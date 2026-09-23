@@ -182,7 +182,8 @@ export default function CampanaNotificaciones() {
       {abierto && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setAbierto(false)} />
-          <div className="absolute right-0 top-full z-50 mt-2 w-96 overflow-hidden rounded-2xl border border-line bg-surface shadow-soft-lg">
+          {/* En celular ocupa el ancho de la pantalla (se abre desde el menú del ícono M) */}
+          <div className="fixed inset-x-4 top-16 z-50 overflow-hidden rounded-2xl border border-line bg-surface shadow-soft-lg sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-96">
             <div className="flex items-center justify-between border-b border-line px-4 py-3">
               <h3 className="flex items-center gap-2 text-sm font-semibold text-ink"><Bell size={15} aria-hidden /> Notificaciones</h3>
               <button onClick={() => setAbierto(false)} className="rounded-lg p-1 text-sub hover:bg-line hover:text-ink" aria-label="Cerrar"><X size={15} aria-hidden /></button>

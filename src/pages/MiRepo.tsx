@@ -639,7 +639,7 @@ export default function MiRepo() {
 
           {/* Panel fijo compacto: repo + cronómetro + botón en una fila, barra con contador, input.
               Queda arriba al bajar la lista; en celular ocupa lo mínimo. */}
-          <div className="sticky top-[61px] z-[5] -mx-4 space-y-2 border-b border-line bg-paper px-4 pb-2.5 pt-1 sm:mx-0 sm:space-y-3 sm:rounded-2xl sm:border sm:bg-surface sm:p-4 sm:shadow-soft">
+          <div className="sticky top-0 z-[5] -mx-4 space-y-2 border-b border-line bg-paper px-4 pb-2.5 pt-1 sm:top-[61px] sm:mx-0 sm:space-y-3 sm:rounded-2xl sm:border sm:bg-surface sm:p-4 sm:shadow-soft">
             {/* Fila 1: repo · cronómetro · botón */}
             <div className="flex items-center gap-2.5">
               <div className="min-w-0 flex-1">
