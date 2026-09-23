@@ -23,7 +23,13 @@ import { AutocompleteCampo } from '@/components/MultiselectFiltro'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { FILTRO_EMPLEADOS_ACTIVOS } from '@/lib/empleadosActivos'
-import { emailDeLegajo, legajoLimpio } from '@/lib/loginEmpleado'
+import {
+  MIN_CLAVE_EMPLEADO,
+  emailDeLegajo,
+  generarClave,
+  legajoLimpio,
+  problemaClaveEmpleado,
+} from '@/lib/loginEmpleado'
 
 interface UsuarioRow {
   id: string
@@ -109,7 +115,7 @@ export default function Usuarios() {
       supabase.from('roles').select('codigo,nombre,es_admin,protegido').order('orden', { ascending: true }),
       supabase.from('usuario_roles').select('usuario_id,rol_codigo'),
       // Nómina: solo la gente activa y con legajo, para dar de alta el ingreso.
-      supabase.from('empleados').select('id,legajo,nombre').not('legajo', 'is', null).or(FILTRO_EMPLEADOS_ACTIVOS).order('nombre', { ascending: true }),
+      supabase.from('empleados_basico').select('id,legajo,nombre').not('legajo', 'is', null).or(FILTRO_EMPLEADOS_ACTIVOS).order('nombre', { ascending: true }),
     ])
     if (u.error) setError(u.error.message)
     setUsuarios((u.data as UsuarioRow[]) ?? [])
@@ -689,10 +695,7 @@ function AltaEmpleadoModal({
   const yaTieneCuenta = usuarios.find((u) => legajoLimpio(u.legajo ?? '') === legajoSel)
 
   function generar() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
-    let s = ''
-    for (let i = 0; i < 8; i++) s += chars[Math.floor(Math.random() * chars.length)]
-    setPassword(s)
+    setPassword(generarClave())
   }
 
   async function crear() {
@@ -700,7 +703,8 @@ function AltaEmpleadoModal({
     if (!token) { setError('Sesión expirada. Volvé a entrar.'); return }
     if (!empleadoSel) { setError('Elegí un empleado de la nómina.'); return }
     if (yaTieneCuenta) { setError('Ese legajo ya tiene una cuenta de ingreso.'); return }
-    if (password.length < 6) { setError('La contraseña debe tener al menos 6 caracteres.'); return }
+    const problema = problemaClaveEmpleado(password, empleadoSel.legajo ?? '')
+    if (problema) { setError(problema); return }
 
     setBusy(true)
     try {
@@ -782,7 +786,7 @@ function AltaEmpleadoModal({
               autoComplete="new-password"
               spellCheck={false}
               className={inputCls}
-              placeholder="Mínimo 6 caracteres"
+              placeholder="Mínimo 8 caracteres"
             />
           </label>
 
@@ -831,15 +835,12 @@ function PasswordModal({ usuario, onClose }: { usuario: UsuarioRow; onClose: () 
   const [ok, setOk] = useState(false)
 
   function generar() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
-    let s = ''
-    for (let i = 0; i < 10; i++) s += chars[Math.floor(Math.random() * chars.length)]
-    setPw(s)
+    setPw(generarClave())
   }
 
   async function guardar() {
     if (!supabase) return
-    if (pw.length < 6) { setError('La contraseña debe tener al menos 6 caracteres.'); return }
+    if (pw.length < MIN_CLAVE_EMPLEADO) { setError(`La contraseña debe tener al menos ${MIN_CLAVE_EMPLEADO} caracteres.`); return }
     setBusy(true); setError(null)
     const { data, error } = await supabase.functions.invoke('admin-set-password', {
       body: { userId: usuario.id, password: pw },
@@ -878,7 +879,7 @@ function PasswordModal({ usuario, onClose }: { usuario: UsuarioRow; onClose: () 
               <label className="block">
                 <span className="mb-1 block text-sm font-medium text-ink">Nueva contraseña</span>
                 <div className="flex items-center gap-2">
-                  <input type="text" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="Mínimo 6 caracteres" autoComplete="off" className="w-full rounded-xl border border-line bg-surface2 px-3 py-2 text-ink outline-none focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40" />
+                  <input type="text" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="Mínimo 8 caracteres" autoComplete="off" className="w-full rounded-xl border border-line bg-surface2 px-3 py-2 text-ink outline-none focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40" />
                   <button onClick={generar} className="btn-press shrink-0 rounded-lg border border-line bg-surface2 px-3 py-2 text-xs font-medium text-ink hover:bg-line">Generar</button>
                 </div>
               </label>
@@ -886,7 +887,7 @@ function PasswordModal({ usuario, onClose }: { usuario: UsuarioRow; onClose: () 
               <p className="text-xs text-sub">La contraseña se cambia al instante. El usuario podrá entrar con la nueva.</p>
             </div>
             <div className="flex gap-2 border-t border-line px-4 py-3">
-              <button onClick={guardar} disabled={busy || pw.length < 6} className="btn-press inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand-600 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">
+              <button onClick={guardar} disabled={busy || pw.length < MIN_CLAVE_EMPLEADO} className="btn-press inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand-600 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">
                 {busy ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <KeyRound size={16} aria-hidden />}
                 {busy ? 'Cambiando…' : 'Cambiar contraseña'}
               </button>

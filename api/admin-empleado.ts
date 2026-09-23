@@ -17,7 +17,7 @@
  *   SUPABASE_SERVICE_ROLE_KEY   - service role (crear auth.users y escribir usuarios)
  */
 
-import { DOMINIO_LOGIN_EMPLEADO, emailDeLegajo, legajoLimpio } from '../src/lib/loginEmpleado'
+import { DOMINIO_LOGIN_EMPLEADO, emailDeLegajo, legajoLimpio, problemaClaveEmpleado } from '../src/lib/loginEmpleado'
 
 type Req = {
   method?: string
@@ -36,6 +36,7 @@ interface Perfil {
   email: string | null
   nombre: string | null
   rol: string | null
+  estado: string | null
   es_admin: boolean
   roles: string[] | null
 }
@@ -100,6 +101,8 @@ async function rpcConToken<T>(token: string, nombre: string): Promise<T | null> 
 async function esAdmin(token: string): Promise<boolean> {
   const perfil = await rpcConToken<Perfil>(token, 'mi_perfil')
   if (!perfil) return false
+  // Un admin desactivado/pendiente con la sesión todavía abierta no puede dar de alta cuentas
+  if (perfil.estado !== 'aprobado') return false
   if (perfil.es_admin || perfil.rol === 'administrador') return true
   const roles = perfil.roles ?? []
   if (roles.includes('administrador') || roles.length === 0) return roles.includes('administrador')
@@ -211,8 +214,9 @@ export default async function handler(req: Req, res: Res) {
   if (!/^[A-Za-z0-9][A-Za-z0-9 ._-]{0,19}$/.test(legajo)) {
     return res.status(400).json({ error: 'Legajo inválido.' })
   }
-  if (password.length < 6) {
-    return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres.' })
+  const problemaClave = problemaClaveEmpleado(password, legajo)
+  if (problemaClave) {
+    return res.status(400).json({ error: problemaClave })
   }
 
   const email = emailDeLegajo(legajo)

@@ -261,7 +261,7 @@ export default function Mayorista() {
         .select('id,nombre,motivo,created_at,venta_fecha,cant_venta,horas,personas,observacion')
         .order('created_at', { ascending: false })
         .limit(60)),
-      seguro(supabase.from('empleados').select('id,legajo,nombre').or(FILTRO_EMPLEADOS_ACTIVOS).order('nombre', { ascending: true })),
+      seguro(supabase.from('empleados_basico').select('id,legajo,nombre').or(FILTRO_EMPLEADOS_ACTIVOS).order('nombre', { ascending: true })),
       seguro(supabase.from('mayorista_responsables').select('lote_id,local,empleado_id')),
       seguro(supabase.from('vw_mayorista_resumen').select('*')),
     ])

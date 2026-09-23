@@ -73,7 +73,7 @@ export default function EstadisticasRendimiento() {
       const hastaQ = hastaF || new Date().toISOString().slice(0, 10)
 
       const [empData, itemsData] = await Promise.all([
-        sb.from('empleados').select('id,legajo,nombre').or(FILTRO_EMPLEADOS_ACTIVOS).order('nombre'),
+        sb.from('empleados_basico').select('id,legajo,nombre').or(FILTRO_EMPLEADOS_ACTIVOS).order('nombre'),
         sb.from('vw_estadisticas_rendimiento').select('empleado_id,fecha,items,unidades,lotes,segundos').gte('fecha', desdeQ).lte('fecha', hastaQ).order('fecha', { ascending: false }),
       ])
       setEmpleados((empData.data as Empleado[] | null) ?? [])

@@ -236,7 +236,7 @@ export default function Deposito() {
       .limit(60)
     const lotesData = (ld as Lote[]) ?? []
     setLotes(lotesData)
-    const { data: emp } = await supabase.from('empleados').select('id,nombre').or(FILTRO_EMPLEADOS_ACTIVOS).order('nombre')
+    const { data: emp } = await supabase.from('empleados_basico').select('id,nombre').or(FILTRO_EMPLEADOS_ACTIVOS).order('nombre')
     setEmpleados((emp as { id: string; nombre: string }[]) ?? [])
     if (lotesData.length) {
       const ids = lotesData.map((l) => l.id)

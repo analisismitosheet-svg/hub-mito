@@ -252,7 +252,7 @@ export default function CargaNovedades() {
   // Empleados (legajo + nombre) para armar una fila por legajo en el mes en curso
   useEffect(() => {
     if (!supabase) return
-    void supabase.from('empleados').select('legajo,nombre').not('legajo', 'is', null).or(FILTRO_EMPLEADOS_ACTIVOS).then(({ data }) => {
+    void supabase.from('empleados_basico').select('legajo,nombre').not('legajo', 'is', null).or(FILTRO_EMPLEADOS_ACTIVOS).then(({ data }) => {
       const rows = ((data as { legajo: string | null; nombre: string | null }[] | null) ?? [])
         .filter((e) => e.legajo && e.nombre)
         .map((e) => ({ legajo: String(e.legajo), nombre: String(e.nombre) }))

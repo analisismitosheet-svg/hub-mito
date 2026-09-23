@@ -40,13 +40,19 @@ interface Item {
   hecho_por: string | null
 }
 
-/** Estado previo de un ítem, para poder deshacer el último escaneo. */
-interface Snapshot {
+/** Lo que devuelven escanear_codigo() / deshacer_escaneo() (sql/empleados_piso_seguridad_1.sql). */
+interface FilaEscaneo {
+  item_id: string
+  item_escaneadas: number
+  item_cantidad: number
+  item_estado: EstadoM
+  item_codigo: string | null
+}
+
+/** Último escaneo confirmado, para poder deshacerlo. */
+interface UltimoEscaneo {
   id: string
-  escaneadas: number
-  estado: EstadoM
-  hecho_at: string | null
-  hecho_por: string | null
+  codigo: string
 }
 
 const COLUMNAS_ITEM =
@@ -74,8 +80,10 @@ export default function MiRepo() {
 
   const [sel, setSel] = useState<string | null>(null)
   const [mensaje, setMensaje] = useState<{ ok: boolean; texto: string } | null>(null)
-  const [deshacer, setDeshacer] = useState<Snapshot | null>(null)
-  const [enviando, setEnviando] = useState(false)
+  const [deshacer, setDeshacer] = useState<UltimoEscaneo | null>(null)
+  // Escaneos en viaje: se cuentan (no se bloquea), así un lector rápido no pierde lecturas
+  const [enViaje, setEnViaje] = useState(0)
+  const [deshaciendo, setDeshaciendo] = useState(false)
   const [camara, setCamara] = useState(false)
 
   const inputRef = useRef<HTMLInputElement>(null)
@@ -106,7 +114,7 @@ export default function MiRepo() {
 
     try {
       const { data: emp, error: eEmp } = await supabase
-        .from('empleados')
+        .from('empleados_basico')
         .select('id,nombre')
         .eq('legajo', legajo)
         .limit(1)
@@ -218,108 +226,77 @@ export default function MiRepo() {
   /* ------------------------------------------------------------------ */
   /*  Escaneo                                                            */
   /* ------------------------------------------------------------------ */
-  const aplicarSnapshot = useCallback((snap: Snapshot) => {
-    setItems((prev) => prev.map((x) => (x.id === snap.id ? { ...x, ...snap } : x)))
+  /** La base es la fuente de verdad: el ítem queda como lo devolvió la función. */
+  const aplicarFila = useCallback((f: FilaEscaneo) => {
+    setItems((prev) =>
+      prev.map((x) => (x.id === f.item_id ? { ...x, escaneadas: f.item_escaneadas, estado: f.item_estado } : x)),
+    )
   }, [])
 
   const alEscanear = useCallback(
     (bruto: string) => {
       const cod = normalizaCodigo(bruto)
-      if (!cod || !asignacionSel || enviando || !supabase) return
+      const sb = supabase
+      if (!cod || !asignacionSel || !sb) return
+      const { lote_id, local } = asignacionSel
 
-      const candidatos = itemsDe(asignacionSel)
-        .filter(
-          (i) =>
-            normalizaCodigo(String(i.codigo ?? '')) === cod &&
-            i.estado !== 'faltante' &&
-            i.escaneadas < i.cantidad,
-        )
-        .sort((a, b) => a.orden - b.orden)
-
-      if (candidatos.length === 0) {
-        setMensaje({ ok: false, texto: `${cod} no está pendiente en este repo` })
-        enfocar()
-        return
-      }
-
-      const item = candidatos[0]
-      const previo: Snapshot = {
-        id: item.id,
-        escaneadas: item.escaneadas,
-        estado: item.estado,
-        hecho_at: item.hecho_at,
-        hecho_por: item.hecho_por,
-      }
-
-      const nuevas = item.escaneadas + 1
-      const completo = nuevas >= item.cantidad
-      const ahora = new Date().toISOString()
-      const patch: Partial<Item> = completo
-        ? { escaneadas: nuevas, estado: 'hecho', hecho_at: ahora, hecho_por: perfil?.id ?? null }
-        : { escaneadas: nuevas }
-
-      // Optimista: el ítem sale de la lista de una.
-      aplicarSnapshot({ ...previo, ...patch } as Snapshot)
-      setEnviando(true)
-      setMensaje(null)
-      setDeshacer(null)
-
+      // No se bloquea mientras hay otro en viaje: cada lectura va a la base, que suma
+      // de a una con bloqueo de fila (sql: escanear_codigo), así dos lecturas seguidas cuentan dos.
+      setEnViaje((n) => n + 1)
       void (async () => {
         try {
-          const { error: eUp } = await supabase
-            .from('mayorista_items')
-            .update(patch)
-            .eq('id', item.id)
-          if (eUp) throw new Error(eUp.message)
+          const { data, error: eRpc } = await sb.rpc('escanear_codigo', {
+            p_lote: lote_id,
+            p_local: local,
+            p_codigo: cod,
+          })
+          if (eRpc) throw new Error(eRpc.message)
+          const fila = ((Array.isArray(data) ? data[0] : data) ?? null) as FilaEscaneo | null
+          if (!fila) throw new Error('La base no confirmó el escaneo. Probá de nuevo.')
 
-          setDeshacer(previo)
+          aplicarFila(fila)
+          setDeshacer({ id: fila.item_id, codigo: cod })
           setMensaje({
             ok: true,
-            texto: completo
-              ? `${cod} · completado (${item.cantidad} u.)`
-              : `${cod} · ${nuevas} de ${item.cantidad}`,
+            texto:
+              fila.item_escaneadas >= fila.item_cantidad
+                ? `${cod} · completado (${fila.item_cantidad} u.)`
+                : `${cod} · ${fila.item_escaneadas} de ${fila.item_cantidad}`,
           })
         } catch (e) {
-          aplicarSnapshot(previo) // revertimos: no se perdió nada
-          setDeshacer(null)
           setMensaje({
             ok: false,
             texto: e instanceof Error ? e.message : 'No se pudo registrar el escaneo',
           })
         } finally {
-          setEnviando(false)
+          setEnViaje((n) => n - 1)
           enfocar()
         }
       })()
     },
-    [asignacionSel, enviando, itemsDe, perfil?.id, aplicarSnapshot, enfocar],
+    [asignacionSel, aplicarFila, enfocar],
   )
 
   const deshacerUltimo = useCallback(async () => {
-    if (!deshacer || enviando || !supabase) return
-    const snap = deshacer
-    setEnviando(true)
+    const sb = supabase
+    if (!deshacer || deshaciendo || !sb) return
+    const ultimo = deshacer
+    setDeshaciendo(true)
     try {
-      const { error: eUp } = await supabase
-        .from('mayorista_items')
-        .update({
-          escaneadas: snap.escaneadas,
-          estado: snap.estado,
-          hecho_at: snap.hecho_at,
-          hecho_por: snap.hecho_por,
-        })
-        .eq('id', snap.id)
-      if (eUp) throw new Error(eUp.message)
-      aplicarSnapshot(snap)
+      const { data, error: eRpc } = await sb.rpc('deshacer_escaneo', { p_item: ultimo.id })
+      if (eRpc) throw new Error(eRpc.message)
+      const fila = ((Array.isArray(data) ? data[0] : data) ?? null) as FilaEscaneo | null
+      if (!fila) throw new Error('La base no confirmó el cambio. Probá de nuevo.')
+      aplicarFila(fila)
       setDeshacer(null)
-      setMensaje({ ok: true, texto: 'Escaneo deshecho.' })
+      setMensaje({ ok: true, texto: `${ultimo.codigo} · escaneo deshecho (${fila.item_escaneadas} de ${fila.item_cantidad})` })
     } catch (e) {
       setMensaje({ ok: false, texto: e instanceof Error ? e.message : 'No se pudo deshacer' })
     } finally {
-      setEnviando(false)
+      setDeshaciendo(false)
       enfocar()
     }
-  }, [deshacer, enviando, aplicarSnapshot, enfocar])
+  }, [deshacer, deshaciendo, aplicarFila, enfocar])
 
   function onSubmitInput(e: FormEvent) {
     e.preventDefault()
@@ -500,7 +477,7 @@ export default function MiRepo() {
                 {mensaje.ok && deshacer && (
                   <button
                     onClick={() => void deshacerUltimo()}
-                    disabled={enviando}
+                    disabled={deshaciendo}
                     className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-current px-2 py-1 text-xs font-medium opacity-80 hover:opacity-100 disabled:opacity-40"
                   >
                     <Undo2 size={13} aria-hidden /> Deshacer
@@ -523,7 +500,6 @@ export default function MiRepo() {
               enterKeyHint="search"
               placeholder="Escaneá o escribí el código…"
               aria-label="Código de barra"
-              disabled={enviando}
               onBlur={() => { if (!camara) enfocar() }}
               className="w-full rounded-xl border border-line bg-surface2 px-3 py-3 text-base text-ink outline-none transition placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40 disabled:opacity-60"
             />
@@ -537,6 +513,12 @@ export default function MiRepo() {
               {camara ? <CameraOff size={19} aria-hidden /> : <Camera size={19} aria-hidden />}
             </button>
           </form>
+          {enViaje > 0 && (
+            <p className="flex items-center gap-1.5 text-xs text-sub" aria-live="polite">
+              <Loader2 size={12} className="animate-spin" aria-hidden />
+              Guardando {enViaje === 1 ? '1 escaneo' : `${enViaje} escaneos`}…
+            </p>
+          )}
 
           {camara && (
             <ScannerCamara
