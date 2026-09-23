@@ -29,6 +29,8 @@ import Roles from '@/pages/Roles'
 import LocalesPage from '@/pages/Locales'
 import EmpleadosPage from '@/pages/Empleados'
 import Cumpleanios from '@/pages/Cumpleanios'
+import ProveedoresPacho from '@/pages/ProveedoresPacho'
+import GuiaPacho from '@/pages/GuiaPacho'
 import Transportes from '@/pages/Transportes'
 import Clientes from '@/pages/Clientes'
 import FacturacionFabrica from '@/pages/FacturacionFabrica'
@@ -214,6 +216,22 @@ export default function App() {
             element={
               <PermissionRoute permiso="deposito.view">
                 <Rma />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/deposito/rma/proveedores"
+            element={
+              <PermissionRoute permiso="deposito.view">
+                <ProveedoresPacho />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/deposito/rma/guia"
+            element={
+              <PermissionRoute permiso="deposito.view">
+                <GuiaPacho />
               </PermissionRoute>
             }
           />
