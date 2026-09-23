@@ -94,7 +94,7 @@ function Barra({ items }: { items: Item[] }) {
   const w = (n: number) => (total ? `${(n / total) * 100}%` : '0%')
   return (
     <div className="flex shrink-0 items-center gap-2">
-      <div className="flex h-2 w-24 shrink-0 overflow-hidden rounded-full bg-surface2">
+      <div className="flex h-2 w-14 shrink-0 overflow-hidden rounded-full bg-surface2 sm:w-24">
         <div className="h-full bg-emerald-500 transition-all duration-300" style={{ width: w(hecho) }} />
         <div className="h-full bg-red-500 transition-all duration-300" style={{ width: w(faltante) }} />
       </div>
@@ -110,7 +110,7 @@ function BarraResumen({ resumen }: { resumen: { items: number; total: number; he
   const w = (n: number) => (resumen.total ? `${(n / resumen.total) * 100}%` : '0%')
   return (
     <div className="flex shrink-0 items-center gap-2">
-      <div className="flex h-2 w-24 shrink-0 overflow-hidden rounded-full bg-surface2">
+      <div className="flex h-2 w-14 shrink-0 overflow-hidden rounded-full bg-surface2 sm:w-24">
         <div className="h-full bg-emerald-500 transition-all duration-300" style={{ width: w(resumen.hecho) }} />
         <div className="h-full bg-red-500 transition-all duration-300" style={{ width: w(resumen.faltante) }} />
       </div>
@@ -746,29 +746,32 @@ export default function Mayorista() {
                       const ventaLocal = lItems.find((i) => i.venta_local != null)?.venta_local ?? null
                       return (
                         <div key={local} className="my-1 overflow-hidden rounded-xl border border-line">
-                          <div className={`flex w-full items-center gap-3 px-3 py-2 ${todoHecho ? 'bg-emerald-500/10' : 'bg-surface2'}`}>
-                            <button onClick={() => setLocalAbierto(lAbierto ? null : key)} className="flex flex-1 items-center gap-2 text-left">
+                          {/* En celular: fila 1 = local + barra; fila 2 = responsable + "todo" */}
+                          <div className={`flex w-full flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2 sm:flex-nowrap ${todoHecho ? 'bg-emerald-500/10' : 'bg-surface2'}`}>
+                            <button onClick={() => setLocalAbierto(lAbierto ? null : key)} className="flex min-w-0 basis-full items-center gap-2 text-left sm:flex-1 sm:basis-auto">
                               <ChevronRight size={15} aria-hidden className={`shrink-0 text-sub transition-transform ${lAbierto ? 'rotate-90' : ''}`} />
-                              {pri < 9999 && <span className="rounded-full bg-line px-1.5 py-0.5 text-[11px] font-semibold text-sub">P{pri}</span>}
-                              <span className="flex-1 font-display font-semibold text-ink">{local}</span>
+                              {pri < 9999 && <span className="shrink-0 rounded-full bg-line px-1.5 py-0.5 text-[11px] font-semibold text-sub">P{pri}</span>}
+                              <span className="min-w-0 flex-1 truncate font-display font-semibold text-ink">{local}</span>
                               {ventaLocal != null && (
                                 <span className="shrink-0 rounded-full bg-line px-2 py-0.5 text-[11px] font-medium text-sub">venta {ventaLocal}</span>
                               )}
                               <Barra items={lItems} />
                             </button>
                             {puedeAsignar ? (
-                              <SelectorEmpleado
-                                empleados={empleados}
-                                valor={responsables[key] ?? null}
-                                onElegir={(id) => asignarResponsable(lote.id, local, id)}
-                              />
+                              <div className="ml-6 min-w-0 sm:ml-0">
+                                <SelectorEmpleado
+                                  empleados={empleados}
+                                  valor={responsables[key] ?? null}
+                                  onElegir={(id) => asignarResponsable(lote.id, local, id)}
+                                />
+                              </div>
                             ) : (
                               responsables[key] && (
-                                <span className="shrink-0 text-xs text-sub">{empleados.find((e) => e.id === responsables[key])?.nombre}</span>
+                                <span className="ml-6 shrink-0 text-xs text-sub sm:ml-0">{empleados.find((e) => e.id === responsables[key])?.nombre}</span>
                               )
                             )}
                             {puedeMarcar && (
-                              <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-medium text-sub" title="Marcar todo el local">
+                              <label className="ml-auto flex cursor-pointer sm:ml-0 items-center gap-1.5 text-[11px] font-medium text-sub" title="Marcar todo el local">
                                 <input
                                   type="checkbox"
                                   ref={(cb) => {

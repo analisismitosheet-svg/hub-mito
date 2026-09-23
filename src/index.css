@@ -39,6 +39,31 @@ body,
   height: 100%;
 }
 
+/* Celular: todo el hub un poco más chico de una sola vez. Tailwind mide en rem,
+   así que bajar la base achica textos, márgenes, botones y cuadros por igual
+   (la computadora no cambia). */
+@media (max-width: 639px) {
+  html {
+    font-size: 14px;
+  }
+  /* Los campos quedan en 16px: con menos, el iPhone hace zoom al tocarlos */
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+  /* Nada puede ensanchar la página más que la pantalla */
+  body {
+    overflow-x: clip;
+  }
+  img,
+  video,
+  canvas,
+  svg {
+    max-width: 100%;
+  }
+}
+
 body {
   margin: 0;
   font-family: 'Open Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;

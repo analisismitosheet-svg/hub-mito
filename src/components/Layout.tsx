@@ -166,7 +166,7 @@ export default function Layout({ children, wide = true }: { children: ReactNode;
       </div>
 
       {/* En celular: sin espacio arriba (no hay barra) y margen abajo para el ícono flotante */}
-      <main className={`mx-auto ${maxW} px-4 pb-24 pt-2 sm:py-8`}>{children}</main>
+      <main className={`mx-auto ${maxW} px-3 pb-24 pt-2 sm:px-4 sm:py-8`}>{children}</main>
       {logueado && <ChatAgentes />}
     </div>
   )
