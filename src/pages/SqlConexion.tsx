@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { CheckCircle2, Database, Eye, EyeOff, Loader2, Plus, Trash2, XCircle } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
+import ExploradorSql from '@/components/ExploradorSql'
 import {
   cargarConexion,
   cargarVistas,
@@ -82,8 +83,8 @@ export default function SqlConexion() {
   function agregar(e: FormEvent) {
     e.preventDefault()
     const nombre = nuevaVista.trim()
-    if (!/^[A-Za-z0-9_]+$/.test(nombre)) {
-      setError('El nombre de la vista solo puede tener letras, números y guión bajo.')
+    if (!/^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+){0,2}$/.test(nombre)) {
+      setError('Nombre inválido: usá vista, esquema.vista o BASE.esquema.vista (letras, números, guión y guión bajo).')
       return
     }
     if (vistas.some((v) => v.vista.toLowerCase() === nombre.toLowerCase())) {
@@ -95,6 +96,14 @@ export default function SqlConexion() {
     setNuevaVista('')
     setNuevaLabel('')
     setOkMsg(null)
+  }
+
+  // Desde el explorador: ya viene validado como BASE.esquema.objeto
+  function agregarDelExplorador(vista: string, label: string) {
+    if (vistas.some((v) => v.vista.toLowerCase() === vista.toLowerCase())) return
+    setVistas((prev) => [...prev, { vista, label }])
+    setError(null)
+    setOkMsg(`"${vista}" agregada. Apretá "Guardar cambios" para activarla.`)
   }
 
   function quitar(vista: string) {
@@ -297,6 +306,10 @@ export default function SqlConexion() {
           Una vista por necesidad (ej. <code className="rounded bg-surface2 px-1 py-0.5 text-xs">vw_stock</code>). Los cambios
           aplican sin redeploys.
         </p>
+
+        {estado?.esPuente && (
+          <ExploradorSql yaAgregadas={vistas.map((v) => v.vista)} onAgregar={agregarDelExplorador} />
+        )}
 
         {vistas.length > 0 && (
           <ul className="mb-3 space-y-1.5">

@@ -93,7 +93,7 @@ async function vistasDeDb(): Promise<VistaDb[]> {
     for (const v of lista) {
       if (typeof v !== 'object' || v === null) continue
       const vista = String((v as Record<string, unknown>).vista ?? '')
-      if (!/^[A-Za-z0-9_]+$/.test(vista)) continue
+      if (!/^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+){0,2}$/.test(vista)) continue
       out.push({ vista, label: String((v as Record<string, unknown>).label ?? '') || vista })
     }
     return out

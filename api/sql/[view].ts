@@ -101,7 +101,7 @@ async function vistasDeDb(): Promise<string[]> {
     if (!Array.isArray(lista)) return []
     return lista
       .map((v) => (typeof v === 'object' && v !== null ? String((v as Record<string, unknown>).vista ?? '') : ''))
-      .filter((v) => /^[A-Za-z0-9_]+$/.test(v))
+      .filter((v) => /^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+){0,2}$/.test(v))
   } catch {
     return []
   }
@@ -127,7 +127,7 @@ export default async function handler(req: Req, res: Res) {
 
   const vista = primerQuery(req.query.view)
   const habilitadas = new Set([...SQL_VIEWS, ...(await vistasDeDb())])
-  if (!/^[A-Za-z0-9_]+$/.test(vista) || !habilitadas.has(vista)) {
+  if (!/^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+){0,2}$/.test(vista) || !habilitadas.has(vista)) {
     return res.status(400).json({ error: 'Vista no habilitada' })
   }
 
@@ -172,7 +172,7 @@ export default async function handler(req: Req, res: Res) {
   }
   if (!la.ok) {
     const detalle = (await la.text().catch(() => '')).slice(0, 300)
-    return res.status(502).json({ error: `Logic App respondió ${la.status}`, detalle })
+    return res.status(502).json({ error: `${esPuente ? 'Puente SQL' : 'Logic App'} respondió ${la.status}`, detalle })
   }
 
   let filas: unknown = await la.json().catch(() => null)

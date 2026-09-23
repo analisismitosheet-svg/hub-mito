@@ -6,7 +6,7 @@ import { cargarVistas, guardarVistas, leerVista, type FilaSql, type VistaDef } f
 import { usePermisosArea } from '@/hooks/usePermisosArea'
 
 const MAX_FILAS_UI = 300
-const NOMBRE_VISTA = /^[A-Za-z0-9_]+$/
+const NOMBRE_VISTA = /^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+){0,2}$/
 
 function celda(v: unknown): string {
   if (v === null || v === undefined) return ''
@@ -355,7 +355,7 @@ export default function DatosSql() {
                 value={nuevaVista}
                 onChange={(e) => setNuevaVista(e.target.value)}
                 placeholder="vw_equi"
-                pattern="[A-Za-z0-9_]+"
+                pattern="[A-Za-z0-9_.\-]+"
                 required
                 className="w-44 rounded-lg border border-line bg-surface2 px-2 py-1.5 font-mono text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
               />
