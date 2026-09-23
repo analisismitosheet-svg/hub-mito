@@ -619,7 +619,7 @@ export default function MiRepo() {
           </button>
 
           {/* Panel fijo: contador que sube + cronómetro + controles. Queda arriba al bajar la lista. */}
-          <div className="sticky top-[61px] z-[5] -mx-4 space-y-3 border-b border-line bg-paper/95 px-4 pb-3 pt-1 backdrop-blur sm:mx-0 sm:rounded-2xl sm:border sm:bg-surface sm:p-4 sm:shadow-soft">
+          <div className="sticky top-[61px] z-[5] -mx-4 space-y-3 border-b border-line bg-paper px-4 pb-3 pt-1 sm:mx-0 sm:rounded-2xl sm:border sm:bg-surface sm:p-4 sm:shadow-soft">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="truncate font-display text-base font-bold text-ink sm:text-lg">
@@ -794,13 +794,14 @@ export default function MiRepo() {
             ) : (
               <ul className="divide-y divide-line/60">
                 {pendientesDeSel.map((i) => {
-                  const faltan = i.cantidad - i.escaneadas
+                  // Talle numérico con "T" (T38); de letra tal cual (M, L, U)
+                  const talle = i.talle ? (/^\d/.test(i.talle) ? `T${i.talle}` : i.talle) : null
                   return (
                     <li key={i.id} className="flex items-center gap-3 px-4 py-3">
                       <span className="min-w-0 flex-1">
                         <span className="block break-words text-[15px] font-semibold text-ink">{i.codigo}</span>
                         <span className="block truncate text-xs text-sub">
-                          {[i.articulo, i.color, i.talle ? `T${i.talle}` : null].filter(Boolean).join(' · ')}
+                          {[i.articulo, i.color, talle].filter(Boolean).join(' · ')}
                         </span>
                       </span>
                       <span
@@ -809,7 +810,8 @@ export default function MiRepo() {
                         }`}
                         title={i.escaneadas > 0 ? `${i.escaneadas} de ${i.cantidad} escaneadas` : undefined}
                       >
-                        {i.escaneadas > 0 ? `${faltan}/${i.cantidad}` : `×${i.cantidad}`}
+                        {/* Escaneadas / total, igual que el contador grande de arriba */}
+                        {i.escaneadas > 0 ? `${i.escaneadas}/${i.cantidad}` : `×${i.cantidad}`}
                       </span>
                     </li>
                   )
