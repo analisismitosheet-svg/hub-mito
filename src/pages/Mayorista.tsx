@@ -9,6 +9,31 @@ import { FILTRO_EMPLEADOS_ACTIVOS } from '@/lib/empleadosActivos'
 import { useAuth } from '@/context/AuthContext'
 
 type EstadoM = 'pendiente' | 'hecho' | 'faltante'
+/** Qué repos se listan. Por defecto la semana vigente (lunes a domingo, hora Argentina). */
+type Periodo = 'semana' | 'anterior' | 'cuatro' | 'todas'
+const PERIODOS: { id: Periodo; label: string }[] = [
+  { id: 'semana', label: 'Esta semana' },
+  { id: 'anterior', label: 'Semana pasada' },
+  { id: 'cuatro', label: 'Últimas 4 semanas' },
+  { id: 'todas', label: 'Todas' },
+]
+
+/** Lunes 00:00 (Argentina, UTC-3) de la semana actual menos `semanasAtras`, en ISO. */
+function lunesAR(semanasAtras = 0): string {
+  const hoy = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' }) // AAAA-MM-DD
+  const d = new Date(`${hoy}T12:00:00Z`)
+  const desdeLunes = (d.getUTCDay() + 6) % 7 // lunes = 0
+  d.setUTCDate(d.getUTCDate() - desdeLunes - semanasAtras * 7)
+  return `${d.toISOString().slice(0, 10)}T00:00:00-03:00`
+}
+
+function rangoDe(p: Periodo): { desde: string | null; hasta: string | null } {
+  if (p === 'semana') return { desde: lunesAR(0), hasta: null }
+  if (p === 'anterior') return { desde: lunesAR(1), hasta: lunesAR(0) }
+  if (p === 'cuatro') return { desde: lunesAR(3), hasta: null }
+  return { desde: null, hasta: null }
+}
+
 interface Lote {
   id: string
   nombre: string
@@ -219,6 +244,18 @@ export default function Mayorista() {
   const puedeMarcar = isAdmin || can('mayorista.mark')
 
   const [lotes, setLotes] = useState<Lote[]>([])
+  const [periodo, setPeriodoState] = useState<Periodo>(() => {
+    try {
+      const g = localStorage.getItem('mayorista.periodo') as Periodo | null
+      return g && PERIODOS.some((p) => p.id === g) ? g : 'semana'
+    } catch {
+      return 'semana'
+    }
+  })
+  function setPeriodo(p: Periodo) {
+    setPeriodoState(p)
+    try { localStorage.setItem('mayorista.periodo', p) } catch { /* sin almacenamiento: no pasa nada */ }
+  }
   const [itemsCache, setItemsCache] = useState<Record<string, Item[]>>({})
   const [resumenes, setResumenes] = useState<Record<string, { items: number; total: number; hecho: number; faltante: number }>>({})
   const [cargando, setCargando] = useState(true)
@@ -256,12 +293,17 @@ export default function Mayorista() {
         return { data: null as T | null, error: null }
       }
     }
+    // Solo los lotes del período elegido (por defecto, la semana vigente)
+    const { desde, hasta } = rangoDe(periodo)
+    let qLotes = supabase
+      .from('mayorista_lotes')
+      .select('id,nombre,motivo,created_at,venta_fecha,cant_venta,horas,personas,observacion')
+      .order('created_at', { ascending: false })
+      .limit(60)
+    if (desde) qLotes = qLotes.gte('created_at', desde)
+    if (hasta) qLotes = qLotes.lt('created_at', hasta)
     const [ld, emp, respData, resData] = await Promise.all([
-      seguro(supabase
-        .from('mayorista_lotes')
-        .select('id,nombre,motivo,created_at,venta_fecha,cant_venta,horas,personas,observacion')
-        .order('created_at', { ascending: false })
-        .limit(60)),
+      seguro(qLotes),
       seguro(supabase.from('empleados_basico').select('id,legajo,nombre').or(FILTRO_EMPLEADOS_ACTIVOS).order('nombre', { ascending: true })),
       seguro(supabase.from('mayorista_responsables').select('lote_id,local,empleado_id')),
       seguro(supabase.from('vw_mayorista_resumen').select('*')),
@@ -280,7 +322,7 @@ export default function Mayorista() {
     }
     setResumenes(res)
     setCargando(false)
-  }, [])
+  }, [periodo])
 
   // Trae los ítems de UN lote al abrirlo (cache por lote).
   const cargarItemsLote = useCallback(async (loteId: string) => {
@@ -551,6 +593,25 @@ export default function Mayorista() {
         </p>
       )}
 
+      {/* Período: por defecto la semana vigente (la elección queda guardada en este navegador) */}
+      <div role="tablist" aria-label="Período" className="mb-4 flex gap-1.5 overflow-x-auto pb-1">
+        {PERIODOS.map((p) => (
+          <button
+            key={p.id}
+            role="tab"
+            aria-selected={periodo === p.id}
+            onClick={() => setPeriodo(p.id)}
+            className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+              periodo === p.id
+                ? 'border-amber-500/50 bg-amber-500/15 text-amber-500'
+                : 'border-line text-sub hover:border-line2 hover:text-ink'
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+
       {cargando ? (
         <div className="flex items-center justify-center gap-2 py-16 text-sub">
           <Loader2 size={18} className="animate-spin" aria-hidden /> Cargando…
@@ -558,7 +619,19 @@ export default function Mayorista() {
       ) : lotes.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-line2 bg-surface/50 py-14 text-center text-sub">
           <Store size={28} aria-hidden />
-          <p>{puedeImportar ? 'Subí un Excel de repo (columnas LOCAL y CODIGO).' : 'Todavía no hay repos cargados.'}</p>
+          {periodo === 'todas' ? (
+            <p>{puedeImportar ? 'Subí un Excel de repo (columnas LOCAL y CODIGO).' : 'Todavía no hay repos cargados.'}</p>
+          ) : (
+            <>
+              <p>No hay repos cargados {periodo === 'semana' ? 'esta semana' : periodo === 'anterior' ? 'la semana pasada' : 'en las últimas 4 semanas'}.</p>
+              <button
+                onClick={() => setPeriodo(periodo === 'semana' ? 'anterior' : 'todas')}
+                className="btn-press rounded-lg border border-line bg-surface2 px-3 py-1.5 text-xs font-medium text-ink hover:bg-line"
+              >
+                {periodo === 'semana' ? 'Ver la semana pasada' : 'Ver todas'}
+              </button>
+            </>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
