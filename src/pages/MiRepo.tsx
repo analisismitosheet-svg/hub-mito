@@ -223,6 +223,12 @@ export default function MiRepo() {
 
   const progresoSel = asignacionSel ? progreso(asignacionSel) : null
 
+  /** En la lista solo van los repos con algo por escanear (los terminados no se muestran). */
+  const conPendientes = useMemo(
+    () => asignaciones.filter((a) => progreso(a).pendientes > 0),
+    [asignaciones, progreso],
+  )
+
   /* ------------------------------------------------------------------ */
   /*  Escaneo                                                            */
   /* ------------------------------------------------------------------ */
@@ -371,10 +377,18 @@ export default function MiRepo() {
         </div>
       )}
 
-      {/* ---------- Lista de asignaciones ---------- */}
-      {!asignacionSel && asignaciones.length > 0 && (
+      {!aviso && !error && !asignacionSel && asignaciones.length > 0 && conPendientes.length === 0 && (
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 py-14 text-center text-emerald-400">
+          <Check size={28} aria-hidden />
+          <p className="font-medium">Terminaste todos tus repos</p>
+          <p className="text-xs text-sub">Cuando te asignen uno nuevo, aparece acá.</p>
+        </div>
+      )}
+
+      {/* ---------- Lista de asignaciones (solo las que tienen algo pendiente) ---------- */}
+      {!asignacionSel && conPendientes.length > 0 && (
         <div className="space-y-3">
-          {asignaciones.map((a) => {
+          {conPendientes.map((a) => {
             const lote = lotes[a.lote_id]
             const p = progreso(a)
             const pct = p.total > 0 ? Math.round((p.listas / p.total) * 100) : 0
