@@ -3,6 +3,7 @@ import { AuthProvider } from '@/context/AuthContext'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import PermissionRoute from '@/components/PermissionRoute'
 import AdminRoute from '@/components/AdminRoute'
+import SoloPisoRedirect from '@/components/SoloPisoRedirect'
 import Login from '@/pages/Login'
 import Ingreso from '@/pages/Ingreso'
 import Register from '@/pages/Register'
@@ -67,7 +68,9 @@ export default function App() {
             path="/"
             element={
               <ProtectedRoute>
-                <Menu />
+                <SoloPisoRedirect>
+                  <Menu />
+                </SoloPisoRedirect>
               </ProtectedRoute>
             }
           />
@@ -75,7 +78,9 @@ export default function App() {
             path="/area/:areaId"
             element={
               <ProtectedRoute>
-                <Area />
+                <SoloPisoRedirect>
+                  <Area />
+                </SoloPisoRedirect>
               </ProtectedRoute>
             }
           />

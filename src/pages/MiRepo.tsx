@@ -67,7 +67,7 @@ function claveDe(a: Asignacion): string {
 }
 
 export default function MiRepo() {
-  const { perfil } = useAuth()
+  const { perfil, soloPiso } = useAuth()
 
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -329,7 +329,8 @@ export default function MiRepo() {
 
   return (
     <Layout wide={false}>
-      <BackButton label="Menú" />
+      {/* Las cuentas de piso no tienen menú: Mi repo es su única pantalla */}
+      {!soloPiso && <BackButton label="Menú" />}
 
       <div className="mb-5 flex items-center gap-3">
         <div

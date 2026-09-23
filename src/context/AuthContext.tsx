@@ -37,6 +37,11 @@ interface AuthState {
   permisos: Set<string>
   isAdmin: boolean
   isApproved: boolean
+  /**
+   * Cuenta de piso "pura": solo el rol empleado y sin permisos extra.
+   * No ve menú: entra directo a Mi repo. Si se le suman pantallas, deja de serlo.
+   */
+  soloPiso: boolean
   /** ¿El usuario tiene el permiso indicado? (admin siempre true) */
   can: (clave: string) => boolean
   refresh: () => Promise<void>
@@ -53,6 +58,10 @@ interface AuthState {
 // (evita que quede en localhost si te registrás en desarrollo). Configurable por env.
 const SITE_URL =
   (import.meta.env.VITE_SITE_URL as string | undefined)?.trim() || 'https://hub-mito.vercel.app'
+
+/** Rol y permisos de las cuentas de piso (sql/empleados_piso.sql) */
+const ROL_PISO = 'empleado'
+const PERMISOS_PISO = new Set(['mayorista.repos_piso', 'area_mayorista.view'])
 
 const AuthContext = createContext<AuthState | undefined>(undefined)
 
@@ -116,6 +125,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const configured = isSupabaseConfigured
     const isAdmin = !configured || perfil?.rol === 'administrador' || perfil?.es_admin === true || (perfil?.roles ?? []).includes('administrador')
     const isApproved = !configured || perfil?.estado === 'aprobado'
+    const roles = perfil?.roles ?? []
+    const soloPiso =
+      configured &&
+      !isAdmin &&
+      roles.length > 0 &&
+      roles.every((r) => r === ROL_PISO) &&
+      [...permisos].every((p) => PERMISOS_PISO.has(p))
     return {
       user: session?.user ?? null,
       session,
@@ -125,6 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       permisos,
       isAdmin,
       isApproved,
+      soloPiso,
       can(clave) {
         if (!configured) return true
         if (isAdmin) return true
