@@ -529,17 +529,13 @@ export default function Usuarios() {
           usuarios={usuarios}
           token={session?.access_token ?? null}
           onClose={() => setAltaAbierta(false)}
-          onCreado={async (uid) => {
+          onCreado={async (_uid, aviso) => {
+            // El rol "empleado" ya le da "Mi repo": no hace falta abrir Permisos.
+            // (Solo si se quieren sumar pantallas extra, con el botón de Permisos de la fila.)
             setAltaAbierta(false)
+            setPestana('piso')
+            if (aviso) setError(aviso)
             await cargar()
-            if (!supabase) return
-            const { data } = await supabase
-              .from('usuarios')
-              .select('id,email,nombre,rol,estado,created_at,motivo_rechazo,local,legajo')
-              .eq('id', uid)
-              .single()
-            // Directo a los permisos: así eligís qué pantallas va a ver.
-            if (data) setGestion(data as UsuarioRow)
           }}
         />
       )}
@@ -807,7 +803,7 @@ function AltaEmpleadoModal({
   usuarios: UsuarioRow[]
   token: string | null
   onClose: () => void
-  onCreado: (uid: string) => Promise<void>
+  onCreado: (uid: string, aviso: string | null) => Promise<void>
 }) {
   const [legajo, setLegajo] = useState('')
   const [password, setPassword] = useState('')
@@ -847,12 +843,12 @@ function AltaEmpleadoModal({
           password,
         }),
       })
-      const data = (await r.json().catch(() => ({}))) as { uid?: string; error?: string }
+      const data = (await r.json().catch(() => ({}))) as { uid?: string; error?: string; aviso?: string | null }
       if (!r.ok || !data.uid) {
         setError(data.error ?? `No se pudo crear la cuenta (HTTP ${r.status}).`)
         return
       }
-      await onCreado(data.uid)
+      await onCreado(data.uid, data.aviso ?? null)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo crear la cuenta.')
     } finally {
@@ -920,8 +916,8 @@ function AltaEmpleadoModal({
           </label>
 
           <p className="text-xs leading-relaxed text-sub">
-            Después de crearlo vas a poder elegirle <strong className="font-medium text-ink">qué pantallas ve</strong> y asignarle
-            sus locales en Mayorista &gt; Reposición.
+            Se crea con el rol <strong className="font-medium text-ink">Empleado</strong>, que ya le da la pantalla
+            <strong className="font-medium text-ink"> Mi repo</strong>. Después asignale sus locales en Mayorista &gt; Reposición.
           </p>
 
           {yaTieneCuenta && (

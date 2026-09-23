@@ -287,20 +287,24 @@ export default async function handler(req: Req, res: Res) {
       body: JSON.stringify(perfil),
     })
     const filas = resPatch.ok ? ((await resPatch.json().catch(() => [])) as unknown[]) : null
-    if (resPatch.ok && Array.isArray(filas) && filas.length > 0) return ok(res, uid, email)
+    // Lo normal: el trigger de alta (handle_new_user) ya creó la fila y el PATCH la actualizó.
+    // OJO: NO se corta acá; falta el paso 3 (rol). Antes se hacía `return` y el empleado quedaba sin rol.
+    const actualizado = resPatch.ok && Array.isArray(filas) && filas.length > 0
 
-    // No existía la fila (no hay trigger de alta): la creamos.
-    const resInsert = await fetch(`${cfg.url}/rest/v1/usuarios`, {
-      method: 'POST',
-      headers: { ...serviceHeadersMap, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-      body: JSON.stringify(perfil),
-    })
-    if (!resInsert.ok) {
-      const detalle = (await resInsert.text().catch(() => '')).slice(0, 300)
-      return res.status(502).json({
-        error: `La cuenta de login se creó (${email}) pero no se pudo guardar el perfil en public.usuarios.`,
-        detalle,
+    if (!actualizado) {
+      // No existía la fila (no hay trigger de alta): la creamos.
+      const resInsert = await fetch(`${cfg.url}/rest/v1/usuarios`, {
+        method: 'POST',
+        headers: { ...serviceHeadersMap, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+        body: JSON.stringify(perfil),
       })
+      if (!resInsert.ok) {
+        const detalle = (await resInsert.text().catch(() => '')).slice(0, 300)
+        return res.status(502).json({
+          error: `La cuenta de login se creó (${email}) pero no se pudo guardar el perfil en public.usuarios.`,
+          detalle,
+        })
+      }
     }
   } catch (e) {
     return res.status(502).json({
@@ -308,9 +312,10 @@ export default async function handler(req: Req, res: Res) {
     })
   }
 
-  // --- 3. Rol base "empleado" (ON CONFLICT DO NOTHING) ---
+  // --- 3. Rol base "empleado" (ON CONFLICT DO NOTHING): le da la pantalla "Mi repo" ---
+  let avisoRol: string | null = null
   try {
-    await fetch(`${cfg.url}/rest/v1/usuario_roles`, {
+    const resRol = await fetch(`${cfg.url}/rest/v1/usuario_roles`, {
       method: 'POST',
       headers: {
         ...serviceHeadersMap,
@@ -319,13 +324,15 @@ export default async function handler(req: Req, res: Res) {
       },
       body: JSON.stringify({ usuario_id: uid, rol_codigo: 'empleado' }),
     })
-  } catch {
-    /* no bloquea: los permisos se pueden setear a mano desde /usuarios */
+    if (!resRol.ok) avisoRol = `HTTP ${resRol.status}: ${(await resRol.text().catch(() => '')).slice(0, 200)}`
+  } catch (e) {
+    avisoRol = e instanceof Error ? e.message : String(e)
   }
 
-  return ok(res, uid, email)
+  // La cuenta ya existe: no se devuelve error, pero se avisa para asignar el rol a mano.
+  return ok(res, uid, email, avisoRol ? `La cuenta se creó pero no se pudo asignar el rol "empleado" (${avisoRol}). Asignalo desde Permisos.` : null)
 }
 
-function ok(res: Res, uid: string, email: string) {
-  return res.status(200).json({ ok: true, uid, email })
+function ok(res: Res, uid: string, email: string, aviso: string | null = null) {
+  return res.status(200).json({ ok: true, uid, email, aviso })
 }
