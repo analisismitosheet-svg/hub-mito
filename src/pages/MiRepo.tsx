@@ -637,86 +637,87 @@ export default function MiRepo() {
             <ChevronRight size={16} aria-hidden className="rotate-180" /> Mis repos
           </button>
 
-          {/* Panel fijo: contador que sube + cronómetro + controles. Queda arriba al bajar la lista. */}
-          <div className="sticky top-[61px] z-[5] -mx-4 space-y-3 border-b border-line bg-paper px-4 pb-3 pt-1 sm:mx-0 sm:rounded-2xl sm:border sm:bg-surface sm:p-4 sm:shadow-soft">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="truncate font-display text-base font-bold text-ink sm:text-lg">
+          {/* Panel fijo compacto: repo + cronómetro + botón en una fila, barra con contador, input.
+              Queda arriba al bajar la lista; en celular ocupa lo mínimo. */}
+          <div className="sticky top-[61px] z-[5] -mx-4 space-y-2 border-b border-line bg-paper px-4 pb-2.5 pt-1 sm:mx-0 sm:space-y-3 sm:rounded-2xl sm:border sm:bg-surface sm:p-4 sm:shadow-soft">
+            {/* Fila 1: repo · cronómetro · botón */}
+            <div className="flex items-center gap-2.5">
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-display text-sm font-bold leading-tight text-ink sm:text-base">
                   {lotes[asignacionSel.lote_id]?.nombre ?? 'Repo'}
                 </p>
-                <p className="text-xs text-sub sm:text-sm">Local {asignacionSel.local}</p>
-              </div>
-              <div className="shrink-0 text-right" aria-live="polite">
-                <p
-                  className={`font-display text-4xl font-bold leading-none tabular-nums ${
-                    progresoSel.pendientes === 0 ? 'text-emerald-500' : 'text-ink'
-                  }`}
-                >
-                  {progresoSel.listas}
-                  <span className="text-xl text-sub">/{progresoSel.total}</span>
-                </p>
-                <p className="mt-1 text-[11px] text-sub">unidades escaneadas</p>
-              </div>
-            </div>
-
-            <div className="h-2.5 w-full overflow-hidden rounded-full bg-line">
-              <div
-                className={`h-full rounded-full transition-all duration-300 ${
-                  progresoSel.pendientes === 0 ? 'bg-emerald-500' : 'bg-amber-500'
-                }`}
-                style={{
-                  width: `${progresoSel.total > 0 ? Math.round((progresoSel.listas / progresoSel.total) * 100) : 0}%`,
-                }}
-              />
-            </div>
-
-            {/* Cronómetro + controles */}
-            <div className="flex items-center gap-3">
-              <div className="flex min-w-0 flex-1 items-center gap-2">
-                <Timer size={18} aria-hidden className={sesion?.estado === 'en_curso' ? 'text-emerald-400' : 'text-sub'} />
-                <div className="min-w-0">
-                  <p className="font-mono text-2xl font-semibold leading-none tabular-nums text-ink">
+                <p className="flex items-center gap-1.5 text-xs leading-tight text-sub">
+                  <span className="font-semibold text-amber-500">{asignacionSel.local}</span>
+                  <span aria-hidden>·</span>
+                  <Timer size={12} aria-hidden className={sesion?.estado === 'en_curso' ? 'text-emerald-400' : 'text-sub'} />
+                  <span
+                    className={`font-mono text-sm font-semibold tabular-nums ${sesion?.estado === 'en_curso' ? 'text-ink' : 'text-sub'}`}
+                    title={
+                      cargandoSesion
+                        ? 'Cargando…'
+                        : sesion?.estado === 'en_curso'
+                          ? 'En curso'
+                          : sesion?.estado === 'pausada'
+                            ? 'En pausa: el tiempo no corre'
+                            : 'Sin iniciar'
+                    }
+                  >
                     {fmtReloj(segundosSesion)}
-                  </p>
-                  <p className="mt-0.5 text-[11px] text-sub">
-                    {cargandoSesion
-                      ? 'Cargando…'
-                      : sesion?.estado === 'en_curso'
-                        ? 'En curso'
-                        : sesion?.estado === 'pausada'
-                          ? 'En pausa · el tiempo no corre'
-                          : 'Sin iniciar'}
-                  </p>
-                </div>
+                  </span>
+                  {sesion?.estado === 'pausada' && <span className="text-amber-400">en pausa</span>}
+                </p>
               </div>
 
               {!cargandoSesion && !sesion && (
                 <button
                   onClick={() => void accion('repo_iniciar')}
                   disabled={accionSesion}
-                  className="btn-press inline-flex h-12 shrink-0 items-center gap-2 rounded-xl bg-emerald-600 px-5 text-base font-semibold text-white shadow-soft transition hover:bg-emerald-700 disabled:opacity-60"
+                  className="btn-press inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white shadow-soft transition hover:bg-emerald-700 disabled:opacity-60"
                 >
-                  {accionSesion ? <Loader2 size={18} className="animate-spin" aria-hidden /> : <Play size={18} aria-hidden />} Iniciar
+                  {accionSesion ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Play size={16} aria-hidden />} Iniciar
                 </button>
               )}
               {sesion?.estado === 'en_curso' && (
                 <button
                   onClick={() => void accion('repo_pausar')}
                   disabled={accionSesion}
-                  className="btn-press inline-flex h-12 shrink-0 items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/15 px-4 text-base font-semibold text-amber-400 transition hover:bg-amber-500/25 disabled:opacity-60"
+                  className="btn-press inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/15 px-3 text-sm font-semibold text-amber-400 transition hover:bg-amber-500/25 disabled:opacity-60"
                 >
-                  {accionSesion ? <Loader2 size={18} className="animate-spin" aria-hidden /> : <Pause size={18} aria-hidden />} Pausar
+                  {accionSesion ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Pause size={16} aria-hidden />} Pausar
                 </button>
               )}
               {sesion?.estado === 'pausada' && (
                 <button
                   onClick={() => void accion('repo_reanudar')}
                   disabled={accionSesion}
-                  className="btn-press inline-flex h-12 shrink-0 items-center gap-2 rounded-xl bg-emerald-600 px-4 text-base font-semibold text-white shadow-soft transition hover:bg-emerald-700 disabled:opacity-60"
+                  className="btn-press inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-emerald-600 px-3 text-sm font-semibold text-white shadow-soft transition hover:bg-emerald-700 disabled:opacity-60"
                 >
-                  {accionSesion ? <Loader2 size={18} className="animate-spin" aria-hidden /> : <Play size={18} aria-hidden />} Reanudar
+                  {accionSesion ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Play size={16} aria-hidden />} Reanudar
                 </button>
               )}
+            </div>
+
+            {/* Fila 2: barra + contador que sube */}
+            <div className="flex items-center gap-2.5" aria-live="polite">
+              <div className="h-2 flex-1 overflow-hidden rounded-full bg-line">
+                <div
+                  className={`h-full rounded-full transition-all duration-300 ${
+                    progresoSel.pendientes === 0 ? 'bg-emerald-500' : 'bg-amber-500'
+                  }`}
+                  style={{
+                    width: `${progresoSel.total > 0 ? Math.round((progresoSel.listas / progresoSel.total) * 100) : 0}%`,
+                  }}
+                />
+              </div>
+              <p
+                className={`shrink-0 font-display text-lg font-bold leading-none tabular-nums ${
+                  progresoSel.pendientes === 0 ? 'text-emerald-500' : 'text-ink'
+                }`}
+                title="Unidades escaneadas"
+              >
+                {progresoSel.listas}
+                <span className="text-sm font-semibold text-sub">/{progresoSel.total}</span>
+              </p>
             </div>
 
             {/* Entrada: escáner inalámbrico (escribe + Enter), teclado o cámara. Solo en curso. */}
@@ -735,12 +736,12 @@ export default function MiRepo() {
                   placeholder="Escaneá o escribí el código…"
                   aria-label="Código de barra"
                   onBlur={() => { if (!camara && !confirmarFin) enfocar() }}
-                  className="h-12 w-full min-w-0 rounded-xl border border-line bg-surface2 px-3 text-base text-ink outline-none transition placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40"
+                  className="h-11 w-full min-w-0 rounded-xl border border-line bg-surface2 px-3 text-base text-ink outline-none transition placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40"
                 />
                 <button
                   type="button"
                   onClick={() => setCamara((c) => !c)}
-                  className="btn-press flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-line bg-surface2 text-ink transition hover:bg-line"
+                  className="btn-press flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-line bg-surface2 text-ink transition hover:bg-line"
                   title={camara ? 'Cerrar cámara' : 'Abrir cámara'}
                   aria-label={camara ? 'Cerrar cámara' : 'Abrir cámara'}
                 >
@@ -754,7 +755,7 @@ export default function MiRepo() {
               <div aria-live="polite" className="space-y-1.5">
                 {mensaje && (
                   <div
-                    className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium ${
+                    className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-1.5 text-sm font-medium ${
                       mensaje.ok
                         ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
                         : 'border-brand-600/40 bg-brand-600/10 text-brand-400'
@@ -815,12 +816,25 @@ export default function MiRepo() {
                 {pendientesDeSel.map((i) => {
                   const talle = fmtTalle(i.talle)
                   return (
-                    <li key={i.id} className="flex items-center gap-3 px-4 py-3">
+                    <li key={i.id} className="flex items-center gap-3 px-4 py-2.5">
                       <span className="min-w-0 flex-1">
-                        <span className="block break-words text-[15px] font-semibold text-ink">{i.codigo}</span>
-                        <span className="block truncate text-xs text-sub">
-                          {[i.articulo, i.color, talle].filter(Boolean).join(' · ')}
+                        {/* Código + color + talle juntos: lo que hay que buscar en la etiqueta */}
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-[15px] font-semibold text-ink">{i.codigo}</span>
+                          {i.color && (
+                            <span className="rounded-md bg-sky-500/15 px-1.5 py-0.5 text-xs font-semibold text-sky-400" title="Color">
+                              {i.color}
+                            </span>
+                          )}
+                          {talle && (
+                            <span className="rounded-md bg-violet-500/15 px-1.5 py-0.5 text-xs font-semibold text-violet-400" title="Talle">
+                              {talle}
+                            </span>
+                          )}
                         </span>
+                        {i.articulo && (
+                          <span className="mt-0.5 block truncate text-xs text-sub">{i.articulo.replace(/^\(\)\s*/, '')}</span>
+                        )}
                       </span>
                       <span
                         className={`shrink-0 rounded-lg px-2.5 py-1.5 text-sm font-bold tabular-nums ${
