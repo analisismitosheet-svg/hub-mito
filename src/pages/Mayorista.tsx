@@ -3,6 +3,7 @@ import { Upload, Loader2, ChevronRight, Store, Trash2, Check, X, Plus, BarChart3
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import SelectorEmpleado from '@/components/SelectorEmpleado'
 import { supabase } from '@/lib/supabase'
 import { FILTRO_EMPLEADOS_ACTIVOS } from '@/lib/empleadosActivos'
 import { useAuth } from '@/context/AuthContext'
@@ -683,17 +684,11 @@ export default function Mayorista() {
                               <Barra items={lItems} />
                             </button>
                             {puedeAsignar ? (
-                              <select
-                                value={responsables[key] ?? ''}
-                                onChange={(e) => asignarResponsable(lote.id, local, e.target.value || null)}
-                                className="max-w-[8.5rem] shrink-0 rounded-lg border border-line bg-surface px-2 py-1 text-xs text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
-                                title="Empleado responsable"
-                              >
-                                <option value="">Responsable…</option>
-                                {empleados.map((em) => (
-                                  <option key={em.id} value={em.id}>{em.nombre}</option>
-                                ))}
-                              </select>
+                              <SelectorEmpleado
+                                empleados={empleados}
+                                valor={responsables[key] ?? null}
+                                onElegir={(id) => asignarResponsable(lote.id, local, id)}
+                              />
                             ) : (
                               responsables[key] && (
                                 <span className="shrink-0 text-xs text-sub">{empleados.find((e) => e.id === responsables[key])?.nombre}</span>
