@@ -10,8 +10,8 @@ import ChatAgentes from '@/components/ChatAgentes'
  * Shell de la app. Por defecto usa un contenedor ancho (aprovecha toda la pantalla).
  * Pasar `wide={false}` para volver a un ancho centrado y angosto en una página puntual.
  *
- * En celular no hay barra fija: solo el ícono rojo "M", que abre un menú con
- * recargar, tema, avisos y salir (así la pantalla queda para el contenido).
+ * En celular no hay barra: el contenido empieza arriba de todo y el ícono rojo "M"
+ * flota abajo a la izquierda; abre un menú con recargar, tema, avisos y salir.
  */
 export default function Layout({ children, wide = true }: { children: ReactNode; wide?: boolean }) {
   const { user, signOut, configured, soloPiso } = useAuth()
@@ -42,6 +42,12 @@ export default function Layout({ children, wide = true }: { children: ReactNode;
 
   const logo = (
     <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 font-display text-sm font-bold text-white shadow-glow transition-transform group-hover:scale-105">
+      M
+    </div>
+  )
+  // En celular es un botón flotante: más grande para el dedo
+  const logoFlotante = (
+    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-600 font-display text-base font-bold text-white shadow-glow transition-transform active:scale-95">
       M
     </div>
   )
@@ -94,8 +100,8 @@ export default function Layout({ children, wide = true }: { children: ReactNode;
         </div>
       </header>
 
-      {/* ---------- Celular: solo el ícono rojo, que abre el menú ---------- */}
-      <div className="relative px-4 pt-3 sm:hidden" ref={menuRef}>
+      {/* ---------- Celular: sin barra. El ícono rojo flota abajo a la izquierda y abre el menú ---------- */}
+      <div className="fixed bottom-4 left-4 z-40 sm:hidden" ref={menuRef}>
         {logueado ? (
           <button
             type="button"
@@ -103,20 +109,20 @@ export default function Layout({ children, wide = true }: { children: ReactNode;
             aria-haspopup="menu"
             aria-expanded={menuAbierto}
             aria-label="Abrir menú"
-            className="group rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
+            className="group block rounded-xl shadow-soft-lg outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
           >
-            {logo}
+            {logoFlotante}
           </button>
         ) : (
-          <Link to="/" aria-label="Ir al inicio" className="group inline-block rounded-xl">
-            {logo}
+          <Link to="/" aria-label="Ir al inicio" className="group block rounded-xl shadow-soft-lg">
+            {logoFlotante}
           </Link>
         )}
 
         {menuAbierto && logueado && user && (
           <div
             role="menu"
-            className="absolute left-4 top-full z-50 mt-2 w-64 rounded-2xl border border-line bg-surface p-1.5 shadow-soft-lg"
+            className="absolute bottom-full left-0 z-50 mb-2 w-64 rounded-2xl border border-line bg-surface p-1.5 shadow-soft-lg"
           >
             <div className="flex items-center justify-between gap-2 border-b border-line px-3 pb-2 pt-1.5">
               <div className="min-w-0">
@@ -159,7 +165,8 @@ export default function Layout({ children, wide = true }: { children: ReactNode;
         )}
       </div>
 
-      <main className={`mx-auto ${maxW} px-4 pb-8 pt-3 sm:py-8`}>{children}</main>
+      {/* En celular: sin espacio arriba (no hay barra) y margen abajo para el ícono flotante */}
+      <main className={`mx-auto ${maxW} px-4 pb-24 pt-2 sm:py-8`}>{children}</main>
       {logueado && <ChatAgentes />}
     </div>
   )
