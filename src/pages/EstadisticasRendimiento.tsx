@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
-import { Loader2, TrendingUp, User, ChevronRight } from 'lucide-react'
+import { Loader2, TrendingUp, User, ChevronRight, Timer } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
@@ -14,6 +14,27 @@ interface ItemSep {
   unidades: number
   lotes: number
   segundos: number
+}
+
+/** Tiempo real medido con Iniciar/Pausar/Finalizar en Mi repo (vista vw_tiempos_piso) */
+interface TiempoPiso {
+  empleado_id: string | null
+  fecha: string
+  sesiones: number
+  repos: number
+  unidades: number
+  segundos: number
+  pendientes_fin: number
+}
+
+interface FilaPiso {
+  empleadoId: string
+  nombre: string
+  legajo: string | null
+  repos: number
+  unidades: number
+  segundos: number
+  faltaron: number
 }
 
 interface FilaEmpleado {
@@ -55,6 +76,7 @@ export default function EstadisticasRendimiento() {
   const { ver: puedeVer } = usePermisosArea('mayorista.estadisticas')
   const [empleados, setEmpleados] = useState<Empleado[]>([])
   const [items, setItems] = useState<ItemSep[]>([])
+  const [tiempos, setTiempos] = useState<TiempoPiso[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [desde, setDesde] = useState('')
@@ -72,12 +94,15 @@ export default function EstadisticasRendimiento() {
       const desdeQ = desdeF || hace90dias
       const hastaQ = hastaF || new Date().toISOString().slice(0, 10)
 
-      const [empData, itemsData] = await Promise.all([
+      const [empData, itemsData, tiemposData] = await Promise.all([
         sb.from('empleados_basico').select('id,legajo,nombre').or(FILTRO_EMPLEADOS_ACTIVOS).order('nombre'),
         sb.from('vw_estadisticas_rendimiento').select('empleado_id,fecha,items,unidades,lotes,segundos').gte('fecha', desdeQ).lte('fecha', hastaQ).order('fecha', { ascending: false }),
+        sb.from('vw_tiempos_piso').select('empleado_id,fecha,sesiones,repos,unidades,segundos,pendientes_fin').gte('fecha', desdeQ).lte('fecha', hastaQ),
       ])
       setEmpleados((empData.data as Empleado[] | null) ?? [])
       setItems((itemsData.data as ItemSep[] | null) ?? [])
+      // Si la vista todavía no existe (sql/piso_tiempos.sql sin aplicar) simplemente no se muestra
+      setTiempos(tiemposData.error ? [] : ((tiemposData.data as TiempoPiso[] | null) ?? []))
       if (empData.error) setError(empData.error.message)
       if (itemsData.error) setError(itemsData.error.message)
     } catch (e) {
@@ -132,6 +157,24 @@ export default function EstadisticasRendimiento() {
     return Array.from(porEmpleado.values()).sort((a, b) => b.unidades - a.unidades)
   }, [items, empleados])
 
+  const filasPiso = useMemo<FilaPiso[]>(() => {
+    const mapa = new Map<string, FilaPiso>()
+    for (const t of tiempos) {
+      if (!t.empleado_id) continue
+      const emp = empleados.find((e) => e.id === t.empleado_id)
+      let f = mapa.get(t.empleado_id)
+      if (!f) {
+        f = { empleadoId: t.empleado_id, nombre: emp?.nombre ?? 'Sin nombre', legajo: emp?.legajo ?? null, repos: 0, unidades: 0, segundos: 0, faltaron: 0 }
+        mapa.set(t.empleado_id, f)
+      }
+      f.repos += t.repos
+      f.unidades += t.unidades
+      f.segundos += t.segundos
+      f.faltaron += t.pendientes_fin
+    }
+    return Array.from(mapa.values()).sort((a, b) => b.unidades - a.unidades)
+  }, [tiempos, empleados])
+
   const totalItems = filas.reduce((s, f) => s + f.items, 0)
   const totalUnidades = filas.reduce((s, f) => s + f.unidades, 0)
   const totalSegundos = filas.reduce((s, f) => s + f.segundos, 0)
@@ -165,6 +208,46 @@ export default function EstadisticasRendimiento() {
         )}
         <span className="text-[11px] text-sub/70">{totalItems} items · {totalUnidades} unidades separadas</span>
       </div>
+
+      {!cargando && filasPiso.length > 0 && (
+        <section className="mb-6">
+          <h2 className="mb-1 flex items-center gap-2 font-display text-lg font-semibold text-ink">
+            <Timer size={17} className="text-emerald-500" aria-hidden /> Tiempo real en piso
+          </h2>
+          <p className="mb-2 text-xs text-sub/70">Medido con Iniciar / Pausar / Finalizar en Mi repo. Las pausas no cuentan.</p>
+          <div className="w-full overflow-x-auto rounded-2xl border border-line">
+            <table className="w-full table-auto border-collapse text-sm leading-tight">
+              <thead>
+                <tr className="table-head text-left text-[11px] font-semibold uppercase tracking-wider">
+                  <th className="px-3 py-2 whitespace-nowrap">N° Empleado</th>
+                  <th className="px-3 py-2 text-center whitespace-nowrap">Repos</th>
+                  <th className="px-3 py-2 text-center whitespace-nowrap">Unidades</th>
+                  <th className="px-3 py-2 text-center whitespace-nowrap">Tiempo real</th>
+                  <th className="px-3 py-2 text-center whitespace-nowrap">Unid/h</th>
+                  <th className="px-3 py-2 text-center whitespace-nowrap">Faltaron</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line/50 bg-surface">
+                {filasPiso.map((f) => (
+                  <tr key={f.empleadoId}>
+                    <td className="px-3 py-2">
+                      <span className="flex items-center gap-2 font-medium text-ink">
+                        <User size={13} className="text-sub" aria-hidden /> {f.legajo ? `#${f.legajo}` : f.nombre}{' '}
+                        {f.legajo ? <span className="text-[10px] font-normal text-sub/70">{f.nombre}</span> : null}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-center text-sub">{f.repos}</td>
+                    <td className="px-3 py-2 text-center font-semibold text-ink">{f.unidades}</td>
+                    <td className="px-3 py-2 text-center text-ink whitespace-nowrap">{fmtDuracion(f.segundos)}</td>
+                    <td className="px-3 py-2 text-center text-sub whitespace-nowrap">{f.segundos > 0 ? (f.unidades / (f.segundos / 3600)).toFixed(1) : '—'}</td>
+                    <td className={'px-3 py-2 text-center whitespace-nowrap ' + (f.faltaron > 0 ? 'text-amber-500' : 'text-sub')}>{f.faltaron || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       {cargando ? (
         <div className="flex items-center justify-center gap-2 py-10 text-sub"><Loader2 size={18} className="animate-spin" aria-hidden /> Cargando...</div>

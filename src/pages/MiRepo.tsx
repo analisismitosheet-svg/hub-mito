@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
   ScanLine, Loader2, Store, Check, Undo2, Camera, CameraOff, ChevronRight, AlertTriangle,
+  Play, Pause, Flag, Timer,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import ScannerCamara from '@/components/ScannerCamara'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
@@ -66,6 +68,39 @@ function claveDe(a: Asignacion): string {
   return `${a.lote_id}|${String(a.local ?? '').trim().toUpperCase()}`
 }
 
+/** Sesión de trabajo de un repo (sql/piso_tiempos.sql): Iniciar -> Pausar/Reanudar -> Finalizar */
+type EstadoSesion = 'en_curso' | 'pausada' | 'finalizada'
+interface FilaSesion {
+  sesion_id: string
+  estado: EstadoSesion
+  segundos: number
+  unidades: number
+  pendientes_fin: number | null
+}
+/** Sesión en pantalla: `segundos` al momento `marca` (reloj local), para el cronómetro. */
+interface Sesion {
+  id: string
+  estado: EstadoSesion
+  segundos: number
+  marca: number
+}
+
+function aSesion(f: FilaSesion): Sesion {
+  return { id: f.sesion_id, estado: f.estado, segundos: f.segundos, marca: Date.now() }
+}
+
+function fmtReloj(seg: number): string {
+  const s = Math.max(0, Math.floor(seg))
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const r = s % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`
+}
+
+function filaDe<T>(data: unknown): T | null {
+  return ((Array.isArray(data) ? data[0] : data) ?? null) as T | null
+}
+
 export default function MiRepo() {
   const { perfil, soloPiso } = useAuth()
 
@@ -85,6 +120,17 @@ export default function MiRepo() {
   const [enViaje, setEnViaje] = useState(0)
   const [deshaciendo, setDeshaciendo] = useState(false)
   const [camara, setCamara] = useState(false)
+
+  // Tiempo de trabajo del repo abierto
+  const [sesion, setSesion] = useState<Sesion | null>(null)
+  const [cargandoSesion, setCargandoSesion] = useState(false)
+  const [accionSesion, setAccionSesion] = useState(false)
+  const [confirmarFin, setConfirmarFin] = useState(false)
+  const [resumen, setResumen] = useState<string | null>(null)
+  // Repos que YA finalicé (no se vuelven a mostrar) y los que tengo abiertos (en curso / pausa)
+  const [finalizados, setFinalizados] = useState<Set<string>>(new Set())
+  const [abiertos, setAbiertos] = useState<Record<string, EstadoSesion>>({})
+  const [, setTick] = useState(0)
 
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -152,6 +198,25 @@ export default function MiRepo() {
       for (const l of (rl.data as Lote[] | null) ?? []) mapa[l.id] = l
       setLotes(mapa)
 
+      // Mis sesiones de trabajo en esos lotes: las finalizadas no se vuelven a mostrar
+      if (perfil?.id) {
+        const rs = await supabase
+          .from('repo_sesiones')
+          .select('lote_id,local,estado')
+          .eq('usuario_id', perfil.id)
+          .in('lote_id', loteIds)
+        if (!rs.error) {
+          const fin = new Set<string>()
+          const ab: Record<string, EstadoSesion> = {}
+          for (const s of (rs.data as Array<Asignacion & { estado: EstadoSesion }> | null) ?? []) {
+            if (s.estado === 'finalizada') fin.add(claveDe(s))
+            else ab[claveDe(s)] = s.estado
+          }
+          setFinalizados(fin)
+          setAbiertos(ab)
+        }
+      }
+
       const PAGE = 1000
       const todos: Item[] = []
       for (let desde = 0; ; desde += PAGE) {
@@ -177,7 +242,7 @@ export default function MiRepo() {
       setError(e instanceof Error ? e.message : 'No se pudieron cargar tus repos.')
       setCargando(false)
     }
-  }, [perfil?.legajo, perfil?.nombre, enfocar])
+  }, [perfil?.id, perfil?.legajo, perfil?.nombre, enfocar])
 
   useEffect(() => { void cargar() }, [cargar])
 
@@ -223,11 +288,88 @@ export default function MiRepo() {
 
   const progresoSel = asignacionSel ? progreso(asignacionSel) : null
 
-  /** En la lista solo van los repos con algo por escanear (los terminados no se muestran). */
+  /**
+   * En la lista van los repos con algo por escanear que no finalicé, más los que
+   * tengo abiertos (en curso / pausa). Los terminados o finalizados no se muestran.
+   */
   const conPendientes = useMemo(
-    () => asignaciones.filter((a) => progreso(a).pendientes > 0),
-    [asignaciones, progreso],
+    () =>
+      asignaciones.filter((a) => {
+        const k = claveDe(a)
+        if (abiertos[k]) return true
+        return progreso(a).pendientes > 0 && !finalizados.has(k)
+      }),
+    [asignaciones, progreso, abiertos, finalizados],
   )
+
+  /* ------------------------------------------------------------------ */
+  /*  Tiempo: Iniciar / Pausar / Reanudar / Finalizar                    */
+  /* ------------------------------------------------------------------ */
+  const segundosSesion = sesion
+    ? sesion.segundos + (sesion.estado === 'en_curso' ? (Date.now() - sesion.marca) / 1000 : 0)
+    : 0
+
+  // El cronómetro se redibuja cada segundo mientras está en curso
+  useEffect(() => {
+    if (sesion?.estado !== 'en_curso') return
+    const id = window.setInterval(() => setTick((t) => t + 1), 1000)
+    return () => window.clearInterval(id)
+  }, [sesion?.estado])
+
+  const recordarSesion = useCallback((a: Asignacion, s: Sesion | null) => {
+    const k = claveDe(a)
+    setAbiertos((prev) => {
+      const nuevo = { ...prev }
+      if (s && s.estado !== 'finalizada') nuevo[k] = s.estado
+      else delete nuevo[k]
+      return nuevo
+    })
+    if (s?.estado === 'finalizada') setFinalizados((prev) => new Set(prev).add(k))
+  }, [])
+
+  const accion = useCallback(
+    async (fn: 'repo_iniciar' | 'repo_pausar' | 'repo_reanudar' | 'repo_finalizar') => {
+      const sb = supabase
+      if (!sb || !asignacionSel || accionSesion) return null
+      setAccionSesion(true)
+      setMensaje(null)
+      try {
+        const args =
+          fn === 'repo_iniciar'
+            ? { p_lote: asignacionSel.lote_id, p_local: asignacionSel.local }
+            : { p_sesion: sesion?.id }
+        const { data, error: eRpc } = await sb.rpc(fn, args)
+        if (eRpc) throw new Error(eRpc.message)
+        const fila = filaDe<FilaSesion>(data)
+        if (!fila) throw new Error('La base no confirmó el cambio. Probá de nuevo.')
+        const s = aSesion(fila)
+        setSesion(s.estado === 'finalizada' ? null : s)
+        recordarSesion(asignacionSel, s)
+        if (s.estado === 'en_curso') enfocar()
+        return fila
+      } catch (e) {
+        setMensaje({ ok: false, texto: e instanceof Error ? e.message : 'No se pudo registrar' })
+        return null
+      } finally {
+        setAccionSesion(false)
+      }
+    },
+    [asignacionSel, accionSesion, sesion?.id, recordarSesion, enfocar],
+  )
+
+  async function finalizar() {
+    setConfirmarFin(false)
+    const fila = await accion('repo_finalizar')
+    if (!fila) return
+    const faltaron = fila.pendientes_fin ?? 0
+    setResumen(
+      `Repo finalizado en ${fmtReloj(fila.segundos)} · ${fila.unidades} u. escaneadas` +
+        (faltaron > 0 ? ` · quedaron ${faltaron} u. sin escanear` : ''),
+    )
+    setSel(null)
+    setDeshacer(null)
+    setCamara(false)
+  }
 
   /* ------------------------------------------------------------------ */
   /*  Escaneo                                                            */
@@ -244,6 +386,11 @@ export default function MiRepo() {
       const cod = normalizaCodigo(bruto)
       const sb = supabase
       if (!cod || !asignacionSel || !sb) return
+      if (sesion?.estado !== 'en_curso') {
+        // La base también lo rechaza: el tiempo medido tiene que ser real
+        setMensaje({ ok: false, texto: sesion ? 'Estás en pausa: tocá Reanudar' : 'Tocá Iniciar para empezar a escanear' })
+        return
+      }
       const { lote_id, local } = asignacionSel
 
       // No se bloquea mientras hay otro en viaje: cada lectura va a la base, que suma
@@ -280,7 +427,7 @@ export default function MiRepo() {
         }
       })()
     },
-    [asignacionSel, aplicarFila, enfocar],
+    [asignacionSel, sesion, aplicarFila, enfocar],
   )
 
   const deshacerUltimo = useCallback(async () => {
@@ -317,7 +464,27 @@ export default function MiRepo() {
     setSel(claveDe(a))
     setMensaje(null)
     setDeshacer(null)
-    enfocar()
+    setResumen(null)
+    setSesion(null)
+    // ¿Ya tenía una sesión abierta en este repo? (ej. la pausó y volvió)
+    const sb = supabase
+    if (!sb) return
+    setCargandoSesion(true)
+    void (async () => {
+      const { data, error: eRpc } = await sb.rpc('repo_sesion_actual', { p_lote: a.lote_id, p_local: a.local })
+      const fila = eRpc ? null : filaDe<FilaSesion>(data)
+      setSesion(fila ? aSesion(fila) : null)
+      setCargandoSesion(false)
+      if (fila?.estado === 'en_curso') enfocar()
+    })()
+  }
+
+  function cerrarRepo() {
+    setSel(null)
+    setMensaje(null)
+    setDeshacer(null)
+    setCamara(false)
+    setSesion(null)
   }
 
   /* ------------------------------------------------------------------ */
@@ -338,20 +505,22 @@ export default function MiRepo() {
       {/* Las cuentas de piso no tienen menú: Mi repo es su única pantalla */}
       {!soloPiso && <BackButton label="Menú" />}
 
-      <div className="mb-5 flex items-center gap-3">
-        <div
-          className="rounded-xl border p-3"
-          style={{ color: '#d97706', backgroundColor: '#d9770624', borderColor: '#d9770640' }}
-        >
-          <ScanLine size={26} aria-hidden />
+      {!asignacionSel && (
+        <div className="mb-4 flex items-center gap-3 sm:mb-5">
+          <div
+            className="rounded-xl border p-2.5 sm:p-3"
+            style={{ color: '#d97706', backgroundColor: '#d9770624', borderColor: '#d9770640' }}
+          >
+            <ScanLine size={24} aria-hidden />
+          </div>
+          <div className="min-w-0">
+            <h1 className="font-display text-xl font-bold text-ink sm:text-2xl">Mi repo</h1>
+            <p className="truncate text-sm text-sub">
+              {empleadoNombre ?? 'Tus locales asignados'}
+            </p>
+          </div>
         </div>
-        <div className="min-w-0">
-          <h1 className="font-display text-2xl font-bold text-ink">Mi repo</h1>
-          <p className="truncate text-sm text-sub">
-            {empleadoNombre ? `${empleadoNombre} · ` : ''}Escaneá y se va sacando de la lista
-          </p>
-        </div>
-      </div>
+      )}
 
       {error && (
         <p role="alert" className="mb-4 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">
@@ -367,48 +536,62 @@ export default function MiRepo() {
         </div>
       )}
 
+      {/* Resumen del último repo finalizado */}
+      {!asignacionSel && resumen && (
+        <div className="mb-4 flex items-start gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm font-medium text-emerald-400">
+          <Flag size={16} className="mt-0.5 shrink-0" aria-hidden /> {resumen}
+        </div>
+      )}
+
       {!aviso && !error && asignaciones.length === 0 && (
-        <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-line2 bg-surface/50 py-14 text-center text-sub">
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-line2 bg-surface/50 px-4 py-14 text-center text-sub">
           <Store size={28} aria-hidden />
           <p>Todavía no te asignaron ningún local en un repo.</p>
-          <p className="text-xs">
-            Cuando un administrador te asigne en Mayorista &gt; Reposición, aparece acá.
-          </p>
+          <p className="text-xs">Cuando un administrador te asigne en Mayorista &gt; Reposición, aparece acá.</p>
         </div>
       )}
 
       {!aviso && !error && !asignacionSel && asignaciones.length > 0 && conPendientes.length === 0 && (
-        <div className="flex flex-col items-center gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 py-14 text-center text-emerald-400">
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-14 text-center text-emerald-400">
           <Check size={28} aria-hidden />
           <p className="font-medium">Terminaste todos tus repos</p>
           <p className="text-xs text-sub">Cuando te asignen uno nuevo, aparece acá.</p>
         </div>
       )}
 
-      {/* ---------- Lista de asignaciones (solo las que tienen algo pendiente) ---------- */}
+      {/* ---------- Lista de repos (solo los que tienen algo pendiente o están abiertos) ---------- */}
       {!asignacionSel && conPendientes.length > 0 && (
         <div className="space-y-3">
           {conPendientes.map((a) => {
             const lote = lotes[a.lote_id]
             const p = progreso(a)
             const pct = p.total > 0 ? Math.round((p.listas / p.total) * 100) : 0
+            const estado = abiertos[claveDe(a)]
             return (
               <button
                 key={claveDe(a)}
                 onClick={() => abrirAsignacion(a)}
-                className="flex w-full items-center gap-3 rounded-2xl border border-line bg-surface px-4 py-3.5 text-left shadow-soft transition hover:bg-surface2"
+                className="flex min-h-[4.5rem] w-full items-center gap-3 rounded-2xl border border-line bg-surface px-4 py-3.5 text-left shadow-soft transition active:scale-[0.99] hover:bg-surface2"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="flex items-center gap-1.5 truncate font-display font-semibold text-ink">
+                  <p className="flex items-center gap-1.5 font-display font-semibold text-ink">
                     <span className="shrink-0 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-500">
                       {a.local}
                     </span>
                     <span className="truncate">{lote?.nombre ?? 'Repo'}</span>
                   </p>
-                  <p className="mt-0.5 text-xs text-sub">
-                    {p.pendientes === 0
-                      ? 'Terminado ✓'
-                      : `${p.pendientes} de ${p.total} unidades por escanear`}
+                  <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-sub">
+                    <span className="tabular-nums">{p.listas} de {p.total} unidades</span>
+                    {estado === 'en_curso' && (
+                      <span className="inline-flex items-center gap-1 font-medium text-emerald-400">
+                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" /> En curso
+                      </span>
+                    )}
+                    {estado === 'pausada' && (
+                      <span className="inline-flex items-center gap-1 font-medium text-amber-400">
+                        <Pause size={11} aria-hidden /> En pausa
+                      </span>
+                    )}
                   </p>
                   <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-line">
                     <div
@@ -417,51 +600,48 @@ export default function MiRepo() {
                     />
                   </div>
                 </div>
-                <ChevronRight size={18} aria-hidden className="shrink-0 text-sub" />
+                <ChevronRight size={20} aria-hidden className="shrink-0 text-sub" />
               </button>
             )
           })}
         </div>
       )}
 
-      {/* ---------- Repo abierto: escaneo ---------- */}
+      {/* ---------- Repo abierto ---------- */}
       {asignacionSel && progresoSel && (
-        <div className="space-y-3">
+        <div className="space-y-3 pb-4">
           <button
-            onClick={() => {
-              setSel(null)
-              setMensaje(null)
-              setDeshacer(null)
-              setCamara(false)
-            }}
-            className="inline-flex items-center gap-1 text-sm font-medium text-sub transition hover:text-ink"
+            onClick={cerrarRepo}
+            className="-ml-1 inline-flex min-h-[2.5rem] items-center gap-1 px-1 text-sm font-medium text-sub transition hover:text-ink"
           >
-            <ChevronRight size={15} aria-hidden className="rotate-180" /> Todos mis repos
+            <ChevronRight size={16} aria-hidden className="rotate-180" /> Mis repos
           </button>
 
-          <div className="rounded-2xl border border-line bg-surface p-4 shadow-soft">
+          {/* Panel fijo: contador que sube + cronómetro + controles. Queda arriba al bajar la lista. */}
+          <div className="sticky top-[61px] z-[5] -mx-4 space-y-3 border-b border-line bg-paper/95 px-4 pb-3 pt-1 backdrop-blur sm:mx-0 sm:rounded-2xl sm:border sm:bg-surface sm:p-4 sm:shadow-soft">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="font-display text-lg font-bold text-ink">
+                <p className="truncate font-display text-base font-bold text-ink sm:text-lg">
                   {lotes[asignacionSel.lote_id]?.nombre ?? 'Repo'}
                 </p>
-                <p className="text-sm text-sub">Local {asignacionSel.local}</p>
+                <p className="text-xs text-sub sm:text-sm">Local {asignacionSel.local}</p>
               </div>
-              <div className="shrink-0 text-right">
+              <div className="shrink-0 text-right" aria-live="polite">
                 <p
-                  className={`font-display text-xl font-bold tabular-nums ${
-                    progresoSel.pendientes === 0 ? 'text-emerald-500' : 'text-amber-500'
+                  className={`font-display text-4xl font-bold leading-none tabular-nums ${
+                    progresoSel.pendientes === 0 ? 'text-emerald-500' : 'text-ink'
                   }`}
                 >
-                  {progresoSel.listas}/{progresoSel.total}
+                  {progresoSel.listas}
+                  <span className="text-xl text-sub">/{progresoSel.total}</span>
                 </p>
-                <p className="text-[11px] text-sub">unidades</p>
+                <p className="mt-1 text-[11px] text-sub">unidades escaneadas</p>
               </div>
             </div>
 
-            <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-line">
+            <div className="h-2.5 w-full overflow-hidden rounded-full bg-line">
               <div
-                className={`h-full rounded-full transition-all ${
+                className={`h-full rounded-full transition-all duration-300 ${
                   progresoSel.pendientes === 0 ? 'bg-emerald-500' : 'bg-amber-500'
                 }`}
                 style={{
@@ -469,73 +649,123 @@ export default function MiRepo() {
                 }}
               />
             </div>
-          </div>
 
-          {/* Feedback del último escaneo */}
-          <div aria-live="polite" className="min-h-[2.75rem]">
-            {mensaje && (
-              <div
-                className={`flex items-center justify-between gap-2 rounded-xl border p-3 text-sm font-medium ${
-                  mensaje.ok
-                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
-                    : 'border-brand-600/40 bg-brand-600/10 text-brand-400'
-                }`}
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  {mensaje.ok ? (
-                    <Check size={16} className="shrink-0" aria-hidden />
-                  ) : (
-                    <AlertTriangle size={16} className="shrink-0" aria-hidden />
-                  )}
-                  <span className="truncate">{mensaje.texto}</span>
-                </span>
-                {mensaje.ok && deshacer && (
-                  <button
-                    onClick={() => void deshacerUltimo()}
-                    disabled={deshaciendo}
-                    className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-current px-2 py-1 text-xs font-medium opacity-80 hover:opacity-100 disabled:opacity-40"
+            {/* Cronómetro + controles */}
+            <div className="flex items-center gap-3">
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                <Timer size={18} aria-hidden className={sesion?.estado === 'en_curso' ? 'text-emerald-400' : 'text-sub'} />
+                <div className="min-w-0">
+                  <p className="font-mono text-2xl font-semibold leading-none tabular-nums text-ink">
+                    {fmtReloj(segundosSesion)}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-sub">
+                    {cargandoSesion
+                      ? 'Cargando…'
+                      : sesion?.estado === 'en_curso'
+                        ? 'En curso'
+                        : sesion?.estado === 'pausada'
+                          ? 'En pausa · el tiempo no corre'
+                          : 'Sin iniciar'}
+                  </p>
+                </div>
+              </div>
+
+              {!cargandoSesion && !sesion && (
+                <button
+                  onClick={() => void accion('repo_iniciar')}
+                  disabled={accionSesion}
+                  className="btn-press inline-flex h-12 shrink-0 items-center gap-2 rounded-xl bg-emerald-600 px-5 text-base font-semibold text-white shadow-soft transition hover:bg-emerald-700 disabled:opacity-60"
+                >
+                  {accionSesion ? <Loader2 size={18} className="animate-spin" aria-hidden /> : <Play size={18} aria-hidden />} Iniciar
+                </button>
+              )}
+              {sesion?.estado === 'en_curso' && (
+                <button
+                  onClick={() => void accion('repo_pausar')}
+                  disabled={accionSesion}
+                  className="btn-press inline-flex h-12 shrink-0 items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/15 px-4 text-base font-semibold text-amber-400 transition hover:bg-amber-500/25 disabled:opacity-60"
+                >
+                  {accionSesion ? <Loader2 size={18} className="animate-spin" aria-hidden /> : <Pause size={18} aria-hidden />} Pausar
+                </button>
+              )}
+              {sesion?.estado === 'pausada' && (
+                <button
+                  onClick={() => void accion('repo_reanudar')}
+                  disabled={accionSesion}
+                  className="btn-press inline-flex h-12 shrink-0 items-center gap-2 rounded-xl bg-emerald-600 px-4 text-base font-semibold text-white shadow-soft transition hover:bg-emerald-700 disabled:opacity-60"
+                >
+                  {accionSesion ? <Loader2 size={18} className="animate-spin" aria-hidden /> : <Play size={18} aria-hidden />} Reanudar
+                </button>
+              )}
+            </div>
+
+            {/* Entrada: escáner inalámbrico (escribe + Enter), teclado o cámara. Solo en curso. */}
+            {sesion?.estado === 'en_curso' && (
+              <form onSubmit={onSubmitInput} className="flex gap-2">
+                <input
+                  ref={inputRef}
+                  name="codigo"
+                  type="text"
+                  inputMode="text"
+                  autoComplete="off"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  enterKeyHint="send"
+                  placeholder="Escaneá o escribí el código…"
+                  aria-label="Código de barra"
+                  onBlur={() => { if (!camara && !confirmarFin) enfocar() }}
+                  className="h-12 w-full min-w-0 rounded-xl border border-line bg-surface2 px-3 text-base text-ink outline-none transition placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40"
+                />
+                <button
+                  type="button"
+                  onClick={() => setCamara((c) => !c)}
+                  className="btn-press flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-line bg-surface2 text-ink transition hover:bg-line"
+                  title={camara ? 'Cerrar cámara' : 'Abrir cámara'}
+                  aria-label={camara ? 'Cerrar cámara' : 'Abrir cámara'}
+                >
+                  {camara ? <CameraOff size={20} aria-hidden /> : <Camera size={20} aria-hidden />}
+                </button>
+              </form>
+            )}
+
+            {/* Feedback del último escaneo */}
+            {(mensaje || enViaje > 0) && (
+              <div aria-live="polite" className="space-y-1.5">
+                {mensaje && (
+                  <div
+                    className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium ${
+                      mensaje.ok
+                        ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                        : 'border-brand-600/40 bg-brand-600/10 text-brand-400'
+                    }`}
                   >
-                    <Undo2 size={13} aria-hidden /> Deshacer
-                  </button>
+                    <span className="flex min-w-0 items-center gap-2">
+                      {mensaje.ok ? <Check size={16} className="shrink-0" aria-hidden /> : <AlertTriangle size={16} className="shrink-0" aria-hidden />}
+                      <span className="truncate">{mensaje.texto}</span>
+                    </span>
+                    {mensaje.ok && deshacer && sesion?.estado === 'en_curso' && (
+                      <button
+                        onClick={() => void deshacerUltimo()}
+                        disabled={deshaciendo}
+                        className="inline-flex min-h-[2.25rem] shrink-0 items-center gap-1 rounded-lg border border-current px-2.5 text-xs font-medium opacity-80 hover:opacity-100 disabled:opacity-40"
+                      >
+                        <Undo2 size={14} aria-hidden /> Deshacer
+                      </button>
+                    )}
+                  </div>
+                )}
+                {enViaje > 0 && (
+                  <p className="flex items-center gap-1.5 text-xs text-sub">
+                    <Loader2 size={12} className="animate-spin" aria-hidden />
+                    Guardando {enViaje === 1 ? '1 escaneo' : `${enViaje} escaneos`}…
+                  </p>
                 )}
               </div>
             )}
           </div>
 
-          {/* Entrada: escáner inalámbrico (escribe + Enter) o teclado */}
-          <form onSubmit={onSubmitInput} className="flex gap-2">
-            <input
-              ref={inputRef}
-              name="codigo"
-              type="text"
-              autoComplete="off"
-              autoCapitalize="off"
-              autoCorrect="off"
-              spellCheck={false}
-              enterKeyHint="search"
-              placeholder="Escaneá o escribí el código…"
-              aria-label="Código de barra"
-              onBlur={() => { if (!camara) enfocar() }}
-              className="w-full rounded-xl border border-line bg-surface2 px-3 py-3 text-base text-ink outline-none transition placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40 disabled:opacity-60"
-            />
-            <button
-              type="button"
-              onClick={() => setCamara((c) => !c)}
-              className="btn-press flex shrink-0 items-center justify-center rounded-xl border border-line bg-surface2 px-3.5 text-ink transition hover:bg-line"
-              title={camara ? 'Cerrar cámara' : 'Abrir cámara'}
-              aria-label={camara ? 'Cerrar cámara' : 'Abrir cámara'}
-            >
-              {camara ? <CameraOff size={19} aria-hidden /> : <Camera size={19} aria-hidden />}
-            </button>
-          </form>
-          {enViaje > 0 && (
-            <p className="flex items-center gap-1.5 text-xs text-sub" aria-live="polite">
-              <Loader2 size={12} className="animate-spin" aria-hidden />
-              Guardando {enViaje === 1 ? '1 escaneo' : `${enViaje} escaneos`}…
-            </p>
-          )}
-
-          {camara && (
+          {camara && sesion?.estado === 'en_curso' && (
             <ScannerCamara
               onLectura={(t) => alEscanear(t)}
               onCerrar={() => {
@@ -545,7 +775,7 @@ export default function MiRepo() {
             />
           )}
 
-          {/* Lista de lo que falta: a medida que escanea, sale de acá */}
+          {/* Lista de lo que falta: a medida que escanea, sale de acá (el contador de arriba sube) */}
           <div className="overflow-hidden rounded-2xl border border-line bg-surface">
             <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
               <span className="font-display text-sm font-semibold text-ink">Faltan escanear</span>
@@ -557,32 +787,28 @@ export default function MiRepo() {
             {pendientesDeSel.length === 0 ? (
               <div className="flex flex-col items-center gap-2 bg-emerald-500/10 px-4 py-10 text-center">
                 <Check size={30} className="text-emerald-500" aria-hidden />
-                <p className="font-display font-semibold text-emerald-500">¡Repo terminado!</p>
-                <p className="text-xs text-sub">No queda nada por escanear en este local.</p>
+                <p className="font-display font-semibold text-emerald-500">¡Está todo escaneado!</p>
+                <p className="text-xs text-sub">Tocá Finalizar para cerrar el repo y guardar tu tiempo.</p>
               </div>
             ) : (
               <ul className="divide-y divide-line/60">
                 {pendientesDeSel.map((i) => {
                   const faltan = i.cantidad - i.escaneadas
                   return (
-                    <li key={i.id} className="flex items-center gap-3 px-4 py-2.5">
+                    <li key={i.id} className="flex items-center gap-3 px-4 py-3">
                       <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-medium text-ink">
-                          {i.codigo}
-                          {i.color ? ` · ${i.color}` : ''}
-                          {i.talle ? ` · T${i.talle}` : ''}
+                        <span className="block break-words text-[15px] font-semibold text-ink">{i.codigo}</span>
+                        <span className="block truncate text-xs text-sub">
+                          {[i.articulo, i.color, i.talle ? `T${i.talle}` : null].filter(Boolean).join(' · ')}
                         </span>
-                        {i.articulo && <span className="block truncate text-xs text-sub">{i.articulo}</span>}
                       </span>
                       <span
-                        className={`shrink-0 rounded-lg px-2 py-1 text-xs font-semibold tabular-nums ${
+                        className={`shrink-0 rounded-lg px-2.5 py-1.5 text-sm font-bold tabular-nums ${
                           i.escaneadas > 0 ? 'bg-amber-500/15 text-amber-500' : 'bg-line text-sub'
                         }`}
-                        title={
-                          i.escaneadas > 0 ? `${i.escaneadas} de ${i.cantidad} escaneadas` : undefined
-                        }
+                        title={i.escaneadas > 0 ? `${i.escaneadas} de ${i.cantidad} escaneadas` : undefined}
                       >
-                        {i.escaneadas > 0 ? `${faltan} de ${i.cantidad}` : `×${i.cantidad}`}
+                        {i.escaneadas > 0 ? `${faltan}/${i.cantidad}` : `×${i.cantidad}`}
                       </span>
                     </li>
                   )
@@ -590,8 +816,40 @@ export default function MiRepo() {
               </ul>
             )}
           </div>
+
+          {/* Finalizar: siempre al final */}
+          {sesion && (
+            <button
+              onClick={() => setConfirmarFin(true)}
+              disabled={accionSesion}
+              className={`btn-press flex h-14 w-full items-center justify-center gap-2 rounded-2xl text-base font-semibold shadow-soft transition disabled:opacity-60 ${
+                progresoSel.pendientes === 0
+                  ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                  : 'border border-brand-600/40 bg-brand-600/10 text-brand-400 hover:bg-brand-600/20'
+              }`}
+            >
+              <Flag size={18} aria-hidden /> Finalizar repo
+            </button>
+          )}
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmarFin}
+        title={progresoSel && progresoSel.pendientes > 0 ? '¿Finalizar con faltantes?' : '¿Finalizar el repo?'}
+        message={
+          progresoSel && progresoSel.pendientes > 0
+            ? `Quedan ${progresoSel.pendientes} unidades sin escanear.\nSe guarda tu tiempo (${fmtReloj(segundosSesion)}) y queda registrado lo que faltó.`
+            : `Se guarda tu tiempo: ${fmtReloj(segundosSesion)}.`
+        }
+        confirmLabel="Finalizar"
+        busy={accionSesion}
+        onCancel={() => {
+          setConfirmarFin(false)
+          enfocar()
+        }}
+        onConfirm={() => void finalizar()}
+      />
     </Layout>
   )
 }
