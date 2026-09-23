@@ -14,6 +14,8 @@ import {
   Copy,
   Pencil,
   Trash2,
+  ScanLine,
+  Users,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -24,6 +26,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { FILTRO_EMPLEADOS_ACTIVOS } from '@/lib/empleadosActivos'
 import {
+  DOMINIO_LOGIN_EMPLEADO,
   MIN_CLAVE_EMPLEADO,
   emailDeLegajo,
   generarClave,
@@ -78,6 +81,13 @@ function iniciales(nombre: string | null): string {
   return ((p[0]?.[0] || '') + (p[1]?.[0] || '')).slice(0, 2).toUpperCase() || '?'
 }
 
+/** Cuenta de piso: entra con legajo (email interno @${DOMINIO_LOGIN_EMPLEADO}), no con su email. */
+function esCuentaPiso(u: UsuarioRow): boolean {
+  return Boolean(u.legajo) || String(u.email ?? '').toLowerCase().endsWith(`@${DOMINIO_LOGIN_EMPLEADO}`)
+}
+
+type Pestana = 'usuarios' | 'piso'
+
 function fmtFecha(iso: string): string {
   try {
     return new Intl.DateTimeFormat('es-AR', { dateStyle: 'short' }).format(new Date(iso))
@@ -101,6 +111,16 @@ export default function Usuarios() {
   const [pwUser, setPwUser] = useState<UsuarioRow | null>(null)
   const [editUser, setEditUser] = useState<UsuarioRow | null>(null)
   const [altaAbierta, setAltaAbierta] = useState(false)
+  const [pestana, setPestanaState] = useState<Pestana>(() =>
+    new URLSearchParams(window.location.search).get('pestana') === 'piso' ? 'piso' : 'usuarios',
+  )
+  function setPestana(p: Pestana) {
+    setPestanaState(p)
+    const url = new URL(window.location.href)
+    if (p === 'piso') url.searchParams.set('pestana', 'piso')
+    else url.searchParams.delete('pestana')
+    window.history.replaceState(null, '', url)
+  }
   const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
 
   const cargar = useCallback(async () => {
@@ -139,7 +159,9 @@ export default function Usuarios() {
 
   useEffect(() => { void cargar() }, [cargar])
 
-  const pendientes = useMemo(() => usuarios.filter((u) => u.estado === 'pendiente'), [usuarios])
+  const oficina = useMemo(() => usuarios.filter((u) => !esCuentaPiso(u)), [usuarios])
+  const piso = useMemo(() => usuarios.filter(esCuentaPiso), [usuarios])
+  const pendientes = useMemo(() => oficina.filter((u) => u.estado === 'pendiente'), [oficina])
 
   async function actualizar(id: string, patch: Partial<UsuarioRow>) {
     if (!supabase) return
@@ -192,6 +214,71 @@ export default function Usuarios() {
     return roles.find((r) => r.codigo === codigo)?.nombre ?? codigo
   }
 
+  /** Botones de cada fila (iguales en las dos pestañas). "Editar" no aplica a cuentas de piso. */
+  function accionesDe(u: UsuarioRow, esYo: boolean, esAdmin: boolean) {
+    return (
+      <div className="flex items-center justify-end gap-0.5">
+        {!esCuentaPiso(u) && (
+          <button
+            onClick={() => setEditUser(u)}
+            className="rounded border border-line p-1 text-ink transition hover:bg-line"
+            title="Editar"
+            aria-label={`Editar ${u.nombre}`}
+          >
+            <Pencil size={12} aria-hidden />
+          </button>
+        )}
+        {u.estado === 'aprobado' && !esYo && (
+          <button
+            onClick={() => actualizar(u.id, { estado: 'desactivado' })}
+            className="rounded border border-line p-1 text-sub transition hover:text-ink"
+            title="Desactivar"
+            aria-label={`Desactivar ${u.nombre}`}
+          >
+            <Ban size={12} aria-hidden />
+          </button>
+        )}
+        {(u.estado === 'desactivado' || u.estado === 'rechazado') && (
+          <button
+            onClick={() => actualizar(u.id, { estado: 'aprobado', motivo_rechazo: null })}
+            className="rounded border border-emerald-500/30 bg-emerald-500/10 p-1 text-emerald-400 transition"
+            title="Reactivar"
+            aria-label={`Reactivar ${u.nombre}`}
+          >
+            <RotateCcw size={12} aria-hidden />
+          </button>
+        )}
+        <button
+          onClick={() => setPwUser(u)}
+          className="rounded border border-line p-1 text-ink transition hover:bg-line"
+          title="Contraseña"
+          aria-label={`Contraseña de ${u.nombre}`}
+        >
+          <KeyRound size={12} aria-hidden />
+        </button>
+        <button
+          onClick={() => setGestion(u)}
+          disabled={esAdmin}
+          className="rounded border border-line p-1 text-ink transition hover:bg-line disabled:opacity-40"
+          title={esAdmin ? 'Acceso total' : 'Permisos'}
+          aria-label={`Permisos de ${u.nombre}`}
+        >
+          <SlidersHorizontal size={12} aria-hidden />
+        </button>
+        {!esYo && (
+          <button
+            onClick={() => setConfirm({ message: `¿Borrar el usuario "${u.nombre}" (${u.email})? Se elimina su perfil y ya no figurará en la lista.`, onConfirm: () => void borrar(u) })}
+            className="rounded border border-red-500/30 bg-red-500/10 p-1 text-red-400 transition hover:bg-red-500/20"
+            title="Borrar"
+            aria-label={`Borrar ${u.nombre}`}
+          >
+            <Trash2 size={12} aria-hidden />
+          </button>
+        )}
+      </div>
+    )
+  }
+
   if (cargando) {
     return (
       <Layout>
@@ -214,12 +301,6 @@ export default function Usuarios() {
           <h1 className="font-display text-2xl font-bold text-ink">Usuarios</h1>
           <p className="text-sm text-sub">Gestión de usuarios, aprobación de solicitudes y permisos.</p>
         </div>
-        <button
-          onClick={() => setAltaAbierta(true)}
-          className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-3.5 py-2 text-sm font-medium text-white shadow-soft hover:bg-brand-700"
-        >
-          <UserPlus size={16} aria-hidden /> Alta de empleado
-        </button>
       </div>
 
       {error && (
@@ -228,6 +309,29 @@ export default function Usuarios() {
         </p>
       )}
 
+      <div role="tablist" aria-label="Tipo de cuenta" className="mb-5 flex gap-1 overflow-x-auto border-b border-line">
+        {([
+          { id: 'usuarios', label: 'Usuarios', detalle: 'entran con email', icono: Users, n: oficina.length },
+          { id: 'piso', label: 'Empleados de piso', detalle: 'entran con legajo', icono: ScanLine, n: piso.length },
+        ] as const).map((p) => (
+          <button
+            key={p.id}
+            role="tab"
+            aria-selected={pestana === p.id}
+            onClick={() => setPestana(p.id)}
+            className={`-mb-px inline-flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition ${
+              pestana === p.id ? 'border-brand-500 text-ink' : 'border-transparent text-sub hover:text-ink'
+            }`}
+          >
+            <p.icono size={15} aria-hidden />
+            {p.label}
+            <span className="rounded-full bg-surface2 px-1.5 text-[11px] text-sub">{p.n}</span>
+            <span className="hidden text-xs font-normal text-sub sm:inline">· {p.detalle}</span>
+          </button>
+        ))}
+      </div>
+
+      {pestana === 'usuarios' && (<>
       {pendientes.length > 0 && (
         <section className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4">
           <div className="mb-3 flex items-center gap-2 font-display font-semibold text-amber-300">
@@ -249,7 +353,7 @@ export default function Usuarios() {
       )}
 
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="font-display text-lg font-semibold text-ink">Usuarios <span className="text-sm font-normal text-sub">({usuarios.length})</span></h2>
+        <h2 className="font-display text-lg font-semibold text-ink">Usuarios <span className="text-sm font-normal text-sub">({oficina.length})</span></h2>
       </div>
 
       <div className="rounded-2xl border border-line overflow-hidden">
@@ -266,7 +370,7 @@ export default function Usuarios() {
             </tr>
           </thead>
           <tbody className="divide-y divide-line/50 bg-surface">
-            {usuarios.map((u) => {
+            {oficina.map((u) => {
               const esYo = u.id === perfil?.id
               const rolesUsuario = getUserRoles(u.id)
               const esAdmin = rolesUsuario.some((rc) => roles.find((r) => r.codigo === rc)?.es_admin)
@@ -317,63 +421,7 @@ export default function Usuarios() {
                   </td>
                   <td className="px-2 py-1.5 text-[11px] text-sub whitespace-nowrap">{fmtFecha(u.created_at)}</td>
                   <td className="px-2 py-1.5 text-right">
-                    <div className="flex items-center justify-end gap-0.5">
-                      <button
-                        onClick={() => setEditUser(u)}
-                        className="rounded border border-line p-1 text-ink transition hover:bg-line"
-                        title="Editar"
-                        aria-label={`Editar ${u.nombre}`}
-                      >
-                        <Pencil size={12} aria-hidden />
-                      </button>
-                      {u.estado === 'aprobado' && !esYo && (
-                        <button
-                          onClick={() => actualizar(u.id, { estado: 'desactivado' })}
-                          className="rounded border border-line p-1 text-sub transition hover:text-ink"
-                          title="Desactivar"
-                          aria-label={`Desactivar ${u.nombre}`}
-                        >
-                          <Ban size={12} aria-hidden />
-                        </button>
-                      )}
-                      {(u.estado === 'desactivado' || u.estado === 'rechazado') && (
-                        <button
-                          onClick={() => actualizar(u.id, { estado: 'aprobado', motivo_rechazo: null })}
-                          className="rounded border border-emerald-500/30 bg-emerald-500/10 p-1 text-emerald-400 transition"
-                          title="Reactivar"
-                          aria-label={`Reactivar ${u.nombre}`}
-                        >
-                          <RotateCcw size={12} aria-hidden />
-                        </button>
-                      )}
-                      <button
-                        onClick={() => setPwUser(u)}
-                        className="rounded border border-line p-1 text-ink transition hover:bg-line"
-                        title="Contraseña"
-                        aria-label={`Contraseña de ${u.nombre}`}
-                      >
-                        <KeyRound size={12} aria-hidden />
-                      </button>
-                      <button
-                        onClick={() => setGestion(u)}
-                        disabled={esAdmin}
-                        className="rounded border border-line p-1 text-ink transition hover:bg-line disabled:opacity-40"
-                        title={esAdmin ? 'Acceso total' : 'Permisos'}
-                        aria-label={`Permisos de ${u.nombre}`}
-                      >
-                        <SlidersHorizontal size={12} aria-hidden />
-                      </button>
-                      {!esYo && (
-                        <button
-                          onClick={() => setConfirm({ message: `¿Borrar el usuario "${u.nombre}" (${u.email})? Se elimina su perfil y ya no figurará en la lista.`, onConfirm: () => void borrar(u) })}
-                          className="rounded border border-red-500/30 bg-red-500/10 p-1 text-red-400 transition hover:bg-red-500/20"
-                          title="Borrar"
-                          aria-label={`Borrar ${u.nombre}`}
-                        >
-                          <Trash2 size={12} aria-hidden />
-                        </button>
-                      )}
-                    </div>
+                    {accionesDe(u, esYo, esAdmin)}
                   </td>
                 </tr>
               )
@@ -381,6 +429,87 @@ export default function Usuarios() {
           </tbody>
         </table>
       </div>
+
+      </>)}
+
+      {pestana === 'piso' && (
+        <>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="font-display text-lg font-semibold text-ink">
+                Empleados de piso <span className="text-sm font-normal text-sub">({piso.length})</span>
+              </h2>
+              <p className="text-xs text-sub">
+                Entran en <span className="font-medium">/ingreso</span> con su legajo y la clave que les asignás.
+              </p>
+            </div>
+            <button
+              onClick={() => setAltaAbierta(true)}
+              className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-3.5 py-2 text-sm font-medium text-white shadow-soft hover:bg-brand-700"
+            >
+              <UserPlus size={16} aria-hidden /> Alta de empleado
+            </button>
+          </div>
+
+          {piso.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-line p-8 text-center text-sm text-sub">
+              Todavía no hay cuentas de empleados de piso. Tocá <span className="font-medium text-ink">Alta de empleado</span> para crear la primera.
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-2xl border border-line">
+              <table className="w-full text-[13px] leading-tight">
+                <thead>
+                  <tr className="table-head text-left text-[10px] font-semibold uppercase tracking-wider">
+                    <th className="w-[30%] px-2 py-2 whitespace-nowrap">Nombre</th>
+                    <th className="w-[12%] px-2 py-2 whitespace-nowrap">Legajo</th>
+                    <th className="w-[20%] px-2 py-2 whitespace-nowrap">Roles</th>
+                    <th className="w-[12%] px-2 py-2 whitespace-nowrap">Estado</th>
+                    <th className="w-[10%] px-2 py-2 whitespace-nowrap">Alta</th>
+                    <th className="w-[16%] px-2 py-2 text-right whitespace-nowrap">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line/50 bg-surface">
+                  {piso.map((u) => {
+                    const rolesUsuario = getUserRoles(u.id)
+                    const esAdmin = rolesUsuario.some((rc) => roles.find((r) => r.codigo === rc)?.es_admin)
+                    return (
+                      <tr key={u.id} className="transition hover:bg-line/20">
+                        <td className="px-2 py-1.5">
+                          <div className="flex items-center gap-1.5">
+                            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-[10px] font-semibold text-amber-400">{iniciales(u.nombre)}</div>
+                            <span className="truncate font-medium text-ink" title={u.nombre}>{u.nombre}</span>
+                          </div>
+                        </td>
+                        <td className="px-2 py-1.5 font-mono text-[12px] text-ink">{u.legajo ?? '—'}</td>
+                        <td className="px-2 py-1.5">
+                          <div className="flex flex-wrap gap-0.5">
+                            {rolesUsuario.length > 0 ? (
+                              rolesUsuario.map((rc) => (
+                                <span key={rc} className="inline-block whitespace-nowrap rounded-full border border-brand-600/30 bg-brand-600/10 px-1.5 py-px text-[9px] font-medium text-brand-400">
+                                  {getRolNombre(rc)}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-[11px] text-sub/50">—</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <span className={`inline-block whitespace-nowrap rounded-full border px-2 py-px text-[10px] font-medium ${ESTADO_STYLE[u.estado] ?? ''}`}>
+                            {u.estado}
+                          </span>
+                        </td>
+                        <td className="px-2 py-1.5 text-[11px] text-sub whitespace-nowrap">{fmtFecha(u.created_at)}</td>
+                        <td className="px-2 py-1.5 text-right">{accionesDe(u, u.id === perfil?.id, esAdmin)}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
 
       {gestion && (
         <PermisosModal
@@ -840,7 +969,10 @@ function PasswordModal({ usuario, onClose }: { usuario: UsuarioRow; onClose: () 
 
   async function guardar() {
     if (!supabase) return
-    if (pw.length < MIN_CLAVE_EMPLEADO) { setError(`La contraseña debe tener al menos ${MIN_CLAVE_EMPLEADO} caracteres.`); return }
+    const problema = esCuentaPiso(usuario)
+      ? problemaClaveEmpleado(pw, usuario.legajo ?? '')
+      : pw.length < MIN_CLAVE_EMPLEADO ? `La contraseña debe tener al menos ${MIN_CLAVE_EMPLEADO} caracteres.` : null
+    if (problema) { setError(problema); return }
     setBusy(true); setError(null)
     const { data, error } = await supabase.functions.invoke('admin-set-password', {
       body: { userId: usuario.id, password: pw },
