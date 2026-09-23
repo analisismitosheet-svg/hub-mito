@@ -266,7 +266,8 @@ export default function MiRepo() {
       let listas = 0
       for (const i of itemsDe(a)) {
         if (i.estado === 'faltante') continue
-        const hechas = Math.min(i.escaneadas, i.cantidad)
+        // "hecho" cuenta completo aunque el contador no coincida (ítems marcados a mano)
+        const hechas = i.estado === 'hecho' ? i.cantidad : Math.min(i.escaneadas, i.cantidad)
         total += i.cantidad
         listas += hechas
       }
@@ -278,7 +279,7 @@ export default function MiRepo() {
   const pendientesDeSel = useMemo(() => {
     if (!asignacionSel) return []
     return itemsDe(asignacionSel)
-      .filter((i) => i.estado !== 'faltante' && i.escaneadas < i.cantidad)
+      .filter((i) => i.estado === 'pendiente' && i.escaneadas < i.cantidad)
       .sort(
         (a, b) =>
           a.orden - b.orden ||
