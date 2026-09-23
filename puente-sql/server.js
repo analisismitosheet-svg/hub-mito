@@ -66,8 +66,18 @@ try {
   process.exit(1)
 }
 
+// SQL_SERVER acepta: "host", "host\instancia", "host:puerto" o "host,puerto"
+let serverHost = SQL_SERVER
+let serverPort
+const mPuerto = String(SQL_SERVER).match(/^(.+?)[,:](\d+)$/)
+if (mPuerto && !String(SQL_SERVER).includes('\\')) {
+  serverHost = mPuerto[1]
+  serverPort = Number(mPuerto[2])
+}
+
 const pool = new sql.ConnectionPool({
-  server: SQL_SERVER,
+  server: serverHost,
+  ...(serverPort ? { port: serverPort } : {}),
   database: SQL_DATABASE,
   user: SQL_USER,
   password: SQL_PASSWORD,
@@ -112,7 +122,7 @@ const server = http.createServer(async (req, res) => {
     // Sanitizado estricto del nombre de vista (solo SELECT, nunca otra cosa)
     if (!/^[A-Za-z0-9_]+$/.test(vista)) return enviar(res, 400, { error: 'Nombre de vista inválido' })
 
-    const result = await pool.request().input('top', sql.Int(top)).query(
+    const result = await pool.request().input('top', sql.Int, top).query(
       `SELECT TOP (@top) * FROM dbo.[${vista}]`,
     )
     return enviar(res, 200, result.recordset ?? [])
@@ -125,3 +135,8 @@ const server = http.createServer(async (req, res) => {
 server.listen(Number(PUENTE_PORT), () => {
   console.log(`[puente] Escuchando en http://localhost:${PUENTE_PORT}`)
 })
+
+// Conexión explícita al arrancar (mssql v10 ya no se autoconecta en el primer request)
+pool.connect()
+  .then(() => console.log(`[puente] Conectado a SQL Server: ${serverHost}:${serverPort ?? 1433} / ${SQL_DATABASE}`))
+  .catch((err) => console.error(`[puente] No se pudo conectar a SQL Server: ${err.message}`))
