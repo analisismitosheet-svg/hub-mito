@@ -17,7 +17,9 @@
  *   SUPABASE_SERVICE_ROLE_KEY   - service role (crear auth.users y escribir usuarios)
  */
 
-import { DOMINIO_LOGIN_EMPLEADO, emailDeLegajo, legajoLimpio, problemaClaveEmpleado } from '../src/lib/loginEmpleado'
+// Con "type": "module", Node (Vercel) exige la extensión .js en imports relativos;
+// sin ella la función se cae al cargar (FUNCTION_INVOCATION_FAILED).
+import { DOMINIO_LOGIN_EMPLEADO, emailDeLegajo, legajoLimpio, problemaClaveEmpleado } from '../src/lib/loginEmpleado.js'
 
 type Req = {
   method?: string
