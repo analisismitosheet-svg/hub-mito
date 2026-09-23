@@ -864,6 +864,21 @@ export default function MiRepo() {
             )}
           </div>
 
+          {/* Finalizar (el cuadro de escaneados va debajo). En celular deja lugar a la izquierda para el ícono M flotante. */}
+          {sesion && (
+            <button
+              onClick={() => setConfirmarFin(true)}
+              disabled={accionSesion}
+              className={`btn-press ml-14 flex h-14 w-[calc(100%-3.5rem)] items-center justify-center gap-2 rounded-2xl text-base font-semibold shadow-soft transition disabled:opacity-60 sm:ml-0 sm:w-full ${
+                progresoSel.pendientes === 0
+                  ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                  : 'border border-brand-600/40 bg-brand-600/10 text-brand-400 hover:bg-brand-600/20'
+              }`}
+            >
+              <Flag size={18} aria-hidden /> Finalizar repo
+            </button>
+          )}
+
           {/* Escaneados: lo que ya se completó, lo último arriba */}
           {escaneadosDeSel.length > 0 && (
             <div className="overflow-hidden rounded-2xl border border-emerald-500/25 bg-surface">
@@ -902,21 +917,6 @@ export default function MiRepo() {
                 })}
               </ul>
             </div>
-          )}
-
-          {/* Finalizar: siempre al final. En celular deja lugar a la izquierda para el ícono M flotante. */}
-          {sesion && (
-            <button
-              onClick={() => setConfirmarFin(true)}
-              disabled={accionSesion}
-              className={`btn-press ml-14 flex h-14 w-[calc(100%-3.5rem)] items-center justify-center gap-2 rounded-2xl text-base font-semibold shadow-soft transition disabled:opacity-60 sm:ml-0 sm:w-full ${
-                progresoSel.pendientes === 0
-                  ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                  : 'border border-brand-600/40 bg-brand-600/10 text-brand-400 hover:bg-brand-600/20'
-              }`}
-            >
-              <Flag size={18} aria-hidden /> Finalizar repo
-            </button>
           )}
         </div>
       )}
