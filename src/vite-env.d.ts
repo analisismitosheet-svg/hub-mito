@@ -6,6 +6,7 @@ interface ImportMetaEnv {
   readonly VITE_SUPABASE_ANON_KEY: string
   readonly VITE_URL_TRANSPORTE: string
   readonly VITE_URL_CONTROL_LOCALES: string
+  readonly VITE_URL_AGENTES?: string
 }
 
 interface ImportMeta {

@@ -4,6 +4,7 @@ import { LogOut, Sun, Moon, RefreshCw } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { useTheme } from '@/context/ThemeContext'
 import CampanaNotificaciones from '@/components/CampanaNotificaciones'
+import ChatAgentes from '@/components/ChatAgentes'
 
 /**
  * Shell de la app. Por defecto usa un contenedor ancho (aprovecha toda la pantalla).
@@ -60,6 +61,7 @@ export default function Layout({ children, wide = true }: { children: ReactNode;
         </div>
       </header>
       <main className={`mx-auto ${maxW} px-4 py-8`}>{children}</main>
+      {configured && user && <ChatAgentes />}
     </div>
   )
 }
