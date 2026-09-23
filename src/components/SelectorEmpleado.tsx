@@ -34,7 +34,7 @@ export default function SelectorEmpleado({
   const [abierto, setAbierto] = useState(false)
   const [texto, setTexto] = useState('')
   const [activo, setActivo] = useState(0)
-  const [pos, setPos] = useState<{ top: number; left: number; width: number; arriba: boolean } | null>(null)
+  const [pos, setPos] = useState<{ top: number; left: number; width: number; arriba: boolean; movil: boolean } | null>(null)
   const botonRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -68,10 +68,15 @@ export default function SelectorEmpleado({
   function ubicar() {
     const r = botonRef.current?.getBoundingClientRect()
     if (!r) return
+    // Celular: arriba de todo y a lo ancho, así el teclado no tapa la lista
+    if (window.innerWidth < 640) {
+      setPos({ top: 12, left: 8, width: window.innerWidth - 16, arriba: false, movil: true })
+      return
+    }
     const ancho = Math.min(320, window.innerWidth - 16)
     const left = Math.max(8, Math.min(r.right - ancho, window.innerWidth - ancho - 8))
     const arriba = r.bottom + 340 > window.innerHeight && r.top > 360
-    setPos({ top: arriba ? r.top - 6 : r.bottom + 6, left, width: ancho, arriba })
+    setPos({ top: arriba ? r.top - 6 : r.bottom + 6, left, width: ancho, arriba, movil: false })
   }
 
   useLayoutEffect(() => {
@@ -169,12 +174,13 @@ export default function SelectorEmpleado({
                 className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-sub/70"
               />
             </div>
-            <ul role="listbox" className="max-h-72 overflow-y-auto py-1 text-sm">
+            <ul role="listbox" className={`${pos.movil ? 'max-h-[40vh]' : 'max-h-72'} overflow-y-auto overscroll-contain py-1 text-sm`}>
               {conQuitar && (
                 <li
                   role="option"
                   aria-selected={activo === 0}
-                  onMouseDown={(e) => { e.preventDefault(); elegir(null) }}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => elegir(null)}
                   onMouseEnter={() => setActivo(0)}
                   className={`flex cursor-pointer items-center gap-2 px-3 py-2 text-sub ${activo === 0 ? 'bg-surface2 text-ink' : ''}`}
                 >
@@ -188,7 +194,10 @@ export default function SelectorEmpleado({
                     key={e.id}
                     role="option"
                     aria-selected={e.id === valor}
-                    onMouseDown={(ev) => { ev.preventDefault(); elegir(e.id) }}
+                    // mousedown solo evita que el buscador pierda el foco; se elige con click,
+                    // que en el celular llega bien al tocar y no se dispara al deslizar la lista
+                    onMouseDown={(ev) => ev.preventDefault()}
+                    onClick={() => elegir(e.id)}
                     onMouseEnter={() => setActivo(idx)}
                     className={`flex cursor-pointer items-center gap-2 px-3 py-2 ${activo === idx ? 'bg-surface2' : ''} ${
                       e.id === valor ? 'font-semibold text-brand-500' : 'text-ink'
