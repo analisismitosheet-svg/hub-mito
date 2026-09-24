@@ -118,6 +118,12 @@ function leerPredef(): PredefEtiqueta {
   }
 }
 
+/** Tamaño del membrete predefinido (el mismo de Facturación / Guías), en mm */
+export function tamanoMembrete(): { ancho: number; alto: number } {
+  const { ancho, alto } = leerPredef()
+  return { ancho, alto }
+}
+
 export function EtiquetasModal({ registro, onClose }: { registro: EtiquetaRegistro; onClose: () => void }) {
   const totalDefault = useMemo(() => (registro?.bulto ?? 1), [registro])
   const [total, setTotal] = useState<number>(totalDefault)

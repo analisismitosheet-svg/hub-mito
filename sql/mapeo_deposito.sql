@@ -33,7 +33,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS mapeo_deposito_codigo_ubic_uq
 INSERT INTO public.permisos (clave, modulo, accion, label, orden) VALUES
   ('mayorista.mapeo.view',     'mayorista', 'mapeo.view',     'Ver mapeo depósito',        950),
   ('mayorista.mapeo.escanear', 'mayorista', 'mapeo.escanear', 'Escanear mapeo depósito',   951),
-  ('mayorista.mapeo.borrar',   'mayorista', 'mapeo.borrar',   'Borrar del mapeo depósito', 952)
+  ('mayorista.mapeo.borrar',   'mayorista', 'mapeo.borrar',   'Borrar del mapeo depósito', 952),
+  ('mayorista.mapeo.gestionar','mayorista', 'mapeo.gestionar','Crear/borrar pasillos y niveles', 953)
 ON CONFLICT (clave) DO NOTHING;
 
 -- Misma definición que en sql/contador_clientes.sql (por si ese no se corrió)
@@ -60,6 +61,35 @@ DROP POLICY IF EXISTS mapeo_deposito_borrar ON public.mapeo_deposito;
 CREATE POLICY mapeo_deposito_borrar ON public.mapeo_deposito
   FOR DELETE TO authenticated
   USING (private.tengo_permiso('mayorista.mapeo.borrar'));
+
+-- ============================================================
+-- Lista de pasillos / niveles. Su QR impreso dice "UBI:<codigo>".
+-- ============================================================
+CREATE TABLE IF NOT EXISTS public.mapeo_ubicaciones (
+  codigo     text PRIMARY KEY,               -- "P01-N02"
+  pasillo    integer NOT NULL CHECK (pasillo BETWEEN 1 AND 99),
+  nivel      integer NOT NULL CHECK (nivel BETWEEN 1 AND 99),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (pasillo, nivel)
+);
+ALTER TABLE public.mapeo_ubicaciones ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.mapeo_ubicaciones FROM anon, authenticated;
+GRANT SELECT, INSERT, DELETE ON public.mapeo_ubicaciones TO authenticated;
+
+DROP POLICY IF EXISTS mapeo_ubic_ver ON public.mapeo_ubicaciones;
+CREATE POLICY mapeo_ubic_ver ON public.mapeo_ubicaciones
+  FOR SELECT TO authenticated
+  USING (private.tengo_permiso('mayorista.mapeo.view') OR private.tengo_permiso('mayorista.mapeo.escanear'));
+
+DROP POLICY IF EXISTS mapeo_ubic_crear ON public.mapeo_ubicaciones;
+CREATE POLICY mapeo_ubic_crear ON public.mapeo_ubicaciones
+  FOR INSERT TO authenticated
+  WITH CHECK (private.tengo_permiso('mayorista.mapeo.gestionar'));
+
+DROP POLICY IF EXISTS mapeo_ubic_borrar ON public.mapeo_ubicaciones;
+CREATE POLICY mapeo_ubic_borrar ON public.mapeo_ubicaciones
+  FOR DELETE TO authenticated
+  USING (private.tengo_permiso('mayorista.mapeo.gestionar'));
 
 -- ============================================================
 -- Escanear un artículo en la ubicación actual (al final del orden).

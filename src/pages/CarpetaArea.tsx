@@ -7,7 +7,15 @@ import { cargarOverridesAreas, appsDeAreaConOverrides } from '@/config/areas'
 import { useAuth } from '@/context/AuthContext'
 
 /** Sub-vista de una carpeta: lista las apps de una sub-área (ej. rrhh-novedades). */
-export default function CarpetaArea({ carpetaId = 'rrhh-novedades' }: { carpetaId?: string }) {
+export default function CarpetaArea({
+  carpetaId = 'rrhh-novedades',
+  titulo: tituloProp,
+  color = '#7c3aed',
+}: {
+  carpetaId?: string
+  titulo?: string
+  color?: string
+}) {
   const { can } = useAuth()
   const [overrides, setOverrides] = useState<Record<string, string[]>>({})
 
@@ -21,13 +29,13 @@ export default function CarpetaArea({ carpetaId = 'rrhh-novedades' }: { carpetaI
     .filter((a) => !a.permiso || can(a.permiso))
     .sort((a, b) => a.title.localeCompare(b.title, 'es', { sensitivity: 'base' }))
 
-  const titulo = carpetaId.split('-').slice(1).join(' ')
+  const titulo = tituloProp ?? carpetaId.split('-').slice(1).join(' ')
 
   return (
     <Layout>
       <BackButton />
       <div className="mb-6 flex items-center gap-3">
-        <div className="rounded-xl border p-3" style={{ color: '#7c3aed', backgroundColor: '#7c3aed24', borderColor: '#7c3aed40' }}>
+        <div className="rounded-xl border p-3" style={{ color, backgroundColor: `${color}24`, borderColor: `${color}40` }}>
           <FolderOpen size={24} aria-hidden />
         </div>
         <h1 className="font-display text-2xl font-bold text-ink capitalize">{titulo}</h1>

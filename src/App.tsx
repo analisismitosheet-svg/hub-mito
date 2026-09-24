@@ -40,7 +40,9 @@ import FacturacionFabrica from '@/pages/FacturacionFabrica'
 import Guias from '@/pages/Guias'
 import NotasCredito from '@/pages/NotasCredito'
 import EstadisticasRendimiento from '@/pages/EstadisticasRendimiento'
-import MapeoDeposito from '@/pages/MapeoDeposito'
+import MapeoEscanear from '@/pages/MapeoEscanear'
+import MapeoOrden from '@/pages/MapeoOrden'
+import MapeoUbicaciones from '@/pages/MapeoUbicaciones'
 import CargaNovedades from '@/pages/CargaNovedades'
 import ResumenNovedades from '@/pages/ResumenNovedades'
 import MotivosNovedades from '@/pages/MotivosNovedades'
@@ -186,7 +188,31 @@ export default function App() {
             path="/mayorista/mapeo"
             element={
               <PermissionRoute permiso="mayorista.mapeo.view">
-                <MapeoDeposito />
+                <CarpetaArea carpetaId="mayorista-mapeo" titulo="Mapeo depósito" color="#d97706" />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/mayorista/mapeo/escanear"
+            element={
+              <PermissionRoute permiso="mayorista.mapeo.escanear">
+                <MapeoEscanear />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/mayorista/mapeo/orden"
+            element={
+              <PermissionRoute permiso="mayorista.mapeo.view">
+                <MapeoOrden />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/mayorista/mapeo/ubicaciones"
+            element={
+              <PermissionRoute permiso="mayorista.mapeo.view">
+                <MapeoUbicaciones />
               </PermissionRoute>
             }
           />

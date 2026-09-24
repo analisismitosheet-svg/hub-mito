@@ -333,6 +333,7 @@ function RolPermisosModal({
       'mayorista.mapeo.view': 'mayorista',
       'mayorista.mapeo.escanear': 'mayorista',
       'mayorista.mapeo.borrar': 'mayorista',
+      'mayorista.mapeo.gestionar': 'mayorista',
       'rrhh.novedades.view': 'rrhh',
       'rrhh.novedades.create': 'rrhh',
       'rrhh.novedades.edit': 'rrhh',
