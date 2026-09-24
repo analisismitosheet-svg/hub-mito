@@ -29,6 +29,7 @@ import {
   RotateCcw,
   Cake,
   ScanLine,
+  Map as MapIcon,
   type LucideIcon,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -258,6 +259,17 @@ export const APPS: AppDef[] = [
     target: '/mayorista/notas-credito',
     color: '#f59e0b',
     permiso: 'mayorista.notas_credito.view',
+  },
+  {
+    id: 'mayorista-mapeo',
+    areaId: 'mayorista',
+    title: 'Mapeo depósito',
+    description: 'Escaneá los artículos en el orden del depósito y consultá el orden mapeado.',
+    icon: MapIcon,
+    kind: 'internal',
+    target: '/mayorista/mapeo',
+    color: '#d97706',
+    permiso: 'mayorista.mapeo.view',
   },
   {
     id: 'mayorista-estadisticas',

@@ -40,6 +40,7 @@ import FacturacionFabrica from '@/pages/FacturacionFabrica'
 import Guias from '@/pages/Guias'
 import NotasCredito from '@/pages/NotasCredito'
 import EstadisticasRendimiento from '@/pages/EstadisticasRendimiento'
+import MapeoDeposito from '@/pages/MapeoDeposito'
 import CargaNovedades from '@/pages/CargaNovedades'
 import ResumenNovedades from '@/pages/ResumenNovedades'
 import MotivosNovedades from '@/pages/MotivosNovedades'
@@ -178,6 +179,14 @@ export default function App() {
             element={
               <PermissionRoute permiso="mayorista.notas_credito.view">
                 <NotasCredito />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/mayorista/mapeo"
+            element={
+              <PermissionRoute permiso="mayorista.mapeo.view">
+                <MapeoDeposito />
               </PermissionRoute>
             }
           />
