@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Loader2, MapPin, Search, X, Download, RefreshCw } from 'lucide-react'
+import { Loader2, MapPin, Search, Trash2, Download, RefreshCw, ChevronDown } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
-import { cargarMapeo, type Mapeo } from '@/lib/mapeo'
+import { cargarMapeo, compararUbicaciones, type Mapeo } from '@/lib/mapeo'
 
-/** Mapeo depósito · Orden mapeado: cada artículo con su(s) ubicación(es) */
+const SIN_UBICACION = 'Sin ubicación'
+
+/** Mapeo depósito · Orden mapeado: cada ubicación con sus códigos (desplegable) */
 export default function MapeoOrden() {
   const { can } = useAuth()
   const puedeBorrar = can('mayorista.mapeo.borrar')
@@ -15,6 +17,7 @@ export default function MapeoOrden() {
   const [filas, setFilas] = useState<Mapeo[]>([])
   const [cargando, setCargando] = useState(true)
   const [busqueda, setBusqueda] = useState('')
+  const [abiertas, setAbiertas] = useState<Set<string>>(new Set())
   const [borrar, setBorrar] = useState<Mapeo | null>(null)
   const [borrando, setBorrando] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -35,27 +38,42 @@ export default function MapeoOrden() {
     void cargar()
   }, [cargar])
 
-  const onRecargar = () => void cargar()
-
-  // Un artículo por fila con todas sus ubicaciones, en el orden del recorrido
-  // (el artículo aparece donde se escaneó por primera vez)
-  const articulos = useMemo(() => {
-    const m = new Map<string, { codigo: string; ubicaciones: Mapeo[] }>()
-    for (const f of [...filas].sort((x, y) => x.orden - y.orden)) {
-      const a = m.get(f.codigo) ?? { codigo: f.codigo, ubicaciones: [] }
-      a.ubicaciones.push(f)
-      m.set(f.codigo, a)
+  // Ubicaciones en el orden del depósito (PB-A1, PB-A2 …), cada una con sus códigos
+  const ubicaciones = useMemo(() => {
+    const m = new Map<string, Mapeo[]>()
+    for (const f of filas) {
+      const u = f.ubicacion ?? SIN_UBICACION
+      m.set(u, [...(m.get(u) ?? []), f])
     }
-    return [...m.values()]
+    return [...m.entries()]
+      .map(([ubicacion, items]) => ({
+        ubicacion,
+        items: items.sort((a, b) => a.codigo.localeCompare(b.codigo)),
+      }))
+      .sort((a, b) =>
+        a.ubicacion === SIN_UBICACION ? 1 : b.ubicacion === SIN_UBICACION ? -1 : compararUbicaciones(a.ubicacion, b.ubicacion),
+      )
   }, [filas])
 
+  // Búsqueda: por ubicación muestra la ubicación entera; por código, solo los códigos que coinciden
+  const q = busqueda.trim().toUpperCase()
   const visibles = useMemo(() => {
-    const q = busqueda.trim().toUpperCase()
-    if (!q) return articulos
-    return articulos.filter(
-      (a) => a.codigo.toUpperCase().includes(q) || a.ubicaciones.some((u) => (u.ubicacion ?? '').toUpperCase().includes(q)),
-    )
-  }, [articulos, busqueda])
+    if (!q) return ubicaciones
+    return ubicaciones
+      .map((u) =>
+        u.ubicacion.toUpperCase().includes(q) ? u : { ...u, items: u.items.filter((i) => i.codigo.toUpperCase().includes(q)) },
+      )
+      .filter((u) => u.items.length > 0)
+  }, [ubicaciones, q])
+
+  function alternar(u: string) {
+    setAbiertas((prev) => {
+      const n = new Set(prev)
+      if (n.has(u)) n.delete(u)
+      else n.add(u)
+      return n
+    })
+  }
 
   async function confirmarBorrar() {
     if (!borrar || !supabase) return
@@ -75,10 +93,7 @@ export default function MapeoOrden() {
   async function exportar() {
     const XLSX = await import('xlsx')
     const wb = XLSX.utils.book_new()
-    const datos = articulos.map((a) => ({
-      Artículo: a.codigo,
-      Ubicaciones: a.ubicaciones.map((u) => u.ubicacion ?? 'Sin ubicación').join(', '),
-    }))
+    const datos = ubicaciones.flatMap((u) => u.items.map((i) => ({ Ubicación: u.ubicacion, Artículo: i.codigo })))
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(datos), 'Mapeo')
     XLSX.writeFile(wb, `mapeo_deposito_${new Date().toISOString().slice(0, 10)}.xlsx`)
   }
@@ -88,7 +103,9 @@ export default function MapeoOrden() {
       <BackButton />
       <header className="mb-3 mt-2">
         <h1 className="font-display text-2xl font-semibold text-ink">Orden mapeado</h1>
-        <p className="text-sm text-sub">{articulos.length} artículos mapeados.</p>
+        <p className="text-sm text-sub">
+          {ubicaciones.length} {ubicaciones.length === 1 ? 'ubicación' : 'ubicaciones'} · {filas.length} códigos
+        </p>
       </header>
       <div className="space-y-3 pb-4">
         <div className="flex flex-wrap items-center gap-2">
@@ -97,13 +114,13 @@ export default function MapeoOrden() {
             <input
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
-              placeholder="Buscar artículo o ubicación…"
+              placeholder="Buscar ubicación o código…"
               aria-label="Buscar"
               className="h-11 w-full rounded-xl border border-line bg-surface pl-9 pr-3 text-sm text-ink outline-none transition placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40"
             />
           </div>
           <button
-            onClick={onRecargar}
+            onClick={() => void cargar()}
             disabled={cargando}
             className="btn-press inline-flex h-11 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-sm font-medium text-ink transition hover:bg-surface2 disabled:opacity-60"
             title="Actualizar"
@@ -113,7 +130,7 @@ export default function MapeoOrden() {
           </button>
           <button
             onClick={() => void exportar()}
-            disabled={articulos.length === 0}
+            disabled={filas.length === 0}
             className="btn-press inline-flex h-11 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-sm font-medium text-ink transition hover:bg-surface2 disabled:opacity-60"
           >
             <Download size={16} aria-hidden /> Excel
@@ -130,45 +147,60 @@ export default function MapeoOrden() {
           </div>
         ) : visibles.length === 0 ? (
           <p className="rounded-2xl border border-line bg-surface px-4 py-10 text-center text-sm text-sub">
-            {busqueda ? 'No hay artículos que coincidan con la búsqueda.' : 'Todavía no hay nada mapeado.'}
+            {busqueda ? 'No hay ubicaciones ni códigos que coincidan.' : 'Todavía no hay nada mapeado.'}
           </p>
         ) : (
           <ul className="divide-y divide-line/60 overflow-hidden rounded-2xl border border-line bg-surface">
-            {visibles.map((a) => (
-              <li key={a.codigo} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2.5">
-                <span className="min-w-[7rem] text-[15px] font-semibold text-ink">{a.codigo}</span>
-                <span className="flex flex-1 flex-wrap items-center gap-1.5">
-                  {a.ubicaciones.map((u) => (
-                    <span
-                      key={u.id}
-                      className="inline-flex items-center gap-1 rounded-lg bg-amber-500/15 py-0.5 pl-2 pr-1 text-xs font-semibold text-amber-500"
-                    >
-                      <MapPin size={12} aria-hidden />
-                      {u.ubicacion ?? 'Sin ubicación'}
-                      {puedeBorrar ? (
-                        <button
-                          onClick={() => setBorrar(u)}
-                          className="ml-0.5 flex h-6 w-6 items-center justify-center rounded-md text-amber-500/70 transition hover:bg-brand-600/15 hover:text-brand-400"
-                          title="Quitar de esta ubicación"
-                          aria-label={`Quitar ${a.codigo} de ${u.ubicacion ?? 'sin ubicación'}`}
-                        >
-                          <X size={13} aria-hidden />
-                        </button>
-                      ) : (
-                        <span className="w-1" />
-                      )}
+            {visibles.map((u) => {
+              // Buscando, se abren solas para mostrar lo encontrado
+              const abierta = !!q || abiertas.has(u.ubicacion)
+              return (
+                <li key={u.ubicacion}>
+                  <button
+                    onClick={() => alternar(u.ubicacion)}
+                    aria-expanded={abierta}
+                    className="flex min-h-[3rem] w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-surface2"
+                  >
+                    <MapPin size={16} aria-hidden className="shrink-0 text-amber-500" />
+                    <span className="flex-1 font-display text-[15px] font-semibold text-ink">{u.ubicacion}</span>
+                    <span className="shrink-0 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-semibold tabular-nums text-amber-500">
+                      {u.items.length} {u.items.length === 1 ? 'código' : 'códigos'}
                     </span>
-                  ))}
-                </span>
-              </li>
-            ))}
+                    <ChevronDown
+                      size={18}
+                      aria-hidden
+                      className={`shrink-0 text-sub transition-transform ${abierta ? 'rotate-180' : ''}`}
+                    />
+                  </button>
+                  {abierta && (
+                    <ul className="divide-y divide-line/40 border-t border-line/60 bg-surface2/50">
+                      {u.items.map((i) => (
+                        <li key={i.id} className="flex min-h-[2.75rem] items-center gap-3 py-1.5 pl-11 pr-3">
+                          <span className="flex-1 text-sm font-semibold text-ink">{i.codigo}</span>
+                          {puedeBorrar && (
+                            <button
+                              onClick={() => setBorrar(i)}
+                              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sub transition hover:bg-brand-600/10 hover:text-brand-400"
+                              title="Quitar de esta ubicación"
+                              aria-label={`Quitar ${i.codigo} de ${u.ubicacion}`}
+                            >
+                              <Trash2 size={16} aria-hidden />
+                            </button>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              )
+            })}
           </ul>
         )}
 
         <ConfirmDialog
           open={!!borrar}
           title="¿Quitar de la ubicación?"
-          message={borrar ? `${borrar.codigo} sale de ${borrar.ubicacion ?? 'sin ubicación'}.` : ''}
+          message={borrar ? `${borrar.codigo} sale de ${borrar.ubicacion ?? SIN_UBICACION}.` : ''}
           confirmLabel="Quitar"
           busy={borrando}
           onCancel={() => setBorrar(null)}
