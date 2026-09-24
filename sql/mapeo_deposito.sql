@@ -52,10 +52,14 @@ ALTER TABLE public.mapeo_deposito ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.mapeo_deposito FROM anon, authenticated;
 GRANT SELECT, DELETE ON public.mapeo_deposito TO authenticated;
 
+-- También leen los repos (Mi repo / Repos Mayorista): muestran la ubicación de cada artículo
 DROP POLICY IF EXISTS mapeo_deposito_ver ON public.mapeo_deposito;
 CREATE POLICY mapeo_deposito_ver ON public.mapeo_deposito
   FOR SELECT TO authenticated
-  USING (private.tengo_permiso('mayorista.mapeo.view') OR private.tengo_permiso('mayorista.mapeo.escanear'));
+  USING (
+    private.tengo_permiso('mayorista.mapeo.view') OR private.tengo_permiso('mayorista.mapeo.escanear')
+    OR private.tengo_permiso('mayorista.repos_piso') OR private.tengo_permiso('mayorista.view')
+  );
 
 DROP POLICY IF EXISTS mapeo_deposito_borrar ON public.mapeo_deposito;
 CREATE POLICY mapeo_deposito_borrar ON public.mapeo_deposito

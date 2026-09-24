@@ -10,6 +10,7 @@ import ScannerCamara from '@/components/ScannerCamara'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { normalizaCodigo } from '@/lib/loginEmpleado'
+import { compararUbicaciones, ubicacionesDeArticulos } from '@/lib/mapeo'
 
 type EstadoM = 'pendiente' | 'hecho' | 'faltante'
 
@@ -124,6 +125,8 @@ export default function MiRepo() {
   const [asignaciones, setAsignaciones] = useState<Asignacion[]>([])
   const [lotes, setLotes] = useState<Record<string, Lote>>({})
   const [items, setItems] = useState<Item[]>([])
+  // Ubicaciones del Mapeo depósito por artículo (código en mayúsculas -> PB-A1, …)
+  const [ubicaciones, setUbicaciones] = useState<Map<string, string[]>>(new Map())
   // Copia para leer los ítems dentro de callbacks sin re-crearlos en cada escaneo
   const itemsRef = useRef<Item[]>([])
   useEffect(() => {
@@ -252,9 +255,14 @@ export default function MiRepo() {
 
       // Defensa extra: aunque la RLS no esté activa, acá solo quedan MIS locales.
       const permitidas = new Set(misAsignaciones.map(claveDe))
-      setItems(todos.filter((i) => permitidas.has(claveDe(i))))
+      const mios = todos.filter((i) => permitidas.has(claveDe(i)))
+      setItems(mios)
       setCargando(false)
       enfocar()
+      // Ubicaciones del mapeo: no frenan la carga; si fallan, la lista queda en su orden de siempre
+      ubicacionesDeArticulos(mios.map((i) => i.codigo ?? ''))
+        .then(setUbicaciones)
+        .catch(() => { /* sin mapeo: sin ubicaciones */ })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudieron cargar tus repos.')
       setCargando(false)
@@ -304,16 +312,28 @@ export default function MiRepo() {
       .sort((a, b) => (ultimoEscaneo[b.id] ?? 0) - (ultimoEscaneo[a.id] ?? 0) || a.orden - b.orden)
   }, [asignacionSel, itemsDe, ultimoEscaneo])
 
+  /** Ubicaciones mapeadas de un ítem (vacío si el artículo no está en el mapeo) */
+  const ubicacionesDe = useCallback(
+    (i: Item) => ubicaciones.get(String(i.codigo ?? '').trim().toUpperCase()) ?? [],
+    [ubicaciones],
+  )
+
+  // Pendientes en el orden del depósito (PB-A1, PB-A2 …); los que no están mapeados, al final
   const pendientesDeSel = useMemo(() => {
     if (!asignacionSel) return []
     return itemsDe(asignacionSel)
       .filter((i) => i.estado === 'pendiente' && i.escaneadas < i.cantidad)
-      .sort(
-        (a, b) =>
+      .sort((a, b) => {
+        const ua = ubicacionesDe(a)[0]
+        const ub = ubicacionesDe(b)[0]
+        const porUbicacion = ua && ub ? compararUbicaciones(ua, ub) : ua ? -1 : ub ? 1 : 0
+        return (
+          porUbicacion ||
           a.orden - b.orden ||
-          String(a.codigo ?? '').localeCompare(String(b.codigo ?? ''), 'es'),
-      )
-  }, [asignacionSel, itemsDe])
+          String(a.codigo ?? '').localeCompare(String(b.codigo ?? ''), 'es')
+        )
+      })
+  }, [asignacionSel, itemsDe, ubicacionesDe])
 
   const progresoSel = asignacionSel ? progreso(asignacionSel) : null
 
@@ -827,6 +847,7 @@ export default function MiRepo() {
               <ul className="divide-y divide-line/60">
                 {pendientesDeSel.map((i) => {
                   const talle = fmtTalle(i.talle)
+                  const ubics = ubicacionesDe(i)
                   return (
                     <li key={i.id} className="flex items-center gap-3 px-4 py-2.5">
                       <span className="min-w-0 flex-1">
@@ -841,6 +862,11 @@ export default function MiRepo() {
                           {talle && (
                             <span className="rounded-md bg-violet-500/15 px-1.5 py-0.5 text-xs font-semibold text-violet-400" title="Talle">
                               {talle}
+                            </span>
+                          )}
+                          {ubics.length > 0 && (
+                            <span className="rounded-md bg-amber-500/15 px-1.5 py-0.5 text-xs font-semibold text-amber-500" title="Ubicación en el depósito">
+                              ({ubics.join(' · ')})
                             </span>
                           )}
                         </span>

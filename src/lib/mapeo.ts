@@ -125,3 +125,43 @@ export const PREFIJO_UBICACION = /^UBI[:\-_ ]?/i
 export function limpiarUbicacion(texto: string): string {
   return texto.trim().replace(PREFIJO_UBICACION, '').trim().toUpperCase()
 }
+
+/* ------------------------------------------------------------------ */
+/*  Orden físico de ubicaciones: planta -> pasillo (letra) -> nivel    */
+/* ------------------------------------------------------------------ */
+
+/** "PB-A10" -> [orden de planta, planta, letra, nivel]; otros textos van al final */
+function partesUbicacion(u: string): [number, string, string, number] | null {
+  const m = /^([A-Z0-9]+)-([A-Z])(\d+)$/.exec(u.trim().toUpperCase())
+  return m ? [ordenPlanta(m[1]), m[1], m[2], Number(m[3])] : null
+}
+
+/** Compara ubicaciones en el orden del depósito (PB-A1 < PB-A2 < PB-A10 < PB-B1 < EP-A1) */
+export function compararUbicaciones(a: string, b: string): number {
+  const pa = partesUbicacion(a)
+  const pb = partesUbicacion(b)
+  if (!pa || !pb) return pa ? -1 : pb ? 1 : a.localeCompare(b)
+  return pa[0] - pb[0] || pa[1].localeCompare(pb[1]) || pa[2].localeCompare(pb[2]) || pa[3] - pb[3]
+}
+
+/** Ubicaciones mapeadas de cada artículo (código en mayúsculas -> ubicaciones ordenadas) */
+export async function ubicacionesDeArticulos(codigos: string[]): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>()
+  const unicos = [...new Set(codigos.map((c) => c.trim().toUpperCase()).filter(Boolean))]
+  if (!supabase || unicos.length === 0) return out
+  const TANDA = 200 // el filtro .in() va en la URL: de a tandas
+  for (let i = 0; i < unicos.length; i += TANDA) {
+    const { data, error } = await supabase
+      .from('mapeo_deposito')
+      .select('codigo,ubicacion')
+      .in('codigo', unicos.slice(i, i + TANDA))
+      .range(0, 9999)
+    if (error) throw new Error(error.message)
+    for (const r of (data as { codigo: string; ubicacion: string | null }[] | null) ?? []) {
+      if (!r.ubicacion) continue
+      out.set(r.codigo, [...(out.get(r.codigo) ?? []), r.ubicacion])
+    }
+  }
+  for (const [k, v] of out) out.set(k, v.sort(compararUbicaciones))
+  return out
+}
