@@ -1,12 +1,11 @@
-import { useMemo, useState } from 'react'
-import { Check, Database, Eye, Loader2, Plus, Search, Table2, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Check, Eye, Loader2, Plus, Search, Table2, X } from 'lucide-react'
 import { listarBases, listarObjetos, muestraObjeto, type FilaSql, type ObjetoSql } from '@/lib/sqlApi'
 
 const MAX_LISTA = 200
 
 /**
- * Explorador del SQL Server: botón "Consultar bases de datos", se elige una base,
- * botón "Consultar tablas y vistas" y de ahí se elige la tabla o vista.
+ * Explorador del SQL Server: primero se elige la base, después la tabla o vista.
  * "Agregar" la suma a la lista de vistas expuestas como BASE.esquema.objeto
  * (después hay que apretar "Guardar cambios"). Solo administradores.
  */
@@ -26,42 +25,25 @@ export default function ExploradorSql({
   const [error, setError] = useState<string | null>(null)
   const [muestra, setMuestra] = useState<{ nombre: string; filas: FilaSql[] | null } | null>(null)
 
-  const [cargandoBases, setCargandoBases] = useState(false)
-  // Base de la que se muestran las tablas (puede diferir de la elegida hasta volver a consultar)
-  const [baseConsultada, setBaseConsultada] = useState('')
+  useEffect(() => {
+    listarBases()
+      .then(setBases)
+      .catch((e) => {
+        setBases([])
+        setError(e instanceof Error ? e.message : 'No se pudieron listar las bases.')
+      })
+  }, [])
 
-  // Paso 1: botón "Consultar bases de datos"
-  async function consultarBases() {
-    setCargandoBases(true)
-    setError(null)
-    try {
-      const lista = await listarBases()
-      setBases(lista)
-      if (!lista.includes(base)) setBase('')
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudieron listar las bases.')
-    } finally {
-      setCargandoBases(false)
-    }
-  }
-
-  // Paso 2: elegir una base (todavía no consulta nada)
-  function elegirBase(b: string) {
+  async function elegirBase(b: string) {
     setBase(b)
-    setError(null)
-  }
-
-  // Paso 3: botón "Consultar tablas y vistas" de la base elegida
-  async function consultarObjetos() {
-    if (!base) return
     setObjetos(null)
     setMuestra(null)
     setFiltro('')
+    if (!b) return
     setCargando(true)
     setError(null)
     try {
-      setObjetos(await listarObjetos(base))
-      setBaseConsultada(base)
+      setObjetos(await listarObjetos(b))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudieron listar las tablas.')
     } finally {
@@ -99,56 +81,29 @@ export default function ExploradorSql({
 
       {error && <p className="mb-2 text-sm text-brand-400">{error}</p>}
 
-      {/* 1. Consultar bases */}
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => void consultarBases()}
-          disabled={cargandoBases}
-          className="btn-press inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
-        >
-          {cargandoBases ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Database size={14} aria-hidden />}
-          Consultar bases de datos
-        </button>
-        {bases && <span className="text-xs text-sub">{bases.length} bases disponibles</span>}
-      </div>
-
-      {/* 2. Elegir base + consultar sus tablas y vistas */}
-      {bases && bases.length > 0 && (
-        <div className="mt-3 flex flex-wrap items-end gap-2">
-          <label className="block min-w-[200px] flex-1">
-            <span className="mb-1 block text-xs font-medium text-sub">Base de datos</span>
-            <select
-              value={base}
-              onChange={(e) => elegirBase(e.target.value)}
-              className="w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
-            >
-              <option value="">Elegí una base…</option>
-              {bases.map((b) => (
-                <option key={b} value={b}>
-                  {b}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="button"
-            onClick={() => void consultarObjetos()}
-            disabled={!base || cargando}
-            className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-sm font-medium text-ink hover:bg-line disabled:opacity-50"
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="block min-w-[200px] flex-1">
+          <span className="mb-1 block text-xs font-medium text-sub">1. Base de datos</span>
+          <select
+            value={base}
+            onChange={(e) => void elegirBase(e.target.value)}
+            disabled={!bases?.length}
+            className="w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 disabled:opacity-60"
           >
-            {cargando ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Table2 size={14} aria-hidden />}
-            Consultar tablas y vistas
-          </button>
-        </div>
-      )}
-
-      {/* 3. Buscar dentro de lo consultado */}
-      {objetos && (
-        <div className="mt-3 flex flex-wrap items-end gap-2">
+            <option value="">
+              {bases === null ? 'Cargando bases…' : bases.length ? 'Elegí una base…' : 'Sin bases disponibles'}
+            </option>
+            {bases?.map((b) => (
+              <option key={b} value={b}>
+                {b}
+              </option>
+            ))}
+          </select>
+        </label>
+        {objetos && (
           <>
             <label className="block min-w-[180px] flex-1">
-              <span className="mb-1 block text-xs font-medium text-sub">Buscar en {baseConsultada}</span>
+              <span className="mb-1 block text-xs font-medium text-sub">2. Buscar tabla o vista</span>
               <div className="relative">
                 <Search size={14} aria-hidden className="absolute left-2 top-1/2 -translate-y-1/2 text-sub" />
                 <input
@@ -170,8 +125,8 @@ export default function ExploradorSql({
               <option value="tabla">Solo tablas</option>
             </select>
           </>
-        </div>
-      )}
+        )}
+      </div>
 
       {cargando && (
         <p className="mt-3 flex items-center gap-2 text-sm text-sub">
@@ -187,7 +142,7 @@ export default function ExploradorSql({
           </p>
           <ul className="mt-1 max-h-80 divide-y divide-line/60 overflow-y-auto rounded-lg border border-line bg-surface">
             {visibles.slice(0, MAX_LISTA).map((o) => {
-              const completo = `${baseConsultada}.${o.esquema}.${o.nombre}`
+              const completo = `${base}.${o.esquema}.${o.nombre}`
               const ya = agregadas.has(completo.toLowerCase())
               return (
                 <li key={completo} className="flex items-center gap-2 px-3 py-1.5">
