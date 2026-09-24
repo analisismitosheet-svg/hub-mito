@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Check, Database, Loader2, Pencil, Plus, RefreshCw, Search, Trash2, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { Check, ChevronRight, Database, Loader2, Pencil, Plus, RefreshCw, Search, Trash2, X } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
-import { cargarVistas, guardarVistas, leerVista, type FilaSql, type VistaDef } from '@/lib/sqlApi'
+import { cargarVistas, estadoConexion, guardarVistas, leerVista, type FilaSql, type VistaDef } from '@/lib/sqlApi'
 import { usePermisosArea } from '@/hooks/usePermisosArea'
 
 const MAX_FILAS_UI = 300
@@ -14,15 +14,189 @@ function celda(v: unknown): string {
   return String(v)
 }
 
+interface DatosVista {
+  filas: FilaSql[] | null
+  error: string | null
+  cargando: boolean
+}
+
+const fmtN = (n: number) => n.toLocaleString('es-AR')
+
+/**
+ * Una vista minimizada: nombre + cantidad de líneas. Al tocarla se despliega
+ * la tabla con su propio buscador.
+ */
+function PanelVista({
+  vista,
+  datos,
+  abierta,
+  tope,
+  pendiente,
+  onAlternar,
+  onActualizar,
+}: {
+  vista: VistaDef
+  datos: DatosVista | undefined
+  abierta: boolean
+  tope: number | null
+  pendiente: boolean
+  onAlternar: () => void
+  onActualizar: () => void
+}) {
+  const [busqueda, setBusqueda] = useState('')
+  const filas = datos?.filas ?? null
+
+  const columnas = useMemo(() => {
+    const cols: string[] = []
+    for (const f of (filas ?? []).slice(0, 20)) {
+      for (const k of Object.keys(f)) if (!cols.includes(k)) cols.push(k)
+    }
+    return cols
+  }, [filas])
+
+  const { visibles, coinciden } = useMemo(() => {
+    const q = busqueda.trim().toLowerCase()
+    const filtradas = q
+      ? (filas ?? []).filter((f) => Object.values(f).some((val) => String(val ?? '').toLowerCase().includes(q)))
+      : filas ?? []
+    return { visibles: filtradas.slice(0, MAX_FILAS_UI), coinciden: filtradas.length }
+  }, [filas, busqueda])
+
+  // Si trajo exactamente el tope, en el SQL Server puede haber más
+  const enTope = filas !== null && tope !== null && filas.length >= tope
+
+  let resumen: ReactNode
+  if (datos?.cargando && filas === null) {
+    resumen = (
+      <span className="inline-flex items-center gap-1 text-xs text-sub">
+        <Loader2 size={12} className="animate-spin" aria-hidden /> consultando…
+      </span>
+    )
+  } else if (datos?.error) {
+    resumen = <span className="text-xs font-medium text-brand-400">error</span>
+  } else if (filas !== null) {
+    resumen = (
+      <span
+        className="shrink-0 rounded-full bg-line px-2 py-0.5 text-xs font-semibold tabular-nums text-ink"
+        title={enTope ? `Se traen como máximo ${fmtN(tope ?? 0)} líneas por consulta` : undefined}
+      >
+        {fmtN(filas.length)}
+        {enTope ? '+' : ''} {filas.length === 1 ? 'línea' : 'líneas'}
+      </span>
+    )
+  } else if (pendiente) {
+    resumen = <span className="text-xs text-sub">guardá los cambios para consultarla</span>
+  }
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-soft">
+      <div className="flex items-center gap-2 px-3 py-2.5">
+        <button
+          type="button"
+          onClick={onAlternar}
+          aria-expanded={abierta}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        >
+          <ChevronRight
+            size={16}
+            aria-hidden
+            className={`shrink-0 text-sub transition-transform ${abierta ? 'rotate-90' : ''}`}
+          />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-display text-sm font-semibold text-ink">{vista.label}</span>
+            {vista.label !== vista.vista && (
+              <span className="block truncate font-mono text-[11px] text-sub">{vista.vista}</span>
+            )}
+          </span>
+          {resumen}
+        </button>
+        <button
+          type="button"
+          onClick={onActualizar}
+          disabled={datos?.cargando || pendiente}
+          title="Volver a consultar"
+          aria-label={`Actualizar ${vista.label}`}
+          className="btn-press shrink-0 rounded-lg p-1.5 text-sub hover:bg-surface2 hover:text-ink disabled:opacity-40"
+        >
+          <RefreshCw size={14} className={datos?.cargando ? 'animate-spin' : ''} aria-hidden />
+        </button>
+      </div>
+
+      {abierta && (
+        <div className="border-t border-line p-3">
+          {datos?.error ? (
+            <p className="text-sm text-brand-400">{datos.error}</p>
+          ) : filas === null ? (
+            <p className="flex items-center gap-2 text-sm text-sub">
+              <Loader2 size={14} className="animate-spin" aria-hidden /> Consultando…
+            </p>
+          ) : filas.length === 0 ? (
+            <p className="text-sm text-sub">La vista no devolvió filas.</p>
+          ) : (
+            <>
+              <label className="mb-2 block">
+                <span className="sr-only">Buscar en {vista.label}</span>
+                <div className="relative">
+                  <Search size={15} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sub/60" />
+                  <input
+                    value={busqueda}
+                    onChange={(e) => setBusqueda(e.target.value)}
+                    placeholder="Buscar en los resultados…"
+                    className="w-full rounded-xl border border-line bg-surface2 py-2 pl-9 pr-3 text-sm text-ink outline-none placeholder:text-sub/50 focus-visible:ring-2 focus-visible:ring-brand-500/40"
+                  />
+                </div>
+              </label>
+              {visibles.length === 0 ? (
+                <p className="text-sm text-sub">Ningún resultado coincide con la búsqueda.</p>
+              ) : (
+                <>
+                  <div className="max-h-[60vh] overflow-auto rounded-xl border border-line">
+                    <table className="w-full text-left text-xs">
+                      <thead className="sticky top-0">
+                        <tr>
+                          {columnas.map((c) => (
+                            <th key={c} scope="col" className="whitespace-nowrap border-b border-line bg-surface2 px-3 py-2 font-semibold text-sub">
+                              {c}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {visibles.map((f, i) => (
+                          <tr key={i} className="odd:bg-surface even:bg-surface2/40">
+                            {columnas.map((c) => (
+                              <td key={c} className="max-w-[280px] truncate whitespace-nowrap px-3 py-1.5 text-ink" title={celda(f[c])}>
+                                {celda(f[c])}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="mt-2 text-right text-xs text-sub/70">
+                    Mostrando {fmtN(visibles.length)} de {fmtN(coinciden)} líneas
+                    {coinciden > MAX_FILAS_UI ? ` (primeras ${MAX_FILAS_UI}; usá el buscador)` : ''}
+                  </p>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function DatosSql() {
   const permisos = usePermisosArea('datos_sql')
   const puedeGestionar = permisos.crear || permisos.editar || permisos.borrar
 
   const [vistas, setVistas] = useState<VistaDef[] | null>(null)
-  const [vista, setVista] = useState('')
-  const [filas, setFilas] = useState<FilaSql[]>([])
-  const [busqueda, setBusqueda] = useState('')
-  const [cargando, setCargando] = useState(false)
+  // Resultado de cada vista (se muestran minimizadas con la cantidad de líneas)
+  const [datos, setDatos] = useState<Record<string, DatosVista>>({})
+  const [abiertas, setAbiertas] = useState<Set<string>>(new Set())
+  const [tope, setTope] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   // Gestión de vistas
@@ -42,46 +216,46 @@ export default function DatosSql() {
     void cargarVistas().then((vs) => {
       if (!activo) return
       setVistas(vs)
-      setVista(vs[0]?.vista ?? '')
     })
+    // Tope de filas por consulta: para avisar cuando una vista tiene más de lo que se trae
+    void estadoConexion()
+      .then((e) => activo && setTope(e.maxRows))
+      .catch(() => {})
     return () => {
       activo = false
     }
   }, [])
 
   const cargar = useCallback(async (v: string) => {
-    if (!v) return
-    setCargando(true)
-    setError(null)
-    setFilas([])
+    setDatos((d) => ({ ...d, [v]: { filas: d[v]?.filas ?? null, error: null, cargando: true } }))
     try {
-      setFilas(await leerVista(v))
+      const filas = await leerVista(v)
+      setDatos((d) => ({ ...d, [v]: { filas, error: null, cargando: false } }))
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error desconocido.')
-    } finally {
-      setCargando(false)
+      const msg = e instanceof Error ? e.message : 'Error desconocido.'
+      setDatos((d) => ({ ...d, [v]: { filas: null, error: msg, cargando: false } }))
     }
   }, [])
 
+  // Consulta todas las vistas guardadas para mostrar cuántas líneas tiene cada una.
+  // Mientras se edita la lista no: las vistas nuevas no están habilitadas hasta guardar.
   useEffect(() => {
-    if (vista) void cargar(vista)
-  }, [vista, cargar])
+    if (!vistas || dirty) return
+    for (const v of vistas) if (!datos[v.vista]) void cargar(v.vista)
+  }, [vistas, dirty, datos, cargar])
 
-  const columnas = useMemo(() => {
-    const cols: string[] = []
-    for (const f of filas.slice(0, 20)) {
-      for (const k of Object.keys(f)) if (!cols.includes(k)) cols.push(k)
-    }
-    return cols
-  }, [filas])
+  function alternar(v: string) {
+    setAbiertas((prev) => {
+      const s = new Set(prev)
+      if (s.has(v)) s.delete(v)
+      else s.add(v)
+      return s
+    })
+  }
 
-  const visibles = useMemo(() => {
-    const q = busqueda.trim().toLowerCase()
-    const filtradas = q
-      ? filas.filter((f) => Object.values(f).some((val) => String(val ?? '').toLowerCase().includes(q)))
-      : filas
-    return filtradas.slice(0, MAX_FILAS_UI)
-  }, [filas, busqueda])
+  function actualizarTodas() {
+    for (const v of vistas ?? []) void cargar(v.vista)
+  }
 
   /* ----------------------- CRUD de vistas ----------------------- */
 
@@ -135,7 +309,6 @@ export default function DatosSql() {
         v.vista === editandoId ? { vista: nombre, label: editLabel.trim() || nombre } : v,
       ),
     )
-    setVista((prev) => (prev === editandoId ? nombre : prev))
     cancelarEdicion()
     setDirty(true)
   }
@@ -144,7 +317,6 @@ export default function DatosSql() {
     if (!confirm(`¿Quitar la vista "${nombre}" de la lista? No borra nada en el SQL Server.`)) return
     const sin = (vistas ?? []).filter((v) => v.vista !== nombre)
     setVistas(sin)
-    setVista((prev) => (prev === nombre ? sin[0]?.vista ?? '' : prev))
     setEditandoId((prev) => (prev === nombre ? null : prev))
     setOkMsg(null)
     setDirty(true)
@@ -184,7 +356,8 @@ export default function DatosSql() {
     }
     setDirty(false)
     setOkMsg('Cambios guardados. Ya están activos para todos los usuarios.')
-    setVista((prev) => (vistas.some((v) => v.vista === prev) ? prev : vistas[0]?.vista ?? ''))
+    // Vuelve a consultar todo (los nombres pudieron cambiar)
+    setDatos({})
   }
 
   async function descartar() {
@@ -193,9 +366,10 @@ export default function DatosSql() {
     setEditandoId(null)
     const vs = await cargarVistas()
     setVistas(vs)
-    setVista((prev) => (vs.some((v) => v.vista === prev) ? prev : vs[0]?.vista ?? ''))
     setDirty(false)
   }
+
+  const algunaCargando = Object.values(datos).some((d) => d.cargando)
 
   if (vistas === null) {
     return (
@@ -217,11 +391,11 @@ export default function DatosSql() {
           <p className="mt-1 text-sm text-sub">Consulta en vivo de vistas del SQL Server.</p>
         </div>
         <button
-          onClick={() => void cargar(vista)}
-          disabled={cargando || !vista}
+          onClick={actualizarTodas}
+          disabled={algunaCargando || vistas.length === 0}
           className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-sm font-medium text-ink hover:bg-surface2 disabled:opacity-50"
         >
-          <RefreshCw size={14} className={cargando ? 'animate-spin' : ''} aria-hidden /> Actualizar
+          <RefreshCw size={14} className={algunaCargando ? 'animate-spin' : ''} aria-hidden /> Actualizar
         </button>
       </header>
 
@@ -401,79 +575,20 @@ export default function DatosSql() {
           </p>
         </div>
       ) : (
-        <>
-          <div className="mb-3 flex flex-wrap gap-1.5">
-            {vistas.map((v) => (
-              <button
-                key={v.vista}
-                onClick={() => setVista(v.vista)}
-                aria-pressed={vista === v.vista}
-                className={
-                  vista === v.vista
-                    ? 'btn-press rounded-full border border-brand-600 bg-brand-600 px-3 py-1.5 text-sm font-medium text-white'
-                    : 'btn-press rounded-full border border-line bg-surface px-3 py-1.5 text-sm font-medium text-sub hover:bg-surface2 hover:text-ink'
-                }
-              >
-                {v.label}
-              </button>
-            ))}
-          </div>
-
-          <label className="mb-3 block">
-            <span className="sr-only">Buscar</span>
-            <div className="relative">
-              <Search size={15} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sub/60" />
-              <input
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-                placeholder="Buscar en los resultados…"
-                className="w-full rounded-xl border border-line bg-surface py-2 pl-9 pr-3 text-sm text-ink outline-none placeholder:text-sub/50 focus-visible:ring-2 focus-visible:ring-brand-500/40"
-              />
-            </div>
-          </label>
-
-          {cargando ? (
-            <div className="flex items-center justify-center gap-2 py-10 text-sub">
-              <Loader2 size={18} className="animate-spin" aria-hidden /> Consultando…
-            </div>
-          ) : filas.length === 0 ? (
-            !error && (
-              <p className="rounded-2xl border border-line bg-surface p-4 text-sm text-sub">La vista no devolvió filas.</p>
-            )
-          ) : visibles.length === 0 ? (
-            <p className="rounded-2xl border border-line bg-surface p-4 text-sm text-sub">Ningún resultado coincide con la búsqueda.</p>
-          ) : (
-            <>
-              <div className="overflow-x-auto rounded-2xl border border-line bg-surface shadow-soft">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr>
-                      {columnas.map((c) => (
-                        <th key={c} scope="col" className="whitespace-nowrap border-b border-line bg-surface2 px-3 py-2 font-semibold text-sub">
-                          {c}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {visibles.map((f, i) => (
-                      <tr key={i} className="odd:bg-surface even:bg-surface2/40">
-                        {columnas.map((c) => (
-                          <td key={c} className="max-w-[280px] truncate whitespace-nowrap px-3 py-1.5 text-ink" title={celda(f[c])}>
-                            {celda(f[c])}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <p className="mt-2 text-right text-xs text-sub/70">
-                Mostrando {visibles.length} de {filas.length} filas{filas.length > MAX_FILAS_UI ? ` (primeras ${MAX_FILAS_UI})` : ''}
-              </p>
-            </>
-          )}
-        </>
+        <div className="space-y-2">
+          {vistas.map((v) => (
+            <PanelVista
+              key={v.vista}
+              vista={v}
+              datos={datos[v.vista]}
+              abierta={abiertas.has(v.vista)}
+              tope={tope}
+              pendiente={dirty && !datos[v.vista]}
+              onAlternar={() => alternar(v.vista)}
+              onActualizar={() => void cargar(v.vista)}
+            />
+          ))}
+        </div>
       )}
     </Layout>
   )
