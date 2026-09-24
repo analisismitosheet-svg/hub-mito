@@ -7,7 +7,7 @@ import BackButton from '@/components/BackButton'
 import ScannerCamara from '@/components/ScannerCamara'
 import { supabase } from '@/lib/supabase'
 import {
-  ChipsArticulo as Etiquetas, PREFIJO_UBICACION, cargarUbicaciones, fmtTalle, limpiarUbicacion,
+  PREFIJO_UBICACION, cargarUbicaciones, limpiarUbicacion,
   type AccionRepetido, type FilaEscaneo,
 } from '@/lib/mapeo'
 
@@ -78,7 +78,7 @@ export default function MapeoEscanear() {
       if (error) throw new Error(error.message)
       const f = ((Array.isArray(data) ? data[0] : data) ?? null) as FilaEscaneo | null
       if (!f) throw new Error('Sin respuesta del servidor.')
-      const etiqueta = [f.codigo, f.color, fmtTalle(f.talle)].filter(Boolean).join(' · ')
+      const etiqueta = f.codigo
       if (f.estado === 'ya_mapeado') {
         setRepetido({ bruto: codigo, ubicacion: ubic, fila: f })
         setMensaje(null)
@@ -225,7 +225,7 @@ export default function MapeoEscanear() {
               <div className="flex items-start gap-2">
                 <AlertTriangle size={18} aria-hidden className="mt-0.5 shrink-0 text-amber-500" />
                 <div className="min-w-0 text-sm">
-                  <Etiquetas m={repetido.fila} chico />
+                  <span className="text-[15px] font-semibold text-ink">{repetido.fila.codigo}</span>
                   <p className="mt-1 text-sub">
                     Ya está en <span className="font-semibold text-ink">{repetido.fila.otras}</span>.
                     ¿Qué hacés en <span className="font-semibold text-ink">{repetido.ubicacion}</span>?

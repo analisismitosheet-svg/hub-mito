@@ -125,26 +125,3 @@ export const PREFIJO_UBICACION = /^UBI[:\-_ ]?/i
 export function limpiarUbicacion(texto: string): string {
   return texto.trim().replace(PREFIJO_UBICACION, '').trim().toUpperCase()
 }
-
-/** Talle numérico con "T" (T38); de letra tal cual (M, L, U) */
-export function fmtTalle(talle: string | null): string | null {
-  if (!talle) return null
-  return /^\d/.test(talle) ? `T${talle}` : talle
-}
-
-/** Código + color + talle como chips */
-export function ChipsArticulo({ m, chico = false }: { m: Pick<Mapeo, 'codigo' | 'color' | 'talle'>; chico?: boolean }) {
-  const talle = fmtTalle(m.talle)
-  const txt = chico ? 'text-[11px]' : 'text-xs'
-  return (
-    <span className="flex flex-wrap items-center gap-1.5">
-      <span className={`${chico ? 'text-sm' : 'text-[15px]'} font-semibold text-ink`}>{m.codigo}</span>
-      {m.color && (
-        <span className={`rounded-md bg-sky-500/15 px-1.5 py-0.5 ${txt} font-semibold text-sky-400`} title="Color">{m.color}</span>
-      )}
-      {talle && (
-        <span className={`rounded-md bg-violet-500/15 px-1.5 py-0.5 ${txt} font-semibold text-violet-400`} title="Talle">{talle}</span>
-      )}
-    </span>
-  )
-}

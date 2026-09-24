@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Loader2, MapPin, Search, Trash2, Download, RefreshCw } from 'lucide-react'
+import { Loader2, MapPin, Search, X, Download, RefreshCw } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
-import { ChipsArticulo as Etiquetas, cargarMapeo, type Mapeo } from '@/lib/mapeo'
+import { cargarMapeo, type Mapeo } from '@/lib/mapeo'
 
-/** Mapeo depósito · Orden mapeado: el recorrido completo, agrupado por ubicación */
+/** Mapeo depósito · Orden mapeado: cada artículo con su(s) ubicación(es) */
 export default function MapeoOrden() {
   const { can } = useAuth()
   const puedeBorrar = can('mayorista.mapeo.borrar')
@@ -37,30 +37,25 @@ export default function MapeoOrden() {
 
   const onRecargar = () => void cargar()
 
-  // Posición = lugar en el recorrido (1..n), sin huecos aunque se borre algo
-  const ordenadas = useMemo(
-    () => [...filas].sort((a, b) => a.orden - b.orden).map((m, i) => ({ ...m, pos: i + 1 })),
-    [filas],
-  )
+  // Un artículo por fila con todas sus ubicaciones, en el orden del recorrido
+  // (el artículo aparece donde se escaneó por primera vez)
+  const articulos = useMemo(() => {
+    const m = new Map<string, { codigo: string; ubicaciones: Mapeo[] }>()
+    for (const f of [...filas].sort((x, y) => x.orden - y.orden)) {
+      const a = m.get(f.codigo) ?? { codigo: f.codigo, ubicaciones: [] }
+      a.ubicaciones.push(f)
+      m.set(f.codigo, a)
+    }
+    return [...m.values()]
+  }, [filas])
 
   const visibles = useMemo(() => {
     const q = busqueda.trim().toUpperCase()
-    if (!q) return ordenadas
-    return ordenadas.filter((m) =>
-      [m.codigo, m.color, m.talle, m.ubicacion].some((v) => String(v ?? '').toUpperCase().includes(q)),
+    if (!q) return articulos
+    return articulos.filter(
+      (a) => a.codigo.toUpperCase().includes(q) || a.ubicaciones.some((u) => (u.ubicacion ?? '').toUpperCase().includes(q)),
     )
-  }, [ordenadas, busqueda])
-
-  // Agrupa tramos consecutivos con la misma ubicación (respeta el recorrido)
-  const grupos = useMemo(() => {
-    const out: { ubicacion: string | null; items: typeof visibles }[] = []
-    for (const m of visibles) {
-      const ult = out[out.length - 1]
-      if (ult && ult.ubicacion === m.ubicacion) ult.items.push(m)
-      else out.push({ ubicacion: m.ubicacion, items: [m] })
-    }
-    return out
-  }, [visibles])
+  }, [articulos, busqueda])
 
   async function confirmarBorrar() {
     if (!borrar || !supabase) return
@@ -80,13 +75,9 @@ export default function MapeoOrden() {
   async function exportar() {
     const XLSX = await import('xlsx')
     const wb = XLSX.utils.book_new()
-    const datos = ordenadas.map((m) => ({
-      Posición: m.pos,
-      Ubicación: m.ubicacion ?? '',
-      Artículo: m.codigo,
-      Color: m.color ?? '',
-      Talle: m.talle ?? '',
-      Escaneado: new Date(m.escaneado_at).toLocaleString('es-AR'),
+    const datos = articulos.map((a) => ({
+      Artículo: a.codigo,
+      Ubicaciones: a.ubicaciones.map((u) => u.ubicacion ?? 'Sin ubicación').join(', '),
     }))
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(datos), 'Mapeo')
     XLSX.writeFile(wb, `mapeo_deposito_${new Date().toISOString().slice(0, 10)}.xlsx`)
@@ -97,7 +88,7 @@ export default function MapeoOrden() {
       <BackButton />
       <header className="mb-3 mt-2">
         <h1 className="font-display text-2xl font-semibold text-ink">Orden mapeado</h1>
-        <p className="text-sm text-sub">{filas.length} artículos en el recorrido del depósito.</p>
+        <p className="text-sm text-sub">{articulos.length} artículos mapeados.</p>
       </header>
       <div className="space-y-3 pb-4">
         <div className="flex flex-wrap items-center gap-2">
@@ -122,7 +113,7 @@ export default function MapeoOrden() {
           </button>
           <button
             onClick={() => void exportar()}
-            disabled={ordenadas.length === 0}
+            disabled={articulos.length === 0}
             className="btn-press inline-flex h-11 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-sm font-medium text-ink transition hover:bg-surface2 disabled:opacity-60"
           >
             <Download size={16} aria-hidden /> Excel
@@ -142,47 +133,42 @@ export default function MapeoOrden() {
             {busqueda ? 'No hay artículos que coincidan con la búsqueda.' : 'Todavía no hay nada mapeado.'}
           </p>
         ) : (
-          <div className="space-y-3">
-            {grupos.map((g) => (
-              <div key={`${g.items[0].id}`} className="overflow-hidden rounded-2xl border border-line bg-surface">
-                <div className="flex items-center justify-between border-b border-line px-4 py-2">
-                  <span className="flex items-center gap-1.5 font-display text-sm font-semibold text-ink">
-                    <MapPin size={14} aria-hidden className="text-amber-500" />
-                    {g.ubicacion ?? <span className="font-normal text-sub">Sin ubicación</span>}
-                  </span>
-                  <span className="text-xs tabular-nums text-sub">
-                    #{g.items[0].pos}{g.items.length > 1 ? `–${g.items[g.items.length - 1].pos}` : ''}
-                  </span>
-                </div>
-                <ul className="divide-y divide-line/60">
-                  {g.items.map((m) => (
-                    <li key={m.id} className="flex items-center gap-3 px-4 py-2">
-                      <span className="w-10 shrink-0 text-right font-mono text-sm font-semibold tabular-nums text-sub">{m.pos}</span>
-                      <span className="min-w-0 flex-1">
-                        <Etiquetas m={m} chico />
-                      </span>
-                      {puedeBorrar && (
+          <ul className="divide-y divide-line/60 overflow-hidden rounded-2xl border border-line bg-surface">
+            {visibles.map((a) => (
+              <li key={a.codigo} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2.5">
+                <span className="min-w-[7rem] text-[15px] font-semibold text-ink">{a.codigo}</span>
+                <span className="flex flex-1 flex-wrap items-center gap-1.5">
+                  {a.ubicaciones.map((u) => (
+                    <span
+                      key={u.id}
+                      className="inline-flex items-center gap-1 rounded-lg bg-amber-500/15 py-0.5 pl-2 pr-1 text-xs font-semibold text-amber-500"
+                    >
+                      <MapPin size={12} aria-hidden />
+                      {u.ubicacion ?? 'Sin ubicación'}
+                      {puedeBorrar ? (
                         <button
-                          onClick={() => setBorrar(m)}
-                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sub transition hover:bg-brand-600/10 hover:text-brand-400"
-                          title="Quitar del mapeo"
-                          aria-label={`Quitar ${m.codigo} del mapeo`}
+                          onClick={() => setBorrar(u)}
+                          className="ml-0.5 flex h-6 w-6 items-center justify-center rounded-md text-amber-500/70 transition hover:bg-brand-600/15 hover:text-brand-400"
+                          title="Quitar de esta ubicación"
+                          aria-label={`Quitar ${a.codigo} de ${u.ubicacion ?? 'sin ubicación'}`}
                         >
-                          <Trash2 size={16} aria-hidden />
+                          <X size={13} aria-hidden />
                         </button>
+                      ) : (
+                        <span className="w-1" />
                       )}
-                    </li>
+                    </span>
                   ))}
-                </ul>
-              </div>
+                </span>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
 
         <ConfirmDialog
           open={!!borrar}
-          title="¿Quitar del mapeo?"
-          message={borrar ? `${borrar.codigo} sale del orden. Si lo volvés a escanear, entra al final.` : ''}
+          title="¿Quitar de la ubicación?"
+          message={borrar ? `${borrar.codigo} sale de ${borrar.ubicacion ?? 'sin ubicación'}.` : ''}
           confirmLabel="Quitar"
           busy={borrando}
           onCancel={() => setBorrar(null)}
