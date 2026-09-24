@@ -104,12 +104,15 @@ async function sha256Hex(texto: string): Promise<string> {
 }
 
 export default function ContadorClientes() {
-  const { can, isAdmin } = useAuth()
+  const { can, isAdmin, perfil } = useAuth()
   const puedeGestionar = isAdmin || can('contador.gestionar')
+  // Cada local ve solo lo suyo (la base igual lo filtra por RLS); la central necesita contador.ver_todo
+  const verTodo = isAdmin || can('contador.ver_todo')
+  const miLocal = perfil?.local ?? ''
   const [params, setParams] = useSearchParams()
   const tab = params.get('tab') === 'camaras' && puedeGestionar ? 'camaras' : 'tablero'
   const preset = (PRESETS.some((p) => p.id === params.get('preset')) ? params.get('preset') : '7d') as Preset
-  const fLocal = params.get('local') ?? ''
+  const fLocal = verTodo ? params.get('local') ?? '' : miLocal
   const rango = useMemo(() => rangoDe(preset), [preset])
 
   const [datos, setDatos] = useState<Resumen | null>(null)
@@ -142,7 +145,7 @@ export default function ContadorClientes() {
   }, [cargar])
 
   useEffect(() => {
-    void sb().from('locales').select('codigo').order('codigo').then(({ data }) => setLocales((data ?? []).map((l) => l.codigo as string)))
+    void sb().from('locales').select('codigo').order('codigo').then(({ data }) => setLocales((data ?? []).map((l) => l.codigo as string).filter((c) => verTodo || c === miLocal)))
     void (async () => {
       const { data } = await sb().from('config_app').select('valor').eq('clave', CLAVE_VISTA).maybeSingle()
       const vista = typeof data?.valor === 'string' ? data.valor : ''

@@ -351,6 +351,7 @@ function RolPermisosModal({
       'contador.gestionar': 'locales',
       'ia_camaras.view': 'sistemas',
       'conversion.view': 'locales',
+      'contador.ver_todo': 'locales',
       'encuestas.gestionar': 'marketing',
       'banner.editar': 'marketing',
       'qr.regenerar': 'locales',

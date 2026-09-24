@@ -149,8 +149,8 @@ export default function TasaConversion() {
 
           {elegido && <DetalleLocal l={elegido} nombre={nombres[elegido.local]} tickets={ticketsHoy?.get(elegido.local)} hayVentas={!!ticketsHoy} />}
 
-          {/* Todos los locales */}
-          <div className="overflow-x-auto rounded-2xl border border-line bg-surface p-4">
+          {/* Todos los locales (solo la central: cada local ve únicamente el suyo por RLS) */}
+          {locales.length > 1 && <div className="overflow-x-auto rounded-2xl border border-line bg-surface p-4">
             <table className="w-full text-sm">
               <thead className="text-left text-[11px] uppercase tracking-wider text-sub/70">
                 <tr>
@@ -179,7 +179,7 @@ export default function TasaConversion() {
                 })}
               </tbody>
             </table>
-          </div>
+          </div>}
         </div>
       )}
     </Layout>

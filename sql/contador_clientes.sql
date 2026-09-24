@@ -194,3 +194,39 @@ AS $$
 $$;
 REVOKE ALL ON FUNCTION public.contador_locales_hoy() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.contador_locales_hoy() TO authenticated;
+
+-- ============================================================
+-- CADA LOCAL VE SOLO LO SUYO (conteos, PC y link del video en vivo).
+-- La central (Sistemas/gerencia) necesita 'contador.ver_todo'; admin ve todo.
+-- Reemplaza las policies de SELECT de arriba. Usa private.tiene_permiso (respeta
+-- overrides por usuario) y private.mi_local() (usuarios.local).
+-- ============================================================
+INSERT INTO public.permisos (clave, modulo, accion, label, orden) VALUES
+  ('conversion.view',   'locales', 'view',     'Ver tasa de conversión',                  863),
+  ('contador.ver_todo', 'locales', 'ver_todo', 'Ver conteo y video de TODOS los locales', 864)
+ON CONFLICT (clave) DO NOTHING;
+
+CREATE OR REPLACE FUNCTION private.contador_puede_ver(p_local text)
+RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
+AS $$
+  SELECT (private.tiene_permiso('contador.view') OR private.tiene_permiso('ia_camaras.view') OR private.tiene_permiso('conversion.view'))
+     AND (private.tiene_permiso('contador.ver_todo')
+          OR upper(p_local) = upper(coalesce(private.mi_local(), '')))
+$$;
+REVOKE ALL ON FUNCTION private.contador_puede_ver(text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION private.contador_puede_ver(text) TO authenticated;
+
+DROP POLICY IF EXISTS contador_visitas_ver ON public.contador_visitas;
+CREATE POLICY contador_visitas_ver ON public.contador_visitas
+  FOR SELECT TO authenticated USING (private.contador_puede_ver(local));
+
+DROP POLICY IF EXISTS contador_disp_ver ON public.contador_dispositivos;
+CREATE POLICY contador_disp_ver ON public.contador_dispositivos
+  FOR SELECT TO authenticated USING (private.contador_puede_ver(local));
+
+DROP POLICY IF EXISTS contador_disp_gestion ON public.contador_dispositivos;
+CREATE POLICY contador_disp_gestion ON public.contador_dispositivos
+  FOR ALL TO authenticated
+  USING (private.tiene_permiso('contador.gestionar'))
+  WITH CHECK (private.tiene_permiso('contador.gestionar'));
