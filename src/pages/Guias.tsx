@@ -536,6 +536,10 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
   const [observaciones, setObservaciones] = useState(guia?.observaciones || '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Guardada En Proceso: solo se editan N° remito, bultos y estado (la base también lo exige:
+  // sql/guias_bloqueo_en_proceso.sql). Se mira el estado guardado, no el elegido en el formulario.
+  const bloqueada = guia != null && estadoDe(guia) === 'EN_PROCESO'
+  const clsBloq = bloqueada ? ' cursor-not-allowed opacity-60' : ''
 
   const [openCliDrop, setOpenCliDrop] = useState(false)
   const [busqCliente, setBusqCliente] = useState('')
@@ -599,7 +603,13 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
     if (!nroCliente.trim()) { setError('El Nro Cliente es obligatorio.'); return }
     setBusy(true); setError(null)
 
-    const payload: Record<string, unknown> = {
+    const payload: Record<string, unknown> = bloqueada ? {
+      en_proceso: estado === 'EN_PROCESO',
+      finalizado: estado === 'FINALIZADO_FACT' || estado === 'FINALIZADO_A_CAJA',
+      estado,
+      nro_remito: nroRemito.trim() || null,
+      bulto: bulto ? Number(bulto) || null : null,
+    } : {
       nro_pedido: nroPedido.trim(),
       nro_cliente: nroCliente.trim(),
       razon_social: razonSocial || null,
@@ -622,7 +632,7 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
         const obsCliente = clientes.find((cl) => cl.n_cliente === nroCliente.trim())?.obs_facturacion || null
         const obsGuia = observaciones.trim() || null
         const obsFact = [
-          `Generado desde Guia N° ${payload.nro_pedido}`,
+          `Generado desde Guia N° ${nroPedido.trim()}`,
           obsGuia || obsCliente,
         ].filter(Boolean).join(' | ')
         const { data: existente } = await supabase.from('facturacion_fabrica').select('id').eq('guia_id', guia.id).limit(1)
@@ -656,7 +666,7 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
         if (esNotaCreditoEdit) {
           await sincronizarNotaCredito(guia.id)
         }
-        void registrarHistorial('guia', guia.id, 'modificacion', usuario, `Guia N° ${payload.nro_pedido}`)
+        void registrarHistorial('guia', guia.id, 'modificacion', usuario, `Guia N° ${nroPedido.trim()}`)
       }
     } else {
       result = await supabase.from('guias').insert(payload).select().single()
@@ -702,6 +712,12 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
 
         <form onSubmit={(e) => void handleSubmit(e)} className="flex-1 overflow-y-auto px-5 py-4">
           {error && <p className="mb-3 rounded-xl border border-brand-600/30 bg-brand-600/10 p-2 text-xs text-brand-400">{error}</p>}
+          {bloqueada && (
+            <p className="mb-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-400">
+              Guía <strong>En Proceso</strong>: solo se pueden cambiar N° remito, bultos y estado. Para corregir otro dato,
+              pasala a <strong>Nuevo</strong>, guardá y volvé a editarla.
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-x-4 gap-y-3">
             {/* Fecha (automatica) */}
             <label className="block">
@@ -712,14 +728,14 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
             {/* Nro Pedido */}
             <label className="block">
               <span className="mb-0.5 block text-[11px] font-medium text-sub">Nro Pedido *</span>
-              <input value={nroPedido} onChange={(e) => setNroPedido(e.target.value)} placeholder="874, 824, 682" className={inputCls} />
+              <input value={nroPedido} onChange={(e) => setNroPedido(e.target.value)} disabled={bloqueada} placeholder="874, 824, 682" className={inputCls + clsBloq} />
             </label>
 
             {/* Nro Cliente + Razon Social */}
             <label className="block relative">
               <span className="mb-0.5 block text-[11px] font-medium text-sub">Nro Cliente *</span>
-              <input value={openCliDrop ? busqCliente : (nroCliente || '')} onChange={(e) => { setBusqCliente(e.target.value); setOpenCliDrop(true) }} onFocus={() => setOpenCliDrop(true)} placeholder="Buscar por N° o nombre..." className={inputCls} />
-              {openCliDrop && (
+              <input value={openCliDrop ? busqCliente : (nroCliente || '')} onChange={(e) => { setBusqCliente(e.target.value); setOpenCliDrop(true) }} onFocus={() => setOpenCliDrop(true)} disabled={bloqueada} placeholder="Buscar por N° o nombre..." className={inputCls + clsBloq} />
+              {openCliDrop && !bloqueada && (
                 <ul className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-line bg-surface shadow-lg">
                   <li><button type="button" onClick={() => setOpenCliDrop(false)} className="w-full px-3 py-1.5 text-left text-[11px] text-sub hover:bg-line">Cerrar</button></li>
                   {filteredClientes.slice(0, 50).map((c) => (
@@ -739,7 +755,7 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
               <span className="mb-0.5 block text-[11px] font-medium text-sub">Pedido</span>
               {!showPedidoCustom ? (
                 <>
-                  <select value={pedido} onChange={(e) => { if (e.target.value === '__custom__') setShowPedidoCustom(true); else setPedido(e.target.value) }} className={selectCls}>
+                  <select value={pedido} onChange={(e) => { if (e.target.value === '__custom__') setShowPedidoCustom(true); else setPedido(e.target.value) }} disabled={bloqueada} className={selectCls + clsBloq}>
                     <option value="">-- seleccionar --</option>
                     {pedidoOpciones.map((o) => <option key={o} value={o}>{o}</option>)}
                     <option value="__custom__">+ Crear nuevo...</option>
@@ -758,7 +774,7 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
             <label className="block relative">
               <span className="mb-0.5 block text-[11px] font-medium text-sub">Sucursal</span>
               {!showSucursalCustom ? (
-                <select value={sucursal} onChange={(e) => { if (e.target.value === '__custom__') setShowSucursalCustom(true); else setSucursal(e.target.value) }} className={selectCls}>
+                <select value={sucursal} onChange={(e) => { if (e.target.value === '__custom__') setShowSucursalCustom(true); else setSucursal(e.target.value) }} disabled={bloqueada} className={selectCls + clsBloq}>
                   <option value="">-- seleccionar --</option>
                   {sucursalOpciones.map((o) => <option key={o} value={o}>{o}</option>)}
                   <option value="__custom__">+ Crear nuevo...</option>
@@ -798,7 +814,7 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
             {/* Observaciones */}
             <label className="block sm:col-span-2">
               <span className="mb-0.5 block text-[11px] font-medium text-sub">Observaciones</span>
-              <textarea value={observaciones} onChange={(e) => setObservaciones(e.target.value)} rows={3} placeholder="Notas adicionales..." className={inputCls + ' resize-none'} />
+              <textarea value={observaciones} onChange={(e) => setObservaciones(e.target.value)} disabled={bloqueada} rows={3} placeholder="Notas adicionales..." className={inputCls + ' resize-none' + clsBloq} />
             </label>
           </div>
 
