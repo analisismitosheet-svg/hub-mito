@@ -37,10 +37,11 @@ INSERT INTO public.permisos (clave, modulo, accion, label, orden) VALUES
   ('mayorista.mapeo.gestionar','mayorista', 'mapeo.gestionar','Crear/borrar pasillos y niveles', 953)
 ON CONFLICT (clave) DO NOTHING;
 
--- El rol Mayorista ve el mapeo (orden y lista de pasillos)
+-- El rol Mayorista ve el mapeo (orden y lista de pasillos) y escanea
 INSERT INTO public.rol_permisos (rol, permiso_clave)
-SELECT 'mayorista', 'mayorista.mapeo.view'
-WHERE NOT EXISTS (SELECT 1 FROM public.rol_permisos WHERE rol = 'mayorista' AND permiso_clave = 'mayorista.mapeo.view');
+SELECT 'mayorista', p.clave
+FROM (VALUES ('mayorista.mapeo.view'), ('mayorista.mapeo.escanear')) AS p(clave)
+WHERE NOT EXISTS (SELECT 1 FROM public.rol_permisos WHERE rol = 'mayorista' AND permiso_clave = p.clave);
 
 -- Misma definición que en sql/contador_clientes.sql (por si ese no se corrió)
 CREATE OR REPLACE FUNCTION private.tengo_permiso(p_clave text)
