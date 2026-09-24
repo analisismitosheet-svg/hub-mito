@@ -538,7 +538,9 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
   const [error, setError] = useState<string | null>(null)
   // Guardada En Proceso: solo se editan N° remito, bultos y estado (la base también lo exige:
   // sql/guias_bloqueo_en_proceso.sql). Se mira el estado guardado, no el elegido en el formulario.
-  const bloqueada = guia != null && estadoDe(guia) === 'EN_PROCESO'
+  // Los administradores pueden editar todo.
+  const { isAdmin } = useAuth()
+  const bloqueada = !isAdmin && guia != null && estadoDe(guia) === 'EN_PROCESO'
   const clsBloq = bloqueada ? ' cursor-not-allowed opacity-60' : ''
 
   const [openCliDrop, setOpenCliDrop] = useState(false)
