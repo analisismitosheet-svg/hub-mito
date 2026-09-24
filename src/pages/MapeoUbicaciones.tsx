@@ -7,7 +7,9 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import { tamanoMembrete } from '@/components/EtiquetasBultos'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
-import { MAX_PASILLOS, cargarUbicaciones, codigoUbicacion, letraPasillo, qrUbicacion, type Ubicacion } from '@/lib/mapeo'
+import {
+  PLANTAS, cargarUbicaciones, codigoUbicacion, letraPasillo, nombrePlanta, numeroPasillo, qrUbicacion, type Ubicacion,
+} from '@/lib/mapeo'
 
 const inputCls =
   'h-11 w-full rounded-xl border border-line bg-surface2 px-3 text-base text-ink outline-none transition placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40'
@@ -25,12 +27,10 @@ function MembreteUbicacion({ u, ancho, alto }: { u: Ubicacion; ancho: number; al
       style={{ width: `${ancho}mm`, height: `${alto}mm`, flexDirection: 'row', alignItems: 'center', gap: '2mm', padding: '2mm' }}
     >
       <QRCodeSVG value={qrUbicacion(u.codigo)} size={256} level="M" style={{ width: `${qrMm}mm`, height: `${qrMm}mm`, flexShrink: 0 }} />
-      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0, flex: 1, textAlign: 'center' }}>
-        <div style={{ fontSize: `${alto * 0.07}mm`, fontWeight: 700 }}>PASILLO</div>
-        <div style={{ fontSize: `${alto * 0.3}mm`, fontWeight: 800, lineHeight: 1 }}>{letraPasillo(u.pasillo)}</div>
-        <div style={{ fontSize: `${alto * 0.07}mm`, fontWeight: 700, marginTop: '1mm' }}>NIVEL</div>
-        <div style={{ fontSize: `${alto * 0.3}mm`, fontWeight: 800, lineHeight: 1 }}>{u.nivel}</div>
-        <div style={{ fontSize: `${alto * 0.06}mm`, fontWeight: 600, marginTop: '1mm' }}>{u.codigo}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '1mm', minWidth: 0, flex: 1, textAlign: 'center' }}>
+        <div style={{ fontSize: `${Math.min(alto * 0.26, ancho * 0.07)}mm`, fontWeight: 800, lineHeight: 1, whiteSpace: 'nowrap' }}>{u.codigo}</div>
+        <div style={{ fontSize: `${alto * 0.075}mm`, fontWeight: 700, textTransform: 'uppercase' }}>{nombrePlanta(u.planta)}</div>
+        <div style={{ fontSize: `${alto * 0.075}mm`, fontWeight: 700 }}>PASILLO {letraPasillo(u.pasillo)} · NIVEL {u.nivel}</div>
       </div>
     </div>
   )
@@ -73,7 +73,9 @@ export default function MapeoUbicaciones() {
   const [aviso, setAviso] = useState<string | null>(null)
 
   // Crear
-  const [pasillos, setPasillos] = useState('')
+  const [planta, setPlanta] = useState('PB')
+  const [desde, setDesde] = useState('')
+  const [hasta, setHasta] = useState('')
   const [niveles, setNiveles] = useState('')
   const [creando, setCreando] = useState(false)
 
@@ -82,8 +84,8 @@ export default function MapeoUbicaciones() {
   const [imprimir, setImprimir] = useState(false)
   const [tam, setTam] = useState(tamanoMembrete)
 
-  // Borrar un pasillo entero
-  const [borrarPasillo, setBorrarPasillo] = useState<number | null>(null)
+  // Borrar un pasillo entero (de una planta)
+  const [borrarPasillo, setBorrarPasillo] = useState<{ planta: string; pasillo: number } | null>(null)
   const [borrando, setBorrando] = useState(false)
 
   const cargar = useCallback(async () => {
@@ -102,19 +104,35 @@ export default function MapeoUbicaciones() {
     void cargar()
   }, [cargar])
 
+  // Agrupado por planta y pasillo (la lista ya viene ordenada)
   const porPasillo = useMemo(() => {
-    const m = new Map<number, Ubicacion[]>()
-    for (const u of lista) m.set(u.pasillo, [...(m.get(u.pasillo) ?? []), u])
-    return [...m.entries()].sort((a, b) => a[0] - b[0])
+    const m = new Map<string, { planta: string; pasillo: number; us: Ubicacion[] }>()
+    for (const u of lista) {
+      const k = `${u.planta}|${u.pasillo}`
+      const g = m.get(k) ?? { planta: u.planta, pasillo: u.pasillo, us: [] }
+      g.us.push(u)
+      m.set(k, g)
+    }
+    return [...m.values()]
   }, [lista])
 
-  /** Crea pasillos A.. (P letras) con niveles 1..N; los que ya existen quedan igual */
+  /** Crea en la planta los pasillos desde..hasta (letras) con niveles 1..N; los que ya existen quedan igual */
   async function crear(e: FormEvent) {
     e.preventDefault()
-    const p = Math.floor(Number(pasillos))
+    const pl = planta.trim().toUpperCase().replace(/\s+/g, '')
+    const p1 = numeroPasillo(desde)
+    const p2 = hasta.trim() ? numeroPasillo(hasta) : p1
     const n = Math.floor(Number(niveles))
-    if (!(p >= 1 && p <= MAX_PASILLOS) || !(n >= 1 && n <= 99)) {
-      setError(`Poné entre 1 y ${MAX_PASILLOS} pasillos (A a Z) y entre 1 y 99 niveles.`)
+    if (!/^[A-Z0-9]{1,4}$/.test(pl)) {
+      setError('Poné la planta (ej: PB).')
+      return
+    }
+    if (p1 == null || p2 == null || p2 < p1) {
+      setError('El pasillo va con una letra (A a Z). Si ponés "hasta", tiene que ser igual o posterior.')
+      return
+    }
+    if (!(n >= 1 && n <= 99)) {
+      setError('Poné entre 1 y 99 niveles.')
       return
     }
     if (!supabase) return
@@ -122,7 +140,7 @@ export default function MapeoUbicaciones() {
     setError(null)
     setAviso(null)
     const filas: Ubicacion[] = []
-    for (let i = 1; i <= p; i++) for (let j = 1; j <= n; j++) filas.push({ codigo: codigoUbicacion(i, j), pasillo: i, nivel: j })
+    for (let i = p1; i <= p2; i++) for (let j = 1; j <= n; j++) filas.push({ codigo: codigoUbicacion(pl, i, j), planta: pl, pasillo: i, nivel: j })
     const existentes = new Set(lista.map((u) => u.codigo))
     const nuevas = filas.filter((f) => !existentes.has(f.codigo))
     const { error: e2 } = nuevas.length
@@ -140,13 +158,14 @@ export default function MapeoUbicaciones() {
   async function confirmarBorrarPasillo() {
     if (borrarPasillo == null || !supabase) return
     setBorrando(true)
-    const { error: e } = await supabase.from('mapeo_ubicaciones').delete().eq('pasillo', borrarPasillo)
+    const { planta: pl, pasillo: p } = borrarPasillo
+    const { error: e } = await supabase.from('mapeo_ubicaciones').delete().eq('planta', pl).eq('pasillo', p)
     setBorrando(false)
     if (e) setError(e.message)
     else {
-      const p = borrarPasillo
-      const delPasillo = new Set(lista.filter((u) => u.pasillo === p).map((u) => u.codigo))
-      setLista((prev) => prev.filter((u) => u.pasillo !== p))
+      const esDel = (u: Ubicacion) => u.planta === pl && u.pasillo === p
+      const delPasillo = new Set(lista.filter(esDel).map((u) => u.codigo))
+      setLista((prev) => prev.filter((u) => !esDel(u)))
       setSel((prev) => new Set([...prev].filter((c) => !delPasillo.has(c))))
     }
     setBorrarPasillo(null)
@@ -163,6 +182,17 @@ export default function MapeoUbicaciones() {
       return n
     })
   }
+
+  // Qué se va a crear, para mostrarlo antes de tocar Crear
+  const previa = (() => {
+    const p1 = numeroPasillo(desde)
+    const n = Math.floor(Number(niveles))
+    const pl = planta.trim().toUpperCase() || 'PB'
+    if (p1 == null || !(n >= 1)) return 'Ej: planta PB, pasillo A, 8 niveles: PB-A1 a PB-A8. '
+    const p2 = hasta.trim() ? (numeroPasillo(hasta) ?? p1) : p1
+    const rango = p2 > p1 ? `pasillos ${letraPasillo(p1)} a ${letraPasillo(p2)}` : `pasillo ${letraPasillo(p1)}`
+    return `Crea ${rango}: ${codigoUbicacion(pl, p1, 1)} a ${codigoUbicacion(pl, Math.max(p1, p2), n)}. `
+  })()
 
   const seleccionadas = useMemo(() => lista.filter((u) => sel.has(u.codigo)), [lista, sel])
   const todosCodigos = useMemo(() => lista.map((u) => u.codigo), [lista])
@@ -186,14 +216,25 @@ export default function MapeoUbicaciones() {
       {puedeGestionar && (
         <form onSubmit={(e) => void crear(e)} className="mb-4 rounded-2xl border border-line bg-surface p-4 shadow-soft">
           <p className="mb-2.5 font-display text-sm font-semibold text-ink">Crear ubicaciones</p>
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-[1fr_1fr_auto]">
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-[1fr_1fr_1fr_1fr_auto]">
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-sub">Cantidad de pasillos</span>
-              <input type="number" inputMode="numeric" min={1} max={MAX_PASILLOS} value={pasillos} onChange={(e) => setPasillos(e.target.value)} placeholder="Ej: 6 (A a F)" className={inputCls} />
+              <span className="mb-1 block text-xs font-medium text-sub">Planta</span>
+              <input list="mapeo-plantas" value={planta} onChange={(e) => setPlanta(e.target.value.toUpperCase())} placeholder="PB" className={inputCls} />
+              <datalist id="mapeo-plantas">
+                {PLANTAS.map((p) => <option key={p.codigo} value={p.codigo}>{p.nombre}</option>)}
+              </datalist>
             </label>
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-sub">Niveles por pasillo</span>
-              <input type="number" inputMode="numeric" min={1} max={99} value={niveles} onChange={(e) => setNiveles(e.target.value)} placeholder="Ej: 4" className={inputCls} />
+              <span className="mb-1 block text-xs font-medium text-sub">Pasillo</span>
+              <input value={desde} onChange={(e) => setDesde(e.target.value.toUpperCase().slice(0, 1))} placeholder="A" maxLength={1} className={inputCls} />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-sub">Hasta pasillo (opcional)</span>
+              <input value={hasta} onChange={(e) => setHasta(e.target.value.toUpperCase().slice(0, 1))} placeholder="-" maxLength={1} className={inputCls} />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-sub">Niveles</span>
+              <input type="number" inputMode="numeric" min={1} max={99} value={niveles} onChange={(e) => setNiveles(e.target.value)} placeholder="Ej: 8" className={inputCls} />
             </label>
             <button
               type="submit"
@@ -204,10 +245,8 @@ export default function MapeoUbicaciones() {
             </button>
           </div>
           <p className="mt-2 text-xs text-sub">
-            {Number(pasillos) >= 1 && Number(pasillos) <= MAX_PASILLOS
-              ? `Crea los pasillos A a ${letraPasillo(Math.floor(Number(pasillos)))}, cada uno con esos niveles. `
-              : 'Los pasillos van por letra (A a Z). '}
-            Las que ya existen no se tocan: para sumar pasillos, poné el total nuevo.
+            {previa}
+            Las que ya existen no se tocan (sirve para sumar niveles a un pasillo).
           </p>
         </form>
       )}
@@ -241,25 +280,28 @@ export default function MapeoUbicaciones() {
         </p>
       ) : (
         <div className="space-y-3 pb-4">
-          {porPasillo.map(([p, us]) => {
+          {porPasillo.map(({ planta: pl, pasillo: p, us }) => {
             const codigos = us.map((u) => u.codigo)
             const todos = codigos.every((c) => sel.has(c))
             return (
-              <div key={p} className="overflow-hidden rounded-2xl border border-line bg-surface">
+              <div key={`${pl}|${p}`} className="overflow-hidden rounded-2xl border border-line bg-surface">
                 <div className="flex items-center gap-2 border-b border-line px-4 py-2">
                   <label className="flex min-h-[2.5rem] flex-1 cursor-pointer items-center gap-2.5">
                     <input type="checkbox" checked={todos} onChange={() => alternar(codigos)} className="h-4 w-4 accent-amber-600" />
-                    <span className="font-display text-sm font-semibold text-ink">Pasillo {letraPasillo(p)}</span>
+                    <span className="font-display text-sm font-semibold text-ink">
+                      <span className="mr-1.5 rounded-md bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-500" title={nombrePlanta(pl)}>{pl}</span>
+                      Pasillo {letraPasillo(p)}
+                    </span>
                     <span className="inline-flex items-center gap-1 text-xs text-sub">
                       <Layers size={12} aria-hidden /> {us.length} {us.length === 1 ? 'nivel' : 'niveles'}
                     </span>
                   </label>
                   {puedeGestionar && (
                     <button
-                      onClick={() => setBorrarPasillo(p)}
+                      onClick={() => setBorrarPasillo({ planta: pl, pasillo: p })}
                       className="flex h-9 w-9 items-center justify-center rounded-lg text-sub transition hover:bg-brand-600/10 hover:text-brand-400"
                       title="Borrar pasillo"
-                      aria-label={`Borrar pasillo ${letraPasillo(p)}`}
+                      aria-label={`Borrar pasillo ${letraPasillo(p)} de ${nombrePlanta(pl)}`}
                     >
                       <Trash2 size={16} aria-hidden />
                     </button>
@@ -340,7 +382,7 @@ export default function MapeoUbicaciones() {
 
       <ConfirmDialog
         open={borrarPasillo != null}
-        title={`¿Borrar el pasillo ${borrarPasillo != null ? letraPasillo(borrarPasillo) : ''}?`}
+        title={borrarPasillo ? `¿Borrar ${borrarPasillo.planta} pasillo ${letraPasillo(borrarPasillo.pasillo)}?` : ''}
         message="Se borran todos sus niveles de la lista. Lo ya mapeado no se toca."
         confirmLabel="Borrar"
         busy={borrando}
