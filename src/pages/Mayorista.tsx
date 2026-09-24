@@ -7,6 +7,7 @@ import SelectorEmpleado from '@/components/SelectorEmpleado'
 import { supabase } from '@/lib/supabase'
 import { FILTRO_EMPLEADOS_ACTIVOS } from '@/lib/empleadosActivos'
 import { useAuth } from '@/context/AuthContext'
+import { ubicacionesDeArticulos } from '@/lib/mapeo'
 
 type EstadoM = 'pendiente' | 'hecho' | 'faltante'
 /** Qué repos se listan. Por defecto la semana vigente (lunes a domingo, hora Argentina). */
@@ -324,6 +325,10 @@ export default function Mayorista() {
     setCargando(false)
   }, [periodo])
 
+  // Ubicaciones del Mapeo depósito por artículo (código en mayúsculas -> PB-A1, …)
+  const [ubicaciones, setUbicaciones] = useState<Map<string, string[]>>(new Map())
+  const ubicacionesDe = (it: Item) => ubicaciones.get(String(it.codigo ?? '').trim().toUpperCase()) ?? []
+
   // Trae los ítems de UN lote al abrirlo (cache por lote).
   const cargarItemsLote = useCallback(async (loteId: string) => {
     if (!supabase) return
@@ -345,6 +350,10 @@ export default function Mayorista() {
         if (error || chunk.length < PAGE) break
       }
       setItemsCache((prev) => ({ ...prev, [loteId]: all }))
+      // Ubicaciones del mapeo: no frenan la carga; si fallan, se ve igual sin ubicación
+      ubicacionesDeArticulos(all.map((i) => i.codigo ?? ''))
+        .then((m) => setUbicaciones((prev) => new Map([...prev, ...m])))
+        .catch(() => { /* sin mapeo: sin ubicaciones */ })
     } finally {
       setCargandoLote(null)
     }
@@ -806,7 +815,7 @@ export default function Mayorista() {
                                 .filter((it) => {
                                   const t = (busquedaArticulo[key] ?? '').trim().toUpperCase()
                                   if (!t) return true
-                                  return [it.codigo, it.articulo, it.color, it.talle].some((v) => (v ?? '').toUpperCase().includes(t))
+                                  return [it.codigo, it.articulo, it.color, it.talle, ...ubicacionesDe(it)].some((v) => (v ?? '').toUpperCase().includes(t))
                                 })
                                 .map((it) => {
                                 const esHecho = it.estado === 'hecho'
@@ -818,6 +827,11 @@ export default function Mayorista() {
                                         {it.codigo}
                                         {it.color ? ` · ${it.color}` : ''}
                                         {it.talle ? ` · ${it.talle}` : ''}
+                                        {ubicacionesDe(it).length > 0 && (
+                                          <span className="ml-1.5 rounded-md bg-amber-500/15 px-1.5 py-0.5 text-xs font-semibold text-amber-500" title="Ubicación en el depósito">
+                                            ({ubicacionesDe(it).join(' · ')})
+                                          </span>
+                                        )}
                                         {it.cantidad > 1 ? ` · x${it.cantidad}` : ''}
                                         {it.escaneadas > 0 && it.escaneadas < it.cantidad
                                           ? ` · ${it.escaneadas}/${it.cantidad} escaneado`
