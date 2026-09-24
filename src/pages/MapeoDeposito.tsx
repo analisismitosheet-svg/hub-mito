@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
   ScanLine, ListOrdered, Loader2, Check, AlertTriangle, Camera, CameraOff, MapPin,
-  Search, Trash2, Download, RefreshCw, MoveDown,
+  Search, Trash2, Download, RefreshCw, MoveDown, QrCode, Plus,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -23,33 +23,24 @@ interface Mapeo {
 
 /** Lo que devuelve mapeo_escanear() */
 interface FilaEscaneo {
-  estado: 'nuevo' | 'movido' | 'ya_mapeado'
-  id: string
-  orden: number
+  estado: 'nuevo' | 'movido' | 'agregado' | 'ya_aca' | 'ya_mapeado'
+  /** null en 'ya_mapeado' (todavía no se guardó nada) */
+  id: string | null
+  orden: number | null
   codigo: string
   color: string | null
   talle: string | null
   ubicacion: string | null
+  /** otras ubicaciones donde ya estaba el artículo */
+  otras: string | null
 }
+
+/** Qué hacer con un artículo que ya está en otra ubicación */
+type AccionRepetido = 'mover' | 'agregar'
 
 type Vista = 'escanear' | 'orden'
 
 const COLUMNAS = 'id,orden,codigo,color,talle,ubicacion,escaneado_at'
-const CLAVE_UBICACION = 'mapeo_deposito.ubicacion'
-
-function leerUbicacion(): string {
-  try {
-    return localStorage.getItem(CLAVE_UBICACION) ?? ''
-  } catch {
-    return ''
-  }
-}
-
-function guardarUbicacion(u: string) {
-  try {
-    localStorage.setItem(CLAVE_UBICACION, u)
-  } catch { /* sin storage: solo dura la sesión */ }
-}
 
 /** Talle numérico con "T" (T38); de letra tal cual (M, L, U) */
 function fmtTalle(talle: string | null): string | null {
@@ -121,13 +112,15 @@ export default function MapeoDeposito() {
 
   /** Aplica en pantalla lo que devolvió un escaneo (sin recargar todo) */
   const aplicarEscaneo = useCallback((f: FilaEscaneo) => {
-    if (f.estado === 'ya_mapeado') return
+    const { id, orden } = f
+    if (f.estado === 'ya_mapeado' || f.estado === 'ya_aca' || !id || orden == null) return
     setFilas((prev) => {
-      const sin = prev.filter((m) => m.id !== f.id)
+      // Mover: el artículo sale de todas las otras ubicaciones
+      const sin = prev.filter((m) => m.id !== id && !(f.estado === 'movido' && m.codigo === f.codigo))
       return [
         ...sin,
         {
-          id: f.id, orden: f.orden, codigo: f.codigo, color: f.color, talle: f.talle,
+          id, orden, codigo: f.codigo, color: f.color, talle: f.talle,
           ubicacion: f.ubicacion, escaneado_at: new Date().toISOString(),
         },
       ]
@@ -140,7 +133,7 @@ export default function MapeoDeposito() {
       <header className="mb-3 mt-2">
         <h1 className="font-display text-2xl font-semibold text-ink">Mapeo depósito</h1>
         <p className="text-sm text-sub">
-          Recorré el depósito escaneando los artículos en el orden en que están.
+          Escaneá el QR de la ubicación y después los artículos que están ahí.
         </p>
       </header>
 
@@ -194,15 +187,27 @@ export default function MapeoDeposito() {
 
 /* ==================================================================== */
 /*  Parte 1: escanear                                                    */
+/*  Paso 1: QR de la ubicación. Paso 2: artículos de esa ubicación.      */
+/*  Escanear otra ubicación cambia dónde van los artículos siguientes.   */
 /* ==================================================================== */
+
+/** QR de ubicación con prefijo opcional: "UBI:P1-E3" */
+const PREFIJO_UBICACION = /^UBI[:\-_ ]?/i
+
+function limpiarUbicacion(texto: string): string {
+  return texto.trim().replace(PREFIJO_UBICACION, '').trim().toUpperCase()
+}
+
 function PanelEscanear({ filas, onEscaneo }: { filas: Mapeo[]; onEscaneo: (f: FilaEscaneo) => void }) {
-  const [ubicacion, setUbicacion] = useState(leerUbicacion)
+  const [ubicacion, setUbicacion] = useState<string | null>(null)
   const [camara, setCamara] = useState(false)
   const [enViaje, setEnViaje] = useState(0)
   const [mensaje, setMensaje] = useState<{ ok: boolean; texto: string } | null>(null)
-  // Artículo que ya estaba mapeado: se ofrece moverlo a la posición actual
-  const [repetido, setRepetido] = useState<{ bruto: string; fila: FilaEscaneo } | null>(null)
-  const [moviendo, setMoviendo] = useState(false)
+  // Artículo que ya estaba en otra ubicación: se pregunta si moverlo o agregarlo
+  const [repetido, setRepetido] = useState<{ bruto: string; ubicacion: string; fila: FilaEscaneo } | null>(null)
+  const [resolviendo, setResolviendo] = useState<AccionRepetido | null>(null)
+  // Artículos escaneados en la ubicación actual (desde que se leyó su QR)
+  const [enEsta, setEnEsta] = useState(0)
 
   const inputRef = useRef<HTMLInputElement>(null)
   const enfocar = useCallback(() => {
@@ -212,41 +217,54 @@ function PanelEscanear({ filas, onEscaneo }: { filas: Mapeo[]; onEscaneo: (f: Fi
 
   useEffect(() => {
     enfocar()
-  }, [enfocar])
+  }, [enfocar, ubicacion])
 
   const ubicacionRef = useRef(ubicacion)
-  useEffect(() => {
-    ubicacionRef.current = ubicacion
-    guardarUbicacion(ubicacion)
-  }, [ubicacion])
 
-  const escanear = useCallback(
-    async (bruto: string, mover = false) => {
-      const codigo = bruto.trim()
-      if (!codigo || !supabase) return
+  // Ubicaciones ya usadas: si el lector inalámbrico lee una, se toma como cambio de ubicación
+  const conocidasRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    conocidasRef.current = new Set(filas.map((m) => (m.ubicacion ?? '').toUpperCase()).filter(Boolean))
+  }, [filas])
+
+  const fijarUbicacion = useCallback((u: string) => {
+    if (!u) return
+    ubicacionRef.current = u
+    setUbicacion(u)
+    setEnEsta(0)
+    setRepetido(null)
+    setMensaje({ ok: true, texto: `Ubicación ${u}: ahora escaneá los artículos.` })
+  }, [])
+
+  const escanearArticulo = useCallback(
+    async (codigo: string, accion?: AccionRepetido, ubicacionFija?: string) => {
+      // Al resolver un repetido se usa la ubicación del momento en que se escaneó
+      const ubic = ubicacionFija ?? ubicacionRef.current
+      if (!codigo || !ubic || !supabase) return
       setEnViaje((n) => n + 1)
       try {
+        // El servidor traduce el código con las equivalencias de Dragonfish
         const { data, error } = await supabase.rpc('mapeo_escanear', {
           p_codigo: codigo,
-          p_ubicacion: ubicacionRef.current.trim() || null,
-          p_mover: mover,
+          p_ubicacion: ubic,
+          p_accion: accion ?? null,
         })
         if (error) throw new Error(error.message)
         const f = ((Array.isArray(data) ? data[0] : data) ?? null) as FilaEscaneo | null
         if (!f) throw new Error('Sin respuesta del servidor.')
         onEscaneo(f)
+        const etiqueta = [f.codigo, f.color, fmtTalle(f.talle)].filter(Boolean).join(' · ')
         if (f.estado === 'ya_mapeado') {
-          setRepetido({ bruto: codigo, fila: f })
-          setMensaje({
-            ok: false,
-            texto: `${f.codigo} ya está mapeado (posición ${f.orden}${f.ubicacion ? ` · ${f.ubicacion}` : ''})`,
-          })
+          setRepetido({ bruto: codigo, ubicacion: ubic, fila: f })
+          setMensaje(null)
+        } else if (f.estado === 'ya_aca') {
+          setRepetido(null)
+          setMensaje({ ok: false, texto: `${etiqueta} ya está mapeado en ${ubic}` })
         } else {
           setRepetido(null)
-          setMensaje({
-            ok: true,
-            texto: `${f.estado === 'movido' ? 'Movido' : 'Mapeado'}: ${[f.codigo, f.color, fmtTalle(f.talle)].filter(Boolean).join(' · ')}`,
-          })
+          if (ubic === ubicacionRef.current) setEnEsta((n) => n + 1)
+          const verbo = f.estado === 'movido' ? 'Movido' : f.estado === 'agregado' ? 'Agregado' : 'Mapeado'
+          setMensaje({ ok: true, texto: `${verbo}: ${etiqueta}` })
         }
       } catch (e) {
         setRepetido(null)
@@ -258,49 +276,65 @@ function PanelEscanear({ filas, onEscaneo }: { filas: Mapeo[]; onEscaneo: (f: Fi
     [onEscaneo],
   )
 
+  /** Cada lectura (lector, teclado o cámara): ¿ubicación o artículo? */
+  const procesar = useCallback(
+    (texto: string, formato?: string) => {
+      const bruto = texto.trim()
+      if (!bruto) return
+      const esUbicacion =
+        !ubicacionRef.current ||
+        formato === 'QR_CODE' ||
+        PREFIJO_UBICACION.test(bruto) ||
+        conocidasRef.current.has(limpiarUbicacion(bruto))
+      if (esUbicacion) fijarUbicacion(limpiarUbicacion(bruto))
+      else void escanearArticulo(bruto)
+    },
+    [fijarUbicacion, escanearArticulo],
+  )
+
   function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const input = inputRef.current
     if (!input) return
     const v = input.value
     input.value = ''
-    void escanear(v)
+    procesar(v)
     enfocar()
   }
 
-  async function moverRepetido() {
+  async function resolverRepetido(accion: AccionRepetido) {
     if (!repetido) return
-    setMoviendo(true)
-    await escanear(repetido.bruto, true)
-    setMoviendo(false)
+    setResolviendo(accion)
+    await escanearArticulo(repetido.bruto, accion, repetido.ubicacion)
+    setResolviendo(null)
     enfocar()
   }
-
-  // Últimos mapeados (lo más nuevo arriba)
-  const ultimos = useMemo(() => [...filas].sort((a, b) => b.orden - a.orden).slice(0, 15), [filas])
 
   return (
     <div className="space-y-3 pb-4">
-      <div className="space-y-2.5 rounded-2xl border border-line bg-surface p-4 shadow-soft">
-        {/* Ubicación actual: queda fija para todos los escaneos siguientes */}
-        <label className="block">
-          <span className="mb-1 flex items-center gap-1.5 text-xs font-medium text-sub">
-            <MapPin size={13} aria-hidden /> Ubicación actual (pasillo / estante) — opcional
-          </span>
-          <input
-            value={ubicacion}
-            onChange={(e) => setUbicacion(e.target.value.toUpperCase())}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                enfocar()
-              }
-            }}
-            placeholder="Ej: P1-E3"
-            autoComplete="off"
-            className="h-11 w-full rounded-xl border border-line bg-surface2 px-3 text-base font-semibold text-ink outline-none transition placeholder:font-normal placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40"
-          />
-        </label>
+      <div className="space-y-3 rounded-2xl border border-line bg-surface p-4 shadow-soft">
+        {/* Paso actual */}
+        {ubicacion ? (
+          <div className="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5">
+            <MapPin size={22} aria-hidden className="shrink-0 text-amber-500" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs text-sub">Ubicación</p>
+              <p className="truncate font-display text-xl font-bold leading-tight text-ink">{ubicacion}</p>
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="font-display text-xl font-bold leading-tight tabular-nums text-amber-500">{enEsta}</p>
+              <p className="text-[11px] text-sub">artículos</p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 rounded-xl border border-dashed border-line bg-surface2 px-3 py-4">
+            <QrCode size={26} aria-hidden className="shrink-0 text-amber-500" />
+            <div>
+              <p className="font-display font-semibold text-ink">Escaneá el QR de la ubicación</p>
+              <p className="text-xs text-sub">Después se habilitan los códigos de barra de los artículos.</p>
+            </div>
+          </div>
+        )}
 
         {/* Entrada: escáner inalámbrico (escribe + Enter), teclado o cámara */}
         <form onSubmit={onSubmit} className="flex gap-2">
@@ -314,14 +348,15 @@ function PanelEscanear({ filas, onEscaneo }: { filas: Mapeo[]; onEscaneo: (f: Fi
             autoCorrect="off"
             spellCheck={false}
             enterKeyHint="send"
-            placeholder="Escaneá o escribí el código…"
-            aria-label="Código de barra"
-            className="h-11 w-full min-w-0 rounded-xl border border-line bg-surface2 px-3 text-base text-ink outline-none transition placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40"
+            placeholder={ubicacion ? 'Escaneá el artículo…' : 'Escaneá el QR de la ubicación…'}
+            aria-label={ubicacion ? 'Código de barra del artículo' : 'QR de la ubicación'}
+            onBlur={() => { if (!camara) enfocar() }}
+            className="h-12 w-full min-w-0 rounded-xl border border-line bg-surface2 px-3 text-base text-ink outline-none transition placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40"
           />
           <button
             type="button"
             onClick={() => setCamara((c) => !c)}
-            className="btn-press flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-line bg-surface2 text-ink transition hover:bg-line"
+            className="btn-press flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-line bg-surface2 text-ink transition hover:bg-line"
             title={camara ? 'Cerrar cámara' : 'Abrir cámara'}
             aria-label={camara ? 'Cerrar cámara' : 'Abrir cámara'}
           >
@@ -333,7 +368,7 @@ function PanelEscanear({ filas, onEscaneo }: { filas: Mapeo[]; onEscaneo: (f: Fi
           <div aria-live="polite" className="space-y-1.5">
             {mensaje && (
               <div
-                className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-1.5 text-sm font-medium ${
+                className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-sm font-medium ${
                   mensaje.ok
                     ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
                     : 'border-brand-600/40 bg-brand-600/10 text-brand-400'
@@ -343,16 +378,6 @@ function PanelEscanear({ filas, onEscaneo }: { filas: Mapeo[]; onEscaneo: (f: Fi
                   {mensaje.ok ? <Check size={16} className="shrink-0" aria-hidden /> : <AlertTriangle size={16} className="shrink-0" aria-hidden />}
                   <span className="truncate">{mensaje.texto}</span>
                 </span>
-                {repetido && (
-                  <button
-                    onClick={() => void moverRepetido()}
-                    disabled={moviendo}
-                    className="inline-flex min-h-[2.25rem] shrink-0 items-center gap-1 rounded-lg border border-current px-2.5 text-xs font-medium opacity-80 hover:opacity-100 disabled:opacity-40"
-                    title="Lo saca de su posición y lo pone al final, con la ubicación actual"
-                  >
-                    <MoveDown size={14} aria-hidden /> Mover acá
-                  </button>
-                )}
               </div>
             )}
             {enViaje > 0 && (
@@ -363,43 +388,58 @@ function PanelEscanear({ filas, onEscaneo }: { filas: Mapeo[]; onEscaneo: (f: Fi
             )}
           </div>
         )}
+
+        {/* Artículo que ya está en otra ubicación: mover o agregar */}
+        {repetido && (
+          <div role="alert" className="space-y-2.5 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3">
+            <div className="flex items-start gap-2">
+              <AlertTriangle size={18} aria-hidden className="mt-0.5 shrink-0 text-amber-500" />
+              <div className="min-w-0 text-sm">
+                <Etiquetas m={repetido.fila} chico />
+                <p className="mt-1 text-sub">
+                  Ya está en <span className="font-semibold text-ink">{repetido.fila.otras}</span>.
+                  ¿Qué hacés en <span className="font-semibold text-ink">{repetido.ubicacion}</span>?
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => void resolverRepetido('mover')}
+                disabled={!!resolviendo}
+                className="btn-press inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-amber-500/40 bg-surface text-sm font-semibold text-amber-500 transition hover:bg-amber-500/15 disabled:opacity-60"
+                title="Lo saca de la otra ubicación y lo deja solo en esta"
+              >
+                {resolviendo === 'mover' ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <MoveDown size={16} aria-hidden />}
+                Mover
+              </button>
+              <button
+                onClick={() => void resolverRepetido('agregar')}
+                disabled={!!resolviendo}
+                className="btn-press inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 text-sm font-semibold text-white shadow-soft transition hover:bg-emerald-700 disabled:opacity-60"
+                title="Queda en las dos ubicaciones"
+              >
+                {resolviendo === 'agregar' ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Plus size={16} aria-hidden />}
+                Agregar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {ubicacion && (
+          <p className="text-xs text-sub">Para cambiar de ubicación, escaneá otro QR de ubicación.</p>
+        )}
       </div>
 
       {camara && (
         <ScannerCamara
-          onLectura={(t) => void escanear(t)}
+          conQr
+          onLectura={(t, formato) => procesar(t, formato)}
           onCerrar={() => {
             setCamara(false)
             enfocar()
           }}
         />
       )}
-
-      <div className="overflow-hidden rounded-2xl border border-line bg-surface">
-        <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
-          <span className="font-display text-sm font-semibold text-ink">Últimos mapeados</span>
-          <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold tabular-nums text-amber-500">
-            {filas.length} artículos
-          </span>
-        </div>
-        {ultimos.length === 0 ? (
-          <p className="px-4 py-8 text-center text-sm text-sub">Todavía no hay nada mapeado. Escaneá el primer artículo.</p>
-        ) : (
-          <ul className="divide-y divide-line/60">
-            {ultimos.map((m) => (
-              <li key={m.id} className="flex items-center gap-3 px-4 py-2">
-                <span className="w-10 shrink-0 text-right font-mono text-sm font-semibold tabular-nums text-sub">#{m.orden}</span>
-                <span className="min-w-0 flex-1">
-                  <Etiquetas m={m} chico />
-                </span>
-                {m.ubicacion && (
-                  <span className="shrink-0 rounded-md bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-500">{m.ubicacion}</span>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
     </div>
   )
 }

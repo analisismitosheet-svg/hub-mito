@@ -4,7 +4,7 @@ import { Camera, CameraOff, Loader2 } from 'lucide-react'
 // La librería real se trae con un import() cuando el usuario abre la cámara.
 import type { Html5Qrcode } from 'html5-qrcode'
 
-/** Códigos de barra de prenda/etiqueta (1D). Se descartan QR y 2D. */
+/** Códigos de barra de prenda/etiqueta (1D). QR solo si se pide con `conQr`. */
 const FORMATOS_1D = ['EAN_13', 'EAN_8', 'UPC_A', 'UPC_E', 'CODE_128', 'CODE_39', 'ITF', 'CODABAR'] as const
 
 /**
@@ -14,9 +14,13 @@ const FORMATOS_1D = ['EAN_13', 'EAN_8', 'UPC_A', 'UPC_E', 'CODE_128', 'CODE_39',
 export default function ScannerCamara({
   onLectura,
   onCerrar,
+  conQr = false,
 }: {
-  onLectura: (texto: string) => void
+  /** `formato`: nombre del formato leído (ej. 'QR_CODE', 'EAN_13') */
+  onLectura: (texto: string, formato?: string) => void
   onCerrar: () => void
+  /** además de los códigos de barra, lee QR (ej. ubicaciones del depósito) */
+  conQr?: boolean
 }) {
   const [error, setError] = useState<string | null>(null)
   const [listo, setListo] = useState(false)
@@ -40,7 +44,10 @@ export default function ScannerCamara({
         const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import('html5-qrcode')
         if (!vivo) return
 
-        const formatos = FORMATOS_1D.map((f) => Html5QrcodeSupportedFormats[f])
+        const formatos = [
+          ...FORMATOS_1D.map((f) => Html5QrcodeSupportedFormats[f]),
+          ...(conQr ? [Html5QrcodeSupportedFormats.QR_CODE] : []),
+        ]
         const sc = new Html5Qrcode(elementoId, {
           formatsToSupport: formatos,
           verbose: false,
@@ -49,14 +56,14 @@ export default function ScannerCamara({
 
         await sc.start(
           { facingMode: 'environment' },
-          { fps: 10, qrbox: { width: 280, height: 120 } },
-          (texto: string) => {
+          { fps: 10, qrbox: conQr ? { width: 260, height: 200 } : { width: 280, height: 120 } },
+          (texto: string, resultado) => {
             if (!vivo || cerradoRef.current) return
             const ahora = Date.now()
             const ultima = ultimaRef.current
             if (ultima && ultima.texto === texto && ahora - ultima.ts < 700) return
             ultimaRef.current = { texto, ts: ahora }
-            lecturaRef.current(texto)
+            lecturaRef.current(texto, resultado?.result?.format?.formatName)
           },
           () => { /* frame sin código: es normal */ },
         )
@@ -81,7 +88,7 @@ export default function ScannerCamara({
           try { sc.clear() } catch { /* ya limpio */ }
         })
     }
-  }, [])
+  }, [conQr])
 
   return (
     <div className="overflow-hidden rounded-2xl border border-line bg-surface">
