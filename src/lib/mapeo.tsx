@@ -16,11 +16,20 @@ export interface Mapeo {
   escaneado_at: string
 }
 
-/** Fila de public.mapeo_ubicaciones (lista de pasillos / niveles) */
+/** Fila de public.mapeo_ubicaciones (lista de pasillos / niveles).
+ *  El pasillo se guarda como número (1 = A) para ordenar; se muestra con letra. */
 export interface Ubicacion {
   codigo: string
   pasillo: number
   nivel: number
+}
+
+/** Pasillos van por letra: A..Z */
+export const MAX_PASILLOS = 26
+
+/** 1 -> "A", 2 -> "B" … */
+export function letraPasillo(pasillo: number): string {
+  return String.fromCharCode(64 + pasillo)
 }
 
 /** Lo que devuelve mapeo_escanear() */
@@ -76,12 +85,12 @@ export async function cargarUbicaciones(): Promise<Ubicacion[]> {
 
 const dos = (n: number) => String(n).padStart(2, '0')
 
-/** Código de una ubicación: pasillo 1, nivel 2 -> "P01-N02" */
+/** Código de una ubicación: pasillo 1 (A), nivel 2 -> "A-02" */
 export function codigoUbicacion(pasillo: number, nivel: number): string {
-  return `P${dos(pasillo)}-N${dos(nivel)}`
+  return `${letraPasillo(pasillo)}-${dos(nivel)}`
 }
 
-/** Lo que lleva el QR impreso: "UBI:P01-N02" (el prefijo la distingue de un artículo) */
+/** Lo que lleva el QR impreso: "UBI:A-02" (el prefijo la distingue de un artículo) */
 export function qrUbicacion(codigo: string): string {
   return `UBI:${codigo}`
 }

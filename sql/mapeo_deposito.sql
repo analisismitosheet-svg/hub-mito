@@ -66,8 +66,8 @@ CREATE POLICY mapeo_deposito_borrar ON public.mapeo_deposito
 -- Lista de pasillos / niveles. Su QR impreso dice "UBI:<codigo>".
 -- ============================================================
 CREATE TABLE IF NOT EXISTS public.mapeo_ubicaciones (
-  codigo     text PRIMARY KEY,               -- "P01-N02"
-  pasillo    integer NOT NULL CHECK (pasillo BETWEEN 1 AND 99),
+  codigo     text PRIMARY KEY,               -- "A-02" (pasillo A, nivel 2)
+  pasillo    integer NOT NULL CHECK (pasillo BETWEEN 1 AND 26),   -- 1 = A … 26 = Z
   nivel      integer NOT NULL CHECK (nivel BETWEEN 1 AND 99),
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (pasillo, nivel)

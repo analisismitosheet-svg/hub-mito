@@ -7,7 +7,7 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import { tamanoMembrete } from '@/components/EtiquetasBultos'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
-import { cargarUbicaciones, codigoUbicacion, qrUbicacion, type Ubicacion } from '@/lib/mapeo'
+import { MAX_PASILLOS, cargarUbicaciones, codigoUbicacion, letraPasillo, qrUbicacion, type Ubicacion } from '@/lib/mapeo'
 
 const inputCls =
   'h-11 w-full rounded-xl border border-line bg-surface2 px-3 text-base text-ink outline-none transition placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40'
@@ -27,7 +27,7 @@ function MembreteUbicacion({ u, ancho, alto }: { u: Ubicacion; ancho: number; al
       <QRCodeSVG value={qrUbicacion(u.codigo)} size={256} level="M" style={{ width: `${qrMm}mm`, height: `${qrMm}mm`, flexShrink: 0 }} />
       <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0, flex: 1, textAlign: 'center' }}>
         <div style={{ fontSize: `${alto * 0.07}mm`, fontWeight: 700 }}>PASILLO</div>
-        <div style={{ fontSize: `${alto * 0.3}mm`, fontWeight: 800, lineHeight: 1 }}>{u.pasillo}</div>
+        <div style={{ fontSize: `${alto * 0.3}mm`, fontWeight: 800, lineHeight: 1 }}>{letraPasillo(u.pasillo)}</div>
         <div style={{ fontSize: `${alto * 0.07}mm`, fontWeight: 700, marginTop: '1mm' }}>NIVEL</div>
         <div style={{ fontSize: `${alto * 0.3}mm`, fontWeight: 800, lineHeight: 1 }}>{u.nivel}</div>
         <div style={{ fontSize: `${alto * 0.06}mm`, fontWeight: 600, marginTop: '1mm' }}>{u.codigo}</div>
@@ -108,13 +108,13 @@ export default function MapeoUbicaciones() {
     return [...m.entries()].sort((a, b) => a[0] - b[0])
   }, [lista])
 
-  /** Crea pasillos 1..P con niveles 1..N; los que ya existen quedan igual */
+  /** Crea pasillos A.. (P letras) con niveles 1..N; los que ya existen quedan igual */
   async function crear(e: FormEvent) {
     e.preventDefault()
     const p = Math.floor(Number(pasillos))
     const n = Math.floor(Number(niveles))
-    if (!(p >= 1 && p <= 99) || !(n >= 1 && n <= 99)) {
-      setError('Poné una cantidad de pasillos y de niveles entre 1 y 99.')
+    if (!(p >= 1 && p <= MAX_PASILLOS) || !(n >= 1 && n <= 99)) {
+      setError(`Poné entre 1 y ${MAX_PASILLOS} pasillos (A a Z) y entre 1 y 99 niveles.`)
       return
     }
     if (!supabase) return
@@ -189,7 +189,7 @@ export default function MapeoUbicaciones() {
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-[1fr_1fr_auto]">
             <label className="block">
               <span className="mb-1 block text-xs font-medium text-sub">Cantidad de pasillos</span>
-              <input type="number" inputMode="numeric" min={1} max={99} value={pasillos} onChange={(e) => setPasillos(e.target.value)} placeholder="Ej: 10" className={inputCls} />
+              <input type="number" inputMode="numeric" min={1} max={MAX_PASILLOS} value={pasillos} onChange={(e) => setPasillos(e.target.value)} placeholder="Ej: 6 (A a F)" className={inputCls} />
             </label>
             <label className="block">
               <span className="mb-1 block text-xs font-medium text-sub">Niveles por pasillo</span>
@@ -204,7 +204,10 @@ export default function MapeoUbicaciones() {
             </button>
           </div>
           <p className="mt-2 text-xs text-sub">
-            Crea del pasillo 1 al que pongas, cada uno con esos niveles. Las que ya existen no se tocan: para sumar pasillos, poné el total nuevo.
+            {Number(pasillos) >= 1 && Number(pasillos) <= MAX_PASILLOS
+              ? `Crea los pasillos A a ${letraPasillo(Math.floor(Number(pasillos)))}, cada uno con esos niveles. `
+              : 'Los pasillos van por letra (A a Z). '}
+            Las que ya existen no se tocan: para sumar pasillos, poné el total nuevo.
           </p>
         </form>
       )}
@@ -246,7 +249,7 @@ export default function MapeoUbicaciones() {
                 <div className="flex items-center gap-2 border-b border-line px-4 py-2">
                   <label className="flex min-h-[2.5rem] flex-1 cursor-pointer items-center gap-2.5">
                     <input type="checkbox" checked={todos} onChange={() => alternar(codigos)} className="h-4 w-4 accent-amber-600" />
-                    <span className="font-display text-sm font-semibold text-ink">Pasillo {p}</span>
+                    <span className="font-display text-sm font-semibold text-ink">Pasillo {letraPasillo(p)}</span>
                     <span className="inline-flex items-center gap-1 text-xs text-sub">
                       <Layers size={12} aria-hidden /> {us.length} {us.length === 1 ? 'nivel' : 'niveles'}
                     </span>
@@ -256,7 +259,7 @@ export default function MapeoUbicaciones() {
                       onClick={() => setBorrarPasillo(p)}
                       className="flex h-9 w-9 items-center justify-center rounded-lg text-sub transition hover:bg-brand-600/10 hover:text-brand-400"
                       title="Borrar pasillo"
-                      aria-label={`Borrar pasillo ${p}`}
+                      aria-label={`Borrar pasillo ${letraPasillo(p)}`}
                     >
                       <Trash2 size={16} aria-hidden />
                     </button>
@@ -337,7 +340,7 @@ export default function MapeoUbicaciones() {
 
       <ConfirmDialog
         open={borrarPasillo != null}
-        title={`¿Borrar el pasillo ${borrarPasillo ?? ''}?`}
+        title={`¿Borrar el pasillo ${borrarPasillo != null ? letraPasillo(borrarPasillo) : ''}?`}
         message="Se borran todos sus niveles de la lista. Lo ya mapeado no se toca."
         confirmLabel="Borrar"
         busy={borrando}
