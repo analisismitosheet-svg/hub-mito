@@ -1,0 +1,13 @@
+config.json
+conteos.db
+*.log
+*.log.*
+*.pt
+.venv/
+__pycache__/
+# Imágenes de clientes: NO subir al repo
+dataset/
+runs/
+modelos/
+grabaciones/
+*.mp4

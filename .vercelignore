@@ -21,3 +21,7 @@ Cuentas Amigos.xlsx
 .env
 .env.local
 .vercel
+# Contador IA: entorno Python, modelos e imagenes de clientes (NO van a Vercel)
+contador-camaras
+runs
+weights

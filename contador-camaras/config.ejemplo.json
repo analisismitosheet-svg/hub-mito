@@ -1,0 +1,38 @@
+{
+  "hub_url": "https://hub-mito.vercel.app",
+  "token": "PEGAR-ACA-EL-TOKEN-QUE-DA-EL-HUB-AL-REGISTRAR-LA-PC",
+
+  "dvr": {
+    "ip": "192.168.1.108",
+    "puerto_rtsp": 554,
+    "usuario": "admin",
+    "clave": "CLAVE-DEL-DVR"
+  },
+
+  "modelo": "yolo11n.pt",
+  "dispositivo": "auto",
+  "confianza": 0.4,
+  "imgsz": 640,
+  "fps_proceso": 8,
+  "envio_segundos": 60,
+
+  "camaras": [
+    {
+      "nombre": "Entrada",
+      "canal": 1,
+      "substream": 0,
+      "modo": "zonas",
+      "punto": "pie",
+      "zona_exterior": null,
+      "zona_interior": null,
+      "zona_a": null,
+      "zona_b": null,
+      "linea": null,
+      "invertir": false,
+      "empleados": null,
+      "reid": true,
+      "dedupe_segundos": 20,
+      "activa": true
+    }
+  ]
+}

@@ -21,6 +21,9 @@ import MiRepo from '@/pages/MiRepo'
 import Deposito from '@/pages/Deposito'
 import Rma from '@/pages/Rma'
 import Opiniones from '@/pages/Opiniones'
+import ContadorClientes from '@/pages/ContadorClientes'
+import IaCamaras from '@/pages/IaCamaras'
+import TasaConversion from '@/pages/TasaConversion'
 import Opinar from '@/pages/Opinar'
 import EncuestasAdmin from '@/pages/EncuestasAdmin'
 import QrEtiquetaEditor from '@/pages/QrEtiquetaEditor'
@@ -293,6 +296,30 @@ export default function App() {
             element={
               <PermissionRoute permiso="opiniones.view">
                 <Opiniones />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/contador-clientes"
+            element={
+              <PermissionRoute permiso="contador.view">
+                <ContadorClientes />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/tasa-conversion"
+            element={
+              <PermissionRoute permiso="conversion.view">
+                <TasaConversion />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/ia-camaras"
+            element={
+              <PermissionRoute permiso="ia_camaras.view">
+                <IaCamaras />
               </PermissionRoute>
             }
           />
