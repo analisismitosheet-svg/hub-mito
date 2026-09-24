@@ -10,7 +10,7 @@ import { useAuth } from '@/context/AuthContext'
 export default function Area() {
   const { areaId = '' } = useParams()
   const navigate = useNavigate()
-  const { can } = useAuth()
+  const { can, esLegajo } = useAuth()
   const [overrides, setOverrides] = useState<Record<string, string[]>>({})
   const area = getArea(areaId)
 
@@ -22,7 +22,7 @@ export default function Area() {
 
   // Ocultar apps sin permiso y ordenar alfabéticamente por título
   const apps = appsDeAreaConOverrides(areaId, overrides)
-    .filter((a) => !a.permiso || can(a.permiso))
+    .filter((a) => (!a.permiso || can(a.permiso)) && (!a.soloLegajo || esLegajo))
     .sort((a, b) => a.title.localeCompare(b.title, 'es', { sensitivity: 'base' }))
   const verArchivos = can('documentos.view')
 

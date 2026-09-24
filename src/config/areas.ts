@@ -77,6 +77,8 @@ export interface AppDef {
   areaIds?: string[]
   /** grupo/encabezado opcional dentro del área (ej. 'Novedades') para agrupar apps visualmente */
   grupo?: string
+  /** solo la ven las cuentas de legajo (empleados de piso), ni siquiera los admins */
+  soloLegajo?: boolean
 }
 
 // accent: color de nivel 600 para contraste AA sobre superficies claras (Soft UI)
@@ -206,6 +208,7 @@ export const APPS: AppDef[] = [
     target: '/mayorista/mi-repo',
     color: '#d97706',
     permiso: 'mayorista.repos_piso',
+    soloLegajo: true,
   },
   {
     id: 'mayorista-transportes',

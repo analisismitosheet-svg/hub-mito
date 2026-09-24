@@ -16,7 +16,7 @@ export default function CarpetaArea({
   titulo?: string
   color?: string
 }) {
-  const { can } = useAuth()
+  const { can, esLegajo } = useAuth()
   const [overrides, setOverrides] = useState<Record<string, string[]>>({})
 
   useEffect(() => {
@@ -26,7 +26,7 @@ export default function CarpetaArea({
   }, [])
 
   const apps = appsDeAreaConOverrides(carpetaId, overrides)
-    .filter((a) => !a.permiso || can(a.permiso))
+    .filter((a) => (!a.permiso || can(a.permiso)) && (!a.soloLegajo || esLegajo))
     .sort((a, b) => a.title.localeCompare(b.title, 'es', { sensitivity: 'base' }))
 
   const titulo = tituloProp ?? carpetaId.split('-').slice(1).join(' ')

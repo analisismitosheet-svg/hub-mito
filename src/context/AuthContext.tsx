@@ -10,6 +10,7 @@ import {
 } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
+import { DOMINIO_LOGIN_EMPLEADO } from '@/lib/loginEmpleado'
 
 export type EstadoUsuario = 'pendiente' | 'aprobado' | 'rechazado' | 'desactivado'
 export type RolUsuario = 'administrador' | 'usuario'
@@ -42,6 +43,8 @@ interface AuthState {
    * No ve menú: entra directo a Mi repo. Si se le suman pantallas, deja de serlo.
    */
   soloPiso: boolean
+  /** Cuenta de legajo: entró con legajo + clave (email sintético de empleado) */
+  esLegajo: boolean
   /** ¿El usuario tiene el permiso indicado? (admin siempre true) */
   can: (clave: string) => boolean
   refresh: () => Promise<void>
@@ -132,6 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       roles.length > 0 &&
       roles.every((r) => r === ROL_PISO) &&
       [...permisos].every((p) => PERMISOS_PISO.has(p))
+    const esLegajo = !!session?.user?.email?.toLowerCase().endsWith(`@${DOMINIO_LOGIN_EMPLEADO}`)
     return {
       user: session?.user ?? null,
       session,
@@ -142,6 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAdmin,
       isApproved,
       soloPiso,
+      esLegajo,
       can(clave) {
         if (!configured) return true
         if (isAdmin) return true
