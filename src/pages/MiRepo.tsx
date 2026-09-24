@@ -98,10 +98,9 @@ function fmtReloj(seg: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`
 }
 
-/** Talle numérico con "T" (T38); de letra tal cual (M, L, U) */
+/** Talle tal cual (38, M, L, U) */
 function fmtTalle(talle: string | null): string | null {
-  if (!talle) return null
-  return /^\d/.test(talle) ? `T${talle}` : talle
+  return talle || null
 }
 
 /** "ZH000200 · color 02 · XL" para los mensajes de escaneo */

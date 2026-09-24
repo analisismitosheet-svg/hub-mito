@@ -817,7 +817,7 @@ export default function Mayorista() {
                                       <span className={`block text-sm ${esHecho ? 'text-sub line-through' : esFaltante ? 'text-sub' : 'text-ink'}`}>
                                         {it.codigo}
                                         {it.color ? ` · ${it.color}` : ''}
-                                        {it.talle ? ` · T${it.talle}` : ''}
+                                        {it.talle ? ` · ${it.talle}` : ''}
                                         {it.cantidad > 1 ? ` · x${it.cantidad}` : ''}
                                         {it.escaneadas > 0 && it.escaneadas < it.cantidad
                                           ? ` · ${it.escaneadas}/${it.cantidad} escaneado`
