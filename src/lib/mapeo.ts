@@ -120,10 +120,15 @@ export function qrUbicacion(codigo: string): string {
 }
 
 /** Prefijo del QR de ubicación (opcional al leer) */
-export const PREFIJO_UBICACION = /^UBI[:\-_ ]?/i
+// El lector inalámbrico "tipea" con teclado inglés: si la PC/celular está en español,
+// ':' llega como 'Ñ' y '-' como '´' o '\''. Se aceptan esas variantes.
+export const PREFIJO_UBICACION = /^UBI[:Ñ\-_ ]?/i
+
+/** Guiones que puede mandar el lector según el idioma del teclado */
+const GUIONES = /[´'`’?¿_]/g
 
 export function limpiarUbicacion(texto: string): string {
-  return texto.trim().replace(PREFIJO_UBICACION, '').trim().toUpperCase()
+  return texto.trim().replace(PREFIJO_UBICACION, '').trim().toUpperCase().replace(GUIONES, '-')
 }
 
 /* ------------------------------------------------------------------ */
