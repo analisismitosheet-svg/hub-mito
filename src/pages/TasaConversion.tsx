@@ -210,8 +210,11 @@ function DetalleLocal({ l, nombre, tickets, hayVentas }: { l: LocalHoy; nombre?:
             ))}
           </div>
         </div>
-        <VideoEnVivo key={`${l.local}-${cam?.nombre ?? ''}`} url={cam?.online ? cam?.vista_url ?? null : null}
-          motivo={!cam ? 'Este local todavía no tiene cámaras informando.' : !cam.online ? 'La PC contadora del local no está en línea.' : !cam.vista_url ? 'El video en vivo no está publicado en esta PC (publicar_vista.bat).' : ''} />
+        <VideoEnVivo key={`${l.local}-${cam?.nombre ?? ''}`} url={cam?.online && cam.ok ? cam?.vista_url ?? null : null}
+          motivo={!cam ? 'Este local todavía no tiene cámaras informando.'
+            : !cam.online ? 'La PC contadora del local no está en línea (apagada o sin internet).'
+            : !cam.ok ? `La cámara no responde: ${cam.error ?? 'sin imagen'}. Revisá que el DVR del local esté prendido y con internet.`
+            : !cam.vista_url ? 'El video en vivo no está publicado en esta PC (publicar_vista.bat).' : ''} />
       </div>
 
       <div className="flex flex-col gap-3">
@@ -256,6 +259,7 @@ function DetalleLocal({ l, nombre, tickets, hayVentas }: { l: LocalHoy; nombre?:
 
 function VideoEnVivo({ url, motivo }: { url: string | null; motivo: string }) {
   const [estado, setEstado] = useState<'cargando' | 'ok' | 'error'>('cargando')
+  const [causa, setCausa] = useState<'vpn' | 'imagen' | null>(null)
   const [intento, setIntento] = useState(0)
   const img = useRef<HTMLImageElement>(null)
 
@@ -263,6 +267,7 @@ function VideoEnVivo({ url, motivo }: { url: string | null; motivo: string }) {
   useEffect(() => {
     if (!url) return
     setEstado('cargando')
+    setCausa(null)
     const inicio = Date.now()
     const t = setInterval(() => {
       if ((img.current?.naturalWidth ?? 0) > 0) { setEstado('ok'); clearInterval(t) }
@@ -270,6 +275,21 @@ function VideoEnVivo({ url, motivo }: { url: string | null; motivo: string }) {
     }, 400)
     return () => clearInterval(t)
   }, [url, intento])
+
+  // Si falla: ¿llegamos a la PC del local? (sí -> problema de imagen; no -> falta la VPN)
+  useEffect(() => {
+    if (estado !== 'error' || !url) return
+    const salud = new URL(url)
+    salud.pathname = '/salud'
+    salud.search = ''
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), 6000)
+    fetch(salud.toString(), { signal: ctrl.signal, cache: 'no-store' })
+      .then((r) => setCausa(r.ok ? 'imagen' : 'vpn'))
+      .catch(() => setCausa('vpn'))
+      .finally(() => clearTimeout(t))
+    return () => { clearTimeout(t); ctrl.abort() }
+  }, [estado, url])
 
   if (!url) {
     return (
@@ -288,7 +308,11 @@ function VideoEnVivo({ url, motivo }: { url: string | null; motivo: string }) {
           {estado === 'cargando' ? 'Conectando con la cámara…' : (
             <>
               No se pudo abrir el video.
-              <span className="text-xs text-white/60">El video en vivo solo se ve desde equipos conectados a la VPN de la empresa (Tailscale).</span>
+              <span className="text-xs text-white/60">
+                {causa === 'imagen' ? 'La PC del local responde, pero la cámara no está enviando imagen. Revisá el DVR.'
+                  : causa === 'vpn' ? 'Este equipo no llega a la PC del local: el video en vivo solo se ve conectado a la VPN de la empresa (Tailscale).'
+                  : 'Revisando la causa…'}
+              </span>
               <button onClick={() => setIntento((n) => n + 1)} className="mt-1 rounded-lg border border-white/30 px-2 py-1 text-xs">Reintentar</button>
             </>
           )}

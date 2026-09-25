@@ -71,7 +71,13 @@ class ServidorVista:
             def do_GET(self):  # noqa: N802
                 url = urllib.parse.urlparse(self.path)
                 if url.path == "/salud":
-                    return self.responder(200, b'{"ok":true}', "application/json")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.send_header("Cache-Control", "no-store")
+                    self.end_headers()
+                    self.wfile.write(b'{"ok":true}')
+                    return
                 token = urllib.parse.parse_qs(url.query).get("t", [""])[0]
                 if not hmac.compare_digest(token, servidor.token):
                     return self.responder(401, b"token invalido", "text/plain")
@@ -90,6 +96,13 @@ class ServidorVista:
                             time.sleep(0.1)
                         img = servidor.jpeg(cam)
                         return self.responder(200 if img else 503, img or b"sin imagen", "image/jpeg" if img else "text/plain")
+                    for _ in range(50):  # hasta 5 s para el primer cuadro; si no hay, avisar y no quedar colgado
+                        if cam.vista is not None:
+                            break
+                        time.sleep(0.1)
+                    if cam.vista is None:
+                        motivo = (cam.lector.error if cam.lector else None) or "sin imagen"
+                        return self.responder(503, f"sin imagen: {motivo}".encode(), "text/plain; charset=utf-8")
                     self.send_response(200)
                     self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=cuadro")
                     self.send_header("Cache-Control", "no-store")
