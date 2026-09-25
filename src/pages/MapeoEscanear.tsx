@@ -24,6 +24,11 @@ export default function MapeoEscanear() {
   // Artículo que ya estaba en otra ubicación: se pregunta si moverlo o agregarlo
   const [repetido, setRepetido] = useState<{ bruto: string; ubicacion: string; fila: FilaEscaneo } | null>(null)
   const [resolviendo, setResolviendo] = useState<AccionRepetido | null>(null)
+  // Mover con el artículo en varias ubicaciones: de cuáles sacarlo (null = no se está eligiendo)
+  const [sacarDe, setSacarDe] = useState<Set<string> | null>(null)
+  useEffect(() => {
+    setSacarDe(null)
+  }, [repetido])
   // Artículos escaneados en la ubicación actual (desde que se leyó su QR)
   const [enEsta, setEnEsta] = useState(0)
 
@@ -63,7 +68,7 @@ export default function MapeoEscanear() {
     setMensaje({ ok: true, texto: `Ubicación ${u}: ahora escaneá los artículos.` })
   }, [])
 
-  const escanearArticulo = useCallback(async (codigo: string, accion?: AccionRepetido, ubicacionFija?: string) => {
+  const escanearArticulo = useCallback(async (codigo: string, accion?: AccionRepetido, ubicacionFija?: string, sacarDeUbic?: string[]) => {
     // Al resolver un repetido se usa la ubicación del momento en que se escaneó
     const ubic = ubicacionFija ?? ubicacionRef.current
     if (!codigo || !ubic || !supabase) return
@@ -74,6 +79,8 @@ export default function MapeoEscanear() {
         p_codigo: codigo,
         p_ubicacion: ubic,
         p_accion: accion ?? null,
+        // Mover: solo de estas ubicaciones (sin lista = de todas las otras)
+        p_sacar_de: sacarDeUbic ?? null,
       })
       if (error) throw new Error(error.message)
       const f = ((Array.isArray(data) ? data[0] : data) ?? null) as FilaEscaneo | null
@@ -125,12 +132,30 @@ export default function MapeoEscanear() {
     enfocar()
   }
 
-  async function resolverRepetido(accion: AccionRepetido) {
+  async function resolverRepetido(accion: AccionRepetido, sacarDeUbic?: string[]) {
     if (!repetido) return
     setResolviendo(accion)
-    await escanearArticulo(repetido.bruto, accion, repetido.ubicacion)
+    await escanearArticulo(repetido.bruto, accion, repetido.ubicacion, sacarDeUbic)
     setResolviendo(null)
     enfocar()
+  }
+
+  // Ubicaciones donde ya está el artículo repetido
+  const otrasUbic = repetido?.fila.otras ? repetido.fila.otras.split(', ') : []
+
+  /** Mover: si está en una sola ubicación, directo; si está en varias, se elige de cuáles sacarlo */
+  function tocarMover() {
+    if (otrasUbic.length > 1) setSacarDe(new Set(otrasUbic))
+    else void resolverRepetido('mover')
+  }
+
+  function alternarSacar(u: string) {
+    setSacarDe((prev) => {
+      const n = new Set(prev ?? [])
+      if (n.has(u)) n.delete(u)
+      else n.add(u)
+      return n
+    })
   }
 
   return (
@@ -232,12 +257,48 @@ export default function MapeoEscanear() {
                   </p>
                 </div>
               </div>
+              {sacarDe ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-sub">¿De qué ubicaciones lo sacás?</p>
+                  <div className="flex flex-wrap gap-2">
+                    {otrasUbic.map((u) => (
+                      <label
+                        key={u}
+                        className={`inline-flex min-h-[2.5rem] cursor-pointer items-center gap-2 rounded-xl border px-3 text-sm font-semibold transition ${
+                          sacarDe.has(u) ? 'border-amber-500/60 bg-amber-500/15 text-amber-500' : 'border-line bg-surface text-sub'
+                        }`}
+                      >
+                        <input type="checkbox" checked={sacarDe.has(u)} onChange={() => alternarSacar(u)} className="h-4 w-4 accent-amber-600" />
+                        {u}
+                      </label>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => { setSacarDe(null); enfocar() }}
+                      disabled={!!resolviendo}
+                      className="btn-press inline-flex h-11 items-center justify-center rounded-xl border border-line bg-surface text-sm font-semibold text-ink transition hover:bg-surface2 disabled:opacity-60"
+                    >
+                      Volver
+                    </button>
+                    <button
+                      onClick={() => void resolverRepetido('mover', [...sacarDe])}
+                      disabled={!!resolviendo || sacarDe.size === 0}
+                      className="btn-press inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-amber-600 text-sm font-semibold text-white shadow-soft transition hover:bg-amber-700 disabled:opacity-50"
+                      title="Lo saca de las tildadas y lo deja también en esta"
+                    >
+                      {resolviendo === 'mover' ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <MoveDown size={16} aria-hidden />}
+                      Mover ({sacarDe.size})
+                    </button>
+                  </div>
+                </div>
+              ) : (
               <div className="grid grid-cols-2 gap-2">
                 <button
-                  onClick={() => void resolverRepetido('mover')}
+                  onClick={tocarMover}
                   disabled={!!resolviendo}
                   className="btn-press inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-amber-500/40 bg-surface text-sm font-semibold text-amber-500 transition hover:bg-amber-500/15 disabled:opacity-60"
-                  title="Lo saca de la otra ubicación y lo deja solo en esta"
+                  title={otrasUbic.length > 1 ? 'Elegí de qué ubicaciones sacarlo' : 'Lo saca de la otra ubicación y lo deja solo en esta'}
                 >
                   {resolviendo === 'mover' ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <MoveDown size={16} aria-hidden />}
                   Mover
@@ -252,6 +313,7 @@ export default function MapeoEscanear() {
                   Agregar
                 </button>
               </div>
+              )}
             </div>
           )}
 

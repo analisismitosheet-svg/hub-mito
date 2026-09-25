@@ -113,11 +113,13 @@ CREATE POLICY mapeo_ubic_borrar ON public.mapeo_ubicaciones
 --                       si está en otra(s) ubicación(es)      -> 'ya_mapeado' (no hace nada;
 --                       en `otras` van esas ubicaciones para preguntar).
 --   p_accion 'mover'  : lo saca de las otras ubicaciones y lo deja en esta -> 'movido'.
+--                       p_sacar_de: de cuáles sacarlo (NULL = de todas las otras).
 --   p_accion 'agregar': lo suma en esta ubicación sin tocar las otras     -> 'agregado'.
 -- ============================================================
 DROP FUNCTION IF EXISTS public.mapeo_escanear(text, text, boolean);
 DROP FUNCTION IF EXISTS public.mapeo_escanear(text, text, text);
-CREATE FUNCTION public.mapeo_escanear(p_codigo text, p_ubicacion text, p_accion text DEFAULT NULL)
+DROP FUNCTION IF EXISTS public.mapeo_escanear(text, text, text, text[]);
+CREATE FUNCTION public.mapeo_escanear(p_codigo text, p_ubicacion text, p_accion text DEFAULT NULL, p_sacar_de text[] DEFAULT NULL)
 RETURNS TABLE (estado text, id uuid, orden integer, codigo text, color text, talle text, ubicacion text, otras text)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
 AS $$
@@ -157,7 +159,8 @@ BEGIN
 
   IF p_accion = 'mover' THEN
     DELETE FROM public.mapeo_deposito m
-     WHERE m.codigo = v_p.codigo AND coalesce(m.ubicacion, '') <> coalesce(v_ubic, '');
+     WHERE m.codigo = v_p.codigo AND coalesce(m.ubicacion, '') <> coalesce(v_ubic, '')
+       AND (p_sacar_de IS NULL OR coalesce(m.ubicacion, 'sin ubicación') = ANY (p_sacar_de));
   ELSIF v_aca.id IS NOT NULL THEN
     RETURN QUERY SELECT 'ya_aca'::text, v_aca.id, v_aca.orden, v_aca.codigo, v_aca.color, v_aca.talle, v_aca.ubicacion, v_otras;
     RETURN;
@@ -181,7 +184,7 @@ BEGIN
             m.id, m.orden, m.codigo, m.color, m.talle, m.ubicacion, v_otras;
 END;
 $$;
-REVOKE ALL ON FUNCTION public.mapeo_escanear(text, text, text) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.mapeo_escanear(text, text, text) TO authenticated;
+REVOKE ALL ON FUNCTION public.mapeo_escanear(text, text, text, text[]) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.mapeo_escanear(text, text, text, text[]) TO authenticated;
 
 COMMIT;
