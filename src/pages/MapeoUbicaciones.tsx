@@ -74,7 +74,7 @@ export default function MapeoUbicaciones() {
 
   // Crear
   const [planta, setPlanta] = useState('PB')
-  const [desde, setDesde] = useState('')
+  const [desde, setDesde] = useState('A')
   const [hasta, setHasta] = useState('')
   const [niveles, setNiveles] = useState('')
   const [creando, setCreando] = useState(false)
@@ -120,7 +120,7 @@ export default function MapeoUbicaciones() {
   async function crear(e: FormEvent) {
     e.preventDefault()
     const pl = planta.trim().toUpperCase().replace(/\s+/g, '')
-    const p1 = numeroPasillo(desde)
+    const p1 = numeroPasillo(desde || 'A')
     const p2 = hasta.trim() ? numeroPasillo(hasta) : p1
     const n = Math.floor(Number(niveles))
     if (!/^[A-Z0-9]{1,4}$/.test(pl)) {
@@ -128,7 +128,7 @@ export default function MapeoUbicaciones() {
       return
     }
     if (p1 == null || p2 == null || p2 < p1) {
-      setError('El pasillo va con una letra (A a Z). Si ponés "hasta", tiene que ser igual o posterior.')
+      setError(`El pasillo va con una letra (A a Z) y "hasta" tiene que ser la misma letra o una posterior a ${desde || 'A'}.`)
       return
     }
     if (!(n >= 1 && n <= 99)) {
@@ -185,7 +185,7 @@ export default function MapeoUbicaciones() {
 
   // Qué se va a crear, para mostrarlo antes de tocar Crear
   const previa = (() => {
-    const p1 = numeroPasillo(desde)
+    const p1 = numeroPasillo(desde || 'A')
     const n = Math.floor(Number(niveles))
     const pl = planta.trim().toUpperCase() || 'PB'
     if (p1 == null || !(n >= 1)) return 'Ej: planta PB, pasillo A, 8 niveles: PB-A1 a PB-A8. '
@@ -226,7 +226,7 @@ export default function MapeoUbicaciones() {
             </label>
             <label className="block">
               <span className="mb-1 block text-xs font-medium text-sub">Pasillo</span>
-              <input value={desde} onChange={(e) => setDesde(e.target.value.toUpperCase().slice(0, 1))} placeholder="A" maxLength={1} className={inputCls} />
+              <input value={desde} onChange={(e) => setDesde(e.target.value.toUpperCase().slice(0, 1))} placeholder="Letra" maxLength={1} className={inputCls} />
             </label>
             <label className="block">
               <span className="mb-1 block text-xs font-medium text-sub">Hasta pasillo (opcional)</span>
