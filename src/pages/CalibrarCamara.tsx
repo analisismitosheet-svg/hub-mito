@@ -29,8 +29,9 @@ interface Calibracion {
   punto: 'pie' | 'centro'
   empleados: Empleados | null
   canal?: number | null
+  stream?: 'principal' | 'secundario'
 }
-interface CamEstado { nombre: string; ok: boolean; error: string | null; foto_url?: string | null; calibracion?: Partial<Calibracion>; config_version?: string | null; canales?: number }
+interface CamEstado { nombre: string; ok: boolean; error: string | null; foto_url?: string | null; calibracion?: Partial<Calibracion>; config_version?: string | null; canales?: number; kbps?: number | null; resolucion?: string }
 
 /** URL de la PC contadora (VPN) para fotos de canales, derivada de la foto de una cámara (lleva su token). */
 function urlCanal(fotoUrl: string, canal: number): string {
@@ -437,6 +438,30 @@ export default function CalibrarCamara() {
                   </div>
                 )}
               </div>
+            </div>
+
+            <div className="rounded-2xl border border-line bg-surface p-3 text-xs">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-sub/70">Calidad del video</div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {([['principal', 'Alta', 'más precisa, más internet'], ['secundario', 'Liviana', '~5 veces menos internet']] as const).map(([v, titulo, sub]) => (
+                  <button key={v} onClick={() => cambiar({ ...cal, stream: v })}
+                    className={'rounded-xl border p-2 text-left ' + ((cal.stream ?? 'principal') === v ? 'border-brand-600 bg-brand-600/10' : 'border-line bg-surface2/60')}>
+                    <span className="block font-semibold text-ink">{titulo}</span>
+                    <span className="text-sub/80">{sub}</span>
+                  </button>
+                ))}
+              </div>
+              {cam?.resolucion && (
+                <p className="mt-2 text-[11px] text-sub">
+                  Ahora: {(cam.calibracion?.stream ?? 'principal') === 'secundario' ? 'Liviana' : 'Alta'} · {cam.resolucion}
+                  {cam.kbps ? ` · ${cam.kbps >= 1000 ? (cam.kbps / 1000).toFixed(1) + ' Mbps' : cam.kbps + ' kbps'} de internet` : ''}
+                </p>
+              )}
+              {(cal.stream ?? 'principal') === 'secundario' && (
+                <p className="mt-1 text-[11px] text-amber-300">
+                  En muchos DVR la liviana es 352×288: si la puerta queda lejos de la cámara, la gente se ve muy chica y se pueden perder entradas. Probala y mirá el video en vivo.
+                </p>
+              )}
             </div>
 
             <div className="rounded-2xl border border-line bg-surface p-3 text-xs">

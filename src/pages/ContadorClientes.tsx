@@ -42,7 +42,7 @@ export interface Dispositivo {
   nombre: string
   activo: boolean
   ultimo_latido: string | null
-  estado: { version?: string; camaras?: { nombre: string; ok: boolean; fps: number; error: string | null; entradas_hoy?: number; vista_url?: string | null }[] } | null
+  estado: { version?: string; camaras?: { nombre: string; ok: boolean; fps: number; error: string | null; entradas_hoy?: number; vista_url?: string | null; kbps?: number | null; resolucion?: string }[] } | null
 }
 
 export type Venta = { local: string; fecha: string; tickets: number }
@@ -85,6 +85,8 @@ function rangoDe(p: Preset): { desde: string; hasta: string } {
 }
 
 /** Normaliza filas de la vista de ventas aceptando nombres de columna habituales. */
+const fmtKbps = (k: number) => (k >= 1000 ? `${(k / 1000).toFixed(1)} Mbps` : `${Math.round(k)} kbps`)
+
 export function aVentas(filas: Record<string, unknown>[]): Venta[] {
   const col = (f: Record<string, unknown>, ...ops: string[]) => {
     const k = Object.keys(f).find((c) => ops.includes(c.toLowerCase()))
@@ -353,6 +355,7 @@ export function Camaras({ dispositivos, locales, onCambio, tarjeta, btnChico }: 
   const [msg, setMsg] = useState<string | null>(null)
   const [borrar, setBorrar] = useState<Dispositivo | null>(null)
   const [quitarCam, setQuitarCam] = useState<{ d: Dispositivo; nombre: string } | null>(null)
+  const consumoTotal = dispositivos.flatMap((d) => d.estado?.camaras ?? []).reduce((a, c) => a + (c.kbps ?? 0), 0)
   const navegar = useNavigate()
 
   // Segunda entrada (u otra cámara del mismo DVR): se elige el canal y se calibra en el editor;
@@ -422,7 +425,9 @@ export function Camaras({ dispositivos, locales, onCambio, tarjeta, btnChico }: 
       {msg && <p className="rounded-xl border border-line bg-surface2 p-3 text-sm text-ink">{msg}</p>}
 
       <div className={tarjeta}>
-        <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-ink"><Cctv size={15} aria-hidden /> PCs contadoras</h3>
+        <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-ink"><Cctv size={15} aria-hidden /> PCs contadoras
+          {consumoTotal > 0 && <span className="ml-auto text-xs font-normal text-sub">Internet de video en uso: <strong className="text-ink">{fmtKbps(consumoTotal)}</strong></span>}
+        </h3>
         {dispositivos.length === 0 ? (
           <p className="text-sm text-sub">No hay PCs registradas todavía.</p>
         ) : (
@@ -445,7 +450,7 @@ export function Camaras({ dispositivos, locales, onCambio, tarjeta, btnChico }: 
                       <span key={c.nombre} className="inline-flex items-center gap-1">
                         <span title={c.error ?? ''}
                           className={'rounded-full border px-2 py-0.5 text-[11px] ' + (c.ok ? 'border-emerald-600/40 text-emerald-400' : 'border-red-600/40 text-red-400')}>
-                          {c.nombre}: {c.ok ? `${c.fps} fps · ${c.entradas_hoy ?? 0} hoy` : c.error ?? 'error'}
+                          {c.nombre}: {c.ok ? `${c.fps} fps · ${c.resolucion || '?'}${c.kbps ? ` · ${fmtKbps(c.kbps)}` : ''} · ${c.entradas_hoy ?? 0} hoy` : c.error ?? 'error'}
                         </span>
                         <Link to={`/ia-camaras/calibrar?disp=${d.id}&cam=${encodeURIComponent(c.nombre)}`}
                           className="rounded-full border border-line px-2 py-0.5 text-[11px] text-brand-400 hover:bg-surface2">Calibrar</Link>

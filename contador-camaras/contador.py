@@ -490,14 +490,31 @@ class Camara(threading.Thread):
     def canal(self) -> int | None:
         return (self.cam.get("sdk") or {}).get("canal") or self.cam.get("canal")
 
+    def stream(self) -> str:
+        if self.cam.get("sdk"):
+            return self.cam["sdk"].get("stream") or "principal"
+        return "secundario" if int(self.cam.get("substream", 1)) == 1 else "principal"
+
     def calibracion(self) -> dict:
-        return {**{k: self.cam.get(k) for k in self.CLAVES_CALIBRACION}, "canal": self.canal()}
+        return {**{k: self.cam.get(k) for k in self.CLAVES_CALIBRACION}, "canal": self.canal(), "stream": self.stream()}
 
     def aplicar_config(self, nueva: dict, version: str) -> None:
         """Calibración nueva desde el hub: se aplica en caliente (las personas que ya se siguen no se pierden)."""
         for k in self.CLAVES_CALIBRACION:
             if k in nueva:
                 self.cam[k] = nueva[k]
+        stream = nueva.get("stream")
+        if stream in ("principal", "secundario") and stream != self.stream():
+            log.info("[%s] calidad de video %s -> %s (desde el hub)", self.nombre, self.stream(), stream)
+            if self.cam.get("sdk"):
+                self.cam["sdk"]["stream"] = stream
+                if self.lector is not None:
+                    self.lector.cambiar_stream(stream)
+            else:
+                self.cam["substream"] = 1 if stream == "secundario" else 0
+                if self.lector is not None:
+                    self.lector.url = url_rtsp(self.cfg, self.cam)
+                    self.lector.reiniciar = True
         canal = nueva.get("canal")
         if canal and int(canal) != int(self.canal() or 0):
             log.info("[%s] cambio de canal %s -> %s (desde el hub)", self.nombre, self.canal(), canal)
@@ -529,7 +546,16 @@ class Camara(threading.Thread):
                 "fps": round(self.fps, 1), "entradas_hoy": h["entradas"], "salidas_hoy": h["salidas"],
                 "transeuntes_hoy": h["transeuntes"], "empleados_hoy": h["empleados"], "vista_url": self.vista_url,
                 "foto_url": self.foto_url, "calibracion": self.calibracion(), "config_version": self.config_version,
-                "canales": getattr(self.lector, "canales", 0) or 0}
+                "canales": getattr(self.lector, "canales", 0) or 0,
+                "kbps": getattr(self.lector, "kbps", None), "resolucion": self.resolucion()}
+
+    def resolucion(self) -> str:
+        r = getattr(self.lector, "resolucion", "")
+        if not r and self.lector is not None:
+            cuadro = self.lector.ultimo()[1]
+            if cuadro is not None:
+                r = f"{cuadro.shape[1]}x{cuadro.shape[0]}"
+        return r
 
     def cargar_modelo(self):
         from ultralytics import YOLO  # import pesado: recién acá
@@ -934,7 +960,12 @@ def aplicar_calibraciones(desde_hub: dict, camaras: list[Camara]) -> bool:
             if c:
                 cal = c.calibracion()
                 canal = cal.pop("canal", None)
+                stream = cal.pop("stream", None)
                 cam.update(cal, config_version=c.config_version)
+                if stream and cam.get("sdk"):
+                    cam["sdk"]["stream"] = stream
+                elif stream:
+                    cam["substream"] = 1 if stream == "secundario" else 0
                 if canal and cam.get("sdk"):
                     cam["sdk"]["canal"] = canal
                 elif canal:

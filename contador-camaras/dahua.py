@@ -140,6 +140,8 @@ class _Tubo:
 
     def escribir(self, datos: bytes) -> None:
         with self.cond:
+            if self.cerrado:  # cortado (cambio de canal/calidad o cámara quitada): no aceptar más
+                return
             if len(self.buf) > 8_000_000:  # si el decodificador se atrasa, no crecer sin límite
                 self.buf.clear()
             self.buf += datos
@@ -152,6 +154,8 @@ class _Tubo:
 
     def read(self, n: int = -1) -> bytes:
         with self.cond:
+            if self.cerrado:  # cortar ya, aunque quede algo en el buffer
+                return b""
             if not self.buf and not self.cerrado:
                 self.cond.wait(self.espera)
             if not self.buf:
@@ -218,6 +222,10 @@ class LectorDahua(threading.Thread):
         self._tubo: _Tubo | None = None
         self._h = 0            # login activo (para sacar fotos de otros canales)
         self._fin = False
+        self.kbps = 0          # consumo real de internet del video (promedio móvil)
+        self.resolucion = ""   # "ancho x alto" del video que llega
+        self._bytes = 0
+        self._t_bytes = 0.0
         self.canales = 0       # cantidad de canales del DVR
         self._fotos: dict[int, tuple[float, bytes]] = {}
         self._lock_fotos = threading.Lock()
@@ -230,8 +238,8 @@ class LectorDahua(threading.Thread):
 
     def cambiar_canal(self, canal: int) -> None:
         """Pasa a otro canal del DVR sin reiniciar el programa (lo elige el editor del hub)."""
-        if int(self.datos.get("canal", 1)) == int(canal):
-            return
+        # (self.datos es el mismo dict que la config de la cámara: puede venir ya actualizado,
+        #  así que no se compara: siempre se reconecta)
         self.datos["canal"] = int(canal)
         if self._tubo is not None:
             self._tubo.cerrar()  # corta el video actual; el bucle reconecta con el canal nuevo
@@ -270,6 +278,25 @@ class LectorDahua(threading.Thread):
     def _al_recibir(self, _h, tipo, buf, n, _param, _user) -> None:
         if tipo == 0 and self._tubo is not None:
             self._tubo.escribir(ctypes.string_at(buf, n))
+            self._contar_bytes(n)
+
+    def _contar_bytes(self, n: int) -> None:
+        import time
+        ahora = time.time()
+        if not self._t_bytes:
+            self._t_bytes = ahora
+        self._bytes += n
+        if ahora - self._t_bytes >= 5:
+            medido = self._bytes * 8 / (ahora - self._t_bytes) / 1000
+            self.kbps = round(medido if not self.kbps else 0.5 * self.kbps + 0.5 * medido)
+            self._bytes, self._t_bytes = 0, ahora
+
+    def cambiar_stream(self, stream: str) -> None:
+        """'principal' (alta calidad) o 'secundario' (liviano, menos internet). Sin reiniciar el programa."""
+        self.datos["stream"] = stream
+        self.kbps, self.resolucion, self._bytes, self._t_bytes = 0, "", 0, 0.0
+        if self._tubo is not None:
+            self._tubo.cerrar()
 
     def ultimo(self):
         with self.lock:
@@ -284,7 +311,6 @@ class LectorDahua(threading.Thread):
         sdk = SDK.obtener(self.cfg)
         d = sdk.dll
         x = self.datos
-        tipo_stream = 3 if x.get("stream") == "secundario" else 0  # DH_RType_Realplay_1 / Realplay
         espera = 5
         while not self._fin:
             h, info, motivo = sdk.login(x["host"], int(x.get("puerto", 37777)), x["usuario"], x["clave"],
@@ -300,6 +326,7 @@ class LectorDahua(threading.Thread):
                 espera = min(espera * 2, 60)
                 continue
             self._h, self.canales = h, info.canales
+            tipo_stream = 3 if x.get("stream") == "secundario" else 0  # DH_RType_Realplay_1 / Realplay
             rh = d.CLIENT_RealPlayEx(h, int(x.get("canal", 1)) - 1, None, tipo_stream)
             if not rh:
                 self.error = f"DVR: no abre el canal {x.get('canal')} (error {d.CLIENT_GetLastError() & 0x7fffffff})"
@@ -314,6 +341,7 @@ class LectorDahua(threading.Thread):
                 cont = av.open(self._tubo, format="dhav")
                 for frame in cont.decode(video=0):
                     img = frame.to_ndarray(format="bgr24")
+                    self.resolucion = f"{frame.width}x{frame.height}"
                     with self.lock:
                         self.cuadro = img
                         self.nro += 1
