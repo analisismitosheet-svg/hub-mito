@@ -9,19 +9,19 @@ import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
 import { leerVista } from '@/lib/sqlApi'
 import { CLAVE_VISTA, aVentas, type Venta, type Dispositivo } from '@/pages/ContadorClientes'
+import { ErrorVideo, pedirPase, urlVideo } from '@/lib/videoContador'
 
 /**
  * Tasa de conversión (Locales): video en vivo de la puerta con el conteo
  * dibujado + entradas vs tickets de HOY por local.
  *
- * Video: lo sirve la PC contadora (contador-camaras/vista.py) por
- * HTTPS dentro de la VPN (tailscale serve). Solo se ve desde equipos
- * conectados a Tailscale; el hub nunca recibe ni guarda imágenes.
+ * Video: lo sirve la PC contadora (contador-camaras/vista.py) con un pase temporal que
+ * valida el usuario contra el hub (cada local ve solo lo suyo). El hub nunca recibe ni guarda imágenes.
  * Ventas: vista SQL configurada en config_app 'contador_vista_ventas'
  * (local, fecha, tickets). Si no hay, se muestra solo el conteo.
  */
 
-interface CamaraEstado { nombre: string; ok: boolean; fps: number; error: string | null; vista_url?: string | null }
+interface CamaraEstado { nombre: string; ok: boolean; fps: number; error: string | null; vista_base?: string | null }
 interface LocalHoy {
   local: string
   entradas: number
@@ -210,11 +210,11 @@ function DetalleLocal({ l, nombre, tickets, hayVentas }: { l: LocalHoy; nombre?:
             ))}
           </div>
         </div>
-        <VideoEnVivo key={`${l.local}-${cam?.nombre ?? ''}`} url={cam?.online && cam.ok ? cam?.vista_url ?? null : null}
+        <VideoEnVivo key={`${l.local}-${cam?.nombre ?? ''}`} base={cam?.online && cam.ok ? cam?.vista_base ?? null : null} camara={cam?.nombre ?? ''}
           motivo={!cam ? 'Este local todavía no tiene cámaras informando.'
             : !cam.online ? 'La PC contadora no está en línea (apagada o sin internet).'
             : !cam.ok ? `La cámara no responde: ${cam.error ?? 'sin imagen'}. Revisá que el DVR del local esté prendido y con internet.`
-            : !cam.vista_url ? 'El video en vivo no está publicado en esta PC (publicar_vista.bat).' : ''} />
+            : !cam.vista_base ? 'La PC contadora no publica el video en vivo (falta url_publica en su configuración).' : ''} />
       </div>
 
       <div className="flex flex-col gap-3">
@@ -257,41 +257,46 @@ function DetalleLocal({ l, nombre, tickets, hayVentas }: { l: LocalHoy; nombre?:
   )
 }
 
-function VideoEnVivo({ url, motivo }: { url: string | null; motivo: string }) {
+function VideoEnVivo({ base, camara, motivo }: { base: string | null; camara: string; motivo: string }) {
   const [estado, setEstado] = useState<'cargando' | 'ok' | 'error'>('cargando')
-  const [causa, setCausa] = useState<'vpn' | 'imagen' | null>(null)
+  const [aviso, setAviso] = useState<string | null>(null)
+  const [url, setUrl] = useState<string | null>(null)
   const [intento, setIntento] = useState(0)
   const img = useRef<HTMLImageElement>(null)
 
-  // MJPEG: Chrome no siempre dispara onLoad en un stream continuo -> se mira si ya llegó el primer cuadro
+  // 1) pedir el pase temporal a la PC contadora (valida el usuario contra el hub)
+  useEffect(() => {
+    if (!base) return
+    let vivo = true
+    setEstado('cargando')
+    setAviso(null)
+    setUrl(null)
+    pedirPase(base, camara, 'ver')
+      .then((pase) => { if (vivo) setUrl(`${urlVideo(base, camara, pase)}&r=${intento}`) })
+      .catch((e: unknown) => {
+        if (!vivo) return
+        setEstado('error')
+        setAviso(e instanceof ErrorVideo ? e.message : 'No se pudo conectar con la PC contadora.')
+      })
+    return () => { vivo = false }
+  }, [base, camara, intento])
+
+  // 2) MJPEG: Chrome no siempre dispara onLoad en un stream continuo -> se mira si ya llegó el primer cuadro
   useEffect(() => {
     if (!url) return
-    setEstado('cargando')
-    setCausa(null)
     const inicio = Date.now()
     const t = setInterval(() => {
       if ((img.current?.naturalWidth ?? 0) > 0) { setEstado('ok'); clearInterval(t) }
-      else if (Date.now() - inicio > 12000) { setEstado('error'); clearInterval(t) }
+      else if (Date.now() - inicio > 12000) {
+        setEstado('error')
+        setAviso('La PC contadora responde, pero la cámara no está enviando imagen. Revisá el DVR del local.')
+        clearInterval(t)
+      }
     }, 400)
     return () => clearInterval(t)
-  }, [url, intento])
+  }, [url])
 
-  // Si falla: ¿llegamos a la PC contadora? (sí -> problema de imagen; no -> falta la VPN)
-  useEffect(() => {
-    if (estado !== 'error' || !url) return
-    const salud = new URL(url)
-    salud.pathname = '/salud'
-    salud.search = ''
-    const ctrl = new AbortController()
-    const t = setTimeout(() => ctrl.abort(), 6000)
-    fetch(salud.toString(), { signal: ctrl.signal, cache: 'no-store' })
-      .then((r) => setCausa(r.ok ? 'imagen' : 'vpn'))
-      .catch(() => setCausa('vpn'))
-      .finally(() => clearTimeout(t))
-    return () => { clearTimeout(t); ctrl.abort() }
-  }, [estado, url])
-
-  if (!url) {
+  if (!base) {
     return (
       <div className="flex aspect-video flex-col items-center justify-center gap-2 rounded-xl bg-black/40 p-4 text-center text-sm text-sub">
         <VideoOff size={28} aria-hidden /> {motivo}
@@ -300,19 +305,20 @@ function VideoEnVivo({ url, motivo }: { url: string | null; motivo: string }) {
   }
   return (
     <div className="relative aspect-video overflow-hidden rounded-xl bg-black">
-      <img key={intento} ref={img} src={`${url}&r=${intento}`} alt="Video en vivo de la puerta con el conteo"
-        className="h-full w-full object-contain" onError={() => setEstado('error')} />
+      {url && (
+        <img key={url} ref={img} src={url} alt="Video en vivo de la puerta con el conteo"
+          className="h-full w-full object-contain" onError={() => {
+            setEstado('error')
+            setAviso('La PC contadora responde, pero la cámara no está enviando imagen. Revisá el DVR del local.')
+          }} />
+      )}
       {estado !== 'ok' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/60 p-4 text-center text-sm text-white/80">
           {estado === 'cargando' ? <Loader2 size={24} className="animate-spin" aria-hidden /> : <VideoOff size={28} aria-hidden />}
           {estado === 'cargando' ? 'Conectando con la cámara…' : (
             <>
               No se pudo abrir el video.
-              <span className="text-xs text-white/60">
-                {causa === 'imagen' ? 'La PC contadora responde, pero la cámara no está enviando imagen. Revisá el DVR del local.'
-                  : causa === 'vpn' ? 'Este equipo no llega a la PC contadora: el video en vivo solo se ve conectado a la VPN de la empresa (Tailscale).'
-                  : 'Revisando la causa…'}
-              </span>
+              {aviso && <span className="text-xs text-white/60">{aviso}</span>}
               <button onClick={() => setIntento((n) => n + 1)} className="mt-1 rounded-lg border border-white/30 px-2 py-1 text-xs">Reintentar</button>
             </>
           )}

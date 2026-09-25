@@ -42,7 +42,7 @@ export interface Dispositivo {
   nombre: string
   activo: boolean
   ultimo_latido: string | null
-  estado: { version?: string; camaras?: { nombre: string; ok: boolean; fps: number; error: string | null; entradas_hoy?: number; vista_url?: string | null; kbps?: number | null; resolucion?: string }[] } | null
+  estado: { version?: string; camaras?: { nombre: string; ok: boolean; fps: number; error: string | null; entradas_hoy?: number; vista_base?: string | null; kbps?: number | null; resolucion?: string }[] } | null
 }
 
 export type Venta = { local: string; fecha: string; tickets: number }

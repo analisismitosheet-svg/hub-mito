@@ -4,10 +4,11 @@ import { Loader2, RefreshCw, Save, Undo2, Trash2, ArrowLeftRight, CheckCircle2, 
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
+import { ErrorVideo, pedirPase, urlCanal, urlFoto } from '@/lib/videoContador'
 
 /**
  * Editor de calibración de una cámara del contador (IA Cámaras → Calibrar).
- * Se dibuja sobre una foto LIMPIA que da la PC contadora por la VPN
+ * Se dibuja sobre una foto LIMPIA que da la PC contadora (pase temporal con permiso de gestión)
  * (contador-camaras/vista.py, /foto?limpia=1). Al guardar va a
  * contador_config; la PC la recibe con su próximo envío y la aplica sin reiniciar.
  * Coordenadas normalizadas 0..1 (las mismas que usa contador.py / calibrar.py).
@@ -31,16 +32,8 @@ interface Calibracion {
   canal?: number | null
   stream?: 'principal' | 'secundario'
 }
-interface CamEstado { nombre: string; ok: boolean; error: string | null; foto_url?: string | null; calibracion?: Partial<Calibracion>; config_version?: string | null; canales?: number; kbps?: number | null; resolucion?: string }
+interface CamEstado { nombre: string; ok: boolean; error: string | null; vista_base?: string | null; calibracion?: Partial<Calibracion>; config_version?: string | null; canales?: number; kbps?: number | null; resolucion?: string }
 
-/** URL de la PC contadora (VPN) para fotos de canales, derivada de la foto de una cámara (lleva su token). */
-function urlCanal(fotoUrl: string, canal: number): string {
-  const u = new URL(fotoUrl)
-  const partes = u.pathname.split('/') // ['', 'foto', '<camara>']
-  u.pathname = `/canal/${partes[2]}/${canal}`
-  u.searchParams.delete('limpia')
-  return u.toString()
-}
 
 const CAPAS: { id: Capa; label: string; color: string; ayuda: string }[] = [
   { id: 'zona_exterior', label: 'Afuera (roja)', color: '#ef4444', ayuda: 'Pasillo / vereda justo antes de la puerta.' },
@@ -89,6 +82,7 @@ export default function CalibrarCamara() {
   const [cam, setCam] = useState<CamEstado | null>(null)
   const [base, setBase] = useState<CamEstado | null>(null) // cámara del mismo DVR para pedir fotos de canales
   const [elegirCanal, setElegirCanal] = useState(false)
+  const [pase, setPase] = useState<string | null>(null) // pase temporal (alcance gestión) para fotos de la PC contadora
   const [cal, setCal] = useState<Calibracion>(VACIA)
   const [historial, setHistorial] = useState<Calibracion[]>([])
   const [herr, setHerr] = useState<Herramienta>('zona_exterior')
@@ -135,6 +129,13 @@ export default function CalibrarCamara() {
       }
     })()
   }, [leerDispositivo, dispId, camNombre, esNueva])
+
+  useEffect(() => {
+    if (!base?.vista_base) return
+    pedirPase(base.vista_base, base.nombre, 'gestion')
+      .then(setPase)
+      .catch((e: unknown) => setError(e instanceof ErrorVideo ? e.message : 'No se pudo conectar con la PC contadora.'))
+  }, [base?.vista_base, base?.nombre])
 
   // Después de guardar: esperar a que la PC informe que aplicó esta versión
   useEffect(() => {
@@ -282,9 +283,10 @@ export default function CalibrarCamara() {
   }, [cal.linea, cal.invertir, W, H])
 
   const canalActual = cam?.calibracion?.canal ?? null
-  const fotoUrl = cam?.foto_url && cal.canal && cal.canal === canalActual
-    ? `${cam.foto_url}&r=${foto.n}`
-    : base?.foto_url && cal.canal ? `${urlCanal(base.foto_url, cal.canal)}&r=${foto.n}` : null
+  const fotoUrl = !base?.vista_base || !pase || !cal.canal ? null
+    : cam && cal.canal === canalActual
+      ? `${urlFoto(base.vista_base, cam.nombre, pase, true)}&r=${foto.n}`
+      : `${urlCanal(base.vista_base, base.nombre, cal.canal, pase)}&r=${foto.n}`
   const nCanales = base?.canales || 16
   const elegir = (n: number) => {
     const hayDibujo = [cal.zona_exterior, cal.zona_interior, cal.zona_a, cal.zona_b, cal.linea].some((v) => v?.length)
@@ -304,7 +306,7 @@ export default function CalibrarCamara() {
           <Crosshair size={22} className="text-cyan-500" aria-hidden /> Calibrar cámara
         </h1>
         <span className="text-sm text-sub">{local} · {camNombre}{esNueva && !cam ? ' (nueva)' : ''} · canal {cal.canal ?? '—'}</span>
-        <button onClick={() => setElegirCanal(true)} disabled={!base?.foto_url}
+        <button onClick={() => setElegirCanal(true)} disabled={!base?.vista_base || !pase}
           className="btn-press inline-flex h-8 items-center gap-1 rounded-lg border border-line bg-surface2 px-2.5 text-xs font-medium text-ink hover:bg-line disabled:opacity-50">
           <LayoutGrid size={13} aria-hidden /> Cambiar canal
         </button>
@@ -339,7 +341,7 @@ export default function CalibrarCamara() {
 
             {!fotoUrl ? (
               <div className="flex aspect-video items-center justify-center rounded-xl bg-black/40 p-4 text-center text-sm text-sub">
-                {!cal.canal ? 'Elegí el canal de la cámara con "Cambiar canal".' : !base ? 'La PC contadora no informó al hub todavía.' : 'Esta PC no publica la foto (actualizá el contador y corré publicar_vista.bat).'}
+                {!cal.canal ? 'Elegí el canal de la cámara con "Cambiar canal".' : !base ? 'La PC contadora no informó al hub todavía.' : !base.vista_base ? 'La PC contadora no publica el video (falta url_publica en su configuración).' : 'Pidiendo permiso a la PC contadora…'}
               </div>
             ) : (
               <div className="relative select-none overflow-hidden rounded-xl bg-black">
@@ -351,7 +353,7 @@ export default function CalibrarCamara() {
                     {foto.estado === 'cargando' ? <><Loader2 size={22} className="animate-spin" aria-hidden /> Pidiendo una foto a la cámara…</> : (
                       <>
                         <AlertTriangle size={22} aria-hidden />
-                        {cam && !cam.ok ? `La cámara no responde: ${cam.error ?? 'sin imagen'}.` : 'No se pudo traer la foto. Este equipo tiene que estar conectado a la VPN (Tailscale).'}
+                        {cam && !cam.ok ? `La cámara no responde: ${cam.error ?? 'sin imagen'}.` : 'No se pudo traer la foto de la PC contadora (apagada, sin internet o la cámara sin imagen).'}
                         <button onClick={() => setFoto({ n: foto.n + 1, estado: 'cargando' })} className="rounded-lg border border-white/30 px-2 py-1 text-xs">Reintentar</button>
                       </>
                     )}
@@ -500,7 +502,7 @@ export default function CalibrarCamara() {
           </div>
         </div>
       )}
-      {elegirCanal && base?.foto_url && (
+      {elegirCanal && base?.vista_base && pase && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true">
           <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-line bg-surface p-4">
             <div className="mb-3 flex items-center gap-2">
@@ -513,7 +515,7 @@ export default function CalibrarCamara() {
               {Array.from({ length: nCanales }, (_, i) => i + 1).map((n) => (
                 <button key={n} onClick={() => elegir(n)}
                   className={'group relative overflow-hidden rounded-xl border text-left ' + (cal.canal === n ? 'border-brand-500 ring-2 ring-brand-500/50' : 'border-line hover:border-brand-500/60')}>
-                  <CanalFoto url={urlCanal(base.foto_url!, n)} />
+                  <CanalFoto url={urlCanal(base.vista_base!, base.nombre, n, pase)} />
                   <span className="absolute left-1.5 top-1.5 rounded bg-black/70 px-1.5 py-0.5 text-[11px] font-bold text-yellow-300">CANAL {n}</span>
                   {cal.canal === n && <span className="absolute right-1.5 top-1.5 rounded bg-brand-600 px-1.5 py-0.5 text-[10px] font-bold text-white">ELEGIDO</span>}
                 </button>

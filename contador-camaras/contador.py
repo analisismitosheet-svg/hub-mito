@@ -458,8 +458,8 @@ class Camara(threading.Thread):
         self.reloj = time.time  # evaluar.py lo cambia por el tiempo del video
         self.vista = None  # último cuadro anotado (con --ver o mientras alguien mira el video en vivo)
         self.mirando = 0   # conexiones abiertas al video en vivo (vista.py)
-        self.vista_url: str | None = None
-        self.foto_url: str | None = None  # foto limpia (sin dibujos) para calibrar desde el hub
+        self.vista_base: str | None = None  # URL pública del servidor de video (el hub pide pases ahí)
+        self.local: str | None = None       # código del local en el hub (lo dice el hub al recibir los conteos)
         self.lector: Lector | None = None
         self._detener = False
         self.eventos: list[str] = []  # para evaluar.py
@@ -544,8 +544,8 @@ class Camara(threading.Thread):
         error = self.lector.error if self.lector else None
         return {"nombre": self.nombre, "modo": self.modo, "ok": error is None, "error": error,
                 "fps": round(self.fps, 1), "entradas_hoy": h["entradas"], "salidas_hoy": h["salidas"],
-                "transeuntes_hoy": h["transeuntes"], "empleados_hoy": h["empleados"], "vista_url": self.vista_url,
-                "foto_url": self.foto_url, "calibracion": self.calibracion(), "config_version": self.config_version,
+                "transeuntes_hoy": h["transeuntes"], "empleados_hoy": h["empleados"], "vista_base": self.vista_base,
+                "calibracion": self.calibracion(), "config_version": self.config_version,
                 "canales": getattr(self.lector, "canales", 0) or 0,
                 "kbps": getattr(self.lector, "kbps", None), "resolucion": self.resolucion()}
 
@@ -793,10 +793,7 @@ class Sistema:
             self.camaras.append(c)
         if self.servidor is not None:
             self.servidor.camaras[c.nombre] = c
-            url = (self.cfg.get("vista") or {}).get("url_publica")
-            if url:
-                c.vista_url = self.servidor.url_camara(url, c.nombre)
-                c.foto_url = self.servidor.url_camara(url, c.nombre, foto=True)
+            c.vista_base = (self.cfg.get("vista") or {}).get("url_publica")
         if iniciar:
             c.start()
         return c
@@ -900,6 +897,8 @@ def enviar(sistema: Sistema) -> None:
                 log.error("el hub rechazó el envío de %s: %s", quienes, respuesta.get("error"))
                 return False
             almacen.marcar_enviados(filas)
+            for c in suyas:  # el hub dice de qué local es este token (para autorizar el video)
+                c.local = respuesta.get("local") or c.local
             desde_hub = respuesta.get("config") or {}
             cambio = sistema.cambios_desde_hub(desde_hub, token)
             cambio = aplicar_calibraciones(desde_hub, [c for c in sistema.camaras if sistema.token(c.cam) == token]) or cambio
@@ -1005,12 +1004,10 @@ def main() -> None:
     vista = cfg.get("vista") or {}
     if vista.get("activo"):
         from vista import ServidorVista
-        sistema.servidor = ServidorVista(camaras, vista)
+        sistema.servidor = ServidorVista(camaras, vista, cfg.get("hub_supabase"))
         sistema.servidor.iniciar()
-        if vista.get("url_publica"):
-            for c in camaras:
-                c.vista_url = sistema.servidor.url_camara(vista["url_publica"], c.nombre)
-                c.foto_url = sistema.servidor.url_camara(vista["url_publica"], c.nombre, foto=True)
+        for c in camaras:
+            c.vista_base = vista.get("url_publica")
     for c in camaras:
         c.start()
     threading.Thread(target=enviar, args=(sistema,), daemon=True, name="envio").start()
