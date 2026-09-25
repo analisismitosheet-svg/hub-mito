@@ -146,7 +146,7 @@ export default function CalibrarCamara() {
           setGuardado({ ...guardado, aplicado: true })
         }
       } catch { /* reintenta */ }
-    }, 5000)
+    }, 3000)
     return () => clearInterval(t)
   }, [guardado, leerDispositivo])
 
@@ -464,7 +464,7 @@ export default function CalibrarCamara() {
               <p className={'flex items-center gap-2 rounded-xl border p-3 text-xs ' + (guardado.aplicado ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : 'border-line bg-surface2 text-sub')}>
                 {guardado.aplicado
                   ? <><CheckCircle2 size={15} aria-hidden /> La PC contadora ya está contando con esta calibración.</>
-                  : <><Loader2 size={15} className="animate-spin" aria-hidden /> Guardado. Esperando que la PC contadora lo aplique (menos de 1 minuto)…</>}
+                  : <><Loader2 size={15} className="animate-spin" aria-hidden /> Guardado. Esperando que la PC contadora lo aplique (unos segundos)…</>}
               </p>
             )}
             {guardado?.aplicado && (

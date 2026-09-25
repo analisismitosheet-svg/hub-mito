@@ -754,6 +754,7 @@ class Sistema:
         self.servidor = None
         self.reconocedores: dict[str, Reconocedor] = {}
         self.lock = threading.Lock()
+        self.despertar = threading.Event()
 
     def token(self, cam: dict) -> str:
         return cam.get("token") or self.cfg["token"]
@@ -782,7 +783,7 @@ class Sistema:
             self.servidor.camaras.pop(c.nombre, None)
         log.info("[%s] cámara quitada desde el hub", c.nombre)
 
-    def cambios_desde_hub(self, desde_hub: dict, token: str) -> None:
+    def cambios_desde_hub(self, desde_hub: dict, token: str) -> bool:
         """Cámaras nuevas (nueva=true) o a quitar (eliminar=true) pedidas desde el editor del hub
         para ESTE local (token). La nueva usa la misma conexión al DVR que otra cámara del local."""
         propias = [c for c in self.camaras if self.token(c.cam) == token]
@@ -812,6 +813,7 @@ class Sistema:
             cambiaron = True
         if cambiaron:
             self.guardar_config()
+        return cambiaron
 
     def guardar_config(self) -> None:
         with _lock_config:
@@ -830,52 +832,88 @@ class Sistema:
             ruta.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+def _tramo(f: tuple) -> dict:
+    return {"camara": f[0], "desde": datetime.fromtimestamp(f[1], timezone.utc).isoformat().replace("+00:00", "Z"),
+            **dict(zip(CAMPOS, f[2:]))}
+
+
 def enviar(sistema: Sistema) -> None:
-    """Sube los tramos pendientes. Cada cámara puede tener su propio "token" (de OTRO local
-    registrado en el hub): así una PC puede contar varios locales y cada conteo va a su local."""
+    """Sube los tramos pendientes y trae la calibración del hub.
+    Todos los locales de esta PC van en UN envío ({lotes: [...]}, cada uno con su token), cada
+    `envio_segundos` (15 por defecto). Si se aplicó algo del hub, se vuelve a enviar enseguida
+    para que el editor muestre "ya está contando" sin esperar al próximo ciclo."""
     cfg, almacen = sistema.cfg, sistema.almacen
     url = cfg["hub_url"].rstrip("/") + "/api/contador-ingesta"
-    cada = int(cfg.get("envio_segundos", 60))
+    cada = int(cfg.get("envio_segundos", 15))
+    por_lote = True  # si el hub todavía no acepta lotes, se manda de a un local (modo viejo)
     while True:
         camaras = list(sistema.camaras)
         token_de = {c.nombre: sistema.token(c.cam) for c in camaras}
         pendientes = almacen.pendientes()
+        grupos = []
         for token in dict.fromkeys(token_de.values()):
-            filas = [f for f in pendientes if token_de.get(f[0], cfg["token"]) == token]
-            suyas = [c for c in camaras if token_de[c.nombre] == token]
-            cuerpo = {
-                "tramos": [
-                    {"camara": f[0], "desde": datetime.fromtimestamp(f[1], timezone.utc).isoformat().replace("+00:00", "Z"),
-                     **dict(zip(CAMPOS, f[2:]))}
-                    for f in filas
-                ],
-                "estado": {"version": VERSION, "camaras": [c.estado() for c in suyas]},
-            }
-            pedido = urllib.request.Request(
-                url, data=json.dumps(cuerpo).encode(), method="POST",
-                headers={"Content-Type": "application/json", "X-Contador-Token": token},
-            )
+            grupos.append((token, [f for f in pendientes if token_de.get(f[0], cfg["token"]) == token],
+                           [c for c in camaras if token_de[c.nombre] == token]))
+
+        def cuerpo(token, filas, suyas, con_token: bool) -> dict:
+            b = {"tramos": [_tramo(f) for f in filas],
+                 "estado": {"version": VERSION, "camaras": [c.estado() for c in suyas]}}
+            return {"token": token, **b} if con_token else b
+
+        def post(datos: dict, token: str | None = None) -> dict:
+            headers = {"Content-Type": "application/json"}
+            if token:
+                headers["X-Contador-Token"] = token
+            pedido = urllib.request.Request(url, data=json.dumps(datos).encode(), method="POST", headers=headers)
+            with urllib.request.urlopen(pedido, timeout=30) as r:
+                return json.load(r)
+
+        def procesar(token, filas, suyas, respuesta: dict) -> bool:
             quienes = ", ".join(c.nombre for c in suyas)
-            try:
-                with urllib.request.urlopen(pedido, timeout=30) as r:
-                    respuesta = json.load(r)
-                almacen.marcar_enviados(filas)
-                desde_hub = respuesta.get("config") or {}
-                sistema.cambios_desde_hub(desde_hub, token)
-                aplicar_calibraciones(desde_hub, [c for c in sistema.camaras if sistema.token(c.cam) == token])
-                if filas:
-                    log.info("subidos %d tramos al hub (%s)", len(filas), quienes)
-            except urllib.error.HTTPError as e:
-                log.error("el hub rechazó el envío de %s (%s): %s", quienes, e.code, e.read()[:300].decode(errors="replace"))
-            except Exception as e:  # noqa: BLE001 — sin internet: se reintenta en el próximo ciclo
-                log.warning("sin conexión con el hub (%s); %d tramos quedan pendientes", e, len(filas))
-        time.sleep(cada)
+            if respuesta.get("status", 200) != 200 or respuesta.get("error"):
+                log.error("el hub rechazó el envío de %s: %s", quienes, respuesta.get("error"))
+                return False
+            almacen.marcar_enviados(filas)
+            desde_hub = respuesta.get("config") or {}
+            cambio = sistema.cambios_desde_hub(desde_hub, token)
+            cambio = aplicar_calibraciones(desde_hub, [c for c in sistema.camaras if sistema.token(c.cam) == token]) or cambio
+            if filas:
+                log.info("subidos %d tramos al hub (%s)", len(filas), quienes)
+            return cambio
+
+        hubo_cambios = False
+        try:
+            if por_lote:
+                resp = post({"lotes": [cuerpo(t, f, c, True) for t, f, c in grupos]})
+                if isinstance(resp.get("lotes"), list) and len(resp["lotes"]) == len(grupos):
+                    for (t, f, c), r in zip(grupos, resp["lotes"]):
+                        hubo_cambios = procesar(t, f, c, r) or hubo_cambios
+                else:
+                    por_lote = False
+            if not por_lote:
+                for t, f, c in grupos:
+                    try:
+                        hubo_cambios = procesar(t, f, c, post(cuerpo(t, f, c, False), t)) or hubo_cambios
+                    except urllib.error.HTTPError as e:
+                        log.error("el hub rechazó el envío (%s): %s", e.code, e.read()[:300].decode(errors="replace"))
+        except urllib.error.HTTPError as e:
+            if por_lote and e.code in (400, 401):  # hub viejo: no entiende "lotes"
+                por_lote = False
+                continue
+            log.error("el hub rechazó el envío (%s): %s", e.code, e.read()[:300].decode(errors="replace"))
+        except Exception as e:  # noqa: BLE001 — sin internet: se reintenta en el próximo ciclo
+            log.warning("sin conexión con el hub (%s); %d tramos quedan pendientes", e, len(pendientes))
+        if hubo_cambios:
+            time.sleep(2)  # dar tiempo a que la cámara tome la calibración y avisar enseguida
+            continue
+        sistema.despertar.wait(cada)
+        sistema.despertar.clear()
 
 
 _lock_config = threading.Lock()
 
 
-def aplicar_calibraciones(desde_hub: dict, camaras: list[Camara]) -> None:
+def aplicar_calibraciones(desde_hub: dict, camaras: list[Camara]) -> bool:
     """Aplica la calibración guardada en el hub si es más nueva, y la persiste en config.json
     (así sigue valiendo aunque la PC arranque sin internet)."""
     cambiaron = False
@@ -886,7 +924,7 @@ def aplicar_calibraciones(desde_hub: dict, camaras: list[Camara]) -> None:
             c.aplicar_config(item.get("config") or {}, item["actualizado"])
             cambiaron = True
     if not cambiaron:
-        return
+        return False
     with _lock_config:
         ruta = BASE / "config.json"
         cfg = json.loads(ruta.read_text(encoding="utf-8"))
@@ -902,6 +940,7 @@ def aplicar_calibraciones(desde_hub: dict, camaras: list[Camara]) -> None:
                 elif canal:
                     cam["canal"] = canal
         ruta.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+    return True
 
 
 # ------------------------------------------------------------------- main ---

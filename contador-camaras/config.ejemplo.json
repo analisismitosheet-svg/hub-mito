@@ -14,7 +14,7 @@
   "confianza": 0.4,
   "imgsz": 640,
   "fps_proceso": 8,
-  "envio_segundos": 60,
+  "envio_segundos": 15,
 
   "camaras": [
     {

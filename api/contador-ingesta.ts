@@ -8,7 +8,7 @@
  * El local sale del dispositivo registrado, NUNCA del body: un token robado
  * solo puede escribir conteos de su propio local.
  *
- * Contrato:
+ * Contrato (también acepta varios locales juntos: body { lotes: [{ token, tramos, estado }] }):
  *   POST  header  X-Contador-Token: <token del dispositivo>
  *         body    {
  *                   tramos: [{ camara, desde (ISO UTC, múltiplo de 15 min), entradas, salidas,
@@ -83,17 +83,11 @@ function validarTramo(t: unknown): Tramo | null {
   return { camara, desde: fecha.toISOString(), entradas, salidas, ...extra }
 }
 
-export default async function handler(req: Req, res: Res) {
-  res.setHeader('Cache-Control', 'no-store')
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' })
+type Resultado = { status: number; cuerpo: Record<string, unknown> }
 
-  const url = process.env.SUPABASE_URL?.replace(/\/$/, '')
-  const service = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !service) return res.status(500).json({ error: 'Falta SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY' })
-  const h = { apikey: service, Authorization: `Bearer ${service}`, 'Content-Type': 'application/json' }
-
-  const token = cabecera(req, 'x-contador-token').trim()
-  if (token.length < 32) return res.status(401).json({ error: 'Token inválido' })
+/** Procesa el envío de UN local (un token): guarda tramos, estado y devuelve su calibración. */
+async function procesar(url: string, h: Record<string, string>, token: string, body: Record<string, unknown>): Promise<Resultado> {
+  if (token.length < 32) return { status: 401, cuerpo: { error: 'Token inválido' } }
   const hash = createHash('sha256').update(token).digest('hex')
 
   const dRes = await fetch(
@@ -101,19 +95,12 @@ export default async function handler(req: Req, res: Res) {
     { headers: h },
   )
   const disp = ((await dRes.json().catch(() => [])) as { id: string; local: string }[])[0]
-  if (!dRes.ok || !disp) return res.status(401).json({ error: 'Dispositivo no registrado o inactivo' })
-
-  let body: Record<string, unknown> = {}
-  try {
-    body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body ?? {})
-  } catch {
-    return res.status(400).json({ error: 'JSON inválido' })
-  }
+  if (!dRes.ok || !disp) return { status: 401, cuerpo: { error: 'Dispositivo no registrado o inactivo' } }
 
   const crudos = Array.isArray(body.tramos) ? body.tramos : []
-  if (crudos.length > MAX_TRAMOS) return res.status(413).json({ error: `Máximo ${MAX_TRAMOS} tramos por envío` })
+  if (crudos.length > MAX_TRAMOS) return { status: 413, cuerpo: { error: `Máximo ${MAX_TRAMOS} tramos por envío` } }
   const tramos = crudos.map(validarTramo)
-  if (tramos.some((t) => t === null)) return res.status(400).json({ error: 'Hay tramos con formato inválido' })
+  if (tramos.some((t) => t === null)) return { status: 400, cuerpo: { error: 'Hay tramos con formato inválido' } }
 
   const ahora = new Date().toISOString()
   if (tramos.length) {
@@ -125,7 +112,7 @@ export default async function handler(req: Req, res: Res) {
     })
     if (!up.ok) {
       const detalle = await up.text().catch(() => '')
-      return res.status(502).json({ error: 'No se pudieron guardar los conteos', detalle: detalle.slice(0, 300) })
+      return { status: 502, cuerpo: { error: 'No se pudieron guardar los conteos', detalle: detalle.slice(0, 300) } }
     }
   }
 
@@ -144,5 +131,41 @@ export default async function handler(req: Req, res: Res) {
   const filas = cRes?.ok ? ((await cRes.json().catch(() => [])) as { camara: string; config: unknown; actualizado: string }[]) : []
   const config = Object.fromEntries(filas.map((f) => [f.camara, { config: f.config, actualizado: f.actualizado }]))
 
-  return res.status(200).json({ ok: true, guardados: tramos.length, local: disp.local, config })
+  return { status: 200, cuerpo: { ok: true, guardados: tramos.length, local: disp.local, config } }
+}
+
+const MAX_LOTES = 40
+
+export default async function handler(req: Req, res: Res) {
+  res.setHeader('Cache-Control', 'no-store')
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' })
+
+  const url = process.env.SUPABASE_URL?.replace(/\/$/, '')
+  const service = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !service) return res.status(500).json({ error: 'Falta SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY' })
+  const h = { apikey: service, Authorization: `Bearer ${service}`, 'Content-Type': 'application/json' }
+
+  let body: Record<string, unknown> = {}
+  try {
+    body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body ?? {})
+  } catch {
+    return res.status(400).json({ error: 'JSON inválido' })
+  }
+
+  // Varios locales en UN envío (PC contadora central): { lotes: [{ token, tramos, estado }] }
+  // -> { ok, lotes: [{ status, ...resultado }] } en el mismo orden. Cada lote se valida con SU token.
+  if (Array.isArray(body.lotes)) {
+    if (body.lotes.length > MAX_LOTES) return res.status(413).json({ error: `Máximo ${MAX_LOTES} locales por envío` })
+    const lotes = await Promise.all(
+      (body.lotes as unknown[]).map(async (l) => {
+        const lote = l && typeof l === 'object' ? (l as Record<string, unknown>) : {}
+        const r = await procesar(url, h, typeof lote.token === 'string' ? lote.token.trim() : '', lote)
+        return { status: r.status, ...r.cuerpo }
+      }),
+    )
+    return res.status(200).json({ ok: true, lotes })
+  }
+
+  const r = await procesar(url, h, cabecera(req, 'x-contador-token').trim(), body)
+  return res.status(r.status).json(r.cuerpo)
 }
