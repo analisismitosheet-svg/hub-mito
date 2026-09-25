@@ -37,6 +37,7 @@ interface LocalHoy {
 }
 
 const REFRESCO_MS = 30000
+const MINUTOS_VIDEO = 5 // el video en vivo se pausa solo (sale por la subida de internet de la PC contadora)
 const OFFLINE_MIN = 5
 const nf = (n: number) => Math.round(n).toLocaleString('es-AR')
 const hoyIso = () => {
@@ -262,11 +263,25 @@ function VideoEnVivo({ base, camara, motivo }: { base: string | null; camara: st
   const [aviso, setAviso] = useState<string | null>(null)
   const [url, setUrl] = useState<string | null>(null)
   const [intento, setIntento] = useState(0)
+  const [pausado, setPausado] = useState<null | 'oculto' | 'tiempo'>(null)
   const img = useRef<HTMLImageElement>(null)
+
+  // Ahorro de internet (el video sale por la subida de la PC contadora):
+  // se corta si la pestaña no está a la vista y a los 5 minutos de estar mirando.
+  useEffect(() => {
+    const alCambiar = () => { if (document.visibilityState === 'hidden') setPausado('oculto') }
+    document.addEventListener('visibilitychange', alCambiar)
+    return () => document.removeEventListener('visibilitychange', alCambiar)
+  }, [])
+  useEffect(() => {
+    if (pausado || !base) return
+    const t = setTimeout(() => setPausado('tiempo'), MINUTOS_VIDEO * 60000)
+    return () => clearTimeout(t)
+  }, [pausado, base, intento])
 
   // 1) pedir el pase temporal a la PC contadora (valida el usuario contra el hub)
   useEffect(() => {
-    if (!base) return
+    if (!base || pausado) return
     let vivo = true
     setEstado('cargando')
     setAviso(null)
@@ -279,7 +294,7 @@ function VideoEnVivo({ base, camara, motivo }: { base: string | null; camara: st
         setAviso(e instanceof ErrorVideo ? e.message : 'No se pudo conectar con la PC contadora.')
       })
     return () => { vivo = false }
-  }, [base, camara, intento])
+  }, [base, camara, intento, pausado])
 
   // 2) MJPEG: Chrome no siempre dispara onLoad en un stream continuo -> se mira si ya llegó el primer cuadro
   useEffect(() => {
@@ -300,6 +315,16 @@ function VideoEnVivo({ base, camara, motivo }: { base: string | null; camara: st
     return (
       <div className="flex aspect-video flex-col items-center justify-center gap-2 rounded-xl bg-black/40 p-4 text-center text-sm text-sub">
         <VideoOff size={28} aria-hidden /> {motivo}
+      </div>
+    )
+  }
+  if (pausado) {
+    return (
+      <div className="flex aspect-video flex-col items-center justify-center gap-2 rounded-xl bg-black/60 p-4 text-center text-sm text-white/80">
+        <VideoOff size={28} aria-hidden />
+        {pausado === 'tiempo' ? `Video pausado después de ${MINUTOS_VIDEO} minutos para ahorrar internet.` : 'Video pausado mientras no mirabas esta pestaña.'}
+        <button onClick={() => { setPausado(null); setIntento((n) => n + 1) }}
+          className="mt-1 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white">Seguir viendo</button>
       </div>
     )
   }
