@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Loader2, RefreshCw, Save, Undo2, Trash2, ArrowLeftRight, CheckCircle2, AlertTriangle, Crosshair } from 'lucide-react'
+import { Loader2, RefreshCw, Save, Undo2, Trash2, ArrowLeftRight, CheckCircle2, AlertTriangle, Crosshair, LayoutGrid, X } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
@@ -28,8 +28,18 @@ interface Calibracion {
   invertir: boolean
   punto: 'pie' | 'centro'
   empleados: Empleados | null
+  canal?: number | null
 }
-interface CamEstado { nombre: string; ok: boolean; error: string | null; foto_url?: string | null; calibracion?: Partial<Calibracion>; config_version?: string | null }
+interface CamEstado { nombre: string; ok: boolean; error: string | null; foto_url?: string | null; calibracion?: Partial<Calibracion>; config_version?: string | null; canales?: number }
+
+/** URL de la PC contadora (VPN) para fotos de canales, derivada de la foto de una cámara (lleva su token). */
+function urlCanal(fotoUrl: string, canal: number): string {
+  const u = new URL(fotoUrl)
+  const partes = u.pathname.split('/') // ['', 'foto', '<camara>']
+  u.pathname = `/canal/${partes[2]}/${canal}`
+  u.searchParams.delete('limpia')
+  return u.toString()
+}
 
 const CAPAS: { id: Capa; label: string; color: string; ayuda: string }[] = [
   { id: 'zona_exterior', label: 'Afuera (roja)', color: '#ef4444', ayuda: 'Pasillo / vereda justo antes de la puerta.' },
@@ -42,6 +52,8 @@ const VACIA: Calibracion = {
   modo: 'zonas', zona_exterior: null, zona_interior: null, zona_a: null, zona_b: null, linea: null,
   invertir: false, punto: 'pie', empleados: null,
 }
+
+const k = (v: unknown) => v !== undefined
 
 function sb() {
   if (!supabase) throw new Error('Supabase no está configurado.')
@@ -70,9 +82,12 @@ export default function CalibrarCamara() {
   const [params] = useSearchParams()
   const dispId = params.get('disp') ?? ''
   const camNombre = params.get('cam') ?? ''
+  const esNueva = params.get('nueva') === '1'
 
   const [local, setLocal] = useState('')
   const [cam, setCam] = useState<CamEstado | null>(null)
+  const [base, setBase] = useState<CamEstado | null>(null) // cámara del mismo DVR para pedir fotos de canales
+  const [elegirCanal, setElegirCanal] = useState(false)
   const [cal, setCal] = useState<Calibracion>(VACIA)
   const [historial, setHistorial] = useState<Calibracion[]>([])
   const [herr, setHerr] = useState<Herramienta>('zona_exterior')
@@ -91,29 +106,34 @@ export default function CalibrarCamara() {
   const leerDispositivo = useCallback(async () => {
     const { data, error: err } = await sb().from('contador_dispositivos').select('local,estado').eq('id', dispId).maybeSingle()
     if (err || !data) throw new Error(err?.message ?? 'No se encontró la PC contadora.')
-    const c = ((data.estado as { camaras?: CamEstado[] } | null)?.camaras ?? []).find((x) => x.nombre === camNombre) ?? null
-    return { local: data.local as string, cam: c }
+    const todas = (data.estado as { camaras?: CamEstado[] } | null)?.camaras ?? []
+    const c = todas.find((x) => x.nombre === camNombre) ?? null
+    return { local: data.local as string, cam: c, base: c ?? todas[0] ?? null }
   }, [dispId, camNombre])
 
   useEffect(() => {
     void (async () => {
       try {
-        const [{ local: l, cam: c }, guardada] = await Promise.all([
+        const [{ local: l, cam: c, base: b }, guardada] = await Promise.all([
           leerDispositivo(),
           sb().from('contador_config').select('config').eq('dispositivo_id', dispId).eq('camara', camNombre).maybeSingle(),
         ])
         setLocal(l)
         setCam(c)
-        const base = (guardada.data?.config as Partial<Calibracion> | undefined) ?? c?.calibracion ?? {}
-        setCal({ ...VACIA, ...Object.fromEntries(Object.entries(base).filter(([, v]) => v !== undefined)) } as Calibracion)
-        if (!c) setError('Esta cámara todavía no informó al hub. Revisá que el contador esté corriendo en la PC del local.')
+        setBase(b)
+        // lo que reporta la PC (incluye el canal real) + lo guardado en el hub encima
+        const inicial = { ...(c?.calibracion ?? {}), ...((guardada.data?.config as Partial<Calibracion> | undefined) ?? {}) }
+        setCal({ ...VACIA, ...Object.fromEntries(Object.entries(inicial).filter(([, v]) => v !== undefined && k(v))) } as Calibracion)
+        if (!b) setError('La PC de este local todavía no informó al hub. Revisá que el contador esté corriendo.')
+        else if (!c && !esNueva) setError('Esta cámara todavía no informó al hub. Revisá que el contador esté corriendo en la PC del local.')
+        if (esNueva && !c) setElegirCanal(true)
       } catch (e) {
         setError((e as Error).message)
       } finally {
         setCargando(false)
       }
     })()
-  }, [leerDispositivo, dispId, camNombre])
+  }, [leerDispositivo, dispId, camNombre, esNueva])
 
   // Después de guardar: esperar a que la PC informe que aplicó esta versión
   useEffect(() => {
@@ -121,6 +141,7 @@ export default function CalibrarCamara() {
     const t = setInterval(async () => {
       try {
         const { cam: c } = await leerDispositivo()
+        if (c && !cam) setCam(c)
         if (c?.config_version && new Date(c.config_version).getTime() === new Date(guardado.version).getTime()) {
           setGuardado({ ...guardado, aplicado: true })
         }
@@ -217,6 +238,7 @@ export default function CalibrarCamara() {
 
   const problemas = useMemo(() => {
     const p: string[] = []
+    if (!cal.canal) p.push('Elegí el canal (la cámara del DVR) con "Cambiar canal".')
     if (cal.modo === 'linea' && (cal.linea?.length ?? 0) !== 2) p.push('La línea necesita exactamente 2 puntos.')
     if (cal.modo !== 'linea') {
       if ((cal.zona_exterior?.length ?? 0) < 3) p.push('La zona de afuera (roja) necesita 3 puntos o más.')
@@ -233,8 +255,8 @@ export default function CalibrarCamara() {
     setGuardando(true)
     setError(null)
     const limpio = (v: Punto[] | null) => (v && v.length ? v : null)
-    const config: Calibracion = {
-      ...cal, modo: cal.modo ?? 'zonas',
+    const config: Calibracion & { nueva?: boolean } = {
+      ...cal, modo: cal.modo ?? 'zonas', ...(esNueva && !cam ? { nueva: true } : {}),
       zona_exterior: limpio(cal.zona_exterior), zona_interior: limpio(cal.zona_interior),
       zona_a: limpio(cal.zona_a), zona_b: limpio(cal.zona_b), linea: limpio(cal.linea),
     }
@@ -258,7 +280,18 @@ export default function CalibrarCamara() {
     return { x1: mx - nx * k * 0.6, y1: my - ny * k * 0.6, x2: mx + nx * k, y2: my + ny * k }
   }, [cal.linea, cal.invertir, W, H])
 
-  const fotoUrl = cam?.foto_url ? `${cam.foto_url}&r=${foto.n}` : null
+  const canalActual = cam?.calibracion?.canal ?? null
+  const fotoUrl = cam?.foto_url && cal.canal && cal.canal === canalActual
+    ? `${cam.foto_url}&r=${foto.n}`
+    : base?.foto_url && cal.canal ? `${urlCanal(base.foto_url, cal.canal)}&r=${foto.n}` : null
+  const nCanales = base?.canales || 16
+  const elegir = (n: number) => {
+    const hayDibujo = [cal.zona_exterior, cal.zona_interior, cal.zona_a, cal.zona_b, cal.linea].some((v) => v?.length)
+    if (n !== cal.canal && hayDibujo && !window.confirm('Cambiar de canal borra las zonas dibujadas (son de otra imagen). ¿Seguimos?')) return
+    cambiar(n === cal.canal ? cal : { ...cal, canal: n, zona_exterior: null, zona_interior: null, zona_a: null, zona_b: null, linea: null })
+    setFoto({ n: foto.n + 1, estado: 'cargando' })
+    setElegirCanal(false)
+  }
   const btn = 'btn-press inline-flex h-8 items-center gap-1 rounded-lg border border-line bg-surface2 px-2.5 text-xs font-medium text-ink hover:bg-line disabled:opacity-50'
   const capasVisibles = CAPAS.filter((c) => (cal.modo === 'linea' ? c.id !== 'zona_exterior' && c.id !== 'zona_interior' : c.id !== 'linea'))
 
@@ -269,7 +302,11 @@ export default function CalibrarCamara() {
         <h1 className="flex items-center gap-2 font-display text-2xl font-semibold text-ink">
           <Crosshair size={22} className="text-cyan-500" aria-hidden /> Calibrar cámara
         </h1>
-        <span className="text-sm text-sub">{local} · {camNombre}</span>
+        <span className="text-sm text-sub">{local} · {camNombre}{esNueva && !cam ? ' (nueva)' : ''} · canal {cal.canal ?? '—'}</span>
+        <button onClick={() => setElegirCanal(true)} disabled={!base?.foto_url}
+          className="btn-press inline-flex h-8 items-center gap-1 rounded-lg border border-line bg-surface2 px-2.5 text-xs font-medium text-ink hover:bg-line disabled:opacity-50">
+          <LayoutGrid size={13} aria-hidden /> Cambiar canal
+        </button>
         <Link to="/ia-camaras?tab=pcs" className="ml-auto text-xs text-brand-400 hover:underline">Volver a PCs y cámaras</Link>
       </header>
 
@@ -301,7 +338,7 @@ export default function CalibrarCamara() {
 
             {!fotoUrl ? (
               <div className="flex aspect-video items-center justify-center rounded-xl bg-black/40 p-4 text-center text-sm text-sub">
-                {!cam ? 'La cámara no informó al hub todavía.' : 'Esta PC no publica la foto (actualizá el contador y corré publicar_vista.bat).'}
+                {!cal.canal ? 'Elegí el canal de la cámara con "Cambiar canal".' : !base ? 'La PC del local no informó al hub todavía.' : 'Esta PC no publica la foto (actualizá el contador y corré publicar_vista.bat).'}
               </div>
             ) : (
               <div className="relative select-none overflow-hidden rounded-xl bg-black">
@@ -438,6 +475,42 @@ export default function CalibrarCamara() {
           </div>
         </div>
       )}
+      {elegirCanal && base?.foto_url && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true">
+          <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-line bg-surface p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <LayoutGrid size={16} className="text-cyan-500" aria-hidden />
+              <h2 className="text-sm font-semibold text-ink">Elegí la cámara de la puerta ({local})</h2>
+              <span className="text-xs text-sub">Las fotos tardan unos segundos: se piden al DVR por la VPN.</span>
+              <button onClick={() => setElegirCanal(false)} className="ml-auto rounded-lg p-1 text-sub hover:bg-surface2" aria-label="Cerrar"><X size={16} /></button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+              {Array.from({ length: nCanales }, (_, i) => i + 1).map((n) => (
+                <button key={n} onClick={() => elegir(n)}
+                  className={'group relative overflow-hidden rounded-xl border text-left ' + (cal.canal === n ? 'border-brand-500 ring-2 ring-brand-500/50' : 'border-line hover:border-brand-500/60')}>
+                  <CanalFoto url={urlCanal(base.foto_url!, n)} />
+                  <span className="absolute left-1.5 top-1.5 rounded bg-black/70 px-1.5 py-0.5 text-[11px] font-bold text-yellow-300">CANAL {n}</span>
+                  {cal.canal === n && <span className="absolute right-1.5 top-1.5 rounded bg-brand-600 px-1.5 py-0.5 text-[10px] font-bold text-white">ELEGIDO</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
+  )
+}
+
+function CanalFoto({ url }: { url: string }) {
+  const [estado, setEstado] = useState<'cargando' | 'ok' | 'error'>('cargando')
+  return (
+    <div className="relative aspect-video bg-black">
+      <img src={url} alt="" loading="lazy" className="h-full w-full object-cover" onLoad={() => setEstado('ok')} onError={() => setEstado('error')} />
+      {estado !== 'ok' && (
+        <div className="absolute inset-0 flex items-center justify-center text-[11px] text-white/60">
+          {estado === 'cargando' ? <Loader2 size={16} className="animate-spin" aria-hidden /> : 'sin imagen'}
+        </div>
+      )}
+    </div>
   )
 }

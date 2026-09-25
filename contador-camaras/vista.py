@@ -18,6 +18,7 @@ Publicar en la VPN: publicar_vista.bat (una vez, como administrador).
 from __future__ import annotations
 
 import hmac
+import json
 import logging
 import threading
 import time
@@ -89,12 +90,28 @@ class ServidorVista:
                     return
                 token = urllib.parse.parse_qs(url.query).get("t", [""])[0]
                 partes = url.path.strip("/").split("/", 1)
-                if len(partes) != 2 or partes[0] not in ("video", "foto"):
+                if len(partes) != 2 or partes[0] not in ("video", "foto", "canales", "canal"):
                     return self.responder(404, b"no existe", "text/plain")
+                numero = None
+                if partes[0] == "canal":  # /canal/<camara>/<n>
+                    resto, _, num = partes[1].rpartition("/")
+                    if not num.isdigit():
+                        return self.responder(404, b"no existe", "text/plain")
+                    partes[1], numero = resto, int(num)
                 nombre = urllib.parse.unquote(partes[1])
                 cam = servidor.camaras.get(nombre)
                 if cam is None or not hmac.compare_digest(token, servidor.token_camara(nombre)):
                     return self.responder(401, b"token invalido", "text/plain")
+                if partes[0] in ("canales", "canal"):
+                    # Fotos de todos los canales del DVR para elegir la cámara desde el hub (solo SDK Dahua)
+                    lector = cam.lector
+                    if not hasattr(lector, "fotos_canales"):
+                        return self.responder(501, b"solo con conexion por SDK Dahua", "text/plain")
+                    if partes[0] == "canales":
+                        cuerpo = json.dumps({"canales": lector.canales, "actual": cam.canal()}).encode()
+                        return self.responder(200, cuerpo, "application/json")
+                    jpg = lector.fotos_canales().get(numero)
+                    return self.responder(200 if jpg else 404, jpg or b"sin imagen", "image/jpeg" if jpg else "text/plain")
                 cam.mirando += 1
                 try:
                     if partes[0] == "foto":

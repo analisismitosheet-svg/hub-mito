@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Loader2, RefreshCw, Footprints, LogIn, LogOut, Users, Percent, Cctv, Plus, Copy, Check, Power, Trash2,
 } from 'lucide-react'
@@ -352,6 +352,30 @@ export function Camaras({ dispositivos, locales, onCambio, tarjeta, btnChico }: 
   const [copiado, setCopiado] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const [borrar, setBorrar] = useState<Dispositivo | null>(null)
+  const [quitarCam, setQuitarCam] = useState<{ d: Dispositivo; nombre: string } | null>(null)
+  const navegar = useNavigate()
+
+  // Segunda entrada (u otra cámara del mismo DVR): se elige el canal y se calibra en el editor;
+  // al guardar, la PC del local crea la cámara sola.
+  const agregarCamara = async (d: Dispositivo) => {
+    const existentes = new Set((d.estado?.camaras ?? []).map((c) => c.nombre))
+    let sugerido = `${d.local} Puerta 2`
+    for (let i = 3; existentes.has(sugerido); i++) sugerido = `${d.local} Puerta ${i}`
+    const nombre = window.prompt(`Nombre de la cámara nueva de ${d.local} (ej. la segunda entrada):`, sugerido)?.trim()
+    if (!nombre) return
+    if (existentes.has(nombre)) return setMsg(`Ya hay una cámara llamada "${nombre}".`)
+    navegar(`/ia-camaras/calibrar?disp=${d.id}&cam=${encodeURIComponent(nombre)}&nueva=1`)
+  }
+
+  const confirmarQuitar = async () => {
+    if (!quitarCam) return
+    const { error } = await sb().from('contador_config').upsert(
+      { dispositivo_id: quitarCam.d.id, camara: quitarCam.nombre, config: { eliminar: true }, actualizado: new Date().toISOString() },
+      { onConflict: 'dispositivo_id,camara' })
+    setMsg(error ? error.message : `La cámara "${quitarCam.nombre}" se quita en menos de 1 minuto (sus conteos ya guardados se conservan).`)
+    setQuitarCam(null)
+    await onCambio()
+  }
   const [vista, setVista] = useState('')
 
   useEffect(() => {
@@ -425,8 +449,16 @@ export function Camaras({ dispositivos, locales, onCambio, tarjeta, btnChico }: 
                         </span>
                         <Link to={`/ia-camaras/calibrar?disp=${d.id}&cam=${encodeURIComponent(c.nombre)}`}
                           className="rounded-full border border-line px-2 py-0.5 text-[11px] text-brand-400 hover:bg-surface2">Calibrar</Link>
+                        {(d.estado?.camaras?.length ?? 0) > 1 && (
+                          <button onClick={() => setQuitarCam({ d, nombre: c.nombre })}
+                            className="rounded-full border border-line px-2 py-0.5 text-[11px] text-sub hover:bg-surface2 hover:text-red-400">Quitar</button>
+                        )}
                       </span>
                     ))}
+                    {d.activo && (d.estado?.camaras?.length ?? 0) > 0 && (
+                      <button onClick={() => void agregarCamara(d)}
+                        className="rounded-full border border-dashed border-brand-500/60 px-2 py-0.5 text-[11px] text-brand-400 hover:bg-surface2">+ Agregar cámara</button>
+                    )}
                   </div>
                   <div className="ml-auto flex gap-1.5">
                     <button onClick={() => void alternar(d)} className={btnChico + ' inline-flex items-center gap-1'}>
@@ -486,6 +518,14 @@ export function Camaras({ dispositivos, locales, onCambio, tarjeta, btnChico }: 
         </div>
       )}
 
+      <ConfirmDialog
+        open={!!quitarCam}
+        title="¿Quitar la cámara?"
+        confirmLabel="Quitar"
+        message={quitarCam ? `Se deja de contar con "${quitarCam.nombre}" (${quitarCam.d.local}). Los conteos ya guardados se conservan.` : ''}
+        onConfirm={() => void confirmarQuitar()}
+        onCancel={() => setQuitarCam(null)}
+      />
       <ConfirmDialog
         open={!!borrar}
         message={borrar ? `¿Borrar la PC "${borrar.nombre}" de ${borrar.local}? Deja de poder subir conteos (los ya subidos se conservan).` : ''}

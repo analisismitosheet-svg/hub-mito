@@ -162,6 +162,11 @@ class Lector(threading.Thread):
         self.nro = 0
         self.error: str | None = "conectando"
         self.lock = threading.Lock()
+        self.reiniciar = False  # cambio de canal: reconectar con self.url nueva
+        self._fin = False
+
+    def detener(self) -> None:
+        self._fin = self.reiniciar = True
 
     def run(self) -> None:
         espera = 2
@@ -176,7 +181,7 @@ class Lector(threading.Thread):
             log.info("[%s] conectado", self.nombre)
             self.error, espera = None, 2
             fallos = 0
-            while True:
+            while not self.reiniciar:
                 ok, cuadro = cap.read()
                 if not ok:
                     fallos += 1
@@ -189,6 +194,11 @@ class Lector(threading.Thread):
                     self.cuadro = cuadro
                     self.nro += 1
             cap.release()
+            if self._fin:
+                return
+            if self.reiniciar:
+                self.reiniciar = False
+                continue
             self.error = "se cortó el video"
             log.warning("[%s] se cortó el video; reconectando", self.nombre)
             time.sleep(espera)
@@ -451,6 +461,7 @@ class Camara(threading.Thread):
         self.vista_url: str | None = None
         self.foto_url: str | None = None  # foto limpia (sin dibujos) para calibrar desde el hub
         self.lector: Lector | None = None
+        self._detener = False
         self.eventos: list[str] = []  # para evaluar.py
         self.traza = None  # evaluar.py --traza: callback(tid, x, y, zona_confirmada)
 
@@ -476,14 +487,29 @@ class Camara(threading.Thread):
             log.warning("[%s] sin calibrar (modo %s): no cuenta hasta que se dibujen las zonas en el hub "
                         "(IA Cámaras -> Calibrar) o con calibrar.py", self.nombre, modo)
 
+    def canal(self) -> int | None:
+        return (self.cam.get("sdk") or {}).get("canal") or self.cam.get("canal")
+
     def calibracion(self) -> dict:
-        return {k: self.cam.get(k) for k in self.CLAVES_CALIBRACION}
+        return {**{k: self.cam.get(k) for k in self.CLAVES_CALIBRACION}, "canal": self.canal()}
 
     def aplicar_config(self, nueva: dict, version: str) -> None:
         """Calibración nueva desde el hub: se aplica en caliente (las personas que ya se siguen no se pierden)."""
         for k in self.CLAVES_CALIBRACION:
             if k in nueva:
                 self.cam[k] = nueva[k]
+        canal = nueva.get("canal")
+        if canal and int(canal) != int(self.canal() or 0):
+            log.info("[%s] cambio de canal %s -> %s (desde el hub)", self.nombre, self.canal(), canal)
+            if self.cam.get("sdk"):
+                self.cam["sdk"]["canal"] = int(canal)
+                if self.lector is not None:
+                    self.lector.cambiar_canal(int(canal))
+            else:
+                self.cam["canal"] = int(canal)
+                if self.lector is not None:
+                    self.lector.url = url_rtsp(self.cfg, self.cam)
+                    self.lector.reiniciar = True
         self.cam["config_version"] = self.config_version = version
         self.configurar()
         for p in self.pistas.values():  # la zona confirmada vieja no vale con la geometría nueva
@@ -491,13 +517,19 @@ class Camara(threading.Thread):
         log.info("[%s] calibración nueva aplicada desde el hub (%s)", self.nombre, version)
 
     # -- estado para el hub
+    def detener(self) -> None:
+        self._detener = True
+        if self.lector is not None and hasattr(self.lector, "detener"):
+            self.lector.detener()
+
     def estado(self) -> dict:
         h = self.almacen.hoy(self.nombre)
         error = self.lector.error if self.lector else None
         return {"nombre": self.nombre, "modo": self.modo, "ok": error is None, "error": error,
                 "fps": round(self.fps, 1), "entradas_hoy": h["entradas"], "salidas_hoy": h["salidas"],
                 "transeuntes_hoy": h["transeuntes"], "empleados_hoy": h["empleados"], "vista_url": self.vista_url,
-                "foto_url": self.foto_url, "calibracion": self.calibracion(), "config_version": self.config_version}
+                "foto_url": self.foto_url, "calibracion": self.calibracion(), "config_version": self.config_version,
+                "canales": getattr(self.lector, "canales", 0) or 0}
 
     def cargar_modelo(self):
         from ultralytics import YOLO  # import pesado: recién acá
@@ -523,7 +555,7 @@ class Camara(threading.Thread):
         periodo = 1.0 / float(self.cfg.get("fps_proceso", 8))
         ultimo_nro, t_prev = -1, time.time()
 
-        while True:
+        while not self._detener:
             t0 = time.time()
             nro, cuadro = self.lector.ultimo()
             if cuadro is None or nro == ultimo_nro:
@@ -711,13 +743,102 @@ class Camara(threading.Thread):
 
 # ------------------------------------------------------------------ envío ---
 
-def enviar(cfg: dict, almacen: Almacen, camaras: list[Camara]) -> None:
+class Sistema:
+    """Todas las cámaras de esta PC. Permite sumar/quitar cámaras en caliente desde el hub
+    (locales con 2 entradas) y comparte el reconocimiento de personas entre las cámaras de un
+    mismo local: si alguien entra por una puerta y sale por la otra, sigue siendo la misma persona."""
+
+    def __init__(self, cfg: dict, almacen: Almacen, ver: bool = False):
+        self.cfg, self.almacen, self.ver = cfg, almacen, ver
+        self.camaras: list[Camara] = []
+        self.servidor = None
+        self.reconocedores: dict[str, Reconocedor] = {}
+        self.lock = threading.Lock()
+
+    def token(self, cam: dict) -> str:
+        return cam.get("token") or self.cfg["token"]
+
+    def agregar(self, cam: dict, iniciar: bool = True) -> Camara:
+        c = Camara(self.cfg, cam, self.almacen, self.ver)
+        if c.reid is not None:  # mismo local (token) = mismo reconocedor
+            c.reid = self.reconocedores.setdefault(self.token(cam), c.reid)
+        with self.lock:
+            self.camaras.append(c)
+        if self.servidor is not None:
+            self.servidor.camaras[c.nombre] = c
+            url = (self.cfg.get("vista") or {}).get("url_publica")
+            if url:
+                c.vista_url = self.servidor.url_camara(url, c.nombre)
+                c.foto_url = self.servidor.url_camara(url, c.nombre, foto=True)
+        if iniciar:
+            c.start()
+        return c
+
+    def quitar(self, c: Camara) -> None:
+        c.detener()
+        with self.lock:
+            self.camaras = [x for x in self.camaras if x is not c]
+        if self.servidor is not None:
+            self.servidor.camaras.pop(c.nombre, None)
+        log.info("[%s] cámara quitada desde el hub", c.nombre)
+
+    def cambios_desde_hub(self, desde_hub: dict, token: str) -> None:
+        """Cámaras nuevas (nueva=true) o a quitar (eliminar=true) pedidas desde el editor del hub
+        para ESTE local (token). La nueva usa la misma conexión al DVR que otra cámara del local."""
+        propias = [c for c in self.camaras if self.token(c.cam) == token]
+        nombres = {c.nombre for c in propias}
+        cambiaron = False
+        for nombre, item in desde_hub.items():
+            conf = item.get("config") or {}
+            if conf.get("eliminar"):
+                for c in propias:
+                    if c.nombre == nombre and len(propias) > 1:  # nunca dejar al local sin cámaras
+                        self.quitar(c)
+                        cambiaron = True
+                continue
+            if nombre in nombres or not conf.get("nueva") or not propias:
+                continue
+            base = propias[0].cam
+            nueva = {"nombre": nombre, "token": base.get("token"), "activa": True, "modo": conf.get("modo") or "zonas",
+                     "punto": conf.get("punto") or "pie", "reid": base.get("reid", False)}
+            if base.get("sdk"):
+                nueva["sdk"] = {**base["sdk"], "canal": int(conf.get("canal") or 1)}
+            else:
+                nueva.update({k: base[k] for k in ("rtsp", "substream") if k in base})
+                nueva["canal"] = int(conf.get("canal") or 1)
+            nueva = {k: v for k, v in nueva.items() if v is not None}
+            log.info("[%s] cámara nueva desde el hub (canal %s)", nombre, conf.get("canal"))
+            self.agregar(nueva)
+            cambiaron = True
+        if cambiaron:
+            self.guardar_config()
+
+    def guardar_config(self) -> None:
+        with _lock_config:
+            ruta = BASE / "config.json"
+            cfg = json.loads(ruta.read_text(encoding="utf-8"))
+            vivas = {c.nombre: c for c in self.camaras}
+            archivo = {cam.get("nombre") for cam in cfg.get("camaras", [])}
+            # quitadas: las del mismo token que ya no corren (las inactivas a mano se respetan)
+            tokens_vivos = {self.token(c.cam) for c in self.camaras}
+            cfg["camaras"] = [cam for cam in cfg.get("camaras", [])
+                              if cam.get("nombre") in vivas or not cam.get("activa", True)
+                              or (cam.get("token") or cfg.get("token")) not in tokens_vivos]
+            for nombre, c in vivas.items():
+                if nombre not in archivo:
+                    cfg["camaras"].append({k: v for k, v in c.cam.items()})
+            ruta.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def enviar(sistema: Sistema) -> None:
     """Sube los tramos pendientes. Cada cámara puede tener su propio "token" (de OTRO local
     registrado en el hub): así una PC puede contar varios locales y cada conteo va a su local."""
+    cfg, almacen = sistema.cfg, sistema.almacen
     url = cfg["hub_url"].rstrip("/") + "/api/contador-ingesta"
     cada = int(cfg.get("envio_segundos", 60))
-    token_de = {c.nombre: c.cam.get("token") or cfg["token"] for c in camaras}
     while True:
+        camaras = list(sistema.camaras)
+        token_de = {c.nombre: sistema.token(c.cam) for c in camaras}
         pendientes = almacen.pendientes()
         for token in dict.fromkeys(token_de.values()):
             filas = [f for f in pendientes if token_de.get(f[0], cfg["token"]) == token]
@@ -739,7 +860,9 @@ def enviar(cfg: dict, almacen: Almacen, camaras: list[Camara]) -> None:
                 with urllib.request.urlopen(pedido, timeout=30) as r:
                     respuesta = json.load(r)
                 almacen.marcar_enviados(filas)
-                aplicar_calibraciones(respuesta.get("config") or {}, suyas)
+                desde_hub = respuesta.get("config") or {}
+                sistema.cambios_desde_hub(desde_hub, token)
+                aplicar_calibraciones(desde_hub, [c for c in sistema.camaras if sistema.token(c.cam) == token])
                 if filas:
                     log.info("subidos %d tramos al hub (%s)", len(filas), quienes)
             except urllib.error.HTTPError as e:
@@ -758,7 +881,8 @@ def aplicar_calibraciones(desde_hub: dict, camaras: list[Camara]) -> None:
     cambiaron = False
     for c in camaras:
         item = desde_hub.get(c.nombre)
-        if item and item.get("actualizado") and item["actualizado"] != c.config_version:
+        if item and item.get("actualizado") and item["actualizado"] != c.config_version \
+                and not (item.get("config") or {}).get("eliminar"):
             c.aplicar_config(item.get("config") or {}, item["actualizado"])
             cambiaron = True
     if not cambiaron:
@@ -770,7 +894,13 @@ def aplicar_calibraciones(desde_hub: dict, camaras: list[Camara]) -> None:
         for cam in cfg.get("camaras", []):
             c = por_nombre.get(cam.get("nombre"))
             if c:
-                cam.update(c.calibracion(), config_version=c.config_version)
+                cal = c.calibracion()
+                canal = cal.pop("canal", None)
+                cam.update(cal, config_version=c.config_version)
+                if canal and cam.get("sdk"):
+                    cam["sdk"]["canal"] = canal
+                elif canal:
+                    cam["canal"] = canal
         ruta.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
@@ -793,30 +923,32 @@ def main() -> None:
 
     configurar_log()
     cfg = cargar_config()
-    almacen = Almacen(BASE / "conteos.db")
-    camaras = [Camara(cfg, c, almacen, args.ver) for c in cfg["camaras"]
-               if c.get("activa", True) and (not args.camara or c["nombre"] == args.camara)]
-    if not camaras:
+    sistema = Sistema(cfg, Almacen(BASE / "conteos.db"), args.ver)
+    for c in cfg["camaras"]:
+        if c.get("activa", True) and (not args.camara or c["nombre"] == args.camara):
+            sistema.agregar(c, iniciar=False)
+    if not sistema.camaras:
         sys.exit("No hay cámaras activas en config.json")
+    camaras = sistema.camaras
 
     log.info("Contador MITO %s — %d cámara(s)", VERSION, len(camaras))
-    for c in camaras:
-        c.start()
     vista = cfg.get("vista") or {}
     if vista.get("activo"):
         from vista import ServidorVista
-        servidor = ServidorVista(camaras, vista)
-        servidor.iniciar()
+        sistema.servidor = ServidorVista(camaras, vista)
+        sistema.servidor.iniciar()
         if vista.get("url_publica"):
             for c in camaras:
-                c.vista_url = servidor.url_camara(vista["url_publica"], c.nombre)
-                c.foto_url = servidor.url_camara(vista["url_publica"], c.nombre, foto=True)
-    threading.Thread(target=enviar, args=(cfg, almacen, camaras), daemon=True, name="envio").start()
+                c.vista_url = sistema.servidor.url_camara(vista["url_publica"], c.nombre)
+                c.foto_url = sistema.servidor.url_camara(vista["url_publica"], c.nombre, foto=True)
+    for c in camaras:
+        c.start()
+    threading.Thread(target=enviar, args=(sistema,), daemon=True, name="envio").start()
 
     try:
         while True:
             if args.ver:
-                for c in camaras:
+                for c in list(sistema.camaras):
                     if c.vista is not None:
                         cv2.imshow(c.nombre, c.vista)
                 if cv2.waitKey(30) & 0xFF == ord("q"):

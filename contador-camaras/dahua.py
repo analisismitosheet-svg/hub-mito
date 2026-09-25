@@ -65,6 +65,7 @@ class InfoEquipo(ctypes.Structure):
 
 
 _DESCONEXION = WINFUNCTYPE(None, c_longlong, c_char_p, c_int, c_longlong)
+_CB_DATOS = WINFUNCTYPE(None, c_longlong, c_uint, POINTER(ctypes.c_ubyte), c_uint, c_longlong, c_longlong)
 
 
 def carpeta_sdk(cfg: dict | None = None) -> Path:
@@ -99,6 +100,10 @@ class SDK:
         if not d.CLIENT_Init(self._cb_desconexion, 0):
             raise RuntimeError("CLIENT_Init falló")
         d.CLIENT_SetConnectTime(5000, 3)  # 5 s por intento, 3 intentos
+        d.CLIENT_RealPlayEx.argtypes = [c_longlong, c_int, c_void_p, c_int]
+        d.CLIENT_RealPlayEx.restype = c_longlong
+        d.CLIENT_SetRealDataCallBackEx2.argtypes = [c_longlong, _CB_DATOS, c_longlong, c_uint]
+        d.CLIENT_StopRealPlayEx.argtypes = [c_longlong]
 
     @classmethod
     def obtener(cls, cfg: dict | None = None) -> "SDK":
@@ -157,7 +162,38 @@ class _Tubo:
             return out
 
 
-_CB_DATOS = WINFUNCTYPE(None, c_longlong, c_uint, POINTER(ctypes.c_ubyte), c_uint, c_longlong, c_longlong)
+def foto_canal(sdk: "SDK", h: int, canal: int, segundos: float = 6.0):
+    """Un cuadro (BGR) de un canal, por el stream secundario, usando un login ya abierto."""
+    import time
+
+    import av
+
+    d = sdk.dll
+    tubo = _Tubo(espera=segundos)
+
+    def cb(_h, tipo, buf, n, _p, _u):
+        if tipo == 0:
+            tubo.escribir(ctypes.string_at(buf, n))
+
+    ref = _CB_DATOS(cb)
+    rh = d.CLIENT_RealPlayEx(h, canal - 1, None, 3)
+    if not rh:
+        return None
+    d.CLIENT_SetRealDataCallBackEx2(rh, ref, 0, 0x1)
+    img, fin = None, time.time() + segundos
+    try:
+        cont = av.open(tubo, format="dhav")
+        for frame in cont.decode(video=0):
+            img = frame.to_ndarray(format="bgr24")
+            if time.time() > fin - segundos / 2:  # un cuadro ya asentado, no el primero gris
+                break
+    except Exception:  # noqa: BLE001
+        pass
+    finally:
+        d.CLIENT_StopRealPlayEx(rh)
+        tubo.cerrar()
+        del ref
+    return img
 
 
 class LectorDahua(threading.Thread):
@@ -180,6 +216,56 @@ class LectorDahua(threading.Thread):
         self.lock = threading.Lock()
         self._cb = _CB_DATOS(self._al_recibir)  # referencia viva
         self._tubo: _Tubo | None = None
+        self._h = 0            # login activo (para sacar fotos de otros canales)
+        self._fin = False
+        self.canales = 0       # cantidad de canales del DVR
+        self._fotos: dict[int, tuple[float, bytes]] = {}
+        self._lock_fotos = threading.Lock()
+
+    def detener(self) -> None:
+        """Cámara quitada desde el hub: cortar el video y no reconectar."""
+        self._fin = True
+        if self._tubo is not None:
+            self._tubo.cerrar()
+
+    def cambiar_canal(self, canal: int) -> None:
+        """Pasa a otro canal del DVR sin reiniciar el programa (lo elige el editor del hub)."""
+        if int(self.datos.get("canal", 1)) == int(canal):
+            return
+        self.datos["canal"] = int(canal)
+        if self._tubo is not None:
+            self._tubo.cerrar()  # corta el video actual; el bucle reconecta con el canal nuevo
+
+    def fotos_canales(self, max_edad: float = 180.0) -> dict[int, bytes]:
+        """Una foto (JPEG) de cada canal del DVR, sacadas en paralelo por el stream secundario.
+        Se guardan unos minutos para no pedirle 16 videos al DVR cada vez."""
+        import time
+        from concurrent.futures import ThreadPoolExecutor
+
+        import cv2
+
+        with self._lock_fotos:
+            ahora = time.time()
+            if self._fotos and all(ahora - t < max_edad for t, _ in self._fotos.values()):
+                return {c: j for c, (_, j) in self._fotos.items()}
+            h, n = self._h, self.canales
+            if not h or not n:
+                return {}
+            sdk = SDK.obtener(self.cfg)
+
+            def una(canal: int):
+                img = foto_canal(sdk, h, canal)
+                if img is None:
+                    return canal, None
+                img = cv2.resize(img, (640, int(img.shape[0] * 640 / img.shape[1])))
+                ok, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 75])
+                return canal, buf.tobytes() if ok else None
+
+            with ThreadPoolExecutor(max_workers=8) as ex:
+                for canal, jpg in ex.map(una, range(1, n + 1)):
+                    if jpg:
+                        self._fotos[canal] = (ahora, jpg)
+            return {c: j for c, (_, j) in self._fotos.items()}
 
     def _al_recibir(self, _h, tipo, buf, n, _param, _user) -> None:
         if tipo == 0 and self._tubo is not None:
@@ -197,14 +283,10 @@ class LectorDahua(threading.Thread):
         log = logging.getLogger("contador")
         sdk = SDK.obtener(self.cfg)
         d = sdk.dll
-        d.CLIENT_RealPlayEx.argtypes = [c_longlong, c_int, c_void_p, c_int]
-        d.CLIENT_RealPlayEx.restype = c_longlong
-        d.CLIENT_SetRealDataCallBackEx2.argtypes = [c_longlong, _CB_DATOS, c_longlong, c_uint]
-        d.CLIENT_StopRealPlayEx.argtypes = [c_longlong]
         x = self.datos
         tipo_stream = 3 if x.get("stream") == "secundario" else 0  # DH_RType_Realplay_1 / Realplay
         espera = 5
-        while True:
+        while not self._fin:
             h, info, motivo = sdk.login(x["host"], int(x.get("puerto", 37777)), x["usuario"], x["clave"],
                                         p2p=bool(x.get("p2p")))
             if not h:
@@ -217,6 +299,7 @@ class LectorDahua(threading.Thread):
                 time.sleep(pausa)
                 espera = min(espera * 2, 60)
                 continue
+            self._h, self.canales = h, info.canales
             rh = d.CLIENT_RealPlayEx(h, int(x.get("canal", 1)) - 1, None, tipo_stream)
             if not rh:
                 self.error = f"DVR: no abre el canal {x.get('canal')} (error {d.CLIENT_GetLastError() & 0x7fffffff})"
@@ -243,7 +326,10 @@ class LectorDahua(threading.Thread):
                 d.CLIENT_StopRealPlayEx(rh)
                 self._tubo.cerrar()
                 self._tubo = None
+                self._h = 0
                 sdk.logout(h)
+            if self._fin:
+                return
             log.warning("[%s] %s; reconectando", self.nombre, self.error)
             time.sleep(espera)
 
