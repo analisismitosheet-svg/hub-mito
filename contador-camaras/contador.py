@@ -513,7 +513,12 @@ class Camara(threading.Thread):
 
     def run(self) -> None:
         modelo = self.cargar_modelo()
-        self.lector = Lector(self.nombre, url_rtsp(self.cfg, self.cam))
+        if self.cam.get("sdk"):
+            # Librería oficial de Dahua (como SmartPSS): puerto 37777/UPnP o P2P, sin depender del RTSP
+            from dahua import LectorDahua
+            self.lector = LectorDahua(self.nombre, self.cam["sdk"], self.cfg)
+        else:
+            self.lector = Lector(self.nombre, url_rtsp(self.cfg, self.cam))
         self.lector.start()
         periodo = 1.0 / float(self.cfg.get("fps_proceso", 8))
         ultimo_nro, t_prev = -1, time.time()

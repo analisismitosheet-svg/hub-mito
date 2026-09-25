@@ -71,6 +71,21 @@ si falla en casos propios del local: cámara muy desde arriba, infrarrojo de noc
 
 Las carpetas `dataset/`, `runs/` y `modelos/` no se suben a git porque tienen imágenes de clientes.
 
+## Conexión por la librería de Dahua (como SmartPSS), sin RTSP
+
+Si el RTSP (554) no está accesible (el router cambió los puertos por UPnP, o el DVR solo entra por P2P),
+la cámara puede conectarse con el SDK oficial de Dahua, por el mismo puerto que usa SmartPSS:
+
+```json
+"sdk": {"host": "indonvcentro.ddns.net", "puerto": 31256, "usuario": "admin", "clave": "...", "canal": 8, "stream": "principal"}
+```
+
+- `host`: el DDNS/IP del DVR, o el **número de serie** con `"p2p": true` (locales que en SmartPSS figuran con serie).
+- `puerto`: el que figura en SmartPSS para ese equipo (37777 o el que haya puesto el router, ej. 31256).
+- La librería (`dhnetsdk.dll`, `play.dll`, etc.) no va en git: `"sdk_dahua": "carpeta"` en config.json o copiarla a `sdk_dahua/`.
+- Si el DVR rechaza la clave, el contador espera 30 minutos antes de reintentar, para no bloquear el usuario.
+- Probar un login: `.venv\Scripts\python dahua.py login <host> <puerto> <usuario>` (dice el motivo exacto si rechaza).
+
 ## Qué cuenta y cómo
 
 | Métrica | Cómo se obtiene |
