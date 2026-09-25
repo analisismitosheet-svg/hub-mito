@@ -43,7 +43,10 @@ Cámara → DVR Dahua ──RTSP──▶ PC del local (contador.py) ──HTTPS
    iniciar.bat --ver
    ```
    Pasá por la puerta: arriba tiene que sumar *Entradas* al entrar y *Salidas* al salir. Cerrá con `q`.
-7. Clic derecho en **`autoarranque.bat`** → *Ejecutar como administrador*. Desde ahí arranca solo al prender la PC.
+7. Clic derecho en **`autoarranque.bat`** → *Ejecutar como administrador*. Cierra el contador si estaba abierto a mano,
+   lo arranca en segundo plano y desde ahí **arranca solo cada vez que se prende la PC**, aunque nadie inicie sesión.
+   Corre sin límite de tiempo (Windows corta las tareas a las 72 h si no se configura) y se reinicia solo si se cae
+   (los reinicios quedan en `reinicios.log`). Para sacarlo: `autoarranque.bat quitar`, también como administrador.
 8. En el hub, en **Cámaras**, la PC tiene que aparecer con el punto verde (*En línea*).
 
 ## Entrenar el modelo con nuestras cámaras (opcional, en la PC con placa NVIDIA)
