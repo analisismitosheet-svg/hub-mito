@@ -124,7 +124,7 @@ export default function IaCamaras() {
 
           {todos.length === 0 ? (
             <div className={tarjeta + ' text-sm text-sub'}>
-              Todavía no hay locales con cámaras. Registrá la PC de un local en <strong>PCs y cámaras</strong> e instalá el contador (carpeta <code>contador-camaras</code>).
+              Todavía no hay locales con cámaras. Registrá la PC contadora en <strong>PCs y cámaras</strong> e instalá el contador (carpeta <code>contador-camaras</code>).
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">

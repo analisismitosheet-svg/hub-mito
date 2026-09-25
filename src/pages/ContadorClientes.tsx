@@ -356,7 +356,7 @@ export function Camaras({ dispositivos, locales, onCambio, tarjeta, btnChico }: 
   const navegar = useNavigate()
 
   // Segunda entrada (u otra cámara del mismo DVR): se elige el canal y se calibra en el editor;
-  // al guardar, la PC del local crea la cámara sola.
+  // al guardar, la PC contadora crea la cámara sola.
   const agregarCamara = async (d: Dispositivo) => {
     const existentes = new Set((d.estado?.camaras ?? []).map((c) => c.nombre))
     let sugerido = `${d.local} Puerta 2`
@@ -474,7 +474,7 @@ export function Camaras({ dispositivos, locales, onCambio, tarjeta, btnChico }: 
       </div>
 
       <div className={tarjeta}>
-        <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-ink"><Plus size={15} aria-hidden /> Registrar PC de un local</h3>
+        <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-ink"><Plus size={15} aria-hidden /> Registrar PC contadora</h3>
         {token ? (
           <div className="flex flex-col gap-2">
             <p className="text-sm text-ink">Copiá este token en el <code>config.json</code> de la PC (campo <code>"token"</code>). <strong>No se vuelve a mostrar.</strong></p>

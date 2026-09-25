@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase'
 
 /**
  * Editor de calibración de una cámara del contador (IA Cámaras → Calibrar).
- * Se dibuja sobre una foto LIMPIA que da la PC del local por la VPN
+ * Se dibuja sobre una foto LIMPIA que da la PC contadora por la VPN
  * (contador-camaras/vista.py, /foto?limpia=1). Al guardar va a
  * contador_config; la PC la recibe con su próximo envío y la aplica sin reiniciar.
  * Coordenadas normalizadas 0..1 (las mismas que usa contador.py / calibrar.py).
@@ -125,7 +125,7 @@ export default function CalibrarCamara() {
         const inicial = { ...(c?.calibracion ?? {}), ...((guardada.data?.config as Partial<Calibracion> | undefined) ?? {}) }
         setCal({ ...VACIA, ...Object.fromEntries(Object.entries(inicial).filter(([, v]) => v !== undefined && k(v))) } as Calibracion)
         if (!b) setError('La PC de este local todavía no informó al hub. Revisá que el contador esté corriendo.')
-        else if (!c && !esNueva) setError('Esta cámara todavía no informó al hub. Revisá que el contador esté corriendo en la PC del local.')
+        else if (!c && !esNueva) setError('Esta cámara todavía no informó al hub. Revisá que el contador esté corriendo en la PC contadora.')
         if (esNueva && !c) setElegirCanal(true)
       } catch (e) {
         setError((e as Error).message)
@@ -338,7 +338,7 @@ export default function CalibrarCamara() {
 
             {!fotoUrl ? (
               <div className="flex aspect-video items-center justify-center rounded-xl bg-black/40 p-4 text-center text-sm text-sub">
-                {!cal.canal ? 'Elegí el canal de la cámara con "Cambiar canal".' : !base ? 'La PC del local no informó al hub todavía.' : 'Esta PC no publica la foto (actualizá el contador y corré publicar_vista.bat).'}
+                {!cal.canal ? 'Elegí el canal de la cámara con "Cambiar canal".' : !base ? 'La PC contadora no informó al hub todavía.' : 'Esta PC no publica la foto (actualizá el contador y corré publicar_vista.bat).'}
               </div>
             ) : (
               <div className="relative select-none overflow-hidden rounded-xl bg-black">
@@ -463,8 +463,8 @@ export default function CalibrarCamara() {
             {guardado && (
               <p className={'flex items-center gap-2 rounded-xl border p-3 text-xs ' + (guardado.aplicado ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : 'border-line bg-surface2 text-sub')}>
                 {guardado.aplicado
-                  ? <><CheckCircle2 size={15} aria-hidden /> La PC del local ya está contando con esta calibración.</>
-                  : <><Loader2 size={15} className="animate-spin" aria-hidden /> Guardado. Esperando que la PC del local lo aplique (menos de 1 minuto)…</>}
+                  ? <><CheckCircle2 size={15} aria-hidden /> La PC contadora ya está contando con esta calibración.</>
+                  : <><Loader2 size={15} className="animate-spin" aria-hidden /> Guardado. Esperando que la PC contadora lo aplique (menos de 1 minuto)…</>}
               </p>
             )}
             {guardado?.aplicado && (

@@ -14,7 +14,7 @@ import { CLAVE_VISTA, aVentas, type Venta, type Dispositivo } from '@/pages/Cont
  * Tasa de conversión (Locales): video en vivo de la puerta con el conteo
  * dibujado + entradas vs tickets de HOY por local.
  *
- * Video: lo sirve la PC contadora del local (contador-camaras/vista.py) por
+ * Video: lo sirve la PC contadora (contador-camaras/vista.py) por
  * HTTPS dentro de la VPN (tailscale serve). Solo se ve desde equipos
  * conectados a Tailscale; el hub nunca recibe ni guarda imágenes.
  * Ventas: vista SQL configurada en config_app 'contador_vista_ventas'
@@ -212,7 +212,7 @@ function DetalleLocal({ l, nombre, tickets, hayVentas }: { l: LocalHoy; nombre?:
         </div>
         <VideoEnVivo key={`${l.local}-${cam?.nombre ?? ''}`} url={cam?.online && cam.ok ? cam?.vista_url ?? null : null}
           motivo={!cam ? 'Este local todavía no tiene cámaras informando.'
-            : !cam.online ? 'La PC contadora del local no está en línea (apagada o sin internet).'
+            : !cam.online ? 'La PC contadora no está en línea (apagada o sin internet).'
             : !cam.ok ? `La cámara no responde: ${cam.error ?? 'sin imagen'}. Revisá que el DVR del local esté prendido y con internet.`
             : !cam.vista_url ? 'El video en vivo no está publicado en esta PC (publicar_vista.bat).' : ''} />
       </div>
@@ -276,7 +276,7 @@ function VideoEnVivo({ url, motivo }: { url: string | null; motivo: string }) {
     return () => clearInterval(t)
   }, [url, intento])
 
-  // Si falla: ¿llegamos a la PC del local? (sí -> problema de imagen; no -> falta la VPN)
+  // Si falla: ¿llegamos a la PC contadora? (sí -> problema de imagen; no -> falta la VPN)
   useEffect(() => {
     if (estado !== 'error' || !url) return
     const salud = new URL(url)
@@ -309,8 +309,8 @@ function VideoEnVivo({ url, motivo }: { url: string | null; motivo: string }) {
             <>
               No se pudo abrir el video.
               <span className="text-xs text-white/60">
-                {causa === 'imagen' ? 'La PC del local responde, pero la cámara no está enviando imagen. Revisá el DVR.'
-                  : causa === 'vpn' ? 'Este equipo no llega a la PC del local: el video en vivo solo se ve conectado a la VPN de la empresa (Tailscale).'
+                {causa === 'imagen' ? 'La PC contadora responde, pero la cámara no está enviando imagen. Revisá el DVR del local.'
+                  : causa === 'vpn' ? 'Este equipo no llega a la PC contadora: el video en vivo solo se ve conectado a la VPN de la empresa (Tailscale).'
                   : 'Revisando la causa…'}
               </span>
               <button onClick={() => setIntento((n) => n + 1)} className="mt-1 rounded-lg border border-white/30 px-2 py-1 text-xs">Reintentar</button>
