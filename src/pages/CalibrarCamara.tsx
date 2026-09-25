@@ -456,7 +456,7 @@ export default function CalibrarCamara() {
               </ul>
             )}
 
-            <button onClick={() => void guardar()} disabled={guardando || problemas.length > 0 || !cam}
+            <button onClick={() => void guardar()} disabled={guardando || problemas.length > 0 || !base}
               className="btn-press inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-brand-600 text-sm font-semibold text-white disabled:opacity-50">
               {guardando ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Save size={16} aria-hidden />} Guardar y aplicar
             </button>
