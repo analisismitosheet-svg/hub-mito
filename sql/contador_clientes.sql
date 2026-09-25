@@ -251,3 +251,8 @@ CREATE POLICY contador_config_gestion ON public.contador_config
   WITH CHECK (private.tiene_permiso('contador.gestionar'));
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.contador_config TO authenticated;
 REVOKE ALL ON public.contador_config FROM anon;
+
+-- Cada local ve SU tasa de conversión (la RLS de arriba limita al local del usuario)
+INSERT INTO public.rol_permisos (rol, permiso_clave)
+SELECT 'locales', 'conversion.view'
+WHERE NOT EXISTS (SELECT 1 FROM public.rol_permisos WHERE rol = 'locales' AND permiso_clave = 'conversion.view');
