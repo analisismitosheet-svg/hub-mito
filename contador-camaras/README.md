@@ -32,7 +32,13 @@ Cámara → DVR Dahua ──RTSP──▶ PC del local (contador.py) ──HTTPS
    - `dvr.ip`, `dvr.usuario`, `dvr.clave`: los del DVR.
    - `camaras[].canal`: el número de cámara en el DVR (el que se ve en el monitor: CH1 = 1, etc.).
    - Si hay 2 puertas, agregá otra cámara a la lista con otro `nombre` y `canal`.
-5. Dibujá la línea de conteo:
+5. **Recomendado: calibrar desde el hub.** Sistemas → IA Cámaras → PCs y cámaras → **Calibrar** en la cámara.
+   Se dibujan las zonas o la línea (y el color de la credencial del personal) sobre una foto de la cámara, y al
+   guardar la PC lo aplica sola en menos de un minuto, sin reiniciar. Hace falta estar conectado a la VPN
+   (Tailscale) y que la PC tenga publicado el video (`publicar_vista.bat`). Una cámara sin calibrar no cuenta,
+   pero igual se conecta para poder calibrarla.
+
+   Alternativa en la misma PC, dibujar la línea de conteo:
    ```
    .venv\Scripts\python calibrar.py "Entrada"
    ```

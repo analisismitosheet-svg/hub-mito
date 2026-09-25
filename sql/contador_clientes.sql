@@ -230,3 +230,24 @@ CREATE POLICY contador_disp_gestion ON public.contador_dispositivos
   FOR ALL TO authenticated
   USING (private.tiene_permiso('contador.gestionar'))
   WITH CHECK (private.tiene_permiso('contador.gestionar'));
+
+-- ============================================================
+-- CALIBRACIÓN DESDE EL HUB (IA Cámaras → Calibrar)
+-- La ingesta la devuelve a la PC en cada envío; la PC la aplica sin reiniciar.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS public.contador_config (
+  dispositivo_id  uuid NOT NULL REFERENCES public.contador_dispositivos(id) ON DELETE CASCADE,
+  camara          text NOT NULL,
+  config          jsonb NOT NULL,
+  actualizado     timestamptz NOT NULL DEFAULT now(),
+  actualizado_por uuid DEFAULT auth.uid(),
+  PRIMARY KEY (dispositivo_id, camara)
+);
+ALTER TABLE public.contador_config ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS contador_config_gestion ON public.contador_config;
+CREATE POLICY contador_config_gestion ON public.contador_config
+  FOR ALL TO authenticated
+  USING (private.tiene_permiso('contador.gestionar'))
+  WITH CHECK (private.tiene_permiso('contador.gestionar'));
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.contador_config TO authenticated;
+REVOKE ALL ON public.contador_config FROM anon;
