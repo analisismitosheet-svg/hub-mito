@@ -13,3 +13,5 @@ grabaciones/
 *.mp4
 canales_dvr.jpg
 sdk_dahua/
+canales/
+dvrs_*.json

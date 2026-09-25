@@ -530,6 +530,10 @@ class Camara(threading.Thread):
                 time.sleep(0.05)
                 continue
             ultimo_nro = nro
+            if self.modo is None and self.mirando == 0:
+                # Sin calibrar y nadie mirando: no gastar GPU (la foto para calibrar sale del lector igual)
+                time.sleep(0.5)
+                continue
             try:
                 res = self.detectar(modelo, cuadro)
                 self.procesar(res, cuadro)
