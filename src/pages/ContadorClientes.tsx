@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   Loader2, RefreshCw, Footprints, LogIn, LogOut, Users, Percent, Cctv, Plus, Copy, Check, Power, Trash2,
 } from 'lucide-react'
@@ -418,9 +418,13 @@ export function Camaras({ dispositivos, locales, onCambio, tarjeta, btnChico }: 
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {(d.estado?.camaras ?? []).map((c) => (
-                      <span key={c.nombre} title={c.error ?? ''}
-                        className={'rounded-full border px-2 py-0.5 text-[11px] ' + (c.ok ? 'border-emerald-600/40 text-emerald-400' : 'border-red-600/40 text-red-400')}>
-                        {c.nombre}: {c.ok ? `${c.fps} fps · ${c.entradas_hoy ?? 0} hoy` : c.error ?? 'error'}
+                      <span key={c.nombre} className="inline-flex items-center gap-1">
+                        <span title={c.error ?? ''}
+                          className={'rounded-full border px-2 py-0.5 text-[11px] ' + (c.ok ? 'border-emerald-600/40 text-emerald-400' : 'border-red-600/40 text-red-400')}>
+                          {c.nombre}: {c.ok ? `${c.fps} fps · ${c.entradas_hoy ?? 0} hoy` : c.error ?? 'error'}
+                        </span>
+                        <Link to={`/ia-camaras/calibrar?disp=${d.id}&cam=${encodeURIComponent(c.nombre)}`}
+                          className="rounded-full border border-line px-2 py-0.5 text-[11px] text-brand-400 hover:bg-surface2">Calibrar</Link>
                       </span>
                     ))}
                   </div>

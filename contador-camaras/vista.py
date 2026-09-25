@@ -45,11 +45,14 @@ class ServidorVista:
         cámara no se puede abrir otra cambiando el nombre. Clave cuando una PC cuenta varios locales."""
         return hmac.new(self.token.encode(), nombre.encode("utf-8"), "sha256").hexdigest()[:40]
 
-    def url_camara(self, url_publica: str, nombre: str) -> str:
-        return f"{url_publica.rstrip('/')}/video/{urllib.parse.quote(nombre)}?t={self.token_camara(nombre)}"
+    def url_camara(self, url_publica: str, nombre: str, foto: bool = False) -> str:
+        ruta = "foto" if foto else "video"
+        extra = "&limpia=1" if foto else ""
+        return f"{url_publica.rstrip('/')}/{ruta}/{urllib.parse.quote(nombre)}?t={self.token_camara(nombre)}{extra}"
 
-    def jpeg(self, camara) -> bytes | None:
-        img = camara.vista
+    def jpeg(self, camara, limpia: bool = False) -> bytes | None:
+        # limpia: el último cuadro de la cámara SIN cajas ni zonas (para calibrar desde el hub)
+        img = (camara.lector.ultimo()[1] if camara.lector else None) if limpia else camara.vista
         if img is None:
             return None
         if img.shape[1] > self.ancho:
@@ -67,6 +70,8 @@ class ServidorVista:
             def responder(self, codigo: int, cuerpo: bytes, tipo: str) -> None:
                 self.send_response(codigo)
                 self.send_header("Content-Type", tipo)
+                # el editor del hub lee los píxeles de la foto (color de credencial): hace falta CORS
+                self.send_header("Access-Control-Allow-Origin", "*")
                 self.send_header("Cache-Control", "no-store")
                 self.send_header("Content-Length", str(len(cuerpo)))
                 self.end_headers()
@@ -93,11 +98,12 @@ class ServidorVista:
                 cam.mirando += 1
                 try:
                     if partes[0] == "foto":
-                        for _ in range(30):  # esperar a que se dibuje el primer cuadro
-                            if cam.vista is not None:
+                        limpia = urllib.parse.parse_qs(url.query).get("limpia", ["0"])[0] == "1"
+                        for _ in range(30):  # esperar a que haya un cuadro
+                            if servidor.jpeg(cam, limpia) is not None:
                                 break
                             time.sleep(0.1)
-                        img = servidor.jpeg(cam)
+                        img = servidor.jpeg(cam, limpia)
                         return self.responder(200 if img else 503, img or b"sin imagen", "image/jpeg" if img else "text/plain")
                     for _ in range(50):  # hasta 5 s para el primer cuadro; si no hay, avisar y no quedar colgado
                         if cam.vista is not None:

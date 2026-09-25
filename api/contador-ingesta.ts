@@ -15,7 +15,8 @@
  *                              transeuntes?, empleados?, nuevos?, reingresos? }],
  *                   estado?: { version, camaras: [{ nombre, ok, fps, error }] }
  *                 }
- *   -> 200 { ok: true, guardados: n, local }
+ *   -> 200 { ok: true, guardados: n, local, config: { <camara>: { config, actualizado } } }
+ *      (config = calibración editada en el hub; la PC la aplica sin reiniciar)
  *
  * Variables de entorno en Vercel (sin prefijo VITE_):
  *   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
@@ -135,5 +136,13 @@ export default async function handler(req: Req, res: Res) {
     body: JSON.stringify(estado ? { ultimo_latido: ahora, estado } : { ultimo_latido: ahora }),
   }).catch(() => undefined)
 
-  return res.status(200).json({ ok: true, guardados: tramos.length, local: disp.local })
+  // Calibración editada desde el hub (IA Cámaras → Calibrar): la PC la aplica en caliente
+  const cRes = await fetch(
+    `${url}/rest/v1/contador_config?dispositivo_id=eq.${disp.id}&select=camara,config,actualizado`,
+    { headers: h },
+  ).catch(() => null)
+  const filas = cRes?.ok ? ((await cRes.json().catch(() => [])) as { camara: string; config: unknown; actualizado: string }[]) : []
+  const config = Object.fromEntries(filas.map((f) => [f.camara, { config: f.config, actualizado: f.actualizado }]))
+
+  return res.status(200).json({ ok: true, guardados: tramos.length, local: disp.local, config })
 }

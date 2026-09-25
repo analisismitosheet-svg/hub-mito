@@ -24,6 +24,7 @@ import Opiniones from '@/pages/Opiniones'
 import ContadorClientes from '@/pages/ContadorClientes'
 import IaCamaras from '@/pages/IaCamaras'
 import TasaConversion from '@/pages/TasaConversion'
+import CalibrarCamara from '@/pages/CalibrarCamara'
 import Opinar from '@/pages/Opinar'
 import EncuestasAdmin from '@/pages/EncuestasAdmin'
 import QrEtiquetaEditor from '@/pages/QrEtiquetaEditor'
@@ -312,6 +313,14 @@ export default function App() {
             element={
               <PermissionRoute permiso="conversion.view">
                 <TasaConversion />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/ia-camaras/calibrar"
+            element={
+              <PermissionRoute permiso="contador.gestionar">
+                <CalibrarCamara />
               </PermissionRoute>
             }
           />

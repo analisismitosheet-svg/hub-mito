@@ -434,37 +434,61 @@ class Camara(threading.Thread):
         super().__init__(daemon=True, name=f"cam-{cam['nombre']}")
         self.cfg, self.cam, self.almacen, self.ver = cfg, cam, almacen, ver
         self.nombre = cam["nombre"]
-        self.modo = cam.get("modo", "zonas" if cam.get("zona_interior") else "linea")
-        if self.modo == "linea":
-            if not cam.get("linea"):
-                sys.exit(f"La cámara '{self.nombre}' no tiene línea. Corré: python calibrar.py \"{self.nombre}\"")
-            self.linea = Linea(cam["linea"], cam.get("invertir", False), cam.get("margen", 0.02))
-        else:
-            self.exterior = poligono_opcional(cam.get("zona_exterior"))
-            self.interior = poligono_opcional(cam.get("zona_interior"))
-            if not (self.exterior and self.interior):
-                sys.exit(f"La cámara '{self.nombre}' está en modo zonas pero le faltan zona_exterior/zona_interior.")
-        self.zona_a = poligono_opcional(cam.get("zona_a"))
-        self.zona_b = poligono_opcional(cam.get("zona_b"))
-        emp = cam.get("empleados") or {}
-        self.emp = emp if emp.get("activo") and emp.get("hsv_min") and emp.get("hsv_max") else None
+        self.config_version: str | None = cam.get("config_version")
+        self.pistas: dict = {}
+        self.configurar()
         self.reid = (Reconocedor(float(cam.get("reid_umbral", 0.92)), float(cam.get("reid_umbral_reciente", 0.90)),
                                  float(cam.get("reid_umbral_continuidad", 0.78))) if cam.get("reid") else None)
         self.dedupe_s = float(cam.get("dedupe_segundos", 20))
         self.min_muestras = int(cam.get("reid_muestras", 4))
         self.espera_entrada = float(cam.get("reid_espera_segundos", 5))
         self.frames_zona = int(cam.get("frames_confirmar", 2))
-        self.punto = cam.get("punto", "pie")
-        self.pistas: dict[int, Pista] = {}
         self.fps = 0.0
         self.n_cuadro = 0
         self.reloj = time.time  # evaluar.py lo cambia por el tiempo del video
         self.vista = None  # último cuadro anotado (con --ver o mientras alguien mira el video en vivo)
         self.mirando = 0   # conexiones abiertas al video en vivo (vista.py)
         self.vista_url: str | None = None
+        self.foto_url: str | None = None  # foto limpia (sin dibujos) para calibrar desde el hub
         self.lector: Lector | None = None
         self.eventos: list[str] = []  # para evaluar.py
         self.traza = None  # evaluar.py --traza: callback(tid, x, y, zona_confirmada)
+
+    # -- calibración (zonas/línea/credencial): desde config.json o editada en el hub
+    CLAVES_CALIBRACION = ("modo", "zona_exterior", "zona_interior", "zona_a", "zona_b", "linea", "invertir", "punto", "empleados")
+
+    def configurar(self) -> None:
+        """Arma la geometría desde self.cam. Sin calibrar -> no cuenta, pero sigue mostrando imagen
+        (para poder calibrarla desde el hub)."""
+        cam = self.cam
+        modo = cam.get("modo") or ("zonas" if cam.get("zona_interior") else "linea")
+        self.punto = cam.get("punto", "pie")
+        self.zona_a = poligono_opcional(cam.get("zona_a"))
+        self.zona_b = poligono_opcional(cam.get("zona_b"))
+        emp = cam.get("empleados") or {}
+        self.emp = emp if emp.get("activo") and emp.get("hsv_min") and emp.get("hsv_max") else None
+        self.linea = Linea(cam["linea"], cam.get("invertir", False), cam.get("margen", 0.02)) if cam.get("linea") else None
+        self.exterior = poligono_opcional(cam.get("zona_exterior"))
+        self.interior = poligono_opcional(cam.get("zona_interior"))
+        listo = self.linea if modo == "linea" else (self.exterior and self.interior)
+        self.modo = modo if listo else None
+        if not listo:
+            log.warning("[%s] sin calibrar (modo %s): no cuenta hasta que se dibujen las zonas en el hub "
+                        "(IA Cámaras -> Calibrar) o con calibrar.py", self.nombre, modo)
+
+    def calibracion(self) -> dict:
+        return {k: self.cam.get(k) for k in self.CLAVES_CALIBRACION}
+
+    def aplicar_config(self, nueva: dict, version: str) -> None:
+        """Calibración nueva desde el hub: se aplica en caliente (las personas que ya se siguen no se pierden)."""
+        for k in self.CLAVES_CALIBRACION:
+            if k in nueva:
+                self.cam[k] = nueva[k]
+        self.cam["config_version"] = self.config_version = version
+        self.configurar()
+        for p in self.pistas.values():  # la zona confirmada vieja no vale con la geometría nueva
+            p.zona, p.candidata, p.frames_candidata, p.lado = None, None, 0, 0
+        log.info("[%s] calibración nueva aplicada desde el hub (%s)", self.nombre, version)
 
     # -- estado para el hub
     def estado(self) -> dict:
@@ -472,7 +496,8 @@ class Camara(threading.Thread):
         error = self.lector.error if self.lector else None
         return {"nombre": self.nombre, "modo": self.modo, "ok": error is None, "error": error,
                 "fps": round(self.fps, 1), "entradas_hoy": h["entradas"], "salidas_hoy": h["salidas"],
-                "transeuntes_hoy": h["transeuntes"], "empleados_hoy": h["empleados"], "vista_url": self.vista_url}
+                "transeuntes_hoy": h["transeuntes"], "empleados_hoy": h["empleados"], "vista_url": self.vista_url,
+                "foto_url": self.foto_url, "calibracion": self.calibracion(), "config_version": self.config_version}
 
     def cargar_modelo(self):
         from ultralytics import YOLO  # import pesado: recién acá
@@ -531,7 +556,7 @@ class Camara(threading.Thread):
                 self.observar(p, recorte, entero and (y2 - y1) >= 0.12 * alto, ahora)
                 if self.modo == "linea":
                     self.paso_linea(p, px, py)
-                else:
+                elif self.modo == "zonas":
                     self.paso_zonas(p, px, py)
                 if self.traza:
                     self.traza(tid, px, py, p.zona)
@@ -656,11 +681,13 @@ class Camara(threading.Thread):
         log.info("[%s] %s (id %s%s)", self.nombre, " + ".join(c.upper() for c in campos), p.tid, quien)
 
     def anotar(self, img, ancho, alto):
-        if self.modo == "linea":
+        if self.modo is None:
+            cv2.putText(img, "SIN CALIBRAR - no cuenta", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+        elif self.modo == "linea":
             a = (int(self.linea.ax * ancho), int(self.linea.ay * alto))
             b = (int(self.linea.bx * ancho), int(self.linea.by * alto))
             cv2.line(img, a, b, (0, 255, 255), 2)
-        else:
+        elif self.exterior and self.interior:
             cv2.polylines(img, [self.exterior.pixeles(ancho, alto)], True, (0, 0, 255), 2)
             cv2.polylines(img, [self.interior.pixeles(ancho, alto)], True, (255, 0, 0), 2)
         for z, color in ((self.zona_a, (0, 200, 255)), (self.zona_b, (255, 200, 0))):
@@ -701,8 +728,9 @@ def enviar(cfg: dict, almacen: Almacen, camaras: list[Camara]) -> None:
             quienes = ", ".join(c.nombre for c in suyas)
             try:
                 with urllib.request.urlopen(pedido, timeout=30) as r:
-                    json.load(r)
+                    respuesta = json.load(r)
                 almacen.marcar_enviados(filas)
+                aplicar_calibraciones(respuesta.get("config") or {}, suyas)
                 if filas:
                     log.info("subidos %d tramos al hub (%s)", len(filas), quienes)
             except urllib.error.HTTPError as e:
@@ -710,6 +738,31 @@ def enviar(cfg: dict, almacen: Almacen, camaras: list[Camara]) -> None:
             except Exception as e:  # noqa: BLE001 — sin internet: se reintenta en el próximo ciclo
                 log.warning("sin conexión con el hub (%s); %d tramos quedan pendientes", e, len(filas))
         time.sleep(cada)
+
+
+_lock_config = threading.Lock()
+
+
+def aplicar_calibraciones(desde_hub: dict, camaras: list[Camara]) -> None:
+    """Aplica la calibración guardada en el hub si es más nueva, y la persiste en config.json
+    (así sigue valiendo aunque la PC arranque sin internet)."""
+    cambiaron = False
+    for c in camaras:
+        item = desde_hub.get(c.nombre)
+        if item and item.get("actualizado") and item["actualizado"] != c.config_version:
+            c.aplicar_config(item.get("config") or {}, item["actualizado"])
+            cambiaron = True
+    if not cambiaron:
+        return
+    with _lock_config:
+        ruta = BASE / "config.json"
+        cfg = json.loads(ruta.read_text(encoding="utf-8"))
+        por_nombre = {c.nombre: c for c in camaras}
+        for cam in cfg.get("camaras", []):
+            c = por_nombre.get(cam.get("nombre"))
+            if c:
+                cam.update(c.calibracion(), config_version=c.config_version)
+        ruta.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 # ------------------------------------------------------------------- main ---
@@ -748,6 +801,7 @@ def main() -> None:
         if vista.get("url_publica"):
             for c in camaras:
                 c.vista_url = servidor.url_camara(vista["url_publica"], c.nombre)
+                c.foto_url = servidor.url_camara(vista["url_publica"], c.nombre, foto=True)
     threading.Thread(target=enviar, args=(cfg, almacen, camaras), daemon=True, name="envio").start()
 
     try:
