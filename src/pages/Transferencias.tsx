@@ -1122,6 +1122,9 @@ function EnviarTransferencia({ lote, items, usuariosLocales, onClose }: {
     DEPOSITO: 'INDOD',
     INDO: 'INDOD',
     INDOD: 'INDOD',
+    // General Paz: en el Excel viene como GRALPAZ; el usuario del local es GPAZD
+    GRALPAZ: 'GPAZD',
+    GRALPAZD: 'GPAZD',
   }
 
   // Normaliza el código de un local aplicando los alias (solo afecta depósito).
