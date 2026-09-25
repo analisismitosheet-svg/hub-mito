@@ -441,7 +441,7 @@ export function Camaras({ dispositivos, locales, onCambio, tarjeta, btnChico }: 
                   <div className="min-w-[10rem]">
                     <div className="text-sm font-medium text-ink">{d.local} · {d.nombre}</div>
                     <div className="text-[11px] text-sub/70">
-                      {!d.activo ? 'Desactivada' : m == null ? 'Nunca se conectó' : online ? `En línea (hace ${m} min)` : `Sin señal hace ${m} min`}
+                      {!d.activo ? 'Desactivada' : m == null ? 'Nunca se conectó: falta poner su token en el config.json de la PC contadora (las cámaras aparecen cuando se conecta)' : online ? `En línea (hace ${m} min)` : `Sin señal hace ${m} min`}
                       {d.estado?.version && ` · v${d.estado.version}`}
                     </div>
                   </div>
@@ -469,7 +469,7 @@ export function Camaras({ dispositivos, locales, onCambio, tarjeta, btnChico }: 
                     <button onClick={() => void alternar(d)} className={btnChico + ' inline-flex items-center gap-1'}>
                       <Power size={13} aria-hidden /> {d.activo ? 'Desactivar' : 'Activar'}
                     </button>
-                    <button onClick={() => setBorrar(d)} className={btnChico} aria-label={`Borrar ${d.nombre}`}><Trash2 size={13} aria-hidden /></button>
+                    <button onClick={() => setBorrar(d)} className={btnChico + ' inline-flex items-center gap-1 hover:text-red-400'} title="Borra el registro de la PC contadora de este local (no es quitar una cámara)"><Trash2 size={13} aria-hidden /> Borrar PC</button>
                   </div>
                 </div>
               )
@@ -533,7 +533,11 @@ export function Camaras({ dispositivos, locales, onCambio, tarjeta, btnChico }: 
       />
       <ConfirmDialog
         open={!!borrar}
-        message={borrar ? `¿Borrar la PC "${borrar.nombre}" de ${borrar.local}? Deja de poder subir conteos (los ya subidos se conservan).` : ''}
+        title="¿Borrar la PC contadora de este local?"
+        confirmLabel="Borrar PC"
+        message={borrar ? `Se desconectan TODAS las cámaras de ${borrar.local} ("${borrar.nombre}") y dejan de subir conteos hasta volver a vincularlas; también se pierde su calibración. Los conteos ya subidos se conservan.
+
+Para sacar solo una cámara usá "Quitar" al lado de la cámara.` : ''}
         onConfirm={() => borrar && void eliminar(borrar)}
         onCancel={() => setBorrar(null)}
       />
