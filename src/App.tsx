@@ -54,6 +54,7 @@ import CarpetaArea from '@/pages/CarpetaArea'
 import DatosSql from '@/pages/DatosSql'
 import SqlConexion from '@/pages/SqlConexion'
 import ComingSoon from '@/pages/ComingSoon'
+import Replicas from '@/pages/Replicas'
 
 export default function App() {
   return (
@@ -384,7 +385,7 @@ export default function App() {
             path="/replicas"
             element={
               <ProtectedRoute>
-                <ComingSoon title="Réplicas" />
+                <Replicas />
               </ProtectedRoute>
             }
           />

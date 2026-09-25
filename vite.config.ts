@@ -47,5 +47,11 @@ export default defineConfig({
   ],
   server: {
     port: 5175,
+    // En dev no existe api/ (eso corre en Vercel): para previsualizar
+    // Sistemas > Réplicas hay que levantar `node scripts/mock-replicas.mjs`
+    // con el Puente SQL corriendo; el resto de /api/* sigue sin existir.
+    proxy: {
+      '/api/replicas': 'http://localhost:4173',
+    },
   },
 })

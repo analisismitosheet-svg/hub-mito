@@ -29,7 +29,15 @@ Documento para retomar el trabajo en otra PC. El código está en GitHub (`main`
 - **RR.HH.** (area rrhh): Empleados (con sub-menú por estado de legajo: nomina activa / planes activos / bajas mito / bajas planes, columnas por hoja en `config/columnasEmpleados.ts`), Cumpleaños (calendario + editor de imagen con plantilla), CargaNovedades, ResumenNovedades (multifiltro por columna + multisort).
 - **Compras**: Transferencias + Estadísticas Transferencias (dashboard recharts, filtros fecha/local).
 - **Depósito**: RMA (menú con sub-pantallas Proveedores y Guía).
-- **Sistemas**: DatosSql.
+- **Sistemas**: DatosSql, Réplicas (`/replicas`: tarjeta por base réplica con su última actualización).
+
+## Réplicas (Sistemas)
+- **La fuente es la PC central del Replicador SQL, `DESKTOP-OA4GU6I`** (es la máquina donde corre el Puente). Ahí está `C:\ReplicadorSQL`: `config.json` (nombre de cada sucursal + servidor origen), `historial.csv` (última corrida: estado y ultimo_error) y `agent_heartbeat.txt`.
+- Cadena: `src/pages/Replicas.tsx` → `GET /api/replicas` (`api/replicas.ts`, JWT Supabase) → Puente SQL con `POST {accion:'replicas'}` → `puente-sql/sql/replicas.sql` contra la instancia local (sqlcmd, Windows auth): `MAX(actualizado)` de `dbo._sync_estado` por base copiada.
+- Cada tarjeta muestra: local (del config.json), código, última actualización + "hace X", tablas, servidor origen, corrida y el error si la última corrida fue "CON ERRORES". Semáforo: < 15 min ok · < 60 min atraso · más viejo desactualizada (el agente corre un ciclo cada pocos minutos).
+- Fechas del SQL: llegan "naive" (hora de la PC central); `src/lib/replicas.ts` las lee campo por campo (`formatearFecha` → `25/09/26 15.27`) y `instanteReal()` re-offsetea para "hace X". `consultado`/`ultimo_latido` sí son instantes reales → `formatearInstante`.
+- Variables del Puente opcionales: `REPLICADOR_DIR` (default `C:\ReplicadorSQL`), `REPLICADOR_SQLSERVER` (default `localhost`), `SQLCMD_PATH`.
+- Desarrollo local: `api/*` no existe fuera de Vercel → levantar `node scripts/mock-replicas.mjs` (puente en :3128); vite proxea `/api/replicas` a :4173.
 
 ## Puente SQL y el tótem F12 (scan-stock)
 - `puente-sql/server.js` ahora acepta filtro: `POST {vista, top, donde, valor}` → `SELECT TOP(n) * FROM vista WHERE [donde] = @valor`. `donde` contra la lista blanca `PUENTE_FILTRO_COLS` (default `ARTCOD`) y el valor siempre parametrizado.
@@ -80,6 +88,7 @@ CREATE INDEX IF NOT EXISTS transfer_items_created_at_idx ON public.transfer_item
 - `src/pages/EstadisticasTransferencias.tsx` — dashboard.
 - `src/pages/Cumpleanios.tsx` + `src/components/EditorCumple.tsx` — cumpleaños + editor de imagen (konva, plantilla por URL en `public/plantilla-cumpleanos.jpeg`).
 - `src/pages/Rma.tsx` + `src/pages/ProveedoresPacho.tsx` + `src/pages/GuiaPacho.tsx` — RMA con proveedores/guía.
+- `src/pages/Replicas.tsx` + `src/lib/replicas.ts` + `api/replicas.ts` — estado de las réplicas (Replicador SQL de la PC central); `puente-sql/sql/replicas.sql` + `scripts/mock-replicas.mjs`.
 
 ## Dependencias extra instaladas
 `konva@9`, `react-konva@18` (React 18), `webfontloader`, `jspdf`, `@types/webfontloader`. (`xlsx`, `recharts` ya estaban).

@@ -17,6 +17,10 @@
  *                   Es lo que usa el tótem F12 para traer solo el artículo escaneado.
  *   POST /          body: { accion: 'bases' }            -> ["BASE1", ...]
  *   POST /          body: { accion: 'objetos', base }    -> [{ esquema, nombre, tipo }]
+ *   POST /          body: { accion: 'replicas' }         -> { replicas: [...], agente }
+ *                   ^ NO sale del SQL remoto: lee el Replicador SQL de ESTA PC
+ *                     (sql/replicas.sql contra la instancia local + config.json
+ *                     + historial.csv). Es lo que usa Sistemas > Réplicas.
  *   GET  /health    -> { ok: true } (sin token, para probar el túnel)
  *
  * Solo lectura: siempre hace SELECT TOP (n) * FROM [base].[esquema].[objeto].
@@ -38,6 +42,8 @@
 const http = require('http')
 const fs = require('fs')
 const path = require('path')
+const os = require('os')
+const { execFile } = require('child_process')
 
 /* ---- mini lector de .env (sin dependencias) ---- */
 try {
@@ -129,6 +135,187 @@ async function leerCuerpo(req) {
   return data ? JSON.parse(data) : {}
 }
 
+/* =========================================================================
+ * REPLICADOR SQL LOCAL — acción 'replicas' (Sistemas > Réplicas)
+ * -------------------------------------------------------------------------
+ * El estado de las réplicas NO sale del SQL remoto: sale de ESTA PC (la
+ * central del Replicador SQL, p. ej. DESKTOP-OA4GU6I). Por cada sucursal
+ * copiada hay una base local con dbo._sync_estado (fecha de la última
+ * actualización por tabla) y, en la carpeta del Replicador, el config.json
+ * (nombre de cada sucursal) y el historial.csv (última corrida + errores).
+ *
+ * Todo es lectura local y fija: el script no recibe parámetros y las bases
+ * las resuelve sys.databases dentro del propio SQL.
+ * ========================================================================= */
+
+const REPLICADOR_DIR = process.env.REPLICADOR_DIR || 'C:\\ReplicadorSQL'
+const REPLICADOR_SQLSERVER = process.env.REPLICADOR_SQLSERVER || 'localhost'
+const SCRIPT_REPLICAS = path.join(__dirname, 'sql', 'replicas.sql')
+const LATIDO_VIVO_MS = 300_000
+
+const SQLCMD = (() => {
+  const candidatos = [
+    process.env.SQLCMD_PATH,
+    'C:\\Program Files\\Microsoft SQL Server\\Client SDK\\ODBC\\180\\Tools\\Binn\\SQLCMD.EXE',
+    'C:\\Program Files\\Microsoft SQL Server\\Client SDK\\ODBC\\170\\Tools\\Binn\\SQLCMD.EXE',
+    'sqlcmd',
+  ].filter(Boolean)
+  return candidatos.find((c) => c === 'sqlcmd' || fs.existsSync(c)) || null
+})()
+
+/** Una línea CSV simple, respetando campos entre comillas. */
+function csvFila(linea) {
+  const out = []
+  let campo = ''
+  let entreComillas = false
+  for (let i = 0; i < linea.length; i++) {
+    const ch = linea[i]
+    if (entreComillas) {
+      if (ch === '"' && linea[i + 1] === '"') {
+        campo += '"'
+        i++
+      } else if (ch === '"') entreComillas = false
+      else campo += ch
+    } else if (ch === '"') entreComillas = true
+    else if (ch === ',') {
+      out.push(campo)
+      campo = ''
+    } else campo += ch
+  }
+  out.push(campo)
+  return out
+}
+
+/** Cada base copiada -> { sucursal, origen }, según el config.json del Replicador. */
+function configReplicador() {
+  const porBase = {}
+  try {
+    const cfg = JSON.parse(fs.readFileSync(path.join(REPLICADOR_DIR, 'config.json'), 'utf8'))
+    for (const s of Array.isArray(cfg?.sources) ? cfg.sources : []) {
+      const base = String(s?.target_database || s?.database || '').trim()
+      if (base) porBase[base] = { sucursal: String(s?.name || '').trim(), origen: String(s?.server || '').trim() }
+    }
+  } catch {
+    /* sin config: se muestra igual, sin nombre de sucursal */
+  }
+  return porBase
+}
+
+/** Última fila del historial.csv por sucursal: { fin, estado, ultimo_error }. */
+function historialReplicador() {
+  const porSucursal = {}
+  try {
+    const lineas = fs.readFileSync(path.join(REPLICADOR_DIR, 'historial.csv'), 'utf8').split(/\r?\n/)
+    if (lineas.length < 2) return porSucursal
+    const cols = csvFila(lineas[0]).map((c) => c.trim())
+    const ix = (n) => cols.indexOf(n)
+    const iFin = ix('fin')
+    const iEst = ix('estado')
+    const iErr = ix('ultimo_error')
+    const iCant = ix('errores')
+    for (let i = 1; i < lineas.length; i++) {
+      if (!lineas[i]) continue
+      const v = csvFila(lineas[i])
+      const sucursal = (v[ix('sucursal')] ?? '').trim()
+      if (sucursal) {
+        porSucursal[sucursal] = {
+          corrida_fin: (v[iFin] ?? '').trim(),
+          estado: (v[iEst] ?? '').trim(),
+          errores: (v[iCant] ?? '').trim(),
+          ultimo_error: (v[iErr] ?? '').trim(),
+        }
+      }
+    }
+  } catch {
+    /* sin historial */
+  }
+  return porSucursal
+}
+
+/**
+ * ¿Sigue vivo el agente? Dos señales locales, y se toma la más reciente:
+ *   - agent_heartbeat.txt: lo escribe al pasar por el bucle principal;
+ *   - sync.log: avanza en cada ciclo (el heartbeat puede quedar viejo si una
+ *     copia inicial tarda varios minutos, y no hay que marcarlo como caído).
+ */
+function latidoAgente() {
+  const candidatos = []
+  try {
+    const crudo = fs.readFileSync(path.join(REPLICADOR_DIR, 'agent_heartbeat.txt'), 'utf8').trim()
+    const ms = Math.round(Number(crudo) * 1000)
+    if (Number.isFinite(ms) && ms > 0) candidatos.push(ms)
+  } catch {
+    /* sin heartbeat */
+  }
+  try {
+    const ms = fs.statSync(path.join(REPLICADOR_DIR, 'sync.log')).mtimeMs
+    if (ms > 0) candidatos.push(ms)
+  } catch {
+    /* sin log */
+  }
+  if (candidatos.length === 0) return { vivo: false, ultimo_latido: null }
+  const ms = Math.max(...candidatos)
+  return { vivo: Date.now() - ms < LATIDO_VIVO_MS, ultimo_latido: new Date(ms).toISOString() }
+}
+
+/** Ejecuta sql/replicas.sql contra la instancia local (Windows auth). */
+function sqlcmdReplicas() {
+  if (!SQLCMD) throw new Error('No se encontró sqlcmd (instalar "Command Line Utilities" o setear SQLCMD_PATH)')
+  if (!fs.existsSync(SCRIPT_REPLICAS)) throw new Error('Falta sql/replicas.sql junto a server.js')
+  return new Promise((resolve, reject) => {
+    execFile(
+      SQLCMD,
+      ['-S', REPLICADOR_SQLSERVER, '-E', '-C', '-d', 'master', '-h', '-1', '-W', '-b', '-i', SCRIPT_REPLICAS],
+      { timeout: 20_000, windowsHide: true, maxBuffer: 1024 * 1024, encoding: 'utf8' },
+      (err, stdout) => {
+        if (err) {
+          const primera = String(err.message || err).split(/\r?\n/)[0]
+          return reject(new Error(`sqlcmd: ${primera.slice(0, 250)}`))
+        }
+        resolve(String(stdout || ''))
+      },
+    )
+  })
+}
+
+let cacheReplicas = { en: 0, datos: null }
+
+/** { replicas: [...], agente: {...} } — cacheado 10 s para no repetir sqlcmd. */
+async function estadoReplicas() {
+  const ahora = Date.now()
+  if (cacheReplicas.datos && ahora - cacheReplicas.en < 10_000) return cacheReplicas.datos
+
+  const salida = await sqlcmdReplicas()
+  const config = configReplicador()
+  const historial = historialReplicador()
+
+  const replicas = []
+  for (const linea of salida.split(/\r?\n/)) {
+    if (!linea.trim()) continue
+    const [base = '', fecha = '', tablas = ''] = linea.split('|')
+    if (!/^[A-Za-z0-9_-]+$/.test(base)) continue
+    const cfg = config[base] || { sucursal: '', origen: '' }
+    const hist = historial[cfg.sucursal] || {}
+    const iso = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(fecha) ? fecha.replace(' ', 'T') : null
+    replicas.push({
+      base,
+      sucursal: cfg.sucursal,
+      origen: cfg.origen,
+      actualizacion: iso,
+      tablas: Number(tablas) || 0,
+      corrida_fin: hist.corrida_fin || '',
+      estado: hist.estado || '',
+      errores: hist.errores || '',
+      ultimo_error: hist.ultimo_error || '',
+    })
+  }
+
+  const datos = { servidor: os.hostname(), replicas, agente: latidoAgente() }
+  cacheReplicas = { en: ahora, datos }
+  return datos
+}
+
+
 const server = http.createServer(async (req, res) => {
   // Socket roto / cliente desconectado: no debe tumbar el proceso
   res.on('error', () => {})
@@ -170,6 +357,11 @@ const server = http.createServer(async (req, res) => {
           ORDER BY TABLE_TYPE DESC, TABLE_SCHEMA, TABLE_NAME`,
       )
       return enviar(res, 200, r.recordset ?? [])
+    }
+
+    // Estado de las réplicas (Sistemas > Réplicas): Replicador SQL local
+    if (body?.accion === 'replicas') {
+      return enviar(res, 200, await estadoReplicas())
     }
 
     vista = String(body?.vista ?? '')

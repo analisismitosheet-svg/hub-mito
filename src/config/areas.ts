@@ -505,11 +505,10 @@ export const APPS: AppDef[] = [
     id: 'replicas',
     areaId: 'sistemas',
     title: 'Réplicas',
-    description: 'Gestión de réplicas. En construcción.',
+    description: 'Última actualización de cada réplica que copia el Replicador SQL.',
     icon: Copy,
     kind: 'internal',
     target: '/replicas',
-    comingSoon: true,
     color: '#7c3aed',
   },
 ]
