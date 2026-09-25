@@ -18,7 +18,6 @@ Publicar en la VPN: publicar_vista.bat (una vez, como administrador).
 from __future__ import annotations
 
 import hmac
-import json
 import logging
 import threading
 import time
@@ -41,8 +40,13 @@ class ServidorVista:
         if len(self.token) < 16:
             raise SystemExit("vista.token tiene que tener al menos 16 caracteres (lo genera publicar_vista.bat)")
 
+    def token_camara(self, nombre: str) -> str:
+        """Token propio de cada cámara (derivado del secreto de la PC): con el link de una
+        cámara no se puede abrir otra cambiando el nombre. Clave cuando una PC cuenta varios locales."""
+        return hmac.new(self.token.encode(), nombre.encode("utf-8"), "sha256").hexdigest()[:40]
+
     def url_camara(self, url_publica: str, nombre: str) -> str:
-        return f"{url_publica.rstrip('/')}/video/{urllib.parse.quote(nombre)}?t={self.token}"
+        return f"{url_publica.rstrip('/')}/video/{urllib.parse.quote(nombre)}?t={self.token_camara(nombre)}"
 
     def jpeg(self, camara) -> bytes | None:
         img = camara.vista
@@ -79,14 +83,13 @@ class ServidorVista:
                     self.wfile.write(b'{"ok":true}')
                     return
                 token = urllib.parse.parse_qs(url.query).get("t", [""])[0]
-                if not hmac.compare_digest(token, servidor.token):
-                    return self.responder(401, b"token invalido", "text/plain")
                 partes = url.path.strip("/").split("/", 1)
                 if len(partes) != 2 or partes[0] not in ("video", "foto"):
                     return self.responder(404, b"no existe", "text/plain")
-                cam = servidor.camaras.get(urllib.parse.unquote(partes[1]))
-                if cam is None:
-                    return self.responder(404, json.dumps(list(servidor.camaras)).encode(), "application/json")
+                nombre = urllib.parse.unquote(partes[1])
+                cam = servidor.camaras.get(nombre)
+                if cam is None or not hmac.compare_digest(token, servidor.token_camara(nombre)):
+                    return self.responder(401, b"token invalido", "text/plain")
                 cam.mirando += 1
                 try:
                     if partes[0] == "foto":

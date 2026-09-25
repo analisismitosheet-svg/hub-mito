@@ -676,32 +676,39 @@ class Camara(threading.Thread):
 # ------------------------------------------------------------------ envío ---
 
 def enviar(cfg: dict, almacen: Almacen, camaras: list[Camara]) -> None:
+    """Sube los tramos pendientes. Cada cámara puede tener su propio "token" (de OTRO local
+    registrado en el hub): así una PC puede contar varios locales y cada conteo va a su local."""
     url = cfg["hub_url"].rstrip("/") + "/api/contador-ingesta"
     cada = int(cfg.get("envio_segundos", 60))
+    token_de = {c.nombre: c.cam.get("token") or cfg["token"] for c in camaras}
     while True:
-        filas = almacen.pendientes()
-        cuerpo = {
-            "tramos": [
-                {"camara": f[0], "desde": datetime.fromtimestamp(f[1], timezone.utc).isoformat().replace("+00:00", "Z"),
-                 **dict(zip(CAMPOS, f[2:]))}
-                for f in filas
-            ],
-            "estado": {"version": VERSION, "camaras": [c.estado() for c in camaras]},
-        }
-        pedido = urllib.request.Request(
-            url, data=json.dumps(cuerpo).encode(), method="POST",
-            headers={"Content-Type": "application/json", "X-Contador-Token": cfg["token"]},
-        )
-        try:
-            with urllib.request.urlopen(pedido, timeout=30) as r:
-                json.load(r)
-            almacen.marcar_enviados(filas)
-            if filas:
-                log.info("subidos %d tramos al hub", len(filas))
-        except urllib.error.HTTPError as e:
-            log.error("el hub rechazó el envío (%s): %s", e.code, e.read()[:300].decode(errors="replace"))
-        except Exception as e:  # noqa: BLE001 — sin internet: se reintenta en el próximo ciclo
-            log.warning("sin conexión con el hub (%s); %d tramos quedan pendientes", e, len(filas))
+        pendientes = almacen.pendientes()
+        for token in dict.fromkeys(token_de.values()):
+            filas = [f for f in pendientes if token_de.get(f[0], cfg["token"]) == token]
+            suyas = [c for c in camaras if token_de[c.nombre] == token]
+            cuerpo = {
+                "tramos": [
+                    {"camara": f[0], "desde": datetime.fromtimestamp(f[1], timezone.utc).isoformat().replace("+00:00", "Z"),
+                     **dict(zip(CAMPOS, f[2:]))}
+                    for f in filas
+                ],
+                "estado": {"version": VERSION, "camaras": [c.estado() for c in suyas]},
+            }
+            pedido = urllib.request.Request(
+                url, data=json.dumps(cuerpo).encode(), method="POST",
+                headers={"Content-Type": "application/json", "X-Contador-Token": token},
+            )
+            quienes = ", ".join(c.nombre for c in suyas)
+            try:
+                with urllib.request.urlopen(pedido, timeout=30) as r:
+                    json.load(r)
+                almacen.marcar_enviados(filas)
+                if filas:
+                    log.info("subidos %d tramos al hub (%s)", len(filas), quienes)
+            except urllib.error.HTTPError as e:
+                log.error("el hub rechazó el envío de %s (%s): %s", quienes, e.code, e.read()[:300].decode(errors="replace"))
+            except Exception as e:  # noqa: BLE001 — sin internet: se reintenta en el próximo ciclo
+                log.warning("sin conexión con el hub (%s); %d tramos quedan pendientes", e, len(filas))
         time.sleep(cada)
 
 
