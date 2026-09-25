@@ -31,6 +31,10 @@ Documento para retomar el trabajo en otra PC. El código está en GitHub (`main`
 - **Depósito**: RMA (menú con sub-pantallas Proveedores y Guía).
 - **Sistemas**: DatosSql.
 
+## Puente SQL y el tótem F12 (scan-stock)
+- `puente-sql/server.js` ahora acepta filtro: `POST {vista, top, donde, valor}` → `SELECT TOP(n) * FROM vista WHERE [donde] = @valor`. `donde` contra la lista blanca `PUENTE_FILTRO_COLS` (default `ARTCOD`) y el valor siempre parametrizado.
+- Lo usa el tótem F12 (`D:\F12 Totems\scan-stock`) para traer solo el artículo escaneado de `ZooLogic.vw_STOCK_TODAS_LAS_SUCURSALES`: SQL local para su sucursal + este puente para las demás. Se configura en la rueda del tótem → *Tipo de conexión: Puente SQL del Hub MITO* (URL `http://IP:3128/` + `PUENTE_TOKEN`).
+
 ## Pendientes SQL (ejecutar en Supabase SQL Editor)
 ```sql
 -- Novedades: tabla de tipos (si no existe)

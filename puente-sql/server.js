@@ -11,6 +11,10 @@
  *                   header: X-Puente-Token: <PUENTE_TOKEN>
  *                   -> 200 JSON array de filas
  *                   vista = "vw_x" (dbo de SQL_DATABASE), "esquema.obj" o "BASE.esquema.obj"
+ *   POST /          body: { vista, top, donde, valor }   (FILTRO opcional)
+ *                   -> 200 JSON array de filas WHERE [donde] = valor
+ *                   'donde' debe estar en PUENTE_FILTRO_COLS; 'valor' va parametrizado.
+ *                   Es lo que usa el tótem F12 para traer solo el artículo escaneado.
  *   POST /          body: { accion: 'bases' }            -> ["BASE1", ...]
  *   POST /          body: { accion: 'objetos', base }    -> [{ esquema, nombre, tipo }]
  *   GET  /health    -> { ok: true } (sin token, para probar el túnel)
@@ -56,6 +60,14 @@ const {
   SQL_ENCRYPT = 'false',
   SQL_TRUST_CERT = 'true',
 } = process.env
+
+// Columnas sobre las que se acepta el filtro WHERE [col] = valor.
+// Lista blanca estricta: el nombre de la columna NUNCA sale de acá,
+// y el valor siempre va parametrizado.
+const PUENTE_FILTRO_COLS = (process.env.PUENTE_FILTRO_COLS || 'ARTCOD')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean)
 
 if (!PUENTE_TOKEN || !SQL_SERVER || !SQL_DATABASE || !SQL_USER || !SQL_PASSWORD) {
   console.error('[puente] Faltan variables: PUENTE_TOKEN, SQL_SERVER, SQL_DATABASE, SQL_USER, SQL_PASSWORD')
@@ -186,6 +198,26 @@ const server = http.createServer(async (req, res) => {
     }
 
     const desde = base ? `[${base}].[${esquema}].[${objeto}]` : `[${esquema}].[${objeto}]`
+
+    // Filtro opcional: WHERE [col] = @v. La columna sale de la lista blanca
+    // (PUENTE_FILTRO_COLS) y el valor SIEMPRE va parametrizado.
+    const donde = String(body?.donde ?? '').trim()
+    const valor = String(body?.valor ?? '').trim()
+    if (donde || valor) {
+      const col = PUENTE_FILTRO_COLS.find((c) => c.toLowerCase() === donde.toLowerCase())
+      if (!col || !valor) {
+        return enviar(res, 400, {
+          error: `Filtro inválido. 'donde' debe ser una de: ${PUENTE_FILTRO_COLS.join(', ')} y 'valor' no puede quedar vacío.`,
+        })
+      }
+      const r = await pool
+        .request()
+        .input('top', sql.Int, top)
+        .input('v', sql.NVarChar(100), valor)
+        .query(`SELECT TOP (@top) * FROM ${desde} WHERE [${col}] = @v`)
+      return enviar(res, 200, r.recordset ?? [])
+    }
+
     const result = await pool.request().input('top', sql.Int, top).query(`SELECT TOP (@top) * FROM ${desde}`)
     return enviar(res, 200, result.recordset ?? [])
   } catch (err) {
