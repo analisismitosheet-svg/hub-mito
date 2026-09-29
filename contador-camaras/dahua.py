@@ -265,6 +265,8 @@ class LectorDahua(threading.Thread):
                 img = foto_canal(sdk, h, canal)
                 if img is None:
                     return canal, None
+                if img.shape[1] < img.shape[0]:  # DVR "medio ancho": mostrar con su forma real
+                    img = cv2.resize(img, (img.shape[1] * 2, img.shape[0]))
                 img = cv2.resize(img, (640, int(img.shape[0] * 640 / img.shape[1])))
                 ok, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 75])
                 return canal, buf.tobytes() if ok else None

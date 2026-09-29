@@ -46,6 +46,15 @@ DURACION_PASE = 30 * 60
 ALCANCES = {"ver": 1, "gestion": 2}
 
 
+def aspecto_real(img):
+    """Muchos DVR graban "medio ancho" (960x1080 = Full HD a la mitad, 352x576 = 704x576 a la mitad)
+    y el DVR lo estira al mostrarlo. Si la imagen es más alta que ancha, se duplica el ancho para
+    verla con su forma real. Solo para MOSTRAR: el conteo usa la imagen original y las zonas van en 0..1."""
+    if img is not None and img.shape[1] < img.shape[0]:
+        return cv2.resize(img, (img.shape[1] * 2, img.shape[0]), interpolation=cv2.INTER_LINEAR)
+    return img
+
+
 class Autorizador:
     """Pregunta al hub (Supabase, con la sesión del usuario) qué puede ver. Cachea 60 s."""
 
@@ -138,6 +147,7 @@ class ServidorVista:
         img = (camara.lector.ultimo()[1] if camara.lector else None) if limpia else camara.vista
         if img is None:
             return None
+        img = aspecto_real(img)
         if img.shape[1] > self.ancho:
             img = cv2.resize(img, (self.ancho, int(img.shape[0] * self.ancho / img.shape[1])))
         ok, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, self.calidad])
@@ -260,7 +270,8 @@ class ServidorVista:
                                                "aviso": "No hay nadie en cámara ahora (o la cámara no está calibrada)."})
                     cuadro, cajas = det[0].copy(), list(det[1])
                     servidor.instantaneas[nombre] = (cuadro, cajas)
-                    img = cuadro if cuadro.shape[1] <= 1280 else cv2.resize(cuadro, (1280, int(cuadro.shape[0] * 1280 / cuadro.shape[1])))
+                    img = aspecto_real(cuadro)
+                    img = img if img.shape[1] <= 1280 else cv2.resize(img, (1280, int(img.shape[0] * 1280 / img.shape[1])))
                     ok, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 80])
                     return self.json(200, {"cajas": cajas, "foto": b64.b64encode(buf.tobytes()).decode() if ok else None,
                                            "referencias": Uniforme.cantidad()})

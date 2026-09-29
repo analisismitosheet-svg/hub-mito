@@ -345,8 +345,8 @@ export default function CalibrarCamara() {
                 {!cal.canal ? 'Elegí el canal de la cámara con "Cambiar canal".' : !base ? 'La PC contadora no informó al hub todavía.' : !base.vista_base ? 'La PC contadora no publica el video (falta url_publica en su configuración).' : 'Pidiendo permiso a la PC contadora…'}
               </div>
             ) : (
-              <div className="relative select-none overflow-hidden rounded-xl bg-black">
-                <img ref={img} src={fotoUrl} crossOrigin="anonymous" alt="Foto de la cámara para calibrar" className="block w-full"
+              <div className="relative mx-auto w-fit min-h-[200px] min-w-[320px] max-w-full select-none overflow-hidden rounded-xl bg-black">
+                <img ref={img} src={fotoUrl} crossOrigin="anonymous" alt="Foto de la cámara para calibrar" className="block h-auto max-h-[65vh] w-auto max-w-full"
                   onLoad={(e) => { setTam({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight }); setFoto((f) => ({ ...f, estado: 'ok' })) }}
                   onError={() => setFoto((f) => ({ ...f, estado: 'error' }))} />
                 {foto.estado !== 'ok' && (
@@ -361,7 +361,7 @@ export default function CalibrarCamara() {
                   </div>
                 )}
                 {foto.estado === 'ok' && (
-                  <svg ref={svg} viewBox={`0 0 ${W} ${H}`} className={'absolute inset-0 h-full w-full ' + (herr === 'credencial' ? 'cursor-crosshair' : 'cursor-copy')}
+                  <svg ref={svg} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className={'absolute inset-0 h-full w-full ' + (herr === 'credencial' ? 'cursor-crosshair' : 'cursor-copy')}
                     onPointerDown={alPresionar} onPointerMove={alMover} onPointerUp={alSoltar} onPointerLeave={alSoltar}
                     onContextMenu={(e) => e.preventDefault()}>
                     {CAPAS.map((c) => {
@@ -588,8 +588,8 @@ function MarcarEmpleado({ base, camara, pase, onCerrar }: { base: string; camara
         ) : !datos.foto ? (
           <p className="py-8 text-center text-sm text-sub">{datos.aviso ?? 'No hay personas en cámara ahora.'}</p>
         ) : (
-          <div className="relative overflow-hidden rounded-xl bg-black">
-            <img src={`data:image/jpeg;base64,${datos.foto}`} alt="Foto con las personas detectadas" className="block w-full" />
+          <div className="relative mx-auto w-fit max-w-full overflow-hidden rounded-xl bg-black">
+            <img src={`data:image/jpeg;base64,${datos.foto}`} alt="Foto con las personas detectadas" className="block h-auto max-h-[65vh] w-auto max-w-full" />
             {datos.cajas.map(([x1, y1, x2, y2], i) => (
               <button key={i} disabled={enviando} onClick={() => void marcar(i)} title="Es del personal"
                 className="absolute rounded border-2 border-emerald-400 bg-emerald-400/10 hover:bg-emerald-400/30"
