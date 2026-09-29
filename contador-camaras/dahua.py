@@ -64,6 +64,25 @@ class InfoEquipo(ctypes.Structure):
     ]
 
 
+class _InfoExacta(ctypes.Structure):
+    """NET_DEVICEINFO_Ex con el tamaño exacto (va dentro de la salida del login seguro)."""
+    _fields_ = [("serie", ctypes.c_char * 48), ("enteros", c_int * 5), ("limite_intentos", ctypes.c_ubyte),
+                ("intentos_restantes", ctypes.c_ubyte), ("_r1", ctypes.c_ubyte * 2), ("bloqueo_segundos", c_int),
+                ("_r2", ctypes.c_char * 24)]
+
+
+class _EntradaLoginSeguro(ctypes.Structure):
+    """NET_IN_LOGIN_WITH_HIGHLEVEL_SECURITY"""
+    _fields_ = [("dwSize", ctypes.c_uint32), ("ip", ctypes.c_char * 64), ("puerto", c_int),
+                ("usuario", ctypes.c_char * 64), ("clave", ctypes.c_char * 64), ("modo", c_int),
+                ("_r", ctypes.c_ubyte * 4), ("cap", c_void_p), ("tls", c_int)]
+
+
+class _SalidaLoginSeguro(ctypes.Structure):
+    """NET_OUT_LOGIN_WITH_HIGHLEVEL_SECURITY"""
+    _fields_ = [("dwSize", ctypes.c_uint32), ("info", _InfoExacta), ("error", c_int), ("_r", ctypes.c_ubyte * 132)]
+
+
 _DESCONEXION = WINFUNCTYPE(None, c_longlong, c_char_p, c_int, c_longlong)
 _CB_DATOS = WINFUNCTYPE(None, c_longlong, c_uint, POINTER(ctypes.c_ubyte), c_uint, c_longlong, c_longlong)
 
@@ -92,6 +111,11 @@ class SDK:
         d.CLIENT_Init.restype = ctypes.c_bool
         d.CLIENT_LoginEx2.argtypes = [c_char_p, c_ushort, c_char_p, c_char_p, c_int, c_void_p, POINTER(InfoEquipo), POINTER(c_int)]
         d.CLIENT_LoginEx2.restype = c_longlong
+        # Login "seguro" (el de SmartPSS): los firmware nuevos en modo seguro rechazan LoginEx2 con "clave incorrecta"
+        self.login_seguro = hasattr(d, "CLIENT_LoginWithHighLevelSecurity")
+        if self.login_seguro:
+            d.CLIENT_LoginWithHighLevelSecurity.argtypes = [POINTER(_EntradaLoginSeguro), POINTER(_SalidaLoginSeguro)]
+            d.CLIENT_LoginWithHighLevelSecurity.restype = c_longlong
         d.CLIENT_Logout.argtypes = [c_longlong]
         d.CLIENT_Logout.restype = ctypes.c_bool
         d.CLIENT_GetLastError.restype = c_uint
@@ -115,6 +139,15 @@ class SDK:
     def login(self, host: str, puerto: int, usuario: str, clave: str, p2p: bool = False) -> tuple[int, InfoEquipo, str | None]:
         """Devuelve (handle, info, error). handle 0 = falló (error dice por qué)."""
         info = InfoEquipo()
+        if self.login_seguro:
+            ent = _EntradaLoginSeguro(dwSize=ctypes.sizeof(_EntradaLoginSeguro), ip=host.encode(), puerto=puerto,
+                                      usuario=usuario.encode(), clave=clave.encode(), modo=LOGIN_P2P if p2p else LOGIN_TCP)
+            sal = _SalidaLoginSeguro(dwSize=ctypes.sizeof(_SalidaLoginSeguro))
+            h = self.dll.CLIENT_LoginWithHighLevelSecurity(byref(ent), byref(sal))
+            ctypes.memmove(byref(info), byref(sal.info), ctypes.sizeof(_InfoExacta))
+            if h:
+                return h, info, None
+            return 0, info, ERRORES_LOGIN.get(sal.error, f"error {sal.error} (SDK {self.dll.CLIENT_GetLastError() & 0x7fffffff})")
         err = c_int(0)
         h = self.dll.CLIENT_LoginEx2(host.encode(), puerto, usuario.encode(), clave.encode(),
                                      LOGIN_P2P if p2p else LOGIN_TCP, None, byref(info), byref(err))
