@@ -38,6 +38,7 @@ interface Calibracion {
   stream?: 'principal' | 'secundario'
   zoom?: number[] | null
   fps?: number | null
+  deteccion?: 'precisa' | 'rapida' | null
 }
 interface CamEstado { nombre: string; ok: boolean; fps?: number; error: string | null; vista_base?: string | null; calibracion?: Partial<Calibracion>; config_version?: string | null; canales?: number; kbps?: number | null; resolucion?: string }
 
@@ -536,6 +537,16 @@ export default function CalibrarCamara() {
             </div>
 
             <div className="rounded-2xl border border-line bg-surface p-3 text-xs">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-sub/70">Modelo de detección</div>
+              <div className="mb-3 grid grid-cols-2 gap-1.5">
+                {([['precisa', 'Precisa', 've mejor a la gente lejos o chica'], ['rapida', 'Rápida', 'mitad de placa: casi el doble de FPS']] as const).map(([v, titulo, sub]) => (
+                  <button key={v} onClick={() => cambiar({ ...cal, deteccion: v === 'precisa' ? null : v })}
+                    className={'rounded-xl border p-2 text-left ' + ((cal.deteccion ?? 'precisa') === v ? 'border-brand-600 bg-brand-600/10' : 'border-line bg-surface2/60')}>
+                    <span className="block font-semibold text-ink">{titulo}</span>
+                    <span className="text-sub/80">{sub}</span>
+                  </button>
+                ))}
+              </div>
               <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-sub/70">Cuadros por segundo (FPS)</div>
               <div className="grid grid-cols-5 gap-1.5">
                 {([null, 2, 4, 6, 8] as const).map((v) => (

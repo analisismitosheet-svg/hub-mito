@@ -486,7 +486,7 @@ class Camara(threading.Thread):
 
     # -- calibración (zonas/línea/credencial): desde config.json o editada en el hub
     CLAVES_CALIBRACION = ("modo", "zona_exterior", "zona_interior", "zona_a", "zona_b", "linea", "invertir", "punto", "empleados",
-                          "zoom", "fps")
+                          "zoom", "fps", "deteccion")
 
     def configurar(self) -> None:
         """Arma la geometría desde self.cam. Sin calibrar -> no cuenta, pero sigue mostrando imagen
@@ -601,9 +601,15 @@ class Camara(threading.Thread):
         # Un modelo por cámara: el tracker guarda estado dentro del modelo
         return YOLO(str(BASE / self.cfg.get("modelo", "yolo11n.pt")))
 
+    # "precisa" = tamaño general de config.json (960); "rapida" = 640: la mitad de placa, casi el doble de FPS
+    TAMANOS_DETECCION = {"rapida": 640}
+
+    def tamano_deteccion(self) -> int:
+        return self.TAMANOS_DETECCION.get(self.cam.get("deteccion") or "", int(self.cfg.get("imgsz", 640)))
+
     def detectar(self, modelo, cuadro):
         return modelo.track(cuadro, persist=True, classes=[CLASE_PERSONA], conf=float(self.cfg.get("confianza", 0.4)),
-                            imgsz=int(self.cfg.get("imgsz", 640)), device=self.dispositivo,
+                            imgsz=self.tamano_deteccion(), device=self.dispositivo,
                             tracker="bytetrack.yaml", verbose=False)[0]
 
     def run(self) -> None:
