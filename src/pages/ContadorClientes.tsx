@@ -374,6 +374,8 @@ export function Camaras({ dispositivos, locales, onCambio, tarjeta, btnChico }: 
     setMsg(error ? error.message : `La cámara "${quitarCam.nombre}" se quita en menos de 1 minuto (sus conteos ya guardados se conservan).`)
     setQuitarCam(null)
     await onCambio()
+    // la PC la saca en su próximo envío (cada 15 s): volver a leer para que desaparezca de la lista
+    if (!error) for (const s of [20, 40, 70]) setTimeout(() => void onCambio(), s * 1000)
   }
   const [vista, setVista] = useState('')
 
