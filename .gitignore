@@ -23,3 +23,6 @@ manuales/
 
 .vercel
 .env*
+
+# Exportaciones de equipos de Tailscale (IPs de la red): nunca al repo
+*-devices-*.csv
