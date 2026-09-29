@@ -33,6 +33,7 @@ Config: config.json (copiar de config.ejemplo.json).
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import logging
 import os
@@ -259,15 +260,26 @@ def elegir_dispositivo(pedido: str = "auto") -> str | int:
     if str(pedido).lower() == "cpu":
         return "cpu"
     if hay_gpu:
-        return 0
+        return siguiente_gpu()
     if str(pedido).lower() not in ("auto", ""):
         log.warning("se pidió GPU pero no hay CUDA disponible: uso CPU")
     return "cpu"
 
 
-def gpu_nombre() -> str:
+_gpu_turno = itertools.count()
+_gpu_lock = threading.Lock()
+
+
+def siguiente_gpu() -> int:
+    """Con varias placas NVIDIA en la PC, reparte las cámaras entre ellas (una y una)."""
     import torch
-    return torch.cuda.get_device_name(0)
+    with _gpu_lock:
+        return next(_gpu_turno) % max(1, torch.cuda.device_count())
+
+
+def gpu_nombre(indice: int = 0) -> str:
+    import torch
+    return f"{torch.cuda.get_device_name(indice)} #{indice}" if torch.cuda.device_count() > 1 else torch.cuda.get_device_name(indice)
 
 
 # ------------------------------------------------------ empleados / reid ----
@@ -597,7 +609,7 @@ class Camara(threading.Thread):
     def cargar_modelo(self):
         from ultralytics import YOLO  # import pesado: recién acá
         self.dispositivo = elegir_dispositivo(self.cfg.get("dispositivo", "auto"))
-        log.info("[%s] detección en %s", self.nombre, "GPU (" + gpu_nombre() + ")" if self.dispositivo != "cpu" else "CPU")
+        log.info("[%s] detección en %s", self.nombre, "GPU (" + gpu_nombre(self.dispositivo) + ")" if self.dispositivo != "cpu" else "CPU")
         # Un modelo por cámara: el tracker guarda estado dentro del modelo
         return YOLO(str(BASE / self.cfg.get("modelo", "yolo11n.pt")))
 
