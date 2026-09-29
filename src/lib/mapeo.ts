@@ -170,3 +170,19 @@ export async function ubicacionesDeArticulos(codigos: string[]): Promise<Map<str
   for (const [k, v] of out) out.set(k, v.sort(compararUbicaciones))
   return out
 }
+
+/** Descripción de cada artículo (código en mayúsculas -> descripción), sacada de transferencias y repos */
+export async function descripcionesDeArticulos(codigos: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>()
+  const unicos = [...new Set(codigos.map((c) => c.trim().toUpperCase()).filter(Boolean))]
+  if (!supabase || unicos.length === 0) return out
+  const TANDA = 500
+  for (let i = 0; i < unicos.length; i += TANDA) {
+    const { data, error } = await supabase.rpc('mapeo_descripciones', { p_codigos: unicos.slice(i, i + TANDA) })
+    if (error) throw new Error(error.message)
+    for (const r of (data as { codigo: string; descripcion: string | null }[] | null) ?? []) {
+      if (r.descripcion) out.set(r.codigo, r.descripcion)
+    }
+  }
+  return out
+}

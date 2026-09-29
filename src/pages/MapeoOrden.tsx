@@ -5,7 +5,7 @@ import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
-import { cargarMapeo, compararUbicaciones, type Mapeo } from '@/lib/mapeo'
+import { cargarMapeo, compararUbicaciones, descripcionesDeArticulos, type Mapeo } from '@/lib/mapeo'
 
 const SIN_UBICACION = 'Sin ubicación'
 
@@ -21,12 +21,20 @@ export default function MapeoOrden() {
   const [borrar, setBorrar] = useState<Mapeo | null>(null)
   const [borrando, setBorrando] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Descripción de cada código (de transferencias / repos); llega después de la lista
+  const [descripciones, setDescripciones] = useState<Map<string, string>>(new Map())
+  const descDe = (codigo: string) => descripciones.get(codigo.toUpperCase()) ?? ''
 
   const cargar = useCallback(async () => {
     setCargando(true)
     setError(null)
     try {
-      setFilas(await cargarMapeo())
+      const todas = await cargarMapeo()
+      setFilas(todas)
+      // No frena la carga: si falla, se ven solo los códigos
+      descripcionesDeArticulos(todas.map((f) => f.codigo))
+        .then(setDescripciones)
+        .catch(() => { /* sin descripciones */ })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo cargar el mapeo.')
     } finally {
@@ -61,7 +69,7 @@ export default function MapeoOrden() {
     if (!q) return ubicaciones
     return ubicaciones
       .map((u) =>
-        u.ubicacion.toUpperCase().includes(q) ? u : { ...u, items: u.items.filter((i) => i.codigo.toUpperCase().includes(q)) },
+        u.ubicacion.toUpperCase().includes(q) ? u : { ...u, items: u.items.filter((i) => i.codigo.toUpperCase().includes(q) || descDe(i.codigo).toUpperCase().includes(q)) },
       )
       .filter((u) => u.items.length > 0)
   }, [ubicaciones, q])
@@ -93,7 +101,9 @@ export default function MapeoOrden() {
   async function exportar() {
     const XLSX = await import('xlsx')
     const wb = XLSX.utils.book_new()
-    const datos = ubicaciones.flatMap((u) => u.items.map((i) => ({ Ubicación: u.ubicacion, Artículo: i.codigo })))
+    const datos = ubicaciones.flatMap((u) =>
+      u.items.map((i) => ({ Ubicación: u.ubicacion, Artículo: i.codigo, Descripción: descDe(i.codigo) })),
+    )
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(datos), 'Mapeo')
     XLSX.writeFile(wb, `mapeo_deposito_${new Date().toISOString().slice(0, 10)}.xlsx`)
   }
@@ -114,7 +124,7 @@ export default function MapeoOrden() {
             <input
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
-              placeholder="Buscar ubicación o código…"
+              placeholder="Buscar ubicación, código o descripción…"
               aria-label="Buscar"
               className="h-11 w-full rounded-xl border border-line bg-surface pl-9 pr-3 text-sm text-ink outline-none transition placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40"
             />
@@ -176,7 +186,10 @@ export default function MapeoOrden() {
                     <ul className="divide-y divide-line/40 border-t border-line/60 bg-surface2/50">
                       {u.items.map((i) => (
                         <li key={i.id} className="flex min-h-[2.75rem] items-center gap-3 py-1.5 pl-11 pr-3">
-                          <span className="flex-1 text-sm font-semibold text-ink">{i.codigo}</span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-semibold text-ink">{i.codigo}</span>
+                            {descDe(i.codigo) && <span className="block truncate text-xs text-sub">{descDe(i.codigo)}</span>}
+                          </span>
                           {puedeBorrar && (
                             <button
                               onClick={() => setBorrar(i)}
