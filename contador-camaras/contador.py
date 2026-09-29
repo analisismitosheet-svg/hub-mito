@@ -485,7 +485,8 @@ class Camara(threading.Thread):
         self.traza = None  # evaluar.py --traza: callback(tid, x, y, zona_confirmada)
 
     # -- calibración (zonas/línea/credencial): desde config.json o editada en el hub
-    CLAVES_CALIBRACION = ("modo", "zona_exterior", "zona_interior", "zona_a", "zona_b", "linea", "invertir", "punto", "empleados")
+    CLAVES_CALIBRACION = ("modo", "zona_exterior", "zona_interior", "zona_a", "zona_b", "linea", "invertir", "punto", "empleados",
+                          "zoom")
 
     def configurar(self) -> None:
         """Arma la geometría desde self.cam. Sin calibrar -> no cuenta, pero sigue mostrando imagen
@@ -506,6 +507,19 @@ class Camara(threading.Thread):
             log.warning("[%s] sin calibrar (modo %s): no cuenta hasta que se dibujen las zonas en el hub "
                         "(IA Cámaras -> Calibrar) o con calibrar.py", self.nombre, modo)
 
+    def recortar(self, cuadro):
+        """Zoom digital [x1, y1, x2, y2] (0..1 sobre la imagen completa del DVR): se detecta y se muestra
+        solo esa parte, así la gente se ve más grande. Las zonas se dibujan sobre la parte recortada."""
+        z = self.cam.get("zoom")
+        if cuadro is None or not z or len(z) != 4:
+            return cuadro
+        alto, ancho = cuadro.shape[:2]
+        x1, x2 = sorted((min(max(float(z[0]), 0.0), 1.0), min(max(float(z[2]), 0.0), 1.0)))
+        y1, y2 = sorted((min(max(float(z[1]), 0.0), 1.0), min(max(float(z[3]), 0.0), 1.0)))
+        if x2 - x1 < 0.1 or y2 - y1 < 0.1:  # recuadro demasiado chico: se ignora
+            return cuadro
+        return cuadro[int(y1 * alto):int(y2 * alto), int(x1 * ancho):int(x2 * ancho)]
+
     def canal(self) -> int | None:
         return (self.cam.get("sdk") or {}).get("canal") or self.cam.get("canal")
 
@@ -519,6 +533,7 @@ class Camara(threading.Thread):
 
     def aplicar_config(self, nueva: dict, version: str) -> None:
         """Calibración nueva desde el hub: se aplica en caliente (las personas que ya se siguen no se pierden)."""
+        zoom_antes = self.cam.get("zoom")
         for k in self.CLAVES_CALIBRACION:
             if k in nueva:
                 self.cam[k] = nueva[k]
@@ -548,6 +563,9 @@ class Camara(threading.Thread):
                     self.lector.reiniciar = True
         self.cam["config_version"] = self.config_version = version
         self.configurar()
+        if self.cam.get("zoom") != zoom_antes:  # otro recorte: las posiciones de antes ya no valen
+            log.info("[%s] zoom %s -> %s (desde el hub)", self.nombre, zoom_antes, self.cam.get("zoom"))
+            self.pistas.clear()
         for p in self.pistas.values():  # la zona confirmada vieja no vale con la geometría nueva
             p.zona, p.candidata, p.frames_candidata, p.lado = None, None, 0, 0
         log.info("[%s] calibración nueva aplicada desde el hub (%s)", self.nombre, version)
@@ -607,6 +625,7 @@ class Camara(threading.Thread):
                 time.sleep(0.05)
                 continue
             ultimo_nro = nro
+            cuadro = self.recortar(cuadro)
             if self.modo is None and self.mirando == 0:
                 # Sin calibrar y nadie mirando: no gastar GPU (la foto para calibrar sale del lector igual)
                 time.sleep(0.5)

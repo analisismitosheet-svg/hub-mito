@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Loader2, RefreshCw, Save, Undo2, Trash2, ArrowLeftRight, CheckCircle2, AlertTriangle, Crosshair, LayoutGrid, X } from 'lucide-react'
+import { Loader2, RefreshCw, Save, Undo2, Trash2, ArrowLeftRight, CheckCircle2, AlertTriangle, Crosshair, LayoutGrid, X, ZoomIn, ZoomOut } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
@@ -12,11 +12,16 @@ import { ErrorVideo, pedirPase, urlCanal, urlFoto } from '@/lib/videoContador'
  * (contador-camaras/vista.py, /foto?limpia=1). Al guardar va a
  * contador_config; la PC la recibe con su próximo envío y la aplica sin reiniciar.
  * Coordenadas normalizadas 0..1 (las mismas que usa contador.py / calibrar.py).
+ * Zoom: recuadro [x1,y1,x2,y2] sobre la imagen ENTERA del DVR; las zonas son relativas a ese recuadro
+ * (la PC recorta antes de detectar). Por eso la foto se pide entera y el recorte se hace acá con CSS.
  */
 
 type Punto = [number, number]
 type Capa = 'zona_exterior' | 'zona_interior' | 'zona_a' | 'zona_b' | 'linea'
-type Herramienta = Capa | 'credencial'
+type Herramienta = Capa | 'credencial' | 'zoom'
+interface Ventana { x0: number; y0: number; w: number; h: number }
+const ENTERA: Ventana = { x0: 0, y0: 0, w: 1, h: 1 }
+const CAPAS_PUNTOS: Capa[] = ['zona_exterior', 'zona_interior', 'zona_a', 'zona_b', 'linea']
 
 interface Empleados { activo: boolean; hsv_min: number[]; hsv_max: number[]; frac_min?: number }
 interface Calibracion {
@@ -31,6 +36,7 @@ interface Calibracion {
   empleados: Empleados | null
   canal?: number | null
   stream?: 'principal' | 'secundario'
+  zoom?: number[] | null
 }
 interface CamEstado { nombre: string; ok: boolean; error: string | null; vista_base?: string | null; calibracion?: Partial<Calibracion>; config_version?: string | null; canales?: number; kbps?: number | null; resolucion?: string }
 
@@ -48,6 +54,20 @@ const VACIA: Calibracion = {
 }
 
 const k = (v: unknown) => v !== undefined
+
+/** Zoom guardado -> ventana (mismas reglas que contador.py: menos de 10% se ignora). */
+function ventanaZoom(z: number[] | null | undefined): Ventana {
+  if (!z || z.length !== 4) return ENTERA
+  const c = (v: number) => Math.min(1, Math.max(0, v))
+  const [x0, x1] = [c(z[0]), c(z[2])].sort((a, b) => a - b), [y0, y1] = [c(z[1]), c(z[3])].sort((a, b) => a - b)
+  return x1 - x0 < 0.1 || y1 - y0 < 0.1 ? ENTERA : { x0, y0, w: x1 - x0, h: y1 - y0 }
+}
+/** Punto relativo a la ventana `de` -> relativo a la ventana `a`. */
+const pasar = ([x, y]: Punto, de: Ventana, a: Ventana, recortar = false): Punto => {
+  let nx = (de.x0 + x * de.w - a.x0) / a.w, ny = (de.y0 + y * de.h - a.y0) / a.h
+  if (recortar) { nx = Math.min(1, Math.max(0, nx)); ny = Math.min(1, Math.max(0, ny)) }
+  return [Math.round(nx * 10000) / 10000, Math.round(ny * 10000) / 10000]
+}
 
 function sb() {
   if (!supabase) throw new Error('Supabase no está configurado.')
@@ -174,7 +194,7 @@ export default function CalibrarCamara() {
   const alPresionar = (e: React.PointerEvent<SVGSVGElement>) => {
     if (e.button !== 0) return
     const p = coords(e)
-    if (herr === 'credencial') {
+    if (herr === 'credencial' || herr === 'zoom') {
       rect.current = { x0: p[0], y0: p[1], x1: p[0], y1: p[1] }
       setRectVis(rect.current)
       svg.current?.setPointerCapture(e.pointerId)
@@ -200,7 +220,8 @@ export default function CalibrarCamara() {
       setGuardado(null)
     }
     if (rect.current) {
-      medirCredencial(rect.current)
+      if (herr === 'zoom') aplicarZoom(rect.current)
+      else medirCredencial(rect.current)
       rect.current = null
       setRectVis(null)
     }
@@ -209,8 +230,9 @@ export default function CalibrarCamara() {
   const medirCredencial = (r: { x0: number; y0: number; x1: number; y1: number }) => {
     const el = img.current
     if (!el || !el.naturalWidth) return
-    const x = Math.round(Math.min(r.x0, r.x1) * el.naturalWidth), y = Math.round(Math.min(r.y0, r.y1) * el.naturalHeight)
-    const w = Math.round(Math.abs(r.x1 - r.x0) * el.naturalWidth), h = Math.round(Math.abs(r.y1 - r.y0) * el.naturalHeight)
+    // el recuadro está sobre la parte con zoom; la foto es la imagen entera
+    const x = Math.round((Z.x0 + Math.min(r.x0, r.x1) * Z.w) * el.naturalWidth), y = Math.round((Z.y0 + Math.min(r.y0, r.y1) * Z.h) * el.naturalHeight)
+    const w = Math.round(Math.abs(r.x1 - r.x0) * Z.w * el.naturalWidth), h = Math.round(Math.abs(r.y1 - r.y0) * Z.h * el.naturalHeight)
     if (w < 3 || h < 3) return
     try {
       const cv = document.createElement('canvas')
@@ -237,6 +259,20 @@ export default function CalibrarCamara() {
     } catch {
       setError('No se pudo leer el color de la foto (la PC tiene que tener el contador actualizado).')
     }
+  }
+
+  /** Cambia el zoom y pasa las zonas ya dibujadas al recorte nuevo (siguen sobre el mismo lugar del piso). */
+  const ponerZoom = (nuevo: number[] | null) => {
+    const a = ventanaZoom(nuevo)
+    const pasadas = Object.fromEntries(CAPAS_PUNTOS.map((c) => [c, cal[c]?.map((q) => pasar(q, Z, a, true)) ?? null]))
+    cambiar({ ...cal, ...pasadas, zoom: nuevo })
+  }
+  const aplicarZoom = (r: { x0: number; y0: number; x1: number; y1: number }) => {
+    const x0 = Math.min(r.x0, r.x1), x1 = Math.max(r.x0, r.x1), y0 = Math.min(r.y0, r.y1), y1 = Math.max(r.y0, r.y1)
+    if (x1 - x0 < 0.1 || y1 - y0 < 0.1) return setError('El recuadro del zoom es muy chico: marcá la puerta y un poco de piso de cada lado.')
+    setError(null)
+    ponerZoom([x0, y0, x1, y1].map((v) => Math.round(v * 10000) / 10000))
+    setHerr('zona_exterior')
   }
 
   const problemas = useMemo(() => {
@@ -271,7 +307,9 @@ export default function CalibrarCamara() {
     setGuardado({ version: data.actualizado as string, aplicado: false })
   }
 
-  const W = tam.w, H = tam.h
+  const Z = ventanaZoom(cal.zoom)               // parte de la imagen que usa el contador
+  const D = herr === 'zoom' ? ENTERA : Z        // parte que se muestra ahora
+  const W = tam.w * D.w, H = tam.h * D.h
   const flecha = useMemo(() => {
     if (cal.linea?.length !== 2) return null
     const [[ax, ay], [bx, by]] = cal.linea
@@ -286,13 +324,13 @@ export default function CalibrarCamara() {
   const canalActual = cam?.calibracion?.canal ?? null
   const fotoUrl = !base?.vista_base || !pase || !cal.canal ? null
     : cam && cal.canal === canalActual
-      ? `${urlFoto(base.vista_base, cam.nombre, pase, true)}&r=${foto.n}`
+      ? `${urlFoto(base.vista_base, cam.nombre, pase, true, true)}&r=${foto.n}`
       : `${urlCanal(base.vista_base, base.nombre, cal.canal, pase)}&r=${foto.n}`
   const nCanales = base?.canales || 16
   const elegir = (n: number) => {
     const hayDibujo = [cal.zona_exterior, cal.zona_interior, cal.zona_a, cal.zona_b, cal.linea].some((v) => v?.length)
     if (n !== cal.canal && hayDibujo && !window.confirm('Cambiar de canal borra las zonas dibujadas (son de otra imagen). ¿Seguimos?')) return
-    cambiar(n === cal.canal ? cal : { ...cal, canal: n, zona_exterior: null, zona_interior: null, zona_a: null, zona_b: null, linea: null })
+    cambiar(n === cal.canal ? cal : { ...cal, canal: n, zona_exterior: null, zona_interior: null, zona_a: null, zona_b: null, linea: null, zoom: null })
     setFoto({ n: foto.n + 1, estado: 'cargando' })
     setElegirCanal(false)
   }
@@ -331,7 +369,7 @@ export default function CalibrarCamara() {
               ))}
               <span className="mx-1 h-5 w-px bg-line" />
               <button onClick={deshacer} disabled={!historial.length} className={btn}><Undo2 size={13} aria-hidden /> Deshacer</button>
-              {herr !== 'credencial' && (
+              {herr !== 'credencial' && herr !== 'zoom' && (
                 <button onClick={() => cambiar({ ...cal, [herr]: null })} className={btn}><Trash2 size={13} aria-hidden /> Borrar {CAPAS.find((c) => c.id === herr)?.label}</button>
               )}
               {cal.modo === 'linea' && (
@@ -345,8 +383,10 @@ export default function CalibrarCamara() {
                 {!cal.canal ? 'Elegí el canal de la cámara con "Cambiar canal".' : !base ? 'La PC contadora no informó al hub todavía.' : !base.vista_base ? 'La PC contadora no publica el video (falta url_publica en su configuración).' : 'Pidiendo permiso a la PC contadora…'}
               </div>
             ) : (
-              <div className="relative mx-auto w-fit min-h-[200px] min-w-[320px] max-w-full select-none overflow-hidden rounded-xl bg-black">
-                <img ref={img} src={fotoUrl} crossOrigin="anonymous" alt="Foto de la cámara para calibrar" className="block h-auto max-h-[65vh] w-auto max-w-full"
+              <div className="relative mx-auto max-w-full select-none overflow-hidden rounded-xl bg-black"
+                style={{ aspectRatio: `${W} / ${H}`, width: `min(100%, calc(65vh * ${W / H}))` }}>
+                <img ref={img} src={fotoUrl} crossOrigin="anonymous" alt="Foto de la cámara para calibrar" className="absolute block max-w-none"
+                  style={{ width: `${100 / D.w}%`, height: `${100 / D.h}%`, left: `${(-D.x0 / D.w) * 100}%`, top: `${(-D.y0 / D.h) * 100}%` }}
                   onLoad={(e) => { setTam({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight }); setFoto((f) => ({ ...f, estado: 'ok' })) }}
                   onError={() => setFoto((f) => ({ ...f, estado: 'error' }))} />
                 {foto.estado !== 'ok' && (
@@ -361,11 +401,11 @@ export default function CalibrarCamara() {
                   </div>
                 )}
                 {foto.estado === 'ok' && (
-                  <svg ref={svg} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className={'absolute inset-0 h-full w-full ' + (herr === 'credencial' ? 'cursor-crosshair' : 'cursor-copy')}
+                  <svg ref={svg} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className={'absolute inset-0 h-full w-full ' + (herr === 'credencial' || herr === 'zoom' ? 'cursor-crosshair' : 'cursor-copy')}
                     onPointerDown={alPresionar} onPointerMove={alMover} onPointerUp={alSoltar} onPointerLeave={alSoltar}
                     onContextMenu={(e) => e.preventDefault()}>
                     {CAPAS.map((c) => {
-                      const pts = cal[c.id] ?? []
+                      const pts = (cal[c.id] ?? []).map((q) => (D === Z ? q : pasar(q, Z, D)))
                       if (!pts.length || (cal.modo === 'linea' && (c.id === 'zona_exterior' || c.id === 'zona_interior')) || (cal.modo !== 'linea' && c.id === 'linea')) return null
                       const pix = pts.map(([x, y]) => `${x * W},${y * H}`).join(' ')
                       const activa = herr === c.id
@@ -389,7 +429,11 @@ export default function CalibrarCamara() {
                         </g>
                       )
                     })}
-                    {cal.modo === 'linea' && flecha && (
+                    {herr === 'zoom' && Z !== ENTERA && (
+                      <rect x={Z.x0 * W} y={Z.y0 * H} width={Z.w * W} height={Z.h * H}
+                        fill="none" stroke="#a3e635" strokeWidth={3} strokeDasharray="10 6" vectorEffect="non-scaling-stroke" />
+                    )}
+                    {cal.modo === 'linea' && flecha && herr !== 'zoom' && (
                       <line x1={flecha.x1} y1={flecha.y1} x2={flecha.x2} y2={flecha.y2} stroke="#22c55e" strokeWidth={5} markerEnd="url(#punta)" vectorEffect="non-scaling-stroke" />
                     )}
                     <defs>
@@ -407,7 +451,9 @@ export default function CalibrarCamara() {
               </div>
             )}
             <p className="mt-2 text-[11px] text-sub/70">
-              Clic: agregar punto · arrastrar un punto: moverlo · clic derecho sobre un punto: borrarlo. Las zonas se dibujan en el PISO (se cuenta por los pies).
+              {herr === 'zoom'
+                ? 'Arrastrá un recuadro alrededor de la puerta (con un poco de piso de cada lado). El contador va a mirar solo esa parte, más grande.'
+                : 'Clic: agregar punto · arrastrar un punto: moverlo · clic derecho sobre un punto: borrarlo. Las zonas se dibujan en el PISO (se cuenta por los pies).'}
             </p>
           </div>
 
@@ -426,6 +472,19 @@ export default function CalibrarCamara() {
                     </span>
                   </button>
                 ))}
+                <button onClick={() => setHerr('zoom')}
+                  className={'flex items-start gap-2 rounded-xl border p-2 text-left text-xs ' + (herr === 'zoom' ? 'border-brand-600 bg-brand-600/10' : 'border-line bg-surface2/60')}>
+                  <ZoomIn size={14} className="mt-0.5 shrink-0 text-lime-400" aria-hidden />
+                  <span>
+                    <span className="font-semibold text-ink">Zoom {Z !== ENTERA ? `(${Math.round(Z.w * 100)}% del ancho)` : ''}</span>
+                    <span className="block text-sub/80">Acercá la imagen a la puerta: la IA ve a la gente más grande y cuenta mejor. Las zonas se mantienen en su lugar.</span>
+                  </span>
+                </button>
+                {Z !== ENTERA && (
+                  <button onClick={() => ponerZoom(null)} className="flex items-center gap-2 rounded-xl border border-line p-2 text-left text-[11px] text-sub hover:bg-surface2">
+                    <ZoomOut size={13} aria-hidden /> Quitar zoom (ver la imagen entera)
+                  </button>
+                )}
                 <button onClick={() => setHerr('credencial')}
                   className={'flex items-start gap-2 rounded-xl border p-2 text-left text-xs ' + (herr === 'credencial' ? 'border-brand-600 bg-brand-600/10' : 'border-line bg-surface2/60')}>
                   <span className="mt-0.5 inline-block h-3 w-3 shrink-0 rounded-sm bg-fuchsia-500" />

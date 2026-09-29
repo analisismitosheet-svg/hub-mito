@@ -47,7 +47,8 @@ const raiz = (base: string) => base.replace(/\/$/, '')
 const cam = (camara: string) => encodeURIComponent(camara)
 
 export const urlVideo = (base: string, camara: string, pase: string) => `${raiz(base)}/video/${cam(camara)}?k=${encodeURIComponent(pase)}`
-export const urlFoto = (base: string, camara: string, pase: string, limpia = false) =>
-  `${raiz(base)}/foto/${cam(camara)}?k=${encodeURIComponent(pase)}${limpia ? '&limpia=1' : ''}`
+/** limpia: sin dibujos (con el zoom); completa: además sin zoom, la imagen entera del DVR. */
+export const urlFoto = (base: string, camara: string, pase: string, limpia = false, completa = false) =>
+  `${raiz(base)}/foto/${cam(camara)}?k=${encodeURIComponent(pase)}${limpia ? '&limpia=1' : ''}${completa ? '&completa=1' : ''}`
 export const urlCanal = (base: string, camara: string, canal: number, pase: string) =>
   `${raiz(base)}/canal/${cam(camara)}/${canal}?k=${encodeURIComponent(pase)}`

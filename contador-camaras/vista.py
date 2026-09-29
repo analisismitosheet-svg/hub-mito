@@ -10,7 +10,8 @@ canales) exige además el permiso contador.gestionar.
     POST /pase    Authorization: Bearer <sesión del hub>   {"camara", "alcance": "ver"|"gestion"}
                   -> {"pase", "vence"}   (30 min)
     GET  /video/<camara>?k=<pase>          MJPEG (lo muestra un <img> en el hub)
-    GET  /foto/<camara>?k=<pase>[&limpia=1]  un cuadro JPEG (limpia = sin dibujos, para calibrar)
+    GET  /foto/<camara>?k=<pase>[&limpia=1|&completa=1]  un cuadro JPEG (limpia = sin dibujos, con el zoom;
+                                          completa = la imagen entera del DVR, para elegir el zoom)
     GET  /canales/<camara>?k=<pase>        {"canales", "actual"}          (alcance gestion)
     GET  /canal/<camara>/<n>?k=<pase>      foto de otro canal del DVR     (alcance gestion)
     GET  /personas/<camara>?k=<pase>      foto + personas detectadas (para marcar empleados; gestion)
@@ -142,9 +143,14 @@ class ServidorVista:
         except (ValueError, UnicodeDecodeError):
             return False
 
-    def jpeg(self, camara, limpia: bool = False) -> bytes | None:
-        # limpia: el último cuadro de la cámara SIN cajas ni zonas (para calibrar desde el hub)
-        img = (camara.lector.ultimo()[1] if camara.lector else None) if limpia else camara.vista
+    def jpeg(self, camara, limpia: bool = False, completa: bool = False) -> bytes | None:
+        # limpia: el último cuadro de la cámara SIN cajas ni zonas (para calibrar desde el hub);
+        # completa: además sin el zoom (para marcar el recuadro del zoom)
+        if limpia or completa:
+            img = camara.lector.ultimo()[1] if camara.lector else None
+            img = img if completa else camara.recortar(img)
+        else:
+            img = camara.vista
         if img is None:
             return None
         img = aspecto_real(img)
@@ -258,7 +264,8 @@ class ServidorVista:
                 nombre = urllib.parse.unquote(partes[1])
                 cam = servidor.camaras.get(nombre)
                 limpia = q.get("limpia", ["0"])[0] == "1"
-                alcance = "gestion" if partes[0] in ("canales", "canal", "personas") or limpia else "ver"
+                completa = q.get("completa", ["0"])[0] == "1"
+                alcance = "gestion" if partes[0] in ("canales", "canal", "personas") or limpia or completa else "ver"
                 if cam is None or not servidor.validar(pase, nombre, alcance):
                     return self.responder(401, b"pase invalido o vencido", "text/plain")
                 if partes[0] == "personas":
@@ -288,10 +295,10 @@ class ServidorVista:
                 try:
                     if partes[0] == "foto":
                         for _ in range(30):  # esperar a que haya un cuadro
-                            if servidor.jpeg(cam, limpia) is not None:
+                            if servidor.jpeg(cam, limpia, completa) is not None:
                                 break
                             time.sleep(0.1)
-                        img = servidor.jpeg(cam, limpia)
+                        img = servidor.jpeg(cam, limpia, completa)
                         return self.responder(200 if img else 503, img or b"sin imagen", "image/jpeg" if img else "text/plain")
                     for _ in range(50):  # hasta 5 s para el primer cuadro; si no hay, avisar y no quedar colgado
                         if cam.vista is not None:
