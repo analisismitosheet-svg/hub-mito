@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Loader2, RefreshCw, ScanEye, LogIn, LogOut, Users, Footprints, UserCheck, BadgeCheck, ChevronRight } from 'lucide-react'
+import { Loader2, RefreshCw, ScanEye, LogIn, LogOut, Footprints, UserCheck, BadgeCheck, ChevronRight } from 'lucide-react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, Tooltip } from 'recharts'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -112,11 +112,9 @@ export default function IaCamaras() {
         <Camaras dispositivos={dispositivos} locales={locales} onCambio={cargar} tarjeta={tarjeta} btnChico={btnChico} />
       ) : (
         <div className="flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Resumen icono={<LogIn size={16} className="text-emerald-500" />} label="Entradas hoy" valor={nf(total('entradas'))} />
-            <Resumen icono={<Users size={16} className="text-amber-500" />} label="Adentro ahora" valor={nf(total('adentro'))} />
-            <Resumen icono={<Footprints size={16} className="text-violet-500" />} label="Transeúntes" valor={nf(total('transeuntes'))}
-              nota={total('transeuntes') ? `atracción ${((100 * total('entradas')) / total('transeuntes')).toFixed(1)}%` : undefined} />
+            <Resumen icono={<Footprints size={16} className="text-violet-500" />} label="Transeúntes" valor={nf(total('transeuntes'))} />
             <Resumen icono={<UserCheck size={16} className="text-sky-500" />} label="Clientes únicos" valor={nf(total('nuevos'))}
               nota={total('reingresos') ? `${nf(total('reingresos'))} reingresos` : undefined} />
             <Resumen icono={<ScanEye size={16} className="text-cyan-500" />} label="PCs en línea" valor={`${pcsOnline}/${dispositivos.length}`} />
@@ -171,15 +169,14 @@ function TarjetaLocal({ l }: { l: LocalHoy }) {
           <div className="text-[11px] uppercase tracking-wider text-sub/70">Entradas hoy</div>
           <div className="font-display text-4xl font-bold leading-none text-ink">{nf(l.entradas)}</div>
         </div>
-        <div className="grid flex-1 grid-cols-3 gap-2 text-center">
+        <div className="grid flex-1 grid-cols-2 gap-2 text-center">
           <Mini icono={<LogOut size={12} />} label="Salidas" valor={nf(l.salidas)} />
-          <Mini icono={<Users size={12} />} label="Adentro" valor={nf(l.adentro)} />
           <Mini icono={<BadgeCheck size={12} />} label="Personal" valor={nf(l.empleados)} />
         </div>
       </div>
 
       <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-sub">
-        {l.transeuntes > 0 && <span>{nf(l.transeuntes)} transeúntes · atracción {((100 * l.entradas) / l.transeuntes).toFixed(1)}%</span>}
+        {l.transeuntes > 0 && <span>{nf(l.transeuntes)} transeúntes</span>}
         {l.nuevos + l.reingresos > 0 && <span>{nf(l.nuevos)} únicos · {nf(l.reingresos)} reingresos</span>}
       </div>
 

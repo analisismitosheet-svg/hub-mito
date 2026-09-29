@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  Loader2, RefreshCw, Footprints, LogIn, LogOut, Users, Percent, Cctv, Plus, Copy, Check, Power, Trash2,
+  Loader2, RefreshCw, Footprints, LogIn, LogOut, Percent, Cctv, Plus, Copy, Check, Power, Trash2,
 } from 'lucide-react'
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend, ComposedChart, Line,
@@ -170,7 +170,6 @@ export default function ContadorClientes() {
   const conversion = (entradas: number, tk: number | undefined) => (entradas > 0 && tk != null ? (tk / entradas) * 100 : null)
   const totalTickets = tickets ? [...tickets.values()].reduce((a, b) => a + b, 0) : null
   const convTotal = datos && totalTickets != null ? conversion(datos.totales.entradas, totalTickets) : null
-  const adentroAhora = (datos?.ocupacion ?? []).reduce((a, o) => a + o.adentro, 0)
 
   const serieDia = useMemo(() => {
     if (!datos) return []
@@ -240,13 +239,12 @@ export default function ContadorClientes() {
             <div className="flex items-center justify-center gap-2 py-10 text-sub"><Loader2 size={18} className="animate-spin" aria-hidden /> Cargando datos...</div>
           ) : (
             <div className={'flex flex-col gap-4 transition-opacity ' + (cargando ? 'opacity-60' : '')}>
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
                 <Kpi icono={<LogIn size={16} className="text-emerald-500" />} label="Entradas" valor={nf(datos.totales.entradas)} />
                 <Kpi icono={<LogOut size={16} className="text-sky-500" />} label="Salidas" valor={nf(datos.totales.salidas)} />
                 <Kpi icono={<Footprints size={16} className="text-violet-500" />} label="Promedio / día" valor={nf(datos.totales.entradas / Math.max(datos.totales.dias, 1))} />
                 <Kpi icono={<Footprints size={16} className="text-sky-500" />} label="Transeúntes" valor={nf(datos.totales.transeuntes)}
-                  nota={datos.totales.transeuntes ? `atracción ${((100 * datos.totales.entradas) / datos.totales.transeuntes).toFixed(1)}% · ${nf(datos.totales.nuevos)} únicos` : `${nf(datos.totales.empleados)} entradas de personal (no suman)`} />
-                <Kpi icono={<Users size={16} className="text-amber-500" />} label="Adentro ahora" valor={nf(adentroAhora)} nota="estimado: entradas − salidas de hoy" />
+                  nota={datos.totales.transeuntes ? `${nf(datos.totales.nuevos)} únicos` : `${nf(datos.totales.empleados)} entradas de personal (no suman)`} />
                 <Kpi icono={<Percent size={16} className="text-pink-500" />} label="Conversión"
                   valor={convTotal != null ? `${convTotal.toFixed(1)}%` : '—'}
                   nota={ventas ? `${nf(totalTickets ?? 0)} tickets` : 'configurá la vista de ventas en Cámaras'} />
@@ -295,7 +293,6 @@ export default function ContadorClientes() {
                           <th className="py-1.5 pr-3">Local</th>
                           <th className="py-1.5 pr-3 text-right">Entradas</th>
                           <th className="py-1.5 pr-3 text-right">Salidas</th>
-                          <th className="py-1.5 pr-3 text-right">Adentro ahora</th>
                           {ventas && <th className="py-1.5 pr-3 text-right">Tickets</th>}
                           {ventas && <th className="py-1.5 text-right">Conversión</th>}
                         </tr>
@@ -311,7 +308,6 @@ export default function ContadorClientes() {
                               </td>
                               <td className="py-1.5 pr-3 text-right tabular-nums">{nf(l.entradas)}</td>
                               <td className="py-1.5 pr-3 text-right tabular-nums">{nf(l.salidas)}</td>
-                              <td className="py-1.5 pr-3 text-right tabular-nums">{nf(datos.ocupacion.find((o) => o.local === l.local)?.adentro ?? 0)}</td>
                               {ventas && <td className="py-1.5 pr-3 text-right tabular-nums">{nf(tk ?? 0)}</td>}
                               {ventas && <td className="py-1.5 text-right tabular-nums">{conv != null ? `${conv.toFixed(1)}%` : '—'}</td>}
                             </tr>

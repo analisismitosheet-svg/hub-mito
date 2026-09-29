@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
-  Loader2, RefreshCw, Percent, LogIn, LogOut, Users, Footprints, Receipt, VideoOff, Video, ChevronRight, Info,
+  Loader2, RefreshCw, Percent, LogIn, LogOut, Footprints, Receipt, VideoOff, Video, ChevronRight, Info,
 } from 'lucide-react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
 import Layout from '@/components/Layout'
@@ -158,9 +158,7 @@ export default function TasaConversion() {
                   <th className="py-1.5 pr-3">Local</th>
                   <th className="py-1.5 pr-3 text-right">Entradas</th>
                   <th className="py-1.5 pr-3 text-right">Tickets</th>
-                  <th className="py-1.5 pr-3 text-right">Conversión</th>
-                  <th className="py-1.5 pr-3 text-right">Adentro</th>
-                  <th className="py-1.5 text-right">Atracción</th>
+                  <th className="py-1.5 text-right">Conversión</th>
                 </tr>
               </thead>
               <tbody>
@@ -172,9 +170,7 @@ export default function TasaConversion() {
                       <td className="py-1.5 pr-3 font-medium text-ink">{l.local} <span className="text-xs font-normal text-sub">{nombres[l.local]}</span></td>
                       <td className="py-1.5 pr-3 text-right tabular-nums">{nf(l.entradas)}</td>
                       <td className="py-1.5 pr-3 text-right tabular-nums">{ticketsHoy ? nf(tk ?? 0) : '—'}</td>
-                      <td className="py-1.5 pr-3 text-right font-semibold tabular-nums text-ink">{c != null ? `${c.toFixed(1)}%` : '—'}</td>
-                      <td className="py-1.5 pr-3 text-right tabular-nums">{nf(l.adentro)}</td>
-                      <td className="py-1.5 text-right tabular-nums">{l.transeuntes ? `${((100 * l.entradas) / l.transeuntes).toFixed(1)}%` : '—'}</td>
+                      <td className="py-1.5 text-right font-semibold tabular-nums text-ink">{c != null ? `${c.toFixed(1)}%` : '—'}</td>
                     </tr>
                   )
                 })}
@@ -224,10 +220,8 @@ function DetalleLocal({ l, nombre, tickets, hayVentas }: { l: LocalHoy; nombre?:
             nota={hayVentas ? `${nf(tickets ?? 0)} tickets / ${nf(l.entradas)} entradas` : 'faltan las ventas'} />
           <Dato icono={<LogIn size={15} className="text-emerald-500" />} label="Entradas hoy" valor={nf(l.entradas)} grande
             nota={l.nuevos + l.reingresos > 0 ? `${nf(l.nuevos)} clientes únicos · ${nf(l.reingresos)} volvieron` : undefined} />
-          <Dato icono={<Users size={15} className="text-amber-500" />} label="Adentro ahora" valor={nf(l.adentro)} />
           <Dato icono={<LogOut size={15} className="text-sky-500" />} label="Salidas" valor={nf(l.salidas)} />
-          <Dato icono={<Footprints size={15} className="text-violet-500" />} label="Transeúntes" valor={nf(l.transeuntes)}
-            nota={l.transeuntes ? `atracción ${((100 * l.entradas) / l.transeuntes).toFixed(1)}%` : undefined} />
+          <Dato icono={<Footprints size={15} className="text-violet-500" />} label="Transeúntes" valor={nf(l.transeuntes)} />
           <Dato icono={<Receipt size={15} className="text-lime-500" />} label="Tickets hoy" valor={hayVentas ? nf(tickets ?? 0) : '—'} />
         </div>
 
