@@ -1022,6 +1022,22 @@ def configurar_log() -> None:
     )
 
 
+_mutex = None
+
+
+def una_sola_instancia() -> bool:
+    """Nunca dos contadores a la vez (ej. el de autoarranque como SYSTEM y uno abierto a mano):
+    contarían dos veces y se pisarían el video. Usa un mutex global de Windows."""
+    global _mutex
+    if sys.platform != "win32":
+        return True
+    import ctypes
+    k32 = ctypes.windll.kernel32
+    k32.CreateMutexW.restype = ctypes.c_void_p
+    _mutex = k32.CreateMutexW(None, False, r"Global\MITO_Contador_Clientes")
+    return bool(_mutex) and k32.GetLastError() != 183  # 183 = ERROR_ALREADY_EXISTS
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Contador de clientes MITO")
     ap.add_argument("--ver", action="store_true", help="mostrar ventanas con las detecciones")
@@ -1029,6 +1045,10 @@ def main() -> None:
     args = ap.parse_args()
 
     configurar_log()
+    if not una_sola_instancia():
+        log.warning("ya hay otro contador corriendo en esta PC: este no arranca (reintenta en 1 minuto)")
+        time.sleep(60)
+        return
     cfg = cargar_config()
     sistema = Sistema(cfg, Almacen(BASE / "conteos.db"), args.ver)
     for c in cfg["camaras"]:

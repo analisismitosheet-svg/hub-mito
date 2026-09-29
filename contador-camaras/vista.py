@@ -317,6 +317,7 @@ class ServidorVista:
                 finally:
                     cam.mirando -= 1
 
+        ThreadingHTTPServer.allow_reuse_address = False  # en Windows permitiría DOS servidores en el mismo puerto
         httpd = ThreadingHTTPServer(("127.0.0.1", self.puerto), Manejador)
         httpd.daemon_threads = True
         threading.Thread(target=httpd.serve_forever, daemon=True, name="vista").start()
