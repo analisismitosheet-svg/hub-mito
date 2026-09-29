@@ -13,6 +13,8 @@ canales) exige además el permiso contador.gestionar.
     GET  /foto/<camara>?k=<pase>[&limpia=1]  un cuadro JPEG (limpia = sin dibujos, para calibrar)
     GET  /canales/<camara>?k=<pase>        {"canales", "actual"}          (alcance gestion)
     GET  /canal/<camara>/<n>?k=<pase>      foto de otro canal del DVR     (alcance gestion)
+    GET  /personas/<camara>?k=<pase>      foto + personas detectadas (para marcar empleados; gestion)
+    POST /empleado?k=<pase>                {"camara", "indice"} -> guarda al marcado como referencia del uniforme
     GET  /salud                            {"ok": true}
 
 Config (config.json):
@@ -108,6 +110,7 @@ class ServidorVista:
         if len(self.secreto) < 16:
             raise SystemExit("vista.token tiene que tener al menos 16 caracteres (lo genera publicar_vista.bat)")
         cfg_hub = cfg_hub or {}
+        self.instantaneas: dict[str, tuple] = {}  # camara -> (cuadro, cajas) mostrada para marcar empleados
         self.autorizador = Autorizador(cfg_hub["url"], cfg_hub["anon"]) if cfg_hub.get("url") and cfg_hub.get("anon") else None
         if not self.autorizador:
             log.warning("vista: falta 'hub_supabase' (url y anon) en config.json: nadie va a poder pedir pases de video")
@@ -171,7 +174,10 @@ class ServidorVista:
                 self.end_headers()
 
             def do_POST(self):  # noqa: N802
-                if urllib.parse.urlparse(self.path).path != "/pase":
+                url_post = urllib.parse.urlparse(self.path)
+                if url_post.path == "/empleado":
+                    return self.marcar_empleado(url_post)
+                if url_post.path != "/pase":
                     return self.json(404, {"error": "no existe"})
                 if servidor.autorizador is None:
                     return self.json(503, {"error": "La PC contadora no tiene configurado el acceso al hub"})
@@ -198,6 +204,32 @@ class ServidorVista:
                 pase, vence = servidor.emitir(nombre, alcance)
                 return self.json(200, {"pase": pase, "vence": vence})
 
+            def marcar_empleado(self, url_post) -> None:
+                import numpy as np  # noqa: F401
+                from empleados import Uniforme
+                try:
+                    largo = min(int(self.headers.get("Content-Length") or 0), 4096)
+                    pedido = json.loads(self.rfile.read(largo) or b"{}")
+                except ValueError:
+                    return self.json(400, {"error": "JSON inválido"})
+                nombre = str(pedido.get("camara") or "")
+                pase = urllib.parse.parse_qs(url_post.query).get("k", [""])[0]
+                if not servidor.validar(pase, nombre, "gestion"):
+                    return self.json(401, {"error": "pase invalido o vencido"})
+                inst = servidor.instantaneas.get(nombre)
+                try:
+                    i = int(pedido.get("indice"))
+                    cuadro, cajas = inst
+                    x1, y1, x2, y2 = cajas[i]
+                except (TypeError, ValueError, IndexError):
+                    return self.json(400, {"error": "volvé a pedir la foto y tocá una persona"})
+                h, w = cuadro.shape[:2]
+                recorte = cuadro[max(0, int(y1 * h)):int(y2 * h), max(0, int(x1 * w)):int(x2 * w)]
+                if recorte.size == 0 or recorte.shape[0] < 60:
+                    return self.json(400, {"error": "la persona se ve muy chica: elegí una que esté más cerca de la cámara"})
+                Uniforme.agregar(recorte)
+                return self.json(200, {"ok": True, "referencias": Uniforme.cantidad()})
+
             def do_GET(self):  # noqa: N802
                 url = urllib.parse.urlparse(self.path)
                 if url.path == "/salud":
@@ -205,7 +237,7 @@ class ServidorVista:
                 q = urllib.parse.parse_qs(url.query)
                 pase = q.get("k", [""])[0]
                 partes = url.path.strip("/").split("/", 1)
-                if len(partes) != 2 or partes[0] not in ("video", "foto", "canales", "canal"):
+                if len(partes) != 2 or partes[0] not in ("video", "foto", "canales", "canal", "personas"):
                     return self.responder(404, b"no existe", "text/plain")
                 numero = None
                 if partes[0] == "canal":  # /canal/<camara>/<n>
@@ -216,9 +248,22 @@ class ServidorVista:
                 nombre = urllib.parse.unquote(partes[1])
                 cam = servidor.camaras.get(nombre)
                 limpia = q.get("limpia", ["0"])[0] == "1"
-                alcance = "gestion" if partes[0] in ("canales", "canal") or limpia else "ver"
+                alcance = "gestion" if partes[0] in ("canales", "canal", "personas") or limpia else "ver"
                 if cam is None or not servidor.validar(pase, nombre, alcance):
                     return self.responder(401, b"pase invalido o vencido", "text/plain")
+                if partes[0] == "personas":
+                    import base64 as b64
+                    from empleados import Uniforme
+                    det = cam.ultima_deteccion
+                    if det is None:
+                        return self.json(200, {"cajas": [], "foto": None, "referencias": Uniforme.cantidad(),
+                                               "aviso": "No hay nadie en cámara ahora (o la cámara no está calibrada)."})
+                    cuadro, cajas = det[0].copy(), list(det[1])
+                    servidor.instantaneas[nombre] = (cuadro, cajas)
+                    img = cuadro if cuadro.shape[1] <= 1280 else cv2.resize(cuadro, (1280, int(cuadro.shape[0] * 1280 / cuadro.shape[1])))
+                    ok, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                    return self.json(200, {"cajas": cajas, "foto": b64.b64encode(buf.tobytes()).decode() if ok else None,
+                                           "referencias": Uniforme.cantidad()})
                 if partes[0] in ("canales", "canal"):
                     # Fotos de todos los canales del DVR para elegir la cámara desde el hub (solo SDK Dahua)
                     lector = cam.lector

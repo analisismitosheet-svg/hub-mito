@@ -34,6 +34,7 @@ def main() -> None:
     ap.add_argument("--anotado", help="guardar video con las detecciones dibujadas")
     ap.add_argument("--ver", action="store_true")
     ap.add_argument("--traza", help="CSV con la posición de cada persona en cada cuadro (para depurar)")
+    ap.add_argument("--ancho", type=int, help="achicar el video a este ancho (simula la calidad Liviana, ej. 352)")
     ap.add_argument("--capturas", help="carpeta donde guardar una imagen por cada evento contado (para revisarlos)")
     args = ap.parse_args()
 
@@ -71,6 +72,9 @@ def main() -> None:
         nro += 1
         if nro % salto:
             continue
+        if args.ancho and cuadro.shape[1] > args.ancho:  # simular stream secundario (CIF 352x288, 4:3)
+            alto = round(args.ancho * 288 / 352) if args.ancho == 352 else round(cuadro.shape[0] * args.ancho / cuadro.shape[1])
+            cuadro = cv2.resize(cuadro, (args.ancho, alto), interpolation=cv2.INTER_AREA)
         antes = len(camara.eventos)
         camara.procesar(camara.detectar(modelo, cuadro), cuadro)
         if args.capturas and len(camara.eventos) > antes and camara.vista is not None:

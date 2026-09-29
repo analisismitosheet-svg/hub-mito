@@ -297,6 +297,20 @@ def histograma_ropa(recorte) -> np.ndarray:
     return np.concatenate(partes) / np.sqrt(2)
 
 
+_uniforme = None
+_uniforme_lock = threading.Lock()
+
+
+def uniforme_compartido(umbral: float):
+    """Referencias del uniforme del personal (empleados.py), las mismas para todas las cámaras."""
+    global _uniforme
+    with _uniforme_lock:
+        if _uniforme is None:
+            from empleados import Uniforme
+            _uniforme = Uniforme(umbral)
+        return _uniforme
+
+
 class RedApariencia:
     """ResNet18 (forma del cuerpo/textura), compartida entre cámaras. GPU si hay."""
 
@@ -335,6 +349,7 @@ class Persona:
     entradas: int = 0
     adentro: bool = False
     ultima_entrada: float = -1e12
+    empleado: bool = False          # reconocida por el uniforme: sus entradas no cuentan como clientes
     tid: int | None = None          # pista que la está siguiendo ahora
     visto: float = -1e12
     x: float = 0.0                  # última posición vista (0..1)
@@ -426,6 +441,8 @@ class Pista:
     entro: bool = False
     emp_si: int = 0
     emp_total: int = 0
+    unif_si: int = 0              # votos "tiene el uniforme del personal"
+    unif_total: int = 0
     cnn: np.ndarray | None = None  # sumas de apariencia de esta pista (hasta saber quién es)
     col: np.ndarray | None = None
     n: int = 0
@@ -453,6 +470,8 @@ class Camara(threading.Thread):
         self.min_muestras = int(cam.get("reid_muestras", 4))
         self.espera_entrada = float(cam.get("reid_espera_segundos", 5))
         self.frames_zona = int(cam.get("frames_confirmar", 2))
+        self.uniforme = uniforme_compartido(float(cfg.get("uniforme_umbral", 0.86))) if cam.get("uniforme", True) else None
+        self.ultima_deteccion = None  # (cuadro, cajas normalizadas) para marcar empleados desde el hub
         self.fps = 0.0
         self.n_cuadro = 0
         self.reloj = time.time  # evaluar.py lo cambia por el tiempo del video
@@ -609,6 +628,9 @@ class Camara(threading.Thread):
         ahora = self.reloj()
         self.n_cuadro += 1
         cajas = res.boxes
+        if cajas is not None and len(cajas.xyxy):
+            self.ultima_deteccion = (cuadro, [[x1 / ancho, y1 / alto, x2 / ancho, y2 / alto]
+                                              for x1, y1, x2, y2 in cajas.xyxy.tolist()])
         if cajas is not None and cajas.id is not None:
             for (x1, y1, x2, y2), tid in zip(cajas.xyxy.tolist(), cajas.id.int().tolist()):
                 p = self.pistas.setdefault(tid, Pista(tid=tid, visto=ahora, inicio=ahora))
@@ -650,6 +672,12 @@ class Camara(threading.Thread):
             p.emp_total += 1
             if fraccion_color(recorte, self.emp["hsv_min"], self.emp["hsv_max"]) >= float(self.emp.get("frac_min", 0.04)):
                 p.emp_si += 1
+        if sirve_para_reid and self.uniforme is not None and self.n_cuadro % 3 == 0 and self.uniforme.activo:
+            p.unif_total += 1
+            if self.uniforme.es_uniforme(recorte):
+                p.unif_si += 1
+                if p.persona is not None and p.unif_si >= 2 and p.unif_si / p.unif_total >= 0.4:
+                    p.persona.empleado = True
         if not self.reid:
             return
         if p.persona is not None:
@@ -673,6 +701,12 @@ class Camara(threading.Thread):
         log.info("[%s] id %s = persona %s (parecido %.3f, %s)", self.nombre, p.tid, p.persona.id, sim, p.vinculo)
 
     def es_empleado(self, p: Pista) -> bool:
+        if p.persona is not None and p.persona.empleado:
+            return True
+        if p.unif_si >= 2 and p.unif_si / max(p.unif_total, 1) >= 0.4:  # uniforme en varias imágenes
+            if p.persona is not None:
+                p.persona.empleado = True
+            return True
         return bool(self.emp) and p.emp_si >= 2 and p.emp_si / max(p.emp_total, 1) >= 0.3
 
     def paso_linea(self, p: Pista, x: float, y: float) -> None:
@@ -719,10 +753,10 @@ class Camara(threading.Thread):
                 self.registrar(p, "salidas")
             return
         p.entro = True
-        if empleado:
-            self.registrar(p, "empleados")
-        elif self.reid:
+        if self.reid:
             p.entrada_pend = ahora  # se cuenta cuando se sabe quién es (o a los pocos segundos)
+        elif empleado:
+            self.registrar(p, "empleados")
         else:
             self.registrar(p, "entradas")
 
@@ -731,6 +765,10 @@ class Camara(threading.Thread):
         if p.persona is None:
             self.identificar(p, ahora)  # con las muestras que haya (si no hay, persona nueva)
         per = p.persona
+        if self.es_empleado(p):
+            per.adentro, per.ultima_entrada = True, ahora
+            self.registrar(p, "empleados")
+            return
         if p.vinculo == "seguro" and per.adentro and ahora - per.ultima_entrada < self.dedupe_s:
             log.info("[%s] entrada descartada (id %s): la persona %s ya entró hace %.0f s sin salir",
                      self.nombre, p.tid, per.id, ahora - per.ultima_entrada)

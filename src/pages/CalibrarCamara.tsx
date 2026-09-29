@@ -82,7 +82,8 @@ export default function CalibrarCamara() {
   const [cam, setCam] = useState<CamEstado | null>(null)
   const [base, setBase] = useState<CamEstado | null>(null) // cámara del mismo DVR para pedir fotos de canales
   const [elegirCanal, setElegirCanal] = useState(false)
-  const [pase, setPase] = useState<string | null>(null) // pase temporal (alcance gestión) para fotos de la PC contadora
+  const [pase, setPase] = useState<string | null>(null)
+  const [marcando, setMarcando] = useState(false) // pase temporal (alcance gestión) para fotos de la PC contadora
   const [cal, setCal] = useState<Calibracion>(VACIA)
   const [historial, setHistorial] = useState<Calibracion[]>([])
   const [herr, setHerr] = useState<Herramienta>('zona_exterior')
@@ -433,6 +434,14 @@ export default function CalibrarCamara() {
                     <span className="block text-sub/80">Arrastrá un recuadro SOLO sobre la credencial/cordón de un empleado. El personal no suma entradas.</span>
                   </span>
                 </button>
+                <button onClick={() => setMarcando(true)} disabled={!base?.vista_base || !pase}
+                  className="flex items-start gap-2 rounded-xl border border-line bg-surface2/60 p-2 text-left text-xs disabled:opacity-50">
+                  <span className="mt-0.5 inline-block h-3 w-3 shrink-0 rounded-sm bg-emerald-500" />
+                  <span>
+                    <span className="font-semibold text-ink">Marcar empleado (uniforme)</span>
+                    <span className="block text-sub/80">Tocá en la foto a alguien del personal con la remera de la empresa. Sirve para todos los locales.</span>
+                  </span>
+                </button>
                 {cal.empleados?.activo && (
                   <div className="flex items-center gap-2 rounded-xl border border-line p-2 text-[11px] text-sub">
                     HSV {cal.empleados.hsv_min.join(',')} → {cal.empleados.hsv_max.join(',')}
@@ -502,6 +511,9 @@ export default function CalibrarCamara() {
           </div>
         </div>
       )}
+      {marcando && base?.vista_base && pase && (
+        <MarcarEmpleado base={base.vista_base} camara={base.nombre} pase={pase} onCerrar={() => setMarcando(false)} />
+      )}
       {elegirCanal && base?.vista_base && pase && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true">
           <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-line bg-surface p-4">
@@ -525,6 +537,69 @@ export default function CalibrarCamara() {
         </div>
       )}
     </Layout>
+  )
+}
+
+function MarcarEmpleado({ base, camara, pase, onCerrar }: { base: string; camara: string; pase: string; onCerrar: () => void }) {
+  const [datos, setDatos] = useState<{ foto: string | null; cajas: number[][]; referencias: number; aviso?: string } | null>(null)
+  const [msg, setMsg] = useState<string | null>(null)
+  const [enviando, setEnviando] = useState(false)
+  const raiz = base.replace(/\/$/, '')
+  const cargar = useCallback(async () => {
+    setDatos(null)
+    try {
+      const r = await fetch(`${raiz}/personas/${encodeURIComponent(camara)}?k=${encodeURIComponent(pase)}`)
+      setDatos(await r.json())
+    } catch {
+      setMsg('No se pudo pedir la foto a la PC contadora.')
+    }
+  }, [raiz, camara, pase])
+  useEffect(() => { void cargar() }, [cargar])
+
+  const marcar = async (i: number) => {
+    setEnviando(true)
+    setMsg(null)
+    try {
+      const r = await fetch(`${raiz}/empleado?k=${encodeURIComponent(pase)}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ camara, indice: i }),
+      })
+      const j = (await r.json()) as { ok?: boolean; referencias?: number; error?: string }
+      setMsg(j.ok ? `Guardado ✓ — ahora hay ${j.referencias} referencia(s) del uniforme. Conviene marcar 3 a 5 personas distintas (de frente y de costado).` : j.error ?? 'No se pudo guardar.')
+      if (j.ok && datos) setDatos({ ...datos, referencias: j.referencias ?? datos.referencias })
+    } catch {
+      setMsg('No se pudo guardar.')
+    } finally {
+      setEnviando(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true">
+      <div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-line bg-surface p-4">
+        <div className="mb-2 flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-ink">Marcar empleado con el uniforme</h2>
+          {datos && <span className="text-xs text-sub">{datos.referencias} referencia(s) guardadas</span>}
+          <button onClick={() => void cargar()} className="ml-auto inline-flex h-8 items-center gap-1 rounded-lg border border-line bg-surface2 px-2.5 text-xs text-ink"><RefreshCw size={13} aria-hidden /> Otra foto</button>
+          <button onClick={onCerrar} className="rounded-lg p-1 text-sub hover:bg-surface2" aria-label="Cerrar"><X size={16} /></button>
+        </div>
+        <p className="mb-2 text-xs text-sub">Tocá el recuadro de una persona del personal que tenga puesta la remera de la empresa. Elegí a alguien que se vea entero y cerca. Si no hay nadie del personal, tocá "Otra foto" cuando pase alguno.</p>
+        {!datos ? (
+          <div className="flex items-center justify-center gap-2 py-10 text-sub"><Loader2 size={18} className="animate-spin" aria-hidden /> Pidiendo la foto…</div>
+        ) : !datos.foto ? (
+          <p className="py-8 text-center text-sm text-sub">{datos.aviso ?? 'No hay personas en cámara ahora.'}</p>
+        ) : (
+          <div className="relative overflow-hidden rounded-xl bg-black">
+            <img src={`data:image/jpeg;base64,${datos.foto}`} alt="Foto con las personas detectadas" className="block w-full" />
+            {datos.cajas.map(([x1, y1, x2, y2], i) => (
+              <button key={i} disabled={enviando} onClick={() => void marcar(i)} title="Es del personal"
+                className="absolute rounded border-2 border-emerald-400 bg-emerald-400/10 hover:bg-emerald-400/30"
+                style={{ left: `${x1 * 100}%`, top: `${y1 * 100}%`, width: `${(x2 - x1) * 100}%`, height: `${(y2 - y1) * 100}%` }} />
+            ))}
+          </div>
+        )}
+        {msg && <p className="mt-2 rounded-xl border border-line bg-surface2 p-2 text-xs text-ink">{msg}</p>}
+      </div>
+    </div>
   )
 }
 
