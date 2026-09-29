@@ -1,6 +1,7 @@
 # Registra en el Programador de tareas de Windows (para el usuario actual, sin permisos de administrador):
 #  - "MITO - Puente SQL": arranca el puente al iniciar sesión, oculto, y lo reinicia si se cae.
 #  - "MITO - Sync equivalencias": copia las equivalencias a Supabase todos los días a las 7:00.
+#  - "MITO - Sync articulos": copia el maestro de artículos a Supabase todos los días a las 7:15.
 # Uso: npm run tareas:instalar      Quitar: npm run tareas:quitar
 
 $raiz = Split-Path $PSScriptRoot -Parent
@@ -32,3 +33,11 @@ Register-ScheduledTask -TaskName 'MITO - Sync equivalencias' -Force `
   -Trigger (New-ScheduledTaskTrigger -Daily -At '07:00') `
   -Settings $ajustesSync | Out-Null
 Write-Output 'OK  MITO - Sync equivalencias (todos los dias 7:00)'
+
+# Maestro de artículos -> Supabase (descripciones en el hub). Todos los días a las 7:15.
+Register-ScheduledTask -TaskName 'MITO - Sync articulos' -Force `
+  -Description 'Copia DWH.dbo.vw_DIM_ARTICULO a Supabase (tabla articulos) para las descripciones del hub. Log: puente-sql\data\sync-articulos.log' `
+  -Action (Accion 'sync-articulos.ps1') `
+  -Trigger (New-ScheduledTaskTrigger -Daily -At '07:15') `
+  -Settings $ajustesSync | Out-Null
+Write-Output 'OK  MITO - Sync articulos (todos los dias 7:15)'
