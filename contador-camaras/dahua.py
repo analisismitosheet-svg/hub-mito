@@ -36,7 +36,7 @@ ERRORES_LOGIN = {
     6: "usuario en lista negra",
     7: "el equipo está ocupado",
     8: "tiempo de espera agotado",
-    9: "demasiadas conexiones",
+    9: "no responde (DVR apagado, sin internet o con demasiadas conexiones)",
     10: "no se pudo conectar",
     11: "no se pudo conectar",
     12: "el equipo no admite este tipo de login",
