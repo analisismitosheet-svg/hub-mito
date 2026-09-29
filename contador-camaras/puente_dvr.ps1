@@ -11,6 +11,13 @@ $ErrorActionPreference = 'Stop'
 $regla = 'MITO Contador - DVR por Tailscale'
 $reglaVieja = 'MITO Contador - video DVR por Tailscale'
 
+$esAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $esAdmin) {
+  Write-Host 'Hay que abrirlo como ADMINISTRADOR: clic derecho en puente_dvr.bat -> Ejecutar como administrador' -ForegroundColor Red
+  Write-Host '(o abrir cmd con clic derecho -> Ejecutar como administrador y correrlo desde ahi).' -ForegroundColor Red
+  Read-Host 'Enter para cerrar'; exit 1
+}
+
 function Abierto([string]$ip, [int]$puerto, [int]$ms = 1500) {
   $c = New-Object Net.Sockets.TcpClient
   try { return ($c.ConnectAsync($ip, $puerto).Wait($ms) -and $c.Connected) } catch { return $false } finally { $c.Close() }
