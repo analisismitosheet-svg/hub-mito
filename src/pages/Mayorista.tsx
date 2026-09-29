@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Upload, Loader2, ChevronRight, Store, Trash2, Check, X, Plus, BarChart3, ArrowRightLeft } from 'lucide-react'
+import { Upload, Loader2, ChevronRight, Store, Trash2, Check, X, Plus, BarChart3, ArrowRightLeft, Printer } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase'
 import { FILTRO_EMPLEADOS_ACTIVOS } from '@/lib/empleadosActivos'
 import { useAuth } from '@/context/AuthContext'
 import { ubicacionesDeArticulos } from '@/lib/mapeo'
+import { imprimirRepos } from '@/lib/imprimirRepo'
 
 type EstadoM = 'pendiente' | 'hecho' | 'faltante'
 /** Qué repos se listan. Por defecto la semana vigente (lunes a domingo, hora Argentina). */
@@ -735,14 +736,25 @@ export default function Mayorista() {
                         </div>
                       )}
                     </div>
-                    <button
-                      onClick={() => setSubAbierto(subAbierto === `${lote.id}|repo` ? null : `${lote.id}|repo`)}
-                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left hover:bg-surface2"
-                    >
-                      <ChevronRight size={15} aria-hidden className={`shrink-0 text-sub transition-transform ${subAbierto === `${lote.id}|repo` ? 'rotate-90' : ''}`} />
-                      <ArrowRightLeft size={15} aria-hidden className="text-sub" />
-                      <span className="font-display font-semibold text-ink">Reposición</span>
-                    </button>
+                    <div className="flex items-center hover:bg-surface2">
+                      <button
+                        onClick={() => setSubAbierto(subAbierto === `${lote.id}|repo` ? null : `${lote.id}|repo`)}
+                        className="flex flex-1 items-center gap-2 px-4 py-2.5 text-left"
+                      >
+                        <ChevronRight size={15} aria-hidden className={`shrink-0 text-sub transition-transform ${subAbierto === `${lote.id}|repo` ? 'rotate-90' : ''}`} />
+                        <ArrowRightLeft size={15} aria-hidden className="text-sub" />
+                        <span className="font-display font-semibold text-ink">Reposición</span>
+                      </button>
+                      {locales.length > 0 && (
+                        <button
+                          onClick={() => void imprimirRepos(lote.nombre, locales)}
+                          className="btn-press mr-3 inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-xs font-semibold text-ink transition hover:bg-line"
+                          title="Imprime una hoja por local, con la ubicación del mapeo"
+                        >
+                          <Printer size={14} aria-hidden /> Imprimir
+                        </button>
+                      )}
+                    </div>
                     {subAbierto === `${lote.id}|repo` && (
                     <div className="px-3 pb-2">
                     {locales.map(([local, lItems]) => {
@@ -779,6 +791,14 @@ export default function Mayorista() {
                                 <span className="ml-6 shrink-0 text-xs text-sub sm:ml-0">{empleados.find((e) => e.id === responsables[key])?.nombre}</span>
                               )
                             )}
+                            <button
+                              onClick={() => void imprimirRepos(lote.nombre, [[local, lItems]])}
+                              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sub transition hover:bg-line hover:text-ink"
+                              title={`Imprimir la hoja de ${local}`}
+                              aria-label={`Imprimir la hoja de ${local}`}
+                            >
+                              <Printer size={15} aria-hidden />
+                            </button>
                             {puedeMarcar && (
                               <label className="ml-auto flex cursor-pointer sm:ml-0 items-center gap-1.5 text-[11px] font-medium text-sub" title="Marcar todo el local">
                                 <input
