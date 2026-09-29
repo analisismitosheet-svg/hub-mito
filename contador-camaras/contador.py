@@ -486,7 +486,7 @@ class Camara(threading.Thread):
 
     # -- calibración (zonas/línea/credencial): desde config.json o editada en el hub
     CLAVES_CALIBRACION = ("modo", "zona_exterior", "zona_interior", "zona_a", "zona_b", "linea", "invertir", "punto", "empleados",
-                          "zoom")
+                          "zoom", "fps")
 
     def configurar(self) -> None:
         """Arma la geometría desde self.cam. Sin calibrar -> no cuenta, pero sigue mostrando imagen
@@ -615,11 +615,12 @@ class Camara(threading.Thread):
         else:
             self.lector = Lector(self.nombre, url_rtsp(self.cfg, self.cam))
         self.lector.start()
-        periodo = 1.0 / float(self.cfg.get("fps_proceso", 8))
         ultimo_nro, t_prev = -1, time.time()
 
         while not self._detener:
             t0 = time.time()
+            # cuadros por segundo a analizar: los de esta cámara (elegidos en el hub) o el general
+            periodo = 1.0 / max(0.5, float(self.cam.get("fps") or self.cfg.get("fps_proceso", 8)))
             nro, cuadro = self.lector.ultimo()
             if cuadro is None or nro == ultimo_nro:
                 time.sleep(0.05)

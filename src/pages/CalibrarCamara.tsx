@@ -37,8 +37,9 @@ interface Calibracion {
   canal?: number | null
   stream?: 'principal' | 'secundario'
   zoom?: number[] | null
+  fps?: number | null
 }
-interface CamEstado { nombre: string; ok: boolean; error: string | null; vista_base?: string | null; calibracion?: Partial<Calibracion>; config_version?: string | null; canales?: number; kbps?: number | null; resolucion?: string }
+interface CamEstado { nombre: string; ok: boolean; fps?: number; error: string | null; vista_base?: string | null; calibracion?: Partial<Calibracion>; config_version?: string | null; canales?: number; kbps?: number | null; resolucion?: string }
 
 
 const CAPAS: { id: Capa; label: string; color: string; ayuda: string }[] = [
@@ -532,6 +533,23 @@ export default function CalibrarCamara() {
                   En muchos DVR la liviana es 352×288: si la puerta queda lejos de la cámara, la gente se ve muy chica y se pueden perder entradas. Probala y mirá el video en vivo.
                 </p>
               )}
+            </div>
+
+            <div className="rounded-2xl border border-line bg-surface p-3 text-xs">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-sub/70">Cuadros por segundo (FPS)</div>
+              <div className="grid grid-cols-5 gap-1.5">
+                {([null, 2, 4, 6, 8] as const).map((v) => (
+                  <button key={String(v)} onClick={() => cambiar({ ...cal, fps: v })}
+                    className={'h-8 rounded-lg border text-xs font-semibold ' + ((cal.fps ?? null) === v ? 'border-brand-600 bg-brand-600/10 text-ink' : 'border-line bg-surface2/60 text-sub')}>
+                    {v ?? 'Auto'}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-[11px] text-sub">
+                Cuántas veces por segundo la IA mira la puerta. Más FPS = no se le escapa la gente que pasa rápido.
+                La placa de video es una sola para todas las cámaras: subirle a una le saca a las otras.
+                {cam?.fps != null && <> Ahora: <b className="text-ink">{cam.fps} FPS</b>.</>}
+              </p>
             </div>
 
             <div className="rounded-2xl border border-line bg-surface p-3 text-xs">
