@@ -1001,8 +1001,12 @@ def aplicar_calibraciones(desde_hub: dict, camaras: list[Camara]) -> bool:
     cambiaron = False
     for c in camaras:
         item = desde_hub.get(c.nombre)
-        if item and item.get("actualizado") and item["actualizado"] != c.config_version \
-                and not (item.get("config") or {}).get("eliminar"):
+        conf = (item or {}).get("config") or {}
+        # Misma versión pero con datos que esta PC no tiene (p. ej. el zoom, guardado cuando corría un
+        # contador anterior que no lo conocía): se vuelve a aplicar, si no las zonas quedan corridas.
+        falta = any(k in conf and conf[k] != c.cam.get(k) for k in Camara.CLAVES_CALIBRACION)
+        if item and item.get("actualizado") and (item["actualizado"] != c.config_version or falta) \
+                and not conf.get("eliminar"):
             c.aplicar_config(item.get("config") or {}, item["actualizado"])
             cambiaron = True
     if not cambiaron:
