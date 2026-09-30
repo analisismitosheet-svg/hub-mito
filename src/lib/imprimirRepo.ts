@@ -86,9 +86,9 @@ export async function imprimirRepos(
         const u = ubicDe(i)
         return `<tr>
           <td class="ubic">${u.length ? esc(u.join(' · ')) : '<span class="sin">—</span>'}</td>
+          <td class="mat">${esc(nombreMaterial(i.material))}</td>
           <td class="cod">${esc(i.codigo)}</td>
           <td>${esc(String(i.articulo ?? '').replace(/^\(\)\s*/, ''))}</td>
-          <td class="mat">${esc(nombreMaterial(i.material))}</td>
           <td>${esc(i.color)}</td>
           <td>${esc(i.talle)}</td>
           <td class="num">${esc(i.cantidad)}</td>
@@ -102,7 +102,7 @@ export async function imprimirRepos(
         <div class="meta">${its.length} artículos · ${unidades} unidades<br>Impreso ${esc(fecha)}</div>
       </div>
       <table>
-        <thead><tr><th>Ubicación</th><th>Código</th><th>Artículo</th><th>Material</th><th>Color</th><th>Talle</th><th class="num">Cant.</th><th class="chk">✓</th></tr></thead>
+        <thead><tr><th>Ubicación</th><th>Material</th><th>Código</th><th>Artículo</th><th>Color</th><th>Talle</th><th class="num">Cant.</th><th class="chk">✓</th></tr></thead>
         <tbody>${filas}</tbody>
         <tfoot><tr class="tot"><td colspan="6">Total</td><td class="num">${unidades}</td><td></td></tr></tfoot>
       </table>

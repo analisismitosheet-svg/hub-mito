@@ -852,21 +852,17 @@ export default function Mayorista() {
                                             ({ubicacionesDe(it).join(' · ')})
                                           </span>
                                         )}
+                                        {it.material && (
+                                          <span className="ml-1.5 rounded-md bg-line px-1.5 py-0.5 text-[11px] font-semibold uppercase text-ink/80" title="Material">
+                                            {nombreMaterial(it.material)}
+                                          </span>
+                                        )}
                                         {it.cantidad > 1 ? ` · x${it.cantidad}` : ''}
                                         {it.escaneadas > 0 && it.escaneadas < it.cantidad
                                           ? ` · ${it.escaneadas}/${it.cantidad} escaneado`
                                           : ''}
                                       </span>
-                                      {(it.articulo || it.material) && (
-                                        <span className="flex min-w-0 items-center gap-1.5 text-xs text-sub">
-                                          {it.material && (
-                                            <span className="shrink-0 rounded-md bg-line px-1.5 py-0.5 text-[11px] font-semibold uppercase text-ink/80" title="Material">
-                                              {nombreMaterial(it.material)}
-                                            </span>
-                                          )}
-                                          {it.articulo && <span className="truncate">{it.articulo}</span>}
-                                        </span>
-                                      )}
+                                      {it.articulo && <span className="block truncate text-xs text-sub">{it.articulo}</span>}
                                     </span>
                                     {it.hecho_at && it.estado !== 'pendiente' && (
                                       <span className="hidden shrink-0 text-[11px] tabular-nums text-sub sm:inline">{fmtHora(it.hecho_at)}</span>
