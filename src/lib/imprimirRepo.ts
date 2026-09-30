@@ -10,9 +10,15 @@ export interface ItemImprimir {
   orden: number
   codigo: string | null
   articulo: string | null
+  material: string | null
   color: string | null
   talle: string | null
   cantidad: number
+}
+
+/** "5 REMERAS" -> "REMERAS" (el número es el código del material) */
+export function nombreMaterial(material: string | null | undefined): string {
+  return String(material ?? '').trim().replace(/^\d+\s+/, '')
 }
 
 const esc = (v: unknown) =>
@@ -35,6 +41,7 @@ const CSS = `
   .ubic { font-weight: 800; white-space: nowrap; }
   .sin { color: #888; font-weight: 400; }
   .cod { font-weight: 700; white-space: nowrap; }
+  .mat { white-space: nowrap; font-size: 11px; }
   .num { text-align: right; font-weight: 700; white-space: nowrap; }
   .chk { width: 22px; }
   .chk span { display: inline-block; width: 13px; height: 13px; border: 1.5px solid #000; }
@@ -81,6 +88,7 @@ export async function imprimirRepos(
           <td class="ubic">${u.length ? esc(u.join(' · ')) : '<span class="sin">—</span>'}</td>
           <td class="cod">${esc(i.codigo)}</td>
           <td>${esc(String(i.articulo ?? '').replace(/^\(\)\s*/, ''))}</td>
+          <td class="mat">${esc(nombreMaterial(i.material))}</td>
           <td>${esc(i.color)}</td>
           <td>${esc(i.talle)}</td>
           <td class="num">${esc(i.cantidad)}</td>
@@ -94,9 +102,9 @@ export async function imprimirRepos(
         <div class="meta">${its.length} artículos · ${unidades} unidades<br>Impreso ${esc(fecha)}</div>
       </div>
       <table>
-        <thead><tr><th>Ubicación</th><th>Código</th><th>Artículo</th><th>Color</th><th>Talle</th><th class="num">Cant.</th><th class="chk">✓</th></tr></thead>
+        <thead><tr><th>Ubicación</th><th>Código</th><th>Artículo</th><th>Material</th><th>Color</th><th>Talle</th><th class="num">Cant.</th><th class="chk">✓</th></tr></thead>
         <tbody>${filas}</tbody>
-        <tfoot><tr class="tot"><td colspan="5">Total</td><td class="num">${unidades}</td><td></td></tr></tfoot>
+        <tfoot><tr class="tot"><td colspan="6">Total</td><td class="num">${unidades}</td><td></td></tr></tfoot>
       </table>
     </section>`
   })

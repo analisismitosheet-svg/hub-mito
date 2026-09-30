@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase'
 import { FILTRO_EMPLEADOS_ACTIVOS } from '@/lib/empleadosActivos'
 import { useAuth } from '@/context/AuthContext'
 import { ubicacionesDeArticulos } from '@/lib/mapeo'
-import { imprimirRepos } from '@/lib/imprimirRepo'
+import { imprimirRepos, nombreMaterial } from '@/lib/imprimirRepo'
 
 type EstadoM = 'pendiente' | 'hecho' | 'faltante'
 /** Qué repos se listan. Por defecto la semana vigente (lunes a domingo, hora Argentina). */
@@ -857,7 +857,16 @@ export default function Mayorista() {
                                           ? ` · ${it.escaneadas}/${it.cantidad} escaneado`
                                           : ''}
                                       </span>
-                                      {it.articulo && <span className="block truncate text-xs text-sub">{it.articulo}</span>}
+                                      {(it.articulo || it.material) && (
+                                        <span className="flex min-w-0 items-center gap-1.5 text-xs text-sub">
+                                          {it.material && (
+                                            <span className="shrink-0 rounded-md bg-line px-1.5 py-0.5 text-[11px] font-semibold uppercase text-ink/80" title="Material">
+                                              {nombreMaterial(it.material)}
+                                            </span>
+                                          )}
+                                          {it.articulo && <span className="truncate">{it.articulo}</span>}
+                                        </span>
+                                      )}
                                     </span>
                                     {it.hecho_at && it.estado !== 'pendiente' && (
                                       <span className="hidden shrink-0 text-[11px] tabular-nums text-sub sm:inline">{fmtHora(it.hecho_at)}</span>
