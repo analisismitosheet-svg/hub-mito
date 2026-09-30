@@ -18,6 +18,7 @@ import {
   Contact,
   BookOpen,
   Wrench,
+  Factory,
   CreditCard,
   Eye,
   ArrowRightLeft,
@@ -101,6 +102,7 @@ export const AREAS: AreaDef[] = [
   { id: 'arquitectura', name: 'Arquitectura', icon: PencilRuler, accent: 'text-teal-600', color: '#0d9488' },
   { id: 'recepcion', name: 'Recepción', icon: Bell, accent: 'text-rose-600', color: '#e11d48' },
   { id: 'mantenimiento', name: 'Mantenimiento', icon: Wrench, accent: 'text-slate-400', color: '#64748b' },
+  { id: 'produccion', name: 'Producción', icon: Factory, accent: 'text-yellow-600', color: '#ca8a04' },
 ]
 
 const URL_TRANSPORTE =

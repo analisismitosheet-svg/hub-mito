@@ -295,6 +295,7 @@ function RolPermisosModal({
       'area_arquitectura.view': 'arquitectura',
       'area_recepcion.view': 'recepcion',
       'area_mantenimiento.view': 'mantenimiento',
+      'area_produccion.view': 'produccion',
       'cuentas_amigos.view': 'tesoreria',
       'cuentas_amigos.create': 'tesoreria',
       'cuentas_amigos.edit': 'tesoreria',
