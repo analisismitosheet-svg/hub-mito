@@ -23,6 +23,8 @@
  *   segundo, el nombre de la vista lleva su alias adelante: "ALIAS:BASE.esquema.obj".
  *   Sin alias = el principal (así todo lo que ya estaba configurado sigue igual).
  *   POST /          body: { accion: 'replicas' }         -> { replicas: [...], agente }
+ *   POST /          body: { accion: 'sync_pedidos_compra' } -> { ok, mensaje }  (botón "Actualizar datos"
+ *                   de Pedidos de compra: corre scripts/sync-pedidos-compra.js en el momento)
  *                   ^ NO sale del SQL remoto: lee el Replicador SQL de ESTA PC
  *                     (sql/replicas.sql contra la instancia local + config.json
  *                     + historial.csv). Es lo que usa Sistemas > Réplicas.
@@ -408,6 +410,29 @@ async function estadoReplicas() {
 }
 
 
+/* ---- Pedidos de compra: copia forzada desde el hub (una a la vez) ---- */
+let syncPedidosEnCurso = null
+function syncPedidosCompra() {
+  if (syncPedidosEnCurso) return syncPedidosEnCurso
+  syncPedidosEnCurso = new Promise((resolve) => {
+    execFile(
+      process.execPath,
+      [path.join(__dirname, 'scripts', 'sync-pedidos-compra.js')],
+      { cwd: __dirname, timeout: 120000, windowsHide: true, maxBuffer: 10 * 1024 * 1024 },
+      (err, stdout) => {
+        // La última línea del log dice "OK: …" o "ERROR: …"
+        const ultima = String(stdout ?? '').trim().split(/\r?\n/).pop() ?? ''
+        const mensaje = ultima.replace(/^\S+\s+\S+\s+/, '')
+        if (err || /ERROR:/.test(ultima)) resolve({ ok: false, error: mensaje || 'La copia falló' })
+        else resolve({ ok: true, mensaje })
+      },
+    )
+  }).finally(() => {
+    syncPedidosEnCurso = null
+  })
+  return syncPedidosEnCurso
+}
+
 const server = http.createServer(async (req, res) => {
   // Socket roto / cliente desconectado: no debe tumbar el proceso
   res.on('error', () => {})
@@ -426,6 +451,11 @@ const server = http.createServer(async (req, res) => {
     }
 
     const body = await leerCuerpo(req)
+
+    // Pedidos de compra: copia forzada (botón "Actualizar datos" del hub)
+    if (body?.accion === 'sync_pedidos_compra') {
+      return enviar(res, 200, await syncPedidosCompra())
+    }
 
     // Servidores configurados (para elegir en el explorador del hub)
     if (body?.accion === 'servidores') {

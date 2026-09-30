@@ -16,6 +16,7 @@ import Documentos from '@/pages/Documentos'
 import Manuales from '@/pages/Manuales'
 import Transferencias from '@/pages/Transferencias'
 import EstadisticasTransferencias from '@/pages/EstadisticasTransferencias'
+import PedidosCompra from '@/pages/PedidosCompra'
 import Mayorista from '@/pages/Mayorista'
 import MiRepo from '@/pages/MiRepo'
 import Deposito from '@/pages/Deposito'
@@ -121,6 +122,14 @@ export default function App() {
             element={
               <PermissionRoute permiso="transferencias.view">
                 <Transferencias />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/compras/pedidos-compra"
+            element={
+              <PermissionRoute permiso="pedidos_compra.view">
+                <PedidosCompra />
               </PermissionRoute>
             }
           />

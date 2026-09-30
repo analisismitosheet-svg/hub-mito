@@ -349,6 +349,7 @@ function RolPermisosModal({
       'opiniones.view': 'locales',
       'opiniones.borrar': 'locales',
       'contador.view': 'locales',
+      'pedidos_compra.view': 'compras',
       'contador.gestionar': 'locales',
       'ia_camaras.view': 'sistemas',
       'conversion.view': 'locales',

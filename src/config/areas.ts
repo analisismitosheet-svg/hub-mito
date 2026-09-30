@@ -438,6 +438,18 @@ export const APPS: AppDef[] = [
     permiso: 'transferencias.view',
   },
   {
+    id: 'pedidos-compra',
+    areaId: 'compras',
+    areaIds: ['compras', 'deposito'],
+    title: 'Pedidos de compra',
+    description: 'Pedidos a proveedores de Dragonfish: artículos, cantidades y totales.',
+    icon: ClipboardList,
+    kind: 'internal',
+    target: '/compras/pedidos-compra',
+    color: '#65a30d',
+    permiso: 'pedidos_compra.view',
+  },
+  {
     id: 'transferencias-estadisticas',
     areaId: 'compras',
     title: 'Estadísticas Transferencias',

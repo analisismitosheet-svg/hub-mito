@@ -41,3 +41,14 @@ Register-ScheduledTask -TaskName 'MITO - Sync articulos' -Force `
   -Trigger (New-ScheduledTaskTrigger -Daily -At '07:15') `
   -Settings $ajustesSync | Out-Null
 Write-Output 'OK  MITO - Sync articulos (todos los dias 7:15)'
+
+# Pedidos de compra (SQL local VISTAS_CONSOLIDADAS) -> Supabase. Cada 1 hora (y a pedido desde el hub).
+$cadaHora = New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval (New-TimeSpan -Hours 1)
+$ajustesPedidos = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+  -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 10) -MultipleInstances IgnoreNew
+Register-ScheduledTask -TaskName 'MITO - Sync pedidos compra' -Force `
+  -Description 'Copia VISTAS_CONSOLIDADAS.dbo.PEDIDO_COMPRA (SQL de esta PC) a Supabase cada 1 hora. Log: puente-sql\data\sync-pedidos-compra.log' `
+  -Action (Accion 'sync-pedidos-compra.ps1') `
+  -Trigger $cadaHora `
+  -Settings $ajustesPedidos | Out-Null
+Write-Output 'OK  MITO - Sync pedidos compra (cada 1 hora)'
