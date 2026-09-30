@@ -1,9 +1,13 @@
 /**
  * Explorador del SQL Server para Configuraciones > Conexión SQL (solo administradores).
  *
- *   GET /api/sql/catalogo                      -> { bases: string[] }
- *   GET /api/sql/catalogo?base=X               -> { objetos: { esquema, nombre, tipo }[] }
- *   GET /api/sql/catalogo?muestra=BASE.ESQ.OBJ -> { filas } (primeras 20, para previsualizar)
+ *   GET /api/sql/catalogo?servidores=1         -> { servidores: { alias, principal }[] }
+ *   GET /api/sql/catalogo[?servidor=S]         -> { bases: string[] }
+ *   GET /api/sql/catalogo?base=X[&servidor=S]  -> { objetos: { esquema, nombre, tipo }[] }
+ *   GET /api/sql/catalogo?muestra=[S:]BASE.ESQ.OBJ -> { filas } (primeras 20, para previsualizar)
+ *
+ * Sin servidor = el principal del puente. Un puente viejo (un solo servidor) no sabe listar
+ * servidores: se responde solo el principal.
  *
  * Solo funciona con el Puente SQL (el Logic App no sabe listar). Lo que se ve depende
  * de los permisos del usuario SQL del puente. Mismas variables de entorno que [view].ts.
@@ -21,7 +25,7 @@ type Res = {
   json(body: unknown): void
 }
 
-const NOMBRE = /^[A-Za-z0-9_-]{1,128}(\.[A-Za-z0-9_-]{1,128}){0,2}$/
+const NOMBRE = /^([A-Za-z0-9_-]{1,128}:)?[A-Za-z0-9_-]{1,128}(\.[A-Za-z0-9_-]{1,128}){0,2}$/
 const PARTE = /^[A-Za-z0-9_-]{1,128}$/
 
 /** true solo si el JWT es válido y el usuario es administrador (public.soy_admin). */
@@ -92,15 +96,20 @@ export default async function handler(req: Req, res: Res) {
 
   const base = primerQuery(req.query.base)
   const muestra = primerQuery(req.query.muestra)
+  const servidor = primerQuery(req.query.servidor)
+  const servidores = primerQuery(req.query.servidores) === '1'
+  if (servidor && !PARTE.test(servidor)) return res.status(400).json({ error: 'Servidor inválido' })
   let pedido: Record<string, unknown>
-  if (muestra) {
+  if (servidores) {
+    pedido = { accion: 'servidores' }
+  } else if (muestra) {
     if (!NOMBRE.test(muestra)) return res.status(400).json({ error: 'Nombre inválido' })
     pedido = { vista: muestra, top: 20 }
   } else if (base) {
     if (!PARTE.test(base)) return res.status(400).json({ error: 'Base inválida' })
-    pedido = { accion: 'objetos', base }
+    pedido = { accion: 'objetos', base, ...(servidor ? { servidor } : {}) }
   } else {
-    pedido = { accion: 'bases' }
+    pedido = { accion: 'bases', ...(servidor ? { servidor } : {}) }
   }
 
   let r: Response
@@ -115,6 +124,9 @@ export default async function handler(req: Req, res: Res) {
   }
 
   const cuerpo = (await r.json().catch(() => null)) as unknown
+  if (servidores && r.status !== 401 && !Array.isArray(cuerpo)) {
+    return res.status(200).json({ servidores: [{ alias: '', principal: true }] })  // puente viejo: uno solo
+  }
   if (r.status === 401) {
     return res.status(502).json({ error: 'El Puente SQL rechazó el token (SQL_BRIDGE_TOKEN no coincide)' })
   }
@@ -127,6 +139,7 @@ export default async function handler(req: Req, res: Res) {
     return res.status(502).json({ error: 'El Puente SQL no soporta el explorador: actualizalo y reinicialo' })
   }
 
+  if (servidores) return res.status(200).json({ servidores: cuerpo })
   if (muestra) return res.status(200).json({ filas: cuerpo })
   if (base) return res.status(200).json({ objetos: cuerpo })
   return res.status(200).json({ bases: cuerpo })

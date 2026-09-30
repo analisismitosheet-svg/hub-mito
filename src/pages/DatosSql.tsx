@@ -6,7 +6,7 @@ import { cargarVistas, estadoConexion, guardarVistas, leerVista, type FilaSql, t
 import { usePermisosArea } from '@/hooks/usePermisosArea'
 
 const MAX_FILAS_UI = 300
-const NOMBRE_VISTA = /^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+){0,2}$/
+const NOMBRE_VISTA = /^([A-Za-z0-9_-]+:)?[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+){0,2}$/
 
 function celda(v: unknown): string {
   if (v === null || v === undefined) return ''

@@ -47,7 +47,7 @@ export function vistasEnv(): VistaDef[] {
       const [vista, label] = par.split('|').map((x) => x.trim())
       return { vista, label: label || vista }
     })
-    .filter((v) => /^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+){0,2}$/.test(v.vista))
+    .filter((v) => /^([A-Za-z0-9_-]+:)?[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+){0,2}$/.test(v.vista))
 }
 
 function aVistas(valor: unknown): VistaDef[] {
@@ -64,7 +64,7 @@ function aVistas(valor: unknown): VistaDef[] {
   for (const v of lista) {
     if (typeof v !== 'object' || v === null) continue
     const nombre = String((v as Record<string, unknown>).vista ?? '').trim()
-    if (!/^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+){0,2}$/.test(nombre)) continue
+    if (!/^([A-Za-z0-9_-]+:)?[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+){0,2}$/.test(nombre)) continue
     out.set(nombre, { vista: nombre, label: String((v as Record<string, unknown>).label ?? '').trim() || nombre })
   }
   return [...out.values()]
@@ -107,7 +107,7 @@ export async function cargarVistaSalidas(): Promise<string> {
     .maybeSingle()
   const deDb = (data as { valor?: unknown } | null)?.valor
   const nombre = typeof deDb === 'string' ? deDb.trim() : ''
-  if (nombre && /^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+){0,2}$/.test(nombre)) return nombre
+  if (nombre && /^([A-Za-z0-9_-]+:)?[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+){0,2}$/.test(nombre)) return nombre
   return (import.meta.env.VITE_SQL_VISTA_SALIDAS as string | undefined)?.trim() ?? ''
 }
 
@@ -115,7 +115,7 @@ export async function cargarVistaSalidas(): Promise<string> {
 export async function guardarVistaSalidas(nombre: string): Promise<{ error: string | null }> {
   if (!supabase) return { error: 'Supabase no está configurado.' }
   const limpio = nombre.trim()
-  if (limpio && !/^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+){0,2}$/.test(limpio)) return { error: 'Nombre de vista inválido.' }
+  if (limpio && !/^([A-Za-z0-9_-]+:)?[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+){0,2}$/.test(limpio)) return { error: 'Nombre de vista inválido.' }
   const { error } = await supabase
     .from('config_app')
     .upsert({ clave: 'sql_vista_salidas', valor: limpio }, { onConflict: 'clave' })
@@ -165,14 +165,24 @@ async function catalogo<T>(params: Record<string, string>): Promise<T> {
   return body
 }
 
-/** Bases del SQL Server a las que el usuario del puente tiene acceso. */
-export async function listarBases(): Promise<string[]> {
-  return (await catalogo<{ bases: string[] }>({})).bases
+/** SQL Server que maneja el puente. El principal se nombra sin prefijo; los otros, "ALIAS:BASE.esquema.obj". */
+export interface ServidorSql {
+  alias: string
+  principal: boolean
+}
+
+export async function listarServidores(): Promise<ServidorSql[]> {
+  return (await catalogo<{ servidores: ServidorSql[] }>({ servidores: '1' })).servidores
+}
+
+/** Bases del SQL Server a las que el usuario del puente tiene acceso (sin servidor = el principal). */
+export async function listarBases(servidor?: string): Promise<string[]> {
+  return (await catalogo<{ bases: string[] }>(servidor ? { servidor } : {})).bases
 }
 
 /** Tablas y vistas de una base. */
-export async function listarObjetos(base: string): Promise<ObjetoSql[]> {
-  return (await catalogo<{ objetos: ObjetoSql[] }>({ base })).objetos
+export async function listarObjetos(base: string, servidor?: string): Promise<ObjetoSql[]> {
+  return (await catalogo<{ objetos: ObjetoSql[] }>(servidor ? { base, servidor } : { base })).objetos
 }
 
 /** Primeras 20 filas de BASE.esquema.objeto, para previsualizar antes de habilitarla. */

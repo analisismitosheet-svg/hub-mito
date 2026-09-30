@@ -10,6 +10,7 @@
     "tareas:quitar": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/quitar-tarea.ps1"
   },
   "dependencies": {
+    "msnodesqlv8": "^5.5.0",
     "mssql": "^10.0.2"
   }
 }

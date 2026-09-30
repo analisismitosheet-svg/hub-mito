@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Check, Eye, Loader2, Plus, Search, Table2, X } from 'lucide-react'
-import { listarBases, listarObjetos, muestraObjeto, type FilaSql, type ObjetoSql } from '@/lib/sqlApi'
+import { listarBases, listarObjetos, listarServidores, muestraObjeto, type FilaSql, type ObjetoSql, type ServidorSql } from '@/lib/sqlApi'
 
 const MAX_LISTA = 200
 
 /**
- * Explorador del SQL Server: primero se elige la base, después la tabla o vista.
+ * Explorador del SQL Server: primero se elige el servidor (si el puente maneja más de uno),
+ * la base y después la tabla o vista.
  * "Agregar" la suma a la lista de vistas expuestas como BASE.esquema.objeto
+ * (o SERVIDOR:BASE.esquema.objeto si no es el servidor principal)
  * (después hay que apretar "Guardar cambios"). Solo administradores.
  */
 export default function ExploradorSql({
@@ -16,6 +18,8 @@ export default function ExploradorSql({
   yaAgregadas: string[]
   onAgregar: (vista: string, label: string) => void
 }) {
+  const [servidores, setServidores] = useState<ServidorSql[]>([])
+  const [servidor, setServidor] = useState('') // '' = el principal
   const [bases, setBases] = useState<string[] | null>(null)
   const [base, setBase] = useState('')
   const [objetos, setObjetos] = useState<ObjetoSql[] | null>(null)
@@ -26,13 +30,23 @@ export default function ExploradorSql({
   const [muestra, setMuestra] = useState<{ nombre: string; filas: FilaSql[] | null } | null>(null)
 
   useEffect(() => {
-    listarBases()
+    listarServidores()
+      .then(setServidores)
+      .catch(() => setServidores([]))
+  }, [])
+
+  useEffect(() => {
+    setBases(null)
+    setBase('')
+    setObjetos(null)
+    setMuestra(null)
+    listarBases(servidor || undefined)
       .then(setBases)
       .catch((e) => {
         setBases([])
         setError(e instanceof Error ? e.message : 'No se pudieron listar las bases.')
       })
-  }, [])
+  }, [servidor])
 
   async function elegirBase(b: string) {
     setBase(b)
@@ -43,7 +57,7 @@ export default function ExploradorSql({
     setCargando(true)
     setError(null)
     try {
-      setObjetos(await listarObjetos(b))
+      setObjetos(await listarObjetos(b, servidor || undefined))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudieron listar las tablas.')
     } finally {
@@ -82,6 +96,26 @@ export default function ExploradorSql({
       {error && <p className="mb-2 text-sm text-brand-400">{error}</p>}
 
       <div className="flex flex-wrap items-end gap-2">
+        {servidores.length > 1 && (
+          <label className="block min-w-[180px]">
+            <span className="mb-1 block text-xs font-medium text-sub">Servidor</span>
+            <select
+              value={servidor}
+              onChange={(e) => {
+                setError(null)
+                setServidor(e.target.value)
+              }}
+              className="w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
+            >
+              {servidores.map((s) => (
+                <option key={s.alias} value={s.principal ? '' : s.alias}>
+                  {s.alias || 'Principal'}
+                  {s.principal ? ' (principal)' : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="block min-w-[200px] flex-1">
           <span className="mb-1 block text-xs font-medium text-sub">1. Base de datos</span>
           <select
@@ -142,7 +176,7 @@ export default function ExploradorSql({
           </p>
           <ul className="mt-1 max-h-80 divide-y divide-line/60 overflow-y-auto rounded-lg border border-line bg-surface">
             {visibles.slice(0, MAX_LISTA).map((o) => {
-              const completo = `${base}.${o.esquema}.${o.nombre}`
+              const completo = `${servidor ? `${servidor}:` : ''}${base}.${o.esquema}.${o.nombre}`
               const ya = agregadas.has(completo.toLowerCase())
               return (
                 <li key={completo} className="flex items-center gap-2 px-3 py-1.5">

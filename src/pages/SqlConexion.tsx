@@ -83,8 +83,8 @@ export default function SqlConexion() {
   function agregar(e: FormEvent) {
     e.preventDefault()
     const nombre = nuevaVista.trim()
-    if (!/^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+){0,2}$/.test(nombre)) {
-      setError('Nombre inválido: usá vista, esquema.vista o BASE.esquema.vista (letras, números, guión y guión bajo).')
+    if (!/^([A-Za-z0-9_-]+:)?[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+){0,2}$/.test(nombre)) {
+      setError('Nombre inválido: usá vista, esquema.vista o BASE.esquema.vista (letras, números, guión y guión bajo). Para otro servidor: SERVIDOR:BASE.esquema.vista.')
       return
     }
     if (vistas.some((v) => v.vista.toLowerCase() === nombre.toLowerCase())) {

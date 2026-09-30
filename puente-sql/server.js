@@ -15,8 +15,13 @@
  *                   -> 200 JSON array de filas WHERE [donde] = valor
  *                   'donde' debe estar en PUENTE_FILTRO_COLS; 'valor' va parametrizado.
  *                   Es lo que usa el tótem F12 para traer solo el artículo escaneado.
- *   POST /          body: { accion: 'bases' }            -> ["BASE1", ...]
- *   POST /          body: { accion: 'objetos', base }    -> [{ esquema, nombre, tipo }]
+ *   POST /          body: { accion: 'servidores' }       -> [{ alias, principal }]
+ *   POST /          body: { accion: 'bases', servidor? }          -> ["BASE1", ...]
+ *   POST /          body: { accion: 'objetos', base, servidor? }  -> [{ esquema, nombre, tipo }]
+ *
+ *   VARIOS SQL SERVER: el principal es SQL_* y se puede sumar otro con SQL2_*. Para leer del
+ *   segundo, el nombre de la vista lleva su alias adelante: "ALIAS:BASE.esquema.obj".
+ *   Sin alias = el principal (así todo lo que ya estaba configurado sigue igual).
  *   POST /          body: { accion: 'replicas' }         -> { replicas: [...], agente }
  *                   ^ NO sale del SQL remoto: lee el Replicador SQL de ESTA PC
  *                     (sql/replicas.sql contra la instancia local + config.json
@@ -35,6 +40,14 @@
  *   SQL_PASSWORD=***
  *   SQL_ENCRYPT=false                  # true si tu servidor tiene TLS válido
  *   SQL_TRUST_CERT=true                # para certificados autofirmados internos
+ *   SQL_ALIAS=ZOOLOGIC                 # nombre con que se ve el principal en el hub (opcional)
+ *
+ *   Segundo SQL Server (opcional):
+ *   SQL2_ALIAS=DESKTOP-OA4GU6I         # letras, números y guiones
+ *   SQL2_SERVER=localhost              # o host\instancia, host:puerto
+ *   SQL2_DATABASE=VISTAS_CONSOLIDADAS
+ *   SQL2_WINDOWS_AUTH=true             # entra con el usuario de Windows que corre el puente
+ *                                      # (driver ODBC + paquete msnodesqlv8); si no, SQL2_USER/SQL2_PASSWORD
  *
  * ARRANQUE:  npm install && npm start   (y dejarlo corriendo, ej. con pm2)
  */
@@ -49,7 +62,7 @@ const { execFile } = require('child_process')
 try {
   const envPath = path.join(__dirname, '.env')
   for (const linea of fs.readFileSync(envPath, 'utf8').split(/\r?\n/)) {
-    const m = linea.match(/^\s*([A-Z_]+)\s*=\s*(.*)\s*$/)
+    const m = linea.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/)
     if (m && !(m[1] in process.env)) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '')
   }
 } catch {
@@ -88,33 +101,112 @@ try {
   process.exit(1)
 }
 
-// SQL_SERVER acepta: "host", "host\instancia", "host:puerto" o "host,puerto"
-let serverHost = SQL_SERVER
-let serverPort
-const mPuerto = String(SQL_SERVER).match(/^(.+?)[,:](\d+)$/)
-if (mPuerto && !String(SQL_SERVER).includes('\\')) {
-  serverHost = mPuerto[1]
-  serverPort = Number(mPuerto[2])
+// Cada parte de un nombre (base, esquema, objeto, alias): sin corchetes, puntos ni comillas
+const PARTE = /^[A-Za-z0-9_-]{1,128}$/
+
+/** SQL_SERVER acepta: "host", "host\instancia", "host:puerto" o "host,puerto" */
+function hostPuerto(servidor) {
+  const m = String(servidor).match(/^(.+?)[,:](\d+)$/)
+  return m && !String(servidor).includes('\\') ? { host: m[1], port: Number(m[2]) } : { host: servidor }
 }
 
-const pool = new sql.ConnectionPool({
-  server: serverHost,
-  ...(serverPort ? { port: serverPort } : {}),
+/**
+ * Servidores SQL: alias -> { alias, principal, sql, pool, descripcion }.
+ * `sql` es el módulo con que se armó el pool (tedious o msnodesqlv8): los tipos de
+ * parámetros (sql.NVarChar, sql.Int) se toman del mismo módulo.
+ */
+const SERVIDORES = new Map()
+
+/**
+ * mssql guarda el driver en un módulo compartido: cargar 'mssql/msnodesqlv8' en la misma copia
+ * cambiaría el driver de las conexiones tedious que ya existen. Se carga en una copia aparte
+ * (caché de require limpia para mssql) y después se deja la caché como estaba.
+ */
+function requireAislado(id) {
+  const esMssql = (k) => k.includes(`${path.sep}node_modules${path.sep}mssql${path.sep}`)
+  const guardados = {}
+  for (const k of Object.keys(require.cache)) if (esMssql(k)) { guardados[k] = require.cache[k]; delete require.cache[k] }
+  try {
+    return require(id)
+  } finally {
+    for (const k of Object.keys(require.cache)) if (esMssql(k)) delete require.cache[k]
+    Object.assign(require.cache, guardados)
+  }
+}
+
+function agregarServidor(alias, principal, cfg) {
+  const { host, port } = hostPuerto(cfg.server)
+  let mod = sql
+  let pool
+  if (cfg.windowsAuth) {
+    try {
+      mod = requireAislado('mssql/msnodesqlv8')
+    } catch {
+      console.error(`[puente] ${alias}: para entrar con usuario de Windows falta el paquete msnodesqlv8 (npm install)`)
+      return
+    }
+    const servidorOdbc = port ? `${host},${port}` : host
+    pool = new mod.ConnectionPool({
+      connectionString:
+        `Driver={${cfg.driver || 'ODBC Driver 18 for SQL Server'}};Server=${servidorOdbc};Database=${cfg.database};` +
+        `Trusted_Connection=yes;TrustServerCertificate=yes;`,
+    })
+  } else {
+    pool = new mod.ConnectionPool({
+      server: host,
+      ...(port ? { port } : {}),
+      database: cfg.database,
+      user: cfg.user,
+      password: cfg.password,
+      options: { encrypt: cfg.encrypt === 'true', trustServerCertificate: cfg.trustCert !== 'false' },
+    })
+  }
+  pool.on('error', (err) => console.error(`[puente] Error de pool (${alias}):`, err.message))
+  SERVIDORES.set(alias.toUpperCase(), {
+    alias,
+    principal,
+    sql: mod,
+    pool,
+    descripcion: `${host}${port ? ':' + port : ''} / ${cfg.database}${cfg.windowsAuth ? ' (usuario de Windows)' : ''}`,
+  })
+}
+
+const ALIAS_PRINCIPAL = PARTE.test(process.env.SQL_ALIAS || '') ? process.env.SQL_ALIAS : 'PRINCIPAL'
+agregarServidor(ALIAS_PRINCIPAL, true, {
+  server: SQL_SERVER,
   database: SQL_DATABASE,
   user: SQL_USER,
   password: SQL_PASSWORD,
-  options: {
-    encrypt: SQL_ENCRYPT === 'true',
-    trustServerCertificate: SQL_TRUST_CERT === 'true',
-  },
+  encrypt: SQL_ENCRYPT,
+  trustCert: SQL_TRUST_CERT,
 })
-pool.on('error', (err) => console.error('[puente] Error de pool:', err.message))
+if (process.env.SQL2_SERVER) {
+  const alias2 = process.env.SQL2_ALIAS || ''
+  if (!PARTE.test(alias2) || alias2.toUpperCase() === ALIAS_PRINCIPAL.toUpperCase()) {
+    console.error('[puente] SQL2_ALIAS falta o es inválido (letras, números y guiones, distinto del principal): se ignora el segundo servidor')
+  } else {
+    agregarServidor(alias2, false, {
+      server: process.env.SQL2_SERVER,
+      database: process.env.SQL2_DATABASE || 'master',
+      user: process.env.SQL2_USER,
+      password: process.env.SQL2_PASSWORD,
+      encrypt: process.env.SQL2_ENCRYPT || 'false',
+      trustCert: process.env.SQL2_TRUST_CERT || 'true',
+      windowsAuth: process.env.SQL2_WINDOWS_AUTH === 'true',
+      driver: process.env.SQL2_ODBC_DRIVER,
+    })
+  }
+}
 
-// Cada parte de un nombre (base, esquema, objeto): sin corchetes, puntos ni comillas
-const PARTE = /^[A-Za-z0-9_-]{1,128}$/
+/** Servidor por alias (sin alias = el principal). null si no existe. */
+function servidorDe(alias) {
+  if (!alias) return SERVIDORES.get(ALIAS_PRINCIPAL.toUpperCase())
+  return PARTE.test(alias) ? SERVIDORES.get(String(alias).toUpperCase()) ?? null : null
+}
 
 /** La base existe, está en línea y el usuario SQL tiene acceso. */
-async function baseAccesible(base) {
+async function baseAccesible(srv, base) {
+  const { pool, sql } = srv
   const r = await pool
     .request()
     .input('base', sql.NVarChar, base)
@@ -335,9 +427,19 @@ const server = http.createServer(async (req, res) => {
 
     const body = await leerCuerpo(req)
 
+    // Servidores configurados (para elegir en el explorador del hub)
+    if (body?.accion === 'servidores') {
+      return enviar(res, 200, [...SERVIDORES.values()].map((s) => ({ alias: s.alias, principal: s.principal })))
+    }
+
     // Catálogo: bases a las que el usuario SQL tiene acceso
+    let srvCat = null
+    if (body?.accion === 'bases' || body?.accion === 'objetos') {
+      srvCat = servidorDe(body?.servidor)
+      if (!srvCat) return enviar(res, 400, { error: `No existe el servidor ${body?.servidor}` })
+    }
     if (body?.accion === 'bases') {
-      const r = await pool.request().query(
+      const r = await srvCat.pool.request().query(
         `SELECT name FROM sys.databases
           WHERE database_id > 4 AND state = 0 AND HAS_DBACCESS(name) = 1
             AND name NOT LIKE '%[_]Publication[_]%'  -- bases internas de replicación
@@ -349,8 +451,8 @@ const server = http.createServer(async (req, res) => {
     // Catálogo: tablas y vistas de una base (solo las que el usuario puede leer)
     if (body?.accion === 'objetos') {
       const base = String(body?.base ?? '')
-      if (!PARTE.test(base) || !(await baseAccesible(base))) return enviar(res, 400, { error: 'Base no disponible' })
-      const r = await pool.request().query(
+      if (!PARTE.test(base) || !(await baseAccesible(srvCat, base))) return enviar(res, 400, { error: 'Base no disponible' })
+      const r = await srvCat.pool.request().query(
         `SELECT TABLE_SCHEMA AS esquema, TABLE_NAME AS nombre,
                 CASE TABLE_TYPE WHEN 'VIEW' THEN 'vista' ELSE 'tabla' END AS tipo
            FROM [${base}].INFORMATION_SCHEMA.TABLES
@@ -368,16 +470,23 @@ const server = http.createServer(async (req, res) => {
     const pedido = Number(body?.top)
     const top = Math.min(Number.isFinite(pedido) && pedido > 0 ? Math.floor(pedido) : 1000, 10000)
 
+    // "ALIAS:nombre" = de otro servidor; sin alias, el principal
+    const mAlias = vista.match(/^([A-Za-z0-9_-]{1,128}):(.*)$/)
+    const srv = servidorDe(mAlias ? mAlias[1] : '')
+    if (!srv) return enviar(res, 400, { error: `No existe el servidor ${mAlias?.[1]}` })
+    const { pool, sql } = srv
+    const nombre = mAlias ? mAlias[2] : vista
+
     // Nombre: "vista" (dbo de la base del .env), "esquema.objeto" o "base.esquema.objeto".
     // Sanitizado estricto de cada parte (solo SELECT, nunca otra cosa)
-    const partes = vista.split('.')
+    const partes = nombre.split('.')
     if (partes.length > 3 || !partes.every((p) => PARTE.test(p))) {
       return enviar(res, 400, { error: 'Nombre de vista inválido' })
     }
     const [objeto, esquema = 'dbo', base = null] = [...partes].reverse()
 
     if (base) {
-      if (!(await baseAccesible(base))) return enviar(res, 400, { error: `No hay acceso a la base ${base}` })
+      if (!(await baseAccesible(srv, base))) return enviar(res, 400, { error: `No hay acceso a la base ${base}` })
       const existe = await pool
         .request()
         .input('esquema', sql.NVarChar, esquema)
@@ -440,6 +549,9 @@ process.on('unhandledRejection', (reason) => {
 })
 
 // Conexión explícita al arrancar (mssql v10 ya no se autoconecta en el primer request)
-pool.connect()
-  .then(() => console.log(`[puente] Conectado a SQL Server: ${serverHost}:${serverPort ?? 1433} / ${SQL_DATABASE}`))
-  .catch((err) => console.error(`[puente] No se pudo conectar a SQL Server: ${err.message}`))
+for (const s of SERVIDORES.values()) {
+  s.pool
+    .connect()
+    .then(() => console.log(`[puente] Conectado a SQL Server ${s.alias}: ${s.descripcion}`))
+    .catch((err) => console.error(`[puente] No se pudo conectar a SQL Server ${s.alias}: ${err.message}`))
+}
