@@ -92,6 +92,8 @@ body::after {
 }
 .bg-surface2:is(.absolute, .fixed, .sticky),
 thead.bg-surface2,
+thead .bg-surface2,
+thead.sticky,
 .fixed .bg-surface2 {
   background-color: var(--surface2-solid);
 }

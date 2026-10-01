@@ -52,7 +52,6 @@ export default defineConfig({
     // con el Puente SQL corriendo; el resto de /api/* sigue sin existir.
     proxy: {
       '/api/replicas': 'http://localhost:4173',
-      '/api': { target: 'https://hub-mito.vercel.app', changeOrigin: true },
     },
   },
 })
