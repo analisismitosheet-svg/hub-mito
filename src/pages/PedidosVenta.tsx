@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  Loader2, Search, ChevronLeft, ChevronRight, RefreshCw, Download, ClipboardList, Ban, ArrowLeft,
+  Loader2, Search, ChevronLeft, ChevronRight, RefreshCw, Download, ClipboardList, Ban, ArrowLeft, Printer,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
+import { imprimirPedido } from '@/lib/imprimirPedido'
 
 /* ------------------------------------------------------------------ */
 /*  Pedidos de venta (Mayorista)                                       */
@@ -245,6 +246,26 @@ export default function PedidosVenta() {
     XLSX.writeFile(wb, `pedido_venta_${pedido.numero ?? pedido.codigo}.xlsx`)
   }
 
+  function imprimir() {
+    if (!pedido) return
+    imprimirPedido(
+      {
+        titulo: 'Pedido de venta',
+        comprobante: numeroComprobante(pedido),
+        fecha: pedido.fecha,
+        persona: { etiqueta: 'Cliente', codigo: pedido.cliente, nombre: pedido.cliente_nombre },
+        datos: [
+          { etiqueta: 'Vendedor', valor: pedido.vendedor },
+          { etiqueta: 'Usuario', valor: pedido.usuario },
+          { etiqueta: 'Observación', valor: pedido.observacion },
+        ],
+        total: pedido.total,
+        anulado: pedido.anulado,
+      },
+      items.map((i) => ({ ...i, color: colorDe(i) })),
+    )
+  }
+
   const campo = (etiqueta: string, valor: React.ReactNode, ancho = '') => (
     <div className={`min-w-0 ${ancho}`}>
       <p className="text-[11px] font-medium uppercase tracking-wide text-sub">{etiqueta}</p>
@@ -411,6 +432,13 @@ export default function PedidosVenta() {
                     className="btn-press inline-flex h-10 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-sm font-medium text-ink transition hover:bg-surface2 disabled:opacity-50"
                   >
                     <Download size={15} aria-hidden /> Excel
+                  </button>
+                  <button
+                    onClick={imprimir}
+                    disabled={items.length === 0 || cargandoItems}
+                    className="btn-press inline-flex h-10 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-sm font-medium text-ink transition hover:bg-surface2 disabled:opacity-50"
+                  >
+                    <Printer size={15} aria-hidden /> Imprimir
                   </button>
                 </div>
               </div>
