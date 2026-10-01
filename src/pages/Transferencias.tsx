@@ -325,7 +325,7 @@ export default function Transferencias() {
   // Algunos bultos se cargaron con el origen sin el sufijo "2" (ej: RUTA9D en
   // lugar de RUTA9D2). Para que el usuario vea ambos, se consultan tanto su
   // local exacto como la variante sin el "2" final.
-  const origenesUsuario = useMemo(() => {
+  const origenesLocales = useMemo(() => {
     const base = miLocal
     if (!base) return []
     const out: string[] = [base]
@@ -344,6 +344,34 @@ export default function Transferencias() {
     }
     return out
   }, [miLocal])
+
+  // Los nombres que cuentan como "mi local" los define la base (variantes +
+  // sinónimos, ej. GPAZD = GRALPAZ; sql/locales_sinonimos.sql). Mientras llegan,
+  // o si fallan, se usan las variantes calculadas acá.
+  const [origenesDb, setOrigenesDb] = useState<string[] | null>(null)
+  // false hasta saber los nombres del local (así no se carga dos veces)
+  const [origenesListos, setOrigenesListos] = useState(false)
+  useEffect(() => {
+    if (!supabase || !miLocal) {
+      setOrigenesListos(true)
+      return
+    }
+    let activo = true
+    supabase
+      .rpc('mis_origenes_transfer')
+      .then(({ data, error }) => {
+        if (activo && !error && Array.isArray(data)) setOrigenesDb((data as string[]).map((x) => x.toUpperCase()))
+      })
+      .then(
+        () => { if (activo) setOrigenesListos(true) },
+        () => { if (activo) setOrigenesListos(true) },
+      )
+    return () => { activo = false }
+  }, [miLocal])
+  const origenesUsuario = useMemo(
+    () => (origenesDb && origenesDb.length ? origenesDb : origenesLocales),
+    [origenesDb, origenesLocales],
+  )
 
   const [lotes, setLotes] = useState<Lote[]>([])
   // Período (como Repos Mayorista): por defecto la semana vigente, queda guardado en el navegador
@@ -420,8 +448,10 @@ export default function Transferencias() {
   }, [verTodo, origenesUsuario, periodo])
 
   useEffect(() => {
+    // un usuario de local espera la lista de sus nombres (sinónimos) antes de cargar
+    if (!verTodo && !origenesListos) return
     void cargar()
-  }, [cargar])
+  }, [cargar, verTodo, origenesListos])
 
   // Carga la vista de salidas configurada (si existe) para el auto-marcado.
   useEffect(() => {

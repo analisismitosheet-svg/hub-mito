@@ -57,16 +57,8 @@ vis as materialized (
        or private.tiene_permiso('transferencias.ver_todo')) as todo,
     private.tiene_permiso('transferencias.view') as ver,
     (private.es_admin() or private.tiene_permiso('transferencias.view')) as ve_lotes,
-    -- los orígenes que habilita transfer_items_select_local
-    array_remove(array[
-      upper(ml.ml),
-      case when right(ml.ml, 1) = '2'
-           then upper(left(ml.ml, greatest(length(ml.ml) - 1, 0))) end,
-      case when right(ml.ml, 1) = 'D'
-           then upper(left(ml.ml, greatest(length(ml.ml) - 1, 0))) end,
-      case when right(ml.ml, 1) <> 'D'
-           then upper(ml.ml || 'D') end
-    ], null) as origenes
+    -- los orígenes que cuentan como "mi local" (variantes + sinónimos, sql/locales_sinonimos.sql)
+    private.mis_origenes() as origenes
   from ml
 ),
 params as (
