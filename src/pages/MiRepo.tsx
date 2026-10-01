@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { normalizaCodigo } from '@/lib/loginEmpleado'
 import { compararUbicaciones, ubicacionesDeArticulos } from '@/lib/mapeo'
+import { nombreMaterial } from '@/lib/imprimirRepo'
 
 type EstadoM = 'pendiente' | 'hecho' | 'faltante'
 
@@ -1045,6 +1046,11 @@ export default function MiRepo() {
                       <span className="min-w-0 flex-1">
                         {/* Código + color + talle juntos: lo que hay que buscar en la etiqueta */}
                         <span className="flex flex-wrap items-center gap-1.5">
+                          {i.material && (
+                            <span className="rounded-md bg-line px-1.5 py-0.5 text-[11px] font-semibold uppercase text-ink/80" title="Material">
+                              {nombreMaterial(i.material)}
+                            </span>
+                          )}
                           <span className="text-[15px] font-semibold text-ink">{i.codigo}</span>
                           {i.color && (
                             <span className="rounded-md bg-sky-500/15 px-1.5 py-0.5 text-xs font-semibold text-sky-400" title="Color">
@@ -1115,6 +1121,11 @@ export default function MiRepo() {
                     <li key={i.id} className="flex items-center gap-3 px-4 py-2 opacity-80">
                       <span className="min-w-0 flex-1">
                         <span className="flex flex-wrap items-center gap-1.5">
+                          {i.material && (
+                            <span className="rounded-md bg-line px-1.5 py-0.5 text-[10px] font-semibold uppercase text-ink/80" title="Material">
+                              {nombreMaterial(i.material)}
+                            </span>
+                          )}
                           <span className="text-sm font-semibold text-ink">{i.codigo}</span>
                           {i.color && (
                             <span className="rounded-md bg-sky-500/15 px-1.5 py-0.5 text-[11px] font-semibold text-sky-400">{i.color}</span>
