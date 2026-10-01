@@ -20,7 +20,9 @@ const path = require('path')
 
 const RAIZ = path.join(__dirname, '..')
 const LOG = path.join(RAIZ, 'data', 'sync-articulos.log')
-const LOTE = 4000
+// Lotes chicos: con 4000 filas el upsert pasaba el statement_timeout de Supabase (falló el 2026-09-30)
+const LOTE = 1000
+const REINTENTOS = 3
 
 /* ---- .env del puente y, como respaldo, el del hub (URL y clave anon de Supabase) ---- */
 function leerEnv(archivo) {
@@ -145,7 +147,17 @@ async function main() {
   const token = cfg('PUENTE_TOKEN')
   const gen = Date.now()
   for (let i = 0; i < lista.length; i += LOTE) {
-    await rpc('articulos_sync_lote', { p_token: token, p_gen: gen, p_filas: lista.slice(i, i + LOTE) })
+    for (let intento = 1; ; intento++) {
+      try {
+        await rpc('articulos_sync_lote', { p_token: token, p_gen: gen, p_filas: lista.slice(i, i + LOTE) })
+        break
+      } catch (err) {
+        // Un lote que falla se reintenta (timeouts momentáneos); la clave inválida no tiene arreglo
+        if (intento >= REINTENTOS || /Clave de sincronizaci/.test(String(err))) throw err
+        anotar(`Lote ${i / LOTE + 1} falló (${err instanceof Error ? err.message : err}); reintento ${intento + 1} de ${REINTENTOS}`)
+        await new Promise((r) => setTimeout(r, 5000 * intento))
+      }
+    }
   }
   const borradas = await rpc('articulos_sync_fin', {
     p_token: token,
