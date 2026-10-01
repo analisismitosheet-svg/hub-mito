@@ -87,6 +87,11 @@ function cambiarEstadoEnTodos(todos: Guia[], id: string, estado: EstadoGuia): Gu
 /*  Main Component                                                     */
 /* ------------------------------------------------------------------ */
 
+/** Guías de MITO SRL (movimientos internos): quedan solo en Guías, no se copian a Facturación ni a Notas de crédito */
+function esMitoSrl(razon: string | null | undefined): boolean {
+  return String(razon ?? '').toUpperCase().replace(/[^A-Z]/g, '') === 'MITOSRL'
+}
+
 export default function Guias() {
   const { perfil } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -227,8 +232,9 @@ export default function Guias() {
     if (err) { mostrarToast('Error al actualizar estado'); await cargar() }
     else {
       void registrarHistorial('guia', g.id, 'modificacion', { nombre: perfil?.nombre ?? null, email: perfil?.email ?? null }, `Estado: ${estado}`)
-      // Si pasa a FINALIZADO_FACT y no tenía facturación, se crea el registro
-      if (estado === 'FINALIZADO_FACT') {
+      const interna = esMitoSrl(g.razon_social)
+      // Si pasa a FINALIZADO_FACT y no tenía facturación, se crea el registro (MITO SRL no se copia)
+      if (estado === 'FINALIZADO_FACT' && !interna) {
         const { data: existente } = await supabase.from('facturacion_fabrica').select('id').eq('guia_id', g.id).limit(1)
         if (existente && existente.length === 0) {
           const obsFact = [
@@ -247,8 +253,8 @@ export default function Guias() {
           })
         }
       }
-      // Si pasa a APLICADA, se copia/actualiza el registro en notas de credito
-      if (estado === 'APLICADA' && (g.pedido || '').toUpperCase().startsWith('NOTA DE CREDITO')) {
+      // Si pasa a APLICADA, se copia/actualiza el registro en notas de credito (MITO SRL no se copia)
+      if (estado === 'APLICADA' && !interna && (g.pedido || '').toUpperCase().startsWith('NOTA DE CREDITO')) {
         const notaData = {
           nro_pedido: g.nro_pedido || null,
           n_cliente: g.nro_cliente || null,
@@ -269,7 +275,11 @@ export default function Guias() {
           })
         }
       }
-      mostrarToast(estado === 'FINALIZADO_FACT' ? 'Guia finalizada y enviada a facturacion' : estado === 'FINALIZADO_A_CAJA' ? 'Guia finalizada a caja' : estado === 'NUEVO' ? 'Guia nueva' : estado === 'APLICADA' ? 'Guia aplicada en notas de credito' : 'Guia en proceso')
+      mostrarToast(
+        interna && (estado === 'FINALIZADO_FACT' || estado === 'APLICADA')
+          ? 'Guia de MITO SRL actualizada (queda solo en Guias)'
+          : estado === 'FINALIZADO_FACT' ? 'Guia finalizada y enviada a facturacion' : estado === 'FINALIZADO_A_CAJA' ? 'Guia finalizada a caja' : estado === 'NUEVO' ? 'Guia nueva' : estado === 'APLICADA' ? 'Guia aplicada en notas de credito' : 'Guia en proceso',
+      )
     }
   }
 
@@ -629,7 +639,10 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
     let result
     if (guia) {
       result = await supabase.from('guias').update(payload).eq('id', guia.id).select().single()
-      if (!result.error && supabase) {
+      if (!result.error && supabase && esMitoSrl(razonSocial)) {
+        // MITO SRL: queda solo en Guías
+        void registrarHistorial('guia', guia.id, 'modificacion', usuario, `Guia N° ${nroPedido.trim()}`)
+      } else if (!result.error && supabase) {
         const esFact = estado === 'FINALIZADO_FACT'
         const obsCliente = clientes.find((cl) => cl.n_cliente === nroCliente.trim())?.obs_facturacion || null
         const obsGuia = observaciones.trim() || null
@@ -676,7 +689,9 @@ function GuiaModal({ guia, clientes, pedidoOpciones, sucursalOpciones, usuario, 
         const guiaId = (result.data as { id: string }).id
         void registrarHistorial('guia', guiaId, 'creacion', usuario, `Guia N° ${payload.nro_pedido} - ${razonSocial || ''}`)
         const esNotaCredito = (pedido || '').toUpperCase() === 'NOTA DE CREDITO'
-        if (esNotaCredito) {
+        if (esMitoSrl(razonSocial)) {
+          // MITO SRL: queda solo en Guías
+        } else if (esNotaCredito) {
           await sincronizarNotaCredito(guiaId)
         } else if (estado === 'FINALIZADO_FACT') {
           const obsCliente = clientes.find((cl) => cl.n_cliente === nroCliente.trim())?.obs_facturacion || null

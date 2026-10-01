@@ -20,9 +20,15 @@ import { claveSku, compararUbicaciones, ubicacionesSkuDeArticulos } from '@/lib/
  *   - ubicación                           -> tabla `mapeo_deposito` (QR del depósito)
  */
 
-/** Vista del SQL Server: una fila por artículo + color + talle. */
+/**
+ * Vista del SQL Server: una fila por artículo + color + talle.
+ *
+ * El nombre va con la base (BASE.ESQUEMA.VISTA) porque el puente se conecta a
+ * `SQL_DATABASE` (DWH) y sin la base no encuentra la vista.
+ */
 export const VISTA_ARTICULOS =
-  (import.meta.env.VITE_SQL_VISTA_ARTICULOS as string | undefined)?.trim() || 'ZooLogic.vw_ARTICULOS_MITO'
+  (import.meta.env.VITE_SQL_VISTA_ARTICULOS as string | undefined)?.trim() ||
+  'DRAGONFISH_MITO.ZooLogic.vw_ARTICULOS_MITO'
 
 /** Tope de filas cuando se busca un término (el proxy lo recorta a SQL_MAX_ROWS). */
 const TOP_BUSQUEDA = 500
