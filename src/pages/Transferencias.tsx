@@ -351,11 +351,20 @@ export default function Transferencias() {
   const [origenesDb, setOrigenesDb] = useState<string[] | null>(null)
   // false hasta saber los nombres del local (así no se carga dos veces)
   const [origenesListos, setOrigenesListos] = useState(false)
+  const hayPerfil = !!perfil
   useEffect(() => {
+    setOrigenesDb(null)
+    // Sin perfil todavía no se sabe el local: se espera (si no, se cargaría con
+    // una lista vacía o vieja y esa respuesta podía pisar a la buena)
+    if (!hayPerfil) {
+      setOrigenesListos(false)
+      return
+    }
     if (!supabase || !miLocal) {
       setOrigenesListos(true)
       return
     }
+    setOrigenesListos(false)
     let activo = true
     supabase
       .rpc('mis_origenes_transfer')
@@ -367,7 +376,7 @@ export default function Transferencias() {
         () => { if (activo) setOrigenesListos(true) },
       )
     return () => { activo = false }
-  }, [miLocal])
+  }, [miLocal, hayPerfil])
   const origenesUsuario = useMemo(
     () => (origenesDb && origenesDb.length ? origenesDb : origenesLocales),
     [origenesDb, origenesLocales],
@@ -402,11 +411,16 @@ export default function Transferencias() {
   const [sinconexionSql, setSinconexionSql] = useState(false)
   const [autoMarca, setAutoMarca] = useState(true)
 
+  // Número de la carga en curso: si arranca otra (cambió el período, el local…)
+  // la respuesta vieja se descarta y no pisa a la nueva
+  const cargaActual = useRef(0)
+
   const cargar = useCallback(async () => {
     if (!supabase) {
       setCargando(false)
       return
     }
+    const mia = ++cargaActual.current
     setCargando(true)
     setError(null)
     // Solo los archivos del período elegido (por defecto, la semana vigente)
@@ -418,6 +432,7 @@ export default function Transferencias() {
       qLotes,
       supabase.from('usuarios').select('email,local').eq('estado', 'aprobado').not('local', 'is', null),
     ])
+    if (mia !== cargaActual.current) return
     if (ld.error) setError(`No se pudieron cargar los archivos: ${ld.error.message}`)
     setUsuariosLocales((uRes.data as { email: string; local: string }[]) ?? [])
     const lotesData = (ld.data as Lote[]) ?? []
@@ -442,6 +457,7 @@ export default function Transferencias() {
       }
     }
     await Promise.all(Array.from({ length: Math.min(LOTES_EN_PARALELO, lotesData.length) }, trabajador))
+    if (mia !== cargaActual.current) return
     if (errorLineas) setError(`No se pudieron cargar las líneas: ${errorLineas}`)
     setItems(porLote.flatMap((x) => x ?? []))
     setCargando(false)
@@ -717,6 +733,9 @@ export default function Transferencias() {
     return m
   }, [items])
 
+  // Un usuario de local solo ve los archivos que incluyen su local
+  const hayLotesVisibles = verTodo ? lotes.length > 0 : lotes.some((l) => (itemsPorLote.get(l.id)?.length ?? 0) > 0)
+
   return (
     <Layout>
       <BackButton />
@@ -793,7 +812,7 @@ export default function Transferencias() {
         <div className="flex items-center justify-center gap-2 py-16 text-sub">
           <Loader2 size={18} className="animate-spin" aria-hidden /> Cargando…
         </div>
-      ) : lotes.length === 0 ? (
+      ) : !hayLotesVisibles ? (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-line2 bg-surface/50 py-14 text-center text-sub">
           <ArrowRightLeft size={28} aria-hidden />
           {periodo === 'todas' ? (
