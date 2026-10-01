@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type RefObject } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Loader2, Search, SearchX, Plus, Pencil, Trash2, X, Upload, FileText, Lock, Printer, Eye, Settings,
 } from 'lucide-react'
@@ -170,6 +171,45 @@ function parseFechaDias(v: string | null | undefined): number | null {
 /*  Main Component                                                     */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Lista desplegable pegada a un input pero dibujada fuera de la tabla (portal + position fixed):
+ * así el overflow de la tabla no la recorta (antes, en la última fila no se podía elegir).
+ * Si no entra abajo, se abre hacia arriba.
+ */
+function DesplegableFijo({ anchorRef, children }: { anchorRef: RefObject<HTMLElement | null>; children: ReactNode }) {
+  const caja = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<{ left: number; top: number; width: number } | null>(null)
+
+  useLayoutEffect(() => {
+    function ubicar() {
+      const a = anchorRef.current?.getBoundingClientRect()
+      if (!a) return
+      const alto = caja.current?.offsetHeight ?? 0
+      const abajo = window.innerHeight - a.bottom
+      const top = abajo < alto + 8 && a.top > alto + 8 ? a.top - alto - 4 : a.bottom + 4
+      setPos({ left: a.left, top, width: Math.max(a.width, 220) })
+    }
+    ubicar()
+    window.addEventListener('scroll', ubicar, true)
+    window.addEventListener('resize', ubicar)
+    return () => {
+      window.removeEventListener('scroll', ubicar, true)
+      window.removeEventListener('resize', ubicar)
+    }
+  }, [anchorRef, children])
+
+  return createPortal(
+    <div
+      ref={caja}
+      style={{ position: 'fixed', left: pos?.left ?? -9999, top: pos?.top ?? -9999, width: pos?.width }}
+      className="z-50 max-h-64 overflow-y-auto rounded-lg border border-line bg-surface shadow-xl"
+    >
+      {children}
+    </div>,
+    document.body,
+  )
+}
+
 export default function FacturacionFabrica() {
   const { isAdmin, perfil } = useAuth()
   const esMayorista = String(perfil?.rol) === 'mayorista' || (perfil?.roles ?? []).includes('mayorista')
@@ -205,6 +245,7 @@ export default function FacturacionFabrica() {
   const [editandoValor, setEditandoValor] = useState('')
   const [legajoBusq, setLegajoBusq] = useState<Record<string, string>>({})
   const [legajoOpen, setLegajoOpen] = useState<Record<string, boolean>>({})
+  const legajoInputRef = useRef<HTMLInputElement>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const POR_PAGINA = 50
 
@@ -540,6 +581,7 @@ export default function FacturacionFabrica() {
         <td className={cls} onClick={(e) => e.stopPropagation()}>
           <div className="relative">
             <input
+              ref={legajoInputRef}
               autoFocus
               value={legajoBusq[r.id] ?? ''}
               onChange={(e) => { setLegajoBusq((p) => ({ ...p, [r.id]: e.target.value })); setLegajoOpen((p) => ({ ...p, [r.id]: true })) }}
@@ -552,7 +594,7 @@ export default function FacturacionFabrica() {
               placeholder="#legajo"
             />
             {legajoOpen[r.id] && busqRaw && (
-              <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-lg border border-line bg-surface shadow-xl">
+              <DesplegableFijo anchorRef={legajoInputRef}>
                 {exacto ? (
                   <button
                     type="button"
@@ -577,7 +619,7 @@ export default function FacturacionFabrica() {
                 ) : (
                   <p className="px-2 py-1 text-[10px] text-sub">Sin coincidencias</p>
                 )}
-              </div>
+              </DesplegableFijo>
             )}
           </div>
         </td>
