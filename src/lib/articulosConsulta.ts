@@ -35,7 +35,7 @@ export const VISTA_ARTICULOS =
 
 /** Tope de filas cuando se busca un término (el proxy lo recorta a SQL_MAX_ROWS). */
 const TOP_BUSQUEDA = 500
-/** Tope de filas al abrir el módulo sin buscar nada. */
+/** Tope de filas cuando el destino no filtra y hay que acotar en el navegador. */
 const TOP_LISTA = 1000
 
 export interface Articulo {
@@ -295,7 +295,7 @@ async function armar(crudas: FilaSql[], q: string): Promise<Articulo[]> {
 }
 
 /**
- * Busca artículos. `termino` vacío trae el listado de la vista.
+ * Busca artículos. Con menos de 2 caracteres no consulta nada (devuelve vacío).
  *
  * Primero se le pide al SQL el filtro (WHERE [col] LIKE '%texto%'). Si el
  * destino lo ignora —la Lógica App solo acepta { vista, top }— o no trae
@@ -307,29 +307,29 @@ export async function consultarArticulos(termino: string): Promise<ResultadoCons
   let crudas: FilaSql[] = []
   let filtradoEnCliente = false
 
-  if (q.length >= 2) {
-    try {
-      crudas = await leerVistaFiltrada(VISTA_ARTICULOS, {
-        donde: COLUMNAS_BUSQUEDA,
-        valor: q,
-        coincide: 'contiene',
-        limit: TOP_BUSQUEDA,
-      })
-    } catch {
-      crudas = []
-    }
-    // Sin resultado: puede ser que el destino no aplique el filtro (la Lógica App
-    // solo acepta { vista, top }). Se trae el tope de la vista y se acota en el
-    // navegador, así la búsqueda por nombre igual encuentra lo suyo.
-    if (crudas.length === 0) {
-      filtradoEnCliente = true
-      crudas = await leerVista(VISTA_ARTICULOS, TOP_LISTA)
-    }
-  } else {
+  // Sin término no se trae el listado: la pantalla solo muestra lo que se busca
+  if (q.length < 2) return { filas: [], truncado: false, filtradoEnCliente: false }
+
+  try {
+    crudas = await leerVistaFiltrada(VISTA_ARTICULOS, {
+      donde: COLUMNAS_BUSQUEDA,
+      valor: q,
+      coincide: 'contiene',
+      limit: TOP_BUSQUEDA,
+    })
+  } catch {
+    crudas = []
+  }
+  // Sin resultado: puede ser que el destino no aplique el filtro (la Lógica App
+  // solo acepta { vista, top }). Se trae el tope de la vista y se acota en el
+  // navegador, así la búsqueda por nombre igual encuentra lo suyo (en pantalla
+  // solo quedan las coincidencias).
+  if (crudas.length === 0) {
+    filtradoEnCliente = true
     crudas = await leerVista(VISTA_ARTICULOS, TOP_LISTA)
   }
 
-  const tope = q.length >= 2 && !filtradoEnCliente ? TOP_BUSQUEDA : TOP_LISTA
+  const tope = filtradoEnCliente ? TOP_LISTA : TOP_BUSQUEDA
   return { filas: await armar(crudas, q), truncado: crudas.length >= tope, filtradoEnCliente }
 }
 

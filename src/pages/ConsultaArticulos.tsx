@@ -21,6 +21,8 @@ import { usePermisosArea } from '@/hooks/usePermisosArea'
 
 /** Espera a que se termine de tipear antes de ir al SQL. */
 const ESPERA_MS = 400
+/** Con menos letras no se consulta (no se trae el listado entero) */
+const MIN_CARACTERES = 2
 
 const fmtN = (n: number) => n.toLocaleString('es-AR')
 
@@ -57,7 +59,7 @@ export default function ConsultaArticulos() {
   /** Último texto realmente consultado (va con los datos en pantalla) */
   const [consultado, setConsultado] = useState('')
   const [filas, setFilas] = useState<Articulo[]>([])
-  const [cargando, setCargando] = useState(true)
+  const [cargando, setCargando] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [truncado, setTruncado] = useState(false)
   const [filtradoEnCliente, setFiltradoEnCliente] = useState(false)
@@ -76,6 +78,16 @@ export default function ConsultaArticulos() {
     const mio = ++pedido.current
     const q = texto.trim()
     ultimo.current = q
+    // Sin búsqueda no se consulta nada: solo se muestra lo que se busca
+    if (q.length < MIN_CARACTERES) {
+      setFilas([])
+      setConsultado('')
+      setTruncado(false)
+      setFiltradoEnCliente(false)
+      setError(null)
+      setCargando(false)
+      return
+    }
     setCargando(true)
     setConsultado(q)
     setError(null)
@@ -96,11 +108,15 @@ export default function ConsultaArticulos() {
     }
   }, [])
 
-  // Al entrar trae el listado; después busca solo, esperando a que se termine de tipear.
-  // El botón "Consultar" y el Enter hacen el pedido al instante.
+  // Al entrar no trae nada: busca solo cuando se escribe, esperando a que se termine
+  // de tipear. El botón "Consultar" y el Enter hacen el pedido al instante.
   useEffect(() => {
     const q = termino.trim()
     if (ultimo.current === q) return
+    if (q.length < MIN_CARACTERES) {
+      void cargar(q)
+      return
+    }
     if (temporizador.current !== null) clearTimeout(temporizador.current)
     temporizador.current = setTimeout(() => {
       temporizador.current = null
@@ -192,7 +208,7 @@ export default function ConsultaArticulos() {
           </div>
           <button
             onClick={() => void cargar(termino.trim())}
-            disabled={cargando}
+            disabled={cargando || termino.trim().length < MIN_CARACTERES}
             className="btn-press inline-flex h-11 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-sm font-medium text-ink transition hover:bg-surface2 disabled:opacity-60"
             title="Consultar"
           >
@@ -240,7 +256,14 @@ export default function ConsultaArticulos() {
           </div>
         )}
 
-        {cargando && filas.length === 0 ? (
+        {!consultado && !cargando ? (
+          <p className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-line px-4 py-12 text-center text-sm text-sub">
+            <Search size={22} aria-hidden />
+            {termino.trim().length > 0
+              ? `Escribí al menos ${MIN_CARACTERES} caracteres para buscar.`
+              : 'Escribí un código o nombre de artículo para buscar.'}
+          </p>
+        ) : cargando && filas.length === 0 ? (
           <div className="flex items-center justify-center gap-2 py-12 text-sub">
             <Loader2 size={18} className="animate-spin" aria-hidden /> Consultando el SQL Server…
           </div>
