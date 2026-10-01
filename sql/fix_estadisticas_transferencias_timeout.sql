@@ -46,59 +46,83 @@
 
 -- ---------------------------------------------------------------------------
 -- 1. DIAGNÓSTICO
+--    No se asume la firma: se busca en pg_proc y se arma la llamada con tantos
+--    NULL como parámetros tenga, así este bloque no puede fallar por aridad.
 -- ---------------------------------------------------------------------------
 DO $$
 DECLARE
-  v_sig     text;
+  v_sig       text;
   v_prosecdef boolean;
-  v_total   bigint;
-  v_mislocal text;
-  v_perm    boolean;
-  v_timeout text;
-  v_t0      timestamptz;
-  v_ms      bigint;
+  v_nargs     int;
+  v_total     bigint;
+  v_mislocal  text;
+  v_perm      boolean;
+  v_timeout   text;
+  v_t0        timestamptz;
+  v_ms        bigint;
+  v_llamada   text;
 BEGIN
-  SELECT p.oid::regprocedure::text, p.prosecdef
-    INTO v_sig, v_prosecdef
+  RAISE NOTICE '======================== DIAGNÓSTICO ========================';
+
+  SELECT p.oid::regprocedure::text, p.prosecdef, p.pronargs
+    INTO v_sig, v_prosecdef, v_nargs
     FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
    WHERE n.nspname = 'public' AND p.proname = 'estadisticas_transferencias'
+   ORDER BY p.pronargs
    LIMIT 1;
 
-  RAISE NOTICE '======================= DIAGNÓSTICO =======================';
   IF v_sig IS NULL THEN
-    RAISE NOTICE 'No se encontró public.estadisticas_transferencias';
-  ELSE
-    RAISE NOTICE 'firma  = %', v_sig;
-    RAISE NOTICE 'SECURITY DEFINER = %  (false = paga RLS fila por fila)',
-      coalesce(v_prosecdef, false);
+    RAISE NOTICE 'ATENCIÓN: no se encontró public.estadisticas_transferencias';
+    RETURN;
   END IF;
 
-  SELECT current_setting('statement_timeout') INTO v_timeout;
-  RAISE NOTICE 'statement_timeout del rol = %', v_timeout;
-
-  -- Cuánto ve realmente este perfil
-  SELECT count(*) INTO v_total FROM public.transfer_items;
-  RAISE NOTICE 'ítems visibles para este perfil = % de los totales', v_total;
+  RAISE NOTICE 'firma                    = %', v_sig;
+  RAISE NOTICE 'parámetros               = %', v_nargs;
+  RAISE NOTICE 'SECURITY DEFINER        = %   <- false = paga RLS fila por fila',
+    coalesce(v_prosecdef, false);
+  RAISE NOTICE 'statement_timeout (rol)  = %', current_setting('statement_timeout');
 
   BEGIN
     SELECT private.mi_local() INTO v_mislocal;
-    SELECT private.tiene_permiso('transferencias.ver_todo') INTO v_perm;
-    RAISE NOTICE 'mi_local()                  = %', coalesce(v_mislocal, '(vacío)');
-    RAISE NOTICE 'tiene_permiso(ver_todo)     = %', coalesce(v_perm, false);
+    RAISE NOTICE 'mi_local()               = %', coalesce(v_mislocal, '(vacío)');
   EXCEPTION WHEN OTHERS THEN
-    RAISE NOTICE 'no se pudo leer el perfil: %', SQLERRM;
+    RAISE NOTICE 'mi_local()               = no se pudo leer (%s)', SQLERRM;
   END;
 
-  -- Cronometrar la función tal como la llama la página (preset 30d)
-  v_t0 := clock_timestamp();
-  PERFORM public.estadisticas_transferencias(
-    (current_date - 29), current_date, NULL, NULL, NULL, NULL, NULL, 'dia');
-  v_ms := (extract(epoch FROM (clock_timestamp() - v_t0)) * 1000)::bigint;
-  RAISE NOTICE 'estadisticas_transferencias(30d) tardó % ms', v_ms;
-  IF v_ms > 2000 THEN
-    RAISE NOTICE 'ATENCIÓN: % ms es demasiado. La función sigue pagando RLS por fila.', v_ms;
-  END IF;
-  RAISE NOTICE '============================================================';
+  BEGIN
+    SELECT private.tiene_permiso('transferencias.ver_todo') INTO v_perm;
+    RAISE NOTICE 'tiene ver_todo           = %', coalesce(v_perm, false);
+  EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'tiene ver_todo           = no se pudo leer (%s)', SQLERRM;
+  END;
+
+  -- Cuánto ve realmente este perfil (si esto revienta, ya es diagnóstico)
+  BEGIN
+    SELECT count(*) INTO v_total FROM public.transfer_items;
+    RAISE NOTICE 'ítems visibles (perfil)  = %', v_total;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'ítems visibles (perfil)  = LA CONSULTA REVienta: %s', SQLERRM;
+  END;
+
+  -- Cronometrar la función sin filtro (el caso más pesado). NULL en todos los
+  -- parámetros = "todo", que es lo que más filas agrega.
+  v_llamada := 'SELECT public.estadisticas_transferencias('
+               || repeat('NULL, ', greatest(v_nargs - 1, 0)) || 'NULL)';
+  BEGIN
+    v_t0 := clock_timestamp();
+    EXECUTE v_llamada;
+    v_ms := (extract(epoch FROM (clock_timestamp() - v_t0)) * 1000)::bigint;
+    RAISE NOTICE 'función sin filtro        = % ms', v_ms;
+    IF v_ms > 2000 THEN
+      RAISE NOTICE '  -> sigue pagando RLS por fila: el arreglo de fondo es pasarla a SECURITY DEFINER';
+    END IF;
+  EXCEPTION WHEN query_canceled THEN
+    RAISE NOTICE 'función sin filtro        = REVienta por TIMEOUT (o sea: confirmado)';
+  EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'función sin filtro        = no se pudo cronometrar: %s', SQLERRM;
+  END;
+
+  RAISE NOTICE '=============================================================';
 END;
 $$;
 
@@ -155,6 +179,6 @@ CREATE INDEX IF NOT EXISTS transfer_items_origen_upper_idx
 CREATE INDEX IF NOT EXISTS transfer_items_destino_upper_idx
   ON public.transfer_items (upper(destino));
 
--- Para ver cuánto grewió (o cuánto RLS cuesta de verdad):
+-- Para ver el tamaño real de las tablas y cuánto RLS está costando:
 --   SELECT relname, n_live_tup, n_dead_tup
 --     FROM pg_stat_user_tables WHERE relname LIKE 'transfer%';
