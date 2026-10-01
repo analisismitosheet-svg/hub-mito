@@ -9,28 +9,100 @@
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
 }
 
+/* Estilo "vidrio": tarjetas semitransparentes sobre un fondo con luces de color.
+   --surface / --surface2 son translúcidos (dejan ver las luces); los paneles que
+   flotan sobre otro contenido (menús, popups, encabezados fijos) usan las
+   versiones -solid para que no se lea lo de abajo (ver "Superficies flotantes"). */
+
 /* Tema oscuro (default) */
 :root,
 .dark {
-  --paper: #0a0a0a;
-  --surface: #161616;
-  --surface2: #1f1f1f;
-  --line: #262626;
-  --line2: #333333;
-  --ink: #f4f4f5;
-  --sub: #a1a1aa;
+  --paper: #050508;
+  --surface: rgba(255, 255, 255, 0.035);
+  --surface2: rgba(255, 255, 255, 0.07);
+  --surface-solid: #101016;
+  --surface2-solid: #17171f;
+  --line: rgba(255, 255, 255, 0.08);
+  --line2: rgba(255, 255, 255, 0.18);
+  --ink: #f8fafc;
+  --sub: #94a3b8;
+  --glow-1: rgba(59, 130, 246, 0.15);
+  --glow-2: rgba(168, 85, 247, 0.1);
+  --shine: rgba(255, 255, 255, 0.06);
+  --title-from: #ffffff;
+  --title-to: #94a3b8;
+  --shadow-soft: 0 10px 30px -12px rgba(0, 0, 0, 0.6);
+  --shadow-soft-lg: 0 24px 50px -16px rgba(0, 0, 0, 0.8);
 }
 
 /* Tema claro */
 :root.light {
   color-scheme: light;
-  --paper: #f5f5f5;
-  --surface: #ffffff;
-  --surface2: #f0f0f0;
-  --line: #e5e5e5;
-  --line2: #d4d4d4;
-  --ink: #111111;
-  --sub: #525252;
+  --paper: #eef0f5;
+  --surface: rgba(255, 255, 255, 0.6);
+  --surface2: rgba(15, 23, 42, 0.05);
+  --surface-solid: #ffffff;
+  --surface2-solid: #f1f3f7;
+  --line: rgba(15, 23, 42, 0.09);
+  --line2: rgba(15, 23, 42, 0.18);
+  --ink: #0f172a;
+  --sub: #64748b;
+  --glow-1: rgba(59, 130, 246, 0.18);
+  --glow-2: rgba(168, 85, 247, 0.14);
+  --shine: rgba(255, 255, 255, 0.9);
+  --title-from: #0f172a;
+  --title-to: #475569;
+  --shadow-soft: 0 8px 24px -12px rgba(15, 23, 42, 0.15);
+  --shadow-soft-lg: 0 20px 44px -16px rgba(15, 23, 42, 0.25);
+}
+
+/* Luces de fondo (fijas, detrás de todo). El color de la primera se puede
+   cambiar con --glow-1 (ej. la pantalla de un área la tiñe con su color). */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  z-index: -1;
+  border-radius: 50%;
+  filter: blur(120px);
+  pointer-events: none;
+  transition: background-color 1s ease;
+}
+body::before {
+  width: 600px;
+  height: 600px;
+  top: -200px;
+  left: -200px;
+  background-color: var(--glow-1);
+}
+body::after {
+  width: 500px;
+  height: 500px;
+  bottom: -100px;
+  right: -100px;
+  background-color: var(--glow-2);
+}
+
+/* Superficies flotantes: opacas para que no se lea el contenido de abajo */
+.bg-surface:is(.absolute, .fixed, .sticky),
+[role='menu'].bg-surface,
+[role='dialog'] .bg-surface,
+.fixed > .bg-surface {
+  background-color: var(--surface-solid);
+}
+.bg-surface2:is(.absolute, .fixed, .sticky),
+thead.bg-surface2,
+.fixed .bg-surface2 {
+  background-color: var(--surface2-solid);
+}
+
+/* Títulos de página con degradé suave */
+main h1.text-ink {
+  background-image: linear-gradient(to right, var(--title-from), var(--title-to));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: -0.02em;
 }
 
 html,
@@ -66,7 +138,7 @@ body,
 
 body {
   margin: 0;
-  font-family: 'Open Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color: var(--ink);
   background-color: var(--paper);
   -webkit-font-smoothing: antialiased;
@@ -83,25 +155,62 @@ body {
 }
 
 @layer components {
-  /* Tarjeta interactiva: press-feedback + lift + glow rojo sutil en hover */
+  /* Tarjeta interactiva de vidrio: se eleva, se tiñe con su color (--c) y una luz
+     sigue al mouse (--mx/--my, los pone Layout). */
   .hub-card {
+    --c: #e11d2e;
+    border-radius: 1.5rem;
     transition:
-      transform 0.24s var(--ease-out),
-      box-shadow 0.24s var(--ease-out),
-      border-color 0.24s var(--ease-out);
+      transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+      box-shadow 0.3s var(--ease-out),
+      border-color 0.3s var(--ease-out),
+      background-color 0.3s var(--ease-out);
     will-change: transform;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
+  }
+  .hub-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(600px circle at var(--mx, 50%) var(--my, 50%), var(--shine), transparent 40%);
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
   }
   .hub-card:active {
     transform: scale(0.975);
   }
   @media (hover: hover) and (pointer: fine) {
     .hub-card:hover {
-      transform: translateY(-4px);
-      border-color: #3a3a3a;
-      box-shadow: 0 0 0 1px rgba(225, 29, 46, 0.28), 0 16px 40px rgba(0, 0, 0, 0.6);
+      transform: translateY(-6px) scale(1.015);
+      background-color: var(--surface2);
+      border-color: color-mix(in srgb, var(--c) 45%, transparent);
+      box-shadow:
+        0 20px 40px -15px color-mix(in srgb, var(--c) 35%, transparent),
+        0 0 0 1px color-mix(in srgb, var(--c) 30%, transparent) inset;
     }
+    .hub-card:hover::before {
+      opacity: 1;
+    }
+    .hub-card:active {
+      transform: translateY(-1px) scale(0.98);
+    }
+  }
+
+  /* Ícono en cuadradito con degradé del color de la tarjeta (--c) */
+  .icon-tile {
+    display: grid;
+    place-items: center;
+    border-radius: 1rem;
+    color: #fff;
+    background: linear-gradient(135deg, color-mix(in srgb, var(--c) 45%, #000), var(--c));
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.2), 0 4px 10px rgba(0, 0, 0, 0.3);
+  }
+
+  /* Texto de acción ("Entrar", "Abrir") con el color de la tarjeta, legible en ambos temas */
+  .card-link {
+    color: color-mix(in srgb, var(--c) 60%, var(--ink));
   }
 
   /* Botón pulsable */
@@ -333,3 +442,8 @@ body {
   background: rgba(100, 116, 139, 0.8);
 }
 
+
+/* Las páginas que pintan su propio fondo dejan ver las luces del body */
+.min-h-screen.bg-paper {
+  background-color: transparent;
+}

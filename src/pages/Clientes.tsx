@@ -200,7 +200,7 @@ export default function Clientes() {
     ) : null
 
   return (
-    <Layout wide>
+    <Layout>
       <ToastEl />
       <BackButton />
       <header className="mb-3 mt-2">

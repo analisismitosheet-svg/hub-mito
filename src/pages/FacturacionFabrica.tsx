@@ -747,7 +747,7 @@ export default function FacturacionFabrica() {
   ) : null
 
   return (
-    <Layout wide>
+    <Layout>
       <ToastEl />
       {dragging && dragRef.current.moved && (
         <div className="pointer-events-none fixed left-1/2 top-6 z-[70] -translate-x-1/2 rounded-3xl border border-emerald-400/50 bg-emerald-500/90 px-12 py-7 text-center shadow-2xl backdrop-blur-sm">

@@ -34,12 +34,13 @@ export default {
         sub: 'var(--sub)', // texto secundario
       },
       fontFamily: {
-        sans: ['Open Sans', 'system-ui', '-apple-system', 'sans-serif'],
-        display: ['Poppins', 'system-ui', '-apple-system', 'sans-serif'],
+        sans: ['Plus Jakarta Sans', 'system-ui', '-apple-system', 'sans-serif'],
+        display: ['Plus Jakarta Sans', 'system-ui', '-apple-system', 'sans-serif'],
       },
       boxShadow: {
-        soft: '0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.5)',
-        'soft-lg': '0 2px 6px rgba(0,0,0,0.5), 0 18px 42px rgba(0,0,0,0.6)',
+        // sombras por tema (index.css): en claro son mucho más suaves
+        soft: 'var(--shadow-soft)',
+        'soft-lg': 'var(--shadow-soft-lg)',
         glow: '0 0 0 1px rgba(225,29,46,0.35), 0 10px 34px rgba(225,29,46,0.22)',
       },
       transitionDuration: {

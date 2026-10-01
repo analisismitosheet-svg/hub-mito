@@ -100,7 +100,7 @@ export default function Replicas() {
     'btn-press inline-flex h-8 items-center gap-1 rounded-lg border border-line bg-surface2 px-2.5 text-xs font-medium text-ink transition hover:bg-line disabled:opacity-50'
 
   return (
-    <Layout wide>
+    <Layout>
       <BackButton />
       <header className="mb-4 mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
         <h1 className="flex items-center gap-2 font-display text-2xl font-semibold text-ink">

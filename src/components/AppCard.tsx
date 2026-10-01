@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ExternalLink, ArrowRight } from 'lucide-react'
 import type { AppDef } from '@/config/areas'
@@ -30,34 +31,22 @@ export default function AppCard({
     <button
       onClick={onClick}
       disabled={disabled}
-      style={{ animationDelay: `${index * 40}ms` }}
-      className={`animate-enter group relative flex flex-col items-start gap-3 overflow-hidden rounded-2xl border p-5 text-left shadow-soft outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 ${
+      style={{ animationDelay: `${index * 40}ms`, '--c': app.color } as CSSProperties}
+      className={`animate-enter group relative flex flex-col items-start gap-4 overflow-hidden rounded-3xl border p-5 text-left shadow-soft outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 sm:p-6 ${
         disabled
-          ? 'cursor-not-allowed border-line bg-surface/60 opacity-70'
+          ? 'cursor-not-allowed border-line bg-surface opacity-60'
           : 'hub-card cursor-pointer border-line bg-surface'
       }`}
     >
-      {!disabled && (
-        <span
-          aria-hidden
-          className="absolute inset-x-0 top-0 h-[3px] origin-left scale-x-0 transition-transform duration-300 ease-out-strong group-hover:scale-x-100"
-          style={{ backgroundColor: app.color }}
-        />
-      )}
       <div
-        className={`rounded-xl border p-3 transition-transform duration-300 ease-out-strong ${
-          disabled ? '' : 'group-hover:scale-110'
+        className={`icon-tile h-12 w-12 transition-transform duration-300 ease-out-strong sm:h-14 sm:w-14 ${
+          disabled ? 'grayscale' : 'group-hover:scale-110'
         }`}
-        style={{
-          color: app.color,
-          backgroundColor: `${app.color}${disabled ? '18' : '24'}`,
-          borderColor: `${app.color}40`,
-        }}
       >
         <Icon size={24} aria-hidden />
       </div>
       <div>
-        <h3 className="flex items-center gap-2 font-display font-semibold text-ink">
+        <h3 className="flex items-center gap-2 font-display text-lg font-semibold tracking-tight text-ink">
           {app.title}
           {app.kind === 'external' && !disabled && (
             <ExternalLink size={14} className="text-sub" aria-hidden />
@@ -70,10 +59,7 @@ export default function AppCard({
           Próximamente
         </span>
       ) : (
-        <span
-          className="mt-auto flex items-center gap-1.5 text-sm font-medium"
-          style={{ color: app.color }}
-        >
+        <span className="card-link mt-auto flex items-center gap-1.5 text-sm font-semibold transition-[gap] duration-300 group-hover:gap-2.5">
           Abrir
           <ArrowRight
             size={14}

@@ -7,20 +7,32 @@ import CampanaNotificaciones from '@/components/CampanaNotificaciones'
 import ChatAgentes from '@/components/ChatAgentes'
 
 /**
- * Shell de la app. Por defecto usa un contenedor ancho (aprovecha toda la pantalla).
- * Pasar `wide={false}` para volver a un ancho centrado y angosto en una página puntual.
+ * Shell de la app. Todas las pantallas ocupan el 100% del ancho del dispositivo
+ * (solo un margen chico a los costados).
  *
  * En celular no hay barra: el contenido empieza arriba de todo y el ícono rojo "M"
  * flota abajo a la izquierda; abre un menú con recargar, tema, avisos y salir.
  */
-export default function Layout({ children, wide = true }: { children: ReactNode; wide?: boolean }) {
+export default function Layout({ children }: { children: ReactNode }) {
   const { user, signOut, configured, soloPiso } = useAuth()
   const { tema, toggle } = useTheme()
-  const maxW = wide ? 'max-w-[1600px]' : 'max-w-5xl'
   const logueado = configured && Boolean(user)
 
   const [menuAbierto, setMenuAbierto] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+
+  // Luz que sigue al mouse dentro de las tarjetas .hub-card (un solo listener para todo el hub)
+  useEffect(() => {
+    const mover = (e: PointerEvent) => {
+      const card = (e.target as Element | null)?.closest?.('.hub-card') as HTMLElement | null
+      if (!card) return
+      const r = card.getBoundingClientRect()
+      card.style.setProperty('--mx', `${e.clientX - r.left}px`)
+      card.style.setProperty('--my', `${e.clientY - r.top}px`)
+    }
+    document.addEventListener('pointermove', mover, { passive: true })
+    return () => document.removeEventListener('pointermove', mover)
+  }, [])
 
   useEffect(() => {
     if (!menuAbierto) return
@@ -41,25 +53,25 @@ export default function Layout({ children, wide = true }: { children: ReactNode;
   }, [menuAbierto])
 
   const logo = (
-    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 font-display text-sm font-bold text-white shadow-glow transition-transform group-hover:scale-105">
+    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 font-display text-sm font-bold text-white shadow-[0_4px_12px_rgba(239,68,68,0.4)] transition-transform group-hover:scale-105">
       M
     </div>
   )
   // En celular es un botón flotante: más grande para el dedo
   const logoFlotante = (
-    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-600 font-display text-base font-bold text-white shadow-glow transition-transform active:scale-95">
+    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 font-display text-base font-bold text-white shadow-[0_6px_20px_rgba(239,68,68,0.45)] transition-transform active:scale-95">
       M
     </div>
   )
 
   const itemMenu =
-    'flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-ink outline-none transition hover:bg-surface2 focus-visible:bg-surface2'
+    'flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-ink outline-none transition hover:bg-surface2 focus-visible:bg-surface2'
 
   return (
-    <div className="min-h-screen bg-paper text-ink">
-      {/* ---------- Computadora: barra completa ---------- */}
-      <header className="sticky top-0 z-10 hidden border-b border-line bg-paper/85 backdrop-blur sm:block">
-        <div className={`mx-auto flex ${maxW} items-center justify-between px-4 py-3`}>
+    <div className="min-h-screen text-ink">
+      {/* ---------- Computadora: barra completa (píldora de vidrio flotante) ---------- */}
+      <header className="sticky top-3 z-10 hidden px-4 sm:block lg:px-6">
+        <div className="flex items-center justify-between rounded-full border border-line bg-surface py-2 pl-3 pr-2 shadow-soft backdrop-blur-xl">
           <Link
             to="/"
             title="Ir al menu"
@@ -73,7 +85,7 @@ export default function Layout({ children, wide = true }: { children: ReactNode;
             <div className="flex items-center gap-3">
               <button
                 onClick={() => window.location.reload()}
-                className="btn-press flex cursor-pointer items-center justify-center rounded-xl border border-line bg-surface p-2 text-ink outline-none hover:border-line2 hover:bg-surface2 focus-visible:ring-2 focus-visible:ring-brand-500/50"
+                className="btn-press flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-line bg-surface2 text-ink outline-none hover:border-line2 hover:bg-surface2 focus-visible:ring-2 focus-visible:ring-brand-500/50"
                 title="Recargar pagina y datos"
                 aria-label="Recargar pagina y datos"
               >
@@ -81,17 +93,24 @@ export default function Layout({ children, wide = true }: { children: ReactNode;
               </button>
               <button
                 onClick={toggle}
-                className="btn-press flex cursor-pointer items-center justify-center rounded-xl border border-line bg-surface p-2 text-ink outline-none hover:border-line2 hover:bg-surface2 focus-visible:ring-2 focus-visible:ring-brand-500/50"
+                className="btn-press flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-line bg-surface2 text-ink outline-none hover:border-line2 hover:bg-surface2 focus-visible:ring-2 focus-visible:ring-brand-500/50"
                 title={tema === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
                 aria-label="Cambiar tema"
               >
                 {tema === 'dark' ? <Sun size={16} aria-hidden /> : <Moon size={16} aria-hidden />}
               </button>
               <CampanaNotificaciones />
-              <span className="text-sm text-sub">{user.email}</span>
+              <span className="hidden text-sm text-sub lg:inline">{user.email}</span>
+              <span
+                aria-hidden
+                title={user.email ?? ''}
+                className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-white/10 bg-gradient-to-br from-blue-500 to-violet-500 text-sm font-semibold uppercase text-white shadow-[0_0_15px_rgba(59,130,246,0.45)]"
+              >
+                {(user.email ?? '?').charAt(0)}
+              </span>
               <button
                 onClick={() => signOut()}
-                className="btn-press flex cursor-pointer items-center gap-1.5 rounded-xl border border-line bg-surface px-3 py-1.5 text-sm font-medium text-ink outline-none hover:border-line2 hover:bg-surface2 focus-visible:ring-2 focus-visible:ring-brand-500/50"
+                className="btn-press flex cursor-pointer items-center gap-1.5 rounded-full border border-line bg-surface2 px-4 py-2 text-sm font-medium text-ink outline-none hover:border-line2 hover:bg-surface2 focus-visible:ring-2 focus-visible:ring-brand-500/50"
               >
                 <LogOut size={15} aria-hidden /> Salir
               </button>
@@ -109,12 +128,12 @@ export default function Layout({ children, wide = true }: { children: ReactNode;
             aria-haspopup="menu"
             aria-expanded={menuAbierto}
             aria-label="Abrir menú"
-            className="group block rounded-xl shadow-soft-lg outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
+            className="group block rounded-full outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
           >
             {logoFlotante}
           </button>
         ) : (
-          <Link to="/" aria-label="Ir al inicio" className="group block rounded-xl shadow-soft-lg">
+          <Link to="/" aria-label="Ir al inicio" className="group block rounded-full">
             {logoFlotante}
           </Link>
         )}
@@ -122,7 +141,7 @@ export default function Layout({ children, wide = true }: { children: ReactNode;
         {menuAbierto && logueado && user && (
           <div
             role="menu"
-            className="absolute bottom-full left-0 z-50 mb-2 w-64 rounded-2xl border border-line bg-surface p-1.5 shadow-soft-lg"
+            className="absolute bottom-full left-0 z-50 mb-3 w-64 rounded-[1.25rem] border border-line bg-surface p-1.5 shadow-soft-lg"
           >
             <div className="flex items-center justify-between gap-2 border-b border-line px-3 pb-2 pt-1.5">
               <div className="min-w-0">
@@ -166,7 +185,7 @@ export default function Layout({ children, wide = true }: { children: ReactNode;
       </div>
 
       {/* En celular: sin espacio arriba (no hay barra) y margen abajo para el ícono flotante */}
-      <main className={`mx-auto ${maxW} px-3 pb-24 pt-2 sm:px-4 sm:py-8`}>{children}</main>
+      <main className="w-full px-4 pb-24 pt-4 sm:pb-10 sm:pt-10 lg:px-6">{children}</main>
       {logueado && <ChatAgentes />}
     </div>
   )

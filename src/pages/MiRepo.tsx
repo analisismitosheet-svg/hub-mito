@@ -543,7 +543,7 @@ export default function MiRepo() {
   /* ------------------------------------------------------------------ */
   if (cargando) {
     return (
-      <Layout wide={false}>
+      <Layout>
         <div className="flex items-center justify-center gap-2 py-24 text-sub">
           <Loader2 size={18} className="animate-spin" aria-hidden /> Cargando tu repo…
         </div>
@@ -552,7 +552,7 @@ export default function MiRepo() {
   }
 
   return (
-    <Layout wide={false}>
+    <Layout>
       {/* Las cuentas de piso no tienen menú: Mi repo es su única pantalla */}
       {!soloPiso && <BackButton label="Menú" />}
 

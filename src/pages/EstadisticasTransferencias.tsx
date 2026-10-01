@@ -288,7 +288,7 @@ export default function EstadisticasTransferencias() {
   const estadoConNombre = (datos?.porEstado ?? []).map((e) => ({ ...e, name: etiquetaEstado(e.name), crudo: e.name }))
 
   return (
-    <Layout wide>
+    <Layout>
       <BackButton />
       <header className="mb-3 mt-2">
         <div className="flex flex-wrap items-center gap-2">

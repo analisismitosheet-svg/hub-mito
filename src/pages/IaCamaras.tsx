@@ -88,7 +88,7 @@ export default function IaCamaras() {
   )
 
   return (
-    <Layout wide>
+    <Layout>
       <BackButton />
       <header className="mb-4 mt-2 flex flex-wrap items-center gap-2">
         <h1 className="flex items-center gap-2 font-display text-2xl font-semibold text-ink">

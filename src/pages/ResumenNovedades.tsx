@@ -407,7 +407,7 @@ export default function ResumenNovedades() {
   ]
 
   return (
-    <Layout wide>
+    <Layout>
       <BackButton />
       <header className="mb-3 mt-2">
         <div className="flex flex-wrap items-center justify-between gap-2">

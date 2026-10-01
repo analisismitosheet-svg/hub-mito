@@ -8,7 +8,7 @@ import { ArrowLeft } from 'lucide-react'
  */
 export default function BackButton({
   label = 'Volver',
-  className = 'mb-4 inline-flex items-center gap-1 text-sm font-medium text-sub transition duration-250 hover:text-ink',
+  className = 'mb-6 inline-flex items-center gap-2 rounded-full border border-line bg-surface px-4 py-2 text-sm font-medium text-ink transition duration-250 hover:-translate-x-1 hover:bg-surface2',
 }: {
   label?: string
   className?: string

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { FolderOpen, ArrowRight } from 'lucide-react'
 import Layout from '@/components/Layout'
@@ -26,6 +26,16 @@ export default function Area() {
     .sort((a, b) => a.title.localeCompare(b.title, 'es', { sensitivity: 'base' }))
   const verArchivos = can('documentos.view')
 
+  // La luz de fondo de arriba toma el color del área mientras estás adentro
+  useEffect(() => {
+    if (!area) return
+    const root = document.documentElement
+    root.style.setProperty('--glow-1', `${area.color}33`)
+    return () => {
+      root.style.removeProperty('--glow-1')
+    }
+  }, [area])
+
   if (!area) {
     return (
       <Layout>
@@ -42,18 +52,18 @@ export default function Area() {
     <Layout>
       <BackButton />
 
-      <div className="mb-6 flex items-center gap-3">
-        <div
-          className="rounded-xl border p-3"
-          style={{
-            color: area.color,
-            backgroundColor: `${area.color}24`,
-            borderColor: `${area.color}40`,
-          }}
-        >
-          <Icon size={26} aria-hidden />
+      <div className="animate-enter mb-8 flex items-center gap-4 sm:gap-5" style={{ '--c': area.color } as CSSProperties}>
+        <div className="icon-tile h-16 w-16 rounded-[1.25rem] sm:h-20 sm:w-20 sm:rounded-3xl">
+          <Icon className="h-7 w-7 sm:h-9 sm:w-9" aria-hidden />
         </div>
-        <h1 className="font-display text-2xl font-bold text-ink">{area.name}</h1>
+        <div>
+          <h1 className="font-display text-3xl font-bold text-ink sm:text-4xl">{area.name}</h1>
+          {!vacio && (
+            <p className="mt-1 text-sub">
+              {apps.length} app{apps.length === 1 ? '' : 's'}
+            </p>
+          )}
+        </div>
       </div>
 
       {vacio ? (
@@ -61,7 +71,7 @@ export default function Area() {
           Todavía no hay aplicaciones en esta área.
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
           {intercalarArchivos(apps, verArchivos).map((item, i) => (
             item.tipo === 'app' ? (
               <AppCard key={item.app!.id} app={item.app!} index={i} areaId={areaId} />
@@ -69,24 +79,17 @@ export default function Area() {
               <button
                 key="archivos"
                 onClick={() => navigate(`/archivos/${areaId}`)}
-                className="hub-card animate-enter group relative flex flex-col items-start gap-3 overflow-hidden rounded-2xl border border-line bg-surface p-5 text-left shadow-soft outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
+                style={{ animationDelay: `${i * 40}ms`, '--c': area.color } as CSSProperties}
+                className="hub-card animate-enter group relative flex flex-col items-start gap-4 overflow-hidden border border-line bg-surface p-5 text-left shadow-soft outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 sm:p-6"
               >
-                <span
-                  aria-hidden
-                  className="absolute inset-x-0 top-0 h-[3px] origin-left scale-x-0 transition-transform duration-300 ease-out-strong group-hover:scale-x-100"
-                  style={{ backgroundColor: area.color }}
-                />
-                <div
-                  className="rounded-xl border p-3 transition-transform duration-300 ease-out-strong group-hover:scale-110"
-                  style={{ color: area.color, backgroundColor: `${area.color}24`, borderColor: `${area.color}40` }}
-                >
+                <div className="icon-tile h-12 w-12 transition-transform duration-300 ease-out-strong group-hover:scale-110 sm:h-14 sm:w-14">
                   <FolderOpen size={24} aria-hidden />
                 </div>
                 <div>
-                  <h3 className="font-display font-semibold text-ink">Archivos</h3>
+                  <h3 className="font-display text-lg font-semibold tracking-tight text-ink">Archivos</h3>
                   <p className="mt-1 text-sm text-sub">Fotos, PDF, Excel y documentos del área.</p>
                 </div>
-                <span className="mt-auto flex items-center gap-1.5 text-sm font-medium" style={{ color: area.color }}>
+                <span className="card-link mt-auto flex items-center gap-1.5 text-sm font-semibold transition-[gap] duration-300 group-hover:gap-2.5">
                   Abrir
                   <ArrowRight size={14} aria-hidden className="transition-transform duration-300 ease-out-strong group-hover:translate-x-1" />
                 </span>
