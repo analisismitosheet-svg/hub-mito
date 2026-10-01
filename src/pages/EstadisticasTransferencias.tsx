@@ -106,6 +106,15 @@ function resolverRango(preset: Preset, desde: string, hasta: string): { desde: s
 
 type Gran = 'dia' | 'semana' | 'mes'
 
+/** Filtro "Tipo" por nombre del lote: los que contienen "venta diaria" son la transfer diaria */
+type Tipo = '' | 'diaria' | 'otras'
+const TIPOS: { id: Tipo; label: string }[] = [
+  { id: '', label: 'Todas' },
+  { id: 'diaria', label: 'Transfer diaria' },
+  { id: 'otras', label: 'Otras' },
+]
+const esVentaDiaria = (nombre: string | null | undefined) => /venta diaria/i.test(nombre ?? '')
+
 export default function EstadisticasTransferencias() {
   const [params, setParams] = useSearchParams()
   const [datos, setDatos] = useState<Respuesta | null>(null)
@@ -126,6 +135,7 @@ export default function EstadisticasTransferencias() {
   const fDestino = params.get('destino') ?? ''
   const fMotivo = params.get('motivo') ?? ''
   const fEstado = params.get('estado') ?? ''
+  const fTipo = (params.get('tipo') as Tipo) || ''
   const rango = useMemo(
     () => resolverRango(preset, params.get('desde') ?? '', params.get('hasta') ?? ''),
     [preset, params],
@@ -151,7 +161,7 @@ export default function EstadisticasTransferencias() {
   }, [setParams])
 
   const limpiar = () => setParams(new URLSearchParams(), { replace: true })
-  const hayFiltros = !!(fLocal || fOrigen || fDestino || fMotivo || fEstado)
+  const hayFiltros = !!(fLocal || fOrigen || fDestino || fMotivo || fEstado || fTipo)
 
   // ── Carga: una sola llamada, todo agregado en la base ────────────────────
   const paramsRpc = useMemo(
@@ -164,8 +174,9 @@ export default function EstadisticasTransferencias() {
       p_estado: fEstado || null,
       p_local: fLocal || null,
       p_gran: gran,
+      p_tipo: fTipo || null,
     }),
-    [rango.desde, rango.hasta, fOrigen, fDestino, fMotivo, fEstado, fLocal, gran],
+    [rango.desde, rango.hasta, fOrigen, fDestino, fMotivo, fEstado, fLocal, gran, fTipo],
   )
 
   const pedir = useCallback(async (): Promise<{ datos: Respuesta | null; error: string | null }> => {
@@ -236,7 +247,8 @@ export default function EstadisticasTransferencias() {
       if (rango.hasta) qLotes = qLotes.lte('fecha', rango.hasta)
       const { data: lts, error: e1 } = await qLotes
       if (e1) { setError(e1.message); return }
-      const lotes = (lts as { id: string; motivo: string | null; fecha: string }[]) ?? []
+      const lotes = ((lts as { id: string; nombre: string | null; motivo: string | null; fecha: string }[]) ?? [])
+        .filter((l) => !fTipo || (fTipo === 'diaria') === esVentaDiaria(l.nombre))
       const porLote = new Map(lotes.map((l) => [l.id, l]))
 
       const filas: Record<string, unknown>[] = []
@@ -303,6 +315,7 @@ export default function EstadisticasTransferencias() {
     fDestino && { clave: 'destino', texto: `Destino: ${fDestino}` },
     fMotivo && { clave: 'motivo', texto: `Motivo: ${fMotivo}` },
     fEstado && { clave: 'estado', texto: `Estado: ${etiquetaEstado(fEstado)}` },
+    fTipo && { clave: 'tipo', texto: `Tipo: ${TIPOS.find((t) => t.id === fTipo)?.label ?? fTipo}` },
   ].filter(Boolean) as { clave: string; texto: string }[]
 
   const hace = actualizado ? Math.max(0, Math.round((ahora - actualizado.getTime()) / 60000)) : null
@@ -376,6 +389,12 @@ export default function EstadisticasTransferencias() {
             <select value={fLocal} onChange={(e) => setFiltro('local', e.target.value)} className="h-8 rounded-lg border border-line bg-surface2 px-2 text-xs">
               <option value="">Todos</option>
               {locales.map((l) => <option key={l} value={l}>{l}</option>)}
+            </select>
+          </label>
+          <label className="block">
+            <span className="mb-0.5 block text-[11px] font-medium text-sub">Tipo</span>
+            <select value={fTipo} onChange={(e) => setFiltro('tipo', e.target.value)} className="h-8 rounded-lg border border-line bg-surface2 px-2 text-xs">
+              {TIPOS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
             </select>
           </label>
           <label className="block">

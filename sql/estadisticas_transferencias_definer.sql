@@ -19,7 +19,15 @@
 --
 -- Sin permisos devuelve el tablero vacío (igual que antes con RLS).
 -- El cuerpo de las agregaciones no cambia.
+--
+-- p_tipo (filtro "Tipo" de la pantalla), por el NOMBRE del lote:
+--   'diaria' -> lotes cuyo nombre contiene "venta diaria" (sin importar mayúsculas)
+--   'otras'  -> todos los demás
+--   NULL     -> todos
 -- ============================================================================
+
+-- La firma cambia (se agrega p_tipo): se borra la anterior para no dejar dos.
+DROP FUNCTION IF EXISTS public.estadisticas_transferencias(date, date, text, text, text, text, text, text);
 
 CREATE OR REPLACE FUNCTION public.estadisticas_transferencias(
   p_desde date DEFAULT NULL::date,
@@ -29,7 +37,8 @@ CREATE OR REPLACE FUNCTION public.estadisticas_transferencias(
   p_motivo text DEFAULT NULL::text,
   p_estado text DEFAULT NULL::text,
   p_local text DEFAULT NULL::text,
-  p_gran text DEFAULT 'dia'::text
+  p_gran text DEFAULT 'dia'::text,
+  p_tipo text DEFAULT NULL::text
 )
  RETURNS jsonb
  LANGUAGE sql
@@ -95,6 +104,9 @@ datos as (
     and (p_motivo is null or coalesce(nullif(btrim(l.motivo), ''), 'SIN MOTIVO') = p_motivo)
     and (p_estado is null or i.estado = p_estado)
     and (p_local is null or i.origen = p_local or i.destino = p_local)
+    and (p_tipo is null
+         or (p_tipo = 'diaria' and coalesce(l.nombre, '') ilike '%venta diaria%')
+         or (p_tipo = 'otras' and coalesce(l.nombre, '') not ilike '%venta diaria%'))
 ),
 act as (select * from datos where ventana = 'act'),
 prev as (select * from datos where ventana = 'prev'),
