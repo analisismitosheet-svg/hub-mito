@@ -121,10 +121,18 @@ function BarraResumen({ resumen }: { resumen: { items: number; total: number; he
   )
 }
 
-function Celda({ label, children }: { label: string; children: ReactNode }) {
+/** Cuadro de estadística: cada uno con su color (franja, fondo tenue y título) */
+function Celda({ label, color = '#94a3b8', children }: { label: string; color?: string; children: ReactNode }) {
   return (
-    <div className="rounded-lg border border-line bg-surface2 px-2.5 py-1.5">
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-sub">{label}</div>
+    <div
+      className="rounded-xl border px-3.5 py-3"
+      style={{
+        borderColor: `${color}40`,
+        backgroundColor: `${color}14`,
+        boxShadow: `inset 3px 0 0 ${color}`,
+      }}
+    >
+      <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color }}>{label}</div>
       {children}
     </div>
   )
@@ -166,14 +174,12 @@ function horasHabilesEntre(desdeIso: string, hastaIso: string): number {
 function Estadisticas({
   lote,
   items,
-  localesCount,
   personasCount,
   puedeEditar,
   onSaved,
 }: {
   lote: Lote
   items: Item[]
-  localesCount: number
   personasCount: number
   puedeEditar: boolean
   onSaved: () => Promise<void>
@@ -194,6 +200,16 @@ function Estadisticas({
   const hsxper = horas * personas
   const prendasHs = hsxper ? total / hsxper : 0
 
+  // Unidades a reponer por local (de mayor a menor)
+  const porLocal = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const i of items) {
+      const local = (i.local ?? '').trim() || 'SIN LOCAL'
+      m.set(local, (m.get(local) ?? 0) + (i.cantidad || 1))
+    }
+    return Array.from(m.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+  }, [items])
+
   async function guardar() {
     if (!supabase) return
     setBusy(true)
@@ -207,34 +223,68 @@ function Estadisticas({
     await onSaved()
   }
 
-  const dato = 'py-1 text-sm font-medium text-ink'
+  const dato = 'pt-1 text-2xl font-bold tabular-nums text-ink'
   return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-        <Celda label="Venta"><div className={dato}>{fmtFechaCorta(lote.venta_fecha)}</div></Celda>
-        <Celda label="Cant venta"><div className={dato}>{lote.cant_venta ?? '—'}</div></Celda>
-        <Celda label="Cant repo"><div className={dato}>{total}</div></Celda>
-        <Celda label="Art no mandados"><div className="py-1 text-sm font-medium text-red-400">{faltantes}</div></Celda>
-        <Celda label="Locales"><div className={dato}>{localesCount}</div></Celda>
-        <Celda label="Horas"><div className={dato}>{horas.toFixed(2)}{!allDone && total > 0 ? ' · en curso' : ''}</div></Celda>
-        <Celda label="Personas"><div className={dato}>{personas || '—'}</div></Celda>
-        <Celda label="Hs x per"><div className={dato}>{hsxper ? hsxper.toFixed(2) : '—'}</div></Celda>
-        <Celda label="Prendas/hs"><div className={dato}>{prendasHs ? prendasHs.toFixed(2) : '—'}</div></Celda>
-        <Celda label="Observación">
-          <input
-            disabled={!puedeEditar}
-            value={obs}
-            onChange={(e) => setObs(e.target.value)}
-            placeholder="—"
-            className="w-full rounded-lg border border-line bg-surface px-2 py-1 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 disabled:opacity-60"
-          />
-        </Celda>
+    // Mitad y mitad: estadísticas a la izquierda, unidades por local a la derecha
+    // (en celular, una debajo de la otra)
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start">
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3">
+          <Celda label="Fecha de venta" color="#818cf8"><div className={dato}>{fmtFechaCorta(lote.venta_fecha)}</div></Celda>
+          <Celda label="Cant venta" color="#22c55e"><div className={dato}>{lote.cant_venta ?? '—'}</div></Celda>
+          <Celda label="Cant repo" color="#f59e0b"><div className={dato}>{total}</div></Celda>
+          <Celda label="Art no mandados" color="#f87171"><div className="pt-1 text-2xl font-bold tabular-nums text-red-400">{faltantes}</div></Celda>
+          <Celda label="Horas" color="#a78bfa">
+            <div className={dato}>
+              {horas.toFixed(2)}
+              {!allDone && total > 0 && <span className="ml-1.5 align-middle text-xs font-medium text-sub">en curso</span>}
+            </div>
+          </Celda>
+          <Celda label="Personas" color="#38bdf8"><div className={dato}>{personas || '—'}</div></Celda>
+          <Celda label="Prendas/hs" color="#f472b6"><div className={dato}>{prendasHs ? prendasHs.toFixed(2) : '—'}</div></Celda>
+          <Celda label="Observación" color="#94a3b8">
+            <input
+              disabled={!puedeEditar}
+              value={obs}
+              onChange={(e) => setObs(e.target.value)}
+              placeholder="—"
+              className="mt-1.5 w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 disabled:opacity-60"
+            />
+          </Celda>
+        </div>
+        {err && <p className="text-sm text-brand-400">{err}</p>}
+        {puedeEditar && (
+          <button onClick={guardar} disabled={busy} className="btn-press inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">
+            {busy ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Check size={15} aria-hidden />} Guardar observación
+          </button>
+        )}
       </div>
-      {err && <p className="text-sm text-brand-400">{err}</p>}
-      {puedeEditar && (
-        <button onClick={guardar} disabled={busy} className="btn-press inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">
-          {busy ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Check size={15} aria-hidden />} Guardar observación
-        </button>
+
+      {porLocal.length > 0 && (
+        <div className="overflow-hidden rounded-xl border border-line">
+          <table className="w-full text-sm">
+            <thead className="bg-surface2 text-left text-[11px] uppercase tracking-wide text-sub">
+              <tr>
+                <th scope="col" className="px-3 py-2 font-semibold">Local</th>
+                <th scope="col" className="px-3 py-2 text-right font-semibold">Unidades a reponer</th>
+              </tr>
+            </thead>
+            <tbody>
+              {porLocal.map(([local, unidades]) => (
+                <tr key={local} className="border-t border-line/60">
+                  <td className="px-3 py-1.5 font-medium text-ink">{local}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-ink">{unidades.toLocaleString('es-AR')}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t border-line2 bg-surface2/60">
+                <td className="px-3 py-2 font-semibold text-ink">Total</td>
+                <td className="px-3 py-2 text-right font-semibold tabular-nums text-ink">{total.toLocaleString('es-AR')}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
       )}
     </div>
   )
@@ -732,7 +782,7 @@ export default function Mayorista() {
                       </button>
                       {subAbierto === `${lote.id}|stats` && (
                         <div className="px-4 pb-3">
-                          <Estadisticas lote={lote} items={its} localesCount={locales.length} personasCount={personasLote} puedeEditar={puedeEditarStats} onSaved={cargar} />
+                          <Estadisticas lote={lote} items={its} personasCount={personasLote} puedeEditar={puedeEditarStats} onSaved={cargar} />
                         </div>
                       )}
                     </div>
