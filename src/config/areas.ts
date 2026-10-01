@@ -271,6 +271,17 @@ export const APPS: AppDef[] = [
     permiso: 'mayorista.notas_credito.view',
   },
   {
+    id: 'mayorista-pedidos-venta',
+    areaId: 'mayorista',
+    title: 'Pedidos de venta',
+    description: 'Pedidos de clientes mayoristas de Dragonfish: artículos, cantidades y totales.',
+    icon: ClipboardList,
+    kind: 'internal',
+    target: '/mayorista/pedidos-venta',
+    color: '#65a30d',
+    permiso: 'pedidos_venta.view',
+  },
+  {
     id: 'mayorista-mapeo',
     areaId: 'mayorista',
     title: 'Mapeo depósito',

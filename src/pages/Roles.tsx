@@ -350,6 +350,7 @@ function RolPermisosModal({
       'opiniones.borrar': 'locales',
       'contador.view': 'locales',
       'pedidos_compra.view': 'compras',
+      'pedidos_venta.view': 'mayorista',
       'contador.gestionar': 'locales',
       'ia_camaras.view': 'sistemas',
       'conversion.view': 'locales',
