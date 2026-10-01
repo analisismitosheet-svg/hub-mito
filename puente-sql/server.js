@@ -488,7 +488,8 @@ const server = http.createServer(async (req, res) => {
            FROM [${base}].INFORMATION_SCHEMA.TABLES
           ORDER BY TABLE_TYPE DESC, TABLE_SCHEMA, TABLE_NAME`,
       )
-      return enviar(res, 200, r.recordset ?? [])
+      // Solo lo que se puede pedir después: nombres con espacios u otros caracteres no pasan el filtro de PARTE
+      return enviar(res, 200, (r.recordset ?? []).filter((o) => PARTE.test(o.esquema) && PARTE.test(o.nombre)))
     }
 
     // Estado de las réplicas (Sistemas > Réplicas): Replicador SQL local
