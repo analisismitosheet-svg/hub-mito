@@ -336,7 +336,7 @@ export default function ConsultaArticulos() {
                   {visibles.map((f, i) => (
                     <tr
                       key={`${f.idArticulo}|${f.colorCodigo}|${f.color}|${f.talle}|${i}`}
-                      className={bandaOscura[i] ? 'banda-oscura' : ''}
+                      className={`${bandaOscura[i] ? 'banda-oscura' : ''} ${i > 0 && bandaOscura[i] !== bandaOscura[i - 1] ? 'banda-inicio' : ''}`}
                     >
                       <td className="border-b border-line/50 px-3 py-2 align-top">
                         <span className="block font-mono text-[13px] font-semibold text-ink">{f.idArticulo || '—'}</span>

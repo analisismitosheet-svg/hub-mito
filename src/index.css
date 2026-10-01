@@ -448,10 +448,15 @@ body {
   background-color: transparent;
 }
 
-/* Fila agrupada más oscura (ej. F12: cada color de un código en su propio bloque) */
+/* Bloques de filas alternados (ej. F12: cada color de un código en su propio bloque).
+   En oscuro el fondo ya es casi negro, así que el bloque se aclara; en claro se oscurece. */
 .banda-oscura {
-  background-color: rgba(0, 0, 0, 0.32);
+  background-color: rgba(255, 255, 255, 0.07);
 }
 :root.light .banda-oscura {
   background-color: rgba(15, 23, 42, 0.07);
+}
+/* Primera fila de un bloque nuevo: línea de corte marcada */
+.banda-inicio > td {
+  border-top: 2px solid var(--line2);
 }
