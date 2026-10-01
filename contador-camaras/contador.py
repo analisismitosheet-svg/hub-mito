@@ -519,6 +519,14 @@ class Camara(threading.Thread):
             log.warning("[%s] sin calibrar (modo %s): no cuenta hasta que se dibujen las zonas en el hub "
                         "(IA Cámaras -> Calibrar) o con calibrar.py", self.nombre, modo)
 
+    def preparar(self, cuadro):
+        """Imagen tal como la mira la IA: con su forma real y con el zoom.
+        Muchos DVR graban "medio ancho" (352x576, 960x1080): la gente sale aplastada a la mitad y
+        YOLO no la reconoce. Se duplica el ancho ANTES de recortar (las zonas van en 0..1, no cambian)."""
+        if cuadro is not None and cuadro.shape[1] < cuadro.shape[0]:
+            cuadro = cv2.resize(cuadro, (cuadro.shape[1] * 2, cuadro.shape[0]), interpolation=cv2.INTER_LINEAR)
+        return self.recortar(cuadro)
+
     def recortar(self, cuadro):
         """Zoom digital [x1, y1, x2, y2] (0..1 sobre la imagen completa del DVR): se detecta y se muestra
         solo esa parte, así la gente se ve más grande. Las zonas se dibujan sobre la parte recortada."""
@@ -644,7 +652,7 @@ class Camara(threading.Thread):
                 time.sleep(0.05)
                 continue
             ultimo_nro = nro
-            cuadro = self.recortar(cuadro)
+            cuadro = self.preparar(cuadro)
             if self.modo is None and self.mirando == 0:
                 # Sin calibrar y nadie mirando: no gastar GPU (la foto para calibrar sale del lector igual)
                 time.sleep(0.5)

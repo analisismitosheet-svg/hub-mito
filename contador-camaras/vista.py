@@ -148,12 +148,12 @@ class ServidorVista:
         # completa: además sin el zoom (para marcar el recuadro del zoom)
         if limpia or completa:
             img = camara.lector.ultimo()[1] if camara.lector else None
-            img = img if completa else camara.recortar(img)
+            # con su forma real (DVR "medio ancho") y, si no es la completa, con el zoom: lo mismo que mira la IA
+            img = aspecto_real(img) if completa else camara.preparar(img)
         else:
-            img = camara.vista
+            img = camara.vista  # ya viene con la forma real (contador.preparar)
         if img is None:
             return None
-        img = aspecto_real(img)
         if img.shape[1] > self.ancho:
             img = cv2.resize(img, (self.ancho, int(img.shape[0] * self.ancho / img.shape[1])))
         ok, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, self.calidad])
@@ -277,7 +277,7 @@ class ServidorVista:
                                                "aviso": "No hay nadie en cámara ahora (o la cámara no está calibrada)."})
                     cuadro, cajas = det[0].copy(), list(det[1])
                     servidor.instantaneas[nombre] = (cuadro, cajas)
-                    img = aspecto_real(cuadro)
+                    img = cuadro  # ya con la forma real (contador.preparar)
                     img = img if img.shape[1] <= 1280 else cv2.resize(img, (1280, int(img.shape[0] * 1280 / img.shape[1])))
                     ok, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 80])
                     return self.json(200, {"cajas": cajas, "foto": b64.b64encode(buf.tobytes()).decode() if ok else None,
