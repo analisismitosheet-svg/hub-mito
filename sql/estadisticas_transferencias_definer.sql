@@ -71,8 +71,10 @@ params as (
 ),
 datos as (
   select i.lote_id,
-         i.origen,
-         i.destino,
+         -- nombre unificado del local: los sinónimos (GRALPAZ/GPAZD, WALMART/WALMARTD)
+         -- se muestran juntos con el nombre del grupo (sql/locales_sinonimos.sql)
+         coalesce(so.grupo, i.origen) as origen,
+         coalesce(sd.grupo, i.destino) as destino,
          i.estado,
          coalesce(i.cantidad, 1)::numeric as cant,
          l.fecha,
@@ -85,17 +87,19 @@ datos as (
          end as ventana
   from transfer_items i
   join transfer_lotes l on l.id = i.lote_id
+  left join locales_sinonimos so on so.nombre = upper(i.origen)
+  left join locales_sinonimos sd on sd.nombre = upper(i.destino)
   cross join params p
   cross join vis v
   where v.ve_lotes
     and (v.todo or (v.ver and upper(coalesce(i.origen, '')) = any(v.origenes)))
     and (p.desde is null or l.fecha >= coalesce(p.prev_desde, p.desde))
     and (p.hasta is null or l.fecha <= p.hasta)
-    and (p_origen is null or i.origen = p_origen)
-    and (p_destino is null or i.destino = p_destino)
+    and (p_origen is null or coalesce(so.grupo, i.origen) = p_origen)
+    and (p_destino is null or coalesce(sd.grupo, i.destino) = p_destino)
     and (p_motivo is null or coalesce(nullif(btrim(l.motivo), ''), 'SIN MOTIVO') = p_motivo)
     and (p_estado is null or i.estado = p_estado)
-    and (p_local is null or i.origen = p_local or i.destino = p_local)
+    and (p_local is null or coalesce(so.grupo, i.origen) = p_local or coalesce(sd.grupo, i.destino) = p_local)
     and (p_tipo is null
          or (p_tipo = 'diaria' and coalesce(l.nombre, '') ilike '%diaria%')
          or (p_tipo = 'otras' and coalesce(l.nombre, '') not ilike '%diaria%'))
