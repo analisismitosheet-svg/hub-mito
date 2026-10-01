@@ -82,17 +82,6 @@ export default function Menu() {
 
   return (
     <Layout>
-      {accesos.length > 0 && (
-        <section className="mb-10">
-          <h2 className="animate-enter mb-4 font-display text-xl font-bold text-ink sm:text-2xl">Accesos directos</h2>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-            {accesos.map((app, i) => (
-              <AppCard key={app.id} app={app} index={i} />
-            ))}
-          </div>
-        </section>
-      )}
-
       <div className="animate-enter mb-8">
         <h1 className="font-display text-3xl font-bold text-ink sm:text-4xl">Áreas</h1>
         <p className="mt-1.5 text-sub sm:text-lg">Elegí un área para ver sus aplicaciones.</p>
@@ -105,6 +94,17 @@ export default function Menu() {
         {/* Configuraciones va al final y solo para administradores */}
         {isAdmin && <ConfiguracionesCard />}
       </div>
+
+      {accesos.length > 0 && (
+        <section className="mt-12">
+          <h2 className="animate-enter mb-4 font-display text-xl font-bold text-ink sm:text-2xl">Accesos directos</h2>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+            {accesos.map((app, i) => (
+              <AppCard key={app.id} app={app} index={i} />
+            ))}
+          </div>
+        </section>
+      )}
     </Layout>
   )
 }
