@@ -21,7 +21,7 @@
 -- El cuerpo de las agregaciones no cambia.
 --
 -- p_tipo (filtro "Tipo" de la pantalla), por el NOMBRE del lote:
---   'diaria' -> lotes cuyo nombre contiene "venta diaria" (sin importar mayúsculas)
+--   'diaria' -> lotes cuyo nombre contiene "diaria" (ej. "REPO VENTA DIARIA 30-09", "REPO DIARIA 19/08") (sin importar mayúsculas)
 --   'otras'  -> todos los demás
 --   NULL     -> todos
 -- ============================================================================
@@ -105,8 +105,8 @@ datos as (
     and (p_estado is null or i.estado = p_estado)
     and (p_local is null or i.origen = p_local or i.destino = p_local)
     and (p_tipo is null
-         or (p_tipo = 'diaria' and coalesce(l.nombre, '') ilike '%venta diaria%')
-         or (p_tipo = 'otras' and coalesce(l.nombre, '') not ilike '%venta diaria%'))
+         or (p_tipo = 'diaria' and coalesce(l.nombre, '') ilike '%diaria%')
+         or (p_tipo = 'otras' and coalesce(l.nombre, '') not ilike '%diaria%'))
 ),
 act as (select * from datos where ventana = 'act'),
 prev as (select * from datos where ventana = 'prev'),

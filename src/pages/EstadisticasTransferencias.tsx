@@ -106,14 +106,14 @@ function resolverRango(preset: Preset, desde: string, hasta: string): { desde: s
 
 type Gran = 'dia' | 'semana' | 'mes'
 
-/** Filtro "Tipo" por nombre del lote: los que contienen "venta diaria" son la transfer diaria */
+/** Filtro "Tipo" por nombre del lote: los que contienen "diaria" son la transfer diaria */
 type Tipo = '' | 'diaria' | 'otras'
 const TIPOS: { id: Tipo; label: string }[] = [
   { id: '', label: 'Todas' },
   { id: 'diaria', label: 'Transfer diaria' },
   { id: 'otras', label: 'Otras' },
 ]
-const esVentaDiaria = (nombre: string | null | undefined) => /venta diaria/i.test(nombre ?? '')
+const esVentaDiaria = (nombre: string | null | undefined) => /diaria/i.test(nombre ?? '')
 
 export default function EstadisticasTransferencias() {
   const [params, setParams] = useSearchParams()
