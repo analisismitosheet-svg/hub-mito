@@ -40,6 +40,14 @@ const NOMBRES_ESTADO: Record<string, string> = { pendiente: 'Pendiente', hecho: 
 const etiquetaEstado = (e: string) => NOMBRES_ESTADO[e] ?? e
 const REFRESCO_MS = 45000
 
+/**
+ * Huella barata de un tablero: si estos números no se movieron, el refresco
+ * automático no tiene nada que pintar.
+ */
+function huella(r: Respuesta): string {
+  return [r.kpis?.items, r.kpis?.unidades, r.kpis?.lotes, r.kpis?.cumplido, r.buckets?.total].join('|')
+}
+
 const BUCKETS = [
   { id: 'b1' as const, label: 'Menos de 24 h', color: '#34d399' },
   { id: 'b2' as const, label: '24 a 48 h', color: '#fbbf24' },
@@ -146,12 +154,8 @@ export default function EstadisticasTransferencias() {
   const hayFiltros = !!(fLocal || fOrigen || fDestino || fMotivo || fEstado)
 
   // ── Carga: una sola llamada, todo agregado en la base ────────────────────
-  const cargar = useCallback(async () => {
-    const sb = supabase
-    if (!sb) return
-    setCargando(true)
-    setError(null)
-    const { data, error: err } = await sb.rpc('estadisticas_transferencias', {
+  const paramsRpc = useMemo(
+    () => ({
       p_desde: rango.desde || null,
       p_hasta: rango.hasta || null,
       p_origen: fOrigen || null,
@@ -160,36 +164,61 @@ export default function EstadisticasTransferencias() {
       p_estado: fEstado || null,
       p_local: fLocal || null,
       p_gran: gran,
-    })
-    if (err) { setError(err.message); setCargando(false); return }
-    const r = data as Respuesta | null
+    }),
+    [rango.desde, rango.hasta, fOrigen, fDestino, fMotivo, fEstado, fLocal, gran],
+  )
+
+  const pedir = useCallback(async (): Promise<{ datos: Respuesta | null; error: string | null }> => {
+    const sb = supabase
+    if (!sb) return { datos: null, error: null }
+    const { data, error: err } = await sb.rpc('estadisticas_transferencias', paramsRpc)
+    if (err) return { datos: null, error: err.message }
+    return { datos: (data as Respuesta | null) ?? null, error: null }
+  }, [paramsRpc])
+
+  const cargar = useCallback(async () => {
+    setCargando(true)
+    setError(null)
+    const { datos: r, error: err } = await pedir()
+    if (err) { setError(err); setCargando(false); return }
     if (r) {
       setDatos(r)
       // La lista del desplegable se arma sin filtros, si no se iría achicando
       if (!hayFiltros) setLocales(r.locales ?? [])
       setActualizado(new Date())
+      firma.current = huella(r)
     }
     setCargando(false)
-  }, [rango.desde, rango.hasta, fOrigen, fDestino, fMotivo, fEstado, fLocal, gran, hayFiltros])
+  }, [pedir, hayFiltros])
 
   useEffect(() => { void cargar() }, [cargar])
 
-  /** Refresco automático: primero pregunta si algo cambió (consulta liviana). */
+  /**
+   * Refresco automático: se vuelve a pedir el tablero y se aplica solo si cambió.
+   *
+   * Antes se sondeaba `transfer_items` con un COUNT(*) exacto y un
+   * ORDER BY hecho_at para "¿cambió algo?". Las dos reventan: las policies de
+   * RLS llaman private.mi_local()/es_admin()/tiene_permiso() por fila, así que
+   * Postgres no puede usar el índice de hecho_at y se va al timeout de
+   * sentencia (medido: >3 s y "canceling statement due to statement timeout",
+   * incluso con cero filas visibles). Como el RPC ya trae los agregados, la
+   * huella se saca de ahí: una sola llamada y no se toca la tabla cruda.
+   */
   useEffect(() => {
     if (!auto) return
-    const sb = supabase
-    if (!sb) return
     const id = setInterval(async () => {
-      const [{ count }, { data: ultimo }] = await Promise.all([
-        sb.from('transfer_items').select('id', { count: 'exact', head: true }),
-        sb.from('transfer_items').select('hecho_at').order('hecho_at', { ascending: false, nullsFirst: false }).limit(1),
-      ])
-      const nueva = `${count ?? 0}|${(ultimo as { hecho_at: string | null }[] | null)?.[0]?.hecho_at ?? ''}`
-      if (firma.current && firma.current !== nueva) void cargar()
+      if (!firma.current) return
+      const { datos: r } = await pedir()
+      if (!r) return
+      const nueva = huella(r)
+      if (nueva === firma.current) return
       firma.current = nueva
+      setDatos(r)
+      if (!hayFiltros) setLocales(r.locales ?? [])
+      setActualizado(new Date())
     }, REFRESCO_MS)
     return () => clearInterval(id)
-  }, [auto, cargar])
+  }, [auto, pedir, hayFiltros])
 
   useEffect(() => {
     const id = setInterval(() => setAhora(Date.now()), 15000)

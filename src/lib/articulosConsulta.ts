@@ -231,6 +231,37 @@ function coincide(fila: Articulo, q: string): boolean {
   )
 }
 
+/* ------------------------------------------------------------------ */
+/*  Orden de talles por tamaño                                         */
+/* ------------------------------------------------------------------ */
+
+/** Talles de letra de menor a mayor (2XL = XXL, 3XL = XXXL, …). */
+const TALLES_LETRA = ['XXXS', 'XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', 'XXXXL', 'XXXXXL', 'XXXXXXL']
+
+/** "XS - EXTRA SMALL" / "3XL" / "40" -> sigla normalizada ("XS", "XXXL", "40") */
+function siglaTalle(f: Pick<Articulo, 'talle' | 'talleCodigo'>): string {
+  // primero la descripción ("XS - EXTRA SMALL"): el código interno puede ser un número que no indica tamaño
+  const crudo = (f.talle.split(' - ')[0] || f.talleCodigo || '').trim().toUpperCase()
+  // "3XL" -> "XXXL"
+  return crudo.replace(/^(\d)XL$/, (_, n: string) => `${'X'.repeat(Number(n))}L`)
+}
+
+/** [grupo, valor]: primero los de letra por tamaño, después los numéricos, al final el resto. */
+function rangoTalle(f: Pick<Articulo, 'talle' | 'talleCodigo'>): [number, number] {
+  const s = siglaTalle(f)
+  const i = TALLES_LETRA.indexOf(s)
+  if (i >= 0) return [0, i]
+  const n = Number(s.replace(',', '.'))
+  if (s !== '' && Number.isFinite(n)) return [1, n]
+  return [2, 0]
+}
+
+function compararTalles(a: Articulo, b: Articulo): number {
+  const [ga, va] = rangoTalle(a)
+  const [gb, vb] = rangoTalle(b)
+  return ga - gb || va - vb || a.talle.localeCompare(b.talle, undefined, { numeric: true })
+}
+
 /** Nombres de columna que la pantalla sabe leer (ver ALIAS). */
 const COLUMNAS_ESPERADAS = 'ID_ARTICULO, COLOR, TALLE, NOMBRE_COMPLETO, MATERIAL, GRUPO, STOCK_MITO, PRECIO'
 
@@ -308,7 +339,7 @@ async function armar(crudas: FilaSql[], q: string): Promise<Articulo[]> {
       (a, b) =>
         a.idArticulo.localeCompare(b.idArticulo) ||
         (a.colorCodigo || a.color).localeCompare(b.colorCodigo || b.color, undefined, { numeric: true }) ||
-        a.talle.localeCompare(b.talle, undefined, { numeric: true }),
+        compararTalles(a, b),
     )
 }
 
