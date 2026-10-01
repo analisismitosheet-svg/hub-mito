@@ -171,6 +171,40 @@ export async function ubicacionesDeArticulos(codigos: string[]): Promise<Map<str
   return out
 }
 
+/** Clave de un SKU: artículo + color + talle (los tres en mayúsculas, sin espacios). */
+export function claveSku(codigo: string, color?: string | null, talle?: string | null): string {
+  const p = (v?: string | null) => (v ?? '').trim().toUpperCase()
+  return `${p(codigo)}|${p(color)}|${p(talle)}`
+}
+
+/**
+ * Ubicaciones por SKU ("CODIGO|COLOR|TALLE" -> ubicaciones ordenadas).
+ * La fila del mapeo guarda el color y talle que se escanearon; si el artículo
+ * base está mapeado pero la variante no, el llamador puede caer al código solo.
+ */
+export async function ubicacionesSkuDeArticulos(codigos: string[]): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>()
+  const unicos = [...new Set(codigos.map((c) => c.trim().toUpperCase()).filter(Boolean))]
+  if (!supabase || unicos.length === 0) return out
+  const TANDA = 200 // el filtro .in() va en la URL: de a tandas
+  for (let i = 0; i < unicos.length; i += TANDA) {
+    const { data, error } = await supabase
+      .from('mapeo_deposito')
+      .select('codigo,color,talle,ubicacion')
+      .in('codigo', unicos.slice(i, i + TANDA))
+      .range(0, 9999)
+    if (error) throw new Error(error.message)
+    for (const r of (data as { codigo: string; color: string | null; talle: string | null; ubicacion: string | null }[] | null) ?? []) {
+      const u = (r.ubicacion ?? '').trim()
+      if (!u) continue
+      const clave = claveSku(r.codigo, r.color, r.talle)
+      out.set(clave, [...(out.get(clave) ?? []), u])
+    }
+  }
+  for (const [k, v] of out) out.set(k, [...new Set(v)].sort(compararUbicaciones))
+  return out
+}
+
 /** Descripción de cada artículo (código en mayúsculas -> descripción), sacada de transferencias y repos */
 export async function descripcionesDeArticulos(codigos: string[]): Promise<Map<string, string>> {
   const out = new Map<string, string>()

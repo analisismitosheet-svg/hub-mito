@@ -49,6 +49,7 @@ import EstadisticasRendimiento from '@/pages/EstadisticasRendimiento'
 import MapeoEscanear from '@/pages/MapeoEscanear'
 import MapeoOrden from '@/pages/MapeoOrden'
 import MapeoUbicaciones from '@/pages/MapeoUbicaciones'
+import ConsultaArticulos from '@/pages/ConsultaArticulos'
 import CargaNovedades from '@/pages/CargaNovedades'
 import ResumenNovedades from '@/pages/ResumenNovedades'
 import MotivosNovedades from '@/pages/MotivosNovedades'
@@ -204,6 +205,14 @@ export default function App() {
             element={
               <PermissionRoute permiso="mayorista.notas_credito.view">
                 <NotasCredito />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/mayorista/consulta-articulos"
+            element={
+              <PermissionRoute permiso="mayorista.articulos.view">
+                <ConsultaArticulos />
               </PermissionRoute>
             }
           />

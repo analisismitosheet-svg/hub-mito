@@ -35,6 +35,7 @@ import {
   Percent,
   Map as MapIcon,
   ListOrdered,
+  PackageSearch,
   QrCode,
   type LucideIcon,
 } from 'lucide-react'
@@ -280,6 +281,17 @@ export const APPS: AppDef[] = [
     target: '/mayorista/pedidos-venta',
     color: '#65a30d',
     permiso: 'pedidos_venta.view',
+  },
+  {
+    id: 'mayorista-consulta-articulos',
+    areaId: 'mayorista',
+    title: 'F12 Consulta artículos',
+    description: 'Datos de MITO por artículo + color + talle: stock, ubicación y precio.',
+    icon: PackageSearch,
+    kind: 'internal',
+    target: '/mayorista/consulta-articulos',
+    color: '#d97706',
+    permiso: 'mayorista.articulos.view',
   },
   {
     id: 'mayorista-mapeo',

@@ -11,7 +11,9 @@ Documento para retomar el trabajo en otra PC. El código está en GitHub (`main`
 
 ## Comandos útiles
 - Typecheck: `node node_modules/typescript/bin/tsc --noEmit` (NO usar `npx tsc` → crashea el shell).
+- Typecheck de las funciones de Vercel: `node node_modules/typescript/bin/tsc -p tsconfig.api.json --noEmit`.
 - Build local: `node node_modules/vite/bin/vite.js build`
+- Tests: `node scripts/test-consulta-articulos.mjs` (o `npm.cmd test`) — assertions de `src/lib/articulosConsulta.ts`, sin navegador.
 - Instalar deps: `npm.cmd install ...` (PowerShell bloquea `npm.ps1`).
 - Deploy: `npx vercel --prod --scope mito-srl --yes` (o `& "C:\Program Files\nodejs\npx.cmd" ...`).
 - Git: usar `git -C "D:\pwa mito" ...`. Mensajes de commit **sin tildes** (encodig ParserError con caracteres especiales).
@@ -25,7 +27,7 @@ Documento para retomar el trabajo en otra PC. El código está en GitHub (`main`
 - `usePermisosArea('<area>')` para permisos de acción por área.
 
 ## Módulos principales
-- **Mayorista** (area mayorista): FacturacionFabrica (`FacturacionFabrica.tsx`), Guias, NotasCredito, Clientes, Transportes, Estadisticas.
+- **Mayorista** (area mayorista): FacturacionFabrica (`FacturacionFabrica.tsx`), Guias, NotasCredito, Clientes, Transportes, Estadisticas, **F12 Consulta artículos** (`/mayorista/consulta-articulos`).
 - **RR.HH.** (area rrhh): Empleados (con sub-menú por estado de legajo: nomina activa / planes activos / bajas mito / bajas planes, columnas por hoja en `config/columnasEmpleados.ts`), Cumpleaños (calendario + editor de imagen con plantilla), CargaNovedades, ResumenNovedades (multifiltro por columna + multisort).
 - **Compras**: Transferencias + Estadísticas Transferencias (dashboard recharts, filtros fecha/local).
 - **Depósito**: RMA (menú con sub-pantallas Proveedores y Guía).
@@ -40,8 +42,18 @@ Documento para retomar el trabajo en otra PC. El código está en GitHub (`main`
 - Desarrollo local: `api/*` no existe fuera de Vercel → levantar `node scripts/mock-replicas.mjs` (puente en :3128); vite proxea `/api/replicas` a :4173.
 
 ## Puente SQL y el tótem F12 (scan-stock)
-- `puente-sql/server.js` ahora acepta filtro: `POST {vista, top, donde, valor}` → `SELECT TOP(n) * FROM vista WHERE [donde] = @valor`. `donde` contra la lista blanca `PUENTE_FILTRO_COLS` (default `ARTCOD`) y el valor siempre parametrizado.
+- `puente-sql/server.js` acepta filtro: `POST {vista, top, donde, valor, coincide}`. `donde` contra la lista blanca `PUENTE_FILTRO_COLS` (default `ARTCOD,ID_ARTICULO,ARTICULO,NOMBRE_COMPLETO,DESCRIPCION`) y el valor siempre parametrizado.
+- `coincide` (opcional): `igual` (default, `=`) o `contiene` (`LIKE %valor%` con wildcards escapados). Si se mandan varias columnas en `donde` (separadas por `|`), se combinan con OR entre sí.
 - Lo usa el tótem F12 (`D:\F12 Totems\scan-stock`) para traer solo el artículo escaneado de `ZooLogic.vw_STOCK_TODAS_LAS_SUCURSALES`: SQL local para su sucursal + este puente para las demás. Se configura en la rueda del tótem → *Tipo de conexión: Puente SQL del Hub MITO* (URL `http://IP:3128/` + `PUENTE_TOKEN`).
+
+## F12 Consulta artículos (Mayorista)
+- Pantalla: `src/pages/ConsultaArticulos.tsx` → `src/lib/articulosConsulta.ts` → `src/lib/sqlApi.ts` (`leerVistaFiltrada`) → `GET /api/sql/<vista>?where=&value=&match=` (`api/sql/[view].ts`) → Logic App → Puente → SQL Server `DRAGONFISH_MITO`.
+- Muestra `id articulo` (+ color/talle como chips), `nombre completo`, `material`, `grupo`, `stock en mito`, `ubicacion`, `precio`. Granularidad **por SKU (artículo + color + talle)**. Buscador por código o descripción con debounce de 400 ms + botón "Consultar"/Enter (inmediato) y export a Excel.
+- La Logic App **ignora** los parámetros del filtro → la vista devuelve el TOP y la pantalla **vuelve a filtrar en el navegador**; si detecta que el SQL no aplicó el filtro muestra el aviso "el SQL no aplicó el filtro: se acotó en el navegador".
+- Vista en el SQL Server: `ZooLogic.vw_ARTICULOS_MITO` (script en `sql/vw_ARTICULOS_MITO.sql`), columnas canónicas `ID_ARTICULO, COLOR, TALLE, NOMBRE_COMPLETO, MATERIAL, GRUPO, STOCK_MITO, PRECIO` construidas sobre `ZooLogic.vw_PRODUCTOS_WEB`. Se cambia con `VITE_SQL_VISTA_ARTICULOS` y hay que **habilitarla en Configuraciones → Conexión SQL** (o `api/sql/catalogo.ts`).
+- La capa TS tolera nombres alternativos de columna (`articulosConsulta.ts` resuelve por fila, no global) por si la vista tiene otra forma.
+- Lo que no viene del SQL lo completa Supabase: `articulos` (descripcion/material/grupo/precio) y `mapeo_deposito` (ubicación: primero busca el SKU `articulo|color|talle`, si no cae al artículo base). Todo en tandas de 500/200 por el límite de 1000 filas.
+- Permiso nuevo `mayorista.articulos.view` (área `mayorista`), otorgado al rol `mayorista` con `sql/consulta_articulos.sql` (crea el permiso + recrea las políticas RLS de `mapeo_deposito` y `articulos` para que el solo-select acepte el permiso).
 
 ## Pendientes SQL (ejecutar en Supabase SQL Editor)
 ```sql
@@ -76,6 +88,14 @@ CREATE INDEX IF NOT EXISTS transfer_items_lote_id_idx ON public.transfer_items (
 CREATE INDEX IF NOT EXISTS transfer_items_created_at_idx ON public.transfer_items (created_at DESC);
 ```
 
+## Pendientes F12 Consulta artículos (aún NO ejecutado)
+1. Supabase SQL Editor → correr **`sql/consulta_articulos.sql`** (permiso `mayorista.articulos.view` + políticas RLS de `mapeo_deposito` y `articulos` + checklist del hub).
+2. SQL Server de MITO (`DRAGONFISH_MITO`) → correr **`sql/vw_ARTICULOS_MITO.sql`** (crea `ZooLogic.vw_ARTICULOS_MITO`) y grant de SELECT al login del puente.
+3. Hub → Configuraciones → Conexión SQL: habilitar la vista `ZooLogic.vw_ARTICULOS_MITO` (o `api/sql/catalogo.ts` si no aparece).
+4. Reiniciar `puente-sql/server.js` para que tome el `PUENTE_FILTRO_COLS` nuevo (si se sobreescribe por variable de entorno, agregarle `ID_ARTICULO,NOMBRE_COMPLETO`).
+5. Hub → Usuarios → Roles: granting de `mayorista.articulos.view` al rol `mayorista`.
+6. Deploy.
+
 ## Archivos clave
 - `src/config/areas.ts` — áreas + apps del menú (agregar app = AppDef aquí).
 - `src/App.tsx` — rutas.
@@ -89,6 +109,8 @@ CREATE INDEX IF NOT EXISTS transfer_items_created_at_idx ON public.transfer_item
 - `src/pages/Cumpleanios.tsx` + `src/components/EditorCumple.tsx` — cumpleaños + editor de imagen (konva, plantilla por URL en `public/plantilla-cumpleanos.jpeg`).
 - `src/pages/Rma.tsx` + `src/pages/ProveedoresPacho.tsx` + `src/pages/GuiaPacho.tsx` — RMA con proveedores/guía.
 - `src/pages/Replicas.tsx` + `src/lib/replicas.ts` + `api/replicas.ts` — estado de las réplicas (Replicador SQL de la PC central); `puente-sql/sql/replicas.sql` + `scripts/mock-replicas.mjs`.
+- `src/pages/ConsultaArticulos.tsx` + `src/lib/articulosConsulta.ts` — F12 Consulta artículos (Mayorista); `src/lib/sqlApi.ts` (`leerVistaFiltrada`) + `api/sql/[view].ts` + `puente-sql/server.js` (filtro del puente).
+- `sql/consulta_articulos.sql` (Supabase: permiso + RLS) y `sql/vw_ARTICULOS_MITO.sql` (vista en el SQL Server de MITO).
 
 ## Dependencias extra instaladas
 `konva@9`, `react-konva@18` (React 18), `webfontloader`, `jspdf`, `@types/webfontloader`. (`xlsx`, `recharts` ya estaban).

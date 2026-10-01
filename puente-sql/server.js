@@ -13,8 +13,12 @@
  *                   vista = "vw_x" (dbo de SQL_DATABASE), "esquema.obj" o "BASE.esquema.obj"
  *   POST /          body: { vista, top, donde, valor }   (FILTRO opcional)
  *                   -> 200 JSON array de filas WHERE [donde] = valor
- *                   'donde' debe estar en PUENTE_FILTRO_COLS; 'valor' va parametrizado.
- *                   Es lo que usa el tótem F12 para traer solo el artículo escaneado.
+ *                   'donde' (una o varias, separadas por coma) debe estar en
+ *                   PUENTE_FILTRO_COLS; 'valor' va parametrizado.
+ *                   Es lo que usa el tótem F12 para traer solo el artículo escaneado
+ *                   y la consulta de artículos del hub (Mayorista).
+ *   POST /          body: { vista, top, donde, valor, coincide:'contiene' }
+ *                   -> 200 JSON array de filas WHERE [donde] LIKE '%valor%'
  *   POST /          body: { accion: 'servidores' }       -> [{ alias, principal }]
  *   POST /          body: { accion: 'bases', servidor? }          -> ["BASE1", ...]
  *   POST /          body: { accion: 'objetos', base, servidor? }  -> [{ esquema, nombre, tipo }]
@@ -84,10 +88,14 @@ const {
   SQL_TRUST_CERT = 'true',
 } = process.env
 
-// Columnas sobre las que se acepta el filtro WHERE [col] = valor.
+// Columnas sobre las que se acepta el filtro WHERE [col] = valor / LIKE.
 // Lista blanca estricta: el nombre de la columna NUNCA sale de acá,
 // y el valor siempre va parametrizado.
-const PUENTE_FILTRO_COLS = (process.env.PUENTE_FILTRO_COLS || 'ARTCOD')
+// Tiene que incluir las columnas por las que busca el hub
+// (VITE_SQL_VISTA_ARTICULOS → sql/vw_ARTICULOS_MITO.sql).
+const PUENTE_FILTRO_COLS = (
+  process.env.PUENTE_FILTRO_COLS || 'ARTCOD,ID_ARTICULO,ARTICULO,NOMBRE_COMPLETO,DESCRIPCION'
+)
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean)
@@ -537,22 +545,36 @@ const server = http.createServer(async (req, res) => {
 
     const desde = base ? `[${base}].[${esquema}].[${objeto}]` : `[${esquema}].[${objeto}]`
 
-    // Filtro opcional: WHERE [col] = @v. La columna sale de la lista blanca
-    // (PUENTE_FILTRO_COLS) y el valor SIEMPRE va parametrizado.
-    const donde = String(body?.donde ?? '').trim()
+    // Filtro opcional: WHERE ([col1] = @v OR [col2] = @v). Los nombres de columna
+    // salen de la lista blanca (PUENTE_FILTRO_COLS) y el valor SIEMPRE va
+    // parametrizado. Con coincide:'contiene' se busca con LIKE '%valor%'.
+    //   body: { donde: 'ARTCOD' | ['ARTCOD','ARTICULO'], valor, coincide }
+    const pedidoCols = Array.isArray(body?.donde)
+      ? body.donde
+      : String(body?.donde ?? '').split(',')
     const valor = String(body?.valor ?? '').trim()
-    if (donde || valor) {
-      const col = PUENTE_FILTRO_COLS.find((c) => c.toLowerCase() === donde.toLowerCase())
-      if (!col || !valor) {
+    if (pedidoCols.some((c) => String(c ?? '').trim()) || valor) {
+      const cols = [...new Set(
+        pedidoCols
+          .map((c) => String(c ?? '').trim())
+          .map((c) => PUENTE_FILTRO_COLS.find((w) => w.toLowerCase() === c.toLowerCase()))
+          .filter(Boolean),
+      )]
+      if (cols.length === 0 || !valor) {
         return enviar(res, 400, {
           error: `Filtro inválido. 'donde' debe ser una de: ${PUENTE_FILTRO_COLS.join(', ')} y 'valor' no puede quedar vacío.`,
         })
       }
+      const contiene = String(body?.coincide ?? '').trim().toLowerCase() === 'contiene'
+      // Los comodines del usuario van escapados: solo matchea el texto buscado
+      const v = contiene ? `%${valor.replace(/[\\%_[\]]/g, (m) => `\\${m}`)}%` : valor
+      const op = contiene ? 'LIKE' : '='
+      const where = cols.map((c) => `[${c}] ${op} @v`).join(' OR ')
       const r = await pool
         .request()
         .input('top', sql.Int, top)
-        .input('v', sql.NVarChar(100), valor)
-        .query(`SELECT TOP (@top) * FROM ${desde} WHERE [${col}] = @v`)
+        .input('v', sql.NVarChar(250), v)
+        .query(`SELECT TOP (@top) * FROM ${desde} WHERE ${where}`)
       return enviar(res, 200, r.recordset ?? [])
     }
 

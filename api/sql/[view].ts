@@ -4,6 +4,8 @@
  * Flujo:  PWA (JWT Supabase) -> esta función -> Logic App (On-Premises Data Gateway) -> SQL Server
  *
  * Contrato con la Logic App: POST { vista: string, top: number } -> JSON array de filas.
+ * El Puente SQL además acepta { donde, valor, coincide } (filtro). Si el destino es
+ * el Logic App, esos campos se ignoran y el llamador filtra en el cliente.
  * El secreto (SAS del trigger) vive en la tabla sql_conexion (solo admins por RLS)
  * o como variable de entorno; NUNCA se envía al navegador.
  *
@@ -14,6 +16,7 @@
  *   SQL_LOGICAPP_URL            - fallback si no hay URL guardada en BD
  *   SQL_VIEWS                   - whitelist fija opcional, ej: vw_stock,vw_precios
  *   SQL_MAX_ROWS                - fallback del tope de filas (default 1000)
+ *   SQL_FILTER_COLS             - columnas por las que se puede filtrar (lista blanca)
  *   SQL_BRIDGE_TOKEN            - si el destino es el Puente SQL local, el mismo
  *                                 valor que su PUENTE_TOKEN (el Logic App lo ignora)
  *
@@ -40,6 +43,50 @@ const SQL_VIEWS = (process.env.SQL_VIEWS ?? '')
   .filter(Boolean)
 
 const MAX_ROWS = Number(process.env.SQL_MAX_ROWS ?? 1000) || 1000
+
+/**
+ * Columnas por las que se puede filtrar. Es una lista blanca: el nombre de la
+ * columna NUNCA se arma en el navegador ni se interpola sin validar, y el valor
+ * viaja como parámetro (el Puente SQL lo vuelve a parameterizar).
+ * Tiene que coincidir con PUENTE_FILTRO_COLS del puente.
+ */
+const SQL_FILTER_COLS = (
+  process.env.SQL_FILTER_COLS ?? 'ARTCOD,ID_ARTICULO,ARTICULO,NOMBRE_COMPLETO,DESCRIPCION,ARTDES,ARTDESADIC'
+)
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean)
+
+/** Texto a buscar: sin caracteres de control y acotado (va a un parámetro del SQL). */
+function valorValido(v: string): boolean {
+  return v.length > 0 && v.length <= 100 && !/[\u0000-\u001f]/.test(v)
+}
+
+interface Filtro {
+  donde: string[]
+  valor: string
+  coincide: 'igual' | 'contiene'
+}
+
+/** Filtro pedido (?where=ARTCOD,ARTICULO&value=reloj&match=contiene) o null. */
+function filtroDe(q: Record<string, string | string[] | undefined>): Filtro | null | string {
+  const pedido = primerQuery(q.where)
+  const valor = primerQuery(q.value).trim()
+  const coincide = primerQuery(q.match).trim().toLowerCase() === 'contiene' ? 'contiene' : 'igual'
+  if (!pedido && !valor) return null
+  if (!valor || !valorValido(valor)) return 'Filtro inválido: el texto a buscar no puede quedar vacío.'
+
+  const donde = pedido
+    .split(',')
+    .map((c) => c.trim())
+    .filter(Boolean)
+    .map((c) => SQL_FILTER_COLS.find((w) => w.toLowerCase() === c.toLowerCase()))
+    .filter((c): c is string => !!c)
+  if (donde.length === 0) {
+    return `Filtro inválido: 'where' debe ser una de: ${SQL_FILTER_COLS.join(', ')}.`
+  }
+  return { donde, valor, coincide }
+}
 
 /** Valida el JWT de Supabase contra /auth/v1/user. */
 async function usuarioValido(token: string): Promise<boolean> {
@@ -151,6 +198,10 @@ export default async function handler(req: Req, res: Res) {
   const pedido = parseInt(primerQuery(req.query.limit), 10)
   const top = Math.min(Number.isFinite(pedido) && pedido > 0 ? pedido : maxRowsBase, maxRowsBase)
 
+  // Filtro opcional: solo lo entiende el Puente SQL (el Logic App lo ignora).
+  const filtro = filtroDe(req.query)
+  if (typeof filtro === 'string') return res.status(400).json({ error: filtro })
+
   let la: Response
   try {
     la = await fetch(logicUrl, {
@@ -159,7 +210,13 @@ export default async function handler(req: Req, res: Res) {
         'Content-Type': 'application/json',
         ...(process.env.SQL_BRIDGE_TOKEN ? { 'X-Puente-Token': process.env.SQL_BRIDGE_TOKEN } : {}),
       },
-      body: JSON.stringify({ vista, top }),
+      body: JSON.stringify({
+        vista,
+        top,
+        ...(filtro
+          ? { donde: filtro.donde.join(','), valor: filtro.valor, coincide: filtro.coincide }
+          : {}),
+      }),
     })
   } catch {
     return res.status(504).json({ error: 'No se pudo contactar la Logic App / Puente SQL' })

@@ -34,6 +34,58 @@ export async function leerVista(vista: string, limit?: number): Promise<FilaSql[
 }
 
 /**
+ * Columnas por las que se puede filtrar una vista. Es la misma lista blanca
+ * que valida el servidor (api/sql) y el Puente SQL (PUENTE_FILTRO_COLS):
+ * el nombre de la columna nunca sale del servidor y el valor va siempre
+ * parametrizado. Si el destino es el Logic App (no el puente), el filtro se
+ * ignora allá y el llamador tiene que filtrar en el cliente.
+ */
+export const COLUMNAS_BUSQUEDA = [
+  'ARTCOD',
+  'ID_ARTICULO',
+  'ARTICULO',
+  'NOMBRE_COMPLETO',
+  'DESCRIPCION',
+  'ARTDES',
+  'ARTDESADIC',
+]
+
+export interface OpcionesLectura {
+  /** columnas de COLUMNAS_BUSQUEDA; se combinan con OR */
+  donde?: string[]
+  /** texto a buscar; con `coincide: 'contiene'` se busca con LIKE %valor% */
+  valor?: string
+  coincide?: 'igual' | 'contiene'
+  limit?: number
+}
+
+/** Igual que leerVista, pero con filtro en el SQL (WHERE [col] LIKE @v). */
+export async function leerVistaFiltrada(vista: string, opts: OpcionesLectura = {}): Promise<FilaSql[]> {
+  if (!supabase) throw new Error('Supabase no está configurado.')
+  const { data } = await supabase.auth.getSession()
+  const token = data.session?.access_token
+  if (!token) throw new Error('Sin sesión activa.')
+
+  const q = new URLSearchParams()
+  if (opts.limit) q.set('limit', String(opts.limit))
+  if (opts.donde?.length) q.set('where', opts.donde.join(','))
+  if (opts.valor) q.set('value', opts.valor)
+  if (opts.coincide) q.set('match', opts.coincide)
+
+  const res = await fetch(`/api/sql/${encodeURIComponent(vista)}${q.size ? `?${q}` : ''}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const body = (await res.json().catch(() => null)) as
+    | { error?: string; detalle?: string; filas?: FilaSql[] }
+    | null
+  if (!res.ok) {
+    const msg = body?.error ?? `Error ${res.status} consultando ${vista}`
+    throw new Error(body?.detalle ? `${msg} — ${body.detalle}` : msg)
+  }
+  return body?.filas ?? []
+}
+
+/**
  * Vistas fijas por env: VITE_SQL_VISTAS="vista|Etiqueta,vista2|Etiqueta2".
  * Se usan como fallback cuando no hay nada guardado en config_app.
  */
