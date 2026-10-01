@@ -22,6 +22,10 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { usePermisosArea } from '@/hooks/usePermisosArea'
 import { cargarVistaSalidas, leerVista } from '@/lib/sqlApi'
+import { PERIODOS, rangoDe, periodoGuardado, guardarPeriodo, textoPeriodo, type Periodo } from '@/lib/periodoSemanas'
+
+/** Cuántos archivos se piden a la vez al cargar las líneas */
+const LOTES_EN_PARALELO = 6
 
 interface Lote {
   id: string
@@ -342,6 +346,12 @@ export default function Transferencias() {
   }, [miLocal])
 
   const [lotes, setLotes] = useState<Lote[]>([])
+  // Período (como Repos Mayorista): por defecto la semana vigente, queda guardado en el navegador
+  const [periodo, setPeriodoState] = useState<Periodo>(() => periodoGuardado('transferencias.periodo'))
+  function setPeriodo(p: Periodo) {
+    setPeriodoState(p)
+    guardarPeriodo('transferencias.periodo', p)
+  }
   const [items, setItems] = useState<Item[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -371,29 +381,43 @@ export default function Transferencias() {
     }
     setCargando(true)
     setError(null)
+    // Solo los archivos del período elegido (por defecto, la semana vigente)
+    const { desde, hasta } = rangoDe(periodo)
+    let qLotes = supabase.from('transfer_lotes').select('id,nombre,motivo,fecha,created_at').order('created_at', { ascending: false }).limit(60)
+    if (desde) qLotes = qLotes.gte('created_at', desde)
+    if (hasta) qLotes = qLotes.lt('created_at', hasta)
     const [ld, uRes] = await Promise.all([
-      supabase.from('transfer_lotes').select('id,nombre,motivo,fecha,created_at').order('created_at', { ascending: false }).limit(60),
+      qLotes,
       supabase.from('usuarios').select('email,local').eq('estado', 'aprobado').not('local', 'is', null),
     ])
     if (ld.error) setError(`No se pudieron cargar los archivos: ${ld.error.message}`)
     setUsuariosLocales((uRes.data as { email: string; local: string }[]) ?? [])
     const lotesData = (ld.data as Lote[]) ?? []
     setLotes(lotesData)
-    // Cargamos las líneas lote por lote (la RPC con todos los lotes a la vez
-    // corta en archivos grandes). Cada lote devuelve su jsonb completo.
-    const acc: Item[] = []
+    // Las líneas se piden lote por lote (la RPC con todos los lotes a la vez
+    // corta en archivos grandes), pero de a LOTES_EN_PARALELO a la vez y no
+    // uno atrás del otro. Se respeta el orden de los lotes.
+    const sb = supabase
     const origenes = !verTodo && origenesUsuario.length ? origenesUsuario : null
-    for (const l of lotesData) {
-      const { data, error } = await supabase.rpc('listar_transfer_items', {
-        p_lotes: [l.id],
-        p_origenes: origenes,
-      })
-      if (error) { setError(`No se pudieron cargar las líneas: ${error.message}`); break }
-      if (data) acc.push(...(data as Item[]))
+    const porLote: Item[][] = new Array(lotesData.length)
+    let errorLineas: string | null = null
+    let siguiente = 0
+    const trabajador = async () => {
+      while (siguiente < lotesData.length && !errorLineas) {
+        const k = siguiente++
+        const { data, error } = await sb.rpc('listar_transfer_items', {
+          p_lotes: [lotesData[k].id],
+          p_origenes: origenes,
+        })
+        if (error) { errorLineas = error.message; return }
+        porLote[k] = (data as Item[] | null) ?? []
+      }
     }
-    setItems(acc)
+    await Promise.all(Array.from({ length: Math.min(LOTES_EN_PARALELO, lotesData.length) }, trabajador))
+    if (errorLineas) setError(`No se pudieron cargar las líneas: ${errorLineas}`)
+    setItems(porLote.flatMap((x) => x ?? []))
     setCargando(false)
-  }, [verTodo, origenesUsuario])
+  }, [verTodo, origenesUsuario, periodo])
 
   useEffect(() => {
     void cargar()
@@ -417,8 +441,12 @@ export default function Transferencias() {
     if (lotes.some((l) => l.id === id)) {
       setLoteAbierto(id)
       setSearchParams({}, { replace: true })
+    } else if (!cargando && periodo !== 'todas') {
+      // el aviso puede ser de un archivo viejo: se busca en todos
+      setPeriodo('todas')
     }
-  }, [lotes, searchParams, setSearchParams])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lotes, searchParams, setSearchParams, cargando, periodo])
 
   // ¿Este origen es el local del usuario? (para tildar sus propios artículos)
   const esMiLocal = useCallback(
@@ -712,6 +740,25 @@ export default function Transferencias() {
         </div>
       )}
 
+      {/* Período: por defecto la semana vigente (la elección queda guardada en este navegador) */}
+      <div role="tablist" aria-label="Período" className="mb-4 flex gap-1.5 overflow-x-auto pb-1">
+        {PERIODOS.map((p) => (
+          <button
+            key={p.id}
+            role="tab"
+            aria-selected={periodo === p.id}
+            onClick={() => setPeriodo(p.id)}
+            className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+              periodo === p.id
+                ? 'border-amber-500/50 bg-amber-500/15 text-amber-500'
+                : 'border-line text-sub hover:border-line2 hover:text-ink'
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+
       {cargando ? (
         <div className="flex items-center justify-center gap-2 py-16 text-sub">
           <Loader2 size={18} className="animate-spin" aria-hidden /> Cargando…
@@ -719,7 +766,19 @@ export default function Transferencias() {
       ) : lotes.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-line2 bg-surface/50 py-14 text-center text-sub">
           <ArrowRightLeft size={28} aria-hidden />
-          <p>{puedeImportar ? 'Subí un Excel para empezar. Cada hoja es un local origen y cada “1” una transferencia.' : 'Todavía no hay reposiciones cargadas.'}</p>
+          {periodo === 'todas' ? (
+            <p>{puedeImportar ? 'Subí un Excel para empezar. Cada hoja es un local origen y cada “1” una transferencia.' : 'Todavía no hay reposiciones cargadas.'}</p>
+          ) : (
+            <>
+              <p>No hay reposiciones cargadas {textoPeriodo(periodo)}.</p>
+              <button
+                onClick={() => setPeriodo(periodo === 'semana' ? 'anterior' : 'todas')}
+                className="btn-press rounded-lg border border-line bg-surface2 px-3 py-1.5 text-xs font-medium text-ink hover:bg-line"
+              >
+                {periodo === 'semana' ? 'Ver la semana pasada' : 'Ver todas'}
+              </button>
+            </>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
