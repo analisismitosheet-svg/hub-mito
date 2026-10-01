@@ -24,6 +24,8 @@ interface Lote {
 interface Asignacion {
   lote_id: string
   local: string
+  /** modo administrador: nombre del empleado responsable */
+  responsable?: string | null
 }
 
 interface Item {
@@ -114,7 +116,10 @@ function filaDe<T>(data: unknown): T | null {
 }
 
 export default function MiRepo() {
-  const { perfil, soloPiso } = useAuth()
+  const { perfil, soloPiso, isAdmin, esLegajo } = useAuth()
+  // El administrador (con su cuenta común) ve TODOS los repos, solo para consultar
+  const modoAdmin = isAdmin && !esLegajo
+  const [verTerminados, setVerTerminados] = useState(false)
 
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -169,6 +174,81 @@ export default function MiRepo() {
     setCargando(true)
     setError(null)
     setAviso(null)
+
+    if (modoAdmin) {
+      try {
+        // Todas las asignaciones (lote, local, empleado) + nombre del responsable
+        const asig: Array<Asignacion & { empleado_id: string | null }> = []
+        for (let desde = 0; ; desde += 1000) {
+          const { data, error: e } = await supabase
+            .from('mayorista_responsables')
+            .select('lote_id,local,empleado_id')
+            .range(desde, desde + 999)
+          if (e) throw new Error(e.message)
+          const chunk = (data as Array<Asignacion & { empleado_id: string | null }> | null) ?? []
+          asig.push(...chunk)
+          if (chunk.length < 1000) break
+        }
+        const empIds = [...new Set(asig.map((a) => a.empleado_id).filter(Boolean))] as string[]
+        const nombres = new Map<string, string>()
+        for (let i = 0; i < empIds.length; i += 200) {
+          const { data } = await supabase.from('empleados_basico').select('id,nombre').in('id', empIds.slice(i, i + 200))
+          for (const e of (data as Array<{ id: string; nombre: string | null }> | null) ?? []) nombres.set(e.id, e.nombre ?? '')
+        }
+        const todas = asig
+          .filter((a) => a.lote_id && a.local)
+          .map((a) => ({ lote_id: a.lote_id, local: a.local, responsable: a.empleado_id ? nombres.get(a.empleado_id) ?? null : null }))
+        setEmpleadoNombre('Todos los repos · modo consulta')
+        setAsignaciones(todas)
+
+        const loteIds = Array.from(new Set(todas.map((a) => a.lote_id)))
+        if (loteIds.length === 0) {
+          setLotes({})
+          setItems([])
+          setCargando(false)
+          return
+        }
+        const rl = await supabase.from('mayorista_lotes').select('id,nombre,motivo,created_at').in('id', loteIds)
+        if (rl.error) throw new Error(rl.error.message)
+        const mapa: Record<string, Lote> = {}
+        for (const l of (rl.data as Lote[] | null) ?? []) mapa[l.id] = l
+        setLotes(mapa)
+        // Los más nuevos primero, después por local
+        setAsignaciones(
+          [...todas].sort(
+            (a, b) =>
+              String(mapa[b.lote_id]?.created_at ?? '').localeCompare(String(mapa[a.lote_id]?.created_at ?? '')) ||
+              String(a.local).localeCompare(String(b.local), 'es'),
+          ),
+        )
+
+        const todosItems: Item[] = []
+        for (let desde = 0; ; desde += 1000) {
+          const { data, error: e } = await supabase
+            .from('mayorista_items')
+            .select(COLUMNAS_ITEM)
+            .in('lote_id', loteIds)
+            .order('lote_id', { ascending: true })
+            .order('orden', { ascending: true })
+            .range(desde, desde + 999)
+          if (e) throw new Error(e.message)
+          const chunk = (data as Item[]) ?? []
+          todosItems.push(...chunk)
+          if (chunk.length < 1000) break
+        }
+        const asignadas = new Set(todas.map(claveDe))
+        const deAsignados = todosItems.filter((i) => asignadas.has(claveDe(i)))
+        setItems(deAsignados)
+        setCargando(false)
+        ubicacionesDeArticulos(deAsignados.map((i) => i.codigo ?? ''))
+          .then(setUbicaciones)
+          .catch(() => { /* sin mapeo: sin ubicaciones */ })
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'No se pudieron cargar los repos.')
+        setCargando(false)
+      }
+      return
+    }
 
     const legajo = String(perfil?.legajo ?? '').trim()
     if (!legajo) {
@@ -266,7 +346,7 @@ export default function MiRepo() {
       setError(e instanceof Error ? e.message : 'No se pudieron cargar tus repos.')
       setCargando(false)
     }
-  }, [perfil?.id, perfil?.legajo, perfil?.nombre, enfocar])
+  }, [perfil?.id, perfil?.legajo, perfil?.nombre, enfocar, modoAdmin])
 
   useEffect(() => { void cargar() }, [cargar])
 
@@ -343,11 +423,12 @@ export default function MiRepo() {
   const conPendientes = useMemo(
     () =>
       asignaciones.filter((a) => {
+        if (modoAdmin) return verTerminados || progreso(a).pendientes > 0
         const k = claveDe(a)
         if (abiertos[k]) return true
         return progreso(a).pendientes > 0 && !finalizados.has(k)
       }),
-    [asignaciones, progreso, abiertos, finalizados],
+    [asignaciones, progreso, abiertos, finalizados, modoAdmin, verTerminados],
   )
 
   /* ------------------------------------------------------------------ */
@@ -519,7 +600,7 @@ export default function MiRepo() {
     setSesion(null)
     // ¿Ya tenía una sesión abierta en este repo? (ej. la pausó y volvió)
     const sb = supabase
-    if (!sb) return
+    if (!sb || modoAdmin) return
     setCargandoSesion(true)
     void (async () => {
       const { data, error: eRpc } = await sb.rpc('repo_sesion_actual', { p_lote: a.lote_id, p_local: a.local })
@@ -597,16 +678,33 @@ export default function MiRepo() {
       {!aviso && !error && asignaciones.length === 0 && (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-line2 bg-surface/50 px-4 py-14 text-center text-sub">
           <Store size={28} aria-hidden />
-          <p>Todavía no te asignaron ningún local en un repo.</p>
-          <p className="text-xs">Cuando un administrador te asigne en Mayorista &gt; Reposición, aparece acá.</p>
+          <p>{modoAdmin ? 'No hay repos con responsables asignados.' : 'Todavía no te asignaron ningún local en un repo.'}</p>
+          <p className="text-xs">
+            {modoAdmin ? 'Se asignan en Mayorista > Reposición.' : 'Cuando un administrador te asigne en Mayorista > Reposición, aparece acá.'}
+          </p>
         </div>
       )}
 
       {!aviso && !error && !asignacionSel && asignaciones.length > 0 && conPendientes.length === 0 && (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-14 text-center text-emerald-400">
           <Check size={28} aria-hidden />
-          <p className="font-medium">Terminaste todos tus repos</p>
-          <p className="text-xs text-sub">Cuando te asignen uno nuevo, aparece acá.</p>
+          <p className="font-medium">{modoAdmin ? 'No hay repos con pendientes' : 'Terminaste todos tus repos'}</p>
+          <p className="text-xs text-sub">
+            {modoAdmin ? 'Tocá "Ver terminados" para ver los completos.' : 'Cuando te asignen uno nuevo, aparece acá.'}
+          </p>
+        </div>
+      )}
+
+      {/* Administrador: con o sin los repos ya terminados */}
+      {modoAdmin && !asignacionSel && asignaciones.length > 0 && (
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <p className="text-xs text-sub">
+            {conPendientes.length} {conPendientes.length === 1 ? 'repo' : 'repos'}{verTerminados ? '' : ' con pendientes'}
+          </p>
+          <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-ink">
+            <input type="checkbox" checked={verTerminados} onChange={(e) => setVerTerminados(e.target.checked)} className="h-4 w-4 accent-amber-600" />
+            Ver terminados
+          </label>
         </div>
       )}
 
@@ -632,6 +730,9 @@ export default function MiRepo() {
                     <span className="truncate">{lote?.nombre ?? 'Repo'}</span>
                   </p>
                   <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-sub">
+                    {modoAdmin && (
+                      <span className="font-medium text-ink/80">{a.responsable || 'Sin responsable'} ·</span>
+                    )}
                     <span className="tabular-nums">{p.listas} de {p.total} unidades</span>
                     {estado === 'en_curso' && (
                       <span className="inline-flex items-center gap-1 font-medium text-emerald-400">
@@ -665,8 +766,14 @@ export default function MiRepo() {
             onClick={cerrarRepo}
             className="-ml-1 inline-flex min-h-[2.5rem] items-center gap-1 px-1 text-sm font-medium text-sub transition hover:text-ink"
           >
-            <ChevronRight size={16} aria-hidden className="rotate-180" /> Mis repos
+            <ChevronRight size={16} aria-hidden className="rotate-180" /> {modoAdmin ? 'Todos los repos' : 'Mis repos'}
           </button>
+
+          {modoAdmin && (
+            <p className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-xs font-medium text-sky-400">
+              Modo consulta: responsable {asignacionSel.responsable || 'sin asignar'}. El escaneo lo hace el empleado desde su cuenta.
+            </p>
+          )}
 
           {/* Panel fijo compacto: repo + cronómetro + botón en una fila, barra con contador, input.
               Queda arriba al bajar la lista; en celular ocupa lo mínimo. */}
@@ -699,7 +806,7 @@ export default function MiRepo() {
                 </p>
               </div>
 
-              {!cargandoSesion && !sesion && (
+              {!modoAdmin && !cargandoSesion && !sesion && (
                 <button
                   onClick={() => void accion('repo_iniciar')}
                   disabled={accionSesion}

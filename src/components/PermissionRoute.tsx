@@ -14,11 +14,11 @@ export default function PermissionRoute({
   children,
 }: {
   permiso: string
-  /** además del permiso, solo cuentas de legajo (ni siquiera admins) */
+  /** además del permiso, solo cuentas de legajo (y administradores) */
   soloLegajo?: boolean
   children: ReactNode
 }) {
-  const { loading, configured, user, isApproved, can, esLegajo } = useAuth()
+  const { loading, configured, user, isApproved, can, esLegajo, isAdmin } = useAuth()
   if (loading)
     return (
       <div className="flex min-h-screen items-center justify-center gap-2 bg-paper text-sub">
@@ -28,6 +28,6 @@ export default function PermissionRoute({
   if (configured && !user) return <Navigate to="/login" replace />
   if (configured && user && !isApproved) return <Navigate to="/acceso" replace />
   if (!can(permiso)) return <Navigate to="/denegado" replace />
-  if (configured && soloLegajo && !esLegajo) return <Navigate to="/denegado" replace />
+  if (configured && soloLegajo && !esLegajo && !isAdmin) return <Navigate to="/denegado" replace />
   return <>{children}</>
 }

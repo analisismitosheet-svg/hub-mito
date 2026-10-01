@@ -248,7 +248,7 @@ export default function PedidosVenta() {
 
   function imprimir() {
     if (!pedido) return
-    imprimirPedido(
+    void imprimirPedido(
       {
         titulo: 'Pedido de venta',
         comprobante: numeroComprobante(pedido),

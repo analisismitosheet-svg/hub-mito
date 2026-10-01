@@ -81,7 +81,7 @@ export interface AppDef {
   areaIds?: string[]
   /** grupo/encabezado opcional dentro del área (ej. 'Novedades') para agrupar apps visualmente */
   grupo?: string
-  /** solo la ven las cuentas de legajo (empleados de piso), ni siquiera los admins */
+  /** solo la ven las cuentas de legajo (empleados de piso) y los administradores */
   soloLegajo?: boolean
 }
 
