@@ -24,8 +24,9 @@ interface Lote {
 interface Asignacion {
   lote_id: string
   local: string
-  /** modo administrador: nombre del empleado responsable */
+  /** modo administrador: nombre y legajo del empleado responsable */
   responsable?: string | null
+  legajo?: string | null
 }
 
 interface Item {
@@ -119,7 +120,9 @@ export default function MiRepo() {
   const { perfil, soloPiso, isAdmin, esLegajo } = useAuth()
   // El administrador (con su cuenta común) ve TODOS los repos, solo para consultar
   const modoAdmin = isAdmin && !esLegajo
-  const [verTerminados, setVerTerminados] = useState(false)
+  // Desplegables del administrador: empleados abiertos y sus "Terminados" abiertos
+  const [empAbiertos, setEmpAbiertos] = useState<Set<string>>(new Set())
+  const [termAbiertos, setTermAbiertos] = useState<Set<string>>(new Set())
 
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -190,14 +193,19 @@ export default function MiRepo() {
           if (chunk.length < 1000) break
         }
         const empIds = [...new Set(asig.map((a) => a.empleado_id).filter(Boolean))] as string[]
-        const nombres = new Map<string, string>()
+        const nombres = new Map<string, { nombre: string; legajo: string | null }>()
         for (let i = 0; i < empIds.length; i += 200) {
-          const { data } = await supabase.from('empleados_basico').select('id,nombre').in('id', empIds.slice(i, i + 200))
-          for (const e of (data as Array<{ id: string; nombre: string | null }> | null) ?? []) nombres.set(e.id, e.nombre ?? '')
+          const { data } = await supabase.from('empleados_basico').select('id,nombre,legajo').in('id', empIds.slice(i, i + 200))
+          for (const e of (data as Array<{ id: string; nombre: string | null; legajo: string | null }> | null) ?? []) {
+            nombres.set(e.id, { nombre: e.nombre ?? '', legajo: e.legajo ?? null })
+          }
         }
         const todas = asig
           .filter((a) => a.lote_id && a.local)
-          .map((a) => ({ lote_id: a.lote_id, local: a.local, responsable: a.empleado_id ? nombres.get(a.empleado_id) ?? null : null }))
+          .map((a) => {
+            const emp = a.empleado_id ? nombres.get(a.empleado_id) : undefined
+            return { lote_id: a.lote_id, local: a.local, responsable: emp?.nombre || null, legajo: emp?.legajo ?? null }
+          })
         setEmpleadoNombre('Todos los repos · modo consulta')
         setAsignaciones(todas)
 
@@ -423,13 +431,38 @@ export default function MiRepo() {
   const conPendientes = useMemo(
     () =>
       asignaciones.filter((a) => {
-        if (modoAdmin) return verTerminados || progreso(a).pendientes > 0
+        if (modoAdmin) return true // el administrador ve todo, agrupado por legajo
         const k = claveDe(a)
         if (abiertos[k]) return true
         return progreso(a).pendientes > 0 && !finalizados.has(k)
       }),
-    [asignaciones, progreso, abiertos, finalizados, modoAdmin, verTerminados],
+    [asignaciones, progreso, abiertos, finalizados, modoAdmin],
   )
+
+  /** Administrador: repos agrupados por legajo, y adentro pendientes / terminados */
+  const porLegajo = useMemo(() => {
+    if (!modoAdmin) return []
+    const m = new Map<string, { clave: string; legajo: string | null; nombre: string; pendientes: Asignacion[]; terminados: Asignacion[] }>()
+    for (const a of asignaciones) {
+      const clave = a.legajo ?? a.responsable ?? '—'
+      const g = m.get(clave) ?? { clave, legajo: a.legajo ?? null, nombre: a.responsable || 'Sin responsable', pendientes: [], terminados: [] }
+      if (progreso(a).pendientes > 0) g.pendientes.push(a)
+      else g.terminados.push(a)
+      m.set(clave, g)
+    }
+    return [...m.values()].sort((a, b) =>
+      a.nombre === 'Sin responsable' ? 1 : b.nombre === 'Sin responsable' ? -1 : a.nombre.localeCompare(b.nombre, 'es'),
+    )
+  }, [modoAdmin, asignaciones, progreso])
+
+  function alternarSet(set: (f: (prev: Set<string>) => Set<string>) => void, clave: string) {
+    set((prev) => {
+      const n = new Set(prev)
+      if (n.has(clave)) n.delete(clave)
+      else n.add(clave)
+      return n
+    })
+  }
 
   /* ------------------------------------------------------------------ */
   /*  Tiempo: Iniciar / Pausar / Reanudar / Finalizar                    */
@@ -619,6 +652,50 @@ export default function MiRepo() {
     setSesion(null)
   }
 
+  /** Tarjeta de un repo (local + archivo + avance) */
+  function tarjeta(a: Asignacion) {
+    const lote = lotes[a.lote_id]
+    const p = progreso(a)
+    const pct = p.total > 0 ? Math.round((p.listas / p.total) * 100) : 0
+    const estado = abiertos[claveDe(a)]
+    return (
+      <button
+        key={claveDe(a)}
+        onClick={() => abrirAsignacion(a)}
+        className="flex min-h-[4.5rem] w-full items-center gap-3 rounded-2xl border border-line bg-surface px-4 py-3.5 text-left shadow-soft transition active:scale-[0.99] hover:bg-surface2"
+      >
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-1.5 font-display font-semibold text-ink">
+            <span className="shrink-0 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-500">
+              {a.local}
+            </span>
+            <span className="truncate">{lote?.nombre ?? 'Repo'}</span>
+          </p>
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-sub">
+            <span className="tabular-nums">{p.listas} de {p.total} unidades</span>
+            {estado === 'en_curso' && (
+              <span className="inline-flex items-center gap-1 font-medium text-emerald-400">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" /> En curso
+              </span>
+            )}
+            {estado === 'pausada' && (
+              <span className="inline-flex items-center gap-1 font-medium text-amber-400">
+                <Pause size={11} aria-hidden /> En pausa
+              </span>
+            )}
+          </p>
+          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-line">
+            <div
+              className={`h-full rounded-full transition-all ${pct === 100 ? 'bg-emerald-500' : 'bg-amber-500'}`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        </div>
+        <ChevronRight size={20} aria-hidden className="shrink-0 text-sub" />
+      </button>
+    )
+  }
+
   /* ------------------------------------------------------------------ */
   /*  Render                                                              */
   /* ------------------------------------------------------------------ */
@@ -688,72 +765,81 @@ export default function MiRepo() {
       {!aviso && !error && !asignacionSel && asignaciones.length > 0 && conPendientes.length === 0 && (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-14 text-center text-emerald-400">
           <Check size={28} aria-hidden />
-          <p className="font-medium">{modoAdmin ? 'No hay repos con pendientes' : 'Terminaste todos tus repos'}</p>
+          <p className="font-medium">{modoAdmin ? 'No hay repos asignados' : 'Terminaste todos tus repos'}</p>
           <p className="text-xs text-sub">
-            {modoAdmin ? 'Tocá "Ver terminados" para ver los completos.' : 'Cuando te asignen uno nuevo, aparece acá.'}
+            {modoAdmin ? 'Cuando se asigne un repo, aparece acá.' : 'Cuando te asignen uno nuevo, aparece acá.'}
           </p>
-        </div>
-      )}
-
-      {/* Administrador: con o sin los repos ya terminados */}
-      {modoAdmin && !asignacionSel && asignaciones.length > 0 && (
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <p className="text-xs text-sub">
-            {conPendientes.length} {conPendientes.length === 1 ? 'repo' : 'repos'}{verTerminados ? '' : ' con pendientes'}
-          </p>
-          <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-ink">
-            <input type="checkbox" checked={verTerminados} onChange={(e) => setVerTerminados(e.target.checked)} className="h-4 w-4 accent-amber-600" />
-            Ver terminados
-          </label>
         </div>
       )}
 
       {/* ---------- Lista de repos (solo los que tienen algo pendiente o están abiertos) ---------- */}
-      {!asignacionSel && conPendientes.length > 0 && (
+      {!asignacionSel && conPendientes.length > 0 && !modoAdmin && (
+        <div className="space-y-3">{conPendientes.map((a) => tarjeta(a))}</div>
+      )}
+
+      {/* ---------- Administrador: por legajo → pendientes / terminados ---------- */}
+      {!asignacionSel && modoAdmin && porLegajo.length > 0 && (
         <div className="space-y-3">
-          {conPendientes.map((a) => {
-            const lote = lotes[a.lote_id]
-            const p = progreso(a)
-            const pct = p.total > 0 ? Math.round((p.listas / p.total) * 100) : 0
-            const estado = abiertos[claveDe(a)]
+          {porLegajo.map((g) => {
+            const abierto = empAbiertos.has(g.clave)
+            const termAbierto = termAbiertos.has(g.clave)
             return (
-              <button
-                key={claveDe(a)}
-                onClick={() => abrirAsignacion(a)}
-                className="flex min-h-[4.5rem] w-full items-center gap-3 rounded-2xl border border-line bg-surface px-4 py-3.5 text-left shadow-soft transition active:scale-[0.99] hover:bg-surface2"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="flex items-center gap-1.5 font-display font-semibold text-ink">
-                    <span className="shrink-0 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-500">
-                      {a.local}
+              <div key={g.clave} className="overflow-hidden rounded-2xl border border-line bg-surface">
+                <button
+                  onClick={() => alternarSet(setEmpAbiertos, g.clave)}
+                  aria-expanded={abierto}
+                  className="flex min-h-[3.5rem] w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-surface2"
+                >
+                  {g.legajo && (
+                    <span className="shrink-0 rounded-lg bg-line px-2 py-1 font-mono text-xs font-semibold text-ink" title="Legajo">
+                      #{g.legajo}
                     </span>
-                    <span className="truncate">{lote?.nombre ?? 'Repo'}</span>
-                  </p>
-                  <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-sub">
-                    {modoAdmin && (
-                      <span className="font-medium text-ink/80">{a.responsable || 'Sin responsable'} ·</span>
-                    )}
-                    <span className="tabular-nums">{p.listas} de {p.total} unidades</span>
-                    {estado === 'en_curso' && (
-                      <span className="inline-flex items-center gap-1 font-medium text-emerald-400">
-                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" /> En curso
-                      </span>
-                    )}
-                    {estado === 'pausada' && (
-                      <span className="inline-flex items-center gap-1 font-medium text-amber-400">
-                        <Pause size={11} aria-hidden /> En pausa
-                      </span>
-                    )}
-                  </p>
-                  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-line">
-                    <div
-                      className={`h-full rounded-full transition-all ${pct === 100 ? 'bg-emerald-500' : 'bg-amber-500'}`}
-                      style={{ width: `${pct}%` }}
-                    />
+                  )}
+                  <span className="min-w-0 flex-1 truncate font-display font-semibold text-ink">{g.nombre}</span>
+                  {g.pendientes.length > 0 && (
+                    <span className="shrink-0 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold tabular-nums text-amber-500" title="Pendientes">
+                      {g.pendientes.length}
+                    </span>
+                  )}
+                  {g.terminados.length > 0 && (
+                    <span className="shrink-0 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-semibold tabular-nums text-emerald-500" title="Terminados">
+                      {g.terminados.length}
+                    </span>
+                  )}
+                  <ChevronRight size={18} aria-hidden className={`shrink-0 text-sub transition-transform ${abierto ? 'rotate-90' : ''}`} />
+                </button>
+
+                {abierto && (
+                  <div className="space-y-3 border-t border-line bg-surface2/40 p-3">
+                    <div>
+                      <p className="mb-2 flex items-center gap-1.5 px-1 text-xs font-semibold uppercase tracking-wide text-amber-500">
+                        <Timer size={13} aria-hidden /> Pendientes ({g.pendientes.length})
+                      </p>
+                      {g.pendientes.length === 0 ? (
+                        <p className="px-1 text-xs text-sub">No tiene repos pendientes.</p>
+                      ) : (
+                        <div className="space-y-2">{g.pendientes.map((a) => tarjeta(a))}</div>
+                      )}
+                    </div>
+                    <div>
+                      <button
+                        onClick={() => alternarSet(setTermAbiertos, g.clave)}
+                        aria-expanded={termAbierto}
+                        className="mb-2 flex w-full items-center gap-1.5 px-1 text-left text-xs font-semibold uppercase tracking-wide text-emerald-500"
+                      >
+                        <Check size={13} aria-hidden /> Terminados ({g.terminados.length})
+                        <ChevronRight size={14} aria-hidden className={`transition-transform ${termAbierto ? 'rotate-90' : ''}`} />
+                      </button>
+                      {termAbierto &&
+                        (g.terminados.length === 0 ? (
+                          <p className="px-1 text-xs text-sub">Todavía no terminó ninguno.</p>
+                        ) : (
+                          <div className="space-y-2">{g.terminados.map((a) => tarjeta(a))}</div>
+                        ))}
+                    </div>
                   </div>
-                </div>
-                <ChevronRight size={20} aria-hidden className="shrink-0 text-sub" />
-              </button>
+                )}
+              </div>
             )
           })}
         </div>
