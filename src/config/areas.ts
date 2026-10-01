@@ -84,6 +84,12 @@ export interface AppDef {
   grupo?: string
   /** solo la ven las cuentas de legajo (empleados de piso) y los administradores */
   soloLegajo?: boolean
+  /**
+   * Acceso directo en el MENÚ PRINCIPAL (no se lista dentro de las áreas).
+   * Sus áreas (areaId/areaIds o las tildadas en Roles → Ubicación de menús)
+   * ya no dicen dónde aparece sino QUIÉN lo ve: el que pueda ver alguna.
+   */
+  enMenu?: boolean
 }
 
 // accent: color de nivel 600 para contraste AA sobre superficies claras (Soft UI)
@@ -180,6 +186,7 @@ export const APPS: AppDef[] = [
     target: URL_CONTROL_LOCALES,
     comingSoon: !URL_CONTROL_LOCALES,
     color: '#16a34a',
+    enMenu: true,
   },
   {
     id: 'transporte',
@@ -192,6 +199,7 @@ export const APPS: AppDef[] = [
     target: URL_TRANSPORTE,
     comingSoon: !URL_TRANSPORTE,
     color: '#0891b2',
+    enMenu: true,
   },
   {
     id: 'mayorista-repo',
@@ -551,7 +559,15 @@ export const APPS: AppDef[] = [
 ]
 
 export function appsDeArea(areaId: string): AppDef[] {
-  return APPS.filter((a) => a.areaId === areaId || a.areaIds?.includes(areaId))
+  return APPS.filter((a) => !a.enMenu && (a.areaId === areaId || a.areaIds?.includes(areaId)))
+}
+
+/** Accesos directos del menú principal (Transporte, Control de Locales…). */
+export const ACCESOS_MENU: AppDef[] = APPS.filter((a) => a.enMenu)
+
+/** Áreas de una app: las tildadas en Roles (override) o, si no hay, las del código. */
+export function areasDeApp(app: AppDef, mapa: Record<string, string[]>): string[] {
+  return mapa[app.id] ?? [app.areaId, ...(app.areaIds ?? [])]
 }
 
 export function getArea(areaId: string): AreaDef | undefined {
@@ -613,7 +629,7 @@ export function appsDeAreaConOverrides(areaId: string, mapa: Record<string, stri
   // Apps que no estaban en el estático pero se marcaron en esta área
   const idsBase = new Set(base.map((a) => a.id))
   for (const app of APPS) {
-    if (idsBase.has(app.id)) continue
+    if (idsBase.has(app.id) || app.enMenu) continue
     if ((mapa[app.id] ?? []).includes(areaId)) out.push(app)
   }
   return out

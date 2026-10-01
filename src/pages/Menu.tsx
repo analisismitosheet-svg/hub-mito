@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { Settings, ArrowRight } from 'lucide-react'
 import Layout from '@/components/Layout'
 import AreaCard from '@/components/AreaCard'
-import { AREAS } from '@/config/areas'
+import AppCard from '@/components/AppCard'
+import { AREAS, ACCESOS_MENU, areasDeApp, cargarOverridesAreas } from '@/config/areas'
 import { useAuth } from '@/context/AuthContext'
 import { supabase } from '@/lib/supabase'
 
@@ -51,6 +52,25 @@ function ConfiguracionesCard() {
 
 export default function Menu() {
   const { can, isAdmin } = useAuth()
+  const [overrides, setOverrides] = useState<Record<string, string[]> | null>(null)
+
+  useEffect(() => {
+    let activo = true
+    void cargarOverridesAreas().then((m) => { if (activo) setOverrides(m) })
+    return () => { activo = false }
+  }, [])
+
+  // Accesos directos (Transporte, Control de Locales): los ve quien pueda ver
+  // alguna de las áreas donde estaban antes (o las tildadas en Roles)
+  const accesos = useMemo(
+    () =>
+      overrides === null
+        ? []
+        : ACCESOS_MENU.filter(
+            (app) => isAdmin || areasDeApp(app, overrides).some((a) => can(`area_${a}.view`)),
+          ),
+    [overrides, can, isAdmin],
+  )
   const areas = useMemo(
     () =>
       [...AREAS]
@@ -62,6 +82,17 @@ export default function Menu() {
 
   return (
     <Layout>
+      {accesos.length > 0 && (
+        <section className="mb-10">
+          <h2 className="animate-enter mb-4 font-display text-xl font-bold text-ink sm:text-2xl">Accesos directos</h2>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+            {accesos.map((app, i) => (
+              <AppCard key={app.id} app={app} index={i} />
+            ))}
+          </div>
+        </section>
+      )}
+
       <div className="animate-enter mb-8">
         <h1 className="font-display text-3xl font-bold text-ink sm:text-4xl">Áreas</h1>
         <p className="mt-1.5 text-sub sm:text-lg">Elegí un área para ver sus aplicaciones.</p>

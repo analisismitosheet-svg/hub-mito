@@ -191,7 +191,14 @@ export default function Roles() {
               return (
                 <details key={app.id} className="rounded-xl border border-line bg-surface2/60">
                   <summary className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm font-medium text-ink">
-                    <span className="flex-1 truncate">{app.title}</span>
+                    <span className="flex-1 truncate">
+                      {app.title}
+                      {app.enMenu && (
+                        <span className="ml-2 text-[11px] font-normal text-sub/80">
+                          acceso directo del menú principal · lo ve quien pueda ver alguna de estas áreas
+                        </span>
+                      )}
+                    </span>
                     <span className="text-[11px] text-sub/70">{areasMarcadas.length > 0 ? `${areasMarcadas.length} área(s)` : 'por defecto'}</span>
                     <ChevronRight size={13} aria-hidden className="text-sub" />
                   </summary>
