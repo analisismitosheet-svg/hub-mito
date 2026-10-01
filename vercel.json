@@ -10,6 +10,9 @@
   "functions": {
     "api/pedidos-compra-sync.ts": {
       "maxDuration": 60
+    },
+    "api/pedidos-venta-sync.ts": {
+      "maxDuration": 60
     }
   }
 }

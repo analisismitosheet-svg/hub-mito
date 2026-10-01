@@ -1,20 +1,19 @@
 /**
- * Copia los pedidos de compra del SQL Server local a Supabase
- * (tablas public.pedidos_compra + public.pedidos_compra_items) para la pantalla
- * "Pedidos de compra" del hub (áreas Compras y Depósito).
+ * Copia los pedidos de venta mayoristas (Dragonfish MITO) a Supabase
+ * (tablas public.pedidos_venta + public.pedidos_venta_items) para la pantalla
+ * "Pedidos de venta" del hub (área Mayorista).
  *
- *   node scripts/sync-pedidos-compra.js     (tarea "MITO - Sync pedidos compra" cada 1 hora, o el botón "Actualizar datos")
+ *   node scripts/sync-pedidos-venta.js            últimos 7 días (tarea cada 15 minutos, botón "Actualizar datos")
+ *   node scripts/sync-pedidos-venta.js --todo     todos desde 2025 y borra los que ya no están (tarea diaria 6:30)
  *
- * Lee VISTAS_CONSOLIDADAS.dbo.PEDIDO_COMPRA del SQL Server de ESTA PC con el usuario
- * de Windows (sqlcmd -E): el usuario SQL del puente no tiene acceso a ese servidor.
- * Suma el nombre del proveedor (ZooLogic.PROV). Si algo falla a mitad de camino no se
- * borra nada: queda la copia anterior + lo que se alcanzó a actualizar.
+ * Lee los comprobantes "PEDIDO" de [MITO].DRAGONFISH_MITO.ZooLogic.COMPROBANTEV + COMPROBANTEVDET
+ * desde el SQL Server de ESTA PC (servidor vinculado MITO) con el usuario de Windows (sqlcmd -E).
+ * Solo lectura. Si algo falla a mitad de camino no se borra nada.
  *
  * Configuración (puente-sql/.env), todo opcional salvo PUENTE_TOKEN:
- *   PEDIDOS_SQL_SERVER   default localhost
- *   PEDIDOS_VISTA        default VISTAS_CONSOLIDADAS.dbo.PEDIDO_COMPRA
- *   PEDIDOS_PROV         default DRAGONFISH_VCPD.ZooLogic.PROV
- * Log: data/sync-pedidos-compra.log
+ *   PEDIDOS_SQL_SERVER     default localhost
+ *   PEDIDOS_VENTA_BASE     default MITO.DRAGONFISH_MITO.ZooLogic   (servidor.base.esquema de Dragonfish)
+ * Log: data/sync-pedidos-venta.log
  */
 
 const fs = require('fs')
@@ -22,14 +21,19 @@ const path = require('path')
 const { execFileSync } = require('child_process')
 
 const RAIZ = path.join(__dirname, '..')
-const LOG = path.join(RAIZ, 'data', 'sync-pedidos-compra.log')
-const LOTE = 100 // pedidos por llamada (cada uno con sus ítems)
+const LOG = path.join(RAIZ, 'data', 'sync-pedidos-venta.log')
+// Lotes por cantidad de ítems (hay pedidos de cientos de renglones): la llamada entra con la clave anon,
+// que tiene un límite de 3 s por consulta en Supabase
+const ITEMS_POR_LOTE = 2000
+const MAX_PEDIDOS_LOTE = 200
+const DIAS_RECIENTES = 7
+const COMPLETA = process.argv.includes('--todo')
 
 function leerEnv(archivo) {
   const out = {}
   try {
     for (const linea of fs.readFileSync(archivo, 'utf8').split(/\r?\n/)) {
-      const m = linea.match(/^\s*([A-Z_]+)\s*=\s*(.*)\s*$/)
+      const m = linea.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/)
       if (m) out[m[1]] = m[2].replace(/^["']|["']$/g, '')
     }
   } catch {
@@ -44,8 +48,7 @@ const cfg = (k) => process.env[k] ?? envPuente[k]
 const SUPABASE_URL = cfg('SUPABASE_URL') ?? envHub.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY = cfg('SUPABASE_ANON_KEY') ?? envHub.VITE_SUPABASE_ANON_KEY
 const SERVIDOR = cfg('PEDIDOS_SQL_SERVER') || 'localhost'
-const VISTA = cfg('PEDIDOS_VISTA') || 'VISTAS_CONSOLIDADAS.dbo.PEDIDO_COMPRA'
-const PROV = cfg('PEDIDOS_PROV') || 'DRAGONFISH_VCPD.ZooLogic.PROV'
+const BASE = cfg('PEDIDOS_VENTA_BASE') || 'MITO.DRAGONFISH_MITO.ZooLogic'
 
 function anotar(texto) {
   const linea = `${new Date().toLocaleString('sv-SE')}  ${texto}`
@@ -73,11 +76,11 @@ async function rpc(nombre, params) {
   return cuerpo
 }
 
-/** "BASE.esquema.objeto" -> "[BASE].[esquema].[objeto]" (validado: se arma dentro de la consulta) */
-function objetoSql(nombre, variable) {
+/** "SERVIDOR.BASE.esquema" -> "[SERVIDOR].[BASE].[esquema]" (validado: se arma dentro de la consulta) */
+function prefijoSql(nombre) {
   const partes = nombre.split('.')
-  if (partes.length !== 3 || !partes.every((p) => /^[A-Za-z0-9_-]{1,128}$/.test(p))) {
-    throw new Error(`${variable} inválida: ${nombre} (usar BASE.esquema.objeto)`)
+  if (partes.length < 2 || partes.length > 3 || !partes.every((p) => /^[A-Za-z0-9_-]{1,128}$/.test(p))) {
+    throw new Error(`PEDIDOS_VENTA_BASE inválida: ${nombre} (usar SERVIDOR.BASE.esquema o BASE.esquema)`)
   }
   return partes.map((p) => `[${p}]`).join('.')
 }
@@ -99,7 +102,7 @@ function leerJson(consulta) {
   const crudo = execFileSync(
     'sqlcmd',
     ['-S', SERVIDOR, '-E', '-C', '-b', '-f', '65001', '-y', '0', '-Q', `SET NOCOUNT ON; ${consulta}`],
-    { maxBuffer: 512 * 1024 * 1024, windowsHide: true },
+    { maxBuffer: 1024 * 1024 * 1024, windowsHide: true },
   )
   // sqlcmd a veces entrega los textos en la página de la consola (CP850) aunque se le pida UTF-8
   // (la Ñ llegaba como "�"): si no es UTF-8 válido, se lee como CP850
@@ -127,18 +130,22 @@ async function main() {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error('Falta SUPABASE_URL / SUPABASE_ANON_KEY')
 
   const t0 = Date.now()
+  const b = prefijoSql(BASE)
+  // Fecha fija en el texto (no hay datos del usuario en la consulta)
+  const desde = COMPLETA ? '20250101' : new Date(Date.now() - DIAS_RECIENTES * 86400000).toISOString().slice(0, 10).replace(/-/g, '')
   const filas = leerJson(
-    `SELECT p.CODIGO, p.FNUMCOMP, p.DESCFW, CONVERT(varchar(10), p.FFCH, 23) AS FFCH,
-            CONVERT(varchar(10), p.FALTAFW, 23) AS FALTAFW, p.HALTAFW, p.FPERSON, pr.CLNOM, p.CODLISTA,
-            p.FOBS, p.FTOTAL, p.ANULADO, p.UALTAFW, p.BD,
-            p.FART, p.FCOLO, p.FTALL, p.FCANT, p.FPRECIO, p.FMONTO, p.FMTOIVA, p.FBRUTO
-     FROM ${objetoSql(VISTA, 'PEDIDOS_VISTA')} p
-     LEFT JOIN ${objetoSql(PROV, 'PEDIDOS_PROV')} pr
-       ON pr.CLCOD COLLATE DATABASE_DEFAULT = p.FPERSON COLLATE DATABASE_DEFAULT
+    `SELECT C.CODIGO, C.FNUMCOMP, C.DESCFW, CONVERT(varchar(10), C.FFCH, 23) AS FFCH,
+            CONVERT(varchar(10), C.FALTAFW, 23) AS FALTAFW, C.HALTAFW, C.FPERSON, C.FCLIENTE, C.FVEN,
+            CAST(C.FOBS AS varchar(max)) AS FOBS, C.FSUBTOT, C.FIMPUESTO, C.FTOTAL, C.ANULADO, C.UALTAFW,
+            D.FART, D.FTXT, D.CCOLOR, D.FCOLTXT, D.TALLE, D.FCANT, D.FPRECIO, D.FNETO, D.FMTOIVA, D.FBRUTO
+     FROM ${b}.[COMPROBANTEV] C
+     JOIN ${b}.[COMPROBANTEVDET] D ON D.CODIGO = C.CODIGO
+     WHERE C.DESCFW LIKE 'PEDIDO %' AND C.FFCH >= '${desde}'
+     ORDER BY C.CODIGO
      FOR JSON PATH, INCLUDE_NULL_VALUES`,
   )
 
-  // Agrupa por pedido (la vista trae una fila por artículo)
+  // Agrupa por pedido (la consulta trae una fila por artículo)
   const pedidos = new Map()
   for (const f of filas) {
     const codigo = txt(f.CODIGO)
@@ -153,14 +160,16 @@ async function main() {
         fecha: txt(f.FFCH) || null,
         // Fecha/hora de alta en hora de Argentina
         fecha_alta: f.FALTAFW ? `${txt(f.FALTAFW)}T${/^\d{1,2}:\d{2}(:\d{2})?$/.test(hora) ? hora : '00:00:00'}-03:00` : null,
-        proveedor: txt(f.FPERSON),
-        proveedor_nombre: txt(f.CLNOM),
-        lista: txt(f.CODLISTA),
+        cliente: txt(f.FPERSON),
+        cliente_nombre: txt(f.FCLIENTE),
+        vendedor: txt(f.FVEN),
         observacion: txt(f.FOBS),
+        subtotal: num(f.FSUBTOT),
+        impuestos: num(f.FIMPUESTO),
         total: num(f.FTOTAL),
         anulado: Boolean(f.ANULADO),
         usuario: txt(f.UALTAFW),
-        base: txt(f.BD),
+        base: 'DRAGONFISH_MITO',
         items: [],
       }
       pedidos.set(codigo, p)
@@ -168,31 +177,61 @@ async function main() {
     p.items.push({
       linea: p.items.length + 1,
       articulo: txt(f.FART),
-      color: txt(f.FCOLO),
-      talle: txt(f.FTALL),
+      descripcion: txt(f.FTXT),
+      color: txt(f.CCOLOR),
+      color_nombre: txt(f.FCOLTXT),
+      talle: txt(f.TALLE),
       cantidad: num(f.FCANT),
       precio: num(f.FPRECIO),
-      neto: num(f.FMONTO),
+      neto: num(f.FNETO),
       iva: num(f.FMTOIVA),
       bruto: num(f.FBRUTO),
     })
   }
   const lista = [...pedidos.values()]
-  anotar(`Leídas ${filas.length} filas de ${VISTA} (${lista.length} pedidos) en ${Date.now() - t0} ms`)
-  if (lista.length === 0) throw new Error('La vista no devolvió pedidos: no se toca la copia actual')
+  const alcance = COMPLETA ? 'copia completa' : `últimos ${DIAS_RECIENTES} días`
+  anotar(`Leídas ${filas.length} filas de ${BASE} (${lista.length} pedidos, ${alcance}) en ${Date.now() - t0} ms`)
+  if (lista.length === 0) {
+    if (COMPLETA) throw new Error('Dragonfish no devolvió pedidos: no se toca la copia actual')
+    anotar('OK: no hay pedidos nuevos en el período')
+    return
+  }
 
   const token = cfg('PUENTE_TOKEN')
   const gen = Date.now()
-  for (let i = 0; i < lista.length; i += LOTE) {
-    await rpc('pedidos_compra_sync_lote', { p_token: token, p_gen: gen, p_pedidos: lista.slice(i, i + LOTE) })
+  const lotes = []
+  let actual = []
+  let items = 0
+  for (const p of lista) {
+    if (actual.length && (items + p.items.length > ITEMS_POR_LOTE || actual.length >= MAX_PEDIDOS_LOTE)) {
+      lotes.push(actual)
+      actual = []
+      items = 0
+    }
+    actual.push(p)
+    items += p.items.length
   }
-  const borrados = await rpc('pedidos_compra_sync_fin', {
+  if (actual.length) lotes.push(actual)
+
+  for (const lote of lotes) {
+    for (let intento = 1; ; intento++) {
+      try {
+        await rpc('pedidos_venta_sync_lote', { p_token: token, p_gen: gen, p_pedidos: lote })
+        break
+      } catch (err) {
+        if (intento >= 3 || /Clave de sincronizaci/.test(String(err))) throw err
+        await new Promise((r) => setTimeout(r, 5000 * intento))
+      }
+    }
+  }
+  const borrados = await rpc('pedidos_venta_sync_fin', {
     p_token: token,
     p_gen: gen,
     p_total: lista.length,
-    p_origen: `${SERVIDOR} ${VISTA}`,
+    p_origen: `${SERVIDOR} ${BASE}`,
+    p_completa: COMPLETA,
   })
-  anotar(`OK: ${lista.length} pedidos (${filas.length} ítems) en Supabase, ${borrados} viejos borrados (${Math.round((Date.now() - t0) / 1000)} s)`)
+  anotar(`OK: ${lista.length} pedidos (${filas.length} ítems, ${alcance}) en Supabase, ${borrados} viejos borrados (${Math.round((Date.now() - t0) / 1000)} s)`)
 }
 
 main().catch((err) => {

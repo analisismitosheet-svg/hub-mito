@@ -25,6 +25,8 @@
  *   POST /          body: { accion: 'replicas' }         -> { replicas: [...], agente }
  *   POST /          body: { accion: 'sync_pedidos_compra' } -> { ok, mensaje }  (botón "Actualizar datos"
  *                   de Pedidos de compra: corre scripts/sync-pedidos-compra.js en el momento)
+ *   POST /          body: { accion: 'sync_pedidos_venta' }  -> { ok, mensaje }  (ídem Pedidos de venta:
+ *                   scripts/sync-pedidos-venta.js, últimos 7 días)
  *                   ^ NO sale del SQL remoto: lee el Replicador SQL de ESTA PC
  *                     (sql/replicas.sql contra la instancia local + config.json
  *                     + historial.csv). Es lo que usa Sistemas > Réplicas.
@@ -410,14 +412,14 @@ async function estadoReplicas() {
 }
 
 
-/* ---- Pedidos de compra: copia forzada desde el hub (una a la vez) ---- */
-let syncPedidosEnCurso = null
-function syncPedidosCompra() {
-  if (syncPedidosEnCurso) return syncPedidosEnCurso
-  syncPedidosEnCurso = new Promise((resolve) => {
+/* ---- Pedidos de compra / venta: copia forzada desde el hub (una a la vez por script) ---- */
+const syncEnCurso = new Map()
+function correrSync(script) {
+  if (syncEnCurso.has(script)) return syncEnCurso.get(script)
+  const promesa = new Promise((resolve) => {
     execFile(
       process.execPath,
-      [path.join(__dirname, 'scripts', 'sync-pedidos-compra.js')],
+      [path.join(__dirname, 'scripts', script)],
       { cwd: __dirname, timeout: 120000, windowsHide: true, maxBuffer: 10 * 1024 * 1024 },
       (err, stdout) => {
         // La última línea del log dice "OK: …" o "ERROR: …"
@@ -428,9 +430,10 @@ function syncPedidosCompra() {
       },
     )
   }).finally(() => {
-    syncPedidosEnCurso = null
+    syncEnCurso.delete(script)
   })
-  return syncPedidosEnCurso
+  syncEnCurso.set(script, promesa)
+  return promesa
 }
 
 const server = http.createServer(async (req, res) => {
@@ -454,7 +457,10 @@ const server = http.createServer(async (req, res) => {
 
     // Pedidos de compra: copia forzada (botón "Actualizar datos" del hub)
     if (body?.accion === 'sync_pedidos_compra') {
-      return enviar(res, 200, await syncPedidosCompra())
+      return enviar(res, 200, await correrSync('sync-pedidos-compra.js'))
+    }
+    if (body?.accion === 'sync_pedidos_venta') {
+      return enviar(res, 200, await correrSync('sync-pedidos-venta.js'))
     }
 
     // Servidores configurados (para elegir en el explorador del hub)

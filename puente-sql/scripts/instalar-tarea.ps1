@@ -2,6 +2,7 @@
 #  - "MITO - Puente SQL": arranca el puente al iniciar sesión, oculto, y lo reinicia si se cae.
 #  - "MITO - Sync equivalencias": copia las equivalencias a Supabase todos los días a las 7:00.
 #  - "MITO - Sync articulos": copia el maestro de artículos a Supabase todos los días a las 7:15.
+#  - "MITO - Sync pedidos compra" (cada hora) y "MITO - Sync pedidos venta" (cada hora + completa 6:30).
 # Uso: npm run tareas:instalar      Quitar: npm run tareas:quitar
 
 $raiz = Split-Path $PSScriptRoot -Parent
@@ -52,3 +53,21 @@ Register-ScheduledTask -TaskName 'MITO - Sync pedidos compra' -Force `
   -Trigger $cadaHora `
   -Settings $ajustesPedidos | Out-Null
 Write-Output 'OK  MITO - Sync pedidos compra (cada 1 hora)'
+
+# Pedidos de venta mayoristas (Dragonfish MITO) -> Supabase.
+# Cada 15 minutos los últimos 7 días (y a pedido desde el hub); todos los días a las 6:30 la copia completa.
+$cada15Venta = New-ScheduledTaskTrigger -Once -At (Get-Date).Date.AddMinutes(5) -RepetitionInterval (New-TimeSpan -Minutes 15)
+Register-ScheduledTask -TaskName 'MITO - Sync pedidos venta' -Force `
+  -Description 'Copia los pedidos de venta mayoristas (DRAGONFISH_MITO) de los ultimos 7 dias a Supabase cada 15 minutos. Log: puente-sql\data\sync-pedidos-venta.log' `
+  -Action (Accion 'sync-pedidos-venta.ps1') `
+  -Trigger $cada15Venta `
+  -Settings $ajustesPedidos | Out-Null
+Write-Output 'OK  MITO - Sync pedidos venta (cada 15 minutos, ultimos 7 dias)'
+$ajustesVentaTodo = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+  -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 30) -MultipleInstances IgnoreNew
+Register-ScheduledTask -TaskName 'MITO - Sync pedidos venta completo' -Force `
+  -Description 'Copia completa de los pedidos de venta mayoristas (DRAGONFISH_MITO) a Supabase y borra los que ya no estan. Log: puente-sql\data\sync-pedidos-venta.log' `
+  -Action (Accion 'sync-pedidos-venta.ps1' '--todo') `
+  -Trigger (New-ScheduledTaskTrigger -Daily -At '06:30') `
+  -Settings $ajustesVentaTodo | Out-Null
+Write-Output 'OK  MITO - Sync pedidos venta completo (todos los dias 6:30)'
