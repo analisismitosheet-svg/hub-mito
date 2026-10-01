@@ -1,23 +1,51 @@
-/* =====================================================================
-   F12 · CONSULTA ARTÍCULOS — vista para el hub (Mayorista)
+﻿/* =====================================================================
+   F12 - CONSULTA ARTICULOS: vista para el hub (Mayorista)
 
-   Una fila = un SKU: artículo + color + talle. Es lo que lee
-   /mayorista/consulta-articulos del Hub MITO a través del proxy /api/sql.
+   Una fila = un SKU: articulo + color + talle, con el stock de MITO.
+   Es lo que lee /mayorista/consulta-articulos del Hub MITO a traves del
+   proxy /api/sql (Hub -> Logic App -> Puente SQL -> esta vista).
 
-   EJECUTAR EN EL SQL SERVER DE MITO (base DRAGONFISH_MITO) con un usuario
-   que pueda leer ZooLogic.vw_PRODUCTOS_WEB.
+   -------------------------------------------------------------------------
+   Origen de cada columna (base DRAGONFISH_MITO, esquema ZooLogic)
+   -------------------------------------------------------------------------
+     ID_ARTICULO      COMB.COART        (BDALTAFW/BDMODIFW = 'MITO')
+     COLOR            COL.COLDES        (codigo en COLOR_CODIGO)
+     TALLE            TALLE.DESCRIP     (codigo en TALLE_CODIGO)
+     NOMBRE_COMPLETO  ART.ARTDES + ART.ARTDESADIC
+     MATERIAL         MAT.MATDES        (a traves de ART.MAT)
+     GRUPO            ART.GRUPO
+     STOCK_MITO       COMB, ver abajo
+     PRECIO           PRECIOAR, lista LISTA2 (MAYOR), ver abajo
+     PRECIO_CONTADO   PRECIOAR, lista LISTA1 (Contado) -- de apoyo
+     SUCURSAL         siempre 'MITO'
 
-   ---------------------------------------------------------------------
-   ANTES DE CORRER: revisá que los nombres de columna de abajo existan.
-   La fuente (vw_PRODUCTOS_WEB) tiene, entre otras, estas columnas:
-       ARTCOD, ARTDES, ARTDESADIC, ARTFAB, GRUPO,
-       TALLE, TALLE_DESCRIPCION, COLOR, COLOR_CODIGO,
-       STOCK_DISPONIBLE, PRECIO
+   -------------------------------------------------------------------------
+   Stock: se toma SOLO la fila de MITO
+   -------------------------------------------------------------------------
+   COMB tiene una fila por (sucursal, articulo, color, talle). La formula es
+   la misma que usa ZooLogic.VISTA_SKU_COMPLETA (la vista que alimenta el
+   Replicador y de la que salen stock y ubicaciones):
 
-   Lo único que puede cambiar en tu base es MATERIAL: si tu vista no tiene
-   una columna con ese nombre, comentá la línea de MATERIAL (y el SELECT la
-   va a mostrar como texto vacío) o poné la que corresponda, por ejemplo
-   W.DESCRIP_MATERIAL o W.MATEL. La pantalla tolera que falte: muestra "—".
+       disponible = COCANT - PEDIDO - PREPARADO,   nunca menor a 0
+
+   Ojo: vw_PRODUCTOS_WEB usa otra formula (suma ENTRANSITO) y ademas NO filtra
+   por sucursal, asi que mezcla las filas de todos los locales. Para "stock en
+   MITO" no sirve.
+
+   -------------------------------------------------------------------------
+   Precio: lista LISTA2 = "MAYOR" (nombre en ZooLogic.LPRECIO)
+   -------------------------------------------------------------------------
+   El módulo es de Mayorista, así que el precio es el de mayorista. Es la misma
+   lista que usa VISTA_SKU_COMPLETA. vw_PRODUCTOS_WEB, en cambio, usa LISTA1
+   (Contado) y por eso no coincide.
+
+   PRECIOAR guarda un renglón por lista, color y vigencia, así que se toma el
+   de FECHAVIG más alta (desempatado por HMODIFW) para ese artículo+color; si
+   el artículo no tiene precio propio del color se usa el general.
+
+   -------------------------------------------------------------------------
+   Correr:  node scripts/sql.mjs -f sql/vw_ARTICULOS_MITO.sql
+   Verificar:  node scripts/sql.mjs -f sql/verificar_vw_ARTICULOS_MITO.sql
    ===================================================================== */
 
 USE [DRAGONFISH_MITO];
@@ -25,57 +53,110 @@ GO
 
 CREATE OR ALTER VIEW ZooLogic.vw_ARTICULOS_MITO
 AS
+WITH combos AS (
+    SELECT
+        LTRIM(RTRIM(C.COART))                 AS COART,
+        LTRIM(RTRIM(C.COCOL))                 AS COCOL,
+        LTRIM(RTRIM(C.TALLE))                 AS TALLE,
+        CAST(ISNULL(C.COCANT, 0) AS INT)      AS STOCK_FISICO,
+        CAST(ISNULL(C.ENTRANSITO, 0) AS INT) AS EN_TRANSITO,
+        CAST(ISNULL(C.PEDIDO, 0) AS INT)      AS EN_PEDIDO,
+        CAST(ISNULL(C.PREPARADO, 0) AS INT)   AS PREPARADO,
+        CAST(CASE
+            WHEN ISNULL(C.COCANT, 0) - ISNULL(C.PEDIDO, 0) - ISNULL(C.PREPARADO, 0) < 0
+                THEN 0
+            ELSE ISNULL(C.COCANT, 0) - ISNULL(C.PEDIDO, 0) - ISNULL(C.PREPARADO, 0)
+        END AS INT)                           AS STOCK_MITO
+    FROM ZooLogic.COMB C
+    WHERE C.BDALTAFW = 'MITO' AND C.BDMODIFW = 'MITO'
+),
+-- Las tablas maestras vienen repetidas por cada sucursal: una fila por código
+colores AS (
+    SELECT COCOL, MAX(CORDES) AS CORDES
+    FROM (
+        SELECT LTRIM(RTRIM(COLCOD)) AS COCOL, LTRIM(RTRIM(COLDES)) AS CORDES
+        FROM ZooLogic.COL
+    ) X
+    GROUP BY COCOL
+),
+talles AS (
+    SELECT TCOD, MAX(TDES) AS TDES
+    FROM (
+        SELECT LTRIM(RTRIM(CODIGO)) AS TCOD, LTRIM(RTRIM(DESCRIP)) AS TDES
+        FROM ZooLogic.TALLE
+    ) X
+    GROUP BY TCOD
+),
+materiales AS (
+    SELECT MATCOD, MAX(MATDES) AS MATDES
+    FROM (
+        SELECT LTRIM(RTRIM(MATCOD)) AS MATCOD, LTRIM(RTRIM(MATDES)) AS MATDES
+        FROM ZooLogic.MAT
+    ) X
+    GROUP BY MATCOD
+),
+-- Precio vigente de las dos listas que interesan, por artículo+color
+precios AS (
+    SELECT ARTICULO, CCOLOR, LISTAPRE, PDIRECTO
+    FROM (
+        SELECT
+            LTRIM(RTRIM(P.ARTICULO))           AS ARTICULO,
+            LTRIM(RTRIM(ISNULL(P.CCOLOR, ''))) AS CCOLOR,
+            P.LISTAPRE,
+            P.PDIRECTO,
+            ROW_NUMBER() OVER (
+                PARTITION BY P.LISTAPRE,
+                             LTRIM(RTRIM(P.ARTICULO)),
+                             LTRIM(RTRIM(ISNULL(P.CCOLOR, '')))
+                ORDER BY P.FECHAVIG DESC, P.HMODIFW DESC
+            ) AS rn
+        FROM ZooLogic.PRECIOAR P
+        WHERE P.LISTAPRE IN ('LISTA2', 'LISTA1') AND P.PDIRECTO IS NOT NULL
+    ) X
+    WHERE rn = 1
+)
 SELECT
-    W.ARTCOD                                   AS ID_ARTICULO,
-    ISNULL(NULLIF(LTRIM(RTRIM(W.COLOR)), ''), LTRIM(RTRIM(W.COLOR_CODIGO)))  AS COLOR,
-    ISNULL(NULLIF(LTRIM(RTRIM(W.TALLE_DESCRIPCION)), ''), LTRIM(RTRIM(W.TALLE))) AS TALLE,
+    CO.COART                                                    AS ID_ARTICULO,
 
-    -- "nombre completo": modelo + descripción adicional
+    -- color: la descripción del maestro; si no hay, el código
+    COALESCE(NULLIF(C.CORDES, ''), CO.COCOL)                   AS COLOR,
+    CO.COCOL                                                    AS COLOR_CODIGO,
+
+    -- talle: la descripción del maestro; si no hay, el código; si no hay talle, ÚNICO
+    COALESCE(NULLIF(T.TDES, ''), NULLIF(CO.TALLE, ''), 'UNICO') AS TALLE,
+    COALESCE(NULLIF(CO.TALLE, ''), 'UNICO')                     AS TALLE_CODIGO,
+
+    -- nombre completo: descripción + descripción adicional
     CONCAT(
-        NULLIF(LTRIM(RTRIM(W.ARTDES)), ''),
-        CASE WHEN NULLIF(LTRIM(RTRIM(W.ARTDESADIC)), '') IS NOT NULL
-             THEN CONCAT(' - ', LTRIM(RTRIM(W.ARTDESADIC))) ELSE '' END
-    )                                           AS NOMBRE_COMPLETO,
+        NULLIF(LTRIM(RTRIM(A.ARTDES)), ''),
+        CASE WHEN NULLIF(LTRIM(RTRIM(A.ARTDESADIC)), '') IS NOT NULL
+             THEN CONCAT(' - ', LTRIM(RTRIM(A.ARTDESADIC))) ELSE '' END
+    )                                                           AS NOMBRE_COMPLETO,
 
-    -- >>> acá va la columna de material de tu base (ver nota arriba) <<<
-    NULLIF(LTRIM(RTRIM(W.MATERIAL)), '')         AS MATERIAL,
+    NULLIF(M.MATDES, '')                                       AS MATERIAL,
+    NULLIF(LTRIM(RTRIM(A.GRUPO)), '')                          AS GRUPO,
 
-    NULLIF(LTRIM(RTRIM(W.GRUPO)), '')            AS GRUPO,
+    CO.STOCK_MITO                                              AS STOCK_MITO,
 
-    -- físico + en tránsito - pedido - preparado (Stock disponible de MITO)
-    CAST(ISNULL(W.STOCK_DISPONIBLE, 0) AS INT)   AS STOCK_MITO,
+    -- precio mayorista (LISTA2); si el color no tiene, el general del artículo
+    CAST(COALESCE(PM.PDIRECTO, PMA.PDIRECTO) AS DECIMAL(18,2))  AS PRECIO,
 
-    CAST(W.PRECIO AS DECIMAL(18,2))              AS PRECIO
-FROM ZooLogic.vw_PRODUCTOS_WEB W
-WHERE NULLIF(LTRIM(RTRIM(W.ARTCOD)), '') IS NOT NULL
-;
+    -- de apoyo: el hub los ignora, sirven para verificar la vista
+    'MITO'                                                     AS SUCURSAL,
+    CO.STOCK_FISICO                                            AS STOCK_FISICO,
+    CO.EN_TRANSITO                                             AS EN_TRANSITO,
+    CO.EN_PEDIDO                                               AS EN_PEDIDO,
+    CO.PREPARADO                                               AS PREPARADO,
+    CAST(COALESCE(PC.PDIRECTO, PCA.PDIRECTO) AS DECIMAL(18,2)) AS PRECIO_CONTADO,
+    COALESCE(PM.LISTAPRE, PMA.LISTAPRE)                        AS LISTAPRE_MAYOR
+FROM combos CO
+LEFT JOIN talles T       ON T.TCOD = CO.TALLE
+LEFT JOIN colores C      ON C.COCOL = CO.COCOL
+LEFT JOIN ZooLogic.ART A ON A.ARTCOD = CO.COART
+LEFT JOIN materiales M   ON M.MATCOD = LTRIM(RTRIM(A.MAT))
+LEFT JOIN precios PM  ON PM.ARTICULO = CO.COART AND PM.CCOLOR = CO.COCOL AND PM.LISTAPRE = 'LISTA2'
+LEFT JOIN precios PMA ON PMA.ARTICULO = CO.COART AND PMA.CCOLOR = ''           AND PMA.LISTAPRE = 'LISTA2'
+LEFT JOIN precios PC  ON PC.ARTICULO = CO.COART AND PC.CCOLOR = CO.COCOL AND PC.LISTAPRE = 'LISTA1'
+LEFT JOIN precios PCA ON PCA.ARTICULO = CO.COART AND PCA.CCOLOR = ''           AND PCA.LISTAPRE = 'LISTA1'
+WHERE NULLIF(CO.COART, '') IS NOT NULL
 GO
-
-/* ---------------------------------------------------------------------
-   COMPROBACIÓN (en el SQL Server)
-
-      SELECT TOP 20 * FROM ZooLogic.vw_ARTICULOS_MITO;
-      SELECT TOP 20 * FROM ZooLogic.vw_ARTICULOS_MITO
-      WHERE ID_ARTICULO LIKE '%BG01%' OR NOMBRE_COMPLETO LIKE '%reloj%';
-
-   Si la segunda consulta tarda más de 1 o 2 segundos, fijá los índices:
-
-      CREATE INDEX IX_COMB_COART     ON ZooLogic.COMB     (COART)     INCLUDE (COCOL, TALLE, COCANT, ENTRANSITO, PEDIDO, PREPARADO);
-      CREATE INDEX IX_PRECIOAR_BUSCA ON ZooLogic.PRECIOAR (LISTAPRE, ARTICULO, CCOLOR) INCLUDE (PDIRECTO, FECHAVIG, HMODIFW);
-
-   ---------------------------------------------------------------------
-   PERMISOS del usuario del puente (en esta base)
-
-      CREATE USER scan_stock FOR LOGIN scan_stock;
-      GRANT SELECT ON ZooLogic.vw_ARTICULOS_MITO TO scan_stock;
-      GRANT VIEW DEFINITION ON ZooLogic.vw_ARTICULOS_MITO TO scan_stock;
-
-   ---------------------------------------------------------------------
-   DESPUÉS, EN EL HUB (sin redeploy)
-
-   1. Configuraciones → Conexión SQL → agregar a la lista de vistas:
-          ZooLogic.vw_ARTICULOS_MITO
-      (o la base.esquema.vista completa, según cómo esté configurado el puente)
-   2. Habilitar la app en el área Mayorista desde Usuarios → Roles
-      (permiso 'mayorista.articulos.view').
-   ===================================================================== */

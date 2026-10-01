@@ -226,6 +226,35 @@ async function baseAccesible(srv, base) {
   return Boolean(r.recordset?.length)
 }
 
+/**
+ * Columnas reales de un objeto, en minúsculas y cacheadas 10 minutos.
+ *
+ * Sirve para que el filtro no se rompa cuando se piden columnas que la vista
+ * no tiene: cada vista expone las suyas (por ejemplo, la de artículos usa
+ * ID_ARTICULO y no ARTCOD), y el cliente manda la lista completa.
+ */
+const cacheColumnas = new Map()
+const COLUMNAS_TTL_MS = 600_000
+
+async function columnasDe(srv, base, esquema, objeto) {
+  const clave = `${srv.alias}|${base || ''}|${esquema}|${objeto}`.toUpperCase()
+  const guardado = cacheColumnas.get(clave)
+  if (guardado && Date.now() - guardado.en < COLUMNAS_TTL_MS) return guardado.cols
+  const { pool, sql } = srv
+  const r = await pool.request()
+    .input('base', sql.NVarChar, base || '')
+    .input('esquema', sql.NVarChar, esquema)
+    .input('objeto', sql.NVarChar, objeto)
+    .query(
+      `SELECT LOWER(COLUMN_NAME) AS col
+         FROM ${base ? `[${base}].` : ''}INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = @esquema AND TABLE_NAME = @objeto AND (TABLE_CATALOG = @base OR @base = '')`,
+    )
+  const cols = new Set((r.recordset ?? []).map((x) => x.col))
+  cacheColumnas.set(clave, { en: Date.now(), cols })
+  return cols
+}
+
 function enviar(res, status, body) {
   const payload = JSON.stringify(body)
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' })
@@ -565,11 +594,20 @@ const server = http.createServer(async (req, res) => {
           error: `Filtro inválido. 'donde' debe ser una de: ${PUENTE_FILTRO_COLS.join(', ')} y 'valor' no puede quedar vacío.`,
         })
       }
+      // De las columnas pedidas se usan solo las que la vista tiene: cada vista
+      // nombra las suyas y el cliente manda la lista completa.
+      const existentes = await columnasDe(srv, base, esquema, objeto)
+      const colsUtiles = cols.filter((c) => existentes.has(c.toLowerCase()))
+      if (colsUtiles.length === 0) {
+        return enviar(res, 400, {
+          error: `La vista ${vista} no tiene ninguna de las columnas pedidas (${cols.join(', ')}).`,
+        })
+      }
       const contiene = String(body?.coincide ?? '').trim().toLowerCase() === 'contiene'
       // Los comodines del usuario van escapados: solo matchea el texto buscado
       const v = contiene ? `%${valor.replace(/[\\%_[\]]/g, (m) => `\\${m}`)}%` : valor
       const op = contiene ? 'LIKE' : '='
-      const where = cols.map((c) => `[${c}] ${op} @v`).join(' OR ')
+      const where = colsUtiles.map((c) => `[${c}] ${op} @v`).join(' OR ')
       const r = await pool
         .request()
         .input('top', sql.Int, top)

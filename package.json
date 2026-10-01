@@ -8,7 +8,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx",
-    "test": "node scripts/test-consulta-articulos.mjs"
+    "test": "node scripts/test-consulta-articulos.mjs",
+    "test:sql": "node scripts/test-puente-filtro.mjs && node scripts/test-consulta-articulos-sql.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

@@ -43,17 +43,35 @@ Documento para retomar el trabajo en otra PC. El código está en GitHub (`main`
 
 ## Puente SQL y el tótem F12 (scan-stock)
 - `puente-sql/server.js` acepta filtro: `POST {vista, top, donde, valor, coincide}`. `donde` contra la lista blanca `PUENTE_FILTRO_COLS` (default `ARTCOD,ID_ARTICULO,ARTICULO,NOMBRE_COMPLETO,DESCRIPCION`) y el valor siempre parametrizado.
-- `coincide` (opcional): `igual` (default, `=`) o `contiene` (`LIKE %valor%` con wildcards escapados). Si se mandan varias columnas en `donde` (separadas por `|`), se combinan con OR entre sí.
+- `coincide` (opcional): `igual` (default, `=`) o `contiene` (`LIKE %valor%` con wildcards escapados). Si se mandan varias columnas en `donde` (separadas por `,`), se combinan con OR entre sí.
+- De las columnas pedidas se usan **solo las que la vista tiene**: el puente cachea 10 min las columnas reales del objeto (`INFORMATION_SCHEMA.COLUMNS`, `columnasDe()`) y las descarta. Así el cliente puede mandar la lista completa y no se rompe con vistas que nombran las columnas distinto (`ID_ARTICULO` vs `ARTCOD`).
 - Lo usa el tótem F12 (`D:\F12 Totems\scan-stock`) para traer solo el artículo escaneado de `ZooLogic.vw_STOCK_TODAS_LAS_SUCURSALES`: SQL local para su sucursal + este puente para las demás. Se configura en la rueda del tótem → *Tipo de conexión: Puente SQL del Hub MITO* (URL `http://IP:3128/` + `PUENTE_TOKEN`).
 
 ## F12 Consulta artículos (Mayorista)
 - Pantalla: `src/pages/ConsultaArticulos.tsx` → `src/lib/articulosConsulta.ts` → `src/lib/sqlApi.ts` (`leerVistaFiltrada`) → `GET /api/sql/<vista>?where=&value=&match=` (`api/sql/[view].ts`) → Logic App → Puente → SQL Server `DRAGONFISH_MITO`.
 - Muestra `id articulo` (+ color/talle como chips), `nombre completo`, `material`, `grupo`, `stock en mito`, `ubicacion`, `precio`. Granularidad **por SKU (artículo + color + talle)**. Buscador por código o descripción con debounce de 400 ms + botón "Consultar"/Enter (inmediato) y export a Excel.
 - La Logic App **ignora** los parámetros del filtro → la vista devuelve el TOP y la pantalla **vuelve a filtrar en el navegador**; si detecta que el SQL no aplicó el filtro muestra el aviso "el SQL no aplicó el filtro: se acotó en el navegador".
-- Vista en el SQL Server: `ZooLogic.vw_ARTICULOS_MITO` (script en `sql/vw_ARTICULOS_MITO.sql`), columnas canónicas `ID_ARTICULO, COLOR, TALLE, NOMBRE_COMPLETO, MATERIAL, GRUPO, STOCK_MITO, PRECIO` construidas sobre `ZooLogic.vw_PRODUCTOS_WEB`. Se cambia con `VITE_SQL_VISTA_ARTICULOS` y hay que **habilitarla en Configuraciones → Conexión SQL** (o `api/sql/catalogo.ts`).
+- Vista en el SQL Server: `ZooLogic.vw_ARTICULOS_MITO` en `DRAGONFISH_MITO`, creada con `sql/vw_ARTICULOS_MITO.sql` (o `node scripts/sql.mjs -f sql/vw_ARTICULOS_MITO.sql`, que corre en esta misma PC). Columnas canónicas `ID_ARTICULO, COLOR, TALLE, NOMBRE_COMPLETO, MATERIAL, GRUPO, STOCK_MITO, PRECIO` + de apoyo `SUCURSAL, STOCK_FISICO, EN_TRANSITO, EN_PEDIDO, PREPARADO, PRECIO_CONTADO, LISTAPRE_MAYOR, COLOR_CODIGO, TALLE_CODIGO`. Se cambia con `VITE_SQL_VISTA_ARTICULOS` y hay que **habilitarla en Configuraciones → Conexión SQL** (o `api/sql/catalogo.ts`).
 - La capa TS tolera nombres alternativos de columna (`articulosConsulta.ts` resuelve por fila, no global) por si la vista tiene otra forma.
 - Lo que no viene del SQL lo completa Supabase: `articulos` (descripcion/material/grupo/precio) y `mapeo_deposito` (ubicación: primero busca el SKU `articulo|color|talle`, si no cae al artículo base). Todo en tandas de 500/200 por el límite de 1000 filas.
 - Permiso nuevo `mayorista.articulos.view` (área `mayorista`), otorgado al rol `mayorista` con `sql/consulta_articulos.sql` (crea el permiso + recrea las políticas RLS de `mapeo_deposito` y `articulos` para que el solo-select acepte el permiso).
+
+### Fórmulas del SQL de MITO (importante: NO usar vw_PRODUCTOS_WEB)
+Leyendo las definiciones reales (`INFORMATION_SCHEMA.VIEWS`):
+- **Precio = lista `LISTA2` = "MAYOR"** (el nombre de la lista está en `ZooLogic.LPRECIO.LPR_NOMBRE`). Se toma el renglón con `FECHAVIG` más alta (desempatado por `HMODIFW`) para ese artículo+color; si el color no tiene, el general del artículo. `vw_PRODUCTOS_WEB` usa `LISTA1` ("Contado"), o sea precio de mostrador, **no** el de mayorista. `PRECIO_CONTADO` en la vista nueva deja el de `LISTA1` a la vista para comparar.
+- **Stock = `COCANT - PEDIDO - PREPARADO`, piso 0.** Es la fórmula de `ZooLogic.VISTA_SKU_COMPLETA`, la vista que alimenta el Replicador (de ahí salen stock y ubicaciones). `vw_PRODUCTOS_WEB` usa otra (`+ ENTRANSITO`) y además **no filtra por sucursal**: como `COMB` tiene una fila por local, esa vista mezcla los locales (por eso devuelve 51 302 filas para 17 678 de MITO). Para "stock en MITO" hay que filtrar `BDALTAFW = 'MITO' AND BDMODIFW = 'MITO'`.
+- Tablas maestras (`COL`, `TALLE`, `MAT`) vienen repetidas por cada sucursal: hay que agrupar por código (`MAX` de la descripción).
+- `talles` usa `TALLE.DESCRIP` (el código está en `TALLE.CODIGO`, no `TALDES`). Sin talle cargado la vista devuelve `UNICO` para no perder el SKU.
+- Estado actual de la vista: 17 678 filas / 2 408 artículos, 0 sin nombre, 0 sin material, 0 sin color/talle, 2 sin grupo, 281 sin precio, 30 con precio 0. Verificar con `sql/verificar_vw_ARTICULOS_MITO.sql` (todas las columnas `mal_*` tienen que dar 0).
+
+### Herramientas para hablar con el SQL de esta PC
+- `node scripts/sql.mjs "SELECT ..."` — cualquier SQL con las credenciales de `puente-sql/.env` (el puente solo permite `SELECT TOP`; esto no). Opciones: `--json`, `--alias <srv>` (otro servidor), `-f <archivo.sql>` (parte por `GO`), `-i` (interactivo), `--lote` (muestra los lotes). Timeout 120 s (`SQL_TIMEOUT_MS`).
+- `node scripts/puente.mjs <health|servidores|bases|objetos|vista|filtro|raw>` — habla con el puente local (`localhost:3128`) igual que el hub, sin Credenciales a mano.
+- El puente se reinicia solo (tarea programada "MITO - Puente SQL" → `puente-sql/scripts/servicio.ps1`, log en `puente-sql/data/servicio.log`): para que tome un cambio en `server.js` basta con `Stop-Process` del `node server.js` y espera ~15 s.
+
+### Pruebas del módulo
+- `npm test` → `scripts/test-consulta-articulos.mjs`: mapeo de columnas, parseo de números, filtro y ubicaciones. No toca la red.
+- `npm run test:sql` → `scripts/test-puente-filtro.mjs` (filtro del puente, wildcard escapado, lista blanca, token) + `scripts/test-consulta-articulos-sql.mjs` (filas **reales** de la vista recurridas por la lib, de punta a punta). Necesitan el puente levantado.
 
 ## Pendientes SQL (ejecutar en Supabase SQL Editor)
 ```sql
