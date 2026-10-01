@@ -114,7 +114,11 @@ function ok(nombre, cond, extra = '') {
   }
 }
 
-const res = await consultarArticulos('')
+// Sin término la pantalla no pide nada: solo muestra lo que se escribe (commit 668098b)
+ok('sin término no trae filas', (await consultarArticulos('')).filas.length === 0)
+ok('con 1 carácter no trae filas', (await consultarArticulos('Z')).filas.length === 0)
+
+const res = await consultarArticulos('ZH0602')
 ok('devuelve filas', res.filas.length > 0, `(${res.filas.length})`)
 ok('sin aviso de filtrado en cliente (el puente filtra)', !res.filtradoEnCliente)
 
