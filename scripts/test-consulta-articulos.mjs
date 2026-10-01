@@ -66,7 +66,7 @@ function ok(nombre, cond, extra = '') {
 }
 const sinMaestro = async () => new Map()
 
-ok('vista por defecto', VISTA_ARTICULOS === 'ZooLogic.vw_ARTICULOS_MITO', VISTA_ARTICULOS)
+ok('vista por defecto, con base', VISTA_ARTICULOS === 'DRAGONFISH_MITO.ZooLogic.vw_ARTICULOS_MITO', VISTA_ARTICULOS)
 
 /* ---- 1. Vista con los nombres canónicos ---- */
 globalThis.__supabase = null
