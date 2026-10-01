@@ -46,6 +46,21 @@ interface Lote {
   horas: number | null
   personas: number | null
   observacion: string | null
+  /** null = sin empezar · 'en_proceso' (automático al marcar/escanear el primer artículo) · 'finalizado' (a mano) */
+  estado: 'en_proceso' | 'finalizado' | null
+}
+
+/** Etiqueta del estado del repo */
+function EstadoRepo({ estado }: { estado: Lote['estado'] }) {
+  const [texto, clase] =
+    estado === 'finalizado'
+      ? ['Finalizado', 'border-emerald-500/40 bg-emerald-500/15 text-emerald-500']
+      : estado === 'en_proceso'
+        ? ['En proceso', 'border-amber-500/40 bg-amber-500/15 text-amber-500']
+        : ['Sin empezar', 'border-line bg-surface2 text-sub']
+  return (
+    <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${clase}`}>{texto}</span>
+  )
 }
 interface Empleado {
   id: string
@@ -349,7 +364,7 @@ export default function Mayorista() {
     const { desde, hasta } = rangoDe(periodo)
     let qLotes = supabase
       .from('mayorista_lotes')
-      .select('id,nombre,motivo,created_at,venta_fecha,cant_venta,horas,personas,observacion')
+      .select('id,nombre,motivo,created_at,venta_fecha,cant_venta,horas,personas,observacion,estado')
       .order('created_at', { ascending: false })
       .limit(60)
     if (desde) qLotes = qLotes.gte('created_at', desde)
@@ -612,6 +627,18 @@ export default function Mayorista() {
     setSubiendo(false)
   }
 
+  // "En proceso" lo pone la base sola; "Finalizado" es lo único que se marca a mano
+  const puedeFinalizar = isAdmin || puedeImportar || puedeMarcar
+  async function finalizarLote(id: string) {
+    if (!supabase) return
+    const { error } = await supabase.rpc('finalizar_repo_mayorista', { p_lote: id })
+    if (error) {
+      setError(error.message)
+      return
+    }
+    setLotes((prev) => prev.map((l) => (l.id === id ? { ...l, estado: 'finalizado' } : l)))
+  }
+
   async function borrarLote(id: string) {
     if (!supabase) return
     const { error } = await supabase.from('mayorista_lotes').delete().eq('id', id)
@@ -748,6 +775,27 @@ export default function Mayorista() {
                   ) : resumen ? (
                     <BarraResumen resumen={resumen} />
                   ) : null}
+                  <EstadoRepo estado={lote.estado} />
+                  {puedeFinalizar && lote.estado === 'en_proceso' && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setConfirm({ message: `¿Marcar "${lote.nombre}" como finalizado?`, onConfirm: () => void finalizarLote(lote.id) })
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter' && e.key !== ' ') return
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setConfirm({ message: `¿Marcar "${lote.nombre}" como finalizado?`, onConfirm: () => void finalizarLote(lote.id) })
+                      }}
+                      className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-emerald-500/40 px-2 py-1 text-xs font-medium text-emerald-500 hover:bg-emerald-500/15"
+                      title="Marcar el repo como finalizado"
+                    >
+                      <Check size={13} aria-hidden /> Finalizar
+                    </span>
+                  )}
                   {puedeImportar && (
                     <span
                       role="button"
