@@ -51,7 +51,6 @@ export default defineConfig({
     // Sistemas > Réplicas hay que levantar `node scripts/mock-replicas.mjs`
     // con el Puente SQL corriendo; el resto de /api/* sigue sin existir.
     proxy: {
-      '/api/replicas': 'http://localhost:4173',
-    },
+      '/api/replicas': 'http://localhost:4173',    },
   },
 })

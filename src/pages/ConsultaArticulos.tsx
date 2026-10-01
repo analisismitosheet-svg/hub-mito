@@ -276,10 +276,10 @@ export default function ConsultaArticulos() {
         ) : (
           <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-soft">
             <div className="max-h-[70vh] overflow-auto">
-              <table className="w-full min-w-[900px] text-left text-sm">
+              <table className="w-full min-w-[1000px] text-left text-sm">
                 <thead className="sticky top-0 z-10">
                   <tr>
-                    {['ID artículo', 'Nombre completo', 'Material', 'Grupo', 'Stock en MITO', 'Ubicación', 'Precio'].map(
+                    {['ID artículo', 'Color', 'Talle', 'Nombre completo', 'Material', 'Grupo', 'Stock en MITO', 'Ubicación', 'Precio'].map(
                       (c) => (
                         <th
                           key={c}
@@ -297,15 +297,14 @@ export default function ConsultaArticulos() {
                 <tbody>
                   {filas.map((f, i) => (
                     <tr key={`${f.idArticulo}|${f.color}|${f.talle}|${i}`} className="odd:bg-surface even:bg-surface2/40">
-                      {/* ID artículo + la variante (color / talle) */}
                       <td className="border-b border-line/50 px-3 py-2 align-top">
                         <span className="block font-mono text-[13px] font-semibold text-ink">{f.idArticulo || '—'}</span>
-                        {(f.color || f.talle) && (
-                          <span className="mt-1 flex flex-wrap gap-1">
-                            {f.color && <Chip tono="naranja">{f.color}</Chip>}
-                            {f.talle && <Chip>{f.talle}</Chip>}
-                          </span>
-                        )}
+                      </td>
+                      <td className="whitespace-nowrap border-b border-line/50 px-3 py-2 align-top">
+                        {f.color ? <Chip tono="naranja">{f.color}</Chip> : <span className="text-sub">—</span>}
+                      </td>
+                      <td className="whitespace-nowrap border-b border-line/50 px-3 py-2 align-top">
+                        {f.talle ? <Chip>{f.talle}</Chip> : <span className="text-sub">—</span>}
                       </td>
                       <td className="border-b border-line/50 px-3 py-2 align-top text-ink">
                         {f.nombre || <span className="text-sub">—</span>}
