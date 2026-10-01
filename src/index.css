@@ -447,3 +447,11 @@ body {
 .min-h-screen.bg-paper {
   background-color: transparent;
 }
+
+/* Fila agrupada más oscura (ej. F12: cada color de un código en su propio bloque) */
+.banda-oscura {
+  background-color: rgba(0, 0, 0, 0.32);
+}
+:root.light .banda-oscura {
+  background-color: rgba(15, 23, 42, 0.07);
+}

@@ -12,6 +12,7 @@ import {
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import {
+  colorEtiqueta,
   consultarArticulos,
   filasParaExcel,
   VISTA_ARTICULOS,
@@ -63,6 +64,8 @@ export default function ConsultaArticulos() {
   const [error, setError] = useState<string | null>(null)
   const [truncado, setTruncado] = useState(false)
   const [filtradoEnCliente, setFiltradoEnCliente] = useState(false)
+  /** Por defecto solo se ve lo que tiene stock; con la tilde, todas las variantes */
+  const [verSinStock, setVerSinStock] = useState(false)
   // Número de consulta en curso: si el usuario sigue tipeando, el resultado viejo se descarta
   const pedido = useRef(0)
   // Último término enviado al SQL, para no preguntar dos veces lo mismo
@@ -127,22 +130,43 @@ export default function ConsultaArticulos() {
     }
   }, [termino, cargar])
 
+  const visibles = useMemo(
+    () => (verSinStock ? filas : filas.filter((f) => (f.stock ?? 0) > 0)),
+    [filas, verSinStock],
+  )
+  const ocultasSinStock = filas.length - visibles.length
+
+  // Banda por color: cada vez que cambia el artículo+color se alterna el fondo,
+  // así un código con 2 colores se ve en dos bloques
+  const bandaOscura = useMemo(() => {
+    const out: boolean[] = []
+    let oscura = false
+    let anterior = ''
+    visibles.forEach((f, i) => {
+      const clave = `${f.idArticulo}|${f.colorCodigo || f.color}`
+      if (i > 0 && clave !== anterior) oscura = !oscura
+      anterior = clave
+      out.push(oscura)
+    })
+    return out
+  }, [visibles])
+
   async function exportar() {
-    if (filas.length === 0) return
+    if (visibles.length === 0) return
     const XLSX = await import('xlsx')
     const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasParaExcel(filas)), 'Artículos')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasParaExcel(visibles)), 'Artículos')
     const sufijo = consultado ? `_${consultado.replace(/[^\w-]+/g, '_')}` : ''
     XLSX.writeFile(wb, `consulta_articulos${sufijo}_${new Date().toISOString().slice(0, 10)}.xlsx`)
   }
 
   const { stockTotal, conStock, conUbicacion } = useMemo(
     () => ({
-      stockTotal: filas.reduce((s, f) => s + (f.stock ?? 0), 0),
-      conStock: filas.filter((f) => (f.stock ?? 0) > 0).length,
-      conUbicacion: filas.filter((f) => f.ubicaciones.length > 0).length,
+      stockTotal: visibles.reduce((s, f) => s + (f.stock ?? 0), 0),
+      conStock: visibles.filter((f) => (f.stock ?? 0) > 0).length,
+      conUbicacion: visibles.filter((f) => f.ubicaciones.length > 0).length,
     }),
-    [filas],
+    [visibles],
   )
 
   if (!puedeVer) {
@@ -170,7 +194,7 @@ export default function ConsultaArticulos() {
         </div>
         <button
           onClick={() => void exportar()}
-          disabled={filas.length === 0}
+          disabled={visibles.length === 0}
           className="btn-press inline-flex h-11 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-sm font-medium text-ink transition hover:bg-surface2 disabled:opacity-50"
         >
           <Download size={16} aria-hidden /> Excel
@@ -215,6 +239,15 @@ export default function ConsultaArticulos() {
             <RefreshCw size={16} className={cargando ? 'animate-spin' : ''} aria-hidden />
             <span className="hidden sm:inline">Consultar</span>
           </button>
+          <label className="inline-flex h-11 cursor-pointer select-none items-center gap-2 rounded-xl border border-line bg-surface px-3 text-sm font-medium text-ink transition hover:bg-surface2">
+            <input
+              type="checkbox"
+              checked={verSinStock}
+              onChange={(e) => setVerSinStock(e.target.checked)}
+              className="h-4 w-4 accent-brand-600"
+            />
+            Sin stock
+          </label>
         </div>
 
         {error && (
@@ -233,9 +266,9 @@ export default function ConsultaArticulos() {
         )}
 
         {/* Resumen */}
-        {filas.length > 0 && (
+        {visibles.length > 0 && (
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-line bg-surface px-3 py-2 text-xs text-sub">
-            <span className="font-semibold tabular-nums text-ink">{fmtN(filas.length)} SKU</span>
+            <span className="font-semibold tabular-nums text-ink">{fmtN(visibles.length)} SKU</span>
             <span>
               <span className="font-semibold tabular-nums text-ink">{fmtN(conStock)}</span> con stock
             </span>
@@ -245,6 +278,9 @@ export default function ConsultaArticulos() {
             <span>
               <span className="font-semibold tabular-nums text-ink">{fmtN(conUbicacion)}</span> con ubicación
             </span>
+            {ocultasSinStock > 0 && (
+              <span>· {fmtN(ocultasSinStock)} sin stock ocultos (marcá "Sin stock" para verlos)</span>
+            )}
             {truncado && (
               <span className="text-amber-500">
                 · se trajo el máximo de filas por consulta: acotá la búsqueda
@@ -267,11 +303,13 @@ export default function ConsultaArticulos() {
           <div className="flex items-center justify-center gap-2 py-12 text-sub">
             <Loader2 size={18} className="animate-spin" aria-hidden /> Consultando el SQL Server…
           </div>
-        ) : filas.length === 0 ? (
+        ) : visibles.length === 0 ? (
           <p className="rounded-2xl border border-line bg-surface px-4 py-10 text-center text-sm text-sub">
-            {consultado
-              ? `Ningún artículo coincide con "${consultado}".`
-              : 'La vista del SQL Server no devolvió artículos.'}
+            {filas.length > 0
+              ? `"${consultado}" no tiene stock en MITO (${fmtN(filas.length)} variantes sin stock). Marcá "Sin stock" para verlas.`
+              : consultado
+                ? `Ningún artículo coincide con "${consultado}".`
+                : 'La vista del SQL Server no devolvió artículos.'}
           </p>
         ) : (
           <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-soft">
@@ -295,13 +333,16 @@ export default function ConsultaArticulos() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filas.map((f, i) => (
-                    <tr key={`${f.idArticulo}|${f.color}|${f.talle}|${i}`} className="odd:bg-surface even:bg-surface2/40">
+                  {visibles.map((f, i) => (
+                    <tr
+                      key={`${f.idArticulo}|${f.colorCodigo}|${f.color}|${f.talle}|${i}`}
+                      className={bandaOscura[i] ? 'banda-oscura' : ''}
+                    >
                       <td className="border-b border-line/50 px-3 py-2 align-top">
                         <span className="block font-mono text-[13px] font-semibold text-ink">{f.idArticulo || '—'}</span>
                       </td>
                       <td className="whitespace-nowrap border-b border-line/50 px-3 py-2 align-top">
-                        {f.color ? <Chip tono="naranja">{f.color}</Chip> : <span className="text-sub">—</span>}
+                        {f.color || f.colorCodigo ? <Chip tono="naranja">{colorEtiqueta(f)}</Chip> : <span className="text-sub">—</span>}
                       </td>
                       <td className="whitespace-nowrap border-b border-line/50 px-3 py-2 align-top">
                         {f.talle ? <Chip>{f.talle}</Chip> : <span className="text-sub">—</span>}

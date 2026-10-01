@@ -40,8 +40,13 @@ const TOP_LISTA = 1000
 
 export interface Articulo {
   idArticulo: string
+  /** código del color (COLOR_CODIGO, ej. "02") */
+  colorCodigo: string
+  /** descripción del color (ej. "NEGRO") */
   color: string
   talle: string
+  /** código del talle (TALLE_CODIGO) */
+  talleCodigo: string
   nombre: string
   material: string
   grupo: string
@@ -59,7 +64,7 @@ export interface ResultadoConsulta {
   filtradoEnCliente: boolean
 }
 
-type Campo = 'idArticulo' | 'color' | 'talle' | 'nombre' | 'material' | 'grupo' | 'stock' | 'precio'
+type Campo = 'idArticulo' | 'colorCodigo' | 'color' | 'talleCodigo' | 'talle' | 'nombre' | 'material' | 'grupo' | 'stock' | 'precio'
 
 /**
  * Nombre de columna que se acepta para cada campo, del más exacto al más
@@ -70,8 +75,10 @@ type Campo = 'idArticulo' | 'color' | 'talle' | 'nombre' | 'material' | 'grupo' 
  */
 const ALIAS: Record<Campo, string[]> = {
   idArticulo: ['idarticulo', 'artcod', 'codigomodelo', 'codigo', 'idart', 'coart', 'articulo', 'art'],
-  color: ['color', 'colorcodigo', 'codcolor', 'descripcolor', 'nombrecolor', 'descripcioncolor'],
-  talle: ['talle', 'talledescripcion', 'descriptalle', 'codtalle', 'descripciontalle'],
+  colorCodigo: ['colorcodigo', 'codcolor', 'idcolor', 'cocol', 'ccolor'],
+  color: ['color', 'descripcolor', 'nombrecolor', 'descripcioncolor', 'colordescripcion'],
+  talleCodigo: ['tallecodigo', 'codtalle', 'idtalle'],
+  talle: ['talle', 'talledescripcion', 'descriptalle', 'descripciontalle'],
   nombre: [
     'nombrecompleto', 'nombre', 'descripcion', 'modelo', 'artdes',
     'descripcioncompleta', 'articulo_nombre', 'detalle',
@@ -82,7 +89,7 @@ const ALIAS: Record<Campo, string[]> = {
   precio: ['precio', 'preciopublico', 'preciovigente', 'precio_unitario', 'precioventa', 'neto', 'preciodirecto'],
 }
 
-const ORDEN: Campo[] = ['idArticulo', 'color', 'talle', 'nombre', 'material', 'grupo', 'stock', 'precio']
+const ORDEN: Campo[] = ['idArticulo', 'colorCodigo', 'color', 'talleCodigo', 'talle', 'nombre', 'material', 'grupo', 'stock', 'precio']
 
 /** Descripción "adicional" de las vistas viejas: se suma al nombre del modelo. */
 const ALIAS_ADIC = ['artdesadic', 'descripcioncomplet', 'descripcionadicional']
@@ -219,7 +226,7 @@ async function maestroDe(codigos: string[]): Promise<Map<string, Maestro>> {
 function coincide(fila: Articulo, q: string): boolean {
   const n = norm(q)
   if (!n) return true
-  return [fila.idArticulo, fila.nombre, fila.material, fila.grupo, fila.color, fila.talle].some((v) =>
+  return [fila.idArticulo, fila.nombre, fila.material, fila.grupo, fila.colorCodigo, fila.color, fila.talle].some((v) =>
     norm(v).includes(n),
   )
 }
@@ -247,8 +254,10 @@ async function armar(crudas: FilaSql[], q: string): Promise<Articulo[]> {
 
     base.push({
       idArticulo: txt(val('idArticulo')).toUpperCase(),
+      colorCodigo: txt(val('colorCodigo')),
       color: txt(val('color')),
       talle: txt(val('talle')),
+      talleCodigo: txt(val('talleCodigo')),
       nombre,
       material: txt(val('material')),
       grupo: txt(val('grupo')),
@@ -279,8 +288,17 @@ async function armar(crudas: FilaSql[], q: string): Promise<Articulo[]> {
       fila.grupo = fila.grupo || m.grupo
       fila.precio = fila.precio ?? m.precio
     }
-    // primero la ubicación del SKU exacto; si no, la del artículo base
-    const encontradas = ubis.get(claveSku(fila.idArticulo, fila.color, fila.talle)) ?? ubis.get(fila.idArticulo) ?? []
+    // primero la ubicación del SKU exacto (el mapeo puede guardar el color/talle
+    // por código o por descripción); si no, la del artículo base
+    const colores = [...new Set([fila.colorCodigo, fila.color].filter(Boolean))]
+    const talles = [...new Set([fila.talleCodigo, fila.talle].filter(Boolean))]
+    let encontradas: string[] | undefined
+    for (const c of colores.length ? colores : ['']) {
+      for (const t of talles.length ? talles : ['']) {
+        encontradas ??= ubis.get(claveSku(fila.idArticulo, c, t))
+      }
+    }
+    encontradas ??= ubis.get(fila.idArticulo) ?? []
     fila.ubicaciones = [...encontradas].sort(compararUbicaciones)
   }
 
@@ -289,7 +307,7 @@ async function armar(crudas: FilaSql[], q: string): Promise<Articulo[]> {
     .sort(
       (a, b) =>
         a.idArticulo.localeCompare(b.idArticulo) ||
-        a.color.localeCompare(b.color) ||
+        (a.colorCodigo || a.color).localeCompare(b.colorCodigo || b.color, undefined, { numeric: true }) ||
         a.talle.localeCompare(b.talle, undefined, { numeric: true }),
     )
 }
@@ -333,11 +351,18 @@ export async function consultarArticulos(termino: string): Promise<ResultadoCons
   return { filas: await armar(crudas, q), truncado: crudas.length >= tope, filtradoEnCliente }
 }
 
+/** "02 NEGRO": código + descripción del color (sin repetir si son iguales). */
+export function colorEtiqueta(f: Pick<Articulo, 'colorCodigo' | 'color'>): string {
+  if (!f.colorCodigo) return f.color
+  if (!f.color || f.color.toUpperCase() === f.colorCodigo.toUpperCase()) return f.colorCodigo
+  return `${f.colorCodigo} ${f.color}`
+}
+
 /** Columnas del Excel, en el mismo orden que la pantalla. */
 export function filasParaExcel(filas: Articulo[]): Record<string, string | number>[] {
   return filas.map((f) => ({
     'ID artículo': f.idArticulo,
-    Color: f.color,
+    Color: colorEtiqueta(f),
     Talle: f.talle,
     'Nombre completo': f.nombre,
     Material: f.material,
