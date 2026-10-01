@@ -11,8 +11,9 @@ import { claveSku, compararUbicaciones, ubicacionesSkuDeArticulos } from '@/lib/
  * por el proxy /api/sql (Lógica App o Puente SQL). Cada fila es un SKU:
  * artículo + color + talle.
  *
- * La vista se define en sql/vw_ARTICULOS_MITO.sql y hay que habilitarla en
- * Configuraciones > Conexión SQL. Se puede cambiar con VITE_SQL_VISTA_ARTICULOS.
+ * La vista se define en sql/vw_ARTICULOS_MITO.sql (VISTAS_CONSOLIDADAS, que
+ * lee MITO por el servidor vinculado) y hay que habilitarla en Configuraciones >
+ * Conexión SQL. Se puede cambiar con VITE_SQL_VISTA_ARTICULOS.
  *
  * Lo que el SQL no trae (o no se llama como lo espera) se completa con lo que
  * ya está copiado en Supabase:
@@ -23,12 +24,14 @@ import { claveSku, compararUbicaciones, ubicacionesSkuDeArticulos } from '@/lib/
 /**
  * Vista del SQL Server: una fila por artículo + color + talle.
  *
- * El nombre va con la base (BASE.ESQUEMA.VISTA) porque el puente se conecta a
- * `SQL_DATABASE` (DWH) y sin la base no encuentra la vista.
+ * Vive en VISTAS_CONSOLIDADAS, en la instancia local de esta PC, y de ahí lee
+ * los datos de MITO por el servidor vinculado "MITO". Por eso el nombre lleva
+ * el alias del servidor adelante: ALIAS:BASE.ESQUEMA.VISTA. Sin el alias el
+ * puente mira en su servidor principal (ZOOLOGIC) y no la encuentra.
  */
 export const VISTA_ARTICULOS =
   (import.meta.env.VITE_SQL_VISTA_ARTICULOS as string | undefined)?.trim() ||
-  'DRAGONFISH_MITO.ZooLogic.vw_ARTICULOS_MITO'
+  'DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.vw_ARTICULOS_MITO'
 
 /** Tope de filas cuando se busca un término (el proxy lo recorta a SQL_MAX_ROWS). */
 const TOP_BUSQUEDA = 500

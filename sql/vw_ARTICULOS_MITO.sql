@@ -6,6 +6,23 @@
    proxy /api/sql (Hub -> Logic App -> Puente SQL -> esta vista).
 
    -------------------------------------------------------------------------
+   Donde vive
+   -------------------------------------------------------------------------
+   Base VISTAS_CONSOLIDADAS, esquema dbo, en la instancia local
+   (DESKTOP-OA4GU6I, la de esta PC). Ahí están las demás vistas
+   consolidadas del hub (vw_STOCK_SUCURSALES_REAL, vw_comprobantes_*,
+   vw_DETMSTOCK_UNIFICADA...).
+
+   Los datos de MITO NO están en esta instancia: se leen por el servidor
+   vinculado "MITO" (192.168.0.222\ZOOLOGIC) con nombre de 4 partes:
+
+       MITO.DRAGONFISH_MITO.ZooLogic.<tabla>
+
+   Ojo: sin el "MITO." adelante SQL Server busca [DRAGONFISH_MITO] entre las
+   bases LOCALES, no lo encuentra y dice "Invalid object name". Esa base
+   vive en la otra instancia.
+
+   -------------------------------------------------------------------------
    Origen de cada columna (base DRAGONFISH_MITO, esquema ZooLogic)
    -------------------------------------------------------------------------
      ID_ARTICULO      COMB.COART        (BDALTAFW/BDMODIFW = 'MITO')
@@ -44,14 +61,16 @@
    el artículo no tiene precio propio del color se usa el general.
 
    -------------------------------------------------------------------------
-   Correr:  node scripts/sql.mjs -f sql/vw_ARTICULOS_MITO.sql
-   Verificar:  node scripts/sql.mjs -f sql/verificar_vw_ARTICULOS_MITO.sql
+   Correr:  node scripts/sql.mjs --alias -f sql/vw_ARTICULOS_MITO.sql
+            (--alias = la instancia local; sin --alias cae en ZOOLOGIC, que
+             NO tiene esta vista)
+   Verificar:  node scripts/sql.mjs --alias -f sql/verificar_vw_ARTICULOS_MITO.sql
    ===================================================================== */
 
-USE [DRAGONFISH_MITO];
+USE [VISTAS_CONSOLIDADAS];
 GO
 
-CREATE OR ALTER VIEW ZooLogic.vw_ARTICULOS_MITO
+CREATE OR ALTER VIEW dbo.vw_ARTICULOS_MITO
 AS
 WITH combos AS (
     SELECT
@@ -67,7 +86,7 @@ WITH combos AS (
                 THEN 0
             ELSE ISNULL(C.COCANT, 0) - ISNULL(C.PEDIDO, 0) - ISNULL(C.PREPARADO, 0)
         END AS INT)                           AS STOCK_MITO
-    FROM ZooLogic.COMB C
+    FROM MITO.DRAGONFISH_MITO.ZooLogic.COMB C
     WHERE C.BDALTAFW = 'MITO' AND C.BDMODIFW = 'MITO'
 ),
 -- Las tablas maestras vienen repetidas por cada sucursal: una fila por código
@@ -75,7 +94,7 @@ colores AS (
     SELECT COCOL, MAX(CORDES) AS CORDES
     FROM (
         SELECT LTRIM(RTRIM(COLCOD)) AS COCOL, LTRIM(RTRIM(COLDES)) AS CORDES
-        FROM ZooLogic.COL
+        FROM MITO.DRAGONFISH_MITO.ZooLogic.COL
     ) X
     GROUP BY COCOL
 ),
@@ -83,7 +102,7 @@ talles AS (
     SELECT TCOD, MAX(TDES) AS TDES
     FROM (
         SELECT LTRIM(RTRIM(CODIGO)) AS TCOD, LTRIM(RTRIM(DESCRIP)) AS TDES
-        FROM ZooLogic.TALLE
+        FROM MITO.DRAGONFISH_MITO.ZooLogic.TALLE
     ) X
     GROUP BY TCOD
 ),
@@ -91,7 +110,7 @@ materiales AS (
     SELECT MATCOD, MAX(MATDES) AS MATDES
     FROM (
         SELECT LTRIM(RTRIM(MATCOD)) AS MATCOD, LTRIM(RTRIM(MATDES)) AS MATDES
-        FROM ZooLogic.MAT
+        FROM MITO.DRAGONFISH_MITO.ZooLogic.MAT
     ) X
     GROUP BY MATCOD
 ),
@@ -110,7 +129,7 @@ precios AS (
                              LTRIM(RTRIM(ISNULL(P.CCOLOR, '')))
                 ORDER BY P.FECHAVIG DESC, P.HMODIFW DESC
             ) AS rn
-        FROM ZooLogic.PRECIOAR P
+        FROM MITO.DRAGONFISH_MITO.ZooLogic.PRECIOAR P
         WHERE P.LISTAPRE IN ('LISTA2', 'LISTA1') AND P.PDIRECTO IS NOT NULL
     ) X
     WHERE rn = 1
@@ -152,7 +171,7 @@ SELECT
 FROM combos CO
 LEFT JOIN talles T       ON T.TCOD = CO.TALLE
 LEFT JOIN colores C      ON C.COCOL = CO.COCOL
-LEFT JOIN ZooLogic.ART A ON A.ARTCOD = CO.COART
+LEFT JOIN MITO.DRAGONFISH_MITO.ZooLogic.ART A ON A.ARTCOD = CO.COART
 LEFT JOIN materiales M   ON M.MATCOD = LTRIM(RTRIM(A.MAT))
 LEFT JOIN precios PM  ON PM.ARTICULO = CO.COART AND PM.CCOLOR = CO.COCOL AND PM.LISTAPRE = 'LISTA2'
 LEFT JOIN precios PMA ON PMA.ARTICULO = CO.COART AND PMA.CCOLOR = ''           AND PMA.LISTAPRE = 'LISTA2'

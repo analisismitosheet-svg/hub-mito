@@ -27,13 +27,33 @@ const sql = require('mssql')
 /** Las vistas de MITO con joins pesados tardan más que los 15 s por defecto. */
 const TIMEOUT_MS = Number(process.env.SQL_TIMEOUT_MS || 120_000)
 
-/** Abre un pool contra el principal (ZOOLOGIC) o el local, por alias. */
+/**
+ * Abre un pool contra el principal (ZOOLOGIC) o el local, por alias.
+ *
+ * El local (SQL2_*) entra con usuario de Windows, así que va por el driver
+ * ODBC con el paquete mssql/msnodesqlv8: es lo mismo que hace el puente y
+ * hace falta porque tedious no entiende un connectionString de ODBC.
+ */
 export async function abrir(alias) {
   if (alias) {
+    if (cfg.SQL2_WINDOWS_AUTH === 'true') {
+      const mod = require('mssql/msnodesqlv8')
+      const [h2, p2] = String(cfg.SQL2_SERVER).split(':')
+      return new mod.ConnectionPool({
+        connectionString:
+          `Driver={${cfg.SQL2_ODBC_DRIVER || 'ODBC Driver 18 for SQL Server'}};` +
+          `Server=${p2 ? `${h2},${p2}` : h2};Database=${cfg.SQL2_DATABASE};` +
+          `Trusted_Connection=yes;TrustServerCertificate=yes;`,
+      })
+    }
+    const [h2, p2] = String(cfg.SQL2_SERVER).split(':')
     return new sql.ConnectionPool({
-      connectionString:
-        `Driver={ODBC Driver 18 for SQL Server};Server=${cfg.SQL2_SERVER};Database=${cfg.SQL2_DATABASE};` +
-        `Trusted_Connection=yes;TrustServerCertificate=yes;`,
+      server: h2,
+      ...(p2 ? { port: Number(p2) } : {}),
+      database: cfg.SQL2_DATABASE,
+      user: cfg.SQL2_USER,
+      password: cfg.SQL2_PASSWORD,
+      options: { encrypt: cfg.SQL2_ENCRYPT === 'true', trustServerCertificate: cfg.SQL2_TRUST_CERT !== 'false' },
     })
   }
   const [host, port] = String(cfg.SQL_SERVER).split(':')

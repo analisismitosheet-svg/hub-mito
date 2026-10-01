@@ -21,7 +21,7 @@ async function puente(body) {
   return { status: r.status, texto: await r.text() }
 }
 
-const VISTA = 'DRAGONFISH_MITO.ZooLogic.vw_ARTICULOS_MITO'
+const VISTA = 'DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.vw_ARTICULOS_MITO'
 const COLS_CLIENTE = ['ARTCOD', 'ID_ARTICULO', 'ARTICULO', 'NOMBRE_COMPLETO', 'DESCRIPCION', 'ARTDES', 'ARTDESADIC']
 
 let pasa = 0

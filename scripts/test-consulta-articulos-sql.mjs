@@ -36,7 +36,7 @@ async function puente(body) {
   return JSON.parse(texto)
 }
 
-const VISTA = 'DRAGONFISH_MITO.ZooLogic.vw_ARTICULOS_MITO'
+const VISTA = 'DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.vw_ARTICULOS_MITO'
 console.log(`Trayendo filas reales de ${VISTA}…`)
 const crudas = await puente({
   vista: VISTA,

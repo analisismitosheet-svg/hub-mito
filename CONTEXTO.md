@@ -48,10 +48,15 @@ Documento para retomar el trabajo en otra PC. El código está en GitHub (`main`
 - Lo usa el tótem F12 (`D:\F12 Totems\scan-stock`) para traer solo el artículo escaneado de `ZooLogic.vw_STOCK_TODAS_LAS_SUCURSALES`: SQL local para su sucursal + este puente para las demás. Se configura en la rueda del tótem → *Tipo de conexión: Puente SQL del Hub MITO* (URL `http://IP:3128/` + `PUENTE_TOKEN`).
 
 ## F12 Consulta artículos (Mayorista)
-- Pantalla: `src/pages/ConsultaArticulos.tsx` → `src/lib/articulosConsulta.ts` → `src/lib/sqlApi.ts` (`leerVistaFiltrada`) → `GET /api/sql/<vista>?where=&value=&match=` (`api/sql/[view].ts`) → Logic App → Puente → SQL Server `DRAGONFISH_MITO`.
+- Pantalla: `src/pages/ConsultaArticulos.tsx` → `src/lib/articulosConsulta.ts` → `src/lib/sqlApi.ts` (`leerVistaFiltrada`) → `GET /api/sql/<vista>?where=&value=&match=` (`api/sql/[view].ts`) → Logic App → Puente → `VISTAS_CONSOLIDADAS` → servidor vinculado `MITO` → `DRAGONFISH_MITO`.
 - Muestra `id articulo` (+ color/talle como chips), `nombre completo`, `material`, `grupo`, `stock en mito`, `ubicacion`, `precio`. Granularidad **por SKU (artículo + color + talle)**. Buscador por código o descripción con debounce de 400 ms + botón "Consultar"/Enter (inmediato) y export a Excel.
 - La Logic App **ignora** los parámetros del filtro → la vista devuelve el TOP y la pantalla **vuelve a filtrar en el navegador**; si detecta que el SQL no aplicó el filtro muestra el aviso "el SQL no aplicó el filtro: se acotó en el navegador".
-- Vista en el SQL Server: `DRAGONFISH_MITO.ZooLogic.vw_ARTICULOS_MITO`, creada con `sql/vw_ARTICULOS_MITO.sql` (o `node scripts/sql.mjs -f sql/vw_ARTICULOS_MITO.sql`, que corre en esta misma PC). **El nombre va con la base**: el puente se conecta a `SQL_DATABASE` (DWH), así que sin la base responde "No existe la vista". Columnas canónicas `ID_ARTICULO, COLOR, TALLE, NOMBRE_COMPLETO, MATERIAL, GRUPO, STOCK_MITO, PRECIO` + de apoyo `SUCURSAL, STOCK_FISICO, EN_TRANSITO, EN_PEDIDO, PREPARADO, PRECIO_CONTADO, LISTAPRE_MAYOR, COLOR_CODIGO, TALLE_CODIGO`. Se cambia con `VITE_SQL_VISTA_ARTICULOS` y hay que **habilitarla en Configuraciones → Conexión SQL** (agregarla desde el explorador: base `DRAGONFISH_MITO` → esquema `ZooLogic` → `vw_ARTICULOS_MITO`).
+- Vista en el SQL Server: **`DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.vw_ARTICULOS_MITO`**, creada con `node scripts/sql.mjs --alias -f sql/vw_ARTICULOS_MITO.sql`. `--alias` es obligatorio: sin él el script entra a `ZOOLOGIC`, que es donde **estaba antes** (en `DRAGONFISH_MITO.ZooLogic`, ya borrada) y donde no está ahora.
+  - Vive en `VISTAS_CONSOLIDADAS` (instancia local `DESKTOP-OA4GU6I`, la de esta PC) junto a las demás vistas consolidadas del hub (`vw_STOCK_SUCURSALES_REAL`, `vw_comprobantes_*`, `vw_DETMSTOCK_UNIFICADA`).
+  - Los datos de MITO **no** están en esa instancia: la vista los lee del servidor vinculado **`MITO`** (`192.168.0.222\ZOOLOGIC`, MSOLEDBSQL) con nombre de 4 partes: `MITO.DRAGONFISH_MITO.ZooLogic.COMB`. Ojo: sin el `MITO.` adelante, SQL Server busca `DRAGONFISH_MITO` entre las bases **locales**, no la encuentra y dice "Invalid object name".
+  - **El nombre que pide el hub lleva el alias adelante** (`ALIAS:BASE.ESQUEMA.VISTA`) porque el puente tiene dos servidores: sin alias mira en el principal (`ZOOLOGIC`) y responde "No existe la vista".
+  - Columnas canónicas `ID_ARTICULO, COLOR, TALLE, NOMBRE_COMPLETO, MATERIAL, GRUPO, STOCK_MITO, PRECIO` + de apoyo `SUCURSAL, STOCK_FISICO, EN_TRANSITO, EN_PEDIDO, PREPARADO, PRECIO_CONTADO, LISTAPRE_MAYOR, COLOR_CODIGO, TALLE_CODIGO`. Se cambia con `VITE_SQL_VISTA_ARTICULOS` y hay que **habilitarla en Configuraciones → Conexión SQL** (agregarla desde el explorador: servidor `DESKTOP-OA4GU6I` → base `VISTAS_CONSOLIDADAS` → esquema `dbo` → `vw_ARTICULOS_MITO`).
+  - Leerla por el vínculo cuesta: el TOP con filtro tarda ~1,5-2,5 s contra los ~0,2 s de la vista local anterior.
 - La capa TS tolera nombres alternativos de columna (`articulosConsulta.ts` resuelve por fila, no global) por si la vista tiene otra forma.
 - Lo que no viene del SQL lo completa Supabase: `articulos` (descripcion/material/grupo/precio) y `mapeo_deposito` (ubicación: primero busca el SKU `articulo|color|talle`, si no cae al artículo base). Todo en tandas de 500/200 por el límite de 1000 filas.
 - Permiso nuevo `mayorista.articulos.view` (área `mayorista`), otorgado al rol `mayorista` con `sql/consulta_articulos.sql` (crea el permiso + recrea las políticas RLS de `mapeo_deposito` y `articulos` para que el solo-select acepte el permiso).
@@ -62,10 +67,10 @@ Leyendo las definiciones reales (`INFORMATION_SCHEMA.VIEWS`):
 - **Stock = `COCANT - PEDIDO - PREPARADO`, piso 0.** Es la fórmula de `ZooLogic.VISTA_SKU_COMPLETA`, la vista que alimenta el Replicador (de ahí salen stock y ubicaciones). `vw_PRODUCTOS_WEB` usa otra (`+ ENTRANSITO`) y además **no filtra por sucursal**: como `COMB` tiene una fila por local, esa vista mezcla los locales (por eso devuelve 51 302 filas para 17 678 de MITO). Para "stock en MITO" hay que filtrar `BDALTAFW = 'MITO' AND BDMODIFW = 'MITO'`.
 - Tablas maestras (`COL`, `TALLE`, `MAT`) vienen repetidas por cada sucursal: hay que agrupar por código (`MAX` de la descripción).
 - `talles` usa `TALLE.DESCRIP` (el código está en `TALLE.CODIGO`, no `TALDES`). Sin talle cargado la vista devuelve `UNICO` para no perder el SKU.
-- Estado actual de la vista: 17 678 filas / 2 408 artículos, 0 sin nombre, 0 sin material, 0 sin color/talle, 2 sin grupo, 281 sin precio, 30 con precio 0. Verificar con `sql/verificar_vw_ARTICULOS_MITO.sql` (todas las columnas `mal_*` tienen que dar 0).
+- Estado actual de la vista: 17 678 filas / 2 408 artículos, 0 sin nombre, 0 sin material, 0 sin color/talle, 2 sin grupo, 281 sin precio, 30 con precio 0. Verificar con `node scripts/sql.mjs --alias -f sql/verificar_vw_ARTICULOS_MITO.sql` (todas las columnas `mal_*` tienen que dar 0). Al mudarla se comprobó que daba **exactamente lo mismo** que la versión local de `DRAGONFISH_MITO`: mismo `CHECKSUM` de las columnas canónicas (-120017878487), mismo stock (99 196) y mismo precio (486 652 691).
 
 ### Herramientas para hablar con el SQL de esta PC
-- `node scripts/sql.mjs "SELECT ..."` — cualquier SQL con las credenciales de `puente-sql/.env` (el puente solo permite `SELECT TOP`; esto no). Opciones: `--json`, `--alias <srv>` (otro servidor), `-f <archivo.sql>` (parte por `GO`), `-i` (interactivo), `--lote` (muestra los lotes). Timeout 120 s (`SQL_TIMEOUT_MS`).
+- `node scripts/sql.mjs "SELECT ..."` — cualquier SQL con las credenciales de `puente-sql/.env` (el puente solo permite `SELECT TOP`; esto no). Opciones: `--json`, `--alias` (el otro servidor: `VISTAS_CONSOLIDADAS` en `localhost`, por driver ODBC + `mssql/msnodesqlv8` con usuario de Windows), `-f <archivo.sql>` (parte por `GO`), `-i` (interactivo), `--lote` (muestra los lotes). Timeout 120 s (`SQL_TIMEOUT_MS`).
 - `node scripts/puente.mjs <health|servidores|bases|objetos|vista|filtro|raw>` — habla con el puente local (`localhost:3128`) igual que el hub, sin Credenciales a mano.
 - El puente se reinicia solo (tarea programada "MITO - Puente SQL" → `puente-sql/scripts/servicio.ps1`, log en `puente-sql/data/servicio.log`): para que tome un cambio en `server.js` basta con `Stop-Process` del `node server.js` y espera ~15 s.
 
@@ -106,13 +111,15 @@ CREATE INDEX IF NOT EXISTS transfer_items_lote_id_idx ON public.transfer_items (
 CREATE INDEX IF NOT EXISTS transfer_items_created_at_idx ON public.transfer_items (created_at DESC);
 ```
 
-## Pendientes F12 Consulta artículos (aún NO ejecutado)
-1. Supabase SQL Editor → correr **`sql/consulta_articulos.sql`** (permiso `mayorista.articulos.view` + políticas RLS de `mapeo_deposito` y `articulos` + checklist del hub).
-2. SQL Server de MITO (`DRAGONFISH_MITO`) → correr **`sql/vw_ARTICULOS_MITO.sql`** (crea `ZooLogic.vw_ARTICULOS_MITO`) y grant de SELECT al login del puente.
-3. Hub → Configuraciones → Conexión SQL: habilitar la vista `ZooLogic.vw_ARTICULOS_MITO` (o `api/sql/catalogo.ts` si no aparece).
-4. Reiniciar `puente-sql/server.js` para que tome el `PUENTE_FILTRO_COLS` nuevo (si se sobreescribe por variable de entorno, agregarle `ID_ARTICULO,NOMBRE_COMPLETO`).
-5. Hub → Usuarios → Roles: granting de `mayorista.articulos.view` al rol `mayorista`.
-6. Deploy.
+## Pendientes F12 Consulta artículos
+1. Supabase SQL Editor → correr **`sql/consulta_articulos.sql`** (permiso `mayorista.articulos.view` + políticas RLS de `mapeo_deposito` y `articulos` + checklist del hub). **Es lo único que no se puede hacer desde el código.**
+2. Hub → Configuraciones → Conexión SQL: habilitar `DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.vw_ARTICULOS_MITO` desde el explorador (servidor `DESKTOP-OA4GU6I` → base `VISTAS_CONSOLIDADAS` → esquema `dbo`).
+3. Hub → Usuarios → Roles: granting de `mayorista.articulos.view` al rol `mayorista`.
+
+Ya está hecho (no hay que repetirlo):
+- La vista existe y está verificada en `VISTAS_CONSOLIDADAS` (`node scripts/sql.mjs --alias -f sql/vw_ARTICULOS_MITO.sql`).
+- El puente con `PUENTE_FILTRO_COLS` que ya incluye `ID_ARTICULO` y `NOMBRE_COMPLETO`, y que ignora las columnas que la vista no tiene.
+- Deploy.
 
 ## Archivos clave
 - `src/config/areas.ts` — áreas + apps del menú (agregar app = AppDef aquí).
@@ -128,7 +135,7 @@ CREATE INDEX IF NOT EXISTS transfer_items_created_at_idx ON public.transfer_item
 - `src/pages/Rma.tsx` + `src/pages/ProveedoresPacho.tsx` + `src/pages/GuiaPacho.tsx` — RMA con proveedores/guía.
 - `src/pages/Replicas.tsx` + `src/lib/replicas.ts` + `api/replicas.ts` — estado de las réplicas (Replicador SQL de la PC central); `puente-sql/sql/replicas.sql` + `scripts/mock-replicas.mjs`.
 - `src/pages/ConsultaArticulos.tsx` + `src/lib/articulosConsulta.ts` — F12 Consulta artículos (Mayorista); `src/lib/sqlApi.ts` (`leerVistaFiltrada`) + `api/sql/[view].ts` + `puente-sql/server.js` (filtro del puente).
-- `sql/consulta_articulos.sql` (Supabase: permiso + RLS) y `sql/vw_ARTICULOS_MITO.sql` (vista en el SQL Server de MITO).
+- `sql/consulta_articulos.sql` (Supabase: permiso + RLS) y `sql/vw_ARTICULOS_MITO.sql` (la vista, en `VISTAS_CONSOLIDADAS`; se corre con `--alias`).
 
 ## Dependencias extra instaladas
 `konva@9`, `react-konva@18` (React 18), `webfontloader`, `jspdf`, `@types/webfontloader`. (`xlsx`, `recharts` ya estaban).

@@ -63,14 +63,15 @@ switch (cmd) {
     mostrar(await puente(JSON.parse(a)))
     break
   case 'filtro': {
-    // filtro <vista> <valor> [top] [coincide]
+    // filtro <vista> <valor> [top] [contiene]
+    // argv: [2]=filtro [3]=vista [4]=valor [5]=top [6]=contiene
     mostrar(
       await puente({
         vista: a,
-        top: Number(process.argv[6] || b) || 10,
+        top: Number(process.argv[5]) || 10,
         donde: 'ARTCOD,ID_ARTICULO,ARTICULO,NOMBRE_COMPLETO,DESCRIPCION',
         valor: b,
-        coincide: process.argv[7] === 'contiene' ? 'contiene' : 'igual',
+        coincide: process.argv[6] === 'contiene' ? 'contiene' : 'igual',
       }),
     )
     break
