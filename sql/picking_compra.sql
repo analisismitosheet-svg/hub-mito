@@ -114,4 +114,35 @@ REVOKE ALL ON FUNCTION public.picking_items(text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.picking_pedidos() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.picking_items(text) TO authenticated;
 
+-- Por artículo: todos los pedidos (no anulados) que tienen ese artículo, del más viejo al más nuevo.
+-- p_articulo es el código o el principio del código (mínimo 3 caracteres).
+CREATE OR REPLACE FUNCTION public.picking_articulo(p_articulo text)
+RETURNS TABLE (codigo text, numero integer, descripcion text, fecha date, proveedor text, proveedor_nombre text,
+               articulo text, color text, talle text, cantidad numeric, recibido numeric,
+               actualizado_at timestamptz, actualizado_por text)
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  WITH it AS (
+    SELECT i.codigo, upper(trim(i.articulo)) AS articulo, coalesce(trim(i.color), '') AS color,
+           coalesce(trim(i.talle), '') AS talle, sum(coalesce(i.cantidad, 0)) AS cantidad, min(i.linea) AS linea
+    FROM public.pedidos_compra_items i
+    WHERE length(trim(coalesce(p_articulo, ''))) >= 3
+      AND upper(trim(i.articulo)) LIKE upper(replace(replace(trim(p_articulo), '%', ''), '_', '')) || '%'
+    GROUP BY 1, 2, 3, 4
+  )
+  SELECT p.codigo, p.numero, p.descripcion, p.fecha, p.proveedor, p.proveedor_nombre,
+         it.articulo, it.color, it.talle, it.cantidad, coalesce(k.recibido, 0), k.actualizado_at,
+         (SELECT coalesce(nullif(trim(u.nombre), ''), u.email) FROM public.usuarios u WHERE u.id = k.actualizado_por)
+  FROM it
+  JOIN public.pedidos_compra p ON p.codigo = it.codigo AND NOT p.anulado
+  LEFT JOIN public.picking_compra k
+    ON k.codigo = it.codigo AND k.articulo = it.articulo AND k.color = it.color AND k.talle = it.talle
+  WHERE private.tengo_permiso('picking.view')
+  ORDER BY it.articulo, it.color, it.talle, p.fecha, p.numero, it.linea
+  LIMIT 2000
+$$;
+REVOKE ALL ON FUNCTION public.picking_articulo(text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.picking_articulo(text) TO authenticated;
+
 COMMIT;

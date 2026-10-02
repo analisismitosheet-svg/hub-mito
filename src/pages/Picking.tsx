@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Loader2, Search, ScanLine, CheckCheck, Check, Minus, Plus, ArrowLeft, PackageCheck, RotateCcw,
+  Loader2, Search, ScanLine, CheckCheck, Check, Minus, Plus, ArrowLeft, PackageCheck, RotateCcw, Boxes, ClipboardList,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -35,12 +35,24 @@ interface ItemPicking {
   actualizado_por: string | null
 }
 
+/** Renglón del modo "Por artículo": un artículo/color/talle de un pedido. */
+interface FilaArticulo extends ItemPicking {
+  codigo: string
+  numero: number | null
+  descripcion: string | null
+  fecha: string | null
+  proveedor: string | null
+  proveedor_nombre: string | null
+}
+
 type Filtro = 'todos' | 'pendientes' | 'completos'
+type Modo = 'pedido' | 'articulo'
 
 const n0 = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 })
 const fechaCorta = (f: string | null) => (f ? f.split('-').reverse().join('/') : '—')
 const claveItem = (i: { articulo: string; color: string; talle: string }) => `${i.articulo}|${i.color}|${i.talle}`
 const CLAVE_PROV = 'picking.proveedor'
+const CLAVE_MODO = 'picking.modo'
 
 /** "PEDIDODECOMPRA X 00001-00009787" -> "X 00001-00009787" */
 function numeroComprobante(p: PedidoPicking): string {
@@ -68,6 +80,21 @@ export default function Picking() {
     try { return localStorage.getItem(CLAVE_PROV) ?? '' } catch { return '' }
   })
   const [verCompletos, setVerCompletos] = useState(false)
+  const [modo, setModoState] = useState<Modo>(() => {
+    try { return localStorage.getItem(CLAVE_MODO) === 'articulo' ? 'articulo' : 'pedido' } catch { return 'pedido' }
+  })
+  function setModo(m: Modo) {
+    setModoState(m)
+    setAviso(null)
+    try { localStorage.setItem(CLAVE_MODO, m) } catch { /* sin almacenamiento: no pasa nada */ }
+  }
+  // Modo "Por artículo"
+  const [codArt, setCodArt] = useState('')
+  const [buscado, setBuscado] = useState('')
+  const [filasArt, setFilasArt] = useState<FilaArticulo[]>([])
+  const [cargandoArt, setCargandoArt] = useState(false)
+  const [verCompletosArt, setVerCompletosArt] = useState(false)
+  const [llegaron, setLlegaron] = useState<Record<string, string>>({})
   const [sel, setSel] = useState<string | null>(null)
 
   const [items, setItems] = useState<ItemPicking[]>([])
@@ -156,12 +183,13 @@ export default function Picking() {
     return () => { vivo = false }
   }, [sel])
 
-  /** Cambia lo recibido de un artículo (se ve al instante y se guarda en un rato). */
-  function cambiar(item: ItemPicking, recibido: number) {
-    if (!sel || !supabase) return
+  /** Cambia lo recibido de un artículo de un pedido (se ve al instante y se guarda en un rato). */
+  function cambiar(codigo: string, item: ItemPicking, recibido: number) {
+    if (!supabase) return
     const valor = Math.max(0, Math.round(recibido * 100) / 100)
-    const codigo = sel
-    setItems((prev) => prev.map((i) => (claveItem(i) === claveItem(item) ? { ...i, recibido: valor } : i)))
+    // Se actualiza en los dos modos (el mismo renglón puede estar en pantalla en uno y en otro)
+    if (codigo === sel) setItems((prev) => prev.map((i) => (claveItem(i) === claveItem(item) ? { ...i, recibido: valor } : i)))
+    setFilasArt((prev) => prev.map((f) => (f.codigo === codigo && claveItem(f) === claveItem(item) ? { ...f, recibido: valor } : f)))
     // Avance del pedido en la lista (lo recibido de más no suma)
     setPedidos((prev) =>
       prev.map((p) =>
@@ -233,7 +261,7 @@ export default function Picking() {
       return
     }
     const destino = delArticulo.find((i) => i.recibido < i.cantidad) ?? delArticulo[0]
-    cambiar(destino, destino.recibido + 1)
+    cambiar(sel!, destino, destino.recibido + 1)
     setAviso({
       ok: destino.recibido + 1 <= destino.cantidad,
       texto: `${cod} ${destino.color} ${destino.talle}: ${n0.format(destino.recibido + 1)} de ${n0.format(destino.cantidad)}${destino.recibido + 1 > destino.cantidad ? ' (llegó de más)' : ''}`,
@@ -245,11 +273,85 @@ export default function Picking() {
     if (!window.confirm(texto)) return
     for (const i of items) {
       const destino = completo ? Math.max(i.recibido, i.cantidad) : 0
-      if (destino !== i.recibido) cambiar(i, destino)
+      if (destino !== i.recibido) cambiar(sel!, i, destino)
     }
   }
 
   const pct = tot.pedidas > 0 ? Math.round((tot.recibidas / tot.pedidas) * 100) : 0
+
+  /** Busca el artículo (código o principio del código) en todos los pedidos. */
+  async function buscarArticulo(e?: React.FormEvent) {
+    e?.preventDefault()
+    const cod = codArt.trim().toUpperCase().replace(/\s/g, '')
+    if (!supabase) return
+    if (cod.length < 3) {
+      setAviso({ ok: false, texto: 'Escribí al menos 3 caracteres del código.' })
+      return
+    }
+    setCargandoArt(true)
+    setAviso(null)
+    setLlegaron({})
+    const { data, error: er } = await supabase.rpc('picking_articulo', { p_articulo: cod })
+    setCargandoArt(false)
+    if (er) return setError(er.message)
+    const filas = ((data as FilaArticulo[] | null) ?? []).map((f) => ({ ...f, cantidad: Number(f.cantidad), recibido: Number(f.recibido) }))
+    setFilasArt(filas)
+    setBuscado(cod)
+    if (!filas.length) setAviso({ ok: false, texto: `${cod} no está en ningún pedido de compra.` })
+    const arts = [...new Set(filas.map((f) => f.articulo))].filter((a) => !descripciones.has(a))
+    if (arts.length) {
+      const nuevas = new Map<string, string>()
+      for (let k = 0; k < arts.length; k += 200) {
+        const { data: d } = await supabase.from('articulos').select('id_art,descripcion').in('id_art', arts.slice(k, k + 200))
+        for (const a of (d as { id_art: string; descripcion: string | null }[] | null) ?? []) if (a.descripcion) nuevas.set(a.id_art, a.descripcion)
+      }
+      setDescripciones((prev) => new Map([...prev, ...nuevas]))
+    }
+  }
+
+  // Grupos artículo + color + talle, cada uno con sus pedidos del más viejo al más nuevo
+  const grupos = useMemo(() => {
+    const m = new Map<string, { clave: string; articulo: string; color: string; talle: string; filas: FilaArticulo[] }>()
+    for (const f of filasArt) {
+      const k = claveItem(f)
+      const g = m.get(k) ?? { clave: k, articulo: f.articulo, color: f.color, talle: f.talle, filas: [] }
+      g.filas.push(f)
+      m.set(k, g)
+    }
+    return [...m.values()].map((g) => ({
+      ...g,
+      pedido: g.filas.reduce((a, f) => a + f.cantidad, 0),
+      recibido: g.filas.reduce((a, f) => a + Math.min(f.recibido, f.cantidad), 0),
+    }))
+      // Talles en orden natural (3, 4, … 10, 11; S, M, L quedan alfabéticos)
+      .sort((a, b) => a.articulo.localeCompare(b.articulo) || a.color.localeCompare(b.color, 'es', { numeric: true }) || a.talle.localeCompare(b.talle, 'es', { numeric: true }))
+  }, [filasArt])
+
+  /** Reparte las unidades que llegaron: completa primero el pedido más viejo, después el siguiente… */
+  function repartir(g: (typeof grupos)[number]) {
+    let quedan = Number(String(llegaron[g.clave] ?? '').replace(',', '.'))
+    if (!Number.isFinite(quedan) || quedan <= 0) {
+      setAviso({ ok: false, texto: 'Poné cuántas unidades llegaron.' })
+      return
+    }
+    const total = quedan
+    const usados: string[] = []
+    for (const f of g.filas) {
+      if (quedan <= 0) break
+      const falta = Math.max(0, f.cantidad - f.recibido)
+      if (!falta) continue
+      const suma = Math.min(falta, quedan)
+      cambiar(f.codigo, f, f.recibido + suma)
+      usados.push(`N° ${f.numero} (+${n0.format(suma)})`)
+      quedan -= suma
+    }
+    setLlegaron((prev) => ({ ...prev, [g.clave]: '' }))
+    const qué = `${g.articulo} ${g.color} ${g.talle}`.trim()
+    if (!usados.length) setAviso({ ok: false, texto: `${qué}: no hay pedidos pendientes, no se asignó nada.` })
+    else if (quedan > 0)
+      setAviso({ ok: false, texto: `${qué}: ${n0.format(total - quedan)} asignadas a ${usados.join(', ')}. Sobran ${n0.format(quedan)}: no hay más pedidos pendientes de ese talle.` })
+    else setAviso({ ok: true, texto: `${qué}: ${n0.format(total)} asignadas a ${usados.join(', ')}.` })
+  }
   const provActual = proveedores.find((p) => p.codigo === proveedor)
 
   return (
@@ -273,6 +375,202 @@ export default function Picking() {
         <p role="alert" className="mb-3 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>
       )}
 
+      {/* Modo: por pedido (proveedor → N°) o por artículo (todos sus pedidos, del más viejo al más nuevo) */}
+      <div role="tablist" aria-label="Modo" className="mb-3 flex gap-1.5">
+        {([['pedido', 'Por pedido', ClipboardList], ['articulo', 'Por artículo', Boxes]] as const).map(([m, label, Icono]) => (
+          <button
+            key={m}
+            role="tab"
+            aria-selected={modo === m}
+            onClick={() => setModo(m)}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-sm font-medium transition ${
+              modo === m ? 'border-amber-500/50 bg-amber-500/15 text-amber-500' : 'border-line text-sub hover:text-ink'
+            }`}
+          >
+            <Icono size={15} aria-hidden /> {label}
+          </button>
+        ))}
+      </div>
+
+      {modo === 'articulo' && (
+        <div className="space-y-3 pb-4">
+          <form onSubmit={(e) => void buscarArticulo(e)} className="flex flex-wrap items-end gap-2 rounded-2xl border border-line bg-surface p-3">
+            <label className="block min-w-[220px] flex-1">
+              <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-sub">Código del artículo</span>
+              <div className="relative">
+                <ScanLine size={16} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-amber-500" />
+                <input
+                  value={codArt}
+                  onChange={(e) => setCodArt(e.target.value)}
+                  placeholder="Escaneá o escribí el código (o el principio) y Enter"
+                  aria-label="Código del artículo"
+                  className="h-11 w-full rounded-xl border border-amber-500/40 bg-surface2 pl-9 pr-3 text-sm text-ink outline-none placeholder:text-sub/70 focus-visible:ring-2 focus-visible:ring-amber-500/40"
+                />
+              </div>
+            </label>
+            <button
+              type="submit"
+              disabled={cargandoArt}
+              className="btn-press inline-flex h-11 items-center gap-1.5 rounded-xl bg-amber-600 px-4 text-sm font-semibold text-white transition hover:bg-amber-700 disabled:opacity-60"
+            >
+              {cargandoArt ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Search size={15} aria-hidden />} Buscar
+            </button>
+            <label className="inline-flex h-11 cursor-pointer items-center gap-2 text-sm text-sub">
+              <input type="checkbox" checked={verCompletosArt} onChange={(e) => setVerCompletosArt(e.target.checked)} className="h-4 w-4 accent-amber-500" />
+              Ver también los pedidos ya recibidos
+            </label>
+          </form>
+
+          {aviso && (
+            <p role="status" className={`rounded-xl border p-2.5 text-sm ${aviso.ok ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-brand-600/30 bg-brand-600/10 text-brand-400'}`}>
+              {aviso.texto}
+            </p>
+          )}
+
+          {!buscado && !cargandoArt ? (
+            <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-line bg-surface/50 px-4 py-16 text-center text-sub">
+              <Boxes size={28} aria-hidden />
+              Buscá un artículo: aparecen todos los pedidos que lo tienen, del más viejo al más nuevo.
+            </div>
+          ) : (
+            grupos.map((g) => {
+              const falta = Math.max(0, g.pedido - g.recibido)
+              const filas = g.filas.filter((f) => verCompletosArt || f.recibido < f.cantidad)
+              if (!filas.length && !verCompletosArt) return null
+              return (
+                <div key={g.clave} className="overflow-hidden rounded-2xl border border-line bg-surface">
+                  {/* Cabecera del talle: total pendiente + "Llegaron" para repartir */}
+                  <div className="flex flex-wrap items-center gap-3 border-b border-line bg-surface2 px-3 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-ink">
+                        {g.articulo} <span className="text-sub">· {g.color} · talle {g.talle || '—'}</span>
+                      </p>
+                      <p className="truncate text-xs text-sub">{descDe(g.articulo) || '—'}</p>
+                    </div>
+                    <p className="text-xs tabular-nums text-sub">
+                      {g.filas.length} pedido{g.filas.length === 1 ? '' : 's'} · faltan <strong className={falta ? 'text-amber-500' : 'text-emerald-500'}>{n0.format(falta)}</strong> de {n0.format(g.pedido)}
+                    </p>
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault()
+                        repartir(g)
+                      }}
+                      className="flex items-center gap-1.5"
+                    >
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        value={llegaron[g.clave] ?? ''}
+                        onChange={(e) => setLlegaron((prev) => ({ ...prev, [g.clave]: e.target.value }))}
+                        placeholder="Llegaron"
+                        aria-label={`Unidades que llegaron de ${g.articulo} ${g.color} ${g.talle}`}
+                        className="h-9 w-24 rounded-lg border border-line bg-surface px-2 text-center text-sm font-semibold tabular-nums text-ink outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40"
+                      />
+                      <button
+                        type="submit"
+                        disabled={!falta}
+                        title="Completa primero el pedido más viejo"
+                        className="btn-press inline-flex h-9 items-center gap-1 rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-40"
+                      >
+                        <CheckCheck size={14} aria-hidden /> Repartir
+                      </button>
+                    </form>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[40rem] text-sm">
+                      <thead>
+                        <tr className="border-b border-line text-left text-[11px] font-semibold uppercase tracking-wide text-sub">
+                          <th className="px-3 py-1.5">Pedido</th>
+                          <th className="px-3 py-1.5">Fecha</th>
+                          <th className="px-3 py-1.5">Proveedor</th>
+                          <th className="px-3 py-1.5 text-right">Pedido</th>
+                          <th className="px-3 py-1.5 text-center">Recibido</th>
+                          <th className="px-3 py-1.5 text-center">✓</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-line/50">
+                        {filas.map((f) => {
+                          const completo = f.recibido >= f.cantidad
+                          const demas = f.recibido > f.cantidad
+                          return (
+                            <tr
+                              key={f.codigo}
+                              className={demas ? 'bg-brand-600/10' : completo ? 'bg-emerald-500/10' : f.recibido > 0 ? 'bg-amber-500/10' : ''}
+                              title={f.actualizado_at ? `Marcado por ${f.actualizado_por ?? '—'} el ${new Date(f.actualizado_at).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}` : undefined}
+                            >
+                              <td className="whitespace-nowrap px-3 py-1.5 font-display font-bold tabular-nums text-ink">N° {f.numero ?? '—'}</td>
+                              <td className="whitespace-nowrap px-3 py-1.5 tabular-nums text-sub">{fechaCorta(f.fecha)}</td>
+                              <td className="max-w-[16rem] truncate px-3 py-1.5 text-ink/90" title={f.proveedor_nombre ?? ''}>
+                                <span className="text-amber-500">{f.proveedor}</span> {f.proveedor_nombre}
+                              </td>
+                              <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-ink">{n0.format(f.cantidad)}</td>
+                              <td className="px-3 py-1">
+                                <div className="mx-auto flex w-fit items-center gap-1">
+                                  <button
+                                    onClick={() => cambiar(f.codigo, f, f.recibido - 1)}
+                                    disabled={f.recibido <= 0}
+                                    aria-label={`Restar 1 al pedido ${f.numero}`}
+                                    className="btn-press flex h-8 w-8 items-center justify-center rounded-lg border border-line bg-surface text-ink hover:bg-surface2 disabled:opacity-30"
+                                  >
+                                    <Minus size={14} aria-hidden />
+                                  </button>
+                                  <input
+                                    type="number"
+                                    inputMode="decimal"
+                                    min={0}
+                                    value={f.recibido}
+                                    onChange={(e) => cambiar(f.codigo, f, Number(e.target.value) || 0)}
+                                    onFocus={(e) => e.target.select()}
+                                    aria-label={`Recibido del pedido ${f.numero}`}
+                                    className={`h-8 w-16 rounded-lg border bg-surface2 px-1 text-center text-sm font-semibold tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40 ${
+                                      demas ? 'border-brand-500 text-brand-400' : completo ? 'border-emerald-500/60 text-emerald-500' : 'border-line text-ink'
+                                    }`}
+                                  />
+                                  <button
+                                    onClick={() => cambiar(f.codigo, f, f.recibido + 1)}
+                                    aria-label={`Sumar 1 al pedido ${f.numero}`}
+                                    className="btn-press flex h-8 w-8 items-center justify-center rounded-lg border border-line bg-surface text-ink hover:bg-surface2"
+                                  >
+                                    <Plus size={14} aria-hidden />
+                                  </button>
+                                </div>
+                              </td>
+                              <td className="px-3 py-1 text-center">
+                                <button
+                                  onClick={() => cambiar(f.codigo, f, completo ? 0 : f.cantidad)}
+                                  aria-pressed={completo}
+                                  aria-label={completo ? `Desmarcar el pedido ${f.numero}` : `Marcar el pedido ${f.numero} como recibido completo`}
+                                  className={`btn-press mx-auto flex h-8 w-8 items-center justify-center rounded-lg border-2 transition ${
+                                    completo ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-line text-transparent hover:border-emerald-500/60 hover:text-emerald-500/60'
+                                  }`}
+                                >
+                                  <Check size={16} strokeWidth={3} aria-hidden />
+                                </button>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                        {!filas.length && (
+                          <tr><td colSpan={6} className="px-3 py-4 text-center text-xs text-sub">Todo recibido.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )
+            })
+          )}
+          {buscado && !cargandoArt && filasArt.length > 0 && grupos.every((g) => g.filas.every((f) => f.recibido >= f.cantidad)) && !verCompletosArt && (
+            <p className="rounded-2xl border border-dashed border-line bg-surface/50 px-4 py-8 text-center text-sm text-sub">
+              Todos los pedidos de {buscado} ya están recibidos.{' '}
+              <button onClick={() => setVerCompletosArt(true)} className="text-amber-500 hover:underline">Verlos</button>
+            </p>
+          )}
+        </div>
+      )}
+
+      {modo === 'pedido' && (<>
       {/* Proveedor */}
       <div className="mb-3 flex flex-wrap items-end gap-3 rounded-2xl border border-line bg-surface p-3">
         <label className="block min-w-[240px] flex-1">
@@ -489,7 +787,7 @@ export default function Picking() {
                                 <td className="px-3 py-1">
                                   <div className="mx-auto flex w-fit items-center gap-1">
                                     <button
-                                      onClick={() => cambiar(i, i.recibido - 1)}
+                                      onClick={() => cambiar(sel!, i, i.recibido - 1)}
                                       disabled={i.recibido <= 0}
                                       aria-label={`Restar 1 a ${i.articulo}`}
                                       className="btn-press flex h-8 w-8 items-center justify-center rounded-lg border border-line bg-surface text-ink hover:bg-surface2 disabled:opacity-30"
@@ -501,7 +799,7 @@ export default function Picking() {
                                       inputMode="decimal"
                                       min={0}
                                       value={i.recibido}
-                                      onChange={(e) => cambiar(i, Number(e.target.value) || 0)}
+                                      onChange={(e) => cambiar(sel!, i, Number(e.target.value) || 0)}
                                       onFocus={(e) => e.target.select()}
                                       aria-label={`Recibido de ${i.articulo} ${i.color} ${i.talle}`}
                                       className={`h-8 w-16 rounded-lg border bg-surface2 px-1 text-center text-sm font-semibold tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40 ${
@@ -509,7 +807,7 @@ export default function Picking() {
                                       }`}
                                     />
                                     <button
-                                      onClick={() => cambiar(i, i.recibido + 1)}
+                                      onClick={() => cambiar(sel!, i, i.recibido + 1)}
                                       aria-label={`Sumar 1 a ${i.articulo}`}
                                       className="btn-press flex h-8 w-8 items-center justify-center rounded-lg border border-line bg-surface text-ink hover:bg-surface2"
                                     >
@@ -519,7 +817,7 @@ export default function Picking() {
                                 </td>
                                 <td className="px-3 py-1 text-center">
                                   <button
-                                    onClick={() => cambiar(i, completo ? 0 : i.cantidad)}
+                                    onClick={() => cambiar(sel!, i, completo ? 0 : i.cantidad)}
                                     aria-pressed={completo}
                                     aria-label={completo ? `Desmarcar ${i.articulo}` : `Marcar ${i.articulo} como recibido completo`}
                                     title={completo ? 'Desmarcar (vuelve a 0)' : 'Llegó completo'}
@@ -551,6 +849,7 @@ export default function Picking() {
           </section>
         </div>
       )}
+      </>)}
     </Layout>
   )
 }
