@@ -237,9 +237,12 @@ export default function Guias() {
     const { error: err } = await supabase.from('guias').update({ estado, en_proceso: estado === 'EN_PROCESO', finalizado: estado === 'FINALIZADO_FACT' || estado === 'FINALIZADO_A_CAJA' }).eq('id', g.id)
     if (err) { mostrarToast('Error al actualizar estado'); await cargar() }
     else if (esRepoLocFinalizada(g.sucursal, estado)) {
-      // REPO LOC finalizada: la base ya la borró de todos lados (guía, facturación, notas e historial)
+      // REPO LOC finalizada: la base ya borró la guía (y su historial). Si va a facturación,
+      // la copia queda allá hasta que se cargue la fecha de envío.
       setTodos((arr) => arr.filter((x) => x.id !== g.id))
-      mostrarToast('Guia REPO LOC finalizada: se borro de todos lados')
+      mostrarToast(estado === 'FINALIZADO_FACT'
+        ? 'Guia REPO LOC finalizada: queda en Facturacion hasta cargar la fecha de envio'
+        : 'Guia REPO LOC finalizada: se borro de todos lados')
     } else {
       void registrarHistorial('guia', g.id, 'modificacion', { nombre: perfil?.nombre ?? null, email: perfil?.email ?? null }, `Estado: ${estado}`)
       const interna = esMitoSrl(g.razon_social)

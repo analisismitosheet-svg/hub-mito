@@ -39,6 +39,8 @@ interface FactRegistro {
   quien_facturo: string | null
   polo52: boolean
   fecha_envio: string | null
+  /** viene de una guía REPO LOC: la base la borra al cargar la fecha de envío (sql/guias_repo_loc_borrar.sql) */
+  borrar_al_enviar?: boolean
   fecha_recepcion_polo: string | null
   observaciones: string | null
   created_at: string
@@ -469,6 +471,12 @@ export default function FacturacionFabrica() {
     const patch: Record<string, unknown> = { [campo]: valor }
     const { error } = await supabase.from('facturacion_fabrica').update(patch).eq('id', r.id)
     if (error) { mostrarToast('Error al guardar: ' + error.message); return }
+    if (r.borrar_al_enviar && campo === 'fecha_envio' && valor) {
+      // REPO LOC: con la fecha de envío la base ya borró la línea (y su historial)
+      setTodos((prev) => prev.filter((x) => x.id !== r.id))
+      mostrarToast('Envio cargado: la linea REPO LOC se borro')
+      return
+    }
     setTodos((prev) => prev.map((x) => (x.id === r.id ? { ...x, [campo]: valor } : x)))
     void registrarHistorial('facturacion', r.id, 'modificacion', { nombre: perfil?.nombre ?? null, email: perfil?.email ?? null }, `${campo} = ${valor ?? '(vac�o)'}`)
     mostrarToast('Guardado')
