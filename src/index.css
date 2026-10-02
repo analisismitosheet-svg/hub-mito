@@ -146,6 +146,18 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Opciones de los desplegables (<select>): la lista la dibuja el navegador y no puede ser
+   transparente; con el fondo "vidrio" heredado salía blanca con letra blanca. Fondo sólido
+   del tema (oscuro/claro) y letra del tema, en todo el hub. */
+select option,
+select optgroup {
+  background-color: var(--surface-solid);
+  color: var(--ink);
+}
+select option:disabled {
+  color: var(--sub);
+}
+
 /* Encabezado de tabla que sigue el tema (oscuro/claro) */
 .table-head {
   background-color: var(--surface2);
