@@ -17,6 +17,9 @@ import Manuales from '@/pages/Manuales'
 import Transferencias from '@/pages/Transferencias'
 import EstadisticasTransferencias from '@/pages/EstadisticasTransferencias'
 import PedidosCompra from '@/pages/PedidosCompra'
+import EstadoPedidos from '@/pages/EstadoPedidos'
+import Cancelaciones from '@/pages/Cancelaciones'
+import PedidosHub from '@/pages/PedidosHub'
 import PedidosVenta from '@/pages/PedidosVenta'
 import Mayorista from '@/pages/Mayorista'
 import MiRepo from '@/pages/MiRepo'
@@ -125,6 +128,30 @@ export default function App() {
             element={
               <PermissionRoute permiso="transferencias.view">
                 <Transferencias />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/compras/pedidos"
+            element={
+              <PermissionRoute permiso="pedidos_compra.view">
+                <PedidosHub />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/compras/cancelaciones"
+            element={
+              <PermissionRoute permiso="pedidos_compra.view">
+                <Cancelaciones />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/compras/estado-pedidos"
+            element={
+              <PermissionRoute permiso="pedidos_compra.view">
+                <EstadoPedidos />
               </PermissionRoute>
             }
           />

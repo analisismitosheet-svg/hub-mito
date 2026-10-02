@@ -15,6 +15,7 @@
  *   PEDIDOS_VISTA        default VISTAS_CONSOLIDADAS.dbo.PEDIDO_COMPRA
  *   PEDIDOS_PROV         default DRAGONFISH_VCPD.ZooLogic.PROV
  * Log: data/sync-pedidos-compra.log
+ * Al terminar copia también las cancelaciones (scripts/sync-cancelaciones.js).
  */
 
 const fs = require('fs')
@@ -193,6 +194,13 @@ async function main() {
     p_origen: `${SERVIDOR} ${VISTA}`,
   })
   anotar(`OK: ${lista.length} pedidos (${filas.length} ítems) en Supabase, ${borrados} viejos borrados (${Math.round((Date.now() - t0) / 1000)} s)`)
+
+  // Después, las cancelaciones (DWH.dbo.vw_FACT_CANCELADOS): si fallan, los pedidos ya quedaron copiados
+  try {
+    await require('./sync-cancelaciones').sincronizarCancelaciones()
+  } catch (err) {
+    anotar(`Cancelaciones: ERROR ${err instanceof Error ? err.message : String(err)}`)
+  }
 }
 
 main().catch((err) => {
