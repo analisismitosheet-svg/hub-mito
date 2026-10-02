@@ -5,7 +5,7 @@
 -- Por cada artículo de un pedido de compra (pedidos_compra_items, copia de Dragonfish) se anota
 -- cuántas unidades llegaron físicamente. La clave es pedido + artículo + color + talle (no el
 -- número de renglón): la copia horaria reescribe los renglones y el orden puede cambiar.
--- Permiso: picking.view (ver y marcar).
+-- Permiso: picking.view (ver y marcar). Los renglones de servicios (F = flete) no se muestran.
 -- =====================================================
 
 BEGIN;
@@ -73,6 +73,7 @@ AS $$
            coalesce(trim(i.talle), '') AS talle, sum(coalesce(i.cantidad, 0)) AS cantidad
     FROM public.pedidos_compra_items i
     WHERE coalesce(trim(i.articulo), '') <> ''
+      AND upper(trim(i.articulo)) NOT IN ('F')  -- F = flete (servicio, no mercadería)
     GROUP BY 1, 2, 3, 4
   )
   SELECT p.codigo, p.numero, p.descripcion, p.fecha, p.proveedor, p.proveedor_nombre, p.anulado,
@@ -98,6 +99,7 @@ AS $$
            coalesce(trim(i.talle), '') AS talle, sum(coalesce(i.cantidad, 0)) AS cantidad, min(i.linea) AS linea
     FROM public.pedidos_compra_items i
     WHERE i.codigo = p_codigo AND coalesce(trim(i.articulo), '') <> ''
+      AND upper(trim(i.articulo)) NOT IN ('F')  -- F = flete (servicio, no mercadería)
     GROUP BY 1, 2, 3
   )
   SELECT it.articulo, it.color, it.talle, it.cantidad, coalesce(k.recibido, 0), k.actualizado_at,
@@ -128,6 +130,7 @@ AS $$
            coalesce(trim(i.talle), '') AS talle, sum(coalesce(i.cantidad, 0)) AS cantidad, min(i.linea) AS linea
     FROM public.pedidos_compra_items i
     WHERE length(trim(coalesce(p_articulo, ''))) >= 3
+      AND upper(trim(i.articulo)) NOT IN ('F')  -- F = flete (servicio, no mercadería)
       AND upper(trim(i.articulo)) LIKE upper(replace(replace(trim(p_articulo), '%', ''), '_', '')) || '%'
     GROUP BY 1, 2, 3, 4
   )
