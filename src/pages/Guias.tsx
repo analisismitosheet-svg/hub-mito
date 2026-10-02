@@ -92,6 +92,12 @@ function esMitoSrl(razon: string | null | undefined): boolean {
   return String(razon ?? '').toUpperCase().replace(/[^A-Z]/g, '') === 'MITOSRL'
 }
 
+/** Sucursal REPO LOC + finalizada: la base la borra de todos lados (sql/guias_repo_loc_borrar.sql) */
+function esRepoLocFinalizada(sucursal: string | null | undefined, estado: string): boolean {
+  return String(sucursal ?? '').toUpperCase().replace(/\s/g, '').includes('REPOLOC') &&
+    ['FINALIZADO', 'FINALIZADO_FACT', 'FINALIZADO_A_CAJA'].includes(estado)
+}
+
 export default function Guias() {
   const { perfil } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -230,7 +236,11 @@ export default function Guias() {
     setTodos((arr) => cambiarEstadoEnTodos(arr, g.id, estado))
     const { error: err } = await supabase.from('guias').update({ estado, en_proceso: estado === 'EN_PROCESO', finalizado: estado === 'FINALIZADO_FACT' || estado === 'FINALIZADO_A_CAJA' }).eq('id', g.id)
     if (err) { mostrarToast('Error al actualizar estado'); await cargar() }
-    else {
+    else if (esRepoLocFinalizada(g.sucursal, estado)) {
+      // REPO LOC finalizada: la base ya la borró de todos lados (guía, facturación, notas e historial)
+      setTodos((arr) => arr.filter((x) => x.id !== g.id))
+      mostrarToast('Guia REPO LOC finalizada: se borro de todos lados')
+    } else {
       void registrarHistorial('guia', g.id, 'modificacion', { nombre: perfil?.nombre ?? null, email: perfil?.email ?? null }, `Estado: ${estado}`)
       const interna = esMitoSrl(g.razon_social)
       // Si pasa a FINALIZADO_FACT y no tenía facturación, se crea el registro (MITO SRL no se copia)
