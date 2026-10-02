@@ -4,6 +4,7 @@ import { FolderOpen, ArrowRight } from 'lucide-react'
 import Layout from '@/components/Layout'
 import AppCard from '@/components/AppCard'
 import BackButton from '@/components/BackButton'
+import { coloresUnicos } from '@/lib/coloresUnicos'
 import { getArea, cargarOverridesAreas, appsDeAreaConOverrides, type AppDef } from '@/config/areas'
 import { useAuth } from '@/context/AuthContext'
 
@@ -72,14 +73,14 @@ export default function Area() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-          {intercalarArchivos(apps, verArchivos).map((item, i) => (
+          {conColores(intercalarArchivos(apps, verArchivos), area.color).map(({ item, color }, i) => (
             item.tipo === 'app' ? (
-              <AppCard key={item.app!.id} app={item.app!} index={i} areaId={areaId} />
+              <AppCard key={item.app!.id} app={{ ...item.app!, color }} index={i} areaId={areaId} />
             ) : (
               <button
                 key="archivos"
                 onClick={() => navigate(`/archivos/${areaId}`)}
-                style={{ animationDelay: `${i * 40}ms`, '--c': area.color } as CSSProperties}
+                style={{ animationDelay: `${i * 40}ms`, '--c': color } as CSSProperties}
                 className="hub-card animate-enter group relative flex flex-col items-start gap-4 overflow-hidden border border-line bg-surface p-5 text-left shadow-soft outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 sm:p-6"
               >
                 <div className="icon-tile h-12 w-12 transition-transform duration-300 ease-out-strong group-hover:scale-110 sm:h-14 sm:w-14">
@@ -100,6 +101,15 @@ export default function Area() {
       )}
     </Layout>
   )
+}
+
+/** Un color por tarjeta sin repetir tonos en el área (Archivos usa el del área). */
+function conColores(
+  items: ({ tipo: 'app'; app: AppDef } | { tipo: 'archivos' })[],
+  colorArea: string,
+): { item: { tipo: 'app' | 'archivos'; app?: AppDef }; color: string }[] {
+  const colores = coloresUnicos(items.map((it) => (it.tipo === 'app' ? it.app.color : colorArea)))
+  return items.map((item, i) => ({ item, color: colores[i] }))
 }
 
 /** Mezcla la tarjeta "Archivos" en la posición alfabética correcta entre las apps. */

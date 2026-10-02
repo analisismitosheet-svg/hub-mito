@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { FolderOpen } from 'lucide-react'
 import Layout from '@/components/Layout'
 import AppCard from '@/components/AppCard'
+import { coloresUnicos } from '@/lib/coloresUnicos'
 import BackButton from '@/components/BackButton'
 import { cargarOverridesAreas, appsDeAreaConOverrides } from '@/config/areas'
 import { useAuth } from '@/context/AuthContext'
@@ -29,6 +30,8 @@ export default function CarpetaArea({
     .filter((a) => (!a.permiso || can(a.permiso)) && (!a.soloLegajo || esLegajo || isAdmin))
     .sort((a, b) => a.title.localeCompare(b.title, 'es', { sensitivity: 'base' }))
 
+  const colores = coloresUnicos(apps.map((a) => a.color))
+
   const titulo = tituloProp ?? carpetaId.split('-').slice(1).join(' ')
 
   return (
@@ -48,7 +51,7 @@ export default function CarpetaArea({
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {apps.map((app, i) => (
-            <AppCard key={app.id} app={app} index={i} areaId={carpetaId} />
+            <AppCard key={app.id} app={{ ...app, color: colores[i] }} index={i} areaId={carpetaId} />
           ))}
         </div>
       )}
