@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import { COLUMNAS_BUSQUEDA, leerVista, leerVistaFiltrada, type FilaSql } from '@/lib/sqlApi'
-import { claveSku, compararUbicaciones, ubicacionesSkuDeArticulos } from '@/lib/mapeo'
+import { compararUbicaciones, ubicacionesDeArticulos } from '@/lib/mapeo'
 
 /**
  * ============================================================
@@ -308,7 +308,7 @@ async function armar(crudas: FilaSql[], q: string): Promise<Articulo[]> {
   const codigos = base.map((f) => f.idArticulo).filter(Boolean)
   const [maestro, ubis] = await Promise.all([
     maestroDe(codigos).catch(() => new Map<string, Maestro>()),
-    ubicacionesSkuDeArticulos(codigos).catch(() => new Map<string, string[]>()),
+    ubicacionesDeArticulos(codigos).catch(() => new Map<string, string[]>()),
   ])
 
   for (const fila of base) {
@@ -319,18 +319,8 @@ async function armar(crudas: FilaSql[], q: string): Promise<Articulo[]> {
       fila.grupo = fila.grupo || m.grupo
       fila.precio = fila.precio ?? m.precio
     }
-    // primero la ubicación del SKU exacto (el mapeo puede guardar el color/talle
-    // por código o por descripción); si no, la del artículo base
-    const colores = [...new Set([fila.colorCodigo, fila.color].filter(Boolean))]
-    const talles = [...new Set([fila.talleCodigo, fila.talle].filter(Boolean))]
-    let encontradas: string[] | undefined
-    for (const c of colores.length ? colores : ['']) {
-      for (const t of talles.length ? talles : ['']) {
-        encontradas ??= ubis.get(claveSku(fila.idArticulo, c, t))
-      }
-    }
-    encontradas ??= ubis.get(fila.idArticulo) ?? []
-    fila.ubicaciones = [...encontradas].sort(compararUbicaciones)
+    // La ubicación del mapeo es del artículo entero (código): va en todos sus colores y talles
+    fila.ubicaciones = [...(ubis.get(fila.idArticulo.trim().toUpperCase()) ?? [])].sort(compararUbicaciones)
   }
 
   return base

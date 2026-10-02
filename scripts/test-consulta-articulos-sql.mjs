@@ -77,10 +77,8 @@ const alias = {
     export const leerVistaFiltrada = (...a) => globalThis.__leerFiltrada(...a)
   `),
   '@/lib/mapeo': stub('mapeo', `
-    export const claveSku = (c, co = '', t = '') =>
-      [c, co, t].map((v) => String(v ?? '').trim().toUpperCase()).join('|')
     export const compararUbicaciones = (a, b) => a.localeCompare(b, undefined, { numeric: true })
-    export const ubicacionesSkuDeArticulos = async () => new Map()
+    export const ubicacionesDeArticulos = async () => new Map()
   `),
 }
 

@@ -1,7 +1,7 @@
 /**
  * Prueba rápida de src/lib/articulosConsulta.ts: compila la lib con stubs de
  * Supabase / SQL y verifica el mapeo de columnas, el parseo de números, el
- * orden, el filtro y las ubicaciones por SKU. No toca la red ni la base.
+ * orden, el filtro y las ubicaciones por artículo. No toca la red ni la base.
  *
  *   node scripts/test-consulta-articulos.mjs
  */
@@ -35,10 +35,8 @@ const alias = {
     export const leerVistaFiltrada = (...a) => globalThis.__leerFiltrada(...a)
   `),
   '@/lib/mapeo': stub('mapeo', `
-    export const claveSku = (c, co = '', t = '') =>
-      [c, co, t].map((v) => String(v ?? '').trim().toUpperCase()).join('|')
     export const compararUbicaciones = (a, b) => a.localeCompare(b, undefined, { numeric: true })
-    export const ubicacionesSkuDeArticulos = (...a) => globalThis.__ubicaciones(...a)
+    export const ubicacionesDeArticulos = (...a) => globalThis.__ubicaciones(...a)
   `),
 }
 
@@ -139,18 +137,19 @@ r = await consultarArticulos('pantalón')
 ok('filtra en el navegador', r.filas.length === 1 && r.filas[0].idArticulo === 'BB2', JSON.stringify(r.filas))
 ok('avisa que filtró en el navegador', r.filtradoEnCliente === true)
 
-/* ---- 5. Ubicaciones por SKU y caída al artículo base ---- */
+/* ---- 5. Ubicaciones: son del artículo (código), van en todos sus colores y talles ---- */
 globalThis.__leerFiltrada = async () => []
 globalThis.__leerVista = async () => [
   { ID_ARTICULO: 'AA1', COLOR: 'ROJO', TALLE: 'M', MATERIAL: 'ALGODON' },
+  { ID_ARTICULO: 'AA1', COLOR: 'AZUL', TALLE: 'XL', MATERIAL: 'ALGODON' },
   { ID_ARTICULO: 'BB2', COLOR: 'AZUL', TALLE: 'M', MATERIAL: 'ALGODON' },
 ]
-globalThis.__ubicaciones = async () =>
-  new Map([['AA1|ROJO|M', ['PB-B10', 'PB-B2']], ['AA1||', ['PB-A1']], ['BB2|AZUL|M', []]])
+globalThis.__ubicaciones = async () => new Map([['AA1', ['PB-B10', 'PB-B2']]])
 r = await consultarArticulos('algodon')
-ok('ubicación del SKU, ordenada', r.filas[0].ubicaciones.join(',') === 'PB-B2,PB-B10', r.filas[0].ubicaciones.join(','))
-ok('cae al artículo base', r.filas[0].ubicaciones.length === 2)
-ok('sin ubicación mapeada queda vacío', r.filas[1].ubicaciones.length === 0)
+const deAA1 = r.filas.filter((f) => f.idArticulo === 'AA1')
+ok('ubicaciones del artículo, ordenadas', deAA1[0].ubicaciones.join(',') === 'PB-B2,PB-B10', deAA1[0].ubicaciones.join(','))
+ok('las mismas en todos los colores y talles', deAA1.length === 2 && deAA1.every((f) => f.ubicaciones.join(',') === 'PB-B2,PB-B10'))
+ok('sin ubicación mapeada queda vacío', r.filas.find((f) => f.idArticulo === 'BB2').ubicaciones.length === 0)
 
 /* ---- 6. Vista con columnas desconocidas ---- */
 globalThis.__leerFiltrada = async () => []
