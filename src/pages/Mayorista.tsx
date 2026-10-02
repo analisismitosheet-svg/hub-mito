@@ -242,7 +242,7 @@ function Estadisticas({
   return (
     // Mitad y mitad: estadísticas a la izquierda, unidades por local a la derecha
     // (en celular, una debajo de la otra)
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3">
           <Celda label="Fecha de venta" color="#818cf8"><div className={dato}>{fmtFechaCorta(lote.venta_fecha)}</div></Celda>
@@ -276,7 +276,7 @@ function Estadisticas({
       </div>
 
       {porLocal.length > 0 && (
-        <div className="overflow-hidden rounded-xl border border-line">
+        <div className="overflow-hidden rounded-xl border border-line lg:w-72">
           <table className="w-full text-sm">
             <thead className="bg-surface2 text-left text-[11px] uppercase tracking-wide text-sub">
               <tr>
@@ -429,6 +429,16 @@ export default function Mayorista() {
     void cargar()
   }, [cargar])
 
+  // El estado del repo (En proceso / Finalizado al 100%) lo cambia la base al
+  // marcar: se vuelve a leer para que el cartel se actualice sin recargar
+  async function refrescarEstadoLote(loteId: string) {
+    if (!supabase) return
+    const { data } = await supabase.from('mayorista_lotes').select('estado').eq('id', loteId).maybeSingle()
+    if (!data) return
+    const estado = (data as { estado: Lote['estado'] }).estado
+    setLotes((prev) => prev.map((l) => (l.id === loteId ? { ...l, estado } : l)))
+  }
+
   async function marcar(item: Item, estado: EstadoM) {
     if (!supabase) return
     const at = estado === 'pendiente' ? null : new Date().toISOString()
@@ -443,7 +453,9 @@ export default function Mayorista() {
     if (error) {
       setError(error.message)
       await cargar()
+      return
     }
+    void refrescarEstadoLote(item.lote_id)
   }
   async function asignarResponsable(loteId: string, local: string, empleadoId: string | null) {
     if (!supabase) return
@@ -470,7 +482,9 @@ export default function Mayorista() {
     if (error) {
       setError(error.message)
       await cargar()
+      return
     }
+    void refrescarEstadoLote(loteId)
   }
 
   function onSelectFile(e: React.ChangeEvent<HTMLInputElement>) {

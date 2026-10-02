@@ -6,7 +6,8 @@
 --   NULL          -> todavía nadie marcó ni escaneó nada ("Sin empezar")
 --   'en_proceso'  -> se pone SOLO cuando se marca o escanea el primer artículo
 --                    (desde Repos Mayorista o desde Mi repo): trigger en items
---   'finalizado'  -> se pone A MANO con public.finalizar_repo_mayorista(lote)
+--   'finalizado'  -> se pone SOLO al llegar al 100% (sin pendientes), o a mano
+--                    con public.finalizar_repo_mayorista(lote)
 -- ============================================================================
 
 BEGIN;
@@ -20,16 +21,42 @@ ALTER TABLE public.mayorista_lotes DROP CONSTRAINT IF EXISTS mayorista_lotes_est
 ALTER TABLE public.mayorista_lotes
   ADD CONSTRAINT mayorista_lotes_estado_chk CHECK (estado IS NULL OR estado IN ('en_proceso', 'finalizado'));
 
--- ---- En proceso automático: primer artículo marcado o escaneado ----
+-- ---- Automático: En proceso con el primer artículo, Finalizado al 100% ----
+--   - primer artículo marcado/escaneado            -> 'en_proceso'
+--   - no queda ningún artículo pendiente (100%)     -> 'finalizado' (finalizado_por NULL = automático)
+--   - un artículo vuelve a pendiente en un repo finalizado AUTOMÁTICAMENTE -> 'en_proceso'
+--     (si lo finalizó una persona con el botón, queda finalizado)
 CREATE OR REPLACE FUNCTION private.mayorista_lote_en_proceso()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
+DECLARE
+  v_quedan boolean;
 BEGIN
-  IF (NEW.estado IS DISTINCT FROM OLD.estado AND NEW.estado <> 'pendiente')
-     OR coalesce(NEW.escaneadas, 0) > coalesce(OLD.escaneadas, 0) THEN
+  IF NOT ((NEW.estado IS DISTINCT FROM OLD.estado)
+          OR coalesce(NEW.escaneadas, 0) > coalesce(OLD.escaneadas, 0)) THEN
+    RETURN NULL;
+  END IF;
+
+  v_quedan := EXISTS (
+    SELECT 1 FROM public.mayorista_items
+     WHERE lote_id = NEW.lote_id AND estado = 'pendiente'
+  );
+
+  IF NOT v_quedan THEN
+    UPDATE public.mayorista_lotes
+       SET estado = 'finalizado', finalizado_at = now(), finalizado_por = NULL
+     WHERE id = NEW.lote_id
+       AND estado IS DISTINCT FROM 'finalizado';
+  ELSIF NEW.estado = 'pendiente' AND OLD.estado IS DISTINCT FROM 'pendiente' THEN
+    UPDATE public.mayorista_lotes
+       SET estado = 'en_proceso', finalizado_at = NULL
+     WHERE id = NEW.lote_id
+       AND estado = 'finalizado'
+       AND finalizado_por IS NULL;
+  ELSIF NEW.estado <> 'pendiente' OR coalesce(NEW.escaneadas, 0) > coalesce(OLD.escaneadas, 0) THEN
     UPDATE public.mayorista_lotes
        SET estado = 'en_proceso'
      WHERE id = NEW.lote_id
