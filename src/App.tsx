@@ -22,6 +22,7 @@ import Mayorista from '@/pages/Mayorista'
 import MiRepo from '@/pages/MiRepo'
 import Deposito from '@/pages/Deposito'
 import Rma from '@/pages/Rma'
+import Picking from '@/pages/Picking'
 import Opiniones from '@/pages/Opiniones'
 import ContadorClientes from '@/pages/ContadorClientes'
 import IaCamaras from '@/pages/IaCamaras'
@@ -301,6 +302,14 @@ export default function App() {
             element={
               <PermissionRoute permiso="deposito.view">
                 <Rma />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/deposito/picking"
+            element={
+              <PermissionRoute permiso="picking.view">
+                <Picking />
               </PermissionRoute>
             }
           />

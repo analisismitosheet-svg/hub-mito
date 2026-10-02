@@ -351,6 +351,7 @@ function RolPermisosModal({
       'rrhh.empleados.edit': 'rrhh',
       'rrhh.empleados.delete': 'rrhh',
       'deposito.view': 'deposito',
+      'picking.view': 'deposito',
       'deposito.import': 'deposito',
       'deposito.mark': 'deposito',
       'opiniones.view': 'locales',
