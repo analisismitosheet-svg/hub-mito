@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Loader2, Search, ScanLine, CheckCheck, Check, Minus, Plus, ArrowLeft, PackageCheck, RotateCcw, Boxes, ClipboardList,
+  Loader2, Search, ScanLine, CheckCheck, Check, Minus, Plus, ArrowLeft, PackageCheck, RotateCcw, Boxes, ClipboardList, FileSpreadsheet,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
+import { cruzar, leerIngresos, type RenglonPedido } from '@/lib/ingresosPicking'
 
 /* ------------------------------------------------------------------ */
 /*  Picking (Depósito): ingreso físico de los pedidos de compra.       */
@@ -109,6 +110,71 @@ export default function Picking() {
   const pendientes = useRef(new Map<string, ReturnType<typeof setTimeout>>())
   const [guardando, setGuardando] = useState(0)
   const [ultimoGuardado, setUltimoGuardado] = useState<Date | null>(null)
+
+  // Importar el Excel de ingresos del picking (Dragonfish): marca lo que ya ingresó
+  const archivoIngresos = useRef<HTMLInputElement>(null)
+  const [importando, setImportando] = useState<string | null>(null)
+  const [importe, setImporte] = useState<{ ok: boolean; texto: string; detalle?: string[] } | null>(null)
+
+  async function importarIngresos(archivo: File) {
+    if (!supabase) return
+    setImporte(null)
+    try {
+      setImportando('Leyendo el Excel…')
+      const XLSX = await import('xlsx')
+      const wb = XLSX.read(await archivo.arrayBuffer())
+      const filas = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false })
+      const ingresos = leerIngresos(filas)
+      if (!ingresos.length) throw new Error('El Excel no tiene artículos ingresados.')
+
+      setImportando('Buscando los pedidos…')
+      const renglones: RenglonPedido[] = []
+      for (let desde = 0; ; desde += 1000) {
+        const { data, error: e } = await supabase.rpc('picking_items_todos').range(desde, desde + 999)
+        if (e) throw new Error(e.message)
+        const lote = ((data as RenglonPedido[] | null) ?? []).map((r) => ({ ...r, cantidad: Number(r.cantidad), recibido: Number(r.recibido) }))
+        renglones.push(...lote)
+        if (lote.length < 1000) break
+      }
+
+      const r = cruzar(ingresos, renglones)
+      setImportando(null)
+      const avisoNo = [
+        r.sinPedido.length ? `${r.sinPedido.length} pedidos del Excel no están en el hub (anulados o de otra base).` : '',
+        r.sinArticulo.length ? `${r.sinArticulo.length} artículos no figuran en su pedido.` : '',
+      ].filter(Boolean).join(' ')
+      if (!r.marcas.length) {
+        setImporte({ ok: true, texto: `No hay nada nuevo para marcar: todo lo del Excel ya estaba marcado. ${avisoNo}`.trim() })
+        return
+      }
+      if (!window.confirm(`Se van a marcar ${n0.format(r.unidades)} unidades en ${r.marcas.length} renglones de ${r.pedidos} pedidos.${avisoNo ? `
+
+${avisoNo}` : ''}
+
+¿Seguimos?`)) return
+
+      for (let k = 0; k < r.marcas.length; k += 500) {
+        setImportando(`Marcando… ${n0.format(Math.min(k + 500, r.marcas.length))} de ${n0.format(r.marcas.length)}`)
+        const { error: e } = await supabase.from('picking_compra').upsert(
+          r.marcas.slice(k, k + 500).map(({ codigo, articulo, color, talle, recibido }) => ({ codigo, articulo, color, talle, recibido })),
+          { onConflict: 'codigo,articulo,color,talle' },
+        )
+        if (e) throw new Error(`Se cortó en el renglón ${k + 1}: ${e.message}`)
+      }
+      setImporte({
+        ok: true,
+        texto: `Listo: ${n0.format(r.unidades)} unidades marcadas en ${r.pedidos} pedidos. ${avisoNo}`.trim(),
+        detalle: [...r.sinPedido.map((c) => `Sin pedido: ${c.replace('PEDIDODECOMPRA ', '')}`), ...r.sinArticulo.map((a) => `Sin artículo: ${a}`)],
+      })
+      await cargarPedidos()
+      setSel(null)
+    } catch (e) {
+      setImporte({ ok: false, texto: e instanceof Error ? e.message : String(e) })
+    } finally {
+      setImportando(null)
+      if (archivoIngresos.current) archivoIngresos.current.value = ''
+    }
+  }
 
   function setProveedor(p: string) {
     setProveedorState(p)
@@ -362,6 +428,18 @@ export default function Picking() {
           <h1 className="font-display text-2xl font-semibold text-ink">Picking</h1>
           <p className="text-sm text-sub">Ingreso físico de los pedidos de compra: marcá lo que llegó.</p>
         </div>
+        <div className="flex flex-wrap items-center gap-3">
+        <input ref={archivoIngresos} type="file" accept=".xlsx,.xls" className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) void importarIngresos(f) }} />
+        <button
+          onClick={() => archivoIngresos.current?.click()}
+          disabled={!!importando}
+          title="Excel de Dragonfish con los artículos que ya ingresaron en el picking"
+          className="btn-press inline-flex h-9 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-sm font-medium text-ink transition hover:bg-surface2 disabled:opacity-60"
+        >
+          {importando ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <FileSpreadsheet size={15} className="text-emerald-500" aria-hidden />}
+          {importando ?? 'Cargar Excel de ingresos'}
+        </button>
         <p className="text-xs text-sub" aria-live="polite">
           {guardando > 0 ? (
             <span className="inline-flex items-center gap-1"><Loader2 size={12} className="animate-spin" aria-hidden /> Guardando…</span>
@@ -369,7 +447,23 @@ export default function Picking() {
             `Guardado ${ultimoGuardado.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}`
           ) : null}
         </p>
+        </div>
       </header>
+
+      {importe && (
+        <div role="status" className={`mb-3 rounded-xl border p-3 text-sm ${importe.ok ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-brand-600/30 bg-brand-600/10 text-brand-400'}`}>
+          <div className="flex items-start gap-2">
+            <span className="flex-1">{importe.texto}</span>
+            <button onClick={() => setImporte(null)} className="text-xs text-sub hover:text-ink">Cerrar</button>
+          </div>
+          {!!importe.detalle?.length && (
+            <details className="mt-1.5 text-xs text-sub">
+              <summary className="cursor-pointer">Ver lo que no se pudo cruzar ({importe.detalle.length})</summary>
+              <ul className="mt-1 max-h-48 overflow-y-auto">{importe.detalle.map((d) => <li key={d}>{d}</li>)}</ul>
+            </details>
+          )}
+        </div>
+      )}
 
       {error && (
         <p role="alert" className="mb-3 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>

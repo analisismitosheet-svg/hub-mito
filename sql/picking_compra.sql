@@ -149,3 +149,28 @@ REVOKE ALL ON FUNCTION public.picking_articulo(text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.picking_articulo(text) TO authenticated;
 
 COMMIT;
+
+-- Todos los renglones de los pedidos no anulados con lo recibido (para importar el Excel de ingresos
+-- del picking desde el hub: el navegador cruza y marca). Ordenado para poder paginar de a 1000.
+CREATE OR REPLACE FUNCTION public.picking_items_todos()
+RETURNS TABLE (codigo text, descripcion text, articulo text, color text, talle text, cantidad numeric, recibido numeric)
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  WITH it AS (
+    SELECT i.codigo, upper(trim(i.articulo)) AS articulo, coalesce(trim(i.color), '') AS color,
+           coalesce(trim(i.talle), '') AS talle, sum(coalesce(i.cantidad, 0)) AS cantidad, min(i.linea) AS linea
+    FROM public.pedidos_compra_items i
+    WHERE coalesce(trim(i.articulo), '') <> '' AND upper(trim(i.articulo)) NOT IN ('F')
+    GROUP BY 1, 2, 3, 4
+  )
+  SELECT it.codigo, p.descripcion, it.articulo, it.color, it.talle, it.cantidad, coalesce(k.recibido, 0)
+  FROM it
+  JOIN public.pedidos_compra p ON p.codigo = it.codigo AND NOT p.anulado
+  LEFT JOIN public.picking_compra k
+    ON k.codigo = it.codigo AND k.articulo = it.articulo AND k.color = it.color AND k.talle = it.talle
+  WHERE private.tengo_permiso('picking.view')
+  ORDER BY it.codigo, it.linea, it.articulo, it.color, it.talle
+$$;
+REVOKE ALL ON FUNCTION public.picking_items_todos() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.picking_items_todos() TO authenticated;
