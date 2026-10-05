@@ -70,8 +70,10 @@ function chipStock(v: number | null) {
 
 /** Mapeo depósito · Orden mapeado: planta → pasillo (desplegables) → niveles en columnas */
 export default function MapeoOrden() {
-  const { isAdmin } = useAuth()
-  /** El botón de sacar a mano de la lista (borra de verdad) lo ve solo el admin */
+  const { can, isAdmin } = useAuth()
+  /** Permiso para sacar artículos de su ubicación (lo da la RLS de la tabla) */
+  const puedeBorrar = can('mayorista.mapeo.borrar')
+  /** El botón de sacar a mano de la lista lo ve solo el admin */
   const veBorrar = isAdmin
 
   const [filas, setFilas] = useState<Mapeo[]>([])
@@ -89,14 +91,65 @@ export default function MapeoOrden() {
   const [stock, setStock] = useState<StockArticulos | null>(null)
   /** Aviso del stock: qué falló o qué vino cortado */
   const [stockAviso, setStockAviso] = useState<string | null>(null)
-  /** Los artículos en stock 0 no se muestran; con la tilde se los revela.
-   *  Ojo: solo se ocultan acá, en la base siguen mapeados. */
+  /** Resultado de la limpieza automática de los que están en stock 0 */
+  const [quitados, setQuitados] = useState<{ texto: string; ok: boolean } | null>(null)
+  /** Mientras se borran los de stock 0 */
+  const [limpiando, setLimpiando] = useState(false)
+  /** Los que quedaron en 0 y no se pudieron quitar no se muestran;
+   *  con la tilde se revelan (en la base siguen hasta que se borren). */
   const [verSinStock, setVerSinStock] = useState(false)
+
+  /**
+   * Borra de `mapeo_deposito` los artículos que están en stock 0 (de todas
+   * sus ubicaciones). Solo lo que la vista marcó en 0: sin dato no se toca.
+   */
+  const quitarSinStock = useCallback(
+    async (todas: Mapeo[], st: StockArticulos) => {
+      if (!supabase) return
+      const sinStock = todas.filter((f) => (stockDe(st, f.codigo) ?? 1) === 0)
+      if (sinStock.length === 0) {
+        setQuitados(null)
+        return
+      }
+      if (!puedeBorrar) {
+        setQuitados({
+          texto: `${sinStock.length} ${sinStock.length === 1 ? 'artículo está' : 'artículos están'} en stock 0: no tenés permiso para quitarlos del mapeo, así que solo no se muestran.`,
+          ok: false,
+        })
+        return
+      }
+      const codigos = [...new Set(sinStock.map((f) => f.codigo))]
+      const TANDA = 150 // el filtro .in() va en la URL: de a tandas
+      const borrados = new Set<string>()
+      let fallo: string | null = null
+      for (let i = 0; i < codigos.length; i += TANDA) {
+        const lote = codigos.slice(i, i + TANDA)
+        const { error: e } = await supabase.from('mapeo_deposito').delete().in('codigo', lote)
+        if (e) {
+          fallo = e.message
+          break
+        }
+        for (const c of lote) borrados.add(c)
+      }
+      if (borrados.size > 0) {
+        const n = sinStock.filter((f) => borrados.has(f.codigo)).length
+        setFilas((prev) => prev.filter((m) => !borrados.has(m.codigo)))
+        setQuitados({
+          texto: `${n} ${n === 1 ? 'artículo sin stock (0) se quitó' : 'artículos sin stock (0) se quitaron'} del mapeo (de todas sus ubicaciones).`,
+          ok: true,
+        })
+      }
+      if (fallo) setError(`No se pudo quitar todo lo que está en stock 0: ${fallo}`)
+    },
+    [puedeBorrar],
+  )
 
   const cargar = useCallback(async () => {
     setCargando(true)
     setError(null)
     setStockAviso(null)
+    setQuitados(null)
+    setLimpiando(false)
     try {
       const todas = await cargarMapeo()
       setFilas(todas)
@@ -105,17 +158,23 @@ export default function MapeoOrden() {
         .then(setDescripciones)
         .catch(() => { /* sin descripciones */ })
       cargarStockArticulos()
-        .then((st) => {
+        .then(async (st) => {
           setStock(st)
           if (!st.completo) {
             setStockAviso(
               st.tope
                 ? `El stock vino cortado por el tope de filas (${st.filas} de ${st.tope}): ` +
-                  'los artículos que muestran "—" no se pudieron verificar. ' +
-                  'Subí el tope en Configuraciones > Conexión SQL para verlos todos.'
+                  'los artículos que muestran "—" no se pudieron verificar y NO se quitan. ' +
+                  'Subí el tope en Configuraciones > Conexión SQL para completar.'
                 : 'No se pudo confirmar el tope de filas del proxy SQL: ' +
-                  'los artículos que muestran "—" no se pudieron verificar.',
+                  'los artículos que muestran "—" no se pudieron verificar y NO se quitan.',
             )
+          }
+          setLimpiando(true)
+          try {
+            await quitarSinStock(todas, st)
+          } finally {
+            setLimpiando(false)
           }
         })
         .catch((e) => {
@@ -124,7 +183,7 @@ export default function MapeoOrden() {
           setStockAviso(
             /vista no habilitada/i.test(m)
               ? 'No se pudo cargar el stock: habilitá vw_STOCK_ARTICULO_MITO en Configuraciones > Conexión SQL.'
-              : `${m} Sin stock no se muestra nada: todos los códigos quedan a la vista.`,
+              : `${m} Sin stock no se muestra nada ni se quita nada.`,
           )
         })
     } catch (e) {
@@ -132,13 +191,13 @@ export default function MapeoOrden() {
     } finally {
       setCargando(false)
     }
-  }, [])
+  }, [quitarSinStock])
 
   useEffect(() => {
     void cargar()
   }, [cargar])
 
-  /** Cuántos mapeados están en stock 0 (no se borran: solo se ocultan) */
+  /** Cuántos mapeados están en stock 0 ahora mismo (los que quedaron sin poder quitarse) */
   const cantSinStock = useMemo(
     () => (stock ? filas.filter((f) => (stockDe(stock, f.codigo) ?? 1) === 0).length : 0),
     [stock, filas],
@@ -306,7 +365,7 @@ export default function MapeoOrden() {
           </button>
           <label
             className="inline-flex h-11 cursor-pointer select-none items-center gap-2 rounded-xl border border-line bg-surface px-3 text-sm font-medium text-ink transition hover:bg-surface2"
-            title="Los artículos en stock 0 están ocultos: no se borran del mapeo, solo no se muestran"
+            title="Al cargar se quitan del mapeo los que están en stock 0; acá se revelan los que quedaron (si no se pudieron quitar)"
           >
             <input
               type="checkbox"
@@ -323,13 +382,30 @@ export default function MapeoOrden() {
           </label>
         </div>
 
-        {!verSinStock && cantSinStock > 0 && (
-          <p className="rounded-xl border border-line bg-surface2 p-3 text-sm text-sub">
-            {cantSinStock} {cantSinStock === 1 ? 'artículo mapeado está' : 'artículos mapeados están'} en stock 0 y{' '}
-            {cantSinStock === 1 ? 'no se muestra' : 'no se muestran'}.{' '}
-            <span className="font-medium text-ink">No se borraron del mapeo</span>: siguen en su ubicación y aparecen con
-            la tilde «Ver sin stock».
+        {quitados ? (
+          <p
+            role="status"
+            className={`rounded-xl border p-3 text-sm ${
+              quitados.ok
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                : 'border-amber-500/30 bg-amber-500/10 text-amber-500'
+            }`}
+          >
+            {quitados.texto}
           </p>
+        ) : limpiando ? (
+          <p className="flex items-center gap-2 rounded-xl border border-line bg-surface2 p-3 text-sm text-sub">
+            <Loader2 size={16} className="animate-spin" aria-hidden />
+            Quitando del mapeo los artículos sin stock…
+          </p>
+        ) : (
+          !verSinStock &&
+          cantSinStock > 0 && (
+            <p className="rounded-xl border border-line bg-surface2 p-3 text-sm text-sub">
+              {cantSinStock} {cantSinStock === 1 ? 'artículo mapeado está' : 'artículos mapeados están'} en stock 0 y{' '}
+              {cantSinStock === 1 ? 'no se muestra' : 'no se muestran'}. Tildá «Ver sin stock» para verlos.
+            </p>
+          )
         )}
 
         {error && (

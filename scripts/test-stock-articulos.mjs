@@ -1,8 +1,9 @@
 /**
  * Prueba de src/lib/stockArticulos.ts: compila la lib con stubs del proxy SQL
  * y verifica el mapeo de columnas, el parseo de números, cuándo se considera
- * que la vista vino entera y la semántica de stockDe (que es lo que decide
- * qué artículos se muestran u ocultan en Orden mapeado). No toca la red ni la base.
+ * que la vista vino entera y la semántica de stockDe: qué artículos se quitan
+ * del mapeo por estar en stock 0 y cuáles quedan en "—" en Orden mapeado.
+ * No toca la red ni la base.
  *
  *   node scripts/test-stock-articulos.mjs
  */
