@@ -8,6 +8,7 @@ import { useAuth } from '@/context/AuthContext'
 import {
   cargarMapeo, compararUbicaciones, descripcionesDeArticulos, nombrePlanta, ordenPlanta, type Mapeo,
 } from '@/lib/mapeo'
+import { cargarStockArticulos, stockDe, type StockArticulos } from '@/lib/stockArticulos'
 
 const SIN_UBICACION = 'Sin ubicación'
 /** Grupo para lo que no sigue el formato PLANTA-LETRA+NIVEL (ej. sin ubicación) */
@@ -35,10 +36,43 @@ function partes(u: string): { planta: string; letra: string; nivel: number } | n
   return m ? { planta: m[1], letra: m[2], nivel: Number(m[3]) } : null
 }
 
+/** Stock al lado del código: unidades en verde, 0 en rojo, "—" si no hay dato */
+function chipStock(v: number | null) {
+  if (v === null) {
+    return (
+      <span
+        className="shrink-0 rounded-md bg-surface2 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-sub"
+        title="Sin dato de stock"
+      >
+        —
+      </span>
+    )
+  }
+  if (v <= 0) {
+    return (
+      <span
+        className="shrink-0 rounded-md bg-brand-600/15 px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-brand-400"
+        title="Sin stock en MITO"
+      >
+        0
+      </span>
+    )
+  }
+  return (
+    <span
+      className="shrink-0 rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-emerald-400"
+      title="Stock en MITO"
+    >
+      {v.toLocaleString('es-AR')}
+    </span>
+  )
+}
+
 /** Mapeo depósito · Orden mapeado: planta → pasillo (desplegables) → niveles en columnas */
 export default function MapeoOrden() {
-  const { can } = useAuth()
-  const puedeBorrar = can('mayorista.mapeo.borrar')
+  const { isAdmin } = useAuth()
+  /** El botón de sacar a mano de la lista (borra de verdad) lo ve solo el admin */
+  const veBorrar = isAdmin
 
   const [filas, setFilas] = useState<Mapeo[]>([])
   const [cargando, setCargando] = useState(true)
@@ -51,17 +85,48 @@ export default function MapeoOrden() {
   // Descripción de cada código (maestro de artículos); llega después de la lista
   const [descripciones, setDescripciones] = useState<Map<string, string>>(new Map())
   const descDe = useCallback((codigo: string) => descripciones.get(codigo.toUpperCase()) ?? '', [descripciones])
+  // Stock total de cada artículo (vista SQL); llega después de la lista
+  const [stock, setStock] = useState<StockArticulos | null>(null)
+  /** Aviso del stock: qué falló o qué vino cortado */
+  const [stockAviso, setStockAviso] = useState<string | null>(null)
+  /** Los artículos en stock 0 no se muestran; con la tilde se los revela.
+   *  Ojo: solo se ocultan acá, en la base siguen mapeados. */
+  const [verSinStock, setVerSinStock] = useState(false)
 
   const cargar = useCallback(async () => {
     setCargando(true)
     setError(null)
+    setStockAviso(null)
     try {
       const todas = await cargarMapeo()
       setFilas(todas)
-      // No frena la carga: si falla, se ven solo los códigos
+      // No frenan la carga: si fallan, se ven solo los códigos
       descripcionesDeArticulos(todas.map((f) => f.codigo))
         .then(setDescripciones)
         .catch(() => { /* sin descripciones */ })
+      cargarStockArticulos()
+        .then((st) => {
+          setStock(st)
+          if (!st.completo) {
+            setStockAviso(
+              st.tope
+                ? `El stock vino cortado por el tope de filas (${st.filas} de ${st.tope}): ` +
+                  'los artículos que muestran "—" no se pudieron verificar. ' +
+                  'Subí el tope en Configuraciones > Conexión SQL para verlos todos.'
+                : 'No se pudo confirmar el tope de filas del proxy SQL: ' +
+                  'los artículos que muestran "—" no se pudieron verificar.',
+            )
+          }
+        })
+        .catch((e) => {
+          setStock(null)
+          const m = e instanceof Error ? e.message : 'No se pudo cargar el stock.'
+          setStockAviso(
+            /vista no habilitada/i.test(m)
+              ? 'No se pudo cargar el stock: habilitá vw_STOCK_ARTICULO_MITO en Configuraciones > Conexión SQL.'
+              : `${m} Sin stock no se muestra nada: todos los códigos quedan a la vista.`,
+          )
+        })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo cargar el mapeo.')
     } finally {
@@ -73,17 +138,29 @@ export default function MapeoOrden() {
     void cargar()
   }, [cargar])
 
+  /** Cuántos mapeados están en stock 0 (no se borran: solo se ocultan) */
+  const cantSinStock = useMemo(
+    () => (stock ? filas.filter((f) => (stockDe(stock, f.codigo) ?? 1) === 0).length : 0),
+    [stock, filas],
+  )
+
+  /** Lo que se muestra: todo el mapeo, menos los de stock 0 (si no se pidió verlos) */
+  const visibles = useMemo(() => {
+    if (!stock || verSinStock) return filas
+    return filas.filter((f) => (stockDe(stock, f.codigo) ?? 1) !== 0)
+  }, [stock, verSinStock, filas])
+
   // Búsqueda: por ubicación deja la ubicación entera; por código o descripción, solo lo que coincide
   const q = busqueda.trim().toUpperCase()
   const filtradas = useMemo(() => {
-    if (!q) return filas
-    return filas.filter(
+    if (!q) return visibles
+    return visibles.filter(
       (f) =>
         (f.ubicacion ?? SIN_UBICACION).toUpperCase().includes(q) ||
         f.codigo.toUpperCase().includes(q) ||
         descDe(f.codigo).toUpperCase().includes(q),
     )
-  }, [filas, q, descDe])
+  }, [visibles, q, descDe])
 
   // Árbol planta → pasillo → nivel, en el orden del depósito
   const plantas = useMemo<Planta[]>(() => {
@@ -123,7 +200,10 @@ export default function MapeoOrden() {
       )
   }, [filtradas])
 
-  const cantUbicaciones = useMemo(() => new Set(filas.map((f) => f.ubicacion ?? SIN_UBICACION)).size, [filas])
+  const cantUbicaciones = useMemo(
+    () => new Set(visibles.map((f) => f.ubicacion ?? SIN_UBICACION)).size,
+    [visibles],
+  )
 
   function alternar(k: string) {
     setAbiertas((prev) => {
@@ -154,7 +234,7 @@ export default function MapeoOrden() {
   async function exportar() {
     const XLSX = await import('xlsx')
     const wb = XLSX.utils.book_new()
-    const datos = [...filas]
+    const datos = [...visibles]
       .sort(
         (a, b) =>
           compararUbicaciones(a.ubicacion ?? SIN_UBICACION, b.ubicacion ?? SIN_UBICACION) || a.codigo.localeCompare(b.codigo),
@@ -168,6 +248,7 @@ export default function MapeoOrden() {
           Ubicación: f.ubicacion ?? SIN_UBICACION,
           Artículo: f.codigo,
           Descripción: descDe(f.codigo),
+          Stock: stockDe(stock, f.codigo) ?? '',
         }
       })
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(datos), 'Mapeo')
@@ -186,7 +267,13 @@ export default function MapeoOrden() {
       <header className="mb-3 mt-2">
         <h1 className="font-display text-2xl font-semibold text-ink">Orden mapeado</h1>
         <p className="text-sm text-sub">
-          {cantUbicaciones} {cantUbicaciones === 1 ? 'ubicación' : 'ubicaciones'} · {filas.length} códigos
+          {cantUbicaciones} {cantUbicaciones === 1 ? 'ubicación' : 'ubicaciones'} · {visibles.length} códigos
+          {cantSinStock > 0 && (
+            <>
+              {' · '}
+              <span className="font-semibold text-brand-400">{cantSinStock} sin stock</span>
+            </>
+          )}
         </p>
       </header>
       <div className="space-y-3 pb-4">
@@ -212,15 +299,45 @@ export default function MapeoOrden() {
           </button>
           <button
             onClick={() => void exportar()}
-            disabled={filas.length === 0}
+            disabled={visibles.length === 0}
             className="btn-press inline-flex h-11 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-sm font-medium text-ink transition hover:bg-surface2 disabled:opacity-60"
           >
             <Download size={16} aria-hidden /> Excel
           </button>
+          <label
+            className="inline-flex h-11 cursor-pointer select-none items-center gap-2 rounded-xl border border-line bg-surface px-3 text-sm font-medium text-ink transition hover:bg-surface2"
+            title="Los artículos en stock 0 están ocultos: no se borran del mapeo, solo no se muestran"
+          >
+            <input
+              type="checkbox"
+              checked={verSinStock}
+              onChange={(e) => setVerSinStock(e.target.checked)}
+              className="h-4 w-4 accent-brand-600"
+            />
+            Ver sin stock
+            {cantSinStock > 0 && (
+              <span className="rounded-full bg-brand-600/15 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-brand-400">
+                {cantSinStock}
+              </span>
+            )}
+          </label>
         </div>
+
+        {!verSinStock && cantSinStock > 0 && (
+          <p className="rounded-xl border border-line bg-surface2 p-3 text-sm text-sub">
+            {cantSinStock} {cantSinStock === 1 ? 'artículo mapeado está' : 'artículos mapeados están'} en stock 0 y{' '}
+            {cantSinStock === 1 ? 'no se muestra' : 'no se muestran'}.{' '}
+            <span className="font-medium text-ink">No se borraron del mapeo</span>: siguen en su ubicación y aparecen con
+            la tilde «Ver sin stock».
+          </p>
+        )}
 
         {error && (
           <p role="alert" className="rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>
+        )}
+
+        {stockAviso && (
+          <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-500">{stockAviso}</p>
         )}
 
         {cargando && filas.length === 0 ? (
@@ -229,7 +346,11 @@ export default function MapeoOrden() {
           </div>
         ) : plantas.length === 0 ? (
           <p className="rounded-2xl border border-line bg-surface px-4 py-10 text-center text-sm text-sub">
-            {busqueda ? 'No hay ubicaciones ni códigos que coincidan.' : 'Todavía no hay nada mapeado.'}
+            {busqueda
+              ? 'No hay ubicaciones ni códigos que coincidan.'
+              : !verSinStock && cantSinStock > 0
+                ? 'Todo lo que está mapeado tiene stock 0: tildá «Ver sin stock» para verlo.'
+                : 'Todavía no hay nada mapeado.'}
           </p>
         ) : (
           <div className="space-y-3">
@@ -294,12 +415,15 @@ export default function MapeoOrden() {
                                         {nv.items.map((i) => (
                                           <li key={i.id} className="flex items-start gap-1.5 py-1.5 pl-3 pr-1.5">
                                             <span className="min-w-0 flex-1">
-                                              <span className="block text-sm font-semibold text-ink">{i.codigo}</span>
+                                              <span className="flex items-center gap-1.5">
+                                                <span className="truncate text-sm font-semibold text-ink">{i.codigo}</span>
+                                                {chipStock(stockDe(stock, i.codigo))}
+                                              </span>
                                               {descDe(i.codigo) && (
                                                 <span className="block text-[11px] leading-tight text-sub">{descDe(i.codigo)}</span>
                                               )}
                                             </span>
-                                            {puedeBorrar && (
+                                            {veBorrar && (
                                               <button
                                                 onClick={() => setBorrar(i)}
                                                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sub transition hover:bg-brand-600/10 hover:text-brand-400"

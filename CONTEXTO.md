@@ -84,6 +84,13 @@ Leyendo las definiciones reales (`INFORMATION_SCHEMA.VIEWS`):
 ### Pruebas del módulo
 - `npm test` → `scripts/test-consulta-articulos.mjs`: mapeo de columnas, parseo de números, filtro y ubicaciones. No toca la red.
 - `npm run test:sql` → `scripts/test-puente-filtro.mjs` (filtro del puente, wildcard escapado, lista blanca, token) + `scripts/test-consulta-articulos-sql.mjs` (filas **reales** de la vista recurridas por la lib, de punta a punta). Necesitan el puente levantado.
+- `node scripts/test-recepcion-indo.mjs "Recepcion Indo.xlsx"` → parseo del Excel de Recepción INDO (casteo tolerante, encabezados con tildes, clave natural, KPIs contra el archivo real). No toca la red ni la base.
+
+## Mapeo depósito · Orden mapeado (stock)
+- Pantalla `src/pages/MapeoOrden.tsx` → `src/lib/stockArticulos.ts` → `src/lib/sqlApi.ts` (`leerVista` + `estadoConexion`) → `GET /api/sql/<vista>` → Puente → `vw_STOCK_ARTICULO_MITO`.
+- El mapeo guarda solo el artículo (sin color ni talle), así que el chip al lado del código es el **stock total del artículo**: suma del `STOCK_MITO` de todos sus SKUs (`sql/vw_STOCK_ARTICULO_MITO.sql`, armada sobre `vw_ARTICULOS_MITO` para que sea idéntico al de F12). Verde = con unidades, rojo = 0, "—" = sin dato.
+- Al cargar (y con *Actualizar*) los artículos en stock 0 **no se muestran**: es un ocultado visual, en `mapeo_deposito` siguen igual en su ubicación (**no se borra nada**). La tilde «Ver sin stock» los revela y el encabezado cuenta cuántos hay. Si la vista falla, viene vacía o no se pudo saber el tope de filas, no se oculta ninguno (se ve todo). El botón de tacho de la lista —borrado real, con confirmación— lo ve solo el admin.
+- Tests: `node scripts/test-stock-articulos.mjs` (entra en `npm test`).
 
 ## Pendientes SQL (ejecutar en Supabase SQL Editor)
 ```sql
@@ -118,6 +125,13 @@ CREATE INDEX IF NOT EXISTS transfer_items_lote_id_idx ON public.transfer_items (
 CREATE INDEX IF NOT EXISTS transfer_items_created_at_idx ON public.transfer_items (created_at DESC);
 ```
 
+## Pendientes Recepción INDO (Depósito)
+1. Supabase SQL Editor → **`sql/recepcion_indo.sql`** (tablas + RLS + RPCs).
+2. Supabase SQL Editor → **`sql/recepcion_indo_proveedores.sql`** (catálogo de 1.518 proveedores, seed generado desde `DRAGONFISH_INDOD.dbo.PROVEEDORES_INDO`).
+3. Hub → Depósito → **Recepción INDO** → "Subir Excel" con `Recepcion Indo.xlsx`. A partir de ahí no hace falta volver a subirlo: el control queda guardado en la base.
+
+Opcional, solo para el botón "Catálogo": habilitar `DRAGONFISH_INDOD.dbo.PROVEEDORES_INDO` en Configuraciones → Conexión SQL y subir el tope de filas a 2000.
+
 ## Pendientes F12 Consulta artículos
 1. Supabase SQL Editor → correr **`sql/consulta_articulos.sql`** (permiso `mayorista.articulos.view` + políticas RLS de `mapeo_deposito` y `articulos` + checklist del hub). **Es lo único que no se puede hacer desde el código.**
 2. Hub → Configuraciones → Conexión SQL: habilitar `DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.vw_ARTICULOS_MITO` desde el explorador (servidor `DESKTOP-OA4GU6I` → base `VISTAS_CONSOLIDADAS` → esquema `dbo`).
@@ -127,6 +141,13 @@ Ya está hecho (no hay que repetirlo):
 - La vista existe y está verificada en `VISTAS_CONSOLIDADAS` (`node scripts/sql.mjs --alias -f sql/vw_ARTICULOS_MITO.sql`).
 - El puente con `PUENTE_FILTRO_COLS` que ya incluye `ID_ARTICULO` y `NOMBRE_COMPLETO`, y que ignora las columnas que la vista no tiene.
 - Deploy.
+
+## Pendientes Mapeo depósito (stock al lado del código)
+1. Hub → Configuraciones → Conexión SQL: **habilitar** `DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.vw_STOCK_ARTICULO_MITO` (explorador: servidor `DESKTOP-OA4GU6I` → base `VISTAS_CONSOLIDADAS` → esquema `dbo`) y **subir el tope de filas a 3000 o más** (la vista trae 2 409 filas; con el default de 1000 viene cortada y los artículos que faltan muestran "—" y no se pueden ocultar).
+
+Hecho:
+- Vista creada y verificada en `VISTAS_CONSOLIDADAS` (`node scripts/sql.mjs --alias -f sql/vw_STOCK_ARTICULO_MITO.sql`): 2 409 artículos / 97 604 unidades, idéntico a `vw_ARTICULOS_MITO`.
+- Pantalla, lib y tests en el repo (ver "Mapeo depósito · stock" arriba).
 
 ## Archivos clave
 - `src/config/areas.ts` — áreas + apps del menú (agregar app = AppDef aquí).
@@ -145,6 +166,12 @@ Ya está hecho (no hay que repetirlo):
 - `src/pages/Replicas.tsx` + `src/lib/replicas.ts` + `api/replicas.ts` — estado de las réplicas (Replicador SQL de la PC central); `puente-sql/sql/replicas.sql` + `scripts/mock-replicas.mjs`.
 - `src/pages/ConsultaArticulos.tsx` + `src/lib/articulosConsulta.ts` — F12 Consulta artículos (Mayorista); `src/lib/sqlApi.ts` (`leerVistaFiltrada`) + `api/sql/[view].ts` + `puente-sql/server.js` (filtro del puente).
 - `sql/consulta_articulos.sql` (Supabase: permiso + RLS) y `sql/vw_ARTICULOS_MITO.sql` (la vista, en `VISTAS_CONSOLIDADAS`; se corre con `--alias`).
+- `src/pages/RecepcionIndo.tsx` + `src/lib/recepcionIndo.ts` — Recepción INDO (Depósito): import del Excel "Recepción de Mercadería" + marcado de control.
+  - `src/lib/proveedoresIndo.ts` — catálogo de proveedores del desplegable, sembrado en `recepcion_indo_proveedores` para que ande sin el Puente SQL; se refresca con la vista `DRAGONFISH_INDOD.dbo.PROVEEDORES_INDO`.
+  - La **clave natural** la arma el hub (`claveRecepcion`: guía + depósito + proveedor + remito + fechas, en mayúsculas y sin tildes). No incluye estado/IVA/detalle/control, así que **reimportar el mismo Excel actualiza en el lugar en vez de duplicar**. El merge vive en el RPC `recepcion_indo_importar` (no es un upsert llano del navegador) para que un Excel que viene sin fecha de controlada **no borre** el control que alguien cargó a mano.
+  - `dias_atraso` es columna GENERATED (`greatest(0, fecha_controlada - fecha_ingreso)`), nunca se escribe a mano.
+  - Permiso: reusa `deposito.view` para ver, importar y marcar (no se agregó permiso nuevo). Para separar duties después: SELECT → `deposito.view`, INSERT → `deposito.import`, UPDATE → `deposito.mark` (los tres ya existen).
+  - Los KPIs **no** clavan con la hoja "Seguimiento" del Excel y está a propósito: `bultos sin controlar` = 1534 (igual), `recepciones sin controlar` = 97 contra 75 porque el Excel cuenta solo las que tienen OC **numérica** (75), y `días de atraso` = 7,80 contra 9,04 porque el Excel promedia también las no controladas con `hoy - ingreso` (que envejece solo).
 
 ## Dependencias extra instaladas
 `konva@9`, `react-konva@18` (React 18), `webfontloader`, `jspdf`, `@types/webfontloader`. (`xlsx`, `recharts` ya estaban).
@@ -152,4 +179,5 @@ Ya está hecho (no hay que repetirlo):
 ## Notas de estado
 - Transferencias: se arregló la carga por lote (no corta a 1000). El backend envía mails a los 16 locales (pagina la lectura de ítems). Existe botón "Reenviar (N)" para los que fallaron.
 - Empleados: importación del "Listado - MITO" cargada (1726 registros). RLS de edición habilitada.
+- Recepción INDO: módulo terminado (parser con tests en verde, SQL escrito, pantalla y ruta registradas). Falta solo correr los dos `.sql` en Supabase y subir el Excel una vez.
 - El archivo `260922 - W50OFF-XG GPAZ.xlsx` y `PROVEEDORES PACHO.xlsx` están en la raíz (pruebas).
