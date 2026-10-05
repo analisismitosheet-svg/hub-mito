@@ -271,12 +271,15 @@ export default function RecepcionIndo() {
   const [pagina, setPagina] = useState(0)
   const [cargando, setCargando] = useState(true)
   // Los errores se JUNTAN, no se pisan: cada consulta que falla pierde info de las otras
-  // si cada una hace setError por su cuenta, y con 4 RPC a la vez no se sabe cuál falla.
+  // si cada una hace setError por su cuenta, y con 3 RPC a la vez no se sabe cuál falla.
   const [errores, setErrores] = useState<string[]>([])
   const agregarError = useCallback((mensaje: string) => {
     setErrores((prev) => (prev.includes(mensaje) ? prev : [...prev, mensaje]))
   }, [])
   const limpiarErrores = useCallback(() => setErrores([]), [])
+  // Error del catálogo de opciones: va aparte porque NO se limpia en cada recarga (si no,
+  // el primer cambio de filtro lo borra y el síntoma reaparece solo sin explicación).
+  const [errorOpciones, setErrorOpciones] = useState<string | null>(null)
   const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null)
   const [salvandoClave, setSalvandoClave] = useState<string | null>(null)
 
@@ -319,22 +322,29 @@ export default function RecepcionIndo() {
     }
     if (rResumen.error) agregarError(aclarar(rResumen.error.message, 'recepcion_indo_resumen'))
     else setResumen((rResumen.data as Resumen[] | null)?.[0] ?? VACIO)
-    if (rOpciones.error) agregarError(aclarar(rOpciones.error.message, 'recepcion_indo_opciones'))
-    else {
-      const o = (rOpciones.data as Opciones[] | null)?.[0]
-      // array_agg con FILTER devuelve NULL cuando no hay valores: sin este || [] el
-      // primer render con la tabla vacía rompe en el .map() de los filtros.
-      setOpciones({
-        depositos: o?.depositos ?? [],
-        proveedores: o?.proveedores ?? [],
-        transportes: o?.transportes ?? [],
-        estados: o?.estados ?? [],
-      })
-    }
     setCargando(false)
   }, [deposito, proveedor, transporte, estado, control, busca, pagina, agregarError, limpiarErrores])
 
+  // Opciones de los desplegables: no dependen de los filtros, así que se piden una sola
+  // vez (son 106 proveedores) y no en cada cambio de filtro.
+  const cargarOpciones = useCallback(async () => {
+    if (!supabase) return
+    const { data, error: e } = await supabase.rpc('recepcion_indo_opciones')
+    if (e) { setErrorOpciones(aclarar(e.message, 'recepcion_indo_opciones')); return }
+    setErrorOpciones(null)
+    const o = (data as Opciones[] | null)?.[0]
+    // array_agg con FILTER devuelve NULL cuando no hay valores: sin este ?? [] el
+    // primer render con la tabla vacía rompe en el .map() de los filtros.
+    setOpciones({
+      depositos: o?.depositos ?? [],
+      proveedores: o?.proveedores ?? [],
+      transportes: o?.transportes ?? [],
+      estados: o?.estados ?? [],
+    })
+  }, [])
+
   useEffect(() => { void cargar() }, [cargar])
+  useEffect(() => { void cargarOpciones() }, [cargarOpciones])
 
   // Catálogo de proveedores: se carga una vez y queda cacheado en el navegador.
   useEffect(() => {
