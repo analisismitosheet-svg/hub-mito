@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import {
-  Loader2, Search, SearchX, Plus, Pencil, Trash2, X, Upload, FileText, Lock, Printer, Eye, Settings,
+  Loader2, Search, SearchX, Pencil, Trash2, X, Upload, FileText, Lock, Printer, Eye,
 } from 'lucide-react'
 import { EtiquetasModal } from '@/components/EtiquetasBultos'
-import GestionTransportes from '@/components/GestionTransportes'
 import MultiselectFiltro from '@/components/MultiselectFiltro'
 import HistorialLista from '@/components/HistorialLista'
 import { registrarHistorial } from '@/lib/historial'
@@ -254,7 +253,6 @@ export default function FacturacionFabrica() {
   const [clientes, setClientes] = useState<ClienteMini[]>([])
   const [empleados, setEmpleados] = useState<EmpleadoMini[]>([])
   const [transportes, setTransportes] = useState<{ id: string; nombre: string }[]>([])
-  const [gestionTransportes, setGestionTransportes] = useState(false)
   const [guiasFecha, setGuiasFecha] = useState<Record<string, string>>({})
   const [recibidos, setRecibidos] = useState<Set<string>>(new Set())
   const [fechasRecibido, setFechasRecibido] = useState<Record<string, string>>({})
@@ -879,8 +877,6 @@ export default function FacturacionFabrica() {
         {puedeCrear && (
           <>
             {isAdmin && <button onClick={() => setModal('importar')} className="btn-press inline-flex items-center gap-1 rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line"><Upload size={13} aria-hidden /> Importar</button>}
-            <button onClick={() => setModal('new')} className="btn-press inline-flex items-center gap-1 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-700"><Plus size={13} aria-hidden /> Nuevo Registro</button>
-            <button onClick={() => setGestionTransportes(true)} className="btn-press inline-flex items-center gap-1 rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line"><Settings size={13} aria-hidden /> Transportes</button>
           </>
         )}
       </div>
@@ -1005,7 +1001,6 @@ export default function FacturacionFabrica() {
       {/* Etiquetas de bultos */}
       {etiquetaSel && <EtiquetasModal registro={etiquetaSel} onClose={() => setEtiquetaSel(null)} />}
 
-      {gestionTransportes && <GestionTransportes onClose={() => setGestionTransportes(false)} onSaved={async () => { await cargar() }} />}
 
       {/* Modals */}
       {modal === 'importar' && (
