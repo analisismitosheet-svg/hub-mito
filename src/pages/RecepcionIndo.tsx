@@ -597,11 +597,12 @@ export default function RecepcionIndo() {
         </div>
       </header>
 
-      {errores.length > 0 && (
+      {(errores.length > 0 || errorOpciones) && (
         <div role="alert" className="mb-3 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">
           {errores.map((e) => (
             <p key={e} className="mb-1 last:mb-0">{e}</p>
           ))}
+          {errorOpciones && <p className={errores.length ? 'mb-1' : ''}>{errorOpciones}</p>}
         </div>
       )}
       {msg && (
