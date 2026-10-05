@@ -92,6 +92,16 @@ Leyendo las definiciones reales (`INFORMATION_SCHEMA.VIEWS`):
 - Al cargar (y con *Actualizar*) los artículos en stock 0 **se borran de `mapeo_deposito`**, de todas sus ubicaciones, en tandas de 150 códigos por `.in()` y solo si hay permiso `mayorista.mapeo.borrar`; en pantalla ya desaparecen apenas llega el stock. Si la vista falla, viene vacía o no se pudo saber el tope de filas **no se borra ni se oculta nada**; si vino cortada se quita solo lo que la vista marcó en 0. Los que quedaron en 0 sin poder quitarse (sin permiso o con error) se ocultan y se revelan con la tilde «Ver sin stock». El tacho de la lista —borrado manual con confirmación— lo ve solo el admin.
 - Tests: `node scripts/test-stock-articulos.mjs` (entra en `npm test`).
 
+## Pedidos de venta · columna Stock
+- Pantalla `src/pages/PedidosVenta.tsx` → `src/lib/stockSku.ts` → `src/lib/sqlApi.ts` (`leerVista`) → `GET /api/sql/<vista>` → Puente → `vw_STOCK_SKU_MITO`.
+- Cada línea de un pedido es un **SKU** (artículo + color + talle), así que la columna muestra el stock de **ese color y ese talle**, no el del artículo entero: rojo = 0, ámbar = no alcanza para la cantidad pedida, verde = alcanza, "—" = sin dato. El total del artículo y el faltante van en el título de la celda. Va después de *Cantidad* y también en el Excel.
+- La clave es `ARTICULO|COLOR|TALLE` (mayúsculas, sin espacios), con el alias `UNICO` ↔ talle vacío que arma la vista. Verificado contra Dragonfish: de 192 308 líneas de pedido de 2026, **192 299 (99,995 %)** encuentran su SKU exacto.
+- Vista `sql/vw_STOCK_SKU_MITO.sql`: 17 691 SKUs x 4 columnas = **1,45 MB**, armada sobre `vw_ARTICULOS_MITO` (mismo número que F12). No se lee `vw_ARTICULOS_MITO` directamente porque trae 14 columnas y 6,8 MB, que no entra en la respuesta de una función serverless.
+- La lib baja la vista **una vez por sesión** (caché en memoria, `limpiarCacheStockSku()` la resetea); si falla no cachea el error y la columna queda en "—" con un aviso ámbar.
+- Semántica de `stockSkuDe()`: SKU presente → su número; ausente + vista entera → 0; ausente + vista cortada o tope desconocido → `null`; vista vacía o sin columnas reconocibles → tira error.
+- **`vw_STOCK_SKU_MITO` y `vw_STOCK_ARTICULO_MITO` están fijas en el env `SQL_VIEWS` de Vercel** (coma): no hay que habilitarlas a mano en Configuraciones → Conexión SQL. Cambian con `vercel env add/rm SQL_VIEWS production` + redeploy.
+- Tests: `node scripts/test-stock-sku.mjs` (entra en `npm test`).
+
 ## Pendientes SQL (ejecutar en Supabase SQL Editor)
 ```sql
 -- Novedades: tabla de tipos (si no existe)
@@ -143,7 +153,7 @@ Ya está hecho (no hay que repetirlo):
 - Deploy.
 
 ## Pendientes Mapeo depósito (stock al lado del código)
-1. Hub → Configuraciones → Conexión SQL: **habilitar** `DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.vw_STOCK_ARTICULO_MITO` (explorador: servidor `DESKTOP-OA4GU6I` → base `VISTAS_CONSOLIDADAS` → esquema `dbo`). **Nada más**: el tope de filas ya está en 29 900 000, así que la vista (2 409 filas) llega entera.
+1. ~~Hub → Configuraciones → Conexión SQL: habilitar `DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.vw_STOCK_ARTICULO_MITO`~~ **Ya no hace falta**: las dos vistas de stock (`vw_STOCK_ARTICULO_MITO` y `vw_STOCK_SKU_MITO`) están fijas en el env `SQL_VIEWS` de Vercel. **Nada más**: el tope de filas ya está en 29 900 000, así que la vista (2 409 filas) llega entera.
 
 Hecho:
 - Vista creada y verificada en `VISTAS_CONSOLIDADAS` (`node scripts/sql.mjs --alias -f sql/vw_STOCK_ARTICULO_MITO.sql`): 2 409 artículos / 97 604 unidades, idéntico a `vw_ARTICULOS_MITO`.

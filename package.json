@@ -8,7 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx",
-    "test": "node scripts/test-consulta-articulos.mjs && node scripts/test-stock-articulos.mjs",
+    "test": "node scripts/test-consulta-articulos.mjs && node scripts/test-stock-articulos.mjs && node scripts/test-stock-sku.mjs",
     "test:sql": "node scripts/test-puente-filtro.mjs && node scripts/test-consulta-articulos-sql.mjs"
   },
   "dependencies": {
@@ -17,6 +17,7 @@
     "jspdf": "^4.2.1",
     "konva": "^9.3.22",
     "lucide-react": "^0.379.0",
+    "pg": "^8.23.1",
     "qrcode.react": "^4.2.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

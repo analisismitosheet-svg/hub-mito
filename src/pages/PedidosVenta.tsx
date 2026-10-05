@@ -6,6 +6,7 @@ import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
 import { imprimirPedido } from '@/lib/imprimirPedido'
+import { cargarStockSku, stockSkuDe, stockArticuloDe, type StockSku } from '@/lib/stockSku'
 
 /* ------------------------------------------------------------------ */
 /*  Pedidos de venta (Mayorista)                                       */
@@ -113,6 +114,10 @@ export default function PedidosVenta() {
   const [items, setItems] = useState<ItemPedido[]>([])
   const [cargandoItems, setCargandoItems] = useState(false)
 
+  const [stock, setStock] = useState<StockSku | null>(null)
+  const [cargandoStock, setCargandoStock] = useState(true)
+  const [stockNota, setStockNota] = useState<string | null>(null)
+
   const cargar = useCallback(async () => {
     if (!supabase) return
     setCargando(true)
@@ -174,6 +179,35 @@ export default function PedidosVenta() {
       })
     return () => { vivo = false }
   }, [sel, version])
+
+  // Stock por SKU (color y talle) de las líneas: la lib lo baja una vez por
+  // sesión y lo guarda; mientras no llegue, la columna muestra "—".
+  useEffect(() => {
+    let vivo = true
+    setCargandoStock(true)
+    cargarStockSku()
+      .then((st) => {
+        if (vivo) {
+          setStock(st)
+          setStockNota(null)
+        }
+      })
+      .catch((e) => {
+        if (!vivo) return
+        const m = e instanceof Error ? e.message : 'No se pudo cargar el stock.'
+        setStockNota(
+          /vista no habilitada/i.test(m)
+            ? 'No se pudo cargar el stock: habilitá DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.vw_STOCK_SKU_MITO en Configuraciones > Conexión SQL.'
+            : m,
+        )
+      })
+      .finally(() => {
+        if (vivo) setCargandoStock(false)
+      })
+    return () => {
+      vivo = false
+    }
+  }, [])
 
   async function actualizarDatos() {
     if (!supabase || forzando) return
@@ -237,6 +271,7 @@ export default function PedidosVenta() {
       Color: colorDe(i),
       Talle: i.talle ?? '',
       Cantidad: i.cantidad ?? 0,
+      Stock: stockSkuDe(stock, i.articulo, i.color, i.talle) ?? '',
       Precio: i.precio ?? 0,
       Neto: i.neto ?? 0,
       IVA: i.iva ?? 0,
@@ -273,6 +308,38 @@ export default function PedidosVenta() {
     </div>
   )
 
+  /**
+   * Celda de Stock: el del color y talle EXACTOS de la línea, no el del
+   * artículo entero. Rojo si está en 0, ámbar si no alcanza para la
+   * cantidad pedida. El total del artículo va en el título.
+   */
+  const celdaStock = (i: ItemPedido) => {
+    const s = stockSkuDe(stock, i.articulo, i.color, i.talle)
+    if (s === null) {
+      return (
+        <span className="text-sub" title="Sin dato de ese color y talle: la vista no lo trae o no se pudo verificar">
+          —
+        </span>
+      )
+    }
+    const falta = (i.cantidad ?? 0) - s
+    const total = stockArticuloDe(stock, i.articulo)
+    const detalle = [
+      `Color y talle: ${n0.format(s)}`,
+      total != null ? `Artículo completo: ${n0.format(total)}` : null,
+      falta > 0 ? `Faltan ${n0.format(falta)} para la cantidad pedida` : 'Alcanza para la cantidad pedida',
+    ]
+      .filter(Boolean)
+      .join(' · ')
+    const clase =
+      s === 0 ? 'font-semibold text-brand-400' : falta > 0 ? 'font-semibold text-amber-500' : 'text-emerald-500'
+    return (
+      <span className={clase} title={detalle}>
+        {n0.format(s)}
+      </span>
+    )
+  }
+
   return (
     <Layout>
       <BackButton />
@@ -308,6 +375,13 @@ export default function PedidosVenta() {
 
       {error && (
         <p role="alert" className="mb-3 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>
+      )}
+
+      {/* Si no se pudo cargar el stock, la columna queda en "—" y se avisa acá */}
+      {stockNota && (
+        <p role="status" className="mb-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-500">
+          {stockNota}
+        </p>
       )}
 
       {/* Período: por defecto la semana vigente (la elección queda guardada en este navegador) */}
@@ -485,7 +559,7 @@ export default function PedidosVenta() {
               {/* Artículos */}
               <div className="overflow-hidden rounded-2xl border border-line bg-surface">
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[46rem] text-sm">
+                  <table className="w-full min-w-[54rem] text-sm">
                     <thead>
                       <tr className="border-b border-line bg-surface2 text-left text-[11px] font-semibold uppercase tracking-wide text-sub">
                         <th className="px-3 py-2">Artículo</th>
@@ -493,6 +567,10 @@ export default function PedidosVenta() {
                         <th className="px-3 py-2">Color</th>
                         <th className="px-3 py-2">Talle</th>
                         <th className="px-3 py-2 text-right">Cantidad</th>
+                        <th className="px-3 py-2 text-right">
+                          Stock
+                          {cargandoStock && <Loader2 size={12} className="ml-1 inline animate-spin" aria-hidden />}
+                        </th>
                         <th className="px-3 py-2 text-right">Precio</th>
                         <th className="px-3 py-2 text-right">Monto</th>
                       </tr>
@@ -500,7 +578,7 @@ export default function PedidosVenta() {
                     <tbody className="divide-y divide-line/50">
                       {cargandoItems ? (
                         <tr>
-                          <td colSpan={7} className="px-3 py-8 text-center text-sub">
+                          <td colSpan={8} className="px-3 py-8 text-center text-sub">
                             <Loader2 size={16} className="mr-1.5 inline animate-spin" aria-hidden /> Cargando artículos…
                           </td>
                         </tr>
@@ -512,6 +590,7 @@ export default function PedidosVenta() {
                             <td className="whitespace-nowrap px-3 py-1.5 tabular-nums text-sub">{colorDe(i)}</td>
                             <td className="px-3 py-1.5 text-sub">{i.talle}</td>
                             <td className="px-3 py-1.5 text-right tabular-nums text-ink">{n0.format(i.cantidad ?? 0)}</td>
+                            <td className="px-3 py-1.5 text-right tabular-nums">{celdaStock(i)}</td>
                             <td className="px-3 py-1.5 text-right tabular-nums text-ink">{plata(i.precio)}</td>
                             <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-ink">{plata(i.neto)}</td>
                           </tr>
@@ -522,6 +601,7 @@ export default function PedidosVenta() {
                       <tr className="border-t border-line bg-surface2 text-sm font-semibold">
                         <td colSpan={4} className="px-3 py-2 text-sub">Items: {items.length}</td>
                         <td className="px-3 py-2 text-right tabular-nums text-ink">{n0.format(tot.cant)}</td>
+                        <td />
                         <td />
                         <td className="px-3 py-2 text-right tabular-nums text-ink">{plata(tot.neto)}</td>
                       </tr>
