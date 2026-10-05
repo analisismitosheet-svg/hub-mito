@@ -26,6 +26,7 @@ import MiRepo from '@/pages/MiRepo'
 import Deposito from '@/pages/Deposito'
 import Rma from '@/pages/Rma'
 import Picking from '@/pages/Picking'
+import RecepcionIndo from '@/pages/RecepcionIndo'
 import Opiniones from '@/pages/Opiniones'
 import ContadorClientes from '@/pages/ContadorClientes'
 import IaCamaras from '@/pages/IaCamaras'
@@ -337,6 +338,14 @@ export default function App() {
             element={
               <PermissionRoute permiso="picking.view">
                 <Picking />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/deposito/recepcion-indo"
+            element={
+              <PermissionRoute permiso="deposito.view">
+                <RecepcionIndo />
               </PermissionRoute>
             }
           />

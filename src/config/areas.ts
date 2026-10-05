@@ -37,6 +37,7 @@ import {
   Map as MapIcon,
   ListOrdered,
   PackageSearch,
+  Package,
   QrCode,
   type LucideIcon,
 } from 'lucide-react'
@@ -467,6 +468,17 @@ export const APPS: AppDef[] = [
     target: '/deposito/picking',
     color: '#0d9488',
     permiso: 'picking.view',
+  },
+  {
+    id: 'deposito-recepcion-indo',
+    areaId: 'deposito',
+    title: 'Recepción INDO',
+    description: 'Recepción de mercadería: subí el Excel y marcá qué ya se controló.',
+    icon: Package,
+    kind: 'internal',
+    target: '/deposito/recepcion-indo',
+    color: '#ea580c',
+    permiso: 'deposito.view',
   },
   {
     id: 'transferencias',
