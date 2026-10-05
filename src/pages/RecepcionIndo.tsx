@@ -83,6 +83,21 @@ const pesos = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS
 
 const hoy = () => new Date().toLocaleDateString('sv-SE') // "YYYY-MM-DD" en la zona del navegador
 
+/**
+ * PostgREST contesta "Could not find the function ... in the schema cache" tanto si la
+ * función no existe como si la caché quedó vieja. Son dos arreglos distintos, así que el
+ * mensaje dice las dos cosas en vez de dejar que el usuario adivine.
+ */
+function aclarar(mensaje: string, fn: string): string {
+  if (/could not find the function|does not exist/i.test(mensaje)) {
+    return (
+      `Falta ${fn}() en Supabase. O no se corrió sql/recepcion_indo.sql (o falló a mitad de camino y se revirtió todo), ` +
+      `o la caché de PostgREST está vieja: corré "NOTIFY pgrst, 'reload schema';" en el SQL Editor. Detalle: ${mensaje}`
+    )
+  }
+  return mensaje
+}
+
 function fmtFecha(iso: string | null | undefined): string {
   if (!iso) return '—'
   try {
@@ -255,7 +270,13 @@ export default function RecepcionIndo() {
   const [total, setTotal] = useState(0)
   const [pagina, setPagina] = useState(0)
   const [cargando, setCargando] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  // Los errores se JUNTAN, no se pisan: cada consulta que falla pierde info de las otras
+  // si cada una hace setError por su cuenta, y con 4 RPC a la vez no se sabe cuál falla.
+  const [errores, setErrores] = useState<string[]>([])
+  const agregarError = useCallback((mensaje: string) => {
+    setErrores((prev) => (prev.includes(mensaje) ? prev : [...prev, mensaje]))
+  }, [])
+  const limpiarErrores = useCallback(() => setErrores([]), [])
   const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null)
   const [salvandoClave, setSalvandoClave] = useState<string | null>(null)
 
@@ -277,11 +298,11 @@ export default function RecepcionIndo() {
     return () => clearTimeout(t)
   }, [busqueda])
 
-  /* ---- Carga ---- */
+  /* ---- Carga: los dos RPC que dependen de los filtros ---- */
   const cargar = useCallback(async () => {
     if (!supabase) return
     setCargando(true)
-    setError(null)
+    limpiarErrores()
     const args = {
       p_deposito: deposito, p_proveedor: proveedor, p_transporte: transporte, p_estado: estado,
       p_control: control, p_busqueda: busca, p_desde: pagina * POR_PAGINA, p_limite: POR_PAGINA,
@@ -290,34 +311,30 @@ export default function RecepcionIndo() {
       supabase.rpc('recepcion_indo_filas', args),
       supabase.rpc('recepcion_indo_resumen', { p_deposito: deposito }),
     ])
-    if (rFilas.error) setError(rFilas.error.message)
+    if (rFilas.error) agregarError(aclarar(rFilas.error.message, 'recepcion_indo_filas'))
     else {
       const datos = (rFilas.data as Fila[] | null) ?? []
       setFilas(datos.map((f) => ({ ...f, bultos: Number(f.bultos) })))
       setTotal(Number(datos[0]?.total ?? 0))
     }
-    if (rResumen.error) setError((e) => e ?? rResumen.error!.message)
+    if (rResumen.error) agregarError(aclarar(rResumen.error.message, 'recepcion_indo_resumen'))
     else setResumen((rResumen.data as Resumen[] | null)?.[0] ?? VACIO)
+    if (rOpciones.error) agregarError(aclarar(rOpciones.error.message, 'recepcion_indo_opciones'))
+    else {
+      const o = (rOpciones.data as Opciones[] | null)?.[0]
+      // array_agg con FILTER devuelve NULL cuando no hay valores: sin este || [] el
+      // primer render con la tabla vacía rompe en el .map() de los filtros.
+      setOpciones({
+        depositos: o?.depositos ?? [],
+        proveedores: o?.proveedores ?? [],
+        transportes: o?.transportes ?? [],
+        estados: o?.estados ?? [],
+      })
+    }
     setCargando(false)
-  }, [deposito, proveedor, transporte, estado, control, busca, pagina])
-
-  const cargarOpciones = useCallback(async () => {
-    if (!supabase) return
-    const { data, error: e } = await supabase.rpc('recepcion_indo_opciones')
-    if (e) { setError(e.message); return }
-    const o = (data as Opciones[] | null)?.[0]
-    // array_agg con FILTER devuelve NULL cuando no hay valores: sin este || [] el
-    // primer render con la tabla vacía rompe en el .map() de los filtros.
-    setOpciones({
-      depositos: o?.depositos ?? [],
-      proveedores: o?.proveedores ?? [],
-      transportes: o?.transportes ?? [],
-      estados: o?.estados ?? [],
-    })
-  }, [])
+  }, [deposito, proveedor, transporte, estado, control, busca, pagina, agregarError, limpiarErrores])
 
   useEffect(() => { void cargar() }, [cargar])
-  useEffect(() => { void cargarOpciones() }, [cargarOpciones])
 
   // Catálogo de proveedores: se carga una vez y queda cacheado en el navegador.
   useEffect(() => {
@@ -346,7 +363,7 @@ export default function RecepcionIndo() {
     setSalvandoClave(null)
     if (e) { setMsg({ ok: false, texto: e.message }); return }
     if (aviso) setMsg({ ok: true, texto: aviso })
-    await Promise.all([cargar(), cargarOpciones()])
+    await cargar()
   }
 
   const controlar = (f: Fila) =>
@@ -380,7 +397,7 @@ export default function RecepcionIndo() {
       if (e) { setMsg({ ok: false, texto: `Se cortó en la fila ${k + 1}: ${e.message}` }); return }
     }
     setMsg({ ok: true, texto: `${n0.format(claves.length)} recepciones controladas.` })
-    await Promise.all([cargar(), cargarOpciones()])
+    await cargar()
   }
 
   /* ---- Importar el Excel ---- */
@@ -450,7 +467,7 @@ export default function RecepcionIndo() {
       })
       setControl('pendientes')
       setPagina(0)
-      await Promise.all([cargar(), cargarOpciones()])
+      await cargar()
     } catch (e) {
       setImportando(null)
       setMsg({ ok: false, texto: e instanceof Error ? e.message : String(e) })
@@ -570,8 +587,12 @@ export default function RecepcionIndo() {
         </div>
       </header>
 
-      {error && (
-        <p role="alert" className="mb-3 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>
+      {errores.length > 0 && (
+        <div role="alert" className="mb-3 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">
+          {errores.map((e) => (
+            <p key={e} className="mb-1 last:mb-0">{e}</p>
+          ))}
+        </div>
       )}
       {msg && (
         <p

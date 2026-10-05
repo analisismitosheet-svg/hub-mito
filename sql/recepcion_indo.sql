@@ -8,9 +8,11 @@
 --
 -- Permiso: deposito.view (ver, importar y marcar). Correr sql/recepcion_indo_proveedores.sql
 -- después de este archivo: es el catálogo de proveedores del desplegable.
+--
+-- SIN BEGIN/COMMIT a propósito: si una sentencia falla, el SQL Editor muestra cuál es
+-- (con la transacción abierta solo dice "current transaction is aborted" y no se sabe
+-- dónde). Todo es idempotente, así que se puede correr de a partes y volver a correr.
 -- =====================================================
-
-BEGIN;
 
 -- ---- Permisos ----
 INSERT INTO public.permisos (clave, modulo, accion, label, orden) VALUES
@@ -442,8 +444,6 @@ AS $$
 $$;
 REVOKE ALL ON FUNCTION public.recepcion_indo_proveedores(text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.recepcion_indo_proveedores(text) TO authenticated;
-
-COMMIT;
 
 -- =====================================================
 --  Checklist en el hub (sin redeploy)
