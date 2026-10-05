@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Loader2, Search, ChevronLeft, ChevronRight, RefreshCw, Download, ClipboardList, Ban, ArrowLeft,
 } from 'lucide-react'
@@ -69,6 +70,15 @@ export default function PedidosCompra() {
   const [cargandoItems, setCargandoItems] = useState(false)
   const [descripciones, setDescripciones] = useState<Map<string, string>>(new Map())
 
+  // Deep-link: /compras/pedidos-compra?numero=15183 (lo usa la columna "N° OC" de
+  // Recepción INDO). Solo se lee, no se escribe: la pantalla es de dos panes, así que
+  // siempre queda la lista al lado para volver, y no hay que sincronizar el URL en cada
+  // clic (que es la forma fácil de armar un ciclo con el efecto que lo lee).
+  const [params] = useSearchParams()
+  const numeroUrl = (params.get('numero') ?? '').trim()
+  const [avisoUrl, setAvisoUrl] = useState<string | null>(null)
+  const abiertoDesdeUrl = useRef(false)
+
   const cargar = useCallback(async () => {
     if (!supabase) return
     setCargando(true)
@@ -98,6 +108,32 @@ export default function PedidosCompra() {
   useEffect(() => {
     void cargar()
   }, [cargar])
+
+  // Llega ?numero= y abre ese pedido. Se espera a que terminen de cargar los pedidos y
+  // corre una sola vez: si se dejara en el effect, cada cambio de la lista reescribiría
+  // la búsqueda del usuario.
+  useEffect(() => {
+    if (cargando || pedidos.length === 0 || !numeroUrl || abiertoDesdeUrl.current) return
+    abiertoDesdeUrl.current = true
+    const n = numeroUrl.replace(/\s+/g, '')
+    const coincidentes = pedidos.filter((p) => String(p.numero ?? '') === n)
+    if (coincidentes.length === 0) {
+      setAvisoUrl(`No hay ningún pedido de compra con N° ${n}.`)
+      return
+    }
+    if (coincidentes.length > 1) {
+      // Pasa con números bajos (hay 34 repetidos en la base): se avisa cuál se abrió.
+      const elegido = coincidentes[0]
+      setAvisoUrl(
+        `El N° ${n} está repetido en ${coincidentes.length} pedidos; se abrió el más reciente ` +
+          `(${elegido.proveedor_nombre ?? elegido.proveedor}, ${fechaCorta(elegido.fecha)}).`,
+      )
+    } else {
+      setAvisoUrl(null)
+    }
+    setBusqueda(n)
+    setSel(coincidentes[0].codigo)
+  }, [cargando, pedidos, numeroUrl])
 
   // Ítems del pedido elegido (+ descripción desde el maestro de artículos)
   useEffect(() => {
@@ -235,6 +271,26 @@ export default function PedidosCompra() {
           }`}
         >
           {avisoSync.texto}
+        </p>
+      )}
+
+      {avisoUrl && (
+        <p
+          role="status"
+          className="mb-3 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-400"
+        >
+          <ClipboardList size={15} aria-hidden className="mt-0.5 shrink-0" />
+          <span>
+            {avisoUrl}
+            {numeroUrl && (
+              <button
+                onClick={() => setAvisoUrl(null)}
+                className="ml-2 underline underline-offset-2 hover:text-amber-300"
+              >
+                descartar
+              </button>
+            )}
+          </span>
         </p>
       )}
 

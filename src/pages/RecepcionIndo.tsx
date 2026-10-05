@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   AlertTriangle, ArrowLeft, ArrowRight, Building2, Check, CheckCheck, ClipboardCheck, Clock, Download,
   Link2, Loader2, Package, Pencil, RotateCcw, Search, Undo2, Upload, X,
@@ -9,6 +10,7 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import { SelectBuscar } from '@/components/MultiselectFiltro'
 import { supabase } from '@/lib/supabase'
 import { leerRecepcionIndo, normalizar } from '@/lib/recepcionIndo'
+import { numerosPedidoCompra, ocsDeFila } from '@/lib/ocPedidosCompra'
 import {
   cargarProveedores, opcionesProveedor, refrescarDesdeSql, type Proveedor,
 } from '@/lib/proveedoresIndo'
@@ -118,6 +120,57 @@ function LinkFactura({ href }: { href: string }) {
     >
       <Link2 size={12} aria-hidden /> Drive
     </a>
+  )
+}
+
+/**
+ * Columna "N° OC": cada OC es un link al detalle del pedido de compra
+ * (/compras/pedidos-compra?numero=...).
+ *
+ * Solo se linkea si el número existe en public.pedidos_compra: de las 480 OC distintas
+ * del Excel, 234 matchean. Las otras no están en la copia sincronizada (la tabla tiene
+ * 601 filas y arranca en 2025-01-13, mientras el Excel entra en 2024-08), así que
+ * linkearlas dejaría botones que no llevan a ningún lado.
+ *
+ * Cuando `conocidos` viene vacío es porque la consulta falló, y lo más probable es que
+ * falte el permiso 'pedidos_compra.view' — que es lo que exige la RLS de la tabla y la
+ * ruta de destino. Ahí tampoco tiene sentido linkear.
+ */
+function CeldaOc({ valor, conocidos }: { valor: string; conocidos: Set<string> }) {
+  const ocs = ocsDeFila(valor)
+  if (ocs.length === 0) return <span className="text-ink">—</span>
+  return (
+    <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5">
+      {ocs.map((oc) => {
+        const n = oc.replace(/\s+/g, '')
+        if (!/^\d+$/.test(n)) {
+          // 8 de las 480 OC no son numéricas: se muestran tal cual, sin link.
+          return (
+            <span key={oc} className="text-ink" title="No es un número de pedido: se muestra tal cual">
+              {oc}
+            </span>
+          )
+        }
+        const existe = conocidos.has(n)
+        if (!existe) {
+          return (
+            <span key={oc} className="text-ink" title="No hay ningún pedido de compra con este número">
+              {oc}
+            </span>
+          )
+        }
+        return (
+          <Link
+            key={oc}
+            to={`/compras/pedidos-compra?numero=${encodeURIComponent(n)}`}
+            title={`Abrir el pedido de compra N° ${n}`}
+            className="inline-flex items-center gap-0.5 rounded-md px-1 py-0.5 font-semibold tabular-nums text-amber-500 hover:bg-amber-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50"
+          >
+            {n} <Link2 size={11} aria-hidden />
+          </Link>
+        )
+      })}
+    </div>
   )
 }
 
@@ -282,6 +335,8 @@ export default function RecepcionIndo() {
   const [errorOpciones, setErrorOpciones] = useState<string | null>(null)
   const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null)
   const [salvandoClave, setSalvandoClave] = useState<string | null>(null)
+  // Números de pedido de compra que existen, para saber qué OC se puede linkear.
+  const [numerosPedido, setNumerosPedido] = useState<Set<string>>(new Set())
 
   // Filtros
   const [deposito, setDeposito] = useState('')
@@ -345,6 +400,11 @@ export default function RecepcionIndo() {
 
   useEffect(() => { void cargar() }, [cargar])
   useEffect(() => { void cargarOpciones() }, [cargarOpciones])
+
+  // Números de pedido de compra, una sola vez por sesión (la función cachea la promesa).
+  // No avisa si falla: casi siempre es que falta 'pedidos_compra.view', y en ese caso la
+  // columna N° OC queda sin links, que es lo correcto y no necesita un cartel de error.
+  useEffect(() => { void numerosPedidoCompra().then(setNumerosPedido) }, [])
 
   // Catálogo de proveedores: se carga una vez y queda cacheado en el navegador.
   useEffect(() => {
@@ -736,7 +796,9 @@ export default function RecepcionIndo() {
                 Proveedor
               </th>
               <th className="px-2.5 py-2 font-semibold">Remito</th>
-              <th className="px-2.5 py-2 font-semibold">N° OC</th>
+              <th className="px-2.5 py-2 font-semibold" title="Tocá un N° para abrir el pedido de compra">
+                N° OC
+              </th>
               <th className="px-2.5 py-2 font-semibold">Factura</th>
               <th className="px-2.5 py-2 font-semibold">Estado</th>
               <th className="px-2.5 py-2 text-right font-semibold">IVA</th>
@@ -775,7 +837,7 @@ export default function RecepcionIndo() {
                     <div className="text-[10px] text-sub/70">{fmtFecha(f.fecha_remito)}</div>
                   </td>
                   <td className="px-2.5 py-2">
-                    <span className="text-ink">{f.n_oc || '—'}</span>
+                    <CeldaOc valor={f.n_oc} conocidos={numerosPedido} />
                     {f.oc_cargada_dragon && <span className="ml-1 text-[10px] text-emerald-500">dragon</span>}
                   </td>
                   <td className="px-2.5 py-2">

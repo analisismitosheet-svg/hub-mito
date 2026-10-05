@@ -2,13 +2,14 @@
 -- RECEPCION INDO (Deposito): catálogo de proveedores
 --
 -- Generado con:
---   node scripts/sql.mjs --json "SELECT Codigo, LTRIM(RTRIM(Codigo)) AS cod, LTRIM(RTRIM(Nombre)) AS nombre FROM DRAGONFISH_INDOD.dbo.PROVEEDORES_INDO" > prov_indo.json
---   node scripts/generar-proveedores-indo.mjs prov_indo.json
+--   node scripts/generar-proveedores-indo.mjs
 --
 -- Son los proveedores del depósito (INDOD). El desplegable de la columna "Proveedor"
 -- de Recepción INDO sale de acá: con esta lista el módulo anda aunque el Puente SQL
 -- esté caído. Se puede refrescar desde la pantalla ("Actualizar del SQL Server"), y esa
 -- vía sí necesita la vista habilitada en Configuraciones > Conexión SQL.
+--
+-- Origen de esta corrida: vista DRAGONFISH_INDOD.dbo.PROVEEDORES_INDO
 --
 -- 1518 proveedores. Correr después de sql/recepcion_indo.sql. Idempotente.
 -- =====================================================
@@ -199,7 +200,7 @@ INSERT INTO public.recepcion_indo_proveedores (codigo, nombre) VALUES
   ('CFPO', 'CAPTAIN FIN PATIO OLMOS'),
   ('CARK', 'CAR REFINISHES KOLOR (ROLDAN CLAUDIO HECTOR)'),
   ('CARDO', 'CARDOZO ANGEL EDUARDO'),
-  ('CAV', 'Carlos Antonio Vilari├▒o'),
+  ('CAV', 'Carlos Antonio Vilariño'),
   ('GN', 'CARLOS GERMAN EGUIA'),
   ('CM', 'CARLOS MERCADO'),
   ('DY', 'CARLOS MERCADO (DYSEY)'),
@@ -406,7 +407,7 @@ INSERT INTO public.recepcion_indo_proveedores (codigo, nombre) VALUES
   ('EDR', 'EMPRENDIMIENTOS DEL RIO S.R.L'),
   ('TURIS', 'EMPRESA EL TURISTA S R L'),
   ('BLACK', 'EMPRESUR S.R.L'),
-  ('ENMY', 'ENEMY (JULI MONTA├æEZ)'),
+  ('ENMY', 'ENEMY (JULI MONTAÑEZ)'),
   ('EG', 'ENERGIA (AMIGO ESTY)'),
   ('ENG', 'ENGRAMA S.A. (LULI)'),
   ('DICK', 'ENRIQUE R.DICK Y CIA SRL'),
@@ -416,7 +417,7 @@ INSERT INTO public.recepcion_indo_proveedores (codigo, nombre) VALUES
   ('AED', 'ESCALANTE DIAZ ROQUE ALBERTO'),
   ('ESEE', 'ESEELE S.A.'),
   ('ESER', 'ESER S.A.'),
-  ('DISE', 'Espacio De Dise├▒o S.R.L.'),
+  ('DISE', 'Espacio De Diseño S.R.L.'),
   ('EA', 'ESPANYA S.A.'),
   ('ISA', 'ESPINDOLA MARISA INES'),
   ('ESSO', 'ESSO SERVICENTRO BULNES'),
@@ -1066,7 +1067,7 @@ INSERT INTO public.recepcion_indo_proveedores (codigo, nombre) VALUES
   ('PUPE', 'PUPE'),
   ('IBAQX', 'QIX'),
   ('QRC', 'QRC'),
-  ('BREVET', 'QUANZHOU BREVET IMP. & EXP. CO., LTD. - RI├æONERAS'),
+  ('BREVET', 'QUANZHOU BREVET IMP. & EXP. CO., LTD. - RIÑONERAS'),
   ('QJ', 'QUEEN JUANA'),
   ('QP', 'QUEEN UP (ALEJANDRO GARCIA) AMIGO DIEGO'),
   ('QVC', 'Queral Valeria Cristina'),

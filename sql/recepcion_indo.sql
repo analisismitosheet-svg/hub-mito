@@ -244,7 +244,7 @@ BEGIN
   INSERT INTO public.recepcion_indo AS t (
     clave, n_guia, transporte, bultos, deposito, proveedor, proveedor_codigo, n_remito,
     fecha_remito, mes, n_oc, oc_cargada_dragon, n_factura, fecha_factura, factura_link,
-    fecha_ingreso, fecha_controlada, estado, iva, detalle
+    fecha_ingreso, fecha_controlada, estado, iva, detalle, importado_at, importado_por
   )
   SELECT
     upper(btrim(coalesce(x->>'clave', ''))),
@@ -266,7 +266,9 @@ BEGIN
     private.fecha_o_null(x->>'fechaControlada'),
     btrim(coalesce(x->>'estado', '')),
     private.numero_o_null(x->>'iva'),
-    nullif(btrim(coalesce(x->>'detalle', '')), '')
+    nullif(btrim(coalesce(x->>'detalle', '')), ''),
+    now(),
+    auth.uid()
   FROM jsonb_array_elements(p_filas) x
   WHERE btrim(coalesce(x->>'clave', '')) <> ''
   ON CONFLICT (clave) DO UPDATE SET
