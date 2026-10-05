@@ -21,8 +21,8 @@
             node scripts/sql.mjs --alias "SELECT COUNT(*) filas, SUM(STOCK_MITO) stock FROM VISTAS_CONSOLIDADAS.dbo.vw_STOCK_ARTICULO_MITO"
    Después de crearla: habilitarla en el hub, Configuraciones > Conexión SQL
    (servidor DESKTOP-OA4GU6I -> base VISTAS_CONSOLIDADAS -> esquema dbo ->
-   vw_STOCK_ARTICULO_MITO) y subir el tope de filas a 3000 o más, así el
-   stock llega completo a la pantalla de Orden mapeado.
+   vw_STOCK_ARTICULO_MITO). El tope de filas ya está en 29 900 000, así que
+   la vista (2 409 filas) llega entera sin tocar nada más.
    ===================================================================== */
 
 USE [VISTAS_CONSOLIDADAS];

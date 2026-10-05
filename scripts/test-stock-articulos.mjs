@@ -74,7 +74,7 @@ ok('cuenta el 0 como 0', st.porCodigo.get('AA2') === 0)
 ok('parsea miles y decimal', st.porCodigo.get('AA3') === 1240.5, String(st.porCodigo.get('AA3')))
 ok('sin stock legible queda sin dato', !st.porCodigo.has('AA4'))
 ok('con menos filas que el tope, viene completo', st.completo === true, JSON.stringify(st))
-ok('reporta filas y tope', st.filas === 5 && st.tope === 3000, JSON.stringify(st))
+ok('reporta filas, tope y límite', st.filas === 5 && st.tope === 3000 && st.limite === 3000, JSON.stringify(st))
 
 /* ---- 2. Cortada por el tope: falta la cola y NO se puede concluir que está en 0 ---- */
 globalThis.__estado = async () => ({ maxRows: 1000 })
@@ -83,7 +83,7 @@ for (let i = 0; i < 998; i++) cortadas.push({ ID_ARTICULO: `X${i}`, STOCK_MITO: 
 cortadas.push({ ID_ARTICULO: 'BB1', STOCK_MITO: 0 }, { ID_ARTICULO: 'BB2', STOCK_MITO: 4 })
 globalThis.__leerVista = async () => cortadas
 st = await cargarStockArticulos()
-ok('filas == tope se marca incompleto', st.completo === false && st.filas === 1000, JSON.stringify(st))
+ok('filas == tope se marca incompleto', st.completo === false && st.filas === 1000 && st.limite === 1000, JSON.stringify(st))
 ok('lo que vino se lee igual', stockDe(st, 'BB1') === 0 && stockDe(st, 'BB2') === 4)
 ok('sin dato y cortada: no devuelve 0', stockDe(st, 'NO-ESTA') === null, String(stockDe(st, 'NO-ESTA')))
 
@@ -96,6 +96,20 @@ globalThis.__leerVista = async () => [
 st = await cargarStockArticulos()
 ok('con menos filas que el tope, viene completo', st.completo === true, JSON.stringify(st))
 ok('sin dato y entera: devuelve 0', stockDe(st, 'NO-ESTA') === 0, String(stockDe(st, 'NO-ESTA')))
+
+/* ---- 3b. Tope enorme (29 900 000, el que está cargado en Conexión SQL) ---- */
+globalThis.__estado = async () => ({ maxRows: 29_900_000 })
+globalThis.__leerVista = async () => [
+  { ID_ARTICULO: 'CC1', STOCK_MITO: 7 },
+  { ID_ARTICULO: 'CC2', STOCK_MITO: 0 },
+]
+st = await cargarStockArticulos()
+ok('tope enorme: la vista chica viene completa', st.completo === true && st.limite === 60000, JSON.stringify(st))
+
+globalThis.__leerVista = async () =>
+  Array.from({ length: 60000 }, (_, i) => ({ ID_ARTICULO: `Z${i}`, STOCK_MITO: 1 }))
+st = await cargarStockArticulos()
+ok('si se llena nuestro techo de 60 000, queda incompleto', st.completo === false && st.limite === 60000, JSON.stringify(st))
 
 /* ---- 4. Sin estado del proxy: se asume cortado (a lo sumo no se borra nada) ---- */
 globalThis.__estado = async () => { throw new Error('sin estado') }

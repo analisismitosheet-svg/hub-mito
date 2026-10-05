@@ -13,16 +13,19 @@ import { estadoConexion, leerVista, type FilaSql } from '@/lib/sqlApi'
  * con `node scripts/sql.mjs --alias -f sql/vw_STOCK_ARTICULO_MITO.sql` sobre
  * vw_ARTICULOS_MITO, así el número es idéntico al de F12 Consulta artículos.
  * Hay que habilitarla en Configuraciones > Conexión SQL (si no, el proxy
- * contesta "Vista no habilitada") y conviene subir el tope de filas a 3000
- * o más: con el default (1000) la vista viene cortada. Se cambia el nombre
- * con VITE_SQL_VISTA_STOCK_ARTICULO.
+ * contesta "Vista no habilitada"). El tope de filas de esa pantalla está en
+ * 29 900 000, así que la vista (2 409 filas) llega entera; esta lib además
+ * pide como máximo 60 000 y si contrae con cualquiera de los dos topes
+ * marca `completo: false` (no se oculta ni se quita nada sin dato).
+ * Se cambia el nombre con VITE_SQL_VISTA_STOCK_ARTICULO.
  */
 
 export const VISTA_STOCK_ARTICULO =
   (import.meta.env.VITE_SQL_VISTA_STOCK_ARTICULO as string | undefined)?.trim() ||
   'DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.vw_STOCK_ARTICULO_MITO'
 
-/** Tope que se le pide al proxy: el servidor igual recorta a sql_conexion.max_rows. */
+/** Techo propio de esta lib. El servidor recorta antes con sql_conexion.max_rows
+ *  (29 900 000 hoy): el que corte primero manda y eso se detecta con `limite`. */
 const TOPE_PEDIDO = 60000
 
 export interface StockArticulos {
@@ -30,8 +33,10 @@ export interface StockArticulos {
   porCodigo: Map<string, number>
   /** true si vino entero (no se cortó por el tope de filas del proxy) */
   completo: boolean
-  /** tope de filas efectivo (Configuraciones > Conexión SQL) */
+  /** tope de filas del proxy (Configuraciones > Conexión SQL) */
   tope: number | null
+  /** límite con el que se pidió: min(tope del proxy, el que pide esta lib) */
+  limite: number | null
   /** filas que devolvió la vista */
   filas: number
 }
@@ -124,10 +129,11 @@ export async function cargarStockArticulos(): Promise<StockArticulos> {
     throw new Error('La vista de stock no trae columnas reconocibles (ID_ARTICULO, STOCK_MITO).')
   }
 
-  // Vino entero solo si pudimos saber el tope y el servidor no nos cortó.
-  // Con el tope desconocido se da por cortado: adivinar lo contrario haría
-  // que "no aparece" se lea como "está en 0".
+  // Vino entero solo si no pegó contra NINGÚN tope: ni el del proxy ni el que
+  // le pedimos nosotros. Con el tope desconocido se da por cortada: adivinar
+  // lo contrario haría que "no aparece" se lea como "está en 0".
   const tope = estado?.maxRows ?? null
-  const completo = tope !== null && filas.length < tope
-  return { porCodigo, completo, tope, filas: filas.length }
+  const limite = tope === null ? null : Math.min(TOPE_PEDIDO, tope)
+  const completo = limite !== null && filas.length < limite
+  return { porCodigo, completo, tope, limite, filas: filas.length }
 }

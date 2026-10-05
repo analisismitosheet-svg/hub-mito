@@ -162,12 +162,12 @@ export default function MapeoOrden() {
           setStock(st)
           if (!st.completo) {
             setStockAviso(
-              st.tope
-                ? `El stock vino cortado por el tope de filas (${st.filas} de ${st.tope}): ` +
-                  'los artículos que muestran "—" no se pudieron verificar y NO se quitan. ' +
-                  'Subí el tope en Configuraciones > Conexión SQL para completar.'
+              st.limite
+                ? `El stock vino cortado: se recibieron ${st.filas} de hasta ${st.limite.toLocaleString('es-AR')} filas. ` +
+                  'Los artículos que muestran "—" no se pudieron verificar y NO se quitan del mapeo. ' +
+                  'Revisá el tope de filas en Configuraciones > Conexión SQL.'
                 : 'No se pudo confirmar el tope de filas del proxy SQL: ' +
-                  'los artículos que muestran "—" no se pudieron verificar y NO se quitan.',
+                  'los artículos que muestran "—" no se pudieron verificar y NO se quitan del mapeo.',
             )
           }
           setLimpiando(true)

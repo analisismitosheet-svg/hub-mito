@@ -143,7 +143,7 @@ Ya está hecho (no hay que repetirlo):
 - Deploy.
 
 ## Pendientes Mapeo depósito (stock al lado del código)
-1. Hub → Configuraciones → Conexión SQL: **habilitar** `DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.vw_STOCK_ARTICULO_MITO` (explorador: servidor `DESKTOP-OA4GU6I` → base `VISTAS_CONSOLIDADAS` → esquema `dbo`) y **subir el tope de filas a 3000 o más** (la vista trae 2 409 filas; con el default de 1000 viene cortada y los artículos que faltan muestran "—" y no se pueden ocultar).
+1. Hub → Configuraciones → Conexión SQL: **habilitar** `DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.vw_STOCK_ARTICULO_MITO` (explorador: servidor `DESKTOP-OA4GU6I` → base `VISTAS_CONSOLIDADAS` → esquema `dbo`). **Nada más**: el tope de filas ya está en 29 900 000, así que la vista (2 409 filas) llega entera.
 
 Hecho:
 - Vista creada y verificada en `VISTAS_CONSOLIDADAS` (`node scripts/sql.mjs --alias -f sql/vw_STOCK_ARTICULO_MITO.sql`): 2 409 artículos / 97 604 unidades, idéntico a `vw_ARTICULOS_MITO`.
