@@ -21,6 +21,8 @@
  *   SQL_BRIDGE_TOKEN                  - token del Puente SQL local
  */
 
+import { postAlPuente } from '../src/lib/puenteRetry.js'
+
 type Req = {
   method?: string
   headers: { authorization?: string }
@@ -105,24 +107,29 @@ export default async function handler(req: Req, res: Res) {
   const tokenPuente = process.env.SQL_BRIDGE_TOKEN ?? ''
   if (!tokenPuente) return res.status(500).json({ error: 'Falta la variable SQL_BRIDGE_TOKEN en Vercel' })
 
-  let cuerpo: unknown
-  try {
-    const r = await fetch(destino, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Puente-Token': tokenPuente },
-      body: JSON.stringify({ accion: 'replicas' }),
+  const r0 = await postAlPuente(destino, {
+    headers: { 'Content-Type': 'application/json', 'X-Puente-Token': tokenPuente },
+    body: JSON.stringify({ accion: 'replicas' }),
+  })
+  if (!r0.ok) {
+    return res.status(502).json({
+      error:
+        r0.motivo === 'timeout'
+          ? 'El Puente SQL de la PC central tardó demasiado en responder'
+          : 'No se pudo contactar el Puente SQL de la PC central',
+      intentos: r0.intentos,
     })
-    cuerpo = await r.json().catch(() => null)
-    if (!r.ok) {
-      let detalle = (cuerpo as { error?: string } | null)?.error ?? `respuesta ${r.status}`
-      // Un puente viejo no conoce la acción 'replicas' y cae en el camino de vistas.
-      if (/vista inválida|vista invalida/i.test(detalle)) {
-        detalle += ' — el Puente SQL desactualizado: actualizá puente-sql/server.js (acción "replicas").'
-      }
-      return res.status(502).json({ error: `Puente SQL: ${detalle}` })
+  }
+
+  const r = r0.res
+  const cuerpo: unknown = await r.json().catch(() => null)
+  if (!r.ok) {
+    let detalle = (cuerpo as { error?: string } | null)?.error ?? `respuesta ${r.status}`
+    // Un puente viejo no conoce la acción 'replicas' y cae en el camino de vistas.
+    if (/vista inválida|vista invalida/i.test(detalle)) {
+      detalle += ' — el Puente SQL desactualizado: actualizá puente-sql/server.js (acción "replicas").'
     }
-  } catch {
-    return res.status(502).json({ error: 'No se pudo contactar el Puente SQL de la PC central' })
+    return res.status(502).json({ error: `Puente SQL: ${detalle}` })
   }
 
   const datos = (cuerpo ?? {}) as { servidor?: string; replicas?: ReplicaPuente[]; agente?: unknown }

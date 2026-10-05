@@ -13,6 +13,8 @@
  * de los permisos del usuario SQL del puente. Mismas variables de entorno que [view].ts.
  */
 
+import { postAlPuente } from '../../src/lib/puenteRetry.js'
+
 type Req = {
   method?: string
   headers: { authorization?: string }
@@ -112,16 +114,22 @@ export default async function handler(req: Req, res: Res) {
     pedido = { accion: 'bases', ...(servidor ? { servidor } : {}) }
   }
 
-  let r: Response
-  try {
-    r = await fetch(destino, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Puente-Token': process.env.SQL_BRIDGE_TOKEN },
-      body: JSON.stringify(pedido),
+  // El destino es un túnel público cuyo borde se cae por períodos. Un reintento corto
+  // absorbe el parpadeo sin cambiar nada: todas estas llamadas son lecturas de catálogo.
+  const r0 = await postAlPuente(destino, {
+    headers: { 'Content-Type': 'application/json', 'X-Puente-Token': process.env.SQL_BRIDGE_TOKEN! },
+    body: JSON.stringify(pedido),
+  })
+  if (!r0.ok) {
+    return res.status(504).json({
+      error:
+        r0.motivo === 'timeout'
+          ? 'El Puente SQL tardó demasiado en responder'
+          : 'No se pudo contactar el Puente SQL',
+      intentos: r0.intentos,
     })
-  } catch {
-    return res.status(504).json({ error: 'No se pudo contactar el Puente SQL' })
   }
+  const r = r0.res
 
   const cuerpo = (await r.json().catch(() => null)) as unknown
   if (servidores && r.status !== 401 && !Array.isArray(cuerpo)) {

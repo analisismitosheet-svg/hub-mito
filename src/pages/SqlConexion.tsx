@@ -258,6 +258,29 @@ export default function SqlConexion() {
                       : 'configurada (variable de entorno)'}
                 </span>
               </li>
+              {estado.logicApp && (
+                <li className="flex items-start gap-2">
+                  {estado.alcanzable === false ? (
+                    <XCircle size={15} className="mt-0.5 shrink-0 text-brand-500" aria-hidden />
+                  ) : estado.alcanzable === true ? (
+                    <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-emerald-500" aria-hidden />
+                  ) : (
+                    <Loader2 size={15} className="mt-0.5 shrink-0 animate-spin text-sub" aria-hidden />
+                  )}
+                  <span className="text-ink">El destino responde:</span>
+                  <span
+                    className={
+                      estado.alcanzable === false ? 'text-brand-400' : estado.alcanzable ? 'text-emerald-500' : 'text-sub'
+                    }
+                  >
+                    {estado.alcanzable === false
+                      ? (estado.detalleConexion ?? 'no responde')
+                      : estado.alcanzable
+                        ? (estado.detalleConexion === 'ok' ? 'sí, está funcionando' : estado.detalleConexion)
+                        : 'sin verificar'}
+                  </span>
+                </li>
+              )}
               {estado.esPuente && (
                 <li className="flex items-center gap-2">
                   {estado.tokenPuente ? (

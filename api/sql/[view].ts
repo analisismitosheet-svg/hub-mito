@@ -25,6 +25,8 @@
  *   - Whitelist efectiva = SQL_VIEWS (env) + vistas guardadas en config_app clave 'sql_vistas'
  */
 
+import { postAlPuente } from '../../src/lib/puenteRetry.js'
+
 type Req = {
   method?: string
   headers: { authorization?: string }
@@ -202,10 +204,9 @@ export default async function handler(req: Req, res: Res) {
   const filtro = filtroDe(req.query)
   if (typeof filtro === 'string') return res.status(400).json({ error: filtro })
 
-  let la: Response
-  try {
-    la = await fetch(logicUrl, {
-      method: 'POST',
+  const r0 = await postAlPuente(
+    logicUrl,
+    {
       headers: {
         'Content-Type': 'application/json',
         ...(process.env.SQL_BRIDGE_TOKEN ? { 'X-Puente-Token': process.env.SQL_BRIDGE_TOKEN } : {}),
@@ -217,10 +218,21 @@ export default async function handler(req: Req, res: Res) {
           ? { donde: filtro.donde.join(','), valor: filtro.valor, coincide: filtro.coincide }
           : {}),
       }),
+    },
+    // Una consulta larga es normal (tope de filas de 29 M): el reintento solo entra si
+    // el fallo fue rápido, o sea un parpadeo del túnel y no una consulta que se demora.
+    { timeoutMs: 60_000 }
+  )
+  if (!r0.ok) {
+    return res.status(504).json({
+      error:
+        r0.motivo === 'timeout'
+          ? 'La Logic App / Puente SQL tardó demasiado en responder'
+          : 'No se pudo contactar la Logic App / Puente SQL',
+      intentos: r0.intentos,
     })
-  } catch {
-    return res.status(504).json({ error: 'No se pudo contactar la Logic App / Puente SQL' })
   }
+  const la = r0.res
 
   if (esPuente && la.status === 401) {
     return res.status(502).json({

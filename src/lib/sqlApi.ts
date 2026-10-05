@@ -181,6 +181,10 @@ export interface EstadoSql {
   /** Opcionales: una versión vieja del endpoint no los manda */
   esPuente?: boolean
   tokenPuente?: boolean
+  /** ¿Responde el destino ahora? null = sin URL configurada, o no se pudo probar */
+  alcanzable?: boolean | null
+  /** Motivo corto para el cartel: "ok", o por qué no llega */
+  detalleConexion?: string | null
   maxRows: number | null
   vistasEnv: string[]
   vistasDb: VistaDef[]

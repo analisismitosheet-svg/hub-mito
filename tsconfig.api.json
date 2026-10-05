@@ -12,5 +12,5 @@
     "skipLibCheck": true,
     "allowSyntheticDefaultImports": true
   },
-  "include": ["api/**/*.ts", "src/lib/loginEmpleado.ts"]
+  "include": ["api/**/*.ts", "src/lib/loginEmpleado.ts", "src/lib/puenteRetry.ts"]
 }
