@@ -453,5 +453,6 @@ GRANT EXECUTE ON FUNCTION public.recepcion_indo_proveedores(text) TO authenticat
 --  2. Entrar a Depósito > Recepción INDO, subir "Recepcion Indo.xlsx" una vez y
 --     "Controlar" lo que falte.
 --  3. (Opcional) Para que el botón "Actualizar del SQL Server" funcione: habilitar
---     DRAGONFISH_INDOD.dbo.PROVEEDORES_INDO en Configuraciones > Conexión SQL y subir
---     el tope de filas a 2000 (la vista tiene 1.518). No hace falta para usar el módulo.
+--     DRAGONFISH_INDOD.dbo.PROVEEDORES_INDO en Configuraciones > Conexión SQL. Con el
+--     tope de filas actual (29 900 000) no hay que tocar nada: son 1.518. No hace falta
+--     para usar el módulo.

@@ -130,7 +130,7 @@ CREATE INDEX IF NOT EXISTS transfer_items_created_at_idx ON public.transfer_item
 2. Supabase SQL Editor → **`sql/recepcion_indo_proveedores.sql`** (catálogo de 1.518 proveedores, seed generado desde `DRAGONFISH_INDOD.dbo.PROVEEDORES_INDO`).
 3. Hub → Depósito → **Recepción INDO** → "Subir Excel" con `Recepcion Indo.xlsx`. A partir de ahí no hace falta volver a subirlo: el control queda guardado en la base.
 
-Opcional, solo para el botón "Catálogo": habilitar `DRAGONFISH_INDOD.dbo.PROVEEDORES_INDO` en Configuraciones → Conexión SQL y subir el tope de filas a 2000.
+Opcional, solo para el botón "Catálogo": habilitar `DRAGONFISH_INDOD.dbo.PROVEEDORES_INDO` en Configuraciones → Conexión SQL. Con el tope de filas actual (29 900 000) no hay que tocar nada: son 1.518 filas y llegan enteras.
 
 ## Pendientes F12 Consulta artículos
 1. Supabase SQL Editor → correr **`sql/consulta_articulos.sql`** (permiso `mayorista.articulos.view` + políticas RLS de `mapeo_deposito` y `articulos` + checklist del hub). **Es lo único que no se puede hacer desde el código.**
