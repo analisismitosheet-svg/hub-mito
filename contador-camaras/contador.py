@@ -489,12 +489,16 @@ class Camara(threading.Thread):
         self.reloj = time.time  # evaluar.py lo cambia por el tiempo del video
         self.vista = None  # último cuadro anotado (con --ver o mientras alguien mira el video en vivo)
         self.mirando = 0   # conexiones abiertas al video en vivo (vista.py)
+        self.pausada = False  # su PC está desactivada en el hub: no se detecta (no gasta placa)
+        self.fps_fuente = 0.0  # cuadros por segundo que manda el DVR (techo real de esta cámara)
         self.vista_base: str | None = None  # URL pública del servidor de video (el hub pide pases ahí)
         self.local: str | None = None       # código del local en el hub (lo dice el hub al recibir los conteos)
         self.lector: Lector | None = None
         self._detener = False
         self.eventos: list[str] = []  # para evaluar.py
         self.traza = None  # evaluar.py --traza: callback(tid, x, y, zona_confirmada)
+
+    fps_auto = 2.0  # tope de las cámaras en "Auto"; lo ajusta regular_fps() según la placa libre
 
     # -- calibración (zonas/línea/credencial): desde config.json o editada en el hub
     CLAVES_CALIBRACION = ("modo", "zona_exterior", "zona_interior", "zona_a", "zona_b", "linea", "invertir", "punto", "empleados",
@@ -642,19 +646,27 @@ class Camara(threading.Thread):
             self.lector = Lector(self.nombre, url_rtsp(self.cfg, self.cam))
         self.lector.start()
         ultimo_nro, t_prev = -1, time.time()
+        t_fuente = time.time()
 
         while not self._detener:
             t0 = time.time()
             # cuadros por segundo a analizar: los de esta cámara (elegidos en el hub) o el general
-            periodo = 1.0 / max(0.5, float(self.cam.get("fps") or self.cfg.get("fps_proceso", 8)))
+            # FPS fijos de esta cámara (elegidos en el hub) o "Auto": el tope que reparte regular_fps()
+            periodo = 1.0 / max(0.5, float(self.cam.get("fps") or Camara.fps_auto))
             nro, cuadro = self.lector.ultimo()
             if cuadro is None or nro == ultimo_nro:
                 time.sleep(0.05)
                 continue
+            if ultimo_nro >= 0 and nro > ultimo_nro:
+                dt = max(time.time() - t_fuente, 1e-3)
+                self.fps_fuente = 0.8 * self.fps_fuente + 0.2 * ((nro - ultimo_nro) / dt) if self.fps_fuente else (nro - ultimo_nro) / dt
+            t_fuente = time.time()
             ultimo_nro = nro
             cuadro = self.preparar(cuadro)
-            if self.modo is None and self.mirando == 0:
-                # Sin calibrar y nadie mirando: no gastar GPU (la foto para calibrar sale del lector igual)
+            if (self.modo is None or self.pausada) and self.mirando == 0:
+                # Sin calibrar o desactivada en el hub, y nadie mirando: no gastar GPU
+                # (la foto para calibrar sale del lector igual)
+                self.fps = 0.0
                 time.sleep(0.5)
                 continue
             try:
@@ -944,6 +956,33 @@ def _tramo(f: tuple) -> dict:
             **dict(zip(CAMPOS, f[2:]))}
 
 
+def regular_fps(sistema: Sistema) -> None:
+    """FPS dinámicos: la placa de video es una sola para todas las cámaras. Cada 10 s mira cuánto
+    rinden las cámaras en "Auto" y les sube o baja el tope: si sobra placa (porque se apagó o
+    desactivó alguna) suben; si una cámara con FPS fijos no llega a los suyos, las de Auto ceden."""
+    cfg = sistema.cfg
+    piso = float(cfg.get("fps_auto_min", 1))
+    techo = float(cfg.get("fps_auto_max", 8))
+    Camara.fps_auto = min(techo, max(piso, float(cfg.get("fps_proceso", 2))))
+    while True:
+        time.sleep(10)
+        activas = [c for c in sistema.camaras if c.fps > 0 and ((c.modo and not c.pausada) or c.mirando)]
+        autos = [c for c in activas if not c.cam.get("fps")]
+        if not autos:
+            continue
+        fijas = [c for c in activas if c.cam.get("fps")]
+        prom = sum(c.fps for c in autos) / len(autos)
+        # una fija "no llega" solo si le falta placa: si el DVR manda menos cuadros, ese es su techo
+        faltan = [c.nombre for c in fijas
+                  if c.fps < 0.85 * min(float(c.cam["fps"]), techo, c.fps_fuente or techo)]
+        nuevo = prom * 0.85 if faltan else prom * 1.25  # ceder a las fijas o probar si sobra placa
+        nuevo = round(min(techo, max(piso, nuevo)), 1)
+        if abs(nuevo - Camara.fps_auto) >= 0.2:
+            log.info("FPS Auto %.1f -> %.1f (%d en Auto rinden %.1f c/u%s)", Camara.fps_auto, nuevo, len(autos), prom,
+                     f"; no llegan: {', '.join(faltan)}" if faltan else "")
+        Camara.fps_auto = nuevo
+
+
 def enviar(sistema: Sistema) -> None:
     """Sube los tramos pendientes y trae la calibración del hub.
     Todos los locales de esta PC van en UN envío ({lotes: [...]}, cada uno con su token), cada
@@ -978,8 +1017,19 @@ def enviar(sistema: Sistema) -> None:
         def procesar(token, filas, suyas, respuesta: dict) -> bool:
             quienes = ", ".join(c.nombre for c in suyas)
             if respuesta.get("status", 200) != 200 or respuesta.get("error"):
-                log.error("el hub rechazó el envío de %s: %s", quienes, respuesta.get("error"))
+                error = str(respuesta.get("error") or "")
+                if "inactivo" in error.lower() or "no registrado" in error.lower():
+                    for c in suyas:  # PC desactivada en el hub: dejar de detectar (libera placa)
+                        if not c.pausada:
+                            log.info("[%s] desactivada en el hub: deja de detectar", c.nombre)
+                        c.pausada = True
+                else:
+                    log.error("el hub rechazó el envío de %s: %s", quienes, error)
                 return False
+            for c in suyas:
+                if c.pausada:
+                    log.info("[%s] activada en el hub: vuelve a detectar", c.nombre)
+                c.pausada = False
             almacen.marcar_enviados(filas)
             for c in suyas:  # el hub dice de qué local es este token (para autorizar el video)
                 c.local = respuesta.get("local") or c.local
@@ -1119,6 +1169,7 @@ def main() -> None:
     for c in camaras:
         c.start()
     threading.Thread(target=enviar, args=(sistema,), daemon=True, name="envio").start()
+    threading.Thread(target=regular_fps, args=(sistema,), daemon=True, name="fps").start()
 
     try:
         while True:

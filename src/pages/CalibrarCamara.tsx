@@ -558,7 +558,8 @@ export default function CalibrarCamara() {
               </div>
               <p className="mt-2 text-[11px] text-sub">
                 Cuántas veces por segundo la IA mira la puerta. Más FPS = no se le escapa la gente que pasa rápido.
-                La placa de video es una sola para todas las cámaras: subirle a una le saca a las otras.
+                La placa de video es una sola para todas las cámaras. En <b className="text-ink">Auto</b> se reparte sola:
+                si se apaga o desactiva alguna cámara, las demás suben; un número fijo le da prioridad a esta cámara.
                 {cam?.fps != null && <> Ahora: <b className="text-ink">{cam.fps} FPS</b>.</>}
               </p>
             </div>
