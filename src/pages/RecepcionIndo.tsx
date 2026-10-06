@@ -3,11 +3,12 @@ import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import {
   AlertTriangle, ArrowLeft, ArrowRight, Building2, Check, CheckCheck, ClipboardCheck, Clock, Download,
-  Link2, Loader2, Package, Pencil, RotateCcw, Search, Undo2, Upload, X,
+  Link2, Loader2, Package, Pencil, Plus, RotateCcw, Search, Undo2, Upload, X,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import NuevaRecepcionIndo from '@/components/NuevaRecepcionIndo'
 import { SelectBuscar } from '@/components/MultiselectFiltro'
 import { supabase } from '@/lib/supabase'
 import { leerRecepcionIndo, normalizar } from '@/lib/recepcionIndo'
@@ -608,6 +609,7 @@ export default function RecepcionIndo() {
   const archivoRef = useRef<HTMLInputElement>(null)
   const [importando, setImportando] = useState<string | null>(null)
   const [confirma, setConfirma] = useState<null | { titulo: string; texto: string; accion: () => Promise<void> }>(null)
+  const [creando, setCreando] = useState(false)
 
   useEffect(() => {
     const t = setTimeout(() => setBusca(busqueda.trim()), 400)
@@ -711,29 +713,6 @@ export default function RecepcionIndo() {
   /** N° OC elegidas en el buscador (o escritas a mano), como las guarda el Excel: "15183/15347". */
   const cambiarOc = (f: Fila, nOc: string) =>
     guardarFila(f.clave, { n_oc: nOc }, nOc ? `OC de ${f.n_guia || f.clave}: ${nOc.replace(/\//g, ', ')}.` : `Sin OC: ${f.n_guia || f.clave}.`)
-
-  /** Controla todo lo pendiente que está en la vista actual (paginado en bloques). */
-  async function controlarLoPendiente() {
-    if (!supabase) return
-    const claves: string[] = []
-    for (let desde = 0; ; desde += 1000) {
-      const { data, error: e } = await supabase.rpc('recepcion_indo_filas', {
-        p_deposito: deposito, p_proveedor: proveedor, p_transporte: transporte, p_estado: estado,
-        p_control: 'pendientes', p_busqueda: busca, p_desde: desde, p_limite: 1000,
-      })
-      if (e) { setMsg({ ok: false, texto: e.message }); return }
-      const lote = (data as Fila[] | null) ?? []
-      claves.push(...lote.map((f) => f.clave))
-      if (lote.length < 1000) break
-    }
-    if (!claves.length) { setMsg({ ok: true, texto: 'No hay recepciones pendientes con estos filtros.' }); return }
-    for (let k = 0; k < claves.length; k += 200) {
-      const { error: e } = await supabase.from('recepcion_indo').update({ fecha_controlada: hoy() }).in('clave', claves.slice(k, k + 200))
-      if (e) { setMsg({ ok: false, texto: `Se cortó en la fila ${k + 1}: ${e.message}` }); return }
-    }
-    setMsg({ ok: true, texto: `${n0.format(claves.length)} recepciones controladas.` })
-    await cargar()
-  }
 
   /* ---- Importar el Excel ---- */
   /** Lo que quedó del Excel ya leído, esperando que el usuario confirme el guardado. */
@@ -897,6 +876,12 @@ export default function RecepcionIndo() {
             onChange={(e) => { const f = e.target.files?.[0]; if (f) void leerExcel(f) }}
           />
           <button
+            onClick={() => setCreando(true)}
+            className="btn-press inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
+          >
+            <Plus size={15} aria-hidden /> Nuevo registro
+          </button>
+          <button
             onClick={() => archivoRef.current?.click()}
             disabled={!!importando}
             className="btn-press inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
@@ -1036,16 +1021,6 @@ export default function RecepcionIndo() {
             {n0.format(total)} recepciones sin controlar con estos filtros
             {resumen.mas_viejo_pendiente ? ` · la más vieja ingresó el ${fmtFecha(resumen.mas_viejo_pendiente)}` : ''}.
           </p>
-          <button
-            onClick={() => setConfirma({
-              titulo: 'Controlar lo pendiente',
-              texto: `Se van a marcar ${n0.format(total)} recepciones como controladas hoy (${hoy()}).\n\nSe puede deshacer una por una desde la tabla.`,
-              accion: controlarLoPendiente,
-            })}
-            className="btn-press inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
-          >
-            <Check size={13} aria-hidden /> Controlar las {n0.format(total)}
-          </button>
         </div>
       )}
 
@@ -1211,12 +1186,28 @@ export default function RecepcionIndo() {
         </div>
       )}
 
+      {creando && (
+        <NuevaRecepcionIndo
+          depositos={opciones.depositos ?? []}
+          transportes={opciones.transportes ?? []}
+          estados={opciones.estados ?? []}
+          proveedores={catalogo}
+          onCerrar={() => setCreando(false)}
+          onGuardado={(texto) => {
+            setCreando(false)
+            setMsg({ ok: true, texto })
+            void cargar()
+            void cargarOpciones()
+          }}
+        />
+      )}
+
       {confirma && (
         <ConfirmDialog
           open
           title={confirma.titulo}
           message={confirma.texto}
-          confirmLabel={confirma.titulo.startsWith('Importar') ? 'Importar' : 'Controlar'}
+          confirmLabel="Importar"
           onConfirm={() => { const a = confirma.accion; setConfirma(null); void a() }}
           onCancel={() => setConfirma(null)}
         />

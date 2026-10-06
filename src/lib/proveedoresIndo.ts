@@ -27,7 +27,8 @@ export const VISTA_PROVEEDORES = 'DRAGONFISH_INDOD.dbo.PROVEEDORES_INDO'
 const CLAVE_VISTA = 'sql_vista_proveedores_indo'
 
 /** Caché en el navegador: la lista cambia una vez cada tanto y son 1.518 filas. */
-const CLAVE_CACHE = 'recepcionIndo.proveedores'
+// v2: la versión anterior guardaba solo 1.000 (tope de Supabase por consulta) y faltaban de la T en adelante
+const CLAVE_CACHE = 'recepcionIndo.proveedores.v2'
 const TTL_CACHE_MS = 12 * 60 * 60 * 1000 // 12 h
 
 interface Cache {
@@ -105,13 +106,22 @@ export async function cargarProveedores(forzar = false): Promise<Proveedor[]> {
   if (!forzar && cache && Date.now() - cache.guardado < TTL_CACHE_MS) return cache.lista
 
   if (supabase) {
-    const { data, error } = await supabase
-      .from('recepcion_indo_proveedores')
-      .select('codigo,nombre')
-      .order('nombre')
-      .limit(2000)
-    if (!error && data && (data as Proveedor[]).length > 0) {
-      const lista = data as Proveedor[]
+    // Supabase devuelve como mucho 1.000 filas por consulta y el catálogo tiene ~1.520: de a tandas
+    const lista: Proveedor[] = []
+    let error: unknown = null
+    for (let desde = 0; desde < 20000; desde += 1000) {
+      const r = await supabase
+        .from('recepcion_indo_proveedores')
+        .select('codigo,nombre')
+        .order('nombre')
+        .order('codigo')
+        .range(desde, desde + 999)
+      if (r.error) { error = r.error; break }
+      const pagina = (r.data as Proveedor[] | null) ?? []
+      lista.push(...pagina)
+      if (pagina.length < 1000) break
+    }
+    if (!error && lista.length > 0) {
       guardarCache(lista)
       return lista
     }

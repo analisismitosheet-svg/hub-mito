@@ -121,6 +121,12 @@ function leerJson(consulta) {
 }
 
 const txt = (v) => String(v ?? '').trim()
+
+/** Proveedor MITO / Mito SRL: se excluye de la copia (y por eso se borra del hub en la siguiente corrida) */
+function esProveedorMito(codigo, nombre) {
+  const solo = (v) => txt(v).toUpperCase().replace(/[^A-Z]/g, '')
+  return solo(codigo) === 'MITO' || solo(nombre) === 'MITOSRL'
+}
 const num = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v))
 
 async function main() {
@@ -144,6 +150,8 @@ async function main() {
   for (const f of filas) {
     const codigo = txt(f.CODIGO)
     if (!codigo) continue
+    // Los pedidos al proveedor MITO (Mito SRL, movimientos internos) no van al hub
+    if (esProveedorMito(f.FPERSON, f.CLNOM)) continue
     let p = pedidos.get(codigo)
     if (!p) {
       const hora = txt(f.HALTAFW)
