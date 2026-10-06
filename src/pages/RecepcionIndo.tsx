@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import {
   AlertTriangle, ArrowLeft, ArrowRight, Building2, Check, CheckCheck, ClipboardCheck, Clock, Download,
@@ -255,9 +256,10 @@ function CeldaProveedor({
         <span className={`truncate ${valor ? '' : 'italic text-sub/60'}`}>{valor || 'Elegir…'}</span>
         <Pencil size={11} className="shrink-0 text-sub" aria-hidden />
       </button>
-      {abierto && caja && (
+      {/* La lista va al <body>: dentro de la tabla las filas de abajo la tapaban */}
+      {abierto && caja && createPortal(
         <>
-          <div className="fixed inset-0 z-30" onClick={() => setAbierto(false)} />
+          <div className="fixed inset-0 z-[90]" onClick={() => setAbierto(false)} />
           <div
             style={{
               position: 'fixed',
@@ -266,7 +268,7 @@ function CeldaProveedor({
               width: caja.width,
               transform: caja.arriba ? 'translateY(-100%)' : undefined,
             }}
-            className="z-40 max-w-[92vw] rounded-xl border border-line bg-surface p-2 shadow-2xl"
+            className="z-[91] max-w-[92vw] rounded-xl border border-line bg-surface p-2 shadow-2xl"
           >
             <div className="flex items-center gap-1.5 border-b border-line pb-2">
               <Search size={13} className="shrink-0 text-sub/70" aria-hidden />
@@ -308,7 +310,8 @@ function CeldaProveedor({
               )}
             </div>
           </div>
-        </>
+        </>,
+        document.body,
       )}
     </div>
   )
