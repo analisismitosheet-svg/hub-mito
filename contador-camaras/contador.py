@@ -721,7 +721,7 @@ class Camara(threading.Thread):
                 self.cerrar_entrada(self.pistas[tid], ahora)
             del self.pistas[tid]
         if self.ver or self.mirando > 0:  # dibujar cuesta: solo si alguien mira
-            self.vista = self.anotar(res.plot(), ancho, alto)
+            self.vista = self.anotar(res.plot(labels=False, conf=False), ancho, alto)
 
     def observar(self, p: Pista, recorte, sirve_para_reid: bool, ahora: float) -> None:
         if recorte.size == 0:
@@ -844,9 +844,8 @@ class Camara(threading.Thread):
         log.info("[%s] %s (id %s%s)", self.nombre, " + ".join(c.upper() for c in campos), p.tid, quien)
 
     def anotar(self, img, ancho, alto):
-        if self.modo is None:
-            rotulo(img, "SIN CALIBRAR - no cuenta", 2, (0, 0, 255))
-        elif self.modo == "linea":
+        # Sin texto sobre el video (entradas, FPS, etc. se ven en el hub): solo zonas, línea y personas
+        if self.modo == "linea":
             a = (int(self.linea.ax * ancho), int(self.linea.ay * alto))
             b = (int(self.linea.bx * ancho), int(self.linea.by * alto))
             cv2.line(img, a, b, (0, 255, 255), 2)
@@ -856,29 +855,10 @@ class Camara(threading.Thread):
         for z, color in ((self.zona_a, (0, 200, 255)), (self.zona_b, (255, 200, 0))):
             if z:
                 cv2.polylines(img, [z.pixeles(ancho, alto)], True, color, 1)
-        h = self.almacen.hoy(self.nombre)
-        # corto para que entre aunque haya zoom (salidas, transeúntes y personal se ven en el hub)
-        rotulo(img, f"Entradas {h['entradas']}   {self.fps:.1f} fps", 1, (0, 255, 0))
         return img
 
 
 # ------------------------------------------------------------------ envío ---
-
-def rotulo(img, texto: str, renglon: int, color) -> None:
-    """Texto sobre el video con tamaño proporcional al ancho de la imagen (con zoom la imagen es
-    chica y una letra fija se cortaba): nunca ocupa más del 90 % del ancho."""
-    alto, ancho = img.shape[:2]
-    fuente = cv2.FONT_HERSHEY_SIMPLEX
-    escala = min(1.2, max(0.5, ancho / 650))
-    (w, _), _ = cv2.getTextSize(texto, fuente, escala, 2)
-    if w > ancho * 0.9:
-        escala *= ancho * 0.9 / w
-    grosor = max(1, round(escala * 2.5))
-    (_, th), _ = cv2.getTextSize(texto, fuente, escala, grosor)
-    y = int(8 + renglon * (th + 10))
-    cv2.putText(img, texto, (8, y), fuente, escala, (0, 0, 0), grosor + 2)
-    cv2.putText(img, texto, (8, y), fuente, escala, color, grosor)
-
 
 class Sistema:
     """Todas las cámaras de esta PC. Permite sumar/quitar cámaras en caliente desde el hub

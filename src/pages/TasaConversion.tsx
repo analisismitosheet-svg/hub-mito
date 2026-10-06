@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
-  Loader2, RefreshCw, Percent, LogIn, LogOut, Footprints, Receipt, VideoOff, Video, ChevronRight, Info,
+  Loader2, RefreshCw, Percent, Gauge, LogIn, Footprints, Receipt, VideoOff, Video, ChevronRight, Info,
 } from 'lucide-react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
 import Layout from '@/components/Layout'
@@ -220,7 +220,8 @@ function DetalleLocal({ l, nombre, tickets, hayVentas }: { l: LocalHoy; nombre?:
             nota={hayVentas ? `${nf(tickets ?? 0)} tickets / ${nf(l.entradas)} entradas` : 'faltan las ventas'} />
           <Dato icono={<LogIn size={15} className="text-emerald-500" />} label="Entradas hoy" valor={nf(l.entradas)} grande
             nota={l.nuevos + l.reingresos > 0 ? `${nf(l.nuevos)} clientes únicos · ${nf(l.reingresos)} volvieron` : undefined} />
-          <Dato icono={<LogOut size={15} className="text-sky-500" />} label="Salidas" valor={nf(l.salidas)} />
+          <Dato icono={<Gauge size={15} className="text-sky-500" />} label="FPS" valor={cam && cam.online && cam.ok ? (Number(cam.fps) || 0).toFixed(1) : '—'}
+            nota={cam ? (camaras.length > 1 ? cam.nombre : 'cuadros por segundo que analiza la IA') : undefined} />
           <Dato icono={<Footprints size={15} className="text-violet-500" />} label="Transeúntes" valor={nf(l.transeuntes)} />
           <Dato icono={<Receipt size={15} className="text-lime-500" />} label="Tickets hoy" valor={hayVentas ? nf(tickets ?? 0) : '—'} />
         </div>
