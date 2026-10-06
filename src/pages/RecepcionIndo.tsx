@@ -422,6 +422,22 @@ function Kpi({
   )
 }
 
+/**
+ * Nombre de proveedor para comparar: sin acentos, puntos, comas, guiones ni espacios.
+ * El Excel trae "TARCO S.A." y el catálogo "Tarco SA": los dos quedan "TARCOSA".
+ */
+const compacto = (v: string) => normalizar(v).replace(/[^A-Z0-9]/g, '')
+
+/** ¿El nombre del catálogo coincide con lo buscado? Todo junto, o cada palabra por separado. */
+function coincideProveedor(nombre: string, busca: string): boolean {
+  const c = compacto(busca)
+  if (!c) return true
+  const n = compacto(nombre)
+  if (n.includes(c)) return true
+  const palabras = normalizar(busca).split(/[^A-Z0-9]+/).filter((w) => w.length > 1)
+  return palabras.length > 0 && palabras.every((w) => n.includes(w))
+}
+
 /* ------------------------------------------------------------------ */
 /*  Celda de proveedor: desplegable con el catálogo del depósito         */
 /* ------------------------------------------------------------------ */
@@ -472,8 +488,8 @@ function CeldaProveedor({
   }, [abierto])
 
   const filtradas = useMemo(() => {
-    const t = texto.trim().toUpperCase()
-    return (t ? opciones.filter((o) => o.nombre.toUpperCase().includes(t)) : opciones).slice(0, 40)
+    const t = texto.trim()
+    return (t ? opciones.filter((o) => coincideProveedor(o.nombre, t) || compacto(o.codigo) === compacto(t)) : opciones).slice(0, 40)
   }, [opciones, texto])
 
   return (
@@ -482,7 +498,13 @@ function CeldaProveedor({
         ref={botonRef}
         type="button"
         disabled={saving}
-        onClick={() => { setAbierto((a) => !a); setTexto('') }}
+        onClick={() => {
+          setAbierto((a) => !a)
+          // Si el nombre de la fila no está tal cual en el catálogo (ej. "TARCO S.A." vs "Tarco SA"),
+          // se arranca buscándolo: así aparece el del catálogo para elegirlo.
+          const exacto = opciones.some((o) => o.codigo && compacto(o.nombre) === compacto(valor))
+          setTexto(valor && !exacto ? valor : '')
+        }}
         title={valor ? `Cambiar proveedor (${valor})` : 'Elegir proveedor'}
         className="flex w-full items-center justify-between gap-1 rounded-lg border border-line bg-surface2 px-2 py-1 text-left text-xs text-ink hover:bg-line/40 disabled:opacity-50"
       >
@@ -531,7 +553,7 @@ function CeldaProveedor({
                   type="button"
                   onClick={() => { onChange(o.nombre); setAbierto(false) }}
                   className={`block w-full rounded-lg px-2 py-1 text-left text-xs hover:bg-line/40 ${
-                    o.nombre.toUpperCase() === valor.trim().toUpperCase() ? 'bg-brand-600/10 text-brand-400' : 'text-ink'
+                    compacto(o.nombre) === compacto(valor) ? 'bg-brand-600/10 text-brand-400' : 'text-ink'
                   }`}
                 >
                   <span className="block truncate">{o.nombre}</span>
@@ -841,10 +863,10 @@ export default function RecepcionIndo() {
   // Set de nombres del catálogo: enCatalogo() sobre 200 filas x 1.518 nombres en cada
   // render es mucha comparación de strings al pedo.
   const enCatalogoMemo = useMemo(
-    () => new Set(catalogo.map((p) => p.nombre.toUpperCase())),
+    () => new Set(catalogo.map((p) => compacto(p.nombre))),
     [catalogo],
   )
-  const conocido = (nombre: string) => enCatalogoMemo.has(nombre.trim().toUpperCase())
+  const conocido = (nombre: string) => enCatalogoMemo.has(compacto(nombre))
 
   const paginas = Math.max(1, Math.ceil(total / POR_PAGINA))
   const desde = total === 0 ? 0 : pagina * POR_PAGINA + 1
