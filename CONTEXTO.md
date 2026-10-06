@@ -136,11 +136,14 @@ CREATE INDEX IF NOT EXISTS transfer_items_created_at_idx ON public.transfer_item
 ```
 
 ## Pendientes Recepción INDO (Depósito)
-1. Supabase SQL Editor → **`sql/recepcion_indo.sql`** (tablas + RLS + RPCs).
-2. Supabase SQL Editor → **`sql/recepcion_indo_proveedores.sql`** (catálogo de 1.518 proveedores, seed generado desde `DRAGONFISH_INDOD.dbo.PROVEEDORES_INDO`).
-3. Hub → Depósito → **Recepción INDO** → "Subir Excel" con `Recepcion Indo.xlsx`. A partir de ahí no hace falta volver a subirlo: el control queda guardado en la base.
+1. ~~Supabase SQL Editor → `sql/recepcion_indo.sql`~~ **Ya está**: 52/52 sentencias OK (tabla `recepcion_indo`, RLS, trigger y los 5 RPC). Se aplicó con `node scripts/supabase-sql.mjs qwlugajzxrrwckrqlrjp sql/recepcion_indo.sql`.
+2. ~~Supabase SQL Editor → `sql/recepcion_indo_proveedores.sql`~~ **Ya está**: 1.518 proveedores, verificados contra la vista (0 faltantes, 0 sobrantes, 0 nombres distintos).
+3. ~~Hub → Depósito → Recepción INDO → "Subir Excel"~~ **Ya está**: 1.605 filas importadas. A partir de ahí no hace falta volver a subirlo: el control queda guardado en la base.
+4. **Deploy**: la columna "N° OC" linkeable y el deep-link de `PedidosCompra` son código de frontend, así que hay que desplegar para verlos en el navegador.
 
 Opcional, solo para el botón "Catálogo": habilitar `DRAGONFISH_INDOD.dbo.PROVEEDORES_INDO` en Configuraciones → Conexión SQL. Con el tope de filas actual (29 900 000) no hay que tocar nada: son 1.518 filas y llegan enteras.
+
+Lo que **no** va a mejorar: la cobertura de la columna "N° OC". Las 246 OC sin pedido no se arregla desde el hub (ver la nota de "N° OC" en Archivos clave); si el negocio las necesita, el lugar es la vista `VISTAS_CONSOLIDADAS.dbo.PEDIDO_COMPRA`, que hoy tiene `WHERE FFCH >= '20250101'` y baja de `DRAGONFISH_INDOD`.
 
 ## Pendientes F12 Consulta artículos
 1. Supabase SQL Editor → correr **`sql/consulta_articulos.sql`** (permiso `mayorista.articulos.view` + políticas RLS de `mapeo_deposito` y `articulos` + checklist del hub). **Es lo único que no se puede hacer desde el código.**
@@ -182,6 +185,12 @@ Hecho:
   - `dias_atraso` es columna GENERATED (`greatest(0, fecha_controlada - fecha_ingreso)`), nunca se escribe a mano.
   - Permiso: reusa `deposito.view` para ver, importar y marcar (no se agregó permiso nuevo). Para separar duties después: SELECT → `deposito.view`, INSERT → `deposito.import`, UPDATE → `deposito.mark` (los tres ya existen).
   - Los KPIs **no** clavan con la hoja "Seguimiento" del Excel y está a propósito: `bultos sin controlar` = 1534 (igual), `recepciones sin controlar` = 97 contra 75 porque el Excel cuenta solo las que tienen OC **numérica** (75), y `días de atraso` = 7,80 contra 9,04 porque el Excel promedia también las no controladas con `hoy - ingreso` (que envejece solo).
+  - **Columna "N° OC"**: cada OC es un link a `/compras/pedidos-compra?numero=N` (el detalle del pedido de compra: cabecera + artículos + totales). Varias OC pueden venir en una celda (`"15183/15347/15329"`), así que se parte por `/` y cada una es su propio link.
+    - Solo se linkea si el número existe en `public.pedidos_compra`. De las **480 OC distintas** del Excel, **234 linkean**; las otras 246 no, y no es un bug: la copia sincronizada tiene 601 pedidos y arranca en 2025-01-13 (la vista `VISTAS_CONSOLIDADAS.dbo.PEDIDO_COMPRA` filtra `WHERE FFCH >= '20250101'`), mientras el Excel entra en 2024-08. Se verificó que las OC huérfanas **no existen** en `DRAGONFISH_INDOD.ZooLogic.PEDCOMPRA` ni en ninguna otra base `DRAGONFISH_*` del ERP — hay que poner "Pedido N° X" (nunca "Cargado en Dragon"). 89 caen en 2024 (fuera de la cobertura del sync) y 157 están dentro del rango pero sin pedido.
+    - Las OC no linkeables se muestran como texto normal con tooltip explicativo, y las no numéricas (8) tal cual.
+    - El deep-link vive en `src/pages/PedidosCompra.tsx`: lee `?numero=` **sin escribirlo** (es una pantalla de dos panes, así que siempre queda la lista al lado; escribir el URL en cada selección es la forma fácil de armar un ciclo con el efecto que lo lee). Si no encuentra el pedido avisa, y si el número está repetido (24 números repetidos en la base; solo 3 OC caen ahí: 11, 10713, 11901) abre el más reciente y lo dice.
+    - La lista de números se pide una vez por sesión desde `src/lib/ocPedidosCompra.ts` (`select('numero')`, 601 filas). Si la consulta falla, casi siempre es que falta `pedidos_compra.view` — que es lo que exige la RLS de la tabla y el `PermissionRoute` de la ruta — y ahí la columna queda sin links, que es lo correcto.
+    - Diagnóstico: `node scripts/supabase-sql.mjs qwlugajzxrrwckrqlrjp sql/check-oc-pedidos.sql --raw`.
 
 ## Dependencias extra instaladas
 `konva@9`, `react-konva@18` (React 18), `webfontloader`, `jspdf`, `@types/webfontloader`. (`xlsx`, `recharts` ya estaban).
@@ -189,5 +198,5 @@ Hecho:
 ## Notas de estado
 - Transferencias: se arregló la carga por lote (no corta a 1000). El backend envía mails a los 16 locales (pagina la lectura de ítems). Existe botón "Reenviar (N)" para los que fallaron.
 - Empleados: importación del "Listado - MITO" cargada (1726 registros). RLS de edición habilitada.
-- Recepción INDO: módulo terminado (parser con tests en verde, SQL escrito, pantalla y ruta registradas). Falta solo correr los dos `.sql` en Supabase y subir el Excel una vez.
+- Recepción INDO: módulo terminado y andando (SQL aplicado, Excel importado con 1.605 filas, smoke test en verde). Falta el deploy para que se vea la columna "N° OC" linkeable.
 - El archivo `260922 - W50OFF-XG GPAZ.xlsx` y `PROVEEDORES PACHO.xlsx` están en la raíz (pruebas).

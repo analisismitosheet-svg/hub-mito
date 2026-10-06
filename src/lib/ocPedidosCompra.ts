@@ -2,7 +2,7 @@
  * Set de números de pedido de compra que existen en la base, para decidir qué OC de
  * Recepción INDO se puede linkear y cuál no.
  *
- * Son solo codigo+numero (601 filas) y se piden una vez por sesión. Si la consulta falla
+ * Se pide solo la columna `numero` (601 filas) y una vez por sesión. Si la consulta falla
  * casi siempre es que el usuario no tiene 'pedidos_compra.view': la política de RLS de
  * public.pedidos_compra lo exige, igual que la ruta /compras/pedidos-compra. En ese caso
  * se devuelve un set vacío y la columna N° OC queda sin links, que es lo correcto: no
