@@ -3,7 +3,7 @@ import { Camera, Loader2, Plus, Sparkles, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { claveRecepcion, normalizar, type RecepcionIndo } from '@/lib/recepcionIndo'
 import type { Proveedor } from '@/lib/proveedoresIndo'
-import { leerFotoRemito, type DatosRemito } from '@/lib/agentesApi'
+import { leerFotoRemito, type DatosRemito, type LecturaRemito } from '@/lib/agentesApi'
 
 /* ------------------------------------------------------------------ */
 /*  Recepción INDO · "Nuevo registro": alta a mano de una recepción     */
@@ -65,7 +65,11 @@ function elegirDeLista(leido: string | null, lista: string[]): string | null {
   // Primero: algún valor de la lista que aparezca entero en lo leído ("INDOD" dentro de "INDONESIA DEPOSITO (INDOD)")
   const contenido = lista.filter((x) => compacto(x).length >= 3 && l.includes(compacto(x))).sort((a, b) => b.length - a.length)[0]
   if (contenido) return contenido
-  const palabras = normalizar(leido).split(/[^A-Z0-9]+/).filter((w) => w.length > 2)
+  // Una palabra de lo leído igual a un valor de la lista ("AG" en "AG DISTRIBUCIONES")
+  const todas = normalizar(leido).split(/[^A-Z0-9]+/).filter(Boolean)
+  const exacta = lista.find((x) => todas.includes(compacto(x)))
+  if (exacta) return exacta
+  const palabras = todas.filter((w) => w.length > 2)
   return lista.find((x) => palabras.length > 0 && palabras.every((w) => compacto(x).includes(w))) ?? null
 }
 
@@ -83,7 +87,7 @@ export default function NuevaRecepcionIndo({
   estados: string[]
   proveedores: Proveedor[]
   onCerrar: () => void
-  onGuardado: (texto: string) => void
+  onGuardado: (texto: string, seguir?: boolean) => void
 }) {
   const [f, setF] = useState<Form>({
     nGuia: '', transporte: '', bultos: '', deposito: depositos.length === 1 ? depositos[0] : '', proveedor: '',
@@ -98,6 +102,11 @@ export default function NuevaRecepcionIndo({
   const [leyendo, setLeyendo] = useState<number | null>(null) // segundos que lleva
   const [leidos, setLeidos] = useState<Set<keyof Form>>(new Set())
   const [textoFoto, setTextoFoto] = useState<string | null>(null)
+  // Una foto puede traer varios envíos (la factura del transporte: una fila por guía)
+  const [lectura, setLectura] = useState<LecturaRemito | null>(null)
+  const [envioActual, setEnvioActual] = useState<number | null>(null)
+  const [cargados, setCargados] = useState<Set<number>>(new Set())
+  const [aviso, setAviso] = useState<string | null>(null)
   useEffect(() => {
     if (leyendo === null) return
     const id = setInterval(() => setLeyendo((s) => (s === null ? s : s + 1)), 1000)
@@ -114,8 +123,11 @@ export default function NuevaRecepcionIndo({
     [proveedores, f.proveedor],
   )
 
-  /** Pasa lo que leyó la IA a los campos (sin pisar lo que ya se escribió a mano). */
-  function completarDesdeFoto(d: DatosRemito) {
+  /**
+   * Pasa lo que leyó la IA a los campos. Una foto de un solo envío no pisa lo escrito a mano;
+   * al elegir otro envío de la lista se reemplazan los datos del envío anterior.
+   */
+  function completarDesdeFoto(d: DatosRemito, pisar = false, documento?: LecturaRemito['documento']) {
     const nuevos: Partial<Form> = {}
     const proveedor = d.remitente
       ? proveedores.find((p) => compacto(p.nombre) === compacto(d.remitente!.split(/\s[—-]\s|,/)[0]))?.nombre
@@ -131,11 +143,20 @@ export default function NuevaRecepcionIndo({
       nRemito: d.nRemito ?? undefined,
       fechaRemito: d.fechaRemito ?? undefined,
       nFactura: d.nFactura ?? undefined,
+      // La factura del transporte queda anotada en el detalle (no es la factura de la mercadería)
+      detalle: documento?.numero && /factura/i.test(documento.tipo ?? '')
+        ? `Factura transporte ${d.transporte ?? ''} ${documento.numero}`.replace(/\s+/g, ' ').trim()
+        : undefined,
     }
     for (const [k, v] of Object.entries(valores) as [keyof Form, string | undefined][]) {
-      if (v && String(f[k]).trim() === '') (nuevos as Record<string, string>)[k] = v
+      if (v && (pisar || String(f[k]).trim() === '')) (nuevos as Record<string, string>)[k] = v
     }
-    setF((prev) => ({ ...prev, ...nuevos }))
+    const borrar: Partial<Form> = {}
+    if (pisar) {
+      // Lo que el envío nuevo no trae, se vacía (no queda el dato del envío anterior)
+      for (const k of ['nGuia', 'bultos', 'proveedor', 'nRemito', 'fechaRemito'] as const) if (!(k in nuevos)) borrar[k] = ''
+    }
+    setF((prev) => ({ ...prev, ...borrar, ...nuevos }))
     setLeidos(new Set(Object.keys(nuevos) as (keyof Form)[]))
     setTextoFoto(d.textoLeido)
   }
@@ -146,7 +167,11 @@ export default function NuevaRecepcionIndo({
     try {
       const base64 = await fotoABase64(archivo)
       const r = await leerFotoRemito(base64)
-      completarDesdeFoto(r.datos)
+      const envios = r.envios?.length ? r.envios : [r.datos]
+      setLectura({ ...r, envios })
+      setCargados(new Set())
+      setEnvioActual(0)
+      completarDesdeFoto(envios[0], envios.length > 1, r.documento)
     } catch (e) {
       const m = e instanceof Error ? e.message : String(e)
       setError(
@@ -201,7 +226,22 @@ export default function NuevaRecepcionIndo({
     })
     setGuardando(false)
     if (e2) return setError(e2.message)
-    onGuardado(`Registro nuevo: guía ${base.nGuia} de ${base.proveedor}.`)
+    const texto = `Registro nuevo: guía ${base.nGuia} de ${base.proveedor}.`
+    // Si la foto trae más envíos sin cargar, el formulario sigue abierto con el próximo
+    const envios = lectura?.envios ?? []
+    const hechos = new Set(cargados)
+    if (envioActual !== null) hechos.add(envioActual)
+    const proximo = envios.findIndex((_, i) => !hechos.has(i))
+    if (envios.length > 1 && proximo >= 0) {
+      setCargados(hechos)
+      setEnvioActual(proximo)
+      setIntento(false)
+      completarDesdeFoto(envios[proximo], true, lectura?.documento)
+      setAviso(`✓ ${texto} Ahora el envío ${proximo + 1} de ${envios.length}: completá lo que falta y guardalo.`)
+      onGuardado(texto, true)
+      return
+    }
+    onGuardado(texto)
   }
 
   const input = (k: Campo, etiqueta: string, props: React.InputHTMLAttributes<HTMLInputElement> = {}, ancho = '') => (
@@ -252,12 +292,42 @@ export default function NuevaRecepcionIndo({
             </button>
             <p className="min-w-0 flex-1 text-xs text-sub">
               {leyendo !== null
-                ? 'La IA de la oficina está leyendo el remito: tarda entre 30 segundos y 2 minutos.'
+                ? 'La IA de la oficina está leyendo la foto: tarda entre 30 segundos y 3 minutos.'
                 : leidos.size
                   ? <span className="inline-flex items-center gap-1 text-violet-400"><Sparkles size={12} aria-hidden /> Completé {leidos.size} campos (en violeta): revisalos antes de guardar.</span>
-                  : 'Sacá o subí una foto del remito de transporte y completo guía, transporte, bultos, fecha, proveedor y depósito.'}
+                  : 'Sacá o subí una foto del remito o de la factura del transporte (aunque traiga varias guías) y completo guía, transporte, bultos, fecha, proveedor y remito.'}
             </p>
           </div>
+          {lectura && lectura.envios.length > 1 && (
+            <div className="mt-2 space-y-1">
+              <p className="text-xs font-medium text-ink">
+                La foto trae {lectura.envios.length} envíos
+                {lectura.documento.numero ? ` (${lectura.documento.tipo ?? 'documento'} ${lectura.documento.numero})` : ''}: se cargan de a uno.
+              </p>
+              {lectura.envios.map((e, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  disabled={cargados.has(i)}
+                  onClick={() => { setEnvioActual(i); setIntento(false); completarDesdeFoto(e, true, lectura.documento) }}
+                  className={`flex w-full flex-wrap items-center gap-x-3 gap-y-0.5 rounded-lg border px-2.5 py-1.5 text-left text-xs transition ${
+                    cargados.has(i)
+                      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
+                      : envioActual === i
+                        ? 'border-violet-500 bg-violet-500/15 text-ink'
+                        : 'border-line text-sub hover:border-violet-500/50 hover:text-ink'
+                  }`}
+                >
+                  <span className="font-semibold">{cargados.has(i) ? '✓ ' : ''}{i + 1}. {e.nGuia ?? 'sin guía'}</span>
+                  <span>{e.remitente ?? '—'}</span>
+                  <span className="tabular-nums">{e.bultos ?? '—'} bultos</span>
+                  {e.nRemito && <span className="tabular-nums">remito {e.nRemito}</span>}
+                  <span className="ml-auto">{cargados.has(i) ? 'cargado' : envioActual === i ? 'en el formulario' : 'usar este'}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {aviso && <p className="mt-2 text-xs text-emerald-400">{aviso}</p>}
           {textoFoto && (
             <details className="mt-2 text-[11px] text-sub">
               <summary className="cursor-pointer">Texto que leyó la IA</summary>

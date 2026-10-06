@@ -89,9 +89,18 @@ export interface DatosRemito {
  * Manda la foto (JPEG en base64, ya achicada) a mito-server, que la lee con Ollama.
  * No es solo para administradores: alcanza con el permiso de Depósito.
  */
+export interface LecturaRemito {
+  /** Uno o varios envíos: la factura del transporte trae una fila por guía */
+  envios: DatosRemito[]
+  documento: { tipo: string | null; numero: string | null; fecha: string | null }
+  datos: DatosRemito
+  modelo: string
+  segundos: number
+}
+
 export const leerFotoRemito = (imagenBase64: string) =>
-  pedir<{ datos: DatosRemito; modelo: string; segundos: number }>('/ia/remito', {
+  pedir<LecturaRemito>('/ia/remito', {
     method: 'POST',
     body: JSON.stringify({ imagen: imagenBase64 }),
-    timeoutMs: 5 * 60_000, // corre en el procesador: entre 30 s y 2 min
+    timeoutMs: 7 * 60_000, // corre en el procesador: de 30 s a 3 min según la foto
   })

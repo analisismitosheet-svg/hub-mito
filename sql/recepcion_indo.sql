@@ -249,7 +249,8 @@ BEGIN
   SELECT
     upper(btrim(coalesce(x->>'clave', ''))),
     btrim(coalesce(x->>'nGuia', '')),
-    btrim(coalesce(x->>'transporte', '')),
+    -- en mayúsculas y sin espacios dobles: "ag" / "AG" eran dos transportes en el desplegable
+    upper(regexp_replace(btrim(coalesce(x->>'transporte', '')), '\s+', ' ', 'g')),
     coalesce(private.entero_o_null(x->>'bultos'), 0),
     btrim(coalesce(x->>'deposito', '')),
     btrim(coalesce(x->>'proveedor', '')),
