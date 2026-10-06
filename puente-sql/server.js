@@ -113,6 +113,10 @@ try {
   process.exit(1)
 }
 
+// Tope de filas por consulta. Antes era 10.000 y cortaba vistas más grandes sin avisar
+// (vw_STOCK_SKU_MITO tiene ~17.700 SKUs: los que quedaban afuera se veían con stock 0).
+const MAX_FILAS = Math.max(1000, Number(process.env.PUENTE_MAX_FILAS) || 50000)
+
 // Cada parte de un nombre (base, esquema, objeto, alias): sin corchetes, puntos ni comillas
 const PARTE = /^[A-Za-z0-9_-]{1,128}$/
 
@@ -542,7 +546,7 @@ const server = http.createServer(async (req, res) => {
 
     vista = String(body?.vista ?? '')
     const pedido = Number(body?.top)
-    const top = Math.min(Number.isFinite(pedido) && pedido > 0 ? Math.floor(pedido) : 1000, 10000)
+    const top = Math.min(Number.isFinite(pedido) && pedido > 0 ? Math.floor(pedido) : 1000, MAX_FILAS)
 
     // "ALIAS:nombre" = de otro servidor; sin alias, el principal
     const mAlias = vista.match(/^([A-Za-z0-9_-]{1,128}):(.*)$/)

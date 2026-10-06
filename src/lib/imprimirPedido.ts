@@ -17,6 +17,8 @@ export interface PedidoImprimir {
   datos: { etiqueta: string; valor: string | null }[] // Vendedor, Usuario, Observación…
   total: number | null
   anulado: boolean
+  /** Aviso bajo el conteo (ej. "Solo con stock: se omitieron 5 sin stock") */
+  aviso?: string
 }
 
 export interface ItemPedidoImprimir {
@@ -226,6 +228,7 @@ export function htmlPedido(
           <div class="et">Número</div><div class="val mono">${esc(p.comprobante)}</div>
           <div class="et" style="margin-top:4px">Fecha</div><div class="val">${esc(fechaCorta(p.fecha))}</div>
           <div class="meta">${items.length} artículos · ${n0.format(tot.cant)} unidades</div>
+          ${p.aviso ? `<div class="meta"><b>${esc(p.aviso)}</b></div>` : ''}
         </div>
       </div>
     </div>

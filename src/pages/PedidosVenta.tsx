@@ -283,6 +283,18 @@ export default function PedidosVenta() {
 
   function imprimir() {
     if (!pedido) return
+    // Solo los artículos con stock de ese color y talle. Si de una línea no hay dato de stock
+    // (la vista no cargó o vino cortada) se imprime igual: no se esconde lo que no se puede confirmar.
+    const conStock = items.filter((i) => {
+      const s = stockSkuDe(stock, i.articulo, i.color, i.talle)
+      return s === null || s > 0
+    })
+    const omitidas = items.length - conStock.length
+    const sinDato = conStock.filter((i) => stockSkuDe(stock, i.articulo, i.color, i.talle) === null).length
+    if (!conStock.length) {
+      window.alert('Ningún artículo de este pedido tiene stock: no hay nada para imprimir.')
+      return
+    }
     void imprimirPedido(
       {
         titulo: 'Pedido de venta',
@@ -296,8 +308,12 @@ export default function PedidosVenta() {
         ],
         total: pedido.total,
         anulado: pedido.anulado,
+        aviso: [
+          omitidas ? `Solo con stock: se omitieron ${omitidas} sin stock` : '',
+          sinDato ? `${sinDato} sin dato de stock` : '',
+        ].filter(Boolean).join(' · ') || undefined,
       },
-      items.map((i) => ({ ...i, color: colorDe(i) })),
+      conStock.map((i) => ({ ...i, color: colorDe(i) })),
     )
   }
 
@@ -509,7 +525,7 @@ export default function PedidosVenta() {
                   </button>
                   <button
                     onClick={imprimir}
-                    disabled={items.length === 0 || cargandoItems}
+                    disabled={items.length === 0 || cargandoItems || cargandoStock}
                     className="btn-press inline-flex h-10 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-sm font-medium text-ink transition hover:bg-surface2 disabled:opacity-50"
                   >
                     <Printer size={15} aria-hidden /> Imprimir
