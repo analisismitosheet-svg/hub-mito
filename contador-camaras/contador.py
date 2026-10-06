@@ -845,7 +845,7 @@ class Camara(threading.Thread):
 
     def anotar(self, img, ancho, alto):
         if self.modo is None:
-            cv2.putText(img, "SIN CALIBRAR - no cuenta", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+            rotulo(img, "SIN CALIBRAR - no cuenta", 2, (0, 0, 255))
         elif self.modo == "linea":
             a = (int(self.linea.ax * ancho), int(self.linea.ay * alto))
             b = (int(self.linea.bx * ancho), int(self.linea.by * alto))
@@ -857,13 +857,28 @@ class Camara(threading.Thread):
             if z:
                 cv2.polylines(img, [z.pixeles(ancho, alto)], True, color, 1)
         h = self.almacen.hoy(self.nombre)
-        texto = f"Entradas {h['entradas']}  Salidas {h['salidas']}  Transeuntes {h['transeuntes']}  Empleados {h['empleados']}  {self.fps:.1f} fps"
-        cv2.putText(img, texto, (10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 4)
-        cv2.putText(img, texto, (10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        # corto para que entre aunque haya zoom (salidas, transeúntes y personal se ven en el hub)
+        rotulo(img, f"Entradas {h['entradas']}   {self.fps:.1f} fps", 1, (0, 255, 0))
         return img
 
 
 # ------------------------------------------------------------------ envío ---
+
+def rotulo(img, texto: str, renglon: int, color) -> None:
+    """Texto sobre el video con tamaño proporcional al ancho de la imagen (con zoom la imagen es
+    chica y una letra fija se cortaba): nunca ocupa más del 90 % del ancho."""
+    alto, ancho = img.shape[:2]
+    fuente = cv2.FONT_HERSHEY_SIMPLEX
+    escala = min(1.2, max(0.5, ancho / 650))
+    (w, _), _ = cv2.getTextSize(texto, fuente, escala, 2)
+    if w > ancho * 0.9:
+        escala *= ancho * 0.9 / w
+    grosor = max(1, round(escala * 2.5))
+    (_, th), _ = cv2.getTextSize(texto, fuente, escala, grosor)
+    y = int(8 + renglon * (th + 10))
+    cv2.putText(img, texto, (8, y), fuente, escala, (0, 0, 0), grosor + 2)
+    cv2.putText(img, texto, (8, y), fuente, escala, color, grosor)
+
 
 class Sistema:
     """Todas las cámaras de esta PC. Permite sumar/quitar cámaras en caliente desde el hub
