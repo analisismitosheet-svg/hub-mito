@@ -11,7 +11,7 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import { SelectBuscar } from '@/components/MultiselectFiltro'
 import { supabase } from '@/lib/supabase'
 import { leerRecepcionIndo, normalizar } from '@/lib/recepcionIndo'
-import { numerosPedidoCompra, ocsDeFila } from '@/lib/ocPedidosCompra'
+import { numerosPedidoCompra, ocsDeFila, pedidosCompraParaOc, unirOcs, type PedidoCompraOc } from '@/lib/ocPedidosCompra'
 import {
   cargarProveedores, opcionesProveedor, refrescarDesdeSql, type Proveedor,
 } from '@/lib/proveedoresIndo'
@@ -171,6 +171,239 @@ function CeldaOc({ valor, conocidos }: { valor: string; conocidos: Set<string> }
           </Link>
         )
       })}
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/*  Celda N° OC editable: buscar y elegir una o varias órdenes de        */
+/*  compra (pedidos de compra de Dragonfish), o escribir el N° a mano    */
+/*  si no aparece. Se guarda como el Excel: "15183/15347".              */
+/* ------------------------------------------------------------------ */
+function CeldaOcEditable({
+  valor, conocidos, pedidos, proveedorCodigo, proveedorNombre, saving, onChange,
+}: {
+  valor: string
+  conocidos: Set<string>
+  pedidos: PedidoCompraOc[]
+  proveedorCodigo: string | null
+  proveedorNombre: string
+  saving: boolean
+  onChange: (nOc: string) => void
+}) {
+  const [abierto, setAbierto] = useState(false)
+  const [texto, setTexto] = useState('')
+  const [elegidas, setElegidas] = useState<string[]>([])
+  const [soloProveedor, setSoloProveedor] = useState(true)
+  const botonRef = useRef<HTMLButtonElement>(null)
+  const [caja, setCaja] = useState<{ top: number; left: number; width: number; arriba: boolean } | null>(null)
+
+  // Pedidos del proveedor de la fila: por código, o si no hay código, por nombre parecido
+  const delProveedor = useMemo(() => {
+    const cod = (proveedorCodigo ?? '').trim().toUpperCase()
+    const nom = proveedorNombre.trim().toUpperCase()
+    if (!cod && !nom) return []
+    return pedidos.filter((p) =>
+      cod ? (p.proveedor ?? '').trim().toUpperCase() === cod : nom.length >= 3 && (p.proveedor_nombre ?? '').toUpperCase().includes(nom),
+    )
+  }, [pedidos, proveedorCodigo, proveedorNombre])
+  const hayDelProveedor = delProveedor.length > 0
+
+  function abrir() {
+    setElegidas(ocsDeFila(valor))
+    setTexto('')
+    setSoloProveedor(true)
+    setAbierto(true)
+  }
+
+  useLayoutEffect(() => {
+    if (!abierto) return
+    const medir = () => {
+      const r = botonRef.current?.getBoundingClientRect()
+      if (!r) return
+      const alto = 400
+      const abajo = window.innerHeight - r.bottom
+      const arriba = abajo < alto && r.top > abajo
+      const ancho = Math.max(r.width, 340)
+      setCaja({
+        top: arriba ? Math.max(8, r.top - 8) : r.bottom + 4,
+        left: Math.max(8, Math.min(r.left, window.innerWidth - ancho - 12)),
+        width: ancho,
+        arriba,
+      })
+    }
+    medir()
+    window.addEventListener('resize', medir)
+    window.addEventListener('scroll', medir, true)
+    return () => {
+      window.removeEventListener('resize', medir)
+      window.removeEventListener('scroll', medir, true)
+    }
+  }, [abierto])
+
+  useEffect(() => {
+    if (!abierto) return
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setAbierto(false) }
+    document.addEventListener('keydown', esc)
+    return () => document.removeEventListener('keydown', esc)
+  }, [abierto])
+
+  const t = texto.trim().toUpperCase()
+  const base = soloProveedor && hayDelProveedor && !t ? delProveedor : pedidos
+  const filtradas = useMemo(
+    () =>
+      (t
+        ? base.filter((p) =>
+            [String(p.numero), p.proveedor ?? '', p.proveedor_nombre ?? ''].some((v) => v.toUpperCase().includes(t)),
+          )
+        : base
+      ).slice(0, 60),
+    [base, t],
+  )
+  const manual = texto.trim().replace(/\s+/g, '')
+  const puedeManual = manual !== '' && !elegidas.includes(manual) && !pedidos.some((p) => String(p.numero) === manual)
+
+  const alternar = (n: string) =>
+    setElegidas((prev) => (prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n]))
+  const guardar = () => {
+    const nuevo = unirOcs(elegidas)
+    if (nuevo !== unirOcs(ocsDeFila(valor))) onChange(nuevo)
+    setAbierto(false)
+  }
+
+  return (
+    <div className="flex items-start gap-1">
+      <div className="min-w-0 flex-1">
+        <CeldaOc valor={valor} conocidos={conocidos} />
+      </div>
+      <button
+        ref={botonRef}
+        type="button"
+        disabled={saving}
+        onClick={() => (abierto ? setAbierto(false) : abrir())}
+        title="Buscar y elegir las órdenes de compra"
+        aria-label="Editar N° OC"
+        className="shrink-0 rounded-md p-1 text-sub hover:bg-line/40 hover:text-ink disabled:opacity-50"
+      >
+        <Pencil size={11} aria-hidden />
+      </button>
+      {abierto && caja && createPortal(
+        <>
+          <div className="fixed inset-0 z-[90]" onClick={() => setAbierto(false)} />
+          <div
+            style={{
+              position: 'fixed',
+              top: caja.top,
+              left: caja.left,
+              width: caja.width,
+              transform: caja.arriba ? 'translateY(-100%)' : undefined,
+            }}
+            className="fixed z-[91] max-w-[92vw] rounded-xl border border-line bg-surface p-2 shadow-2xl"
+            role="dialog"
+            aria-label="Órdenes de compra"
+          >
+            {/* Elegidas */}
+            <div className="mb-2 flex min-h-[1.75rem] flex-wrap items-center gap-1">
+              {elegidas.length === 0 ? (
+                <span className="px-1 text-[11px] italic text-sub/70">Ninguna OC elegida</span>
+              ) : (
+                elegidas.map((n) => (
+                  <span key={n} className="inline-flex items-center gap-0.5 rounded-md bg-amber-500/15 py-0.5 pl-1.5 pr-0.5 text-xs font-semibold tabular-nums text-amber-500">
+                    {n}
+                    {!pedidos.some((p) => String(p.numero) === n) && <span className="text-[9px] font-normal text-sub">(manual)</span>}
+                    <button onClick={() => alternar(n)} className="rounded p-0.5 hover:bg-amber-500/20" aria-label={`Quitar OC ${n}`}>
+                      <X size={11} aria-hidden />
+                    </button>
+                  </span>
+                ))
+              )}
+            </div>
+
+            {/* Buscar / escribir a mano */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                // Enter: si el texto es un N° de la lista o un N° a mano, lo agrega
+                const exacta = pedidos.find((p) => String(p.numero) === manual)
+                if (exacta || puedeManual) {
+                  if (!elegidas.includes(manual)) setElegidas((prev) => [...prev, manual])
+                  setTexto('')
+                }
+              }}
+              className="flex items-center gap-1.5 border-b border-line pb-2"
+            >
+              <Search size={13} className="shrink-0 text-sub/70" aria-hidden />
+              <input
+                autoFocus
+                value={texto}
+                onChange={(e) => setTexto(e.target.value)}
+                placeholder="N° de OC o proveedor… (Enter agrega)"
+                className="w-full bg-transparent px-1 py-0.5 text-xs text-ink outline-none placeholder:text-sub/60"
+              />
+              {texto && (
+                <button type="button" onClick={() => setTexto('')} className="rounded p-0.5 text-sub hover:text-ink" aria-label="Limpiar búsqueda">
+                  <X size={12} aria-hidden />
+                </button>
+              )}
+            </form>
+            {hayDelProveedor && !t && (
+              <label className="mt-1.5 flex cursor-pointer items-center gap-1.5 px-1 text-[11px] text-sub">
+                <input type="checkbox" checked={soloProveedor} onChange={(e) => setSoloProveedor(e.target.checked)} className="h-3.5 w-3.5 accent-amber-500" />
+                Solo las de {proveedorNombre || 'este proveedor'} ({delProveedor.length})
+              </label>
+            )}
+
+            <div className="mt-1.5 max-h-60 overflow-y-auto">
+              {puedeManual && (
+                <button
+                  type="button"
+                  onClick={() => { setElegidas((prev) => [...prev, manual]); setTexto('') }}
+                  className="block w-full rounded-lg px-2 py-1.5 text-left text-xs text-brand-400 hover:bg-line/40"
+                >
+                  + Agregar «{manual}» a mano (no está en los pedidos de compra)
+                </button>
+              )}
+              {filtradas.map((p) => {
+                const n = String(p.numero)
+                const marcada = elegidas.includes(n)
+                return (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => alternar(n)}
+                    className={`flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left text-xs hover:bg-line/40 ${marcada ? 'bg-amber-500/10' : ''}`}
+                  >
+                    <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${marcada ? 'border-amber-500 bg-amber-500 text-white' : 'border-line2'}`}>
+                      {marcada && <Check size={11} strokeWidth={3} aria-hidden />}
+                    </span>
+                    <span className="w-14 shrink-0 font-semibold tabular-nums text-ink">{n}</span>
+                    <span className="min-w-0 flex-1 truncate text-sub">
+                      {p.proveedor_nombre || p.proveedor}
+                      {p.anulado && <span className="ml-1 text-brand-400">(anulado)</span>}
+                    </span>
+                    <span className="shrink-0 tabular-nums text-sub/70">{fmtFecha(p.fecha)}</span>
+                  </button>
+                )
+              })}
+              {filtradas.length === 0 && !puedeManual && (
+                <p className="px-2 py-1.5 text-[11px] text-sub">
+                  {pedidos.length === 0 ? 'No se pudieron leer los pedidos de compra (permiso de Pedidos de compra). Escribí el N° y agregalo a mano.' : 'No hay OC que coincidan.'}
+                </p>
+              )}
+            </div>
+
+            <div className="mt-2 flex items-center justify-end gap-1.5 border-t border-line pt-2">
+              <button type="button" onClick={() => setAbierto(false)} className="rounded-lg px-2.5 py-1 text-xs text-sub hover:text-ink">
+                Cancelar
+              </button>
+              <button type="button" onClick={guardar} className="rounded-lg bg-amber-600 px-3 py-1 text-xs font-semibold text-white hover:bg-amber-700">
+                Guardar {elegidas.length ? `(${elegidas.length})` : ''}
+              </button>
+            </div>
+          </div>
+        </>,
+        document.body,
+      )}
     </div>
   )
 }
@@ -408,6 +641,9 @@ export default function RecepcionIndo() {
   // No avisa si falla: casi siempre es que falta 'pedidos_compra.view', y en ese caso la
   // columna N° OC queda sin links, que es lo correcto y no necesita un cartel de error.
   useEffect(() => { void numerosPedidoCompra().then(setNumerosPedido) }, [])
+  // Lista de pedidos de compra para el buscador de la columna N° OC (una vez por sesión)
+  const [pedidosOc, setPedidosOc] = useState<PedidoCompraOc[]>([])
+  useEffect(() => { void pedidosCompraParaOc().then(setPedidosOc) }, [])
 
   // Catálogo de proveedores: se carga una vez y queda cacheado en el navegador.
   useEffect(() => {
@@ -449,6 +685,10 @@ export default function RecepcionIndo() {
     const codigo = catalogo.find((p) => p.nombre.toUpperCase() === nombre.trim().toUpperCase())?.codigo ?? null
     await guardarFila(f.clave, { proveedor: nombre.trim(), proveedor_codigo: codigo })
   }
+
+  /** N° OC elegidas en el buscador (o escritas a mano), como las guarda el Excel: "15183/15347". */
+  const cambiarOc = (f: Fila, nOc: string) =>
+    guardarFila(f.clave, { n_oc: nOc }, nOc ? `OC de ${f.n_guia || f.clave}: ${nOc.replace(/\//g, ', ')}.` : `Sin OC: ${f.n_guia || f.clave}.`)
 
   /** Controla todo lo pendiente que está en la vista actual (paginado en bloques). */
   async function controlarLoPendiente() {
@@ -840,7 +1080,15 @@ export default function RecepcionIndo() {
                     <div className="text-[10px] text-sub/70">{fmtFecha(f.fecha_remito)}</div>
                   </td>
                   <td className="px-2.5 py-2">
-                    <CeldaOc valor={f.n_oc} conocidos={numerosPedido} />
+                    <CeldaOcEditable
+                      valor={f.n_oc}
+                      conocidos={numerosPedido}
+                      pedidos={pedidosOc}
+                      proveedorCodigo={f.proveedor_codigo}
+                      proveedorNombre={f.proveedor}
+                      saving={saving}
+                      onChange={(v) => void cambiarOc(f, v)}
+                    />
                     {f.oc_cargada_dragon && <span className="ml-1 text-[10px] text-emerald-500">dragon</span>}
                   </td>
                   <td className="px-2.5 py-2">

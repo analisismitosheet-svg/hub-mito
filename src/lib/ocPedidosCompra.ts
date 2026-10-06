@@ -35,6 +35,48 @@ export function numerosPedidoCompra(): Promise<Set<string>> {
   return promesa
 }
 
+/** Pedido de compra para el buscador de OC (Recepción INDO). */
+export interface PedidoCompraOc {
+  numero: number
+  fecha: string | null
+  proveedor: string | null
+  proveedor_nombre: string | null
+  total: number | null
+  anulado: boolean
+}
+
+let promesaLista: Promise<PedidoCompraOc[]> | null = null
+
+/** Todos los pedidos de compra (más nuevos primero), una vez por sesión. Vacío si no hay permiso. */
+export function pedidosCompraParaOc(): Promise<PedidoCompraOc[]> {
+  if (!promesaLista) {
+    promesaLista = (async () => {
+      if (!supabase) return []
+      const lista: PedidoCompraOc[] = []
+      for (let desde = 0; desde < 20000; desde += 1000) {
+        const { data, error } = await supabase
+          .from('pedidos_compra')
+          .select('numero,fecha,proveedor,proveedor_nombre,total,anulado')
+          .not('numero', 'is', null)
+          .order('fecha', { ascending: false })
+          .order('numero', { ascending: false })
+          .range(desde, desde + 999)
+        if (error) return []
+        const pagina = (data as PedidoCompraOc[] | null) ?? []
+        lista.push(...pagina)
+        if (pagina.length < 1000) break
+      }
+      return lista
+    })()
+  }
+  return promesaLista
+}
+
+/** Une las OC elegidas como las guarda el Excel: "15183/15347". */
+export function unirOcs(ocs: string[]): string {
+  return [...new Set(ocs.map((s) => s.trim()).filter(Boolean))].join('/')
+}
+
 /** El Excel a veces trae varias OC en una celda: "15183/15347/15329". */
 export function ocsDeFila(nOc: string | null | undefined): string[] {
   return String(nOc ?? '')

@@ -281,7 +281,8 @@ BEGIN
     n_remito          = EXCLUDED.n_remito,
     fecha_remito      = EXCLUDED.fecha_remito,
     mes               = EXCLUDED.mes,
-    n_oc              = EXCLUDED.n_oc,
+    -- si el Excel trae la OC vacía, se conserva la elegida en el hub (buscador de la columna N° OC)
+    n_oc              = CASE WHEN btrim(EXCLUDED.n_oc) = '' THEN t.n_oc ELSE EXCLUDED.n_oc END,
     oc_cargada_dragon = EXCLUDED.oc_cargada_dragon,
     n_factura         = EXCLUDED.n_factura,
     fecha_factura     = EXCLUDED.fecha_factura,
