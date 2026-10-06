@@ -71,3 +71,27 @@ export const confirmarAccion = (id: string) =>
   pedir<ResultadoAccion>(`/api/acciones/${id}/confirmar`, { method: 'POST', timeoutMs: 60_000 })
 
 export const cancelarAccion = (id: string) => pedir<{ ok: boolean }>(`/api/acciones/${id}/cancelar`, { method: 'POST' })
+
+/** Campos que la IA local leyó de la foto de un remito de transporte (Recepción INDO). */
+export interface DatosRemito {
+  nGuia: string | null
+  transporte: string | null
+  bultos: number | null
+  fechaRemito: string | null // AAAA-MM-DD
+  remitente: string | null
+  destino: string | null
+  nRemito: string | null
+  nFactura: string | null
+  textoLeido: string | null
+}
+
+/**
+ * Manda la foto (JPEG en base64, ya achicada) a mito-server, que la lee con Ollama.
+ * No es solo para administradores: alcanza con el permiso de Depósito.
+ */
+export const leerFotoRemito = (imagenBase64: string) =>
+  pedir<{ datos: DatosRemito; modelo: string; segundos: number }>('/ia/remito', {
+    method: 'POST',
+    body: JSON.stringify({ imagen: imagenBase64 }),
+    timeoutMs: 5 * 60_000, // corre en el procesador: entre 30 s y 2 min
+  })

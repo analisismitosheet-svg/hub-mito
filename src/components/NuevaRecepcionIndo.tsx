@@ -1,8 +1,9 @@
-import { useMemo, useState, type FormEvent } from 'react'
-import { Loader2, Plus, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { Camera, Loader2, Plus, Sparkles, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { claveRecepcion, normalizar, type RecepcionIndo } from '@/lib/recepcionIndo'
 import type { Proveedor } from '@/lib/proveedoresIndo'
+import { leerFotoRemito, type DatosRemito } from '@/lib/agentesApi'
 
 /* ------------------------------------------------------------------ */
 /*  Recepción INDO · "Nuevo registro": alta a mano de una recepción     */
@@ -36,6 +37,38 @@ interface Form {
 const hoy = () => new Date().toLocaleDateString('sv-SE')
 const compacto = (v: string) => normalizar(v).replace(/[^A-Z0-9]/g, '')
 
+/** Achica la foto (máx. 1600 px) y la pasa a JPEG en base64: viaja rápido y la IA la lee igual. */
+async function fotoABase64(archivo: File): Promise<string> {
+  const url = URL.createObjectURL(archivo)
+  try {
+    const img = await new Promise<HTMLImageElement>((ok, mal) => {
+      const i = new Image()
+      i.onload = () => ok(i)
+      i.onerror = () => mal(new Error('No se pudo abrir la imagen.'))
+      i.src = url
+    })
+    const escala = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight))
+    const c = document.createElement('canvas')
+    c.width = Math.round(img.naturalWidth * escala)
+    c.height = Math.round(img.naturalHeight * escala)
+    c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height)
+    return c.toDataURL('image/jpeg', 0.85).split(',')[1]
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
+
+/** Mejor coincidencia de un texto leído contra una lista (todas las palabras, sin puntos ni acentos). */
+function elegirDeLista(leido: string | null, lista: string[]): string | null {
+  if (!leido) return null
+  const l = compacto(leido)
+  // Primero: algún valor de la lista que aparezca entero en lo leído ("INDOD" dentro de "INDONESIA DEPOSITO (INDOD)")
+  const contenido = lista.filter((x) => compacto(x).length >= 3 && l.includes(compacto(x))).sort((a, b) => b.length - a.length)[0]
+  if (contenido) return contenido
+  const palabras = normalizar(leido).split(/[^A-Z0-9]+/).filter((w) => w.length > 2)
+  return lista.find((x) => palabras.length > 0 && palabras.every((w) => compacto(x).includes(w))) ?? null
+}
+
 // Opcionales: el link de la factura y el detalle. Todo lo demás es obligatorio.
 const OBLIGATORIOS: (keyof Form)[] = [
   'nGuia', 'transporte', 'bultos', 'deposito', 'proveedor', 'nRemito', 'fechaRemito', 'nOc',
@@ -60,6 +93,16 @@ export default function NuevaRecepcionIndo({
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [intento, setIntento] = useState(false)
+  // Foto del remito: la lee la IA local (Ollama en mito-server) y completa los campos
+  const fotoRef = useRef<HTMLInputElement>(null)
+  const [leyendo, setLeyendo] = useState<number | null>(null) // segundos que lleva
+  const [leidos, setLeidos] = useState<Set<keyof Form>>(new Set())
+  const [textoFoto, setTextoFoto] = useState<string | null>(null)
+  useEffect(() => {
+    if (leyendo === null) return
+    const id = setInterval(() => setLeyendo((s) => (s === null ? s : s + 1)), 1000)
+    return () => clearInterval(id)
+  }, [leyendo === null]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((prev) => ({ ...prev, [k]: v }))
   const falta = (k: keyof Form) => OBLIGATORIOS.includes(k) && String(f[k]).trim() === ''
@@ -70,6 +113,52 @@ export default function NuevaRecepcionIndo({
     () => proveedores.find((p) => compacto(p.nombre) === compacto(f.proveedor)) ?? null,
     [proveedores, f.proveedor],
   )
+
+  /** Pasa lo que leyó la IA a los campos (sin pisar lo que ya se escribió a mano). */
+  function completarDesdeFoto(d: DatosRemito) {
+    const nuevos: Partial<Form> = {}
+    const proveedor = d.remitente
+      ? proveedores.find((p) => compacto(p.nombre) === compacto(d.remitente!.split(/\s[—-]\s|,/)[0]))?.nombre
+        ?? elegirDeLista(d.remitente.split(/\s[—-]\s|,/)[0], proveedores.map((p) => p.nombre))
+        ?? d.remitente.split(/\s[—-]\s|,/)[0].trim()
+      : null
+    const valores: Partial<Form> = {
+      nGuia: d.nGuia ?? undefined,
+      transporte: (elegirDeLista(d.transporte, transportes) ?? d.transporte) ?? undefined,
+      bultos: d.bultos != null ? String(d.bultos) : undefined,
+      deposito: elegirDeLista(d.destino, depositos) ?? undefined,
+      proveedor: proveedor ?? undefined,
+      nRemito: d.nRemito ?? undefined,
+      fechaRemito: d.fechaRemito ?? undefined,
+      nFactura: d.nFactura ?? undefined,
+    }
+    for (const [k, v] of Object.entries(valores) as [keyof Form, string | undefined][]) {
+      if (v && String(f[k]).trim() === '') (nuevos as Record<string, string>)[k] = v
+    }
+    setF((prev) => ({ ...prev, ...nuevos }))
+    setLeidos(new Set(Object.keys(nuevos) as (keyof Form)[]))
+    setTextoFoto(d.textoLeido)
+  }
+
+  async function leerFoto(archivo: File) {
+    setError(null)
+    setLeyendo(0)
+    try {
+      const base64 = await fotoABase64(archivo)
+      const r = await leerFotoRemito(base64)
+      completarDesdeFoto(r.datos)
+    } catch (e) {
+      const m = e instanceof Error ? e.message : String(e)
+      setError(
+        /fetch|network|Failed|timeout|aborted/i.test(m)
+          ? 'No se pudo conectar con la IA (mito-server en la PC de la oficina). ¿Está prendida? Mientras tanto completá a mano.'
+          : m,
+      )
+    } finally {
+      setLeyendo(null)
+      if (fotoRef.current) fotoRef.current.value = ''
+    }
+  }
 
   async function guardar(e: FormEvent) {
     e.preventDefault()
@@ -124,7 +213,7 @@ export default function NuevaRecepcionIndo({
         value={String(f[k] ?? '')}
         onChange={(e) => set(k, e.target.value as never)}
         className={`h-10 w-full rounded-xl border bg-surface2 px-3 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 ${
-          intento && falta(k) ? 'border-brand-500' : 'border-line'
+          intento && falta(k) ? 'border-brand-500' : leidos.has(k) ? 'border-violet-500/70 bg-violet-500/10' : 'border-line'
         }`}
         {...props}
       />
@@ -141,6 +230,42 @@ export default function NuevaRecepcionIndo({
           </button>
         </div>
 
+        {/* Foto del remito de transporte: la IA local completa lo que puede leer */}
+        <div className="mb-3 rounded-xl border border-violet-500/30 bg-violet-500/5 p-3">
+          <input
+            ref={fotoRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => { const a = e.target.files?.[0]; if (a) void leerFoto(a) }}
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => fotoRef.current?.click()}
+              disabled={leyendo !== null}
+              className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-60"
+            >
+              {leyendo !== null ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Camera size={15} aria-hidden />}
+              {leyendo !== null ? `Leyendo la foto… ${leyendo} s` : 'Foto del remito'}
+            </button>
+            <p className="min-w-0 flex-1 text-xs text-sub">
+              {leyendo !== null
+                ? 'La IA de la oficina está leyendo el remito: tarda entre 30 segundos y 2 minutos.'
+                : leidos.size
+                  ? <span className="inline-flex items-center gap-1 text-violet-400"><Sparkles size={12} aria-hidden /> Completé {leidos.size} campos (en violeta): revisalos antes de guardar.</span>
+                  : 'Sacá o subí una foto del remito de transporte y completo guía, transporte, bultos, fecha, proveedor y depósito.'}
+            </p>
+          </div>
+          {textoFoto && (
+            <details className="mt-2 text-[11px] text-sub">
+              <summary className="cursor-pointer">Texto que leyó la IA</summary>
+              <p className="mt-1 whitespace-pre-wrap break-words">{textoFoto}</p>
+            </details>
+          )}
+        </div>
+
         <datalist id="nri-depositos">{depositos.map((d) => <option key={d} value={d} />)}</datalist>
         <datalist id="nri-transportes">{transportes.map((t) => <option key={t} value={t} />)}</datalist>
         <datalist id="nri-estados">{estados.map((s) => <option key={s} value={s} />)}</datalist>
@@ -153,7 +278,7 @@ export default function NuevaRecepcionIndo({
             <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-sub">Bultos<span className="text-brand-400"> *</span></span>
             <input
               type="number" min={0} inputMode="numeric" value={f.bultos} onChange={(e) => set('bultos', e.target.value)}
-              className={`h-10 w-full rounded-xl border bg-surface2 px-3 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 ${intento && falta('bultos') ? 'border-brand-500' : 'border-line'}`}
+              className={`h-10 w-full rounded-xl border bg-surface2 px-3 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 ${intento && falta('bultos') ? 'border-brand-500' : leidos.has('bultos') ? 'border-violet-500/70 bg-violet-500/10' : 'border-line'}`}
             />
           </label>
 
