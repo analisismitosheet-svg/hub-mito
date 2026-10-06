@@ -39,7 +39,7 @@ interface Renglon {
   cancelado: number
 }
 
-type Estado = 'todos' | 'sin' | 'parcial' | 'completo'
+type Estado = 'todos' | 'sin' | 'parcial' | 'completo' | 'sobrante'
 type Periodo = '90' | '180' | '365' | 'todo'
 
 const n0 = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 })
@@ -51,14 +51,22 @@ const pct = (a: number, b: number) => (b > 0 ? Math.min(100, Math.round((a / b) 
 const pendientes = (p: { unidades: number; recibidas: number; canceladas: number }) => Math.max(0, p.unidades - p.recibidas - p.canceladas)
 
 function estadoDe(p: EstadoPedido): Exclude<Estado, 'todos'> {
-  if (p.unidades > 0 && pendientes(p) === 0) return 'completo'
+  // Completo, pero llegaron unidades de más: se marca aparte
+  if (p.unidades > 0 && pendientes(p) === 0) return p.demas > 0 ? 'sobrante' : 'completo'
   return p.recibidas > 0 ? 'parcial' : 'sin'
+}
+
+/** Ya no espera nada (completo, con o sin sobrante) */
+const cerrado = (p: EstadoPedido) => {
+  const e = estadoDe(p)
+  return e === 'completo' || e === 'sobrante'
 }
 
 const ESTADOS: Record<Exclude<Estado, 'todos'>, { label: string; clase: string }> = {
   sin: { label: 'Sin ingresar', clase: 'border-rose-500/40 bg-rose-500/10 text-rose-400' },
   parcial: { label: 'Parcial', clase: 'border-amber-500/40 bg-amber-500/10 text-amber-400' },
   completo: { label: 'Completo', clase: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400' },
+  sobrante: { label: 'Con sobrante', clase: 'border-sky-500/40 bg-sky-500/10 text-sky-400' },
 }
 
 /** "PEDIDODECOMPRA X 00001-00009787" -> "X 00001-00009787" */
@@ -125,7 +133,7 @@ export default function EstadoPedidos() {
 
   const tot = useMemo(() => base.reduce((a, p) => ({
     unidades: a.unidades + p.unidades, recibidas: a.recibidas + p.recibidas, canceladas: a.canceladas + p.canceladas, pendientes: a.pendientes + pendientes(p),
-    abiertos: a.abiertos + (estadoDe(p) !== 'completo' ? 1 : 0), completos: a.completos + (estadoDe(p) === 'completo' ? 1 : 0),
+    abiertos: a.abiertos + (cerrado(p) ? 0 : 1), completos: a.completos + (cerrado(p) ? 1 : 0),
     sin: a.sin + (estadoDe(p) === 'sin' ? 1 : 0),
   }), { unidades: 0, recibidas: 0, canceladas: 0, pendientes: 0, abiertos: 0, completos: 0, sin: 0 }), [base])
 
@@ -135,7 +143,7 @@ export default function EstadoPedidos() {
       const k = p.proveedor ?? ''
       const g = m.get(k) ?? { codigo: k, nombre: p.proveedor_nombre || k || '—', pedidos: 0, abiertos: 0, unidades: 0, recibidas: 0, canceladas: 0, pendientes: 0 }
       g.pedidos++
-      if (estadoDe(p) !== 'completo') g.abiertos++
+      if (!cerrado(p)) g.abiertos++
       g.unidades += p.unidades; g.recibidas += p.recibidas; g.canceladas += p.canceladas; g.pendientes += pendientes(p)
       m.set(k, g)
     }
@@ -283,7 +291,7 @@ export default function EstadoPedidos() {
           <section className="rounded-2xl border border-line bg-surface p-3">
             <div className="mb-2 flex flex-wrap items-center gap-1.5">
               <h2 className="mr-2 text-sm font-semibold text-ink">Pedidos <span className="font-normal text-sub">({n0.format(lista.length)})</span></h2>
-              {(['todos', 'sin', 'parcial', 'completo'] as const).map((e) => (
+              {(['todos', 'sin', 'parcial', 'completo', 'sobrante'] as const).map((e) => (
                 <button key={e} onClick={() => setEstado(e)}
                   className={`${chip} ${estado === e ? 'border-lime-500/50 bg-lime-500/15 text-lime-500' : 'border-line text-sub hover:text-ink'}`}>
                   {e === 'todos' ? 'Todos' : ESTADOS[e].label}
@@ -319,7 +327,7 @@ export default function EstadoPedidos() {
                           <td className="py-2 pr-2 text-sub">{abiertoEste ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</td>
                           <td className="py-2 pr-3 font-medium text-ink">{numeroComprobante(p)}</td>
                           <td className="py-2 pr-3 tabular-nums">{fechaCorta(p.fecha)}
-                            {dias != null && est !== 'completo' && <span className={`ml-1.5 text-xs ${dias > 60 ? 'text-rose-400' : 'text-sub'}`}>hace {dias} d</span>}
+                            {dias != null && !cerrado(p) && <span className={`ml-1.5 text-xs ${dias > 60 ? 'text-rose-400' : 'text-sub'}`}>hace {dias} d</span>}
                           </td>
                           <td className="py-2 pr-3">{p.proveedor_nombre ?? p.proveedor}</td>
                           <td className="py-2 pr-3 text-right tabular-nums">{n0.format(p.unidades)}</td>
@@ -342,11 +350,16 @@ export default function EstadoPedidos() {
                                 <table className="w-full max-w-3xl text-xs">
                                   <thead className="text-left text-[10px] uppercase tracking-wide text-sub">
                                     <tr><th className="py-1 pr-3">Artículo</th><th className="py-1 pr-3">Color</th><th className="py-1 pr-3">Talle</th>
-                                      <th className="py-1 pr-3 text-right">Pedido</th><th className="py-1 pr-3 text-right">Ingresado</th><th className="py-1 pr-3 text-right">Cancelado</th><th className="py-1 text-right">Falta</th></tr>
+                                      <th className="py-1 pr-3 text-right">Pedido</th><th className="py-1 pr-3 text-right">Ingresado</th><th className="py-1 pr-3 text-right">Cancelado</th><th className="py-1 text-right">Falta / Sobra</th></tr>
                                   </thead>
                                   <tbody>
-                                    {[...renglones].sort((a, b) => (b.cantidad - b.recibido - b.cancelado) - (a.cantidad - a.recibido - a.cancelado)).map((r) => {
-                                      const falta = Math.max(0, r.cantidad - r.recibido - r.cancelado)
+                                    {[...renglones]
+                                      // Primero lo que no cierra (falta o sobra), de mayor a menor diferencia
+                                      .sort((a, b) => Math.abs(b.cantidad - b.recibido - b.cancelado) - Math.abs(a.cantidad - a.recibido - a.cancelado))
+                                      .map((r) => {
+                                      const dif = r.cantidad - r.recibido - r.cancelado
+                                      const falta = Math.max(0, dif)
+                                      const sobra = Math.max(0, -dif)
                                       return (
                                         <tr key={`${r.articulo}|${r.color}|${r.talle}`} className="border-t border-line/60">
                                           <td className="py-1 pr-3 font-medium text-ink">{r.articulo}</td>
@@ -355,7 +368,9 @@ export default function EstadoPedidos() {
                                           <td className="py-1 pr-3 text-right tabular-nums">{n0.format(r.cantidad)}</td>
                                           <td className="py-1 pr-3 text-right tabular-nums">{n0.format(r.recibido)}</td>
                                           <td className="py-1 pr-3 text-right tabular-nums text-sub">{r.cancelado ? n0.format(r.cancelado) : '—'}</td>
-                                          <td className={`py-1 text-right font-semibold tabular-nums ${falta ? 'text-amber-400' : 'text-emerald-400'}`}>{falta ? n0.format(falta) : '✓'}</td>
+                                          <td className={`py-1 text-right font-semibold tabular-nums ${falta ? 'text-amber-400' : sobra ? 'text-sky-400' : 'text-emerald-400'}`}>
+                                            {falta ? n0.format(falta) : sobra ? `Sobra +${n0.format(sobra)}` : '✓'}
+                                          </td>
                                         </tr>
                                       )
                                     })}
