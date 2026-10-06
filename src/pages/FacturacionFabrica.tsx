@@ -203,7 +203,7 @@ function DesplegableFijo({ anchorRef, children }: { anchorRef: RefObject<HTMLEle
     <div
       ref={caja}
       style={{ position: 'fixed', left: pos?.left ?? -9999, top: pos?.top ?? -9999, width: pos?.width }}
-      className="z-50 max-h-64 overflow-y-auto rounded-lg border border-line bg-surface shadow-xl"
+      className="fixed z-50 max-h-64 overflow-y-auto rounded-lg border border-line bg-surface shadow-xl"
     >
       {children}
     </div>,

@@ -268,7 +268,7 @@ function CeldaProveedor({
               width: caja.width,
               transform: caja.arriba ? 'translateY(-100%)' : undefined,
             }}
-            className="z-[91] max-w-[92vw] rounded-xl border border-line bg-surface p-2 shadow-2xl"
+            className="fixed z-[91] max-w-[92vw] rounded-xl border border-line bg-surface p-2 shadow-2xl"
           >
             <div className="flex items-center gap-1.5 border-b border-line pb-2">
               <Search size={13} className="shrink-0 text-sub/70" aria-hidden />
