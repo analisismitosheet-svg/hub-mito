@@ -145,6 +145,21 @@ async function main() {
      FOR JSON PATH, INCLUDE_NULL_VALUES`,
   )
 
+  // Listado completo de OC (encabezados, SIN excluir nada) para el selector de N° OC de Recepción INDO
+  const ocs = new Map()
+  for (const f of filas) {
+    const codigo = txt(f.CODIGO)
+    if (!codigo || ocs.has(codigo)) continue
+    ocs.set(codigo, {
+      codigo,
+      numero: num(f.FNUMCOMP),
+      fecha: txt(f.FFCH) || null,
+      proveedor: txt(f.FPERSON),
+      proveedor_nombre: txt(f.CLNOM),
+      anulado: Boolean(f.ANULADO),
+    })
+  }
+
   // Agrupa por pedido (la vista trae una fila por artículo)
   const pedidos = new Map()
   for (const f of filas) {
@@ -202,6 +217,14 @@ async function main() {
     p_origen: `${SERVIDOR} ${VISTA}`,
   })
   anotar(`OK: ${lista.length} pedidos (${filas.length} ítems) en Supabase, ${borrados} viejos borrados (${Math.round((Date.now() - t0) / 1000)} s)`)
+
+  // Listado completo de OC (Recepción INDO): si falla, la copia de pedidos ya quedó hecha
+  try {
+    const n = await rpc('pedidos_compra_oc_sync', { p_token: token, p_ocs: [...ocs.values()] })
+    anotar(`Listado de OC para Recepción INDO: ${n} OC (todas las de la vista)`)
+  } catch (err) {
+    anotar(`Listado de OC: ERROR ${err instanceof Error ? err.message : String(err)}`)
+  }
 
   // Después, las cancelaciones (DWH.dbo.vw_FACT_CANCELADOS): si fallan, los pedidos ya quedaron copiados
   try {

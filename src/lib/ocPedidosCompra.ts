@@ -37,17 +37,21 @@ export function numerosPedidoCompra(): Promise<Set<string>> {
 
 /** Pedido de compra para el buscador de OC (Recepción INDO). */
 export interface PedidoCompraOc {
+  codigo: string
   numero: number
   fecha: string | null
   proveedor: string | null
   proveedor_nombre: string | null
-  total: number | null
   anulado: boolean
 }
 
 let promesaLista: Promise<PedidoCompraOc[]> | null = null
 
-/** Todos los pedidos de compra (más nuevos primero), una vez por sesión. Vacío si no hay permiso. */
+/**
+ * Todas las OC de VISTAS_CONSOLIDADAS.dbo.PEDIDO_COMPRA (más nuevas primero), una vez por sesión.
+ * Sale de public.pedidos_compra_oc: el listado completo, sin la exclusión del proveedor MITO que
+ * tiene la copia de Pedidos de compra (sql/pedidos_compra_oc.sql). Vacío si no hay permiso.
+ */
 export function pedidosCompraParaOc(): Promise<PedidoCompraOc[]> {
   if (!promesaLista) {
     promesaLista = (async () => {
@@ -55,8 +59,8 @@ export function pedidosCompraParaOc(): Promise<PedidoCompraOc[]> {
       const lista: PedidoCompraOc[] = []
       for (let desde = 0; desde < 20000; desde += 1000) {
         const { data, error } = await supabase
-          .from('pedidos_compra')
-          .select('numero,fecha,proveedor,proveedor_nombre,total,anulado')
+          .from('pedidos_compra_oc')
+          .select('codigo,numero,fecha,proveedor,proveedor_nombre,anulado')
           .not('numero', 'is', null)
           .order('fecha', { ascending: false })
           .order('numero', { ascending: false })

@@ -135,7 +135,7 @@ function SelectorOc({
           const marcada = elegidas.includes(n)
           return (
             <button
-              key={n}
+              key={p.codigo}
               type="button"
               onClick={() => alternar(n)}
               className={`flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left text-xs hover:bg-line/40 ${marcada ? 'bg-amber-500/10' : ''}`}
