@@ -18,6 +18,9 @@ import { cargarStockSku, stockSkuDe, stockArticuloDe, type StockSku } from '@/li
 
 interface Pedido {
   codigo: string
+  /** código de motivo de Dragonfish (REP, VTD, D…) y su nombre; null = sin motivo */
+  motivo: string | null
+  motivo_nombre: string | null
   numero: number | null
   descripcion: string | null
   fecha: string | null
@@ -29,6 +32,23 @@ interface Pedido {
   total: number | null
   anulado: boolean
   usuario: string | null
+}
+
+/** Filtro "sin motivo" (los demás usan el código de Dragonfish) */
+const SIN_MOTIVO = '__sin'
+
+/** "REPOSICION LOCALES" -> "Reposición locales" */
+function nombreMotivo(p: Pick<Pedido, 'motivo' | 'motivo_nombre'>): string {
+  if (!p.motivo) return 'Sin motivo'
+  const n = (p.motivo_nombre || p.motivo).trim().toLowerCase().replace('reposicion', 'reposición')
+  return n.charAt(0).toUpperCase() + n.slice(1)
+}
+
+/** Un color distinto por motivo (los conocidos fijos, el resto de una paleta) */
+const COLOR_MOTIVO: Record<string, string> = { REP: '#38bdf8', VTD: '#22c55e', D: '#a78bfa', [SIN_MOTIVO]: '#94a3b8' }
+const PALETA_MOTIVO = ['#f472b6', '#f59e0b', '#2dd4bf', '#f87171']
+function colorMotivo(clave: string, orden: number): string {
+  return COLOR_MOTIVO[clave] ?? PALETA_MOTIVO[orden % PALETA_MOTIVO.length]
 }
 
 interface ItemPedido {
@@ -90,6 +110,14 @@ export default function PedidosVenta() {
   const [error, setError] = useState<string | null>(null)
   const [actualizado, setActualizado] = useState<string | null>(null)
   const [busqueda, setBusqueda] = useState('')
+  // Motivo elegido ('' = todos); queda guardado en este navegador
+  const [fMotivo, setFMotivoState] = useState<string>(() => {
+    try { return localStorage.getItem('pedidosVenta.motivo') ?? '' } catch { return '' }
+  })
+  function setFMotivo(m: string) {
+    setFMotivoState(m)
+    try { localStorage.setItem('pedidosVenta.motivo', m) } catch { /* sin almacenamiento */ }
+  }
   const [sel, setSel] = useState<string | null>(null)
   const [periodo, setPeriodoState] = useState<Periodo>(() => {
     try {
@@ -129,7 +157,7 @@ export default function PedidosVenta() {
       for (let desde = 0; desde < MAX_PEDIDOS; desde += PAGINA) {
         let consulta = supabase
           .from('pedidos_venta')
-          .select('codigo,numero,descripcion,fecha,fecha_alta,cliente,cliente_nombre,vendedor,observacion,total,anulado,usuario')
+          .select('codigo,motivo,motivo_nombre,numero,descripcion,fecha,fecha_alta,cliente,cliente_nombre,vendedor,observacion,total,anulado,usuario')
         if (fDesde) consulta = consulta.gte('fecha', fDesde)
         if (fHasta) consulta = consulta.lt('fecha', fHasta)
         const { data, error: e } = await consulta
@@ -231,14 +259,33 @@ export default function PedidosVenta() {
     }
   }
 
+  // Motivos del período con su cantidad (para los chips): los conocidos primero
+  const motivos = useMemo(() => {
+    const m = new Map<string, { clave: string; nombre: string; n: number }>()
+    for (const p of pedidos) {
+      const clave = p.motivo || SIN_MOTIVO
+      const actual = m.get(clave) ?? { clave, nombre: nombreMotivo(p), n: 0 }
+      actual.n++
+      m.set(clave, actual)
+    }
+    const orden = ['REP', 'VTD', 'D']
+    return [...m.values()].sort((a, b) => {
+      const ia = a.clave === SIN_MOTIVO ? 99 : orden.indexOf(a.clave) === -1 ? 50 : orden.indexOf(a.clave)
+      const ib = b.clave === SIN_MOTIVO ? 99 : orden.indexOf(b.clave) === -1 ? 50 : orden.indexOf(b.clave)
+      return ia - ib || a.nombre.localeCompare(b.nombre, 'es')
+    })
+  }, [pedidos])
+  const colorDeMotivo = (clave: string) => colorMotivo(clave, Math.max(0, motivos.findIndex((m) => m.clave === clave)))
+
   const q = busqueda.trim().toUpperCase()
   const visibles = useMemo(() => {
-    if (!q) return pedidos
-    return pedidos.filter((p) =>
+    const porMotivo = fMotivo ? pedidos.filter((p) => (p.motivo || SIN_MOTIVO) === fMotivo) : pedidos
+    if (!q) return porMotivo
+    return porMotivo.filter((p) =>
       [String(p.numero ?? ''), p.descripcion, p.cliente, p.cliente_nombre, p.observacion, fechaCorta(p.fecha)]
         .some((v) => String(v ?? '').toUpperCase().includes(q)),
     )
-  }, [pedidos, q])
+  }, [pedidos, q, fMotivo])
 
   const idx = visibles.findIndex((p) => p.codigo === sel)
   const pedido = pedidos.find((p) => p.codigo === sel) ?? null
@@ -419,6 +466,34 @@ export default function PedidosVenta() {
         ))}
       </div>
 
+      {/* Motivo: separa los pedidos por el motivo de Dragonfish */}
+      {motivos.length > 0 && (
+        <div role="tablist" aria-label="Motivo" className="mb-3 flex items-center gap-1.5 overflow-x-auto pb-1">
+          <span className="shrink-0 text-xs font-medium text-sub">Motivo:</span>
+          {[{ clave: '', nombre: 'Todos', n: pedidos.length }, ...motivos].map((m) => {
+            const activo = fMotivo === m.clave
+            const color = m.clave ? colorDeMotivo(m.clave) : '#f59e0b'
+            return (
+              <button
+                key={m.clave || 'todos'}
+                role="tab"
+                aria-selected={activo}
+                onClick={() => setFMotivo(m.clave)}
+                className="shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition"
+                style={
+                  activo
+                    ? { borderColor: `${color}80`, backgroundColor: `${color}26`, color }
+                    : undefined
+                }
+              >
+                <span className={activo ? '' : 'text-sub'}>{m.nombre}</span>
+                <span className="ml-1.5 tabular-nums opacity-70">{m.n.toLocaleString('es-AR')}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       <div className="grid gap-4 pb-4 lg:grid-cols-[20rem_minmax(0,1fr)]">
         {/* ---------- Lista de pedidos ---------- */}
         <aside className={`${sel ? 'hidden lg:block' : ''} min-w-0`}>
@@ -439,7 +514,7 @@ export default function PedidosVenta() {
               </div>
             ) : visibles.length === 0 ? (
               <p className="px-4 py-10 text-center text-sm text-sub">
-                {q ? 'No hay pedidos que coincidan.' : 'No hay pedidos en este período.'}
+                {q ? 'No hay pedidos que coincidan.' : fMotivo ? 'No hay pedidos con ese motivo en este período.' : 'No hay pedidos en este período.'}
                 {periodo !== 'todas' && (
                   <button onClick={() => setPeriodo('todas')} className="mt-2 block w-full text-amber-500 hover:underline">
                     Buscar en todos los pedidos
@@ -468,7 +543,15 @@ export default function PedidosVenta() {
                             )}
                           </span>
                           <span className="block truncate text-xs font-medium text-ink/90">{p.cliente_nombre || p.cliente}</span>
-                          <span className="block text-[11px] text-sub">{fechaCorta(p.fecha)}</span>
+                          <span className="flex items-center gap-1.5 text-[11px] text-sub">
+                            {fechaCorta(p.fecha)}
+                            <span
+                              className="truncate rounded-md px-1.5 py-px text-[10px] font-semibold"
+                              style={{ color: colorDeMotivo(p.motivo || SIN_MOTIVO), backgroundColor: `${colorDeMotivo(p.motivo || SIN_MOTIVO)}1f` }}
+                            >
+                              {nombreMotivo(p)}
+                            </span>
+                          </span>
                         </span>
                         <span className="shrink-0 text-right text-xs font-semibold tabular-nums text-ink">$ {plata(p.total)}</span>
                       </button>
@@ -545,6 +628,7 @@ export default function PedidosVenta() {
                       </>,
                       'col-span-2',
                     )}
+                    {campo('Motivo', nombreMotivo(pedido))}
                     {campo('Vendedor', pedido.vendedor)}
                     {campo('Observación', pedido.observacion, 'col-span-2')}
                     {campo('Usuario', pedido.usuario)}

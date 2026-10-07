@@ -7,6 +7,7 @@
  *   node scripts/sync-pedidos-venta.js --todo     todos desde 2025 y borra los que ya no están (tarea diaria 6:30)
  *
  * Lee los comprobantes "PEDIDO" de [MITO].DRAGONFISH_MITO.ZooLogic.COMPROBANTEV + COMPROBANTEVDET
+ * (con el motivo: COMPROBANTEV.MOTIVO y su nombre en ZooLogic.MOTIVO)
  * desde el SQL Server de ESTA PC (servidor vinculado MITO) con el usuario de Windows (sqlcmd -E).
  * Solo lectura. Si algo falla a mitad de camino no se borra nada.
  *
@@ -134,7 +135,7 @@ async function main() {
   // Fecha fija en el texto (no hay datos del usuario en la consulta)
   const desde = COMPLETA ? '20250101' : new Date(Date.now() - DIAS_RECIENTES * 86400000).toISOString().slice(0, 10).replace(/-/g, '')
   const filas = leerJson(
-    `SELECT C.CODIGO, C.FNUMCOMP, C.DESCFW, CONVERT(varchar(10), C.FFCH, 23) AS FFCH,
+    `SELECT C.CODIGO, C.MOTIVO, C.FNUMCOMP, C.DESCFW, CONVERT(varchar(10), C.FFCH, 23) AS FFCH,
             CONVERT(varchar(10), C.FALTAFW, 23) AS FALTAFW, C.HALTAFW, C.FPERSON, C.FCLIENTE, C.FVEN,
             CAST(C.FOBS AS varchar(max)) AS FOBS, C.FSUBTOT, C.FIMPUESTO, C.FTOTAL, C.ANULADO, C.UALTAFW,
             D.FART, D.FTXT, D.CCOLOR, D.FCOLTXT, D.TALLE, D.FCANT, D.FPRECIO, D.FNETO, D.FMTOIVA, D.FBRUTO
@@ -145,6 +146,20 @@ async function main() {
      FOR JSON PATH, INCLUDE_NULL_VALUES`,
   )
 
+  // Nombre de cada motivo (REP = REPOSICION LOCALES, VTD = venta diaria, …); la tabla viene
+  // repetida por sucursal. Si falla, los pedidos se copian igual con el código solo.
+  const nombreMotivo = new Map()
+  try {
+    for (const m of leerJson(
+      `SELECT LTRIM(RTRIM(MOTCOD)) AS MOTCOD, MAX(LTRIM(RTRIM(MOTDES))) AS MOTDES
+         FROM ${b}.[MOTIVO] GROUP BY LTRIM(RTRIM(MOTCOD)) FOR JSON PATH`,
+    )) {
+      if (txt(m.MOTCOD)) nombreMotivo.set(txt(m.MOTCOD).toUpperCase(), txt(m.MOTDES))
+    }
+  } catch (err) {
+    anotar(`Aviso: no se pudieron leer los nombres de los motivos (${err instanceof Error ? err.message : err})`)
+  }
+
   // Agrupa por pedido (la consulta trae una fila por artículo)
   const pedidos = new Map()
   for (const f of filas) {
@@ -153,8 +168,11 @@ async function main() {
     let p = pedidos.get(codigo)
     if (!p) {
       const hora = txt(f.HALTAFW)
+      const motivo = txt(f.MOTIVO).toUpperCase()
       p = {
         codigo,
+        motivo,
+        motivo_nombre: motivo ? nombreMotivo.get(motivo) || motivo : '',
         numero: num(f.FNUMCOMP),
         descripcion: txt(f.DESCFW),
         fecha: txt(f.FFCH) || null,
