@@ -526,3 +526,115 @@ END;
 $$;
 REVOKE ALL ON FUNCTION public.recepcion_indo_proveedores_sync(text, jsonb) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.recepcion_indo_proveedores_sync(text, jsonb) TO anon, authenticated;
+
+-- =====================================================
+-- Filas con errores (filtro "Con errores" de la pantalla)
+-- =====================================================
+CREATE OR REPLACE FUNCTION private.compacto(v text)
+RETURNS text LANGUAGE sql IMMUTABLE AS $$
+  SELECT regexp_replace(upper(translate(coalesce(v, ''), 'áéíóúÁÉÍÓÚñÑüÜ', 'aeiouAEIOUnNuU')), '[^A-Z0-9]', '', 'g')
+$$;
+ALTER TABLE public.recepcion_indo_proveedores
+  ADD COLUMN IF NOT EXISTS nombre_compacto text GENERATED ALWAYS AS (private.compacto(nombre)) STORED;
+
+-- Lista de problemas de una fila: 'Falta: …', 'Proveedor fuera del catálogo', 'OC inexistente: …',
+-- 'Ingreso anterior al remito', 'Control anterior al ingreso'. Lo del proveedor llega calculado
+-- (recepcion_indo_filas lo calcula una vez por proveedor distinto: por fila tardaba 24 s).
+DROP FUNCTION IF EXISTS private.recepcion_indo_errores(public.recepcion_indo);
+CREATE OR REPLACE FUNCTION private.recepcion_indo_errores(r public.recepcion_indo, p_proveedor_fuera boolean)
+RETURNS text[] LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  WITH faltan AS (
+    SELECT string_agg(campo, ', ' ORDER BY orden) AS lista FROM (VALUES
+      (1, 'guía', btrim(coalesce(r.n_guia, '')) = ''),
+      (2, 'transporte', btrim(coalesce(r.transporte, '')) = ''),
+      (3, 'bultos', coalesce(r.bultos, 0) <= 0),
+      (4, 'depósito', btrim(coalesce(r.deposito, '')) = ''),
+      (5, 'proveedor', btrim(coalesce(r.proveedor, '')) = ''),
+      (6, 'remito', btrim(coalesce(r.n_remito, '')) = ''),
+      (7, 'fecha remito', r.fecha_remito IS NULL),
+      (8, 'OC', btrim(coalesce(r.n_oc, '')) = ''),
+      (9, 'factura', btrim(coalesce(r.n_factura, '')) = ''),
+      (10, 'fecha factura', r.fecha_factura IS NULL),
+      (11, 'fecha ingreso', r.fecha_ingreso IS NULL),
+      (12, 'estado', btrim(coalesce(r.estado, '')) = ''),
+      (13, 'IVA', r.iva IS NULL)
+    ) x(orden, campo, falta) WHERE falta
+  ), oc_mal AS (
+    -- El listado de OC (VISTAS_CONSOLIDADAS.dbo.PEDIDO_COMPRA) arranca en 2025: antes no se puede validar
+    SELECT string_agg(o, ', ') AS lista
+    FROM unnest(regexp_split_to_array(coalesce(r.n_oc, ''), '[/;,]')) AS t(o0)
+    CROSS JOIN LATERAL (SELECT btrim(o0) AS o) z
+    WHERE o <> '' AND coalesce(r.fecha_ingreso, r.fecha_remito, DATE '2025-01-01') >= DATE '2025-01-01'
+      AND NOT EXISTS (SELECT 1 FROM public.pedidos_compra_oc c WHERE c.numero::text = o)
+  )
+  SELECT array_remove(ARRAY[
+    CASE WHEN (SELECT lista FROM faltan) IS NOT NULL THEN 'Falta: ' || (SELECT lista FROM faltan) END,
+    CASE WHEN p_proveedor_fuera THEN 'Proveedor fuera del catálogo' END,
+    CASE WHEN (SELECT lista FROM oc_mal) IS NOT NULL THEN 'OC inexistente: ' || (SELECT lista FROM oc_mal) END,
+    CASE WHEN r.fecha_ingreso < r.fecha_remito THEN 'Ingreso anterior al remito' END,
+    CASE WHEN r.fecha_controlada < r.fecha_ingreso THEN 'Control anterior al ingreso' END
+  ], NULL)
+$$;
+
+-- recepcion_indo_filas con p_control 'errores' / 'errores_pendientes' y la columna errores
+DROP FUNCTION IF EXISTS public.recepcion_indo_filas(text, text, text, text, text, text, integer, integer);
+CREATE FUNCTION public.recepcion_indo_filas(p_deposito text DEFAULT ''::text, p_proveedor text DEFAULT ''::text, p_transporte text DEFAULT ''::text, p_estado text DEFAULT ''::text, p_control text DEFAULT ''::text, p_busqueda text DEFAULT ''::text, p_desde integer DEFAULT 0, p_limite integer DEFAULT 200)
+ RETURNS TABLE(total bigint, clave text, n_guia text, transporte text, bultos integer, deposito text, proveedor text, proveedor_codigo text, n_remito text, fecha_remito date, mes integer, n_oc text, oc_cargada_dragon boolean, n_factura text, fecha_factura date, factura_link text, fecha_ingreso date, fecha_controlada date, dias_atraso integer, estado text, iva numeric, detalle text, controlado_at timestamp with time zone, controlado_por text, errores text[])
+ LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+  WITH base AS (
+    SELECT r.*
+    FROM public.recepcion_indo r
+    WHERE private.tengo_permiso('deposito.view')
+      AND (nullif(btrim(coalesce(p_deposito, '')), '') IS NULL OR r.deposito = btrim(p_deposito))
+      AND (nullif(btrim(coalesce(p_proveedor, '')), '') IS NULL OR r.proveedor = btrim(p_proveedor))
+      AND (nullif(btrim(coalesce(p_transporte, '')), '') IS NULL OR r.transporte = btrim(p_transporte))
+      AND (nullif(btrim(coalesce(p_estado, '')), '') IS NULL OR r.estado = btrim(p_estado))
+      AND (
+        nullif(btrim(coalesce(p_control, '')), '') IS NULL
+        OR (p_control = 'pendientes' AND r.fecha_controlada IS NULL)
+        OR (p_control = 'controladas' AND r.fecha_controlada IS NOT NULL)
+        OR p_control = 'errores'
+        OR (p_control = 'errores_pendientes' AND r.fecha_controlada IS NULL)
+      )
+      AND (
+        nullif(btrim(coalesce(p_busqueda, '')), '') IS NULL
+        OR r.n_guia ILIKE '%' || btrim(p_busqueda) || '%'
+        OR r.n_remito ILIKE '%' || btrim(p_busqueda) || '%'
+        OR r.n_factura ILIKE '%' || btrim(p_busqueda) || '%'
+        OR r.n_oc ILIKE '%' || btrim(p_busqueda) || '%'
+        OR r.proveedor ILIKE '%' || btrim(p_busqueda) || '%'
+        OR r.transporte ILIKE '%' || btrim(p_busqueda) || '%'
+        OR coalesce(r.detalle, '') ILIKE '%' || btrim(p_busqueda) || '%'
+      )
+  ), pv AS MATERIALIZED (
+    -- Proveedor fuera del catálogo: una vez por proveedor distinto (~110), no por fila.
+    -- Alcanza con que un nombre contenga al otro ("GRIMOLDI S.A." y "GRIMOLDI SA (VANS)").
+    SELECT d.proveedor, length(d.c) >= 3 AND NOT EXISTS (
+             SELECT 1 FROM public.recepcion_indo_proveedores p
+              WHERE p.nombre_compacto = d.c
+                 OR (length(d.c) >= 4 AND (strpos(p.nombre_compacto, d.c) > 0
+                                           OR (length(p.nombre_compacto) >= 4 AND strpos(d.c, p.nombre_compacto) > 0)))) AS fuera
+    FROM (SELECT DISTINCT b.proveedor, private.compacto(b.proveedor) AS c FROM base b) d
+  ), f AS (
+    SELECT b.*, private.recepcion_indo_errores(b::public.recepcion_indo, coalesce(pv.fuera, false)) AS errs
+    FROM base b LEFT JOIN pv ON pv.proveedor IS NOT DISTINCT FROM b.proveedor
+  ), pagina AS (
+    SELECT f.*, count(*) OVER () AS total
+    FROM f
+    WHERE coalesce(p_control, '') NOT IN ('errores', 'errores_pendientes') OR cardinality(f.errs) > 0
+    ORDER BY f.fecha_ingreso DESC NULLS LAST, f.n_guia, f.clave
+    LIMIT greatest(1, least(coalesce(p_limite, 200), 1000))
+    OFFSET greatest(0, coalesce(p_desde, 0))
+  )
+  SELECT
+    p.total, p.clave, p.n_guia, p.transporte, p.bultos, p.deposito, p.proveedor,
+    p.proveedor_codigo, p.n_remito, p.fecha_remito, p.mes, p.n_oc, p.oc_cargada_dragon,
+    p.n_factura, p.fecha_factura, p.factura_link, p.fecha_ingreso, p.fecha_controlada,
+    p.dias_atraso, p.estado, p.iva, p.detalle, p.controlado_at,
+    (SELECT coalesce(nullif(trim(u.nombre), ''), u.email) FROM public.usuarios u WHERE u.id = p.controlado_por),
+    p.errs
+  FROM pagina p
+$function$;
+GRANT EXECUTE ON FUNCTION public.recepcion_indo_filas(text, text, text, text, text, text, integer, integer) TO authenticated;
+REVOKE EXECUTE ON FUNCTION public.recepcion_indo_filas(text, text, text, text, text, text, integer, integer) FROM anon, public;

@@ -57,6 +57,8 @@ interface Fila {
   detalle: string | null
   controlado_at: string | null
   controlado_por: string | null
+  /** Problemas detectados por private.recepcion_indo_errores (faltan datos, OC inexistente, etc.) */
+  errores: string[] | null
 }
 
 interface Resumen {
@@ -1023,6 +1025,8 @@ export default function RecepcionIndo() {
           opciones={[
             { id: 'pendientes', label: 'Sin controlar' },
             { id: 'controladas', label: 'Controladas' },
+            { id: 'errores_pendientes', label: 'Con errores (sin controlar)' },
+            { id: 'errores', label: 'Con errores (todas)' },
             { id: '', label: 'Todas' },
           ]} />
         {hayFiltros && (
@@ -1043,6 +1047,16 @@ export default function RecepcionIndo() {
           <p className="flex-1 text-xs text-sub">
             {n0.format(total)} recepciones sin controlar con estos filtros
             {resumen.mas_viejo_pendiente ? ` · la más vieja ingresó el ${fmtFecha(resumen.mas_viejo_pendiente)}` : ''}.
+          </p>
+        </div>
+      )}
+
+      {control.startsWith('errores') && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-brand-500/25 bg-brand-500/5 p-3">
+          <AlertTriangle size={15} className="shrink-0 text-brand-400" aria-hidden />
+          <p className="flex-1 text-xs text-sub">
+            {n0.format(total)} recepciones con algún error: faltan datos, proveedor fuera del catálogo, OC que no está en
+            el listado de pedidos de compra (desde 2025) o fechas cruzadas (ingreso antes del remito, control antes del ingreso).
           </p>
         </div>
       )}
@@ -1085,6 +1099,15 @@ export default function RecepcionIndo() {
                     {cerrada && (
                       <div className="mb-0.5 inline-flex items-center gap-1 rounded bg-emerald-500/10 px-1 text-[9px] font-medium uppercase tracking-wide text-emerald-400" title="Controlado: solo se puede cambiar el detalle">
                         <Lock size={9} aria-hidden /> controlado
+                      </div>
+                    )}
+                    {!!f.errores?.length && (
+                      <div className="mb-1 flex max-w-[16rem] flex-wrap gap-1">
+                        {f.errores.map((e) => (
+                          <span key={e} className="inline-flex items-center gap-1 rounded bg-brand-500/10 px-1 py-px text-[9px] font-medium text-brand-400" title={e}>
+                            <AlertTriangle size={9} className="shrink-0" aria-hidden /> {e}
+                          </span>
+                        ))}
                       </div>
                     )}
                     <CeldaEditable fijo={cerrada} valor={f.n_guia} saving={saving} onGuardar={(v) => editarCampo(f, 'n_guia', v)} clase="font-medium text-ink" titulo="N° de guía" />
