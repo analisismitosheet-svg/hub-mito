@@ -46,6 +46,9 @@ interface FactRegistro {
   created_at: string
 }
 
+/** Razón social "MITO SRL" (con o sin puntos/espacios): se borra al cargar la fecha de envío */
+const esMitoSrl = (rs: string | null | undefined) => (rs ?? '').toUpperCase().replace(/[^A-Z]/g, '') === 'MITOSRL'
+
 interface ClienteMini { id: string; n_cliente: string | null; razon_social: string; transporte: string | null; obs_facturacion: string | null }
 interface EmpleadoMini { id: string; legajo: string | null; nombre: string }
 
@@ -470,10 +473,10 @@ export default function FacturacionFabrica() {
     const patch: Record<string, unknown> = { [campo]: valor }
     const { error } = await supabase.from('facturacion_fabrica').update(patch).eq('id', r.id)
     if (error) { mostrarToast('Error al guardar: ' + error.message); return }
-    if (r.borrar_al_enviar && campo === 'fecha_envio' && valor) {
-      // REPO LOC: con la fecha de envío la base ya borró la línea (y su historial)
+    if (campo === 'fecha_envio' && valor && (r.borrar_al_enviar || (esMitoSrl(r.razon_social) && !r.fecha_envio))) {
+      // REPO LOC y MITO SRL: con la fecha de envío la base ya borró la línea (y su historial)
       setTodos((prev) => prev.filter((x) => x.id !== r.id))
-      mostrarToast('Envio cargado: la linea REPO LOC se borro')
+      mostrarToast(r.borrar_al_enviar ? 'Envio cargado: la linea REPO LOC se borro' : 'Envio cargado: la linea de MITO SRL se borro')
       return
     }
     setTodos((prev) => prev.map((x) => (x.id === r.id ? { ...x, [campo]: valor } : x)))
@@ -502,8 +505,10 @@ export default function FacturacionFabrica() {
     if (c.transporte) void guardarCampo(r, 'transporte', c.transporte)
   }
 
-  const inlineEdit = (r: FactRegistro, _campo?: string) => {
+  const inlineEdit = (r: FactRegistro, campo?: string) => {
     if (estaCompleta(r) && !isAdmin) return false
+    // El transporte solo lo cambia el admin (al elegir cliente se completa solo)
+    if (campo === 'transporte' && !isAdmin) return false
     return modoPolo52 || puedeEditar
   }
 
@@ -1017,7 +1022,7 @@ export default function FacturacionFabrica() {
         />
       )}
       {modal && modal !== 'importar' && (
-        <FactModal modoPolo52={modoPolo52} registro={modal === 'edit' ? sel : null} clientes={clientes} empleados={empleados} transporteOpciones={transporteOpciones} usuario={{ nombre: perfil?.nombre ?? null, email: perfil?.email ?? null }} onClose={() => { setModal(null); setSel(null) }} onSaved={async () => { setModal(null); setSel(null); await cargar(); mostrarToast(modal === 'edit' ? 'Registro actualizado' : 'Registro creado') }} />
+        <FactModal esAdmin={isAdmin} modoPolo52={modoPolo52} registro={modal === 'edit' ? sel : null} clientes={clientes} empleados={empleados} transporteOpciones={transporteOpciones} usuario={{ nombre: perfil?.nombre ?? null, email: perfil?.email ?? null }} onClose={() => { setModal(null); setSel(null) }} onSaved={async () => { setModal(null); setSel(null); await cargar(); mostrarToast(modal === 'edit' ? 'Registro actualizado' : 'Registro creado') }} />
       )}
       <ConfirmDialog open={!!confirm} message={confirm?.message ?? ''} onCancel={() => setConfirm(null)} onConfirm={() => { confirm?.onConfirm(); setConfirm(null) }} />
     </Layout>
@@ -1108,8 +1113,8 @@ function CRow({ label, value, badge, badgeCls, pre }: { label: string; value: st
 /*  Form Modal                                                         */
 /* ------------------------------------------------------------------ */
 
-function FactModal({ modoPolo52, registro, clientes, empleados, transporteOpciones, usuario, onClose, onSaved }: {
-  modoPolo52: boolean; registro: FactRegistro | null; clientes: ClienteMini[]; empleados: EmpleadoMini[]; transporteOpciones: string[]
+function FactModal({ esAdmin, modoPolo52, registro, clientes, empleados, transporteOpciones, usuario, onClose, onSaved }: {
+  esAdmin: boolean; modoPolo52: boolean; registro: FactRegistro | null; clientes: ClienteMini[]; empleados: EmpleadoMini[]; transporteOpciones: string[]
   usuario: { nombre: string | null; email: string | null }; onClose: () => void; onSaved: () => void
 }) {
   const [autorizacion, setAutorizacion] = useState(registro?.autorizacion || '')
@@ -1250,7 +1255,7 @@ function FactModal({ modoPolo52, registro, clientes, empleados, transporteOpcion
             <label className="block"><span className="mb-1 block text-xs font-medium text-sub">N Remito</span><input value={nRemito} onChange={(e) => setNRemito(e.target.value)} disabled={readonly} placeholder="30307 - 30308" className={inputCls} /></label>
             <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Bulto</span><input type="number" value={bulto} onChange={(e) => setBulto(e.target.value)} disabled={readonly} placeholder="0" className={inputCls} /></label>
             <label className="block"><span className="mb-1 block text-xs font-medium text-sub">Transporte</span>
-              <input list="transportes-list" value={transporte} onChange={(e) => setTransporte(e.target.value)} disabled={readonly} placeholder="Seleccionar o escribir..." className={inputCls} />
+              <input list="transportes-list" value={transporte} onChange={(e) => setTransporte(e.target.value)} disabled={readonly || !esAdmin} title={esAdmin ? undefined : 'Solo el admin puede cambiarlo; se completa con el del cliente'} placeholder={esAdmin ? 'Seleccionar o escribir...' : 'Se completa con el cliente'} className={inputCls} />
               <datalist id="transportes-list">{transporteOpciones.map((v) => <option key={v} value={v} />)}</datalist>
             </label>
 
