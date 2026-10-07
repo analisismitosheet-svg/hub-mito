@@ -460,3 +460,33 @@ GRANT EXECUTE ON FUNCTION public.recepcion_indo_proveedores(text) TO authenticat
 --     DRAGONFISH_INDOD.dbo.PROVEEDORES_INDO en Configuraciones > Conexión SQL. Con el
 --     tope de filas actual (29 900 000) no hay que tocar nada: son 1.518. No hace falta
 --     para usar el módulo.
+
+-- =====================================================
+-- Recepción completa = cerrada (2026-10-07): con todas las columnas cargadas (el link de Drive y el
+-- detalle son opcionales) solo se puede cambiar el detalle. Los administradores pueden todo.
+-- La pantalla aplica la misma regla (función completa() en RecepcionIndo.tsx).
+-- =====================================================
+CREATE OR REPLACE FUNCTION private.recepcion_indo_completa(r public.recepcion_indo)
+RETURNS boolean LANGUAGE sql IMMUTABLE AS $$
+  SELECT btrim(coalesce(r.n_guia, '')) <> '' AND btrim(coalesce(r.transporte, '')) <> '' AND coalesce(r.bultos, 0) > 0
+     AND btrim(coalesce(r.deposito, '')) <> '' AND btrim(coalesce(r.proveedor, '')) <> ''
+     AND btrim(coalesce(r.n_remito, '')) <> '' AND r.fecha_remito IS NOT NULL AND btrim(coalesce(r.n_oc, '')) <> ''
+     AND btrim(coalesce(r.n_factura, '')) <> '' AND r.fecha_factura IS NOT NULL AND r.fecha_ingreso IS NOT NULL
+     AND btrim(coalesce(r.estado, '')) <> '' AND r.iva IS NOT NULL AND r.fecha_controlada IS NOT NULL
+$$;
+
+CREATE OR REPLACE FUNCTION private.recepcion_indo_bloqueo()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_detalle text := NEW.detalle;
+BEGIN
+  IF private.recepcion_indo_completa(OLD) AND NOT coalesce(private.es_admin(), false) THEN
+    NEW := OLD;               -- cerrada: se descarta todo cambio (también el de una reimportación del Excel)…
+    NEW.detalle := v_detalle; -- …menos el detalle
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS recepcion_indo_bloqueo ON public.recepcion_indo;
+CREATE TRIGGER recepcion_indo_bloqueo BEFORE UPDATE ON public.recepcion_indo
+  FOR EACH ROW EXECUTE FUNCTION private.recepcion_indo_bloqueo();

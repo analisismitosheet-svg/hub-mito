@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import {
   AlertTriangle, ArrowLeft, ArrowRight, Building2, Check, CheckCheck, ClipboardCheck, Clock, Download,
-  Link2, Loader2, Package, Pencil, Plus, RotateCcw, Search, Upload, X,
+  Link2, Loader2, Lock, Package, Pencil, Plus, RotateCcw, Search, Upload, X,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -11,6 +11,7 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import NuevaRecepcionIndo from '@/components/NuevaRecepcionIndo'
 import { SelectBuscar } from '@/components/MultiselectFiltro'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/context/AuthContext'
 import { leerRecepcionIndo, normalizar } from '@/lib/recepcionIndo'
 import { numerosPedidoCompra, ocsDeFila, pedidosCompraParaOc, unirOcs, type PedidoCompraOc } from '@/lib/ocPedidosCompra'
 import {
@@ -409,17 +410,31 @@ function CeldaOcEditable({
   )
 }
 
+/**
+ * Recepción completa: todas las columnas cargadas (el link de Drive y el detalle son opcionales).
+ * Completa = cerrada: solo se puede cambiar el detalle. Misma regla que
+ * private.recepcion_indo_completa en la base, que además lo hace cumplir.
+ */
+function completa(f: Fila): boolean {
+  const lleno = (v: string | null | undefined) => String(v ?? '').trim() !== ''
+  return lleno(f.n_guia) && lleno(f.transporte) && Number(f.bultos) > 0 && lleno(f.deposito) && lleno(f.proveedor)
+    && lleno(f.n_remito) && !!f.fecha_remito && lleno(f.n_oc) && lleno(f.n_factura) && !!f.fecha_factura
+    && !!f.fecha_ingreso && lleno(f.estado) && f.iva != null && !!f.fecha_controlada
+}
+
 /* ------------------------------------------------------------------ */
 /*  Celda editable: se toca, se escribe, Enter o salir guarda, Esc cancela */
 /* ------------------------------------------------------------------ */
 type TipoCelda = 'texto' | 'numero' | 'fecha' | 'plata'
 
 function CeldaEditable({
-  valor, tipo = 'texto', saving, onGuardar, mostrar, lista, placeholder, clase = '', titulo,
+  valor, tipo = 'texto', saving, onGuardar, mostrar, lista, placeholder, clase = '', titulo, fijo = false,
 }: {
   valor: string
   tipo?: TipoCelda
   saving: boolean
+  /** Registro cerrado (completo): se muestra sin poder editar */
+  fijo?: boolean
   onGuardar: (nuevo: string) => void
   /** Cómo se ve sin editar (por defecto, el valor o "—") */
   mostrar?: React.ReactNode
@@ -446,6 +461,9 @@ function CeldaEditable({
     if (guardar && borrador.trim() !== valor.trim()) onGuardar(borrador.trim())
   }
 
+  if (fijo) {
+    return <div className={`px-1 py-0.5 ${clase}`}>{mostrar ?? (valor || <span className="text-sub/50">—</span>)}</div>
+  }
   if (editando) {
     return (
       <input
@@ -683,6 +701,7 @@ function CeldaProveedor({
 }
 
 export default function RecepcionIndo() {
+  const { isAdmin } = useAuth()
   const [resumen, setResumen] = useState<Resumen>(VACIO)
   const [filas, setFilas] = useState<Fila[]>([])
   const [opciones, setOpciones] = useState<Opciones>({ depositos: [], proveedores: [], transportes: [], estados: [] })
@@ -1192,27 +1211,33 @@ export default function RecepcionIndo() {
             {filas.map((f) => {
               const saving = salvandoClave === f.clave
               const controlada = !!f.fecha_controlada
+              const cerrada = completa(f) && !isAdmin
               const fueraDeCatalogo = f.proveedor !== '' && !conocido(f.proveedor)
               return (
                 <tr key={f.clave} className={`border-b border-line/60 align-top ${controlada ? 'bg-emerald-500/5' : ''}`}>
                   <td className="px-2.5 py-2">
-                    <CeldaEditable valor={f.n_guia} saving={saving} onGuardar={(v) => editarCampo(f, 'n_guia', v)} clase="font-medium text-ink" titulo="N° de guía" />
+                    {cerrada && (
+                      <div className="mb-0.5 inline-flex items-center gap-1 rounded bg-emerald-500/10 px-1 text-[9px] font-medium uppercase tracking-wide text-emerald-400" title="Registro completo: solo se puede cambiar el detalle">
+                        <Lock size={9} aria-hidden /> completo
+                      </div>
+                    )}
+                    <CeldaEditable fijo={cerrada} valor={f.n_guia} saving={saving} onGuardar={(v) => editarCampo(f, 'n_guia', v)} clase="font-medium text-ink" titulo="N° de guía" />
                     <div className="mt-0.5 flex gap-1 text-[10px] text-sub/70">
-                      <CeldaEditable valor={f.transporte} saving={saving} lista="ri-transportes" placeholder="Transporte" onGuardar={(v) => editarCampo(f, 'transporte', v)} titulo="Transporte" />
-                      <CeldaEditable valor={f.deposito} saving={saving} lista="ri-depositos" placeholder="Depósito" onGuardar={(v) => editarCampo(f, 'deposito', v)} titulo="Depósito" />
+                      <CeldaEditable fijo={cerrada} valor={f.transporte} saving={saving} lista="ri-transportes" placeholder="Transporte" onGuardar={(v) => editarCampo(f, 'transporte', v)} titulo="Transporte" />
+                      <CeldaEditable fijo={cerrada} valor={f.deposito} saving={saving} lista="ri-depositos" placeholder="Depósito" onGuardar={(v) => editarCampo(f, 'deposito', v)} titulo="Depósito" />
                     </div>
                   </td>
                   <td className="whitespace-nowrap px-2.5 py-2 text-ink">
-                    <CeldaEditable valor={f.fecha_ingreso ?? ''} tipo="fecha" saving={saving} mostrar={fmtFecha(f.fecha_ingreso)} onGuardar={(v) => editarCampo(f, 'fecha_ingreso', v)} titulo="Fecha de ingreso" />
+                    <CeldaEditable fijo={cerrada} valor={f.fecha_ingreso ?? ''} tipo="fecha" saving={saving} mostrar={fmtFecha(f.fecha_ingreso)} onGuardar={(v) => editarCampo(f, 'fecha_ingreso', v)} titulo="Fecha de ingreso" />
                   </td>
                   <td className="px-2.5 py-2 text-right tabular-nums text-ink">
-                    <CeldaEditable valor={String(f.bultos ?? '')} tipo="numero" saving={saving} mostrar={n0.format(f.bultos)} clase="text-right" onGuardar={(v) => editarCampo(f, 'bultos', v)} titulo="Bultos" />
+                    <CeldaEditable fijo={cerrada} valor={String(f.bultos ?? '')} tipo="numero" saving={saving} mostrar={n0.format(f.bultos)} clase="text-right" onGuardar={(v) => editarCampo(f, 'bultos', v)} titulo="Bultos" />
                   </td>
                   <td className="px-2.5 py-2">
                     <CeldaProveedor
                       valor={f.proveedor}
                       opciones={opcionesProveedorCelda}
-                      saving={saving}
+                      saving={saving || cerrada}
                       onChange={(v) => void cambiarProveedor(f, v)}
                     />
                     {fueraDeCatalogo && catalogo.length > 0 && (
@@ -1222,8 +1247,8 @@ export default function RecepcionIndo() {
                     )}
                   </td>
                   <td className="px-2.5 py-2">
-                    <CeldaEditable valor={f.n_remito} saving={saving} onGuardar={(v) => editarCampo(f, 'n_remito', v)} clase="text-ink" titulo="N° de remito" />
-                    <CeldaEditable valor={f.fecha_remito ?? ''} tipo="fecha" saving={saving} mostrar={fmtFecha(f.fecha_remito)} onGuardar={(v) => editarCampo(f, 'fecha_remito', v)} clase="text-[10px] text-sub/70" titulo="Fecha del remito" />
+                    <CeldaEditable fijo={cerrada} valor={f.n_remito} saving={saving} onGuardar={(v) => editarCampo(f, 'n_remito', v)} clase="text-ink" titulo="N° de remito" />
+                    <CeldaEditable fijo={cerrada} valor={f.fecha_remito ?? ''} tipo="fecha" saving={saving} mostrar={fmtFecha(f.fecha_remito)} onGuardar={(v) => editarCampo(f, 'fecha_remito', v)} clase="text-[10px] text-sub/70" titulo="Fecha del remito" />
                   </td>
                   <td className="px-2.5 py-2">
                     <CeldaOcEditable
@@ -1232,17 +1257,17 @@ export default function RecepcionIndo() {
                       pedidos={pedidosOc}
                       proveedorCodigo={f.proveedor_codigo}
                       proveedorNombre={f.proveedor}
-                      saving={saving}
+                      saving={saving || cerrada}
                       onChange={(v) => void cambiarOc(f, v)}
                     />
                     {f.oc_cargada_dragon && <span className="ml-1 text-[10px] text-emerald-500">dragon</span>}
                   </td>
                   <td className="px-2.5 py-2">
-                    <CeldaEditable valor={f.n_factura} saving={saving} onGuardar={(v) => editarCampo(f, 'n_factura', v)} clase="text-ink" titulo="N° de factura" />
-                    <CeldaEditable valor={f.fecha_factura ?? ''} tipo="fecha" saving={saving} mostrar={fmtFecha(f.fecha_factura)} onGuardar={(v) => editarCampo(f, 'fecha_factura', v)} clase="text-[10px] text-sub/70" titulo="Fecha de la factura" />
+                    <CeldaEditable fijo={cerrada} valor={f.n_factura} saving={saving} onGuardar={(v) => editarCampo(f, 'n_factura', v)} clase="text-ink" titulo="N° de factura" />
+                    <CeldaEditable fijo={cerrada} valor={f.fecha_factura ?? ''} tipo="fecha" saving={saving} mostrar={fmtFecha(f.fecha_factura)} onGuardar={(v) => editarCampo(f, 'fecha_factura', v)} clase="text-[10px] text-sub/70" titulo="Fecha de la factura" />
                     <div className="flex items-center gap-1">
                       {f.factura_link && <LinkFactura href={f.factura_link} />}
-                      <CeldaEditable
+                      <CeldaEditable fijo={cerrada}
                         valor={f.factura_link ?? ''}
                         saving={saving}
                         placeholder="https://drive.google.com/…"
@@ -1256,7 +1281,7 @@ export default function RecepcionIndo() {
                     <CeldaEstado
                       valor={f.estado}
                       opciones={estadosLista}
-                      saving={saving}
+                      saving={saving || cerrada}
                       onGuardar={(v) => editarCampo(f, 'estado', v)}
                       onNuevo={(v) => {
                         setEstadosNuevos((prev) => (prev.includes(v) ? prev : [...prev, v]))
@@ -1265,7 +1290,7 @@ export default function RecepcionIndo() {
                     />
                   </td>
                   <td className="whitespace-nowrap px-2.5 py-2 text-right tabular-nums text-ink">
-                    <CeldaEditable
+                    <CeldaEditable fijo={cerrada}
                       valor={f.iva != null ? String(f.iva).replace('.', ',') : ''}
                       tipo="plata"
                       saving={saving}
@@ -1276,11 +1301,12 @@ export default function RecepcionIndo() {
                     />
                   </td>
                   <td className="max-w-40 px-2.5 py-2 text-sub">
+                    {/* El detalle se puede cambiar siempre, aunque el registro esté completo */}
                     <CeldaEditable valor={f.detalle ?? ''} saving={saving} onGuardar={(v) => editarCampo(f, 'detalle', v)} titulo="Detalle" />
                   </td>
                   <td className="px-2.5 py-2">
                     {/* Fecha de control: con fecha = controlada, vacía = pendiente */}
-                    <CeldaEditable
+                    <CeldaEditable fijo={cerrada}
                       valor={f.fecha_controlada ?? ''}
                       tipo="fecha"
                       saving={saving}
