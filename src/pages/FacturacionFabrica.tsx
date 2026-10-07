@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import {
-  Loader2, Search, SearchX, Pencil, Trash2, X, Upload, FileText, Lock, Printer, Eye,
+  Loader2, Search, SearchX, Pencil, Trash2, X, Upload, FileText, Lock, Printer, Eye, Plus,
 } from 'lucide-react'
+import BotonFlotante from '@/components/BotonFlotante'
 import { EtiquetasModal } from '@/components/EtiquetasBultos'
 import MultiselectFiltro from '@/components/MultiselectFiltro'
 import HistorialLista from '@/components/HistorialLista'
@@ -1005,6 +1006,15 @@ export default function FacturacionFabrica() {
       {/* Modals */}
       {modal === 'importar' && (
         <ImportFacturacion clientes={clientes} empleados={empleados} onClose={() => setModal(null)} onSaved={async () => { setModal(null); await cargar(); mostrarToast('Registros importados') }} />
+      )}
+      {/* Nuevo registro: botón flotante que se puede arrastrar a cualquier lugar */}
+      {puedeCrear && !modal && (
+        <BotonFlotante
+          clave="facturacion-nuevo"
+          onClick={() => { setSel(null); setModal('new') }}
+          icono={<Plus size={20} aria-hidden />}
+          texto={modoPolo52 ? 'Nuevo Registro Polo52' : 'Nuevo Registro'}
+        />
       )}
       {modal && modal !== 'importar' && (
         <FactModal modoPolo52={modoPolo52} registro={modal === 'edit' ? sel : null} clientes={clientes} empleados={empleados} transporteOpciones={transporteOpciones} usuario={{ nombre: perfil?.nombre ?? null, email: perfil?.email ?? null }} onClose={() => { setModal(null); setSel(null) }} onSaved={async () => { setModal(null); setSel(null); await cargar(); mostrarToast(modal === 'edit' ? 'Registro actualizado' : 'Registro creado') }} />
