@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import {
   AlertTriangle, ArrowLeft, ArrowRight, Building2, CheckCheck, ClipboardCheck, Clock, Download,
-  Link2, Loader2, Lock, Package, Pencil, Plus, Search, Upload, X,
+  Link2, Loader2, Lock, Package, PackageCheck, Pencil, Plus, Search, Upload, X,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -588,7 +588,9 @@ function CeldaProveedor({
 }
 
 export default function RecepcionIndo() {
-  const { isAdmin } = useAuth()
+  const { isAdmin, can } = useAuth()
+  // Botón "Picking" por línea: abre el pedido de compra de esa OC en Depósito > Picking
+  const puedePicking = isAdmin || can('picking.view')
   const [resumen, setResumen] = useState<Resumen>(VACIO)
   const [filas, setFilas] = useState<Fila[]>([])
   const [opciones, setOpciones] = useState<Opciones>({ depositos: [], proveedores: [], transportes: [], estados: [] })
@@ -1150,6 +1152,26 @@ export default function RecepcionIndo() {
                       onChange={(v) => void cambiarOc(f, v)}
                     />
                     {f.oc_cargada_dragon && <span className="ml-1 text-[10px] text-emerald-500">dragon</span>}
+                    {puedePicking && (() => {
+                      // Solo las OC que existen como pedido de compra (las otras no tienen qué pickear)
+                      const ocs = ocsDeFila(f.n_oc).map((oc) => oc.replace(/\s+/g, '')).filter((oc) => /^\d+$/.test(oc) && numerosPedido.has(oc))
+                      if (!ocs.length) return null
+                      return (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {ocs.map((oc) => (
+                            <Link
+                              key={oc}
+                              to={`/deposito/picking?oc=${encodeURIComponent(oc)}&prov=${encodeURIComponent(f.proveedor_codigo ?? '')}`}
+                              title={`Hacer el picking de la OC ${oc}`}
+                              className="inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-500 hover:bg-emerald-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50"
+                            >
+                              <PackageCheck size={11} aria-hidden />
+                              Picking{ocs.length > 1 ? ` ${oc}` : ''}
+                            </Link>
+                          ))}
+                        </div>
+                      )
+                    })()}
                   </td>
                   <td className="px-2.5 py-2">
                     <CeldaEditable fijo={cerrada} valor={f.n_factura} saving={saving} onGuardar={(v) => editarCampo(f, 'n_factura', v)} clase="text-ink" titulo="N° de factura" />

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Loader2, Search, ScanLine, CheckCheck, Check, Minus, Plus, ArrowLeft, PackageCheck, RotateCcw, Boxes, ClipboardList, FileSpreadsheet,
+  Loader2, Search, ChevronRight, CheckCheck, Check, Minus, Plus, ArrowLeft, PackageCheck, RotateCcw, Boxes, ClipboardList, FileSpreadsheet,
 } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
@@ -73,6 +74,94 @@ function Barra({ valor, total }: { valor: number; total: number }) {
   )
 }
 
+const TALLES_LETRA = ['XXXS', 'XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', 'XXXXL']
+/** Talles por tamaño: letras en orden (2XL = XXL), números de menor a mayor, el resto alfabético */
+function compararTalle(a: string, b: string): number {
+  const rango = (t: string): [number, number] => {
+    const s = t.trim().toUpperCase().split(' - ')[0].replace(/^(\d)XL$/, (_, n: string) => `${'X'.repeat(Number(n))}L`)
+    const i = TALLES_LETRA.indexOf(s)
+    if (i >= 0) return [0, i]
+    const n = Number(s.replace(',', '.'))
+    return s !== '' && Number.isFinite(n) ? [1, n] : [2, 0]
+  }
+  const [ga, va] = rango(a)
+  const [gb, vb] = rango(b)
+  return ga - gb || va - vb || a.localeCompare(b, 'es', { numeric: true })
+}
+
+/** Fondo de la fila según lo recibido */
+function colorFila(recibido: number, cantidad: number): string {
+  return recibido > cantidad ? 'bg-brand-600/10' : recibido >= cantidad ? 'bg-emerald-500/10' : recibido > 0 ? 'bg-amber-500/10' : 'hover:bg-surface2/60'
+}
+
+/** "3 colores" o el único valor */
+function resumenDe(valores: string[], uno: string, varios: string): string {
+  const distintos = [...new Set(valores.filter(Boolean))]
+  if (distintos.length <= 1) return distintos[0] ?? '—'
+  return `${distintos.length} ${distintos.length === 1 ? uno : varios}`
+}
+
+/** − cantidad + (lo recibido) */
+function Cantidad({ valor, cantidad, etiqueta, onRestar, onSumar, onFijar }: {
+  valor: number
+  cantidad: number
+  etiqueta: string
+  onRestar: () => void
+  onSumar: () => void
+  onFijar: (n: number) => void
+}) {
+  const completo = valor >= cantidad
+  const demas = valor > cantidad
+  return (
+    <div className="mx-auto flex w-fit items-center gap-1">
+      <button
+        onClick={onRestar}
+        disabled={valor <= 0}
+        aria-label={`Restar 1: ${etiqueta}`}
+        className="btn-press flex h-8 w-8 items-center justify-center rounded-lg border border-line bg-surface text-ink hover:bg-surface2 disabled:opacity-30"
+      >
+        <Minus size={14} aria-hidden />
+      </button>
+      <input
+        type="number"
+        inputMode="decimal"
+        min={0}
+        value={valor}
+        onChange={(e) => onFijar(Number(e.target.value) || 0)}
+        onFocus={(e) => e.target.select()}
+        aria-label={etiqueta}
+        className={`h-8 w-16 rounded-lg border bg-surface2 px-1 text-center text-sm font-semibold tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40 ${
+          demas ? 'border-brand-500 text-brand-400' : completo ? 'border-emerald-500/60 text-emerald-500' : 'border-line text-ink'
+        }`}
+      />
+      <button
+        onClick={onSumar}
+        aria-label={`Sumar 1: ${etiqueta}`}
+        className="btn-press flex h-8 w-8 items-center justify-center rounded-lg border border-line bg-surface text-ink hover:bg-surface2"
+      >
+        <Plus size={14} aria-hidden />
+      </button>
+    </div>
+  )
+}
+
+/** ✓ completo / desmarcar */
+function Tilde({ completo, etiqueta, onClick }: { completo: boolean; etiqueta: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={completo}
+      aria-label={completo ? `Desmarcar ${etiqueta}` : `Marcar ${etiqueta} como recibido completo`}
+      title={completo ? 'Desmarcar (vuelve a 0)' : 'Llegó completo'}
+      className={`btn-press mx-auto flex h-8 w-8 items-center justify-center rounded-lg border-2 transition ${
+        completo ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-line text-transparent hover:border-emerald-500/60 hover:text-emerald-500/60'
+      }`}
+    >
+      <Check size={16} strokeWidth={3} aria-hidden />
+    </button>
+  )
+}
+
 export default function Picking() {
   const [pedidos, setPedidos] = useState<PedidoPicking[]>([])
   const [cargando, setCargando] = useState(true)
@@ -103,7 +192,6 @@ export default function Picking() {
   const [descripciones, setDescripciones] = useState<Map<string, string>>(new Map())
   const [filtro, setFiltro] = useState<Filtro>('todos')
   const [busqueda, setBusqueda] = useState('')
-  const [escaneo, setEscaneo] = useState('')
   const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null)
 
   // Guardado: un temporizador por artículo (se guarda 0,6 s después del último cambio)
@@ -195,6 +283,27 @@ ${avisoNo}` : ''}
   useEffect(() => {
     void cargarPedidos()
   }, [cargarPedidos])
+
+  // Abrir directo un pedido: /deposito/picking?oc=15183&prov=CODIGO (botón de Recepción INDO).
+  // La misma OC puede existir en varias marcas: se usa el proveedor para elegir la correcta.
+  const [params, setParams] = useSearchParams()
+  useEffect(() => {
+    const oc = params.get('oc')?.trim()
+    if (!oc || cargando) return
+    const prov = params.get('prov')?.trim() ?? ''
+    const candidatos = pedidos.filter((p) => String(p.numero ?? '') === oc && !p.anulado)
+    const elegido = candidatos.find((p) => prov && p.proveedor === prov) ?? candidatos[0]
+    setParams({}, { replace: true })
+    if (!elegido) {
+      setError(`La OC ${oc} no está en Picking: no figura en la copia de pedidos de compra o está anulada.`)
+      return
+    }
+    setModo('pedido')
+    setProveedor(elegido.proveedor ?? '')
+    if (elegido.recibidas >= elegido.unidades) setVerCompletos(true)
+    setSel(elegido.codigo)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params, cargando, pedidos])
 
   // Proveedores con sus pedidos (los que tienen algo pendiente primero)
   const proveedores = useMemo(() => {
@@ -315,25 +424,6 @@ ${avisoNo}` : ''}
     [items],
   )
 
-  /** Lector de códigos: suma 1 al primer renglón de ese artículo que todavía falta (o al primero, si ya están todos). */
-  function escanear(e: React.FormEvent) {
-    e.preventDefault()
-    const cod = escaneo.trim().toUpperCase().replace(/\s/g, '')
-    setEscaneo('')
-    if (!cod) return
-    const delArticulo = items.filter((i) => i.articulo === cod)
-    if (!delArticulo.length) {
-      setAviso({ ok: false, texto: `${cod} no está en este pedido.` })
-      return
-    }
-    const destino = delArticulo.find((i) => i.recibido < i.cantidad) ?? delArticulo[0]
-    cambiar(sel!, destino, destino.recibido + 1)
-    setAviso({
-      ok: destino.recibido + 1 <= destino.cantidad,
-      texto: `${cod} ${destino.color} ${destino.talle}: ${n0.format(destino.recibido + 1)} de ${n0.format(destino.cantidad)}${destino.recibido + 1 > destino.cantidad ? ' (llegó de más)' : ''}`,
-    })
-  }
-
   function marcarTodo(completo: boolean) {
     const texto = completo ? '¿Marcar todos los artículos de este pedido como recibidos completos?' : '¿Volver a cero lo recibido de este pedido?'
     if (!window.confirm(texto)) return
@@ -345,13 +435,74 @@ ${avisoNo}` : ''}
 
   const pct = tot.pedidas > 0 ? Math.round((tot.recibidas / tot.pedidas) * 100) : 0
 
+  // Por pedido: cada artículo es una fila con su total; el desplegable abre sus colores y talles
+  const [abiertos, setAbiertos] = useState<Set<string>>(new Set())
+  const alternarAbierto = (a: string) =>
+    setAbiertos((prev) => {
+      const n = new Set(prev)
+      if (n.has(a)) n.delete(a)
+      else n.add(a)
+      return n
+    })
+  const gruposPedido = useMemo(() => {
+    const m = new Map<string, ItemPicking[]>()
+    for (const i of visibles) m.set(i.articulo, [...(m.get(i.articulo) ?? []), i])
+    return [...m.entries()].map(([articulo, sinOrden]) => {
+      // color y después talle por tamaño (XS, S, M… / 24, 26, 28…)
+      const variantes = [...sinOrden].sort((a, b) => a.color.localeCompare(b.color, 'es', { numeric: true }) || compararTalle(a.talle, b.talle))
+      return {
+        articulo,
+        variantes,
+        cantidad: variantes.reduce((a, v) => a + v.cantidad, 0),
+        recibido: variantes.reduce((a, v) => a + v.recibido, 0),
+      }
+    })
+  }, [visibles])
+
+  // Subtotal de lo filtrado (se actualiza a medida que se marca)
+  const subtotal = useMemo(
+    () => ({
+      articulos: new Set(visibles.map((i) => i.articulo)).size,
+      pedidas: visibles.reduce((a, i) => a + i.cantidad, 0),
+      recibidas: visibles.reduce((a, i) => a + i.recibido, 0),
+    }),
+    [visibles],
+  )
+
+  /** Fija lo recibido del artículo entero: llena color/talle en orden y lo que sobra va al último. */
+  function fijarTotal(variantes: ItemPicking[], total: number) {
+    let resto = Math.max(0, Math.round(total * 100) / 100)
+    variantes.forEach((v, k) => {
+      const asignar = k === variantes.length - 1 ? resto : Math.min(v.cantidad, resto)
+      resto -= asignar
+      if (asignar !== v.recibido) cambiar(sel!, v, asignar)
+    })
+  }
+  /** +1 al primer color/talle que falta (o al último); -1 al último que tiene algo. */
+  function sumarArticulo(variantes: ItemPicking[], d: 1 | -1) {
+    const destino =
+      d > 0
+        ? variantes.find((v) => v.recibido < v.cantidad) ?? variantes[variantes.length - 1]
+        : [...variantes].reverse().find((v) => v.recibido > 0)
+    if (destino) cambiar(sel!, destino, destino.recibido + d)
+  }
+  /** ✓ del artículo: todo completo, o si ya estaba, todo a cero. */
+  function tildarArticulo(variantes: ItemPicking[]) {
+    const completo = variantes.every((v) => v.recibido >= v.cantidad)
+    for (const v of variantes) {
+      const destino = completo ? 0 : Math.max(v.recibido, v.cantidad)
+      if (destino !== v.recibido) cambiar(sel!, v, destino)
+    }
+  }
+
   /** Busca el artículo (código o principio del código) en todos los pedidos. */
   async function buscarArticulo(e?: React.FormEvent) {
     e?.preventDefault()
-    const cod = codArt.trim().toUpperCase().replace(/\s/g, '')
+    // Código (o su principio) o parte de la descripción: lo resuelve picking_articulo
+    const cod = codArt.trim().replace(/\s+/g, ' ')
     if (!supabase) return
     if (cod.length < 3) {
-      setAviso({ ok: false, texto: 'Escribí al menos 3 caracteres del código.' })
+      setAviso({ ok: false, texto: 'Escribí al menos 3 caracteres del código o de la descripción.' })
       return
     }
     setCargandoArt(true)
@@ -363,7 +514,7 @@ ${avisoNo}` : ''}
     const filas = ((data as FilaArticulo[] | null) ?? []).map((f) => ({ ...f, cantidad: Number(f.cantidad), recibido: Number(f.recibido) }))
     setFilasArt(filas)
     setBuscado(cod)
-    if (!filas.length) setAviso({ ok: false, texto: `${cod} no está en ningún pedido de compra.` })
+    if (!filas.length) setAviso({ ok: false, texto: `Ningún artículo de los pedidos de compra coincide con "${cod}".` })
     const arts = [...new Set(filas.map((f) => f.articulo))].filter((a) => !descripciones.has(a))
     if (arts.length) {
       const nuevas = new Map<string, string>()
@@ -490,14 +641,14 @@ ${avisoNo}` : ''}
         <div className="space-y-3 pb-4">
           <form onSubmit={(e) => void buscarArticulo(e)} className="flex flex-wrap items-end gap-2 rounded-2xl border border-line bg-surface p-3">
             <label className="block min-w-[220px] flex-1">
-              <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-sub">Código del artículo</span>
+              <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-sub">Artículo</span>
               <div className="relative">
-                <ScanLine size={16} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-amber-500" />
+                <Search size={16} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-amber-500" />
                 <input
                   value={codArt}
                   onChange={(e) => setCodArt(e.target.value)}
-                  placeholder="Escaneá o escribí el código (o el principio) y Enter"
-                  aria-label="Código del artículo"
+                  placeholder="Código (o el principio) o descripción, y Enter"
+                  aria-label="Código o descripción del artículo"
                   className="h-11 w-full rounded-xl border border-amber-500/40 bg-surface2 pl-9 pr-3 text-sm text-ink outline-none placeholder:text-sub/70 focus-visible:ring-2 focus-visible:ring-amber-500/40"
                 />
               </div>
@@ -779,22 +930,12 @@ ${avisoNo}` : ''}
 
                 {/* Escanear · buscar · filtros · marcar todo */}
                 <div className="flex flex-wrap items-center gap-2">
-                  <form onSubmit={escanear} className="relative min-w-[200px] flex-1">
-                    <ScanLine size={16} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-amber-500" />
-                    <input
-                      value={escaneo}
-                      onChange={(e) => setEscaneo(e.target.value)}
-                      placeholder="Escaneá o escribí el código y Enter (+1)"
-                      aria-label="Escanear código"
-                      className="h-11 w-full rounded-xl border border-amber-500/40 bg-surface pl-9 pr-3 text-sm text-ink outline-none placeholder:text-sub/70 focus-visible:ring-2 focus-visible:ring-amber-500/40"
-                    />
-                  </form>
                   <div className="relative min-w-[160px] flex-1">
                     <Search size={16} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sub" />
                     <input
                       value={busqueda}
                       onChange={(e) => setBusqueda(e.target.value)}
-                      placeholder="Buscar artículo…"
+                      placeholder="Buscar artículo (código, descripción, color o talle)…"
                       aria-label="Buscar artículo"
                       className="h-11 w-full rounded-xl border border-line bg-surface pl-9 pr-3 text-sm text-ink outline-none placeholder:text-sub/70 focus-visible:ring-2 focus-visible:ring-brand-500/40"
                     />
@@ -839,7 +980,23 @@ ${avisoNo}` : ''}
                   </p>
                 )}
 
-                {/* Tabla */}
+                {/* Subtotal de lo filtrado: se va sumando a medida que se marca */}
+                {q && (
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm">
+                    <span className="font-medium text-amber-500">Filtrado «{busqueda.trim()}»</span>
+                    <span className="text-sub">{subtotal.articulos} artículo{subtotal.articulos === 1 ? '' : 's'}</span>
+                    <span className="text-sub">Pedido <strong className="tabular-nums text-ink">{n0.format(subtotal.pedidas)}</strong></span>
+                    <span className="text-sub">
+                      Recibido{' '}
+                      <strong className={`tabular-nums ${subtotal.recibidas >= subtotal.pedidas && subtotal.pedidas > 0 ? 'text-emerald-500' : 'text-ink'}`}>
+                        {n0.format(subtotal.recibidas)}
+                      </strong>
+                      {subtotal.pedidas > 0 && <span className="tabular-nums"> ({Math.round((subtotal.recibidas / subtotal.pedidas) * 100)}%)</span>}
+                    </span>
+                  </div>
+                )}
+
+                {/* Tabla: una fila por artículo (se marca por el total); el desplegable abre color y talle */}
                 <div className="overflow-hidden rounded-2xl border border-line bg-surface">
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[46rem] text-sm">
@@ -861,75 +1018,93 @@ ${avisoNo}` : ''}
                               <Loader2 size={16} className="mr-1.5 inline animate-spin" aria-hidden /> Cargando artículos…
                             </td>
                           </tr>
-                        ) : visibles.length === 0 ? (
+                        ) : gruposPedido.length === 0 ? (
                           <tr><td colSpan={7} className="px-3 py-8 text-center text-sub">No hay artículos {filtro === 'pendientes' ? 'pendientes' : filtro === 'completos' ? 'completos' : ''}.</td></tr>
                         ) : (
-                          visibles.map((i) => {
-                            const completo = i.recibido >= i.cantidad
-                            const demas = i.recibido > i.cantidad
-                            return (
-                              <tr
-                                key={claveItem(i)}
-                                className={demas ? 'bg-brand-600/10' : completo ? 'bg-emerald-500/10' : i.recibido > 0 ? 'bg-amber-500/10' : 'hover:bg-surface2/60'}
-                                title={i.actualizado_at ? `Marcado por ${i.actualizado_por ?? '—'} el ${new Date(i.actualizado_at).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}` : undefined}
-                              >
-                                <td className="whitespace-nowrap px-3 py-1.5 font-semibold text-ink">{i.articulo}</td>
-                                <td className="max-w-[18rem] truncate px-3 py-1.5 text-ink/90" title={descDe(i.articulo)}>{descDe(i.articulo) || '—'}</td>
-                                <td className="px-3 py-1.5 tabular-nums text-sub">{i.color}</td>
-                                <td className="px-3 py-1.5 text-sub">{i.talle}</td>
-                                <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-ink">{n0.format(i.cantidad)}</td>
+                          gruposPedido.flatMap((g) => {
+                            const varios = g.variantes.length > 1
+                            const abierto = varios && abiertos.has(g.articulo)
+                            const unaSola = g.variantes[0]
+                            const filaArticulo = (
+                              <tr key={g.articulo} className={`${colorFila(g.recibido, g.cantidad)} ${varios ? 'font-medium' : ''}`}>
+                                <td className="whitespace-nowrap px-3 py-1.5 font-semibold text-ink">
+                                  {varios ? (
+                                    <button
+                                      onClick={() => alternarAbierto(g.articulo)}
+                                      aria-expanded={abierto}
+                                      title={abierto ? 'Cerrar colores y talles' : 'Marcar por color y talle'}
+                                      className="inline-flex items-center gap-1 rounded-md hover:text-amber-500"
+                                    >
+                                      <ChevronRight size={15} aria-hidden className={`transition-transform ${abierto ? 'rotate-90' : ''}`} />
+                                      {g.articulo}
+                                    </button>
+                                  ) : (
+                                    <span className="pl-5">{g.articulo}</span>
+                                  )}
+                                </td>
+                                <td className="max-w-[18rem] truncate px-3 py-1.5 text-ink/90" title={descDe(g.articulo)}>{descDe(g.articulo) || '—'}</td>
+                                <td className="px-3 py-1.5 tabular-nums text-sub">
+                                  {varios ? resumenDe(g.variantes.map((v) => v.color), 'color', 'colores') : unaSola.color}
+                                </td>
+                                <td className="px-3 py-1.5 text-sub">
+                                  {varios ? resumenDe(g.variantes.map((v) => v.talle), 'talle', 'talles') : unaSola.talle}
+                                </td>
+                                <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-ink">{n0.format(g.cantidad)}</td>
                                 <td className="px-3 py-1">
-                                  <div className="mx-auto flex w-fit items-center gap-1">
-                                    <button
-                                      onClick={() => cambiar(sel!, i, i.recibido - 1)}
-                                      disabled={i.recibido <= 0}
-                                      aria-label={`Restar 1 a ${i.articulo}`}
-                                      className="btn-press flex h-8 w-8 items-center justify-center rounded-lg border border-line bg-surface text-ink hover:bg-surface2 disabled:opacity-30"
-                                    >
-                                      <Minus size={14} aria-hidden />
-                                    </button>
-                                    <input
-                                      type="number"
-                                      inputMode="decimal"
-                                      min={0}
-                                      value={i.recibido}
-                                      onChange={(e) => cambiar(sel!, i, Number(e.target.value) || 0)}
-                                      onFocus={(e) => e.target.select()}
-                                      aria-label={`Recibido de ${i.articulo} ${i.color} ${i.talle}`}
-                                      className={`h-8 w-16 rounded-lg border bg-surface2 px-1 text-center text-sm font-semibold tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40 ${
-                                        demas ? 'border-brand-500 text-brand-400' : completo ? 'border-emerald-500/60 text-emerald-500' : 'border-line text-ink'
-                                      }`}
-                                    />
-                                    <button
-                                      onClick={() => cambiar(sel!, i, i.recibido + 1)}
-                                      aria-label={`Sumar 1 a ${i.articulo}`}
-                                      className="btn-press flex h-8 w-8 items-center justify-center rounded-lg border border-line bg-surface text-ink hover:bg-surface2"
-                                    >
-                                      <Plus size={14} aria-hidden />
-                                    </button>
-                                  </div>
+                                  <Cantidad
+                                    valor={g.recibido}
+                                    cantidad={g.cantidad}
+                                    etiqueta={`Recibido de ${g.articulo} (total)`}
+                                    onRestar={() => sumarArticulo(g.variantes, -1)}
+                                    onSumar={() => sumarArticulo(g.variantes, 1)}
+                                    onFijar={(n) => fijarTotal(g.variantes, n)}
+                                  />
                                 </td>
                                 <td className="px-3 py-1 text-center">
-                                  <button
-                                    onClick={() => cambiar(sel!, i, completo ? 0 : i.cantidad)}
-                                    aria-pressed={completo}
-                                    aria-label={completo ? `Desmarcar ${i.articulo}` : `Marcar ${i.articulo} como recibido completo`}
-                                    title={completo ? 'Desmarcar (vuelve a 0)' : 'Llegó completo'}
-                                    className={`btn-press mx-auto flex h-8 w-8 items-center justify-center rounded-lg border-2 transition ${
-                                      completo ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-line text-transparent hover:border-emerald-500/60 hover:text-emerald-500/60'
-                                    }`}
-                                  >
-                                    <Check size={16} strokeWidth={3} aria-hidden />
-                                  </button>
+                                  <Tilde completo={g.recibido >= g.cantidad} etiqueta={g.articulo} onClick={() => tildarArticulo(g.variantes)} />
                                 </td>
                               </tr>
                             )
+                            if (!abierto) return [filaArticulo]
+                            return [
+                              filaArticulo,
+                              ...g.variantes.map((i) => (
+                                <tr
+                                  key={claveItem(i)}
+                                  className={`${colorFila(i.recibido, i.cantidad)} bg-surface2/40 text-[13px]`}
+                                  title={i.actualizado_at ? `Marcado por ${i.actualizado_por ?? '—'} el ${new Date(i.actualizado_at).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}` : undefined}
+                                >
+                                  <td className="px-3 py-1 pl-10 text-sub">↳</td>
+                                  <td className="px-3 py-1 text-sub/70">—</td>
+                                  <td className="px-3 py-1 tabular-nums text-ink">{i.color}</td>
+                                  <td className="px-3 py-1 text-ink">{i.talle}</td>
+                                  <td className="px-3 py-1 text-right tabular-nums text-ink">{n0.format(i.cantidad)}</td>
+                                  <td className="px-3 py-1">
+                                    <Cantidad
+                                      valor={i.recibido}
+                                      cantidad={i.cantidad}
+                                      etiqueta={`Recibido de ${i.articulo} ${i.color} ${i.talle}`}
+                                      onRestar={() => cambiar(sel!, i, i.recibido - 1)}
+                                      onSumar={() => cambiar(sel!, i, i.recibido + 1)}
+                                      onFijar={(n) => cambiar(sel!, i, n)}
+                                    />
+                                  </td>
+                                  <td className="px-3 py-1 text-center">
+                                    <Tilde
+                                      completo={i.recibido >= i.cantidad}
+                                      etiqueta={`${i.articulo} ${i.color} ${i.talle}`}
+                                      onClick={() => cambiar(sel!, i, i.recibido >= i.cantidad ? 0 : i.cantidad)}
+                                    />
+                                  </td>
+                                </tr>
+                              )),
+                            ]
                           })
                         )}
                       </tbody>
                       <tfoot>
                         <tr className="border-t border-line bg-surface2 text-sm font-semibold">
-                          <td colSpan={4} className="px-3 py-2 text-sub">Artículos: {items.length}</td>
+                          <td colSpan={4} className="px-3 py-2 text-sub">Artículos: {new Set(items.map((i) => i.articulo)).size} · renglones: {items.length}</td>
                           <td className="px-3 py-2 text-right tabular-nums text-ink">{n0.format(tot.pedidas)}</td>
                           <td className="px-3 py-2 text-center tabular-nums text-ink">{n0.format(tot.recibidas + tot.demas)}</td>
                           <td />
