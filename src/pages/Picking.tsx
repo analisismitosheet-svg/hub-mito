@@ -28,11 +28,16 @@ interface PedidoPicking {
 }
 
 interface ItemPicking {
+  /** Lo que se espera que ingrese = pedido − cancelado (con esto se marca) */
   articulo: string
   color: string
   talle: string
   cantidad: number
   recibido: number
+  /** Lo pedido en la OC (sin descontar lo cancelado) */
+  pedido?: number
+  /** Unidades canceladas (cancelaciones de DWH) de este artículo/color/talle */
+  cancelado?: number
   actualizado_at: string | null
   actualizado_por: string | null
 }
@@ -74,6 +79,39 @@ function Barra({ valor, total }: { valor: number; total: number }) {
   )
 }
 
+/**
+ * Cruza los renglones con las cancelaciones de sus pedidos (picking_cancelaciones,
+ * sql/picking_cancelaciones.sql): guarda lo pedido y lo cancelado, y deja en
+ * `cantidad` lo que queda por ingresar. Si falla, quedan como estaban.
+ */
+async function conCancelaciones<T extends ItemPicking & { codigo?: string }>(filas: T[], codigoFijo?: string): Promise<T[]> {
+  const codigos = [...new Set(filas.map((f) => codigoFijo ?? f.codigo ?? '').filter(Boolean))]
+  if (!supabase || !codigos.length) return filas
+  const { data, error } = await supabase.rpc('picking_cancelaciones', { p_codigos: codigos })
+  if (error || !Array.isArray(data)) return filas
+  const canc = new Map<string, number>()
+  for (const c of data as { codigo: string; articulo: string; color: string; talle: string; cancelado: number }[]) {
+    canc.set(`${c.codigo}|${c.articulo}|${c.color}|${c.talle}`, Number(c.cancelado) || 0)
+  }
+  return filas.map((f) => {
+    const cancelado = canc.get(`${codigoFijo ?? f.codigo}|${claveItem(f)}`) ?? 0
+    return cancelado > 0 ? { ...f, pedido: f.cantidad, cancelado, cantidad: Math.max(0, f.cantidad - cancelado) } : f
+  })
+}
+
+/** Celda "Pedido": lo que falta ingresar y, si hubo, lo pedido y lo cancelado */
+function CeldaPedido({ i }: { i: { cantidad: number; pedido?: number; cancelado?: number } }) {
+  if (!i.cancelado) return <>{n0.format(i.cantidad)}</>
+  return (
+    <span title={`Pedido ${n0.format(i.pedido ?? i.cantidad)} · cancelado ${n0.format(i.cancelado)} · queda por ingresar ${n0.format(i.cantidad)}`}>
+      {n0.format(i.cantidad)}
+      <span className="block text-[10px] font-medium text-red-400">
+        de {n0.format(i.pedido ?? i.cantidad)} · {n0.format(i.cancelado)} cancel.
+      </span>
+    </span>
+  )
+}
+
 const TALLES_LETRA = ['XXXS', 'XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', 'XXXXL']
 /** Talles por tamaño: letras en orden (2XL = XXL), números de menor a mayor, el resto alfabético */
 function compararTalle(a: string, b: string): number {
@@ -90,7 +128,9 @@ function compararTalle(a: string, b: string): number {
 }
 
 /** Fondo de la fila según lo recibido */
-function colorFila(recibido: number, cantidad: number): string {
+function colorFila(recibido: number, cantidad: number, cancelado = 0): string {
+  // Cancelado entero: no hay nada que ingresar (rojo; si entró algo, rojo fuerte)
+  if (cantidad === 0 && cancelado > 0) return recibido > 0 ? 'bg-red-500/20' : 'bg-red-500/5'
   return recibido > cantidad ? 'bg-brand-600/10' : recibido >= cantidad ? 'bg-emerald-500/10' : recibido > 0 ? 'bg-amber-500/10' : 'hover:bg-surface2/60'
 }
 
@@ -341,7 +381,9 @@ ${avisoNo}` : ''}
     void supabase.rpc('picking_items', { p_codigo: sel }).then(async ({ data, error: e }) => {
       if (!vivo) return
       if (e) setError(e.message)
-      const its = ((data as ItemPicking[] | null) ?? []).map((i) => ({ ...i, cantidad: Number(i.cantidad), recibido: Number(i.recibido) }))
+      const crudos = ((data as ItemPicking[] | null) ?? []).map((i) => ({ ...i, cantidad: Number(i.cantidad), recibido: Number(i.recibido) }))
+      const its = await conCancelaciones(crudos, sel)
+      if (!vivo) return
       setItems(its)
       setCargandoItems(false)
       const faltan = [...new Set(its.map((i) => i.articulo))]
@@ -362,6 +404,14 @@ ${avisoNo}` : ''}
   function cambiar(codigo: string, item: ItemPicking, recibido: number) {
     if (!supabase) return
     const valor = Math.max(0, Math.round(recibido * 100) / 100)
+    // Entra más de lo que queda por ingresar en un artículo con cancelaciones: no debería ingresar
+    if ((item.cancelado ?? 0) > 0 && valor > item.cantidad && valor > item.recibido) {
+      const qué = `${item.articulo} ${item.color} ${item.talle}`.trim()
+      setAviso({
+        ok: false,
+        texto: `${qué}: ${n0.format(item.cancelado ?? 0)} unidades están canceladas en esta OC y no deberían ingresar. Si llegaron igual, hacé una orden de compra nueva por ${n0.format(valor - item.cantidad)}.`,
+      })
+    }
     // Se actualiza en los dos modos (el mismo renglón puede estar en pantalla en uno y en otro)
     if (codigo === sel) setItems((prev) => prev.map((i) => (claveItem(i) === claveItem(item) ? { ...i, recibido: valor } : i)))
     setFilasArt((prev) => prev.map((f) => (f.codigo === codigo && claveItem(f) === claveItem(item) ? { ...f, recibido: valor } : f)))
@@ -435,6 +485,19 @@ ${avisoNo}` : ''}
 
   const pct = tot.pedidas > 0 ? Math.round((tot.recibidas / tot.pedidas) * 100) : 0
 
+  // Cancelaciones del pedido: lo cancelado ya está descontado de lo que hay que ingresar
+  const cancelPedido = useMemo(() => {
+    const con = items.filter((i) => (i.cancelado ?? 0) > 0)
+    return {
+      articulos: new Set(con.map((i) => i.articulo)).size,
+      unidades: con.reduce((a, i) => a + (i.cancelado ?? 0), 0),
+      // Lo que se marcó por encima de lo que quedaba: mercadería cancelada que entró igual
+      entraron: con
+        .filter((i) => i.recibido > i.cantidad)
+        .map((i) => ({ articulo: i.articulo, color: i.color, talle: i.talle, unidades: i.recibido - i.cantidad })),
+    }
+  }, [items])
+
   // Por pedido: cada artículo es una fila con su total; el desplegable abre sus colores y talles
   const [abiertos, setAbiertos] = useState<Set<string>>(new Set())
   const alternarAbierto = (a: string) =>
@@ -454,6 +517,8 @@ ${avisoNo}` : ''}
         articulo,
         variantes,
         cantidad: variantes.reduce((a, v) => a + v.cantidad, 0),
+        pedido: variantes.reduce((a, v) => a + (v.pedido ?? v.cantidad), 0),
+        cancelado: variantes.reduce((a, v) => a + (v.cancelado ?? 0), 0),
         recibido: variantes.reduce((a, v) => a + v.recibido, 0),
       }
     })
@@ -511,7 +576,7 @@ ${avisoNo}` : ''}
     const { data, error: er } = await supabase.rpc('picking_articulo', { p_articulo: cod })
     setCargandoArt(false)
     if (er) return setError(er.message)
-    const filas = ((data as FilaArticulo[] | null) ?? []).map((f) => ({ ...f, cantidad: Number(f.cantidad), recibido: Number(f.recibido) }))
+    const filas = await conCancelaciones(((data as FilaArticulo[] | null) ?? []).map((f) => ({ ...f, cantidad: Number(f.cantidad), recibido: Number(f.recibido) })))
     setFilasArt(filas)
     setBuscado(cod)
     if (!filas.length) setAviso({ ok: false, texto: `Ningún artículo de los pedidos de compra coincide con "${cod}".` })
@@ -741,7 +806,7 @@ ${avisoNo}` : ''}
                           return (
                             <tr
                               key={f.codigo}
-                              className={demas ? 'bg-brand-600/10' : completo ? 'bg-emerald-500/10' : f.recibido > 0 ? 'bg-amber-500/10' : ''}
+                              className={colorFila(f.recibido, f.cantidad, f.cancelado)}
                               title={f.actualizado_at ? `Marcado por ${f.actualizado_por ?? '—'} el ${new Date(f.actualizado_at).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}` : undefined}
                             >
                               <td className="whitespace-nowrap px-3 py-1.5 font-display font-bold tabular-nums text-ink">N° {f.numero ?? '—'}</td>
@@ -749,7 +814,7 @@ ${avisoNo}` : ''}
                               <td className="max-w-[16rem] truncate px-3 py-1.5 text-ink/90" title={f.proveedor_nombre ?? ''}>
                                 <span className="text-amber-500">{f.proveedor}</span> {f.proveedor_nombre}
                               </td>
-                              <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-ink">{n0.format(f.cantidad)}</td>
+                              <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-ink"><CeldaPedido i={f} /></td>
                               <td className="px-3 py-1">
                                 <div className="mx-auto flex w-fit items-center gap-1">
                                   <button
@@ -782,6 +847,9 @@ ${avisoNo}` : ''}
                                 </div>
                               </td>
                               <td className="px-3 py-1 text-center">
+                                {f.cantidad === 0 && (f.cancelado ?? 0) > 0 ? (
+                                  <span className="text-[10px] font-bold uppercase text-red-400" title="Cancelado en este pedido: no debería ingresar">Cancelado</span>
+                                ) : (
                                 <button
                                   onClick={() => cambiar(f.codigo, f, completo ? 0 : f.cantidad)}
                                   aria-pressed={completo}
@@ -792,6 +860,7 @@ ${avisoNo}` : ''}
                                 >
                                   <Check size={16} strokeWidth={3} aria-hidden />
                                 </button>
+                                )}
                               </td>
                             </tr>
                           )
@@ -980,6 +1049,43 @@ ${avisoNo}` : ''}
                   </p>
                 )}
 
+                {/* Cancelaciones de la OC: lo cancelado no se ingresa; si entró igual, OC nueva */}
+                {cancelPedido.unidades > 0 && (
+                  <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2.5 text-sm text-red-400">
+                    <p>
+                      <strong>Esta OC tiene {n0.format(cancelPedido.unidades)} unidades canceladas</strong> en {cancelPedido.articulos} artículo
+                      {cancelPedido.articulos === 1 ? '' : 's'}: ya están descontadas de lo que hay que ingresar (se ven en rojo en cada fila). No las marques como recibidas.
+                    </p>
+                    {cancelPedido.entraron.length > 0 && (
+                      <div className="mt-2 rounded-lg border border-red-500/30 bg-surface/60 p-2.5 text-ink">
+                        <p className="font-semibold text-red-400">
+                          Entró mercadería cancelada: hacé una orden de compra nueva por esto
+                        </p>
+                        <ul className="mt-1 space-y-0.5 text-xs tabular-nums">
+                          {cancelPedido.entraron.map((e) => (
+                            <li key={`${e.articulo}|${e.color}|${e.talle}`}>
+                              <span className="font-semibold">{e.articulo}</span> {e.color} {e.talle}: {n0.format(e.unidades)} u.
+                            </li>
+                          ))}
+                        </ul>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const texto = cancelPedido.entraron.map((e) => `${e.articulo}\t${e.color}\t${e.talle}\t${e.unidades}`).join('\n')
+                            void navigator.clipboard?.writeText(texto).then(
+                              () => setAviso({ ok: true, texto: 'Lista para la OC nueva copiada (artículo, color, talle, unidades).' }),
+                              () => setAviso({ ok: false, texto: 'No se pudo copiar la lista.' }),
+                            )
+                          }}
+                          className="btn-press mt-2 inline-flex h-8 items-center gap-1.5 rounded-lg border border-red-500/40 px-2.5 text-xs font-medium text-red-400 hover:bg-red-500/15"
+                        >
+                          Copiar lista para la OC nueva
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Subtotal de lo filtrado: se va sumando a medida que se marca */}
                 {q && (
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm">
@@ -1026,7 +1132,7 @@ ${avisoNo}` : ''}
                             const abierto = varios && abiertos.has(g.articulo)
                             const unaSola = g.variantes[0]
                             const filaArticulo = (
-                              <tr key={g.articulo} className={`${colorFila(g.recibido, g.cantidad)} ${varios ? 'font-medium' : ''}`}>
+                              <tr key={g.articulo} className={`${colorFila(g.recibido, g.cantidad, g.cancelado)} ${varios ? 'font-medium' : ''}`}>
                                 <td className="whitespace-nowrap px-3 py-1.5 font-semibold text-ink">
                                   {varios ? (
                                     <button
@@ -1049,7 +1155,7 @@ ${avisoNo}` : ''}
                                 <td className="px-3 py-1.5 text-sub">
                                   {varios ? resumenDe(g.variantes.map((v) => v.talle), 'talle', 'talles') : unaSola.talle}
                                 </td>
-                                <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-ink">{n0.format(g.cantidad)}</td>
+                                <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-ink"><CeldaPedido i={g} /></td>
                                 <td className="px-3 py-1">
                                   <Cantidad
                                     valor={g.recibido}
@@ -1061,7 +1167,11 @@ ${avisoNo}` : ''}
                                   />
                                 </td>
                                 <td className="px-3 py-1 text-center">
-                                  <Tilde completo={g.recibido >= g.cantidad} etiqueta={g.articulo} onClick={() => tildarArticulo(g.variantes)} />
+                                  {g.cantidad === 0 && g.cancelado > 0 ? (
+                                    <span className="text-[11px] font-bold uppercase text-red-400" title="Cancelado entero: no debería ingresar">Cancelado</span>
+                                  ) : (
+                                    <Tilde completo={g.recibido >= g.cantidad} etiqueta={g.articulo} onClick={() => tildarArticulo(g.variantes)} />
+                                  )}
                                 </td>
                               </tr>
                             )
@@ -1071,14 +1181,14 @@ ${avisoNo}` : ''}
                               ...g.variantes.map((i) => (
                                 <tr
                                   key={claveItem(i)}
-                                  className={`${colorFila(i.recibido, i.cantidad)} bg-surface2/40 text-[13px]`}
+                                  className={`${colorFila(i.recibido, i.cantidad, i.cancelado)} bg-surface2/40 text-[13px]`}
                                   title={i.actualizado_at ? `Marcado por ${i.actualizado_por ?? '—'} el ${new Date(i.actualizado_at).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}` : undefined}
                                 >
                                   <td className="px-3 py-1 pl-10 text-sub">↳</td>
                                   <td className="px-3 py-1 text-sub/70">—</td>
                                   <td className="px-3 py-1 tabular-nums text-ink">{i.color}</td>
                                   <td className="px-3 py-1 text-ink">{i.talle}</td>
-                                  <td className="px-3 py-1 text-right tabular-nums text-ink">{n0.format(i.cantidad)}</td>
+                                  <td className="px-3 py-1 text-right tabular-nums text-ink"><CeldaPedido i={i} /></td>
                                   <td className="px-3 py-1">
                                     <Cantidad
                                       valor={i.recibido}
@@ -1090,11 +1200,15 @@ ${avisoNo}` : ''}
                                     />
                                   </td>
                                   <td className="px-3 py-1 text-center">
-                                    <Tilde
-                                      completo={i.recibido >= i.cantidad}
-                                      etiqueta={`${i.articulo} ${i.color} ${i.talle}`}
-                                      onClick={() => cambiar(sel!, i, i.recibido >= i.cantidad ? 0 : i.cantidad)}
-                                    />
+                                    {i.cantidad === 0 && (i.cancelado ?? 0) > 0 ? (
+                                      <span className="text-[10px] font-bold uppercase text-red-400" title="Cancelado: no debería ingresar">Cancelado</span>
+                                    ) : (
+                                      <Tilde
+                                        completo={i.recibido >= i.cantidad}
+                                        etiqueta={`${i.articulo} ${i.color} ${i.talle}`}
+                                        onClick={() => cambiar(sel!, i, i.recibido >= i.cantidad ? 0 : i.cantidad)}
+                                      />
+                                    )}
                                   </td>
                                 </tr>
                               )),
