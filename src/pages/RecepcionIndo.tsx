@@ -1193,8 +1193,8 @@ export default function RecepcionIndo() {
           estados={opciones.estados ?? []}
           proveedores={catalogo}
           onCerrar={() => setCreando(false)}
-          onGuardado={(texto, seguir) => {
-            if (!seguir) setCreando(false) // quedan envíos de la foto: el formulario sigue abierto
+          onGuardado={(texto) => {
+            setCreando(false)
             setMsg({ ok: true, texto })
             void cargar()
             void cargarOpciones()

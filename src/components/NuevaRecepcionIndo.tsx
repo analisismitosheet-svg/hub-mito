@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { Camera, Loader2, Plus, Sparkles, X } from 'lucide-react'
+import { useMemo, useState, type FormEvent } from 'react'
+import { Loader2, Plus, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { claveRecepcion, normalizar, type RecepcionIndo } from '@/lib/recepcionIndo'
 import type { Proveedor } from '@/lib/proveedoresIndo'
-import { leerFotoRemito, type DatosRemito, type LecturaRemito } from '@/lib/agentesApi'
 
 /* ------------------------------------------------------------------ */
 /*  Recepción INDO · "Nuevo registro": alta a mano de una recepción     */
@@ -37,42 +36,6 @@ interface Form {
 const hoy = () => new Date().toLocaleDateString('sv-SE')
 const compacto = (v: string) => normalizar(v).replace(/[^A-Z0-9]/g, '')
 
-/** Achica la foto (máx. 1600 px) y la pasa a JPEG en base64: viaja rápido y la IA la lee igual. */
-async function fotoABase64(archivo: File): Promise<string> {
-  const url = URL.createObjectURL(archivo)
-  try {
-    const img = await new Promise<HTMLImageElement>((ok, mal) => {
-      const i = new Image()
-      i.onload = () => ok(i)
-      i.onerror = () => mal(new Error('No se pudo abrir la imagen.'))
-      i.src = url
-    })
-    const escala = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight))
-    const c = document.createElement('canvas')
-    c.width = Math.round(img.naturalWidth * escala)
-    c.height = Math.round(img.naturalHeight * escala)
-    c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height)
-    return c.toDataURL('image/jpeg', 0.85).split(',')[1]
-  } finally {
-    URL.revokeObjectURL(url)
-  }
-}
-
-/** Mejor coincidencia de un texto leído contra una lista (todas las palabras, sin puntos ni acentos). */
-function elegirDeLista(leido: string | null, lista: string[]): string | null {
-  if (!leido) return null
-  const l = compacto(leido)
-  // Primero: algún valor de la lista que aparezca entero en lo leído ("INDOD" dentro de "INDONESIA DEPOSITO (INDOD)")
-  const contenido = lista.filter((x) => compacto(x).length >= 3 && l.includes(compacto(x))).sort((a, b) => b.length - a.length)[0]
-  if (contenido) return contenido
-  // Una palabra de lo leído igual a un valor de la lista ("AG" en "AG DISTRIBUCIONES")
-  const todas = normalizar(leido).split(/[^A-Z0-9]+/).filter(Boolean)
-  const exacta = lista.find((x) => todas.includes(compacto(x)))
-  if (exacta) return exacta
-  const palabras = todas.filter((w) => w.length > 2)
-  return lista.find((x) => palabras.length > 0 && palabras.every((w) => compacto(x).includes(w))) ?? null
-}
-
 // Opcionales: el link de la factura y el detalle. Todo lo demás es obligatorio.
 const OBLIGATORIOS: (keyof Form)[] = [
   'nGuia', 'transporte', 'bultos', 'deposito', 'proveedor', 'nRemito', 'fechaRemito', 'nOc',
@@ -87,7 +50,7 @@ export default function NuevaRecepcionIndo({
   estados: string[]
   proveedores: Proveedor[]
   onCerrar: () => void
-  onGuardado: (texto: string, seguir?: boolean) => void
+  onGuardado: (texto: string) => void
 }) {
   const [f, setF] = useState<Form>({
     nGuia: '', transporte: '', bultos: '', deposito: depositos.length === 1 ? depositos[0] : '', proveedor: '',
@@ -97,21 +60,6 @@ export default function NuevaRecepcionIndo({
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [intento, setIntento] = useState(false)
-  // Foto del remito: la lee la IA local (Ollama en mito-server) y completa los campos
-  const fotoRef = useRef<HTMLInputElement>(null)
-  const [leyendo, setLeyendo] = useState<number | null>(null) // segundos que lleva
-  const [leidos, setLeidos] = useState<Set<keyof Form>>(new Set())
-  const [textoFoto, setTextoFoto] = useState<string | null>(null)
-  // Una foto puede traer varios envíos (la factura del transporte: una fila por guía)
-  const [lectura, setLectura] = useState<LecturaRemito | null>(null)
-  const [envioActual, setEnvioActual] = useState<number | null>(null)
-  const [cargados, setCargados] = useState<Set<number>>(new Set())
-  const [aviso, setAviso] = useState<string | null>(null)
-  useEffect(() => {
-    if (leyendo === null) return
-    const id = setInterval(() => setLeyendo((s) => (s === null ? s : s + 1)), 1000)
-    return () => clearInterval(id)
-  }, [leyendo === null]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((prev) => ({ ...prev, [k]: v }))
   const falta = (k: keyof Form) => OBLIGATORIOS.includes(k) && String(f[k]).trim() === ''
@@ -122,68 +70,6 @@ export default function NuevaRecepcionIndo({
     () => proveedores.find((p) => compacto(p.nombre) === compacto(f.proveedor)) ?? null,
     [proveedores, f.proveedor],
   )
-
-  /**
-   * Pasa lo que leyó la IA a los campos. Una foto de un solo envío no pisa lo escrito a mano;
-   * al elegir otro envío de la lista se reemplazan los datos del envío anterior.
-   */
-  function completarDesdeFoto(d: DatosRemito, pisar = false, documento?: LecturaRemito['documento']) {
-    const nuevos: Partial<Form> = {}
-    const proveedor = d.remitente
-      ? proveedores.find((p) => compacto(p.nombre) === compacto(d.remitente!.split(/\s[—-]\s|,/)[0]))?.nombre
-        ?? elegirDeLista(d.remitente.split(/\s[—-]\s|,/)[0], proveedores.map((p) => p.nombre))
-        ?? d.remitente.split(/\s[—-]\s|,/)[0].trim()
-      : null
-    const valores: Partial<Form> = {
-      nGuia: d.nGuia ?? undefined,
-      transporte: (elegirDeLista(d.transporte, transportes) ?? d.transporte) ?? undefined,
-      bultos: d.bultos != null ? String(d.bultos) : undefined,
-      deposito: elegirDeLista(d.destino, depositos) ?? undefined,
-      proveedor: proveedor ?? undefined,
-      nRemito: d.nRemito ?? undefined,
-      fechaRemito: d.fechaRemito ?? undefined,
-      nFactura: d.nFactura ?? undefined,
-      // La factura del transporte queda anotada en el detalle (no es la factura de la mercadería)
-      detalle: documento?.numero && /factura/i.test(documento.tipo ?? '')
-        ? `Factura transporte ${d.transporte ?? ''} ${documento.numero}`.replace(/\s+/g, ' ').trim()
-        : undefined,
-    }
-    for (const [k, v] of Object.entries(valores) as [keyof Form, string | undefined][]) {
-      if (v && (pisar || String(f[k]).trim() === '')) (nuevos as Record<string, string>)[k] = v
-    }
-    const borrar: Partial<Form> = {}
-    if (pisar) {
-      // Lo que el envío nuevo no trae, se vacía (no queda el dato del envío anterior)
-      for (const k of ['nGuia', 'bultos', 'proveedor', 'nRemito', 'fechaRemito'] as const) if (!(k in nuevos)) borrar[k] = ''
-    }
-    setF((prev) => ({ ...prev, ...borrar, ...nuevos }))
-    setLeidos(new Set(Object.keys(nuevos) as (keyof Form)[]))
-    setTextoFoto(d.textoLeido)
-  }
-
-  async function leerFoto(archivo: File) {
-    setError(null)
-    setLeyendo(0)
-    try {
-      const base64 = await fotoABase64(archivo)
-      const r = await leerFotoRemito(base64)
-      const envios = r.envios?.length ? r.envios : [r.datos]
-      setLectura({ ...r, envios })
-      setCargados(new Set())
-      setEnvioActual(0)
-      completarDesdeFoto(envios[0], envios.length > 1, r.documento)
-    } catch (e) {
-      const m = e instanceof Error ? e.message : String(e)
-      setError(
-        /fetch|network|Failed|timeout|aborted/i.test(m)
-          ? 'No se pudo conectar con la IA (mito-server en la PC de la oficina). ¿Está prendida? Mientras tanto completá a mano.'
-          : m,
-      )
-    } finally {
-      setLeyendo(null)
-      if (fotoRef.current) fotoRef.current.value = ''
-    }
-  }
 
   async function guardar(e: FormEvent) {
     e.preventDefault()
@@ -226,22 +112,7 @@ export default function NuevaRecepcionIndo({
     })
     setGuardando(false)
     if (e2) return setError(e2.message)
-    const texto = `Registro nuevo: guía ${base.nGuia} de ${base.proveedor}.`
-    // Si la foto trae más envíos sin cargar, el formulario sigue abierto con el próximo
-    const envios = lectura?.envios ?? []
-    const hechos = new Set(cargados)
-    if (envioActual !== null) hechos.add(envioActual)
-    const proximo = envios.findIndex((_, i) => !hechos.has(i))
-    if (envios.length > 1 && proximo >= 0) {
-      setCargados(hechos)
-      setEnvioActual(proximo)
-      setIntento(false)
-      completarDesdeFoto(envios[proximo], true, lectura?.documento)
-      setAviso(`✓ ${texto} Ahora el envío ${proximo + 1} de ${envios.length}: completá lo que falta y guardalo.`)
-      onGuardado(texto, true)
-      return
-    }
-    onGuardado(texto)
+    onGuardado(`Registro nuevo: guía ${base.nGuia} de ${base.proveedor}.`)
   }
 
   const input = (k: Campo, etiqueta: string, props: React.InputHTMLAttributes<HTMLInputElement> = {}, ancho = '') => (
@@ -253,7 +124,7 @@ export default function NuevaRecepcionIndo({
         value={String(f[k] ?? '')}
         onChange={(e) => set(k, e.target.value as never)}
         className={`h-10 w-full rounded-xl border bg-surface2 px-3 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 ${
-          intento && falta(k) ? 'border-brand-500' : leidos.has(k) ? 'border-violet-500/70 bg-violet-500/10' : 'border-line'
+          intento && falta(k) ? 'border-brand-500' : 'border-line'
         }`}
         {...props}
       />
@@ -270,72 +141,6 @@ export default function NuevaRecepcionIndo({
           </button>
         </div>
 
-        {/* Foto del remito de transporte: la IA local completa lo que puede leer */}
-        <div className="mb-3 rounded-xl border border-violet-500/30 bg-violet-500/5 p-3">
-          <input
-            ref={fotoRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            onChange={(e) => { const a = e.target.files?.[0]; if (a) void leerFoto(a) }}
-          />
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => fotoRef.current?.click()}
-              disabled={leyendo !== null}
-              className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-60"
-            >
-              {leyendo !== null ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Camera size={15} aria-hidden />}
-              {leyendo !== null ? `Leyendo la foto… ${leyendo} s` : 'Foto del remito'}
-            </button>
-            <p className="min-w-0 flex-1 text-xs text-sub">
-              {leyendo !== null
-                ? 'La IA de la oficina está leyendo la foto: tarda entre 30 segundos y 3 minutos.'
-                : leidos.size
-                  ? <span className="inline-flex items-center gap-1 text-violet-400"><Sparkles size={12} aria-hidden /> Completé {leidos.size} campos (en violeta): revisalos antes de guardar.</span>
-                  : 'Sacá o subí una foto del remito o de la factura del transporte (aunque traiga varias guías) y completo guía, transporte, bultos, fecha, proveedor y remito.'}
-            </p>
-          </div>
-          {lectura && lectura.envios.length > 1 && (
-            <div className="mt-2 space-y-1">
-              <p className="text-xs font-medium text-ink">
-                La foto trae {lectura.envios.length} envíos
-                {lectura.documento.numero ? ` (${lectura.documento.tipo ?? 'documento'} ${lectura.documento.numero})` : ''}: se cargan de a uno.
-              </p>
-              {lectura.envios.map((e, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  disabled={cargados.has(i)}
-                  onClick={() => { setEnvioActual(i); setIntento(false); completarDesdeFoto(e, true, lectura.documento) }}
-                  className={`flex w-full flex-wrap items-center gap-x-3 gap-y-0.5 rounded-lg border px-2.5 py-1.5 text-left text-xs transition ${
-                    cargados.has(i)
-                      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
-                      : envioActual === i
-                        ? 'border-violet-500 bg-violet-500/15 text-ink'
-                        : 'border-line text-sub hover:border-violet-500/50 hover:text-ink'
-                  }`}
-                >
-                  <span className="font-semibold">{cargados.has(i) ? '✓ ' : ''}{i + 1}. {e.nGuia ?? 'sin guía'}</span>
-                  <span>{e.remitente ?? '—'}</span>
-                  <span className="tabular-nums">{e.bultos ?? '—'} bultos</span>
-                  {e.nRemito && <span className="tabular-nums">remito {e.nRemito}</span>}
-                  <span className="ml-auto">{cargados.has(i) ? 'cargado' : envioActual === i ? 'en el formulario' : 'usar este'}</span>
-                </button>
-              ))}
-            </div>
-          )}
-          {aviso && <p className="mt-2 text-xs text-emerald-400">{aviso}</p>}
-          {textoFoto && (
-            <details className="mt-2 text-[11px] text-sub">
-              <summary className="cursor-pointer">Texto que leyó la IA</summary>
-              <p className="mt-1 whitespace-pre-wrap break-words">{textoFoto}</p>
-            </details>
-          )}
-        </div>
-
         <datalist id="nri-depositos">{depositos.map((d) => <option key={d} value={d} />)}</datalist>
         <datalist id="nri-transportes">{transportes.map((t) => <option key={t} value={t} />)}</datalist>
         <datalist id="nri-estados">{estados.map((s) => <option key={s} value={s} />)}</datalist>
@@ -348,7 +153,7 @@ export default function NuevaRecepcionIndo({
             <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-sub">Bultos<span className="text-brand-400"> *</span></span>
             <input
               type="number" min={0} inputMode="numeric" value={f.bultos} onChange={(e) => set('bultos', e.target.value)}
-              className={`h-10 w-full rounded-xl border bg-surface2 px-3 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 ${intento && falta('bultos') ? 'border-brand-500' : leidos.has('bultos') ? 'border-violet-500/70 bg-violet-500/10' : 'border-line'}`}
+              className={`h-10 w-full rounded-xl border bg-surface2 px-3 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 ${intento && falta('bultos') ? 'border-brand-500' : 'border-line'}`}
             />
           </label>
 
