@@ -479,7 +479,10 @@ function CeldaEditable({
   )
 }
 
-/** Estado: desplegable con los que existen + botón "+" para crear uno nuevo. */
+/** Opción especial del desplegable de estado: no es un estado, abre el alta de uno nuevo. */
+const NUEVO_ESTADO = '__nuevo_estado__'
+
+/** Estado: desplegable con los que existen y, al final, "+ Agregar estado…" para crear uno nuevo. */
 function CeldaEstado({
   valor, opciones, saving, onGuardar, onNuevo,
 }: {
@@ -491,32 +494,27 @@ function CeldaEstado({
 }) {
   const lista = opciones.includes(valor) || !valor ? opciones : [valor, ...opciones]
   return (
-    <div className="flex items-center gap-1">
-      <select
-        value={valor}
-        disabled={saving}
-        onChange={(e) => { if (e.target.value !== valor) onGuardar(e.target.value) }}
-        className={`max-w-[9rem] rounded-md border border-line px-1 py-0.5 text-[11px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 disabled:opacity-50 ${
-          valor.toUpperCase().includes('FLEXXUS') ? 'bg-sky-500/15 text-sky-400' : valor ? 'bg-emerald-500/15 text-emerald-400' : 'bg-surface2 text-sub'
-        }`}
-      >
-        <option value="">—</option>
-        {lista.map((e) => <option key={e} value={e}>{e}</option>)}
-      </select>
-      <button
-        type="button"
-        disabled={saving}
-        onClick={() => {
+    <select
+      value={valor}
+      disabled={saving}
+      onChange={(e) => {
+        const elegido = e.target.value
+        if (elegido === NUEVO_ESTADO) {
+          // El select vuelve solo al valor actual (es controlado): solo se abre el alta
           const nuevo = window.prompt('Nombre del estado nuevo:')?.trim().toUpperCase()
           if (nuevo) onNuevo(nuevo)
-        }}
-        title="Crear un estado nuevo"
-        aria-label="Crear un estado nuevo"
-        className="rounded-md border border-line p-0.5 text-sub hover:bg-line/40 hover:text-ink disabled:opacity-50"
-      >
-        <Plus size={12} aria-hidden />
-      </button>
-    </div>
+          return
+        }
+        if (elegido !== valor) onGuardar(elegido)
+      }}
+      className={`max-w-[10rem] rounded-md border border-line px-1 py-0.5 text-[11px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 disabled:opacity-50 ${
+        valor.toUpperCase().includes('FLEXXUS') ? 'bg-sky-500/15 text-sky-400' : valor ? 'bg-emerald-500/15 text-emerald-400' : 'bg-surface2 text-sub'
+      }`}
+    >
+      <option value="">—</option>
+      {lista.map((e) => <option key={e} value={e}>{e}</option>)}
+      <option value={NUEVO_ESTADO}>+ Agregar estado…</option>
+    </select>
   )
 }
 
