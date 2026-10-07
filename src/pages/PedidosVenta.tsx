@@ -278,14 +278,41 @@ export default function PedidosVenta() {
   const colorDeMotivo = (clave: string) => colorMotivo(clave, Math.max(0, motivos.findIndex((m) => m.clave === clave)))
 
   const q = busqueda.trim().toUpperCase()
+
+  // Búsqueda por artículo (código o descripción): la hace la base sobre los
+  // renglones de todos los pedidos; desde 3 letras y después de una pausa
+  const [porArticulo, setPorArticulo] = useState<Set<string> | null>(null)
+  const [buscandoArticulo, setBuscandoArticulo] = useState(false)
+  useEffect(() => {
+    setPorArticulo(null)
+    if (!supabase || q.length < 3) {
+      setBuscandoArticulo(false)
+      return
+    }
+    let activo = true
+    setBuscandoArticulo(true)
+    const t = setTimeout(() => {
+      void supabase!.rpc('pedidos_venta_por_articulo', { q }).then(({ data, error }) => {
+        if (!activo) return
+        setBuscandoArticulo(false)
+        if (!error && Array.isArray(data)) setPorArticulo(new Set(data as string[]))
+      })
+    }, 400)
+    return () => {
+      activo = false
+      clearTimeout(t)
+    }
+  }, [q])
+
   const visibles = useMemo(() => {
     const porMotivo = fMotivo ? pedidos.filter((p) => (p.motivo || SIN_MOTIVO) === fMotivo) : pedidos
     if (!q) return porMotivo
-    return porMotivo.filter((p) =>
-      [String(p.numero ?? ''), p.descripcion, p.cliente, p.cliente_nombre, p.observacion, fechaCorta(p.fecha)]
-        .some((v) => String(v ?? '').toUpperCase().includes(q)),
+    return porMotivo.filter(
+      (p) =>
+        [String(p.numero ?? ''), p.descripcion, p.cliente, p.cliente_nombre, p.observacion, fechaCorta(p.fecha)]
+          .some((v) => String(v ?? '').toUpperCase().includes(q)) || !!porArticulo?.has(p.codigo),
     )
-  }, [pedidos, q, fMotivo])
+  }, [pedidos, q, fMotivo, porArticulo])
 
   const idx = visibles.findIndex((p) => p.codigo === sel)
   const pedido = pedidos.find((p) => p.codigo === sel) ?? null
@@ -499,10 +526,13 @@ export default function PedidosVenta() {
         <aside className={`${sel ? 'hidden lg:block' : ''} min-w-0`}>
           <div className="relative mb-2">
             <Search size={16} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sub" />
+            {buscandoArticulo && (
+              <Loader2 size={15} aria-label="Buscando en los artículos" className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-sub" />
+            )}
             <input
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
-              placeholder="Número, cliente, fecha…"
+              placeholder="Número, cliente, fecha, artículo…"
               aria-label="Buscar pedido"
               className="h-11 w-full rounded-xl border border-line bg-surface pl-9 pr-3 text-sm text-ink outline-none transition placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40"
             />
