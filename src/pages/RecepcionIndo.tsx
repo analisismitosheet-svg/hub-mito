@@ -2,13 +2,14 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import {
-  AlertTriangle, ArrowLeft, ArrowRight, Building2, Check, CheckCheck, ClipboardCheck, Clock, Download,
+  AlertTriangle, ArrowLeft, ArrowRight, Building2, CheckCheck, ClipboardCheck, Clock, Download,
   Link2, Loader2, Lock, Package, Pencil, Plus, RotateCcw, Search, Upload, X,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import NuevaRecepcionIndo from '@/components/NuevaRecepcionIndo'
+import SelectorOc from '@/components/SelectorOc'
 import { SelectBuscar } from '@/components/MultiselectFiltro'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
@@ -194,27 +195,12 @@ function CeldaOcEditable({
   onChange: (nOc: string) => void
 }) {
   const [abierto, setAbierto] = useState(false)
-  const [texto, setTexto] = useState('')
-  const [elegidas, setElegidas] = useState<string[]>([])
-  const [soloProveedor, setSoloProveedor] = useState(true)
+  const [borrador, setBorrador] = useState(valor)
   const botonRef = useRef<HTMLButtonElement>(null)
   const [caja, setCaja] = useState<{ top: number; left: number; width: number; arriba: boolean } | null>(null)
 
-  // Pedidos del proveedor de la fila: por código, o si no hay código, por nombre parecido
-  const delProveedor = useMemo(() => {
-    const cod = (proveedorCodigo ?? '').trim().toUpperCase()
-    const nom = proveedorNombre.trim().toUpperCase()
-    if (!cod && !nom) return []
-    return pedidos.filter((p) =>
-      cod ? (p.proveedor ?? '').trim().toUpperCase() === cod : nom.length >= 3 && (p.proveedor_nombre ?? '').toUpperCase().includes(nom),
-    )
-  }, [pedidos, proveedorCodigo, proveedorNombre])
-  const hayDelProveedor = delProveedor.length > 0
-
   function abrir() {
-    setElegidas(ocsDeFila(valor))
-    setTexto('')
-    setSoloProveedor(true)
+    setBorrador(valor)
     setAbierto(true)
   }
 
@@ -223,10 +209,10 @@ function CeldaOcEditable({
     const medir = () => {
       const r = botonRef.current?.getBoundingClientRect()
       if (!r) return
-      const alto = 400
+      const alto = 420
       const abajo = window.innerHeight - r.bottom
       const arriba = abajo < alto && r.top > abajo
-      const ancho = Math.max(r.width, 340)
+      const ancho = Math.max(r.width, 380)
       setCaja({
         top: arriba ? Math.max(8, r.top - 8) : r.bottom + 4,
         left: Math.max(8, Math.min(r.left, window.innerWidth - ancho - 12)),
@@ -250,28 +236,11 @@ function CeldaOcEditable({
     return () => document.removeEventListener('keydown', esc)
   }, [abierto])
 
-  const t = texto.trim().toUpperCase()
-  const base = soloProveedor && hayDelProveedor && !t ? delProveedor : pedidos
-  const filtradas = useMemo(
-    () =>
-      (t
-        ? base.filter((p) =>
-            [String(p.numero), p.proveedor ?? '', p.proveedor_nombre ?? ''].some((v) => v.toUpperCase().includes(t)),
-          )
-        : base
-      ).slice(0, 60),
-    [base, t],
-  )
-  const manual = texto.trim().replace(/\s+/g, '')
-  const puedeManual = manual !== '' && !elegidas.includes(manual) && !pedidos.some((p) => String(p.numero) === manual)
-
-  const alternar = (n: string) =>
-    setElegidas((prev) => (prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n]))
   const guardar = () => {
-    const nuevo = unirOcs(elegidas)
-    if (nuevo !== unirOcs(ocsDeFila(valor))) onChange(nuevo)
+    if (unirOcs(ocsDeFila(borrador)) !== unirOcs(ocsDeFila(valor))) onChange(unirOcs(ocsDeFila(borrador)))
     setAbierto(false)
   }
+  const cantidad = ocsDeFila(borrador).length
 
   return (
     <div className="flex items-start gap-1">
@@ -304,102 +273,21 @@ function CeldaOcEditable({
             role="dialog"
             aria-label="Órdenes de compra"
           >
-            {/* Elegidas */}
-            <div className="mb-2 flex min-h-[1.75rem] flex-wrap items-center gap-1">
-              {elegidas.length === 0 ? (
-                <span className="px-1 text-[11px] italic text-sub/70">Ninguna OC elegida</span>
-              ) : (
-                elegidas.map((n) => (
-                  <span key={n} className="inline-flex items-center gap-0.5 rounded-md bg-amber-500/15 py-0.5 pl-1.5 pr-0.5 text-xs font-semibold tabular-nums text-amber-500">
-                    {n}
-                    {!pedidos.some((p) => String(p.numero) === n) && <span className="text-[9px] font-normal text-sub">(manual)</span>}
-                    <button onClick={() => alternar(n)} className="rounded p-0.5 hover:bg-amber-500/20" aria-label={`Quitar OC ${n}`}>
-                      <X size={11} aria-hidden />
-                    </button>
-                  </span>
-                ))
-              )}
-            </div>
-
-            {/* Buscar / escribir a mano */}
-            <form
-              onSubmit={(e) => {
-                e.preventDefault()
-                // Enter: si el texto es un N° de la lista o un N° a mano, lo agrega
-                const exacta = pedidos.find((p) => String(p.numero) === manual)
-                if (exacta || puedeManual) {
-                  if (!elegidas.includes(manual)) setElegidas((prev) => [...prev, manual])
-                  setTexto('')
-                }
-              }}
-              className="flex items-center gap-1.5 border-b border-line pb-2"
-            >
-              <Search size={13} className="shrink-0 text-sub/70" aria-hidden />
-              <input
-                autoFocus
-                value={texto}
-                onChange={(e) => setTexto(e.target.value)}
-                placeholder="N° de OC o proveedor… (Enter agrega)"
-                className="w-full bg-transparent px-1 py-0.5 text-xs text-ink outline-none placeholder:text-sub/60"
-              />
-              {texto && (
-                <button type="button" onClick={() => setTexto('')} className="rounded p-0.5 text-sub hover:text-ink" aria-label="Limpiar búsqueda">
-                  <X size={12} aria-hidden />
-                </button>
-              )}
-            </form>
-            {hayDelProveedor && !t && (
-              <label className="mt-1.5 flex cursor-pointer items-center gap-1.5 px-1 text-[11px] text-sub">
-                <input type="checkbox" checked={soloProveedor} onChange={(e) => setSoloProveedor(e.target.checked)} className="h-3.5 w-3.5 accent-amber-500" />
-                Solo las de {proveedorNombre || 'este proveedor'} ({delProveedor.length})
-              </label>
-            )}
-
-            <div className="mt-1.5 max-h-60 overflow-y-auto">
-              {puedeManual && (
-                <button
-                  type="button"
-                  onClick={() => { setElegidas((prev) => [...prev, manual]); setTexto('') }}
-                  className="block w-full rounded-lg px-2 py-1.5 text-left text-xs text-brand-400 hover:bg-line/40"
-                >
-                  + Agregar «{manual}» a mano (no está en los pedidos de compra)
-                </button>
-              )}
-              {filtradas.map((p) => {
-                const n = String(p.numero)
-                const marcada = elegidas.includes(n)
-                return (
-                  <button
-                    key={p.codigo}
-                    type="button"
-                    onClick={() => alternar(n)}
-                    className={`flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left text-xs hover:bg-line/40 ${marcada ? 'bg-amber-500/10' : ''}`}
-                  >
-                    <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${marcada ? 'border-amber-500 bg-amber-500 text-white' : 'border-line2'}`}>
-                      {marcada && <Check size={11} strokeWidth={3} aria-hidden />}
-                    </span>
-                    <span className="w-14 shrink-0 font-semibold tabular-nums text-ink">{n}</span>
-                    <span className="min-w-0 flex-1 truncate text-sub">
-                      {p.proveedor_nombre || p.proveedor}
-                      {p.anulado && <span className="ml-1 text-brand-400">(anulado)</span>}
-                    </span>
-                    <span className="shrink-0 tabular-nums text-sub/70">{fmtFecha(p.fecha)}</span>
-                  </button>
-                )
-              })}
-              {filtradas.length === 0 && !puedeManual && (
-                <p className="px-2 py-1.5 text-[11px] text-sub">
-                  {pedidos.length === 0 ? 'No se pudieron leer los pedidos de compra (permiso de Pedidos de compra). Escribí el N° y agregalo a mano.' : 'No hay OC que coincidan.'}
-                </p>
-              )}
-            </div>
-
+            <SelectorOc
+              valor={valor}
+              onChange={setBorrador}
+              pedidos={pedidos}
+              proveedorNombre={proveedorNombre}
+              proveedorCodigo={proveedorCodigo}
+              autoFocus
+              alto="max-h-60"
+            />
             <div className="mt-2 flex items-center justify-end gap-1.5 border-t border-line pt-2">
               <button type="button" onClick={() => setAbierto(false)} className="rounded-lg px-2.5 py-1 text-xs text-sub hover:text-ink">
                 Cancelar
               </button>
               <button type="button" onClick={guardar} className="rounded-lg bg-amber-600 px-3 py-1 text-xs font-semibold text-white hover:bg-amber-700">
-                Guardar {elegidas.length ? `(${elegidas.length})` : ''}
+                Guardar {cantidad ? `(${cantidad})` : ''}
               </button>
             </div>
           </div>

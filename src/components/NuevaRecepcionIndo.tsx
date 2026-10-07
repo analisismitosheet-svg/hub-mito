@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Check, Loader2, Plus, Search, X } from 'lucide-react'
-import { ocsDeFila, pedidosCompraParaOc, unirOcs, type PedidoCompraOc } from '@/lib/ocPedidosCompra'
+import { Loader2, Plus, X } from 'lucide-react'
+import { pedidosCompraParaOc, type PedidoCompraOc } from '@/lib/ocPedidosCompra'
+import SelectorOc from '@/components/SelectorOc'
 import { supabase } from '@/lib/supabase'
 import { claveRecepcion, normalizar, type RecepcionIndo } from '@/lib/recepcionIndo'
 import type { Proveedor } from '@/lib/proveedoresIndo'
@@ -42,125 +43,6 @@ const OBLIGATORIOS: (keyof Form)[] = [
   'nGuia', 'transporte', 'bultos', 'deposito', 'proveedor', 'nRemito', 'fechaRemito', 'nOc',
   'nFactura', 'fechaFactura', 'fechaIngreso', 'estado', 'iva',
 ]
-
-/**
- * N° OC: lista de las órdenes de compra cargadas (pedidos de compra de Dragonfish) para buscar y
- * tildar una o varias; si una no aparece, se agrega el número a mano. Se guarda como el Excel: "15183/15347".
- */
-function SelectorOc({
-  valor, onChange, pedidos, proveedorNombre, proveedorCodigo, invalido,
-}: {
-  valor: string
-  onChange: (nOc: string) => void
-  pedidos: PedidoCompraOc[]
-  proveedorNombre: string
-  proveedorCodigo: string | null
-  invalido: boolean
-}) {
-  const [texto, setTexto] = useState('')
-  const [soloProveedor, setSoloProveedor] = useState(true)
-  const elegidas = ocsDeFila(valor)
-  const poner = (lista: string[]) => onChange(unirOcs(lista))
-  const alternar = (n: string) => poner(elegidas.includes(n) ? elegidas.filter((x) => x !== n) : [...elegidas, n])
-
-  // OC del proveedor elegido: por código del catálogo o, si no hay, por nombre parecido
-  const delProveedor = useMemo(() => {
-    const cod = (proveedorCodigo ?? '').trim().toUpperCase()
-    const nom = compacto(proveedorNombre)
-    if (!cod && nom.length < 3) return []
-    return pedidos.filter((p) =>
-      cod ? (p.proveedor ?? '').trim().toUpperCase() === cod : compacto(p.proveedor_nombre ?? '').includes(nom),
-    )
-  }, [pedidos, proveedorCodigo, proveedorNombre])
-
-  const t = texto.trim().toUpperCase()
-  const base = soloProveedor && delProveedor.length && !t ? delProveedor : pedidos
-  const visibles = (t
-    ? base.filter((p) => [String(p.numero), p.proveedor ?? '', p.proveedor_nombre ?? ''].some((v) => v.toUpperCase().includes(t)))
-    : base
-  ).slice(0, 80)
-  const manual = texto.trim().replace(/\s+/g, '')
-  const puedeManual = manual !== '' && !elegidas.includes(manual) && !pedidos.some((p) => String(p.numero) === manual)
-
-  return (
-    <div className={`rounded-xl border bg-surface2 p-2 ${invalido ? 'border-brand-500' : 'border-line'}`}>
-      {/* Elegidas */}
-      <div className="mb-1.5 flex min-h-[1.6rem] flex-wrap items-center gap-1">
-        {elegidas.length === 0 ? (
-          <span className="px-1 text-xs italic text-sub/70">Ninguna OC elegida: tildalas abajo</span>
-        ) : (
-          elegidas.map((n) => (
-            <span key={n} className="inline-flex items-center gap-0.5 rounded-md bg-amber-500/15 py-0.5 pl-1.5 pr-0.5 text-xs font-semibold tabular-nums text-amber-500">
-              {n}
-              {!pedidos.some((p) => String(p.numero) === n) && <span className="text-[9px] font-normal text-sub">(manual)</span>}
-              <button type="button" onClick={() => alternar(n)} className="rounded p-0.5 hover:bg-amber-500/20" aria-label={`Quitar OC ${n}`}>
-                <X size={11} aria-hidden />
-              </button>
-            </span>
-          ))
-        )}
-      </div>
-      {/* Buscar / agregar a mano */}
-      <div className="flex items-center gap-1.5 border-b border-line pb-1.5">
-        <Search size={13} className="shrink-0 text-sub/70" aria-hidden />
-        <input
-          value={texto}
-          onChange={(e) => setTexto(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key !== 'Enter') return
-            e.preventDefault() // no enviar el formulario
-            if (pedidos.some((p) => String(p.numero) === manual) || puedeManual) {
-              if (!elegidas.includes(manual)) poner([...elegidas, manual])
-              setTexto('')
-            }
-          }}
-          placeholder="Buscar por N° de OC o proveedor… (Enter agrega)"
-          className="w-full bg-transparent px-1 py-0.5 text-xs text-ink outline-none placeholder:text-sub/60"
-        />
-      </div>
-      {delProveedor.length > 0 && !t && (
-        <label className="mt-1 flex cursor-pointer items-center gap-1.5 px-1 text-[11px] text-sub">
-          <input type="checkbox" checked={soloProveedor} onChange={(e) => setSoloProveedor(e.target.checked)} className="h-3.5 w-3.5 accent-amber-500" />
-          Solo las de {proveedorNombre} ({delProveedor.length})
-        </label>
-      )}
-      <div className="mt-1 max-h-44 overflow-y-auto">
-        {puedeManual && (
-          <button type="button" onClick={() => { poner([...elegidas, manual]); setTexto('') }} className="block w-full rounded-lg px-2 py-1 text-left text-xs text-brand-400 hover:bg-line/40">
-            + Agregar «{manual}» a mano (no está en los pedidos de compra)
-          </button>
-        )}
-        {visibles.map((p) => {
-          const n = String(p.numero)
-          const marcada = elegidas.includes(n)
-          return (
-            <button
-              key={p.codigo}
-              type="button"
-              onClick={() => alternar(n)}
-              className={`flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left text-xs hover:bg-line/40 ${marcada ? 'bg-amber-500/10' : ''}`}
-            >
-              <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${marcada ? 'border-amber-500 bg-amber-500 text-white' : 'border-line2'}`}>
-                {marcada && <Check size={11} strokeWidth={3} aria-hidden />}
-              </span>
-              <span className="w-14 shrink-0 font-semibold tabular-nums text-ink">{n}</span>
-              <span className="min-w-0 flex-1 truncate text-sub">
-                {p.proveedor_nombre || p.proveedor}
-                {p.anulado && <span className="ml-1 text-brand-400">(anulado)</span>}
-              </span>
-              <span className="shrink-0 tabular-nums text-sub/70">{p.fecha ? p.fecha.split('-').reverse().join('/') : ''}</span>
-            </button>
-          )
-        })}
-        {visibles.length === 0 && !puedeManual && (
-          <p className="px-2 py-1.5 text-[11px] text-sub">
-            {pedidos.length === 0 ? 'Cargando las órdenes de compra… (si no aparecen, falta el permiso de Pedidos de compra: escribí el N° y Enter)' : 'No hay OC que coincidan.'}
-          </p>
-        )}
-      </div>
-    </div>
-  )
-}
 
 export default function NuevaRecepcionIndo({
   depositos, transportes, estados, proveedores, onCerrar, onGuardado,
