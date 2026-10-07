@@ -38,10 +38,11 @@ interface Form {
 const hoy = () => new Date().toLocaleDateString('sv-SE')
 const compacto = (v: string) => normalizar(v).replace(/[^A-Z0-9]/g, '')
 
-// Opcionales: el link de la factura y el detalle. Todo lo demás es obligatorio.
-const OBLIGATORIOS: (keyof Form)[] = [
+// Ningún campo es obligatorio: lo que falte se completa después en la tabla
+// (el filtro "Con errores" muestra qué le falta a cada registro).
+const CON_DATOS: (keyof Form)[] = [
   'nGuia', 'transporte', 'bultos', 'deposito', 'proveedor', 'nRemito', 'fechaRemito', 'nOc',
-  'nFactura', 'fechaFactura', 'fechaIngreso', 'estado', 'iva',
+  'nFactura', 'fechaFactura', 'facturaLink', 'estado', 'iva', 'detalle',
 ]
 
 export default function NuevaRecepcionIndo({
@@ -61,14 +62,12 @@ export default function NuevaRecepcionIndo({
   })
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [intento, setIntento] = useState(false)
   // Órdenes de compra cargadas (una vez por sesión) para el selector de N° OC
   const [pedidosOc, setPedidosOc] = useState<PedidoCompraOc[]>([])
   useEffect(() => { void pedidosCompraParaOc().then(setPedidosOc) }, [])
 
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((prev) => ({ ...prev, [k]: v }))
-  const falta = (k: keyof Form) => OBLIGATORIOS.includes(k) && String(f[k]).trim() === ''
-  const faltantes = OBLIGATORIOS.filter(falta)
+  const vacio = CON_DATOS.every((k) => String(f[k]).trim() === '')
 
   // Proveedor del catálogo (por nombre, sin puntos ni acentos): da el código
   const provCatalogo = useMemo(
@@ -78,13 +77,13 @@ export default function NuevaRecepcionIndo({
 
   async function guardar(e: FormEvent) {
     e.preventDefault()
-    setIntento(true)
     setError(null)
-    if (faltantes.length || !supabase) return
-    const bultos = Number(f.bultos)
-    const iva = Number(f.iva.replace(/\./g, '').replace(',', '.'))
+    if (!supabase) return
+    if (vacio) return setError('Cargá al menos un dato (guía, proveedor, remito…).')
+    const bultos = f.bultos.trim() === '' ? 0 : Number(f.bultos)
+    const iva = f.iva.trim() === '' ? null : Number(f.iva.replace(/\./g, '').replace(',', '.'))
     if (!Number.isFinite(bultos) || bultos < 0) return setError('Bultos tiene que ser un número.')
-    if (!Number.isFinite(iva)) return setError('IVA tiene que ser un número (ej. 125000,50).')
+    if (iva !== null && !Number.isFinite(iva)) return setError('IVA tiene que ser un número (ej. 125000,50).')
 
     const base: Omit<RecepcionIndo, 'clave'> = {
       nGuia: f.nGuia.trim(),
@@ -123,14 +122,12 @@ export default function NuevaRecepcionIndo({
   const input = (k: Campo, etiqueta: string, props: React.InputHTMLAttributes<HTMLInputElement> = {}, ancho = '') => (
     <label className={`block ${ancho}`}>
       <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-sub">
-        {etiqueta}{OBLIGATORIOS.includes(k) ? <span className="text-brand-400"> *</span> : <span className="normal-case text-sub/60"> (opcional)</span>}
+        {etiqueta}
       </span>
       <input
         value={String(f[k] ?? '')}
         onChange={(e) => set(k, e.target.value as never)}
-        className={`h-10 w-full rounded-xl border bg-surface2 px-3 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 ${
-          intento && falta(k) ? 'border-brand-500' : 'border-line'
-        }`}
+        className={`h-10 w-full rounded-xl border bg-surface2 px-3 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 border-line`}
         {...props}
       />
     </label>
@@ -155,10 +152,10 @@ export default function NuevaRecepcionIndo({
           {input('nGuia', 'N° guía', { placeholder: '88-5408', autoFocus: true })}
           {input('transporte', 'Transporte', { list: 'nri-transportes' })}
           <label className="block">
-            <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-sub">Bultos<span className="text-brand-400"> *</span></span>
+            <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-sub">Bultos</span>
             <input
               type="number" min={0} inputMode="numeric" value={f.bultos} onChange={(e) => set('bultos', e.target.value)}
-              className={`h-10 w-full rounded-xl border bg-surface2 px-3 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 ${intento && falta('bultos') ? 'border-brand-500' : 'border-line'}`}
+              className={`h-10 w-full rounded-xl border bg-surface2 px-3 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 border-line`}
             />
           </label>
 
@@ -176,7 +173,7 @@ export default function NuevaRecepcionIndo({
 
           <div className="sm:col-span-2">
             <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-sub">
-              N° OC<span className="text-brand-400"> *</span> <span className="normal-case text-sub/60">(una o varias)</span>
+              N° OC <span className="normal-case text-sub/60">(una o varias)</span>
             </span>
             <SelectorOc
               valor={f.nOc}
@@ -184,7 +181,6 @@ export default function NuevaRecepcionIndo({
               pedidos={pedidosOc}
               proveedorNombre={provCatalogo?.nombre ?? f.proveedor}
               proveedorCodigo={provCatalogo?.codigo ?? null}
-              invalido={intento && falta('nOc')}
             />
           </div>
           <label className="flex h-10 cursor-pointer items-center gap-2 self-end text-sm text-sub">
@@ -195,10 +191,10 @@ export default function NuevaRecepcionIndo({
           {input('nFactura', 'N° factura')}
           {input('fechaFactura', 'Fecha factura', { type: 'date' })}
           <label className="block">
-            <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-sub">IVA ($)<span className="text-brand-400"> *</span></span>
+            <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-sub">IVA ($)</span>
             <input
               inputMode="decimal" value={f.iva} onChange={(e) => set('iva', e.target.value)} placeholder="125000,50"
-              className={`h-10 w-full rounded-xl border bg-surface2 px-3 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 ${intento && falta('iva') ? 'border-brand-500' : 'border-line'}`}
+              className={`h-10 w-full rounded-xl border bg-surface2 px-3 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 border-line`}
             />
           </label>
 
@@ -208,11 +204,6 @@ export default function NuevaRecepcionIndo({
           <div className="sm:col-span-3">{input('detalle', 'Detalle')}</div>
         </div>
 
-        {intento && faltantes.length > 0 && (
-          <p className="mt-3 rounded-xl border border-brand-600/30 bg-brand-600/10 p-2.5 text-sm text-brand-400">
-            Completá los campos marcados en rojo ({faltantes.length}).
-          </p>
-        )}
         {error && <p role="alert" className="mt-3 rounded-xl border border-brand-600/30 bg-brand-600/10 p-2.5 text-sm text-brand-400">{error}</p>}
 
         <div className="mt-4 flex justify-end gap-2">
