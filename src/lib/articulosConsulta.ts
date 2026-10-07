@@ -50,8 +50,10 @@ export interface Articulo {
   nombre: string
   material: string
   grupo: string
-  /** null si el SQL no trajo stock */
+  /** stock FÍSICO en MITO (columna STOCK_FISICO de la vista); null si el SQL no lo trajo */
   stock: number | null
+  /** unidades en pedido (columna EN_PEDIDO); null si el SQL no la trajo */
+  pedido: number | null
   precio: number | null
   ubicaciones: string[]
 }
@@ -64,7 +66,7 @@ export interface ResultadoConsulta {
   filtradoEnCliente: boolean
 }
 
-type Campo = 'idArticulo' | 'colorCodigo' | 'color' | 'talleCodigo' | 'talle' | 'nombre' | 'material' | 'grupo' | 'stock' | 'precio'
+type Campo = 'idArticulo' | 'colorCodigo' | 'color' | 'talleCodigo' | 'talle' | 'nombre' | 'material' | 'grupo' | 'stock' | 'pedido' | 'precio'
 
 /**
  * Nombre de columna que se acepta para cada campo, del más exacto al más
@@ -85,11 +87,13 @@ const ALIAS: Record<Campo, string[]> = {
   ],
   material: ['material', 'idmaterial', 'descripcionmaterial', 'nombrematerial', 'mater'],
   grupo: ['grupo', 'idgrupo', 'categoria', 'descripciongrupo', 'nombregrupo', 'rubro'],
-  stock: ['stockmito', 'stock', 'stockdisponible', 'existencia', 'cantidad', 'stocktotal', 'stock_almacen'],
+  // El stock de MITO que se muestra es el FÍSICO (STOCK_FISICO); STOCK_MITO queda solo para vistas viejas
+  stock: ['stockfisico', 'stockmito', 'stock', 'stockdisponible', 'existencia', 'cantidad', 'stocktotal', 'stock_almacen'],
+  pedido: ['enpedido', 'pedido', 'stockpedido'],
   precio: ['precio', 'preciopublico', 'preciovigente', 'precio_unitario', 'precioventa', 'neto', 'preciodirecto'],
 }
 
-const ORDEN: Campo[] = ['idArticulo', 'colorCodigo', 'color', 'talleCodigo', 'talle', 'nombre', 'material', 'grupo', 'stock', 'precio']
+const ORDEN: Campo[] = ['idArticulo', 'colorCodigo', 'color', 'talleCodigo', 'talle', 'nombre', 'material', 'grupo', 'stock', 'pedido', 'precio']
 
 /** Descripción "adicional" de las vistas viejas: se suma al nombre del modelo. */
 const ALIAS_ADIC = ['artdesadic', 'descripcioncomplet', 'descripcionadicional']
@@ -263,7 +267,7 @@ function compararTalles(a: Articulo, b: Articulo): number {
 }
 
 /** Nombres de columna que la pantalla sabe leer (ver ALIAS). */
-const COLUMNAS_ESPERADAS = 'ID_ARTICULO, COLOR, TALLE, NOMBRE_COMPLETO, MATERIAL, GRUPO, STOCK_MITO, PRECIO'
+const COLUMNAS_ESPERADAS = 'ID_ARTICULO, COLOR, TALLE, NOMBRE_COMPLETO, MATERIAL, GRUPO, STOCK_FISICO, EN_PEDIDO, PRECIO'
 
 /** Arma las filas ya con el complemento de Supabase (descripción, ubicación) y las ordena. */
 async function armar(crudas: FilaSql[], q: string): Promise<Articulo[]> {
@@ -293,6 +297,7 @@ async function armar(crudas: FilaSql[], q: string): Promise<Articulo[]> {
       material: txt(val('material')),
       grupo: txt(val('grupo')),
       stock: num(val('stock')),
+      pedido: num(val('pedido')),
       precio: num(val('precio')),
       ubicaciones: [],
     })
@@ -389,6 +394,7 @@ export function filasParaExcel(filas: Articulo[]): Record<string, string | numbe
     Material: f.material,
     Grupo: f.grupo,
     'Stock en MITO': f.stock ?? '',
+    Pedido: f.pedido ?? '',
     Ubicación: f.ubicaciones.join(' · '),
     Precio: f.precio ?? '',
   }))

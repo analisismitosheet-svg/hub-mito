@@ -317,13 +317,13 @@ export default function ConsultaArticulos() {
               <table className="w-full min-w-[1000px] text-left text-sm">
                 <thead className="sticky top-0 z-10">
                   <tr>
-                    {['ID artículo', 'Color', 'Talle', 'Nombre completo', 'Material', 'Grupo', 'Stock en MITO', 'Ubicación', 'Precio'].map(
+                    {['ID artículo', 'Color', 'Talle', 'Nombre completo', 'Material', 'Grupo', 'Stock en MITO', 'Pedido', 'Ubicación', 'Precio'].map(
                       (c) => (
                         <th
                           key={c}
                           scope="col"
                           className={`whitespace-nowrap border-b border-line bg-surface2 px-3 py-2.5 text-xs font-semibold text-sub ${
-                            c === 'Stock en MITO' || c === 'Precio' ? 'text-right' : ''
+                            c === 'Stock en MITO' || c === 'Pedido' || c === 'Precio' ? 'text-right' : ''
                           }`}
                         >
                           {c}
@@ -361,6 +361,13 @@ export default function ConsultaArticulos() {
                           >
                             {fmtN(f.stock)}
                           </span>
+                        )}
+                      </td>
+                      <td className="border-b border-line/50 px-3 py-2 text-right align-top">
+                        {f.pedido ? (
+                          <span className="font-semibold tabular-nums text-amber-500">{fmtN(f.pedido)}</span>
+                        ) : (
+                          <span className="text-sub">{f.pedido === null ? '—' : '0'}</span>
                         )}
                       </td>
                       <td className="border-b border-line/50 px-3 py-2 align-top">
