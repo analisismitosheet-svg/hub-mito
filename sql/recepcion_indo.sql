@@ -490,3 +490,10 @@ $$;
 DROP TRIGGER IF EXISTS recepcion_indo_bloqueo ON public.recepcion_indo;
 CREATE TRIGGER recepcion_indo_bloqueo BEFORE UPDATE ON public.recepcion_indo
   FOR EACH ROW EXECUTE FUNCTION private.recepcion_indo_bloqueo();
+
+-- 2026-10-07 (cambio de regla, pedido del usuario): se cierra cuando tiene fecha de control,
+-- no cuando están todas las columnas completas.
+CREATE OR REPLACE FUNCTION private.recepcion_indo_completa(r public.recepcion_indo)
+RETURNS boolean LANGUAGE sql IMMUTABLE AS $$
+  SELECT r.fecha_controlada IS NOT NULL
+$$;

@@ -411,15 +411,12 @@ function CeldaOcEditable({
 }
 
 /**
- * Recepción completa: todas las columnas cargadas (el link de Drive y el detalle son opcionales).
- * Completa = cerrada: solo se puede cambiar el detalle. Misma regla que
- * private.recepcion_indo_completa en la base, que además lo hace cumplir.
+ * Recepción cerrada: tiene fecha de control. Desde ahí solo se puede cambiar el detalle
+ * (los administradores pueden todo). Misma regla que private.recepcion_indo_completa en la
+ * base, que además la hace cumplir.
  */
 function completa(f: Fila): boolean {
-  const lleno = (v: string | null | undefined) => String(v ?? '').trim() !== ''
-  return lleno(f.n_guia) && lleno(f.transporte) && Number(f.bultos) > 0 && lleno(f.deposito) && lleno(f.proveedor)
-    && lleno(f.n_remito) && !!f.fecha_remito && lleno(f.n_oc) && lleno(f.n_factura) && !!f.fecha_factura
-    && !!f.fecha_ingreso && lleno(f.estado) && f.iva != null && !!f.fecha_controlada
+  return !!f.fecha_controlada
 }
 
 /* ------------------------------------------------------------------ */
@@ -1217,8 +1214,8 @@ export default function RecepcionIndo() {
                 <tr key={f.clave} className={`border-b border-line/60 align-top ${controlada ? 'bg-emerald-500/5' : ''}`}>
                   <td className="px-2.5 py-2">
                     {cerrada && (
-                      <div className="mb-0.5 inline-flex items-center gap-1 rounded bg-emerald-500/10 px-1 text-[9px] font-medium uppercase tracking-wide text-emerald-400" title="Registro completo: solo se puede cambiar el detalle">
-                        <Lock size={9} aria-hidden /> completo
+                      <div className="mb-0.5 inline-flex items-center gap-1 rounded bg-emerald-500/10 px-1 text-[9px] font-medium uppercase tracking-wide text-emerald-400" title="Controlado: solo se puede cambiar el detalle">
+                        <Lock size={9} aria-hidden /> controlado
                       </div>
                     )}
                     <CeldaEditable fijo={cerrada} valor={f.n_guia} saving={saving} onGuardar={(v) => editarCampo(f, 'n_guia', v)} clase="font-medium text-ink" titulo="N° de guía" />
