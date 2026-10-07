@@ -32,7 +32,9 @@ CREATE OR ALTER VIEW dbo.vw_STOCK_ARTICULO_MITO
 AS
 SELECT
     ID_ARTICULO,
-    CAST(SUM(STOCK_MITO) AS INT) AS STOCK_MITO
+    -- Desde 2026-10-07 el stock de MITO que muestra el hub es el FÍSICO (STOCK_FISICO).
+    -- La columna conserva el nombre STOCK_MITO para no cambiar el hub ni la config del puente.
+    CAST(SUM(STOCK_FISICO) AS INT) AS STOCK_MITO
 FROM dbo.vw_ARTICULOS_MITO
 WHERE NULLIF(LTRIM(RTRIM(ID_ARTICULO)), '') IS NOT NULL
 GROUP BY ID_ARTICULO;
