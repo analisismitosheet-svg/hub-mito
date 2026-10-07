@@ -497,3 +497,32 @@ CREATE OR REPLACE FUNCTION private.recepcion_indo_completa(r public.recepcion_in
 RETURNS boolean LANGUAGE sql IMMUTABLE AS $$
   SELECT r.fecha_controlada IS NOT NULL
 $$;
+
+-- 2026-10-07: el catálogo de proveedores lo actualiza solo el puente SQL cada 1 hora
+-- (puente-sql/scripts/sync-pedidos-compra.js lee DRAGONFISH_INDOD.dbo.PROVEEDORES_INDO). Solo agrega/actualiza.
+CREATE OR REPLACE FUNCTION public.recepcion_indo_proveedores_sync(p_token text, p_filas jsonb)
+RETURNS integer
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE v_n integer;
+BEGIN
+  IF NOT private.clave_sync_ok('puente', p_token) THEN
+    RAISE EXCEPTION 'Clave de sincronización inválida' USING ERRCODE = '28000';
+  END IF;
+  IF jsonb_typeof(p_filas) <> 'array' OR jsonb_array_length(p_filas) = 0 OR jsonb_array_length(p_filas) > 20000 THEN
+    RAISE EXCEPTION 'Catálogo inválido' USING ERRCODE = '22023';
+  END IF;
+  INSERT INTO public.recepcion_indo_proveedores AS p (codigo, nombre, actualizado_at)
+  SELECT DISTINCT ON (trim(f->>'codigo')) trim(f->>'codigo'), trim(f->>'nombre'), now()
+  FROM jsonb_array_elements(p_filas) f
+  WHERE coalesce(trim(f->>'codigo'), '') <> '' AND coalesce(trim(f->>'nombre'), '') <> ''
+  ON CONFLICT (codigo) DO UPDATE
+    SET nombre = excluded.nombre, actualizado_at = now()
+    WHERE p.nombre IS DISTINCT FROM excluded.nombre;
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  RETURN v_n;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.recepcion_indo_proveedores_sync(text, jsonb) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.recepcion_indo_proveedores_sync(text, jsonb) TO anon, authenticated;

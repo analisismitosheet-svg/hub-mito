@@ -226,6 +226,28 @@ async function main() {
     anotar(`Listado de OC: ERROR ${err instanceof Error ? err.message : String(err)}`)
   }
 
+  // Catálogo de proveedores de Recepción INDO (DRAGONFISH_INDOD.dbo.PROVEEDORES_INDO), por el puente
+  // de esta PC. Reemplaza al botón "Catálogo" que había en la pantalla. Solo agrega/actualiza.
+  try {
+    const r = await fetch(`http://127.0.0.1:${cfg('PUENTE_PORT') || 3128}/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Puente-Token': token },
+      body: JSON.stringify({ vista: 'DRAGONFISH_INDOD.dbo.PROVEEDORES_INDO', top: 20000 }),
+    })
+    const provs = await r.json()
+    if (!r.ok || !Array.isArray(provs)) throw new Error(provs?.error ?? `el puente respondió ${r.status}`)
+    const filasProv = provs
+      .map((f) => {
+        const k = Object.fromEntries(Object.entries(f).map(([c, v]) => [c.toLowerCase(), v]))
+        return { codigo: txt(k.codigo), nombre: txt(k.nombre) }
+      })
+      .filter((p) => p.codigo && p.nombre)
+    const n = await rpc('recepcion_indo_proveedores_sync', { p_token: token, p_filas: filasProv })
+    anotar(`Catálogo de proveedores INDO: ${filasProv.length} leídos, ${n} nuevos o con nombre cambiado`)
+  } catch (err) {
+    anotar(`Catálogo de proveedores INDO: ERROR ${err instanceof Error ? err.message : String(err)}`)
+  }
+
   // Después, las cancelaciones (DWH.dbo.vw_FACT_CANCELADOS): si fallan, los pedidos ya quedaron copiados
   try {
     await require('./sync-cancelaciones').sincronizarCancelaciones()

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import {
   AlertTriangle, ArrowLeft, ArrowRight, Building2, CheckCheck, ClipboardCheck, Clock, Download,
-  Link2, Loader2, Lock, Package, Pencil, Plus, RotateCcw, Search, Upload, X,
+  Link2, Loader2, Lock, Package, Pencil, Plus, Search, Upload, X,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -16,7 +16,7 @@ import { useAuth } from '@/context/AuthContext'
 import { leerRecepcionIndo, normalizar } from '@/lib/recepcionIndo'
 import { numerosPedidoCompra, ocsDeFila, pedidosCompraParaOc, unirOcs, type PedidoCompraOc } from '@/lib/ocPedidosCompra'
 import {
-  cargarProveedores, opcionesProveedor, refrescarDesdeSql, type Proveedor,
+  cargarProveedores, opcionesProveedor, type Proveedor,
 } from '@/lib/proveedoresIndo'
 
 /* ------------------------------------------------------------------ */
@@ -824,23 +824,6 @@ export default function RecepcionIndo() {
     }
   }
 
-  async function actualizarCatalogo() {
-    setMsg(null)
-    setImportando('Actualizando el catálogo de proveedores…')
-    const r = await refrescarDesdeSql()
-    setImportando(null)
-    if (r.error) { setMsg({ ok: false, texto: `No se pudo actualizar: ${r.error}` }); return }
-    const total = r.total ?? 0
-    const corta = total > r.cantidad
-    setCatalogo(await cargarProveedores(true))
-    setMsg({
-      ok: true,
-      texto: corta
-        ? `Se guardaron ${n0.format(r.cantidad)} proveedores, pero la vista trae ${n0.format(total)}: subí el tope de filas a ${n0.format(total)} en Configuraciones > Conexión SQL para bajarlos todos.`
-        : `${n0.format(r.cantidad)} proveedores actualizados desde el SQL Server.`,
-    })
-  }
-
   /* ---- Exportar ---- */
   async function exportar() {
     setMsg(null)
@@ -923,29 +906,27 @@ export default function RecepcionIndo() {
           >
             <Plus size={15} aria-hidden /> Nuevo registro
           </button>
-          <button
-            onClick={() => archivoRef.current?.click()}
-            disabled={!!importando}
-            className="btn-press inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
-          >
-            {importando ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Upload size={15} aria-hidden />}
-            {importando ?? 'Subir Excel'}
-          </button>
-          <button
-            onClick={exportar}
-            disabled={!filas.length}
-            className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface2 px-3 py-1.5 text-sm font-medium text-ink hover:bg-line/40 disabled:opacity-50"
-          >
-            <Download size={15} aria-hidden /> Exportar
-          </button>
-          <button
-            onClick={actualizarCatalogo}
-            disabled={!!importando}
-            title="Relee DRAGONFISH_INDOD.dbo.PROVEEDORES_INDO y guarda el catálogo"
-            className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface2 px-3 py-1.5 text-sm font-medium text-ink hover:bg-line/40 disabled:opacity-50"
-          >
-            <RotateCcw size={15} aria-hidden /> Catalogo
-          </button>
+          {/* Importar y exportar el Excel: solo administradores. El catálogo de proveedores se
+              actualiza solo cada 1 hora (puente-sql/scripts/sync-pedidos-compra.js). */}
+          {isAdmin && (
+            <>
+              <button
+                onClick={() => archivoRef.current?.click()}
+                disabled={!!importando}
+                className="btn-press inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+              >
+                {importando ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Upload size={15} aria-hidden />}
+                {importando ?? 'Subir Excel'}
+              </button>
+              <button
+                onClick={exportar}
+                disabled={!filas.length}
+                className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface2 px-3 py-1.5 text-sm font-medium text-ink hover:bg-line/40 disabled:opacity-50"
+              >
+                <Download size={15} aria-hidden /> Exportar
+              </button>
+            </>
+          )}
         </div>
       </header>
 
