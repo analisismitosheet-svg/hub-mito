@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { COLUMNAS_ARMADO, PRIORIDADES, nroDePedido, ordenArmados, type Armado, type PrioridadArmado } from '@/lib/armados'
-import { notificarArmado, sonarArmado } from '@/lib/alarma'
+import { notificarArmado, prepararAudio, sonarArmado } from '@/lib/alarma'
 
 interface Notificacion {
   id: string
@@ -59,6 +59,9 @@ export default function CampanaNotificaciones() {
    * El sonido va acá y no en Mi repo, así suena aunque estés en otra pantalla
    * (y sólo una vez por tarea nueva, sin importar cuántas haya activas).
    */
+  // El audio del celular arranca trabado hasta el primer toque: se destraba ahí
+  useEffect(() => { if (verArmados) prepararAudio() }, [verArmados])
+
   const [armados, setArmados] = useState<Armado[]>([])
   const [avisoArmados, setAvisoArmados] = useState(false)
   const vistosRef = useRef<Set<string> | null>(null)

@@ -31,6 +31,34 @@ function contexto(): AudioContext | null {
 }
 
 /**
+ * Los celulares arrancan el audio "en pausa" hasta que la persona toca la pantalla:
+ * si el primer pitido llega sin ese toque, no suena nada. Esto lo destraba en el
+ * primer toque (y cada vez que la app vuelve al frente), con un sonido mudo.
+ */
+let escuchando = false
+export function prepararAudio(): void {
+  if (escuchando || typeof window === 'undefined') return
+  escuchando = true
+  const destrabar = () => {
+    const ac = contexto()
+    if (!ac) return
+    try {
+      const b = ac.createBuffer(1, 1, 22050)
+      const s = ac.createBufferSource()
+      s.buffer = b
+      s.connect(ac.destination)
+      s.start(0)
+    } catch {
+      /* nada */
+    }
+  }
+  for (const ev of ['pointerdown', 'touchstart', 'keydown']) window.addEventListener(ev, destrabar, { passive: true })
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && ctx?.state === 'suspended') void ctx.resume()
+  })
+}
+
+/**
  * Suena el celular: hace sonar `n` pitidos (según prioridad) y vibra.
  * Importa el estado de la pestaña: si la app está en primer plano suena igual
  * (Web Audio), y si está en segundo plano además tira la notificación del

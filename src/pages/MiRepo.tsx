@@ -8,6 +8,7 @@ import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import ScannerCamara from '@/components/ScannerCamara'
 import ArmadoPedido from '@/components/ArmadoPedido'
+import AvisosCelular from '@/components/AvisosCelular'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { normalizaCodigo } from '@/lib/loginEmpleado'
@@ -940,6 +941,9 @@ export default function MiRepo() {
           </div>
         </div>
       )}
+
+      {/* Avisos push: que el celular suene aunque esté bloqueado */}
+      {!asignacionSel && <AvisosCelular />}
 
       {avisoArmado && (
         <p

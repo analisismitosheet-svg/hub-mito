@@ -9,3 +9,10 @@ Mayorista pide armar un pedido de venta; el piso lo toma y lo arma en Mi repo.
 - Tests: `scripts/test-armados.sql`, `scripts/test-armados-rls.sql`. Mockups `mockups/pedir-armado.html`, `mockups/mi-repo.html`.
 
 Ver [[Repos Mayorista y Mi repo]], [[Pedidos compra, venta y cancelaciones]].
+
+## Avisos push (suena con el celular bloqueado)
+- `sql/push_suscripciones.sql`: tabla `push_suscripciones` (un celular por fila), RPC `push_suscribir` / `push_desuscribir` (legajos `@empleados.hub-mito.app` o `mayorista.repos_piso`), columna `mayorista_armados.push_at`.
+- `api/push-armado.ts` (Vercel, `web-push`): GET da la clave pública; POST (lo llama PedidosVenta después de `pedir_armado`, `avisarArmados()`) manda el aviso de los armados no avisados y borra suscripciones vencidas. Env: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`.
+- `public/push-sw.js` (importado por el SW de la PWA vía `workbox.importScripts`): muestra la notificación con vibración y abre Mi repo al tocarla.
+- `src/lib/push.ts` + `src/components/AvisosCelular.tsx`: cartel «Activar avisos» en Mi repo (cada celular lo toca una vez). iPhone: solo con la app instalada en la pantalla de inicio.
+- `alarma.ts` `prepararAudio()`: destraba el audio en el primer toque (sin eso el pitido dentro de la app no sonaba).

@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase'
 import { descripcionesMaestro } from '@/lib/descripcionArticulos'
 import { imprimirPedido } from '@/lib/imprimirPedido'
 import { cargarStockSku, stockSkuDe, stockArticuloDe, type StockSku } from '@/lib/stockSku'
+import { avisarArmados } from '@/lib/push'
 import {
   COLUMNAS_ARMADO, PRIORIDADES, avanceDeArmados,
   type Armado, type AvanceArmado, type PrioridadArmado,
@@ -260,6 +261,8 @@ export default function PedidosVenta() {
       })
       if (error) throw new Error(error.message)
       const n = typeof data === 'number' ? data : 0
+      // Aviso push a los celulares de los legajos (suena aunque estén bloqueados)
+      if (n > 0) void avisarArmados()
       const descartados = pedirA.length - n
       setAvisoArmado(
         n > 0
