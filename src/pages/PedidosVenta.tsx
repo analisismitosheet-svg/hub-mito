@@ -812,8 +812,9 @@ export default function PedidosVenta() {
                       >
                         <span className="min-w-0 flex-1">
                           <span className="flex flex-wrap items-center gap-1.5">
-                            <span className={`font-display text-sm font-bold tabular-nums ${activo ? 'text-amber-500' : 'text-ink'}`}>
-                              N° {p.numero ?? '—'}
+                            {/* Arriba y grande el cliente; el N° de pedido va abajo */}
+                            <span className={`min-w-0 max-w-full truncate font-display text-[15px] font-bold leading-tight ${activo ? 'text-amber-500' : 'text-ink'}`}>
+                              {p.cliente_nombre || p.cliente}
                             </span>
                             {p.anulado && (
                               <span className="rounded-md bg-brand-600/15 px-1.5 py-0.5 text-[10px] font-semibold text-brand-400">ANULADO</span>
@@ -829,7 +830,7 @@ export default function PedidosVenta() {
                               </span>
                             )}
                           </span>
-                          <span className="block truncate text-xs font-medium text-ink/90">{p.cliente_nombre || p.cliente}</span>
+                          <span className="block text-xs font-semibold tabular-nums text-sub">N° {p.numero ?? '—'}</span>
                           {/* Quién lo aceptó / lo hizo (armado o repo diaria) */}
                           {(enCurso || terminado) && arm?.aceptado_nombre && (
                             <span className="block truncate text-[11px] font-semibold text-emerald-400">
