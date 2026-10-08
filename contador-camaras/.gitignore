@@ -17,3 +17,6 @@ canales/
 dvrs_*.json
 empleados_ref/
 conexiones tailscail.csv
+*.db-journal
+*.db-wal
+*.db-shm
