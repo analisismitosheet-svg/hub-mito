@@ -9,6 +9,7 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import ScannerCamara from '@/components/ScannerCamara'
 import ArmadoPedido from '@/components/ArmadoPedido'
 import AvisosCelular from '@/components/AvisosCelular'
+import MotivoPausaDialog, { type MotivoPausa } from '@/components/MotivoPausa'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { normalizaCodigo } from '@/lib/loginEmpleado'
@@ -603,6 +604,9 @@ export default function MiRepo() {
     })
     return () => { vivo = false }
   }, [sesion?.id])
+  // Pausar pide motivo (sql/piso_pausas.sql): se abre el cuadro y recién ahí se pausa
+  const [pidiendoMotivo, setPidiendoMotivo] = useState(false)
+  const [errorPausa, setErrorPausa] = useState<string | null>(null)
   const faltaPausa = pausaLibre ? Math.max(0, Math.ceil((pausaLibre - Date.now()) / 1000)) : 0
 
   const recordarSesion = useCallback((a: Asignacion, s: Sesion | null) => {
@@ -617,7 +621,7 @@ export default function MiRepo() {
   }, [])
 
   const accion = useCallback(
-    async (fn: 'repo_iniciar' | 'repo_pausar' | 'repo_reanudar' | 'repo_finalizar') => {
+    async (fn: 'repo_iniciar' | 'repo_pausar' | 'repo_reanudar' | 'repo_finalizar', extra?: Record<string, unknown>) => {
       const sb = supabase
       if (!sb || !asignacionSel || accionSesion) return null
       setAccionSesion(true)
@@ -626,7 +630,7 @@ export default function MiRepo() {
         const args =
           fn === 'repo_iniciar'
             ? { p_lote: asignacionSel.lote_id, p_local: asignacionSel.local }
-            : { p_sesion: sesion?.id }
+            : { p_sesion: sesion?.id, ...(extra ?? {}) }
         const { data, error: eRpc } = await sb.rpc(fn, args)
         if (eRpc) throw new Error(eRpc.message)
         const fila = filaDe<FilaSesion>(data)
@@ -1177,7 +1181,7 @@ export default function MiRepo() {
               )}
               {sesion?.estado === 'en_curso' && (
                 <button
-                  onClick={() => void accion('repo_pausar')}
+                  onClick={() => { setErrorPausa(null); setPidiendoMotivo(true) }}
                   disabled={accionSesion || faltaPausa > 0}
                   title={faltaPausa > 0 ? 'Después de una pausa hay que esperar 15 minutos para volver a pausar' : undefined}
                   className="btn-press inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/15 px-3 text-sm font-semibold text-amber-400 transition hover:bg-amber-500/25 disabled:opacity-60"
@@ -1441,6 +1445,20 @@ export default function MiRepo() {
         }}
         onConfirm={() => void finalizar()}
       />
+      {pidiendoMotivo && (
+        <MotivoPausaDialog
+          abierto
+          enviando={accionSesion}
+          error={errorPausa}
+          onCancelar={() => setPidiendoMotivo(false)}
+          onConfirmar={(motivo: MotivoPausa, detalle: string) => {
+            void accion('repo_pausar', { p_motivo: motivo, p_detalle: detalle || null }).then((fila) => {
+              if (fila) setPidiendoMotivo(false)
+              else setErrorPausa('No se pudo pausar: mirá el mensaje de arriba.')
+            })
+          }}
+        />
+      )}
     </Layout>
   )
 }

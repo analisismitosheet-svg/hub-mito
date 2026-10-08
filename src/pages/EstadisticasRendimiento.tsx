@@ -3,6 +3,7 @@ import { Loader2, TrendingUp, User, Timer } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import EstadisticaVtd from '@/components/EstadisticaVtd'
+import PausasPiso from '@/components/PausasPiso'
 import { supabase } from '@/lib/supabase'
 import { FILTRO_EMPLEADOS_ACTIVOS } from '@/lib/empleadosActivos'
 import { usePermisosArea } from '@/hooks/usePermisosArea'
@@ -123,7 +124,7 @@ export default function EstadisticasRendimiento() {
         {(desde || hasta) && (
           <button onClick={() => { setDesde(''); setHasta('') }} className="btn-press rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line">Limpiar fechas</button>
         )}
-        <span className="text-[11px] text-sub/70">Fechas para el tiempo real en piso</span>
+        <span className="text-[11px] text-sub/70">Fechas para el tiempo real y las pausas</span>
       </div>
 
       {!cargando && filasPiso.length > 0 && (
@@ -165,6 +166,9 @@ export default function EstadisticasRendimiento() {
           </div>
         </section>
       )}
+
+      {/* Pausas con motivo (repo y armado), con las mismas fechas */}
+      <PausasPiso desde={desde} hasta={hasta} />
 
       {cargando && filasPiso.length === 0 && (
         <div className="flex items-center justify-center gap-2 py-10 text-sub"><Loader2 size={18} className="animate-spin" aria-hidden /> Cargando...</div>

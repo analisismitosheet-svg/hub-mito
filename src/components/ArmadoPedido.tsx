@@ -4,6 +4,7 @@ import {
 } from 'lucide-react'
 import ScannerCamara from '@/components/ScannerCamara'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import MotivoPausaDialog, { type MotivoPausa } from '@/components/MotivoPausa'
 import { supabase } from '@/lib/supabase'
 import { normalizaCodigo } from '@/lib/loginEmpleado'
 import { compararUbicaciones, ubicacionesDeArticulos } from '@/lib/mapeo'
@@ -109,6 +110,42 @@ export default function ArmadoPedido({ armado, alVolver, alCambiar }: Props) {
     void ubicacionesDeArticulos(codigosItems.split(',')).then(setUbicaciones).catch(() => { /* sin mapeo: sin ubicaciones */ })
   }, [codigosItems])
   const ubicacionesDe = useCallback((i: ArmadoItem) => ubicaciones.get(String(i.articulo ?? '').trim().toUpperCase()) ?? [], [ubicaciones])
+
+  // Pausa con motivo y cooldown de 15 min (sql/piso_pausas.sql): queda registrada para medirla
+  const [pidiendoMotivo, setPidiendoMotivo] = useState(false)
+  const [pausando, setPausando] = useState(false)
+  const [errorPausa, setErrorPausa] = useState<string | null>(null)
+  const [pausaLibre, setPausaLibre] = useState<number | null>(null)
+  const [, setTic] = useState(0)
+  useEffect(() => {
+    if (!supabase) return
+    void supabase.rpc('armado_proxima_pausa', { p_id: armado.id }).then(({ data }) => {
+      if (typeof data === 'string') setPausaLibre(new Date(data).getTime())
+    })
+  }, [armado.id])
+  const faltaPausa = pausaLibre ? Math.max(0, Math.ceil((pausaLibre - Date.now()) / 1000)) : 0
+  useEffect(() => {
+    if (faltaPausa <= 0) return
+    const id = window.setInterval(() => setTic((t) => t + 1), 1000)
+    return () => window.clearInterval(id)
+  }, [faltaPausa > 0]) // eslint-disable-line react-hooks/exhaustive-deps
+  async function pausarCon(motivo: MotivoPausa, detalle: string) {
+    if (!supabase) return
+    setPausando(true)
+    setErrorPausa(null)
+    const { error } = await supabase.rpc('armado_pausar', { p_id: armado.id, p_motivo: motivo, p_detalle: detalle || null })
+    setPausando(false)
+    if (error) { setErrorPausa(error.message); return }
+    setPausaLibre(Date.now() + 15 * 60 * 1000)
+    setPidiendoMotivo(false)
+    setSesion('pausada')
+    setMensaje(null)
+  }
+  function reanudar() {
+    if (supabase) void supabase.rpc('armado_reanudar', { p_id: armado.id })
+    setSesion('en_curso')
+    enfocar()
+  }
 
   const avance = useMemo(() => avanceDe(items), [items])
   const pendientes = useMemo(
@@ -387,15 +424,18 @@ export default function ArmadoPedido({ armado, alVolver, alCambiar }: Props) {
               ) : sesion === 'en_curso' ? (
                 <button
                   type="button"
-                  onClick={() => { setSesion('pausada'); setMensaje(null) }}
-                  className="btn-press inline-flex h-9 items-center gap-1 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 text-sm font-semibold text-amber-500 transition hover:bg-amber-500/20"
+                  onClick={() => { setErrorPausa(null); setPidiendoMotivo(true) }}
+                  disabled={faltaPausa > 0}
+                  title={faltaPausa > 0 ? 'Después de una pausa hay que esperar 15 minutos para volver a pausar' : undefined}
+                  className="btn-press inline-flex h-9 items-center gap-1 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 text-sm font-semibold text-amber-500 transition hover:bg-amber-500/20 disabled:opacity-50"
                 >
-                  <Pause size={14} aria-hidden /> Pausar
+                  <Pause size={14} aria-hidden />{' '}
+                  {faltaPausa > 0 ? `Pausar ${Math.floor(faltaPausa / 60)}:${String(faltaPausa % 60).padStart(2, '0')}` : 'Pausar'}
                 </button>
               ) : (
                 <button
                   type="button"
-                  onClick={() => { setSesion('en_curso'); enfocar() }}
+                  onClick={reanudar}
                   className="btn-press inline-flex h-9 items-center gap-1 rounded-xl bg-emerald-600 px-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
                 >
                   <Play size={14} aria-hidden /> Reanudar
@@ -541,6 +581,15 @@ export default function ArmadoPedido({ armado, alVolver, alCambiar }: Props) {
         </div>
       )}
 
+      {pidiendoMotivo && (
+        <MotivoPausaDialog
+          abierto
+          enviando={pausando}
+          error={errorPausa}
+          onCancelar={() => setPidiendoMotivo(false)}
+          onConfirmar={(m, d) => void pausarCon(m, d)}
+        />
+      )}
       <ConfirmDialog
         open={confirmando}
         title={todoListo ? '¿Finalizar el armado?' : '¿Finalizar con faltantes?'}
