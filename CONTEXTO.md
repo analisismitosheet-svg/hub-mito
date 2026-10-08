@@ -15,7 +15,7 @@ Documento para retomar el trabajo en otra PC. El código está en GitHub (`main`
 - Build local: `node node_modules/vite/bin/vite.js build`
 - Tests: `node scripts/test-consulta-articulos.mjs` (o `npm.cmd test`) — assertions de `src/lib/articulosConsulta.ts`, sin navegador.
 - Instalar deps: `npm.cmd install ...` (PowerShell bloquea `npm.ps1`).
-- Deploy: `npx vercel --prod --scope mito-srl --yes` (o `& "C:\Program Files\nodejs\npx.cmd" ...`).
+- Deploy: **automático** — el repo `analisismitosheet-svg/hub-mito` está conectado a Vercel, así que cada push a `main` despliega solo (verificado 2026-10-08: `vercel git connect` responde "already connected" y el deploy de producción tiene el alias `hub-mito-git-main-mito-srl.vercel.app`). Fallback manual: `npx vercel --prod --scope mito-srl --yes` (o `& "C:\Program Files\nodejs\npx.cmd" ...`), que exige `vercel login` una vez en la PC.
 - Git: usar `git -C "D:\pwa mito" ...`. Mensajes de commit **sin tildes** (encodig ParserError con caracteres especiales).
 - Scripts node one-shot con ESM: `node --input-type=module -e "..."` + `createRequire` para resolver `@supabase/supabase-js` desde el repo.
 - Service role key (si hace falta tocar BD desde script): preguntar al dueño; no está en el repo.
