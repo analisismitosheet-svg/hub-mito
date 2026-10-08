@@ -20,3 +20,4 @@ Ver [[Repos Mayorista y Mi repo]], [[Pedidos compra, venta y cancelaciones]].
 ## Responsable del local (sincronizado con Repos Mayorista)
 - `sql/armado_responsable.sql`: trigger al crear el armado → si el **cliente** del pedido es un local (mismo código que en la repo, o sinónimo de `locales_sinonimos`) con responsable en `mayorista_responsables` (la repo más reciente), queda en `asignado_legajo/nombre/local`. `private.responsable_de_local()` usa `public.empleados` (no `empleados_basico`, que filtra por usuario).
 - Asignado ⇒ solo le aparece/suena a ese legajo (Mi repo `paraLegajo()`, campana y push) y solo él lo acepta (`armado_aceptar`; mayorista/admin también). Sin asignar ⇒ como antes, el primero que acepta.
+- **Regla 08/10/2026**: si un pedido tiene un armado aceptado, gana el legajo que lo aceptó (en la lista, el detalle y los renglones), aunque la repo de ese local la tenga otro responsable.

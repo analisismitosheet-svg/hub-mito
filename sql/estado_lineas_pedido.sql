@@ -4,8 +4,9 @@
 -- Aplicado en Supabase (migración estado_lineas_pedido). Idempotente.
 --
 -- Para un pedido devuelve, por línea, cuánto se mandó y su estado:
---   1) si tiene armado (mayorista_armados, el más nuevo): mayorista_armados_items por línea;
---   2) si no y es VTD con repo del día: mayorista_items de esa repo y local, cruzado
+--   1) si tiene armado (mayorista_armados, el más nuevo): sus ítems por línea. Gana el
+--      legajo que aceptó el armado aunque la repo del local la tenga otro (08/10/2026);
+--   2) si no, si es VTD con repo del día: mayorista_items de esa repo y local, cruzado
 --      por artículo + color + talle (verificado 34/34 en el pedido 10070);
 --   3) si es VTD cerrado por única vez (pedidos_vtd_cerrados): todo hecho.
 -- estado: hecho | faltante | pendiente
@@ -25,6 +26,9 @@ BEGIN
     RETURN;
   END IF;
 
+  SELECT * INTO v_ped FROM public.pedidos_venta WHERE codigo = p_codigo;
+  IF v_ped.codigo IS NULL THEN RETURN; END IF;
+
   SELECT a.id INTO v_arm FROM public.mayorista_armados a
    WHERE a.pedido_codigo = p_codigo ORDER BY a.creado_at DESC LIMIT 1;
   IF v_arm IS NOT NULL THEN
@@ -33,21 +37,22 @@ BEGIN
       FROM public.mayorista_armados_items ai WHERE ai.armado_id = v_arm;
     RETURN;
   END IF;
+  IF v_ped.motivo IS DISTINCT FROM 'VTD' THEN RETURN; END IF;
 
-  SELECT * INTO v_ped FROM public.pedidos_venta WHERE codigo = p_codigo;
-  IF v_ped.codigo IS NULL OR v_ped.motivo IS DISTINCT FROM 'VTD' THEN RETURN; END IF;
+  IF v_ped.motivo = 'VTD' THEN
+    SELECT l.id INTO v_lote FROM public.mayorista_lotes l
+     WHERE l.fecha = v_ped.fecha
+       AND EXISTS (SELECT 1 FROM public.mayorista_items mi WHERE mi.lote_id = l.id AND upper(btrim(mi.local)) = upper(btrim(v_ped.cliente)))
+     ORDER BY l.created_at DESC LIMIT 1;
+  END IF;
 
-  IF EXISTS (SELECT 1 FROM public.pedidos_vtd_cerrados c WHERE c.codigo = p_codigo) THEN
+  IF v_lote IS NULL AND EXISTS (SELECT 1 FROM public.pedidos_vtd_cerrados c WHERE c.codigo = p_codigo) THEN
     RETURN QUERY
     SELECT i.linea, round(i.cantidad)::integer, 'hecho'::text
       FROM public.pedidos_venta_items i WHERE i.codigo = p_codigo;
     RETURN;
   END IF;
 
-  SELECT l.id INTO v_lote FROM public.mayorista_lotes l
-   WHERE l.fecha = v_ped.fecha
-     AND EXISTS (SELECT 1 FROM public.mayorista_items mi WHERE mi.lote_id = l.id AND upper(btrim(mi.local)) = upper(btrim(v_ped.cliente)))
-   ORDER BY l.created_at DESC LIMIT 1;
   IF v_lote IS NULL THEN RETURN; END IF;
 
   RETURN QUERY

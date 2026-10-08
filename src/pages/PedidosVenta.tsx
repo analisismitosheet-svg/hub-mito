@@ -246,7 +246,8 @@ export default function PedidosVenta() {
       if ((data as RepoVtd[]).length < 1000) break
     }
     for (const r of reposVtd) {
-      if (porCodigo[r.codigo]) continue // si además le pidieron un armado, manda el armado
+      // Si además le pidieron un armado, gana el legajo que lo aceptó (decisión del 08/10/2026)
+      if (porCodigo[r.codigo]) continue
       const id = r.lote_id ? `repo:${r.lote_id}:${r.local}` : `repo:cerrado:${r.codigo}`
       const estado = r.pendientes === 0 ? 'hecho' : r.lineas_ok > 0 ? 'aceptado' : 'pendiente'
       porCodigo[r.codigo] = {
