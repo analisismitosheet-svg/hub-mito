@@ -1,0 +1,951 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mockup · Mi Repo con los armados de pedidos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --paper:#050508;
+    --surface:rgba(255,255,255,.035);
+    --surface2:rgba(255,255,255,.07);
+    --surface-solid:#101016;
+    --line:rgba(255,255,255,.08);
+    --line2:rgba(255,255,255,.18);
+    --ink:#f8fafc;
+    --sub:#94a3b8;
+    --brand:#ef4444;
+    --amber:#f59e0b;
+    --sky:#38bdf8;
+    --emerald:#22c55e;
+    --violet:#a78bfa;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;padding:24px clamp(12px,3vw,36px) 64px;
+    background:
+      radial-gradient(900px 500px at 10% -10%, rgba(239,68,68,.13), transparent 60%),
+      radial-gradient(800px 500px at 96% 0%, rgba(245,158,11,.10), transparent 55%),
+      var(--paper);
+    color:var(--ink);
+    font-family:'Plus Jakarta Sans',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    font-size:14px;line-height:1.45;
+  }
+  h1,h2,h3,h4{margin:0;font-weight:800;letter-spacing:-.02em}
+  p{margin:0}
+  button{font-family:inherit;cursor:pointer}
+  .sub{color:var(--sub)}
+  .muted{color:var(--sub);font-size:12px}
+
+  .head{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start;justify-content:space-between;margin-bottom:14px}
+  .badge-mock{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.35);font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+  .head h1{font-size:clamp(20px,3vw,29px);margin:8px 0 4px}
+  .actions{display:flex;flex-wrap:wrap;gap:8px}
+  .btn{display:inline-flex;align-items:center;gap:7px;height:38px;padding:0 14px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:13px;font-weight:600;transition:.15s}
+  .btn:hover{background:var(--surface2);border-color:var(--line2)}
+  .btn-red{background:linear-gradient(180deg,#ef4444,#dc2626);border-color:#ef4444;color:#fff;box-shadow:0 8px 22px rgba(239,68,68,.28)}
+  .btn-red:hover{filter:brightness(1.08)}
+
+  .leyenda{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+  .lg{display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border-radius:999px;font-size:11.5px;font-weight:700;border:1px solid var(--line);background:var(--surface);color:var(--sub)}
+  .lg i{width:9px;height:9px;border-radius:99px;display:block}
+  .lg.on{border-color:rgba(239,68,68,.5);background:rgba(239,68,68,.12);color:#fca5a5}
+  .lg.on i{background:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.25)}
+  .lg.off i{background:var(--emerald)}
+
+  .grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;align-items:start}
+  @media (max-width:1040px){.grid{grid-template-columns:1fr}}
+  .card{border:1px solid var(--line);background:var(--surface);border-radius:18px;overflow:hidden}
+  .card-h{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.02)}
+  .card-h h3{font-size:13.5px;display:flex;align-items:center;gap:8px}
+  .tag{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:999px;border:1px solid var(--line2);color:var(--sub)}
+  .tag.nuevo{border-color:rgba(239,68,68,.5);background:rgba(239,68,68,.14);color:#fca5a5}
+
+  /* ============ dispositivo ============ */
+  .disp{padding:16px;background:radial-gradient(600px 300px at 50% 0%, rgba(255,255,255,.03), transparent 70%)}
+  .device{max-width:430px;margin:0 auto;border:1px solid var(--line2);border-radius:28px;background:var(--surface-solid);box-shadow:0 30px 70px rgba(0,0,0,.6);overflow:hidden}
+  .appbar{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.03)}
+  .appbar .logo{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:linear-gradient(180deg,#ef4444,#b91c1c);font-weight:900;font-size:13px;color:#fff}
+  .appbar b{font-size:13px}
+  .appbar .bell{margin-left:auto;position:relative;width:32px;height:32px;border-radius:10px;border:1px solid var(--line);display:grid;place-items:center;background:var(--surface)}
+  .appbar .cnt{position:absolute;top:-5px;right:-5px;min-width:15px;height:15px;padding:0 4px;border-radius:999px;background:#ef4444;color:#fff;font-size:9px;font-weight:800;display:grid;place-items:center}
+  .screen{padding:14px;min-height:640px;display:flex;flex-direction:column;gap:12px}
+
+  .tit{display:flex;align-items:center;gap:11px}
+  .tit .ic{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:#d9770624;border:1px solid #d9770640;color:#f59e0b;font-size:19px}
+  .tit h2{font-size:19px}
+  .tit p{font-size:12.5px;color:var(--sub)}
+
+  .volver{display:inline-flex;align-items:center;gap:6px;background:none;border:0;color:var(--sub);font-size:13px;font-weight:600;padding:4px 0}
+  .volver:hover{color:var(--ink)}
+
+  .secc{font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;display:flex;align-items:center;gap:7px;color:var(--sub)}
+  .secc .n{margin-left:auto;background:var(--surface2);border:1px solid var(--line);color:var(--sub);border-radius:999px;padding:1px 8px;font-size:10.5px}
+  .secc.nuevo{color:#fca5a5}
+  .secc.nuevo .n{background:rgba(239,68,68,.16);border-color:rgba(239,68,68,.4);color:#fca5a5}
+
+  .tarjeta{
+    display:flex;align-items:center;gap:12px;width:100%;text-align:left;min-height:4.5rem;
+    border-radius:16px;border:1px solid var(--line);background:var(--surface);padding:13px 14px;color:var(--ink);transition:.15s
+  }
+  .tarjeta:hover{background:var(--surface2)}
+  .tarjeta.prio{border-color:color-mix(in srgb, var(--pcol,#ef4444) 45%, transparent);background:color-mix(in srgb, var(--pcol,#ef4444) 9%, transparent)}
+  .tarjeta .cuerpo{min-width:0;flex:1}
+  .tarjeta .l1{display:flex;align-items:center;gap:7px;font-weight:700;font-size:14px}
+  .chip{border-radius:999px;padding:1px 8px;font-size:11px;font-weight:800;background:#f59e0b26;color:#fbbf24;border:1px solid #f59e0b40}
+  .chip.red{background:rgba(239,68,68,.16);color:#fca5a5;border-color:rgba(239,68,68,.45)}
+  .chip.verde{background:rgba(34,197,94,.16);color:#86efac;border-color:rgba(34,197,94,.4)}
+  .chip.azul{background:rgba(56,189,248,.16);color:#7dd3fc;border-color:rgba(56,189,248,.4)}
+  .l2{font-size:12px;color:var(--sub);margin-top:3px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .bar{height:6px;border-radius:99px;background:var(--line);overflow:hidden;margin-top:8px}
+  .bar span{display:block;height:100%;border-radius:99px;transition:width .3s cubic-bezier(.23,1,.32,1);background:linear-gradient(90deg,#f59e0b,#fbbf24)}
+  .bar.ok span{background:linear-gradient(90deg,#22c55e,#86efac)}
+  .go{width:20px;flex:0 0 20px;color:var(--sub);font-size:16px;text-align:right}
+
+  .tarjeta-aceptar{border-radius:16px;border:1px solid var(--line2);background:color-mix(in srgb, var(--pcol) 10%, transparent);padding:13px 14px;animation:in .3s cubic-bezier(.23,1,.32,1)}
+  @keyframes in{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+  .tarjeta-aceptar .tt{font-size:10.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--pcol);display:flex;gap:6px;align-items:center}
+  .tarjeta-aceptar h4{font-size:15px;margin:5px 0 2px}
+  .tarjeta-aceptar .obs{font-size:11.5px;color:var(--sub);font-style:italic;margin-top:5px}
+  .btns{display:flex;gap:8px;margin-top:10px}
+  .btn-verde{flex:1;height:38px;border-radius:11px;border:0;background:linear-gradient(180deg,#22c55e,#16a34a);color:#fff;font-size:13.5px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;gap:7px}
+  .btn-verde:hover{filter:brightness(1.08)}
+  .btn-ghost{height:38px;padding:0 13px;border-radius:11px;border:1px solid var(--line2);background:transparent;color:var(--sub);font-size:13px;font-weight:700}
+  .btn-ghost:hover{color:var(--ink);border-color:var(--ink/40)}
+
+  /* panel del repo abierto */
+  .panel{border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:13px;display:flex;flex-direction:column;gap:11px}
+  .p1{display:flex;align-items:center;gap:10px}
+  .p1 .nom{min-width:0;flex:1}
+  .p1 .nom b{display:block;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .p1 .nom span{font-size:11.5px;color:var(--sub);display:flex;gap:6px;align-items:center}
+  .reloj{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--sub)}
+  .reloj.on{color:var(--ink)}
+  .sesion{height:38px;padding:0 14px;border-radius:12px;font-size:13px;font-weight:800;display:inline-flex;align-items:center;gap:7px;transition:.15s}
+  .sesion.iniciar{background:linear-gradient(180deg,#22c55e,#16a34a);border:0;color:#fff}
+  .sesion.pausar{background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.4);color:#fbbf24}
+  .sesion.reanudar{background:linear-gradient(180deg,#22c55e,#16a34a);border:0;color:#fff}
+  .prog-fila{display:flex;align-items:center;gap:10px}
+  .prog-fila .bar{flex:1;height:8px;margin:0}
+  .contador{font-size:19px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .contador small{font-size:13px;color:var(--sub);font-weight:700}
+  .scan{display:flex;gap:8px}
+  .scan input{
+    flex:1;height:44px;min-width:0;border-radius:12px;border:1px solid var(--line);background:var(--surface2);
+    color:var(--ink);padding:0 12px;font-size:15px;font-family:inherit;outline:none
+  }
+  .scan input::placeholder{color:var(--sub)}
+  .scan input:focus{border-color:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.25)}
+  .scan .cam{width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--surface2);color:var(--ink);font-size:17px}
+  .feedback{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 11px;border-radius:11px;font-size:12.5px;font-weight:600}
+  .feedback.ok{border:1px solid rgba(34,197,94,.3);background:rgba(34,197,94,.10);color:#86efac}
+  .feedback.err{border:1px solid rgba(239,68,68,.4);background:rgba(239,68,68,.10);color:#fca5a5}
+  .feedback .desh{border:1px solid currentColor;background:transparent;color:inherit;border-radius:8px;padding:3px 9px;font-size:11.5px;font-weight:700;opacity:.85}
+  .feedback .desh:hover{opacity:1}
+
+  .lista-tareas{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--surface)}
+  .lista-tareas .lh{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-bottom:1px solid var(--line);font-size:13.5px;font-weight:800}
+  .lista-tareas .lh .n{border-radius:999px;padding:1px 9px;font-size:11.5px;background:rgba(245,158,11,.15);color:#fbbf24}
+  .lista-tareas .lh .n.ok{background:rgba(34,197,94,.15);color:#86efac}
+  .lista-tareas ul{list-style:none;margin:0;padding:0}
+  .lista-tareas li{display:flex;align-items:center;gap:11px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.05);animation:in .25s}
+  .lista-tareas li:last-child{border-bottom:0}
+  .lista-tareas li .dat{min-width:0;flex:1}
+  .codigo{font-size:15px;font-weight:700}
+  .pill{border-radius:7px;padding:1px 7px;font-size:11.5px;font-weight:800;background:rgba(56,189,248,.15);color:#7dd3fc}
+  .pill.v{background:rgba(167,139,250,.15);color:#c4b5fd}
+  .pill.u{background:rgba(245,158,11,.15);color:#fbbf24}
+  .desc{font-size:11.5px;color:var(--sub);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .badge-u{border-radius:9px;padding:5px 9px;font-size:13px;font-weight:800;font-variant-numeric:tabular-nums;background:var(--line);color:var(--sub)}
+  .badge-u.on{background:rgba(245,158,11,.15);color:#fbbf24}
+  .badge-u.ok{background:rgba(34,197,94,.15);color:#86efac;display:inline-flex;gap:5px;align-items:center}
+  .vacio-ok{display:flex;flex-direction:column;align-items:center;gap:6px;background:rgba(34,197,94,.10);padding:26px 14px;text-align:center;color:#86efac;font-weight:800}
+  .vacio-ok span{font-size:11.5px;color:var(--sub);font-weight:600}
+
+  .finalizar{
+    height:54px;border-radius:16px;font-size:15.5px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:9px;
+    border:1px solid rgba(239,68,68,.4);background:rgba(239,68,68,.10);color:#fca5a5;transition:.15s;width:100%
+  }
+  .finalizar.listo{border:0;background:linear-gradient(180deg,#22c55e,#16a34a);color:#fff;box-shadow:0 10px 26px rgba(34,197,94,.25)}
+  .finalizar:hover{filter:brightness(1.08)}
+
+  .aviso-nuevo{display:flex;gap:9px;align-items:flex-start;padding:11px 13px;border-radius:13px;border:1px solid rgba(245,158,11,.35);background:rgba(245,158,11,.10);font-size:12.5px;color:#fcd34d;animation:in .3s}
+  .resumen-final{display:flex;gap:9px;align-items:flex-start;padding:12px 14px;border-radius:14px;border:1px solid rgba(34,197,94,.35);background:rgba(34,197,94,.12);color:#86efac;font-size:13px;font-weight:700;animation:in .3s}
+  .resumen-final span{display:block;font-size:11.5px;color:var(--sub);font-weight:600;margin-top:2px}
+  .alerta{padding:12px 14px;border-radius:14px;border:1px solid rgba(245,158,11,.3);background:rgba(245,158,11,.10);font-size:12.5px;color:#fcd34d}
+
+  /* tilde manual al lado de cada artículo (si la cámara no lo lee) */
+  .tick{
+    width:38px;height:38px;flex:0 0 38px;border-radius:12px;border:1px solid var(--line2);
+    background:var(--surface2);color:var(--sub);font-size:17px;font-weight:900;transition:.12s;display:grid;place-items:center
+  }
+  .tick:hover{background:rgba(34,197,94,.18);border-color:rgba(34,197,94,.55);color:#86efac;transform:scale(1.06)}
+  .tick:active{transform:scale(.94)}
+  .tick.ok{background:rgba(34,197,94,.16);border-color:rgba(34,197,94,.45);color:#86efac;pointer-events:none}
+
+  /* visor de cámara */
+  .camara{border:1px solid rgba(56,189,248,.35);background:rgba(56,189,248,.07);border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:10px;animation:in .25s}
+  .vf{position:relative;height:150px;border-radius:12px;background:linear-gradient(180deg,#04070b,#0a0f16);overflow:hidden;display:grid;place-items:center;text-align:center}
+  .vf::before{content:'';position:absolute;inset:20px 46px;border:2px solid rgba(56,189,248,.75);border-radius:10px}
+  .vf::after{content:'';position:absolute;left:46px;right:46px;top:50%;height:2px;background:rgba(239,68,68,.85);box-shadow:0 0 12px rgba(239,68,68,.9);animation:linea 2.2s infinite}
+  @keyframes linea{0%{top:26%}50%{top:72%}100%{top:26%}}
+  .vf .ley{position:relative;z-index:2;font-size:11.5px;color:#7dd3fc;font-weight:700;background:rgba(0,0,0,.6);padding:3px 10px;border-radius:999px}
+  .vf .lectura{position:absolute;bottom:9px;left:0;right:0;z-index:2;font-size:12px;font-weight:800;color:#86efac;background:rgba(0,0,0,.72);padding:5px 8px}
+  .fmts{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:11px;color:var(--sub)}
+  .fmts b{border:1px solid rgba(56,189,248,.45);background:rgba(56,189,248,.14);color:#7dd3fc;border-radius:999px;padding:2px 9px;font-size:11px}
+  .fmts b.on{background:rgba(34,197,94,.18);border-color:rgba(34,197,94,.5);color:#86efac}
+  .nota-tareas{display:flex;gap:8px;align-items:flex-start;font-size:11.5px;color:var(--sub);border:1px dashed var(--line2);border-radius:12px;padding:9px 11px}
+
+  /* ============ columna derecha ============ */
+  .mayorista{padding:14px;display:flex;flex-direction:column;gap:12px}
+  .mk-cab{display:flex;gap:12px;align-items:flex-start;justify-content:space-between}
+  .mk-cab .n{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:17px;font-weight:800;color:var(--amber)}
+  .mk-cab b{display:block;font-size:13.5px}
+  .mk-estado{display:flex;align-items:center;gap:9px;padding:10px 12px;border-radius:12px;font-size:12.5px;font-weight:700;border:1px solid rgba(245,158,11,.4);background:rgba(245,158,11,.10);color:#fcd34d;flex-wrap:wrap}
+  .mk-estado.ok{border-color:rgba(34,197,94,.45);background:rgba(34,197,94,.12);color:#86efac}
+  .dot{width:8px;height:8px;border-radius:99px;background:currentColor;box-shadow:0 0 0 0 currentColor;animation:pulso 1.6s infinite}
+  @keyframes pulso{0%{box-shadow:0 0 0 0 rgba(245,158,11,.5)}70%{box-shadow:0 0 0 9px rgba(245,158,11,0)}100%{box-shadow:0 0 0 0 rgba(245,158,11,0)}}
+  .mk-items{border:1px solid var(--line);border-radius:13px;overflow:hidden}
+  .mk-items div{display:flex;gap:10px;align-items:center;padding:8px 11px;border-bottom:1px solid rgba(255,255,255,.05);font-size:12.5px}
+  .mk-items div:last-child{border-bottom:0}
+  .mk-items div.ok{background:rgba(34,197,94,.09)}
+  .mk-items .a{font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--amber);font-weight:700}
+  .mk-items div.ok .a{color:#4ade80}
+  .mk-items .av{margin-left:auto;font-weight:800;font-variant-numeric:tabular-nums;color:var(--sub)}
+  .mk-items div.ok .av{color:#4ade80}
+  .mk-pie{display:flex;justify-content:space-between;font-size:12px;color:var(--sub)}
+  .mk-pie b{color:#4ade80}
+
+  .log{max-height:250px;overflow:auto;padding:10px 14px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;display:flex;flex-direction:column;gap:5px}
+  .log div{display:flex;gap:9px;animation:in .25s}
+  .log time{color:var(--sub);flex:0 0 auto}
+  .log .ok{color:#86efac}.log .warn{color:#fcd34d}.log .info{color:#7dd3fc}.log .err{color:#fca5a5}
+
+  .notas{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px;margin-top:20px}
+  .nota{border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:16px}
+  .nota h4{font-size:13.5px;display:flex;align-items:center;gap:8px;margin-bottom:9px}
+  .nota ul{margin:0;padding-left:16px;display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:#cbd5e1}
+  .nota li b{color:var(--ink)}
+  .nota.verde{border-color:rgba(34,197,94,.3)}
+  .nota.rojo{border-color:rgba(239,68,68,.35)}
+
+  /* ============ diálogo ============ */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);display:none;place-items:center;z-index:60;padding:16px}
+  .overlay.on{display:grid}
+  .dialogo{width:min(420px,100%);border-radius:18px;border:1px solid var(--line2);background:var(--surface-solid);padding:18px;box-shadow:0 30px 70px rgba(0,0,0,.7);animation:in .25s}
+  .dialogo h3{font-size:16px}
+  .dialogo p{font-size:13px;color:var(--sub);margin-top:8px;white-space:pre-line}
+  .dialogo .f{display:flex;gap:9px;justify-content:flex-end;margin-top:16px}
+</style>
+</head>
+<body>
+
+<div class="head">
+  <div>
+    <span class="badge-mock">● Mockup · pantalla del legajo</span>
+    <h1>Mi Repo · con los armados de pedidos</h1>
+    <p class="sub" style="max-width:660px">
+      Lo verde es <b>lo que ya tenés hoy</b> (reposiciones por local, cronómetro, escáner y finalizar).
+      Lo rojo es <b>lo nuevo</b>: la tarea del armado del pedido entra al mismo repo, con prioridad,
+      y a medida que el legajo escanea <b>el pedido se va marcando en la pantalla del mayorista</b>.
+    </p>
+  </div>
+  <div class="actions">
+    <button class="btn" id="btnNuevo">🔔 Simular pedido nuevo</button>
+    <button class="btn" id="btnDiez">🔟 Simular 10 pedidos</button>
+    <button class="btn" id="btnDemo">▶ Ver demo</button>
+    <button class="btn" id="btnReset">↺ Reiniciar</button>
+  </div>
+</div>
+
+<div class="leyenda">
+  <span class="lg off"><i></i> Lo que ya tenés (sin cambios)</span>
+  <span class="lg on"><i></i> Lo nuevo: tarea de armado con prioridad</span>
+  <span class="lg">📷 Escaneá en el input o tocá “simular lectura”</span>
+</div>
+
+<div class="grid">
+  <!-- ============== MI REPO ============== -->
+  <div class="card">
+    <div class="card-h">
+      <h3>📱 Mi Repo <span class="tag">celular del legajo</span></h3>
+      <span class="tag nuevo">Juan Pérez · 4471</span>
+    </div>
+    <div class="disp">
+      <div class="device">
+        <div class="appbar">
+          <span class="logo">M</span>
+          <b>MITO</b>
+          <span class="bell">🔔<span class="cnt" id="bellCnt" style="display:none">1</span></span>
+        </div>
+        <div class="screen" id="pantalla"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============== DERCHA ============== -->
+  <div style="display:flex;flex-direction:column;gap:16px">
+    <div class="card">
+      <div class="card-h">
+        <h3>🖥️ Lo que ve el mayorista <span class="tag">Pedidos de venta · 10032</span></h3>
+        <span class="tag">tiempo real</span>
+      </div>
+      <div class="mayorista" id="mayorista"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><h3>🧾 Log del sistema</h3><span class="tag">simulación</span></div>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+</div>
+
+<!-- diálogo de confirmación -->
+<div class="overlay" id="overlay">
+  <div class="dialogo">
+    <h3 id="dlgTitulo">¿Finalizar el repo?</h3>
+    <p id="dlgTexto"></p>
+    <div class="f">
+      <button class="btn-ghost" id="dlgNo">Cancelar</button>
+      <button class="btn-verde" style="flex:0 0 auto;padding:0 18px" id="dlgSi">Finalizar</button>
+    </div>
+  </div>
+</div>
+
+<div class="notas">
+  <div class="nota verde">
+    <h4>✅ Lo que ya tenés (igual que hoy)</h4>
+    <ul>
+      <li><b>Lista de repos por local</b> con chip del local, avance <span class="cm2">X de Y unidades</span> y barra.</li>
+      <li><b>Repo abierto</b>: panel fijo con nombre + <b>cronómetro</b> + Iniciar / Pausar / Reanudar.</li>
+      <li><b>Input del escáner</b> (escáner inalámbrico con Enter, teclado o cámara) y feedback del último escaneo con <b>Deshacer</b>.</li>
+      <li><b>Faltan escanear</b> / <b>Escaneados</b>, contador grande que sube y botón <b>Finalizar repo</b> (verde si está todo, rojo con faltantes).</li>
+      <li>Cierres con <b>faltantes</b> → se marcan ✕, como ahora.</li>
+    </ul>
+  </div>
+  <div class="nota rojo">
+    <h4>🔔 Lo nuevo (los armados)</h4>
+    <ul>
+      <li>Arriba de todo: sección <b>Armados pedidos</b> con la tarjeta de cada tarea: <b>prioridad</b>, N° de pedido, cliente y observación + botones <b>Acepto</b> / <b>Omitir</b>.</li>
+      <li>Al aceptar se convierte en una tarjeta más del repo (con barra de avance) y entra al <b>panel abierto de siempre</b>: cronómetro, escáner, faltan/escaneados, finalizar.</li>
+      <li>Los artículos del pedido se van marcando <b>línea por línea con cada escaneo</b>.</li>
+      <li><b>Finalizar armado</b> avisa al mayorista: el pedido pasa a <span class="cm2">hecho 🏁</span> (o “terminado con N faltantes”).</li>
+      <li>Prioridades arriba de la lista: urgente → normal → baja; suena el celular con cada tarea nueva.</li>
+      <li><b>Si mandás 10 pedidos llegan las 10</b> (tocá 🔟): se apilan todas arriba, ordenadas por prioridad, y las aceptás <b>de a una</b> — sólo una tarea se abre para escanear por vez (el cronómetro es por tarea).</li>
+      <li><b>📷 Cámara:</b> lee <b>QR</b>, <b>Code 39</b>, <b>Code 128 / EAN-128</b> y EAN-13 — el visor muestra el formato detectado al lado del código leído.</li>
+      <li><b>✓ Tilde al lado de cada artículo:</b> si la cámara no lo lee y no querés escribirlo, tocás la tilde y esa línea queda marcada (con “↺ Deshacer” para deshacer).</li>
+    </ul>
+  </div>
+  <div class="nota">
+    <h4>🗄️ Cómo se apoya en lo que ya existe</h4>
+    <ul>
+      <li>El armado usa <b>la misma estructura de ítems</b> que los repos: <span class="cm2">cantidad / escaneadas / estado</span> y el mismo RPC <span class="cm2">escaneear_codigo()</span>.</li>
+      <li>Sólo cambia el origen: en vez de un lote cargado, los ítems salen de <span class="cm2">pedidos_venta_items</span> del pedido elegido.</li>
+      <li>Al aceptar: <span class="cm2">update … set estado='aceptado' where estado='pendiente'</span> → sólo un legajo lo toma.</li>
+      <li>La sesión (iniciar/pausar/finalizar) y los tiempos se reutilizan tal cual con <span class="cm2">piso_tiempos.sql</span>.</li>
+      <li>Cuando todas las líneas están marcadas → <span class="cm2">estado='hecho'</span> y el mayorista lo ve en verde.</li>
+      <li>La cámara ya es <b>html5-qrcode</b> (<span class="cm2">ScannerCamara.tsx</span>): hoy tiene <span class="cm2">EAN_13, EAN_8, UPC_A/E, CODE_128, CODE_39, ITF, CODABAR</span> y <b>QR</b> sólo con <span class="cm2">conQr</span>. En el armado se abre con <span class="cm2">conQr={true}</span> y listo.</li>
+      <li>La tilde manual es una actualización por línea: <span class="cm2">update pedidos_venta_items set escaneadas = cantidad</span> (mismo campo que usa hoy el escáner).</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   Mockup Mi Repo — simulación, no toca Supabase
+   ========================================================= */
+const $  = (s)=>document.querySelector(s);
+const $$ = (s)=>document.querySelectorAll(s);
+const money = (v)=> '$ ' + new Intl.NumberFormat('es-AR',{minimumFractionDigits:2}).format(v);
+
+const PRIOS = {
+  urgente:{label:'Urgente', color:'#ef4444', beeps:3, icon:'🚨', rank:0},
+  normal :{label:'Normal',  color:'#f59e0b', beeps:2, icon:'⏰', rank:1},
+  baja   :{label:'Baja',    color:'#38bdf8', beeps:1, icon:'🌙', rank:2},
+};
+
+/* --- lo que YA tenés: reposición por local ---------------------------- */
+function baseAsig(){
+  return {
+    tipo:'asig', local:'MZA', nombre:'Reposición locales · Octubre',
+    sesion:{estado:'inactiva', seg:0},
+    items:[
+      {a:'780110', d:'Gorra Trucker MITO', c:'Negro', t:'U', q:12, mat:'GOR', ub:'A-1', esc:0, fal:0},
+      {a:'781244', d:'Medias Deportivas', c:'Blanco', t:'41', q:8, mat:'MED', ub:'B-2', esc:0, fal:0},
+      {a:'783001', d:'Cinturón Clásico', c:'Marrón', t:'85', q:6, mat:'CIN', ub:'C-4', esc:0, fal:0},
+    ],
+  };
+}
+
+/* --- lo nuevo: pedidos a armar --------------------------------------- */
+const CATALOGO = [
+  {a:'784512', d:'Remera Básica Algodón Pércal', c:'Negro', t:'M', q:48, mat:'REM', ub:'A-3'},
+  {a:'784533', d:'Buzo Canguro Canelado', c:'Gris', t:'L', q:36, mat:'BUZ', ub:'B-1'},
+  {a:'784610', d:'Pantalón Jogger Slim', c:'Verde', t:'40', q:30, mat:'PAN', ub:'C-2'},
+  {a:'784688', d:'Campera Terciopelo Offside', c:'Bordo', t:'XL', q:18, mat:'CAM', ub:'D-1'},
+];
+function armadoNuevo(nro, cliente, prioridad, obs, esc){
+  return {
+    tipo:'armado', nro, cliente, prioridad, obs:obs||'',
+    estado:'pendiente', por:null, faltantes:0,
+    sesion:{estado:'inactiva', seg:0},
+    items: CATALOGO.map(i => ({...i, esc: esc||0, fal:0})),
+  };
+}
+
+let armados = [];
+let asig = null;
+let vista = 'lista';        // 'lista' | 'abierto'
+let abierto = null;         // la tarea abierta
+let mensaje = null;         // {ok, texto}
+let ultimo = null;          // para deshacer
+let resumen = null;
+let omitidos = new Set();
+let camara = false;         // visor de cámara abierto
+let lectura = null;         // último código leído {codigo, fmt}
+
+/* ---------------- sonido ---------------- */
+let ctxA = null;
+function chime(beeps=2, hz=880){
+  try{
+    ctxA = ctxA || new (window.AudioContext || window.webkitAudioContext)();
+    if (ctxA.state === 'suspended') ctxA.resume();
+    const t0 = ctxA.currentTime;
+    for (let i=0;i<beeps;i++){
+      const t = t0 + i*0.30;
+      const o = ctxA.createOscillator(), g = ctxA.createGain();
+      o.type='sine';
+      o.frequency.setValueAtTime(hz,t);
+      o.frequency.exponentialRampToValueAtTime(hz*1.5,t+0.16);
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.exponentialRampToValueAtTime(0.28,t+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+0.24);
+      o.connect(g).connect(ctxA.destination);
+      o.start(t); o.stop(t+0.26);
+    }
+  }catch(e){}
+}
+function vibrar(){ if (navigator.vibrate) navigator.vibrate([200,80,200]); }
+
+/* ---------------- log ---------------- */
+function log(txt, tipo='info'){
+  const d = document.createElement('div');
+  d.innerHTML = `<time>${new Date().toLocaleTimeString('es-AR')}</time><span class="${tipo}">${txt}</span>`;
+  $('#log').prepend(d);
+}
+
+/* ---------------- utilidades ---------------- */
+const totalU   = (t)=> t.items.reduce((s,i)=> s+i.q, 0);
+const hechas   = (t)=> t.items.reduce((s,i)=> s+i.esc, 0);
+const listas   = (t)=> t.items.filter(i => i.esc >= i.q).length;
+const pendU    = (t)=> totalU(t) - hechas(t);
+const pctDe    = (t)=> totalU(t) ? Math.round(hechas(t)/totalU(t)*100) : 0;
+const siguiente= (t)=> t.items.find(i => i.esc < i.q) || null;
+const reloj    = (s)=> `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+
+const ordenTareas = ()=> [...armados].sort((a,b)=>
+  (PRIOS[a.prioridad].rank - PRIOS[b.prioridad].rank) || (a.nro - b.nro));
+
+/* ---------------- escaneo ---------------- */
+/** Lo que la cámara / el escáner inalámbrico van a ir leyendo */
+const FORMATOS = ['QR', 'CODE_39', 'CODE_128', 'EAN_13'];
+
+function leer(t, fmt){
+  const i = siguiente(t);
+  if (!i){
+    mensaje = {ok:true, texto:'¡Todo escaneado! Tocá Finalizar.'};
+    render(); return;
+  }
+  i.esc += 1;
+  const completo = i.esc >= i.q;
+  mensaje = {ok:true, texto: (completo
+    ? `${i.a} · ¡línea completa! ${i.esc}/${i.q}`
+    : `${i.a} · ${i.esc}/${i.q} u.`) + (fmt ? ` · ${fmt}` : '')};
+  ultimo = {t, idx: t.items.indexOf(i), modo:'u'};
+  log(`escaneo → ${i.a} (${i.c} ${i.t}) ${i.esc}/${i.q}${fmt?` · ${fmt}`:''}`, 'info');
+  if (completo) log(`línea ${i.a} completa ✔ (${listas(t)}/${t.items.length} artículos)`, 'ok');
+  revisarFin(t);
+  render();
+}
+
+/** Lectura con la cámara: en el repo real (html5-qrcode) ya soporta QR + Code 39 + Code 128 + EAN */
+function leerCamara(t){
+  const fmt = FORMATOS[Math.floor(Math.random() * FORMATOS.length)];
+  const sig = siguiente(t);
+  lectura = sig ? {codigo: sig.a, fmt} : null;
+  leer(t, fmt);
+}
+
+/** Tilde al lado del artículo: la cámara no lo leyó y no querés escribirlo */
+function marcarLinea(t, codigo){
+  const i = t.items.find(x => x.a === codigo);
+  if (!i || i.esc >= i.q) return;
+  i.esc = i.q;
+  mensaje = {ok:true, texto:`${i.a} · marcado a mano (sin lectura) ${i.esc}/${i.q}`};
+  ultimo = {t, idx: t.items.indexOf(i), modo:'linea'};
+  lectura = {codigo:i.a, fmt:'tilde manual'};
+  log(`tilde manual → ${i.a} · ${i.q}/${i.q} u. (la cámara no lo leía)`, 'warn');
+  revisarFin(t);
+  render();
+}
+
+function deshacer(){
+  if (!ultimo) return;
+  const i = ultimo.t.items[ultimo.idx];
+  if (i){
+    if (ultimo.modo === 'linea'){ log(`deshacer → ${i.a} vuelve a 0/${i.q}`, 'warn'); i.esc = 0; }
+    else if (i.esc > 0){ i.esc -= 1; log(`deshacer → ${i.a} ${i.esc}/${i.q}`, 'warn'); }
+  }
+  mensaje = null; ultimo = null;
+  render();
+}
+function revisarFin(t){
+  if (t.tipo !== 'armado' || t.estado !== 'aceptado') return;
+  if (listas(t) === t.items.length){
+    t.estado = 'hecho'; t.sesion.estado = 'inactiva';
+    chime(2, 1400);
+    log(`Pedido ${t.nro}: todos los artículos marcados → ARMADO 🏁 (el mayorista lo ve en verde)`, 'ok');
+  }
+}
+
+/* ---------------- sesión ---------------- */
+function accionSesion(t, accion){
+  if (accion === 'iniciar')  { t.sesion.estado = 'en_curso'; log(`sesión iniciada (${t.tipo==='armado'?'armado '+t.nro:'repo '+t.local})`, 'ok'); }
+  if (accion === 'pausar')   { t.sesion.estado = 'pausada';  log('sesión pausada (el tiempo no corre)', 'warn'); }
+  if (accion === 'reanudar') { t.sesion.estado = 'en_curso'; log('sesión reanudada', 'ok'); }
+  render();
+}
+setInterval(()=>{
+  let hay = false;
+  [asig, ...armados].forEach(t => { if (t && t.sesion.estado === 'en_curso'){ t.sesion.seg++; hay = true; } });
+  if (hay){
+    const r = $('#reloj');
+    const t = vista === 'abierto' ? abierto : null;
+    if (r && t){ r.textContent = reloj(t.sesion.seg); r.classList.add('on'); }
+  }
+}, 1000);
+
+/* ---------------- aceptar / omitir / finalizar ---------------- */
+function aceptar(nro){
+  const t = armados.find(a => a.nro === nro);
+  if (!t) return;
+  t.estado = 'aceptado';
+  t.por = {nombre:'Juan Pérez', id:'4471'};
+  chime(1, 1200);
+  log(`UPDATE … set estado='aceptado' where nro=${nro} and estado='pendiente' → 1 fila ✅`, 'ok');
+  log(`Aceptaste el armado del pedido ${nro} · prioridad ${PRIOS[t.prioridad].label}`, 'ok');
+  abrir(t);
+}
+function omitir(nro){
+  omitidos.add(nro);
+  log(`Omitiste el armado del ${nro} (queda para otro legajo)`, 'warn');
+  render();
+}
+function abrir(t){ vista = 'abierto'; abierto = t; mensaje = null; ultimo = null; camara = false; lectura = null; render(); }
+function cerrar(){ vista = 'lista'; abierto = null; mensaje = null; ultimo = null; camara = false; lectura = null; render(); }
+
+let dlgCb = null;
+function preguntar(titulo, texto, cb){
+  $('#dlgTitulo').textContent = titulo;
+  $('#dlgTexto').textContent = texto;
+  dlgCb = cb;
+  $('#overlay').classList.add('on');
+}
+function finalizar(t){
+  const faltan = pendU(t);
+  const titulo = faltan > 0 ? '¿Finalizar con faltantes?' : (t.tipo==='armado' ? '¿Finalizar el armado?' : '¿Finalizar el repo?');
+  const texto = faltan > 0
+    ? `Quedan ${faltan} unidades sin escanear: se van a marcar como faltantes (✕).\nSe guarda tu tiempo (${reloj(t.sesion.seg)}).`
+    : `Se guarda tu tiempo: ${reloj(t.sesion.seg)}.`;
+  preguntar(titulo, texto, ()=>{
+    t.faltantes = faltan;
+    t.sesion.estado = 'inactiva';
+    if (t.tipo === 'armado'){
+      t.estado = 'hecho';
+      chime(2, 1400);
+      resumen = faltan > 0
+        ? `Armado del pedido ${t.nro} finalizado con ${faltan} faltantes · ${reloj(t.sesion.seg)}`
+        : `Armado del pedido ${t.nro} terminado: ${hechas(t)}/${totalU(t)} unidades · ${reloj(t.sesion.seg)}`;
+      log(`Armado ${t.nro} finalizado${faltan>0?` con ${faltan} faltantes`:''} → avisa al mayorista (🏁)`, 'ok');
+    } else {
+      resumen = `Repo finalizado en ${reloj(t.sesion.seg)} · ${hechas(t)} u. escaneadas${faltan>0?` · ${faltantes(faltan)}`:''}`;
+      log(`Repo ${t.local} finalizado · ${hechas(t)} u.${faltan>0?` · ${faltan} faltantes`:''}`, 'ok');
+    }
+    vista = 'lista'; abierto = null; mensaje = null; render();
+  });
+}
+const faltantes = (n)=> `${n} faltante${n===1?'':'s'}`;
+
+/** Manda 10 pedidos juntos: en el celular llegan TODAS, apiladas por prioridad */
+function diezPedidos(){
+  const cli = ['GPAZ S.A. Distribuidora','Deportes Rosario','Almacén El Sol','Kiosco Norte','Valema Representaciones','Farmacia Central','Deportes Sur','El Rodeo','La Espiga','Modas Lu'];
+  const prios = ['urgente','normal','baja','normal','urgente','baja','normal','urgente','normal','baja'];
+  const obs = ['', 'Armar y dejar en puerta 1', '', 'Sale con transporte 14 hs', ''];
+  let nuevos = 0;
+  for (let i = 0; i < 10; i++){
+    const nro = 10200 + i;
+    if (armados.some(a => a.nro === nro)) continue;
+    armados.push(armadoNuevo(nro, cli[i], prios[i], obs[i % obs.length], 0));
+    nuevos++;
+  }
+  vista = 'lista'; abierto = null; camara = false;
+  chime(3, 700); vibrar();
+  log(`INSERT mayorista_armados → ${nuevos} tareas · llegan TODAS juntas al celular`, 'ok');
+  log(`Se apilan por prioridad: urgente → normal → baja (las de hoy arriba)`, 'info');
+  log(`Las aceptás de a una: a cualquier hora podés tomar otra, pero sólo una se escanea por vez`, 'info');
+  render();
+}
+
+/* ---------------- tareas nuevas ---------------- */
+const CATALOGO_PEDIDOS = [
+  {nro:10032, cliente:'GPAZ S.A. Distribuidora', prioridad:'urgente', obs:'Retirar por puerta 2, llamar antes'},
+  {nro:10031, cliente:'Deportes Rosario', prioridad:'normal',  obs:'Armar y dejar en puerta 1'},
+  {nro:10030, cliente:'Almacén El Sol',   prioridad:'baja',    obs:''},
+  {nro:10027, cliente:'Valema Representaciones', prioridad:'urgente', obs:'Sale hoy con transporte 14 hs'},
+];
+let idxNuevo = 0;
+function pedidoNuevo(){
+  const p = CATALOGO_PEDIDOS[idxNuevo % CATALOGO_PEDIDOS.length];
+  idxNuevo++;
+  if (armados.some(a => a.nro === p.nro)){ log(`El ${p.nro} ya tiene armado activo`, 'warn'); return; }
+  armados.push(armadoNuevo(p.nro, p.cliente, p.prioridad, p.obs, 0));
+  vista = 'lista'; abierto = null;
+  chime(PRIOS[p.prioridad].beeps, 700);
+  vibrar();
+  log(`INSERT mayorista_armados → ${p.nro} · prioridad ${PRIOS[p.prioridad].label}`, 'ok');
+  log(`🔔 Suena tu celular (${PRIOS[p.prioridad].beeps} pitidos)`, 'err');
+  render();
+}
+
+/* =========================================================
+   RENDER — pantalla del legajo
+   ========================================================= */
+function render(){
+  $('#pantalla').innerHTML = vista === 'lista' ? listaHtml() : abiertoHtml();
+  renderMayorista();
+  bindear();
+  const pend = armados.filter(a => a.estado === 'pendiente' && !omitidos.has(a.nro)).length;
+  $('#bellCnt').style.display = pend ? 'grid' : 'none';
+  $('#bellCnt').textContent = pend;
+}
+
+function listaHtml(){
+  const tareas = ordenTareas().filter(a => !omitidos.has(a.nro));
+  const pendientes = tareas.filter(a => a.estado === 'pendiente');
+  const mias = tareas.filter(a => a.estado !== 'pendiente');
+
+  const tarjetaRepo = ()=>{
+    const p = pctDe(asig);
+    const est = asig.sesion.estado;
+    return `<button class="tarjeta" data-abrir="asig">
+      <span class="cuerpo">
+        <span class="l1"><span class="chip">${asig.local}</span> ${asig.nombre}</span>
+        <span class="l2">${hechas(asig)} de ${totalU(asig)} unidades
+          ${est==='en_curso'?'<span style="color:#4ade80">● En curso</span>':''}
+          ${est==='pausada'?'<span style="color:#fbbf24">⏸ En pausa</span>':''}
+        </span>
+        <span class="bar ${p===100?'ok':''}"><span style="width:${p}%"></span></span>
+      </span>
+      <span class="go">›</span>
+    </button>`;
+  };
+
+  const tarjetaArmado = (a)=>{
+    const p = pctDe(a);
+    const P = PRIOS[a.prioridad];
+    return `<button class="tarjeta prio" style="--pcol:${P.color}" data-abrir="armado:${a.nro}">
+      <span class="cuerpo">
+        <span class="l1">
+          <span class="chip" style="background:${P.color}26;color:${P.color};border-color:${P.color}55">${P.icon} ${P.label}</span>
+          Pedido N° ${a.nro}
+          ${a.estado==='hecho'?'<span class="chip verde">🏁 listo</span>':''}
+        </span>
+        <span class="l2">${a.cliente} · ${a.items.length} líneas · ${hechas(a)}/${totalU(a)} u.
+          ${a.faltantes?`<span class="chip red">${faltantes(a.faltantes)}</span>`:''}
+        </span>
+        <span class="bar ${p===100?'ok':''}"><span style="width:${p}%"></span></span>
+      </span>
+      <span class="go">›</span>
+    </button>`;
+  };
+
+  const tarjetaOferta = (a)=>{
+    const P = PRIOS[a.prioridad];
+    return `<div class="tarjeta-aceptar" style="--pcol:${P.color}">
+      <div class="tt">${P.icon} Armado ${P.label}</div>
+      <h4>Pedido N° ${a.nro}</h4>
+      <div class="l2">${a.cliente} · ${a.items.length} líneas · ${totalU(a)} unidades</div>
+      ${a.obs?`<div class="obs">“${a.obs}”</div>`:''}
+      <div class="btns">
+        <button class="btn-verde" data-aceptar="${a.nro}">✅ Acepto</button>
+        <button class="btn-ghost" data-omitir="${a.nro}">Omitir</button>
+      </div>
+    </div>`;
+  };
+
+  return `
+    ${resumen?`<div class="resumen-final">🏁 ${resumen}<span>El mayorista ya lo ve en verde en Pedidos de venta.</span></div>`:''}
+
+    <div class="tit">
+      <span class="ic">📷</span>
+      <div><h2>Mi repo</h2><p>Juan Pérez · legajo 4471</p></div>
+    </div>
+
+    ${pendientes.length ? `
+      <div class="secc nuevo">🔔 Armados pedidos <span class="n">${pendientes.length}</span></div>
+      <div style="display:flex;flex-direction:column;gap:10px">${pendientes.map(tarjetaOferta).join('')}</div>
+      ${pendientes.length > 1 ? `<div class="nota-tareas">📋 Van <b style="color:var(--ink)">&nbsp;${pendientes.length}&nbsp;</b> tareas: se apilan todas acá <b style="color:var(--ink)">&nbsp;por prioridad&nbsp;</b> (urgente arriba) y las aceptás <b style="color:var(--ink)">&nbsp;de a una&nbsp;</b> — sólo una se abre para escanear por vez.</div>` : ''}
+      <div class="aviso-nuevo">🔔 Si no lo tomás, sigue sonándole a los demás legajos hasta que alguien lo acepte.</div>
+    ` : ''}
+
+    <div class="secc">${mias.some(a=>a.estado==='aceptado')?'▶ En curso':'📦 Mis repos'}
+      <span class="n">${mias.length + 1}</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      ${mias.map(tarjetaArmado).join('')}
+      ${tarjetaRepo()}
+    </div>
+  `;
+}
+
+function abiertoHtml(){
+  const t = abierto;
+  const P = t.tipo==='armado' ? PRIOS[t.prioridad] : null;
+  const s = t.sesion.estado;
+  const p = pctDe(t);
+  const pend = t.items.filter(i => i.esc < i.q);
+  const listos = t.items.filter(i => i.esc >= i.q);
+  const totalFalta = pendU(t);
+  const todo = totalFalta === 0;
+
+  const filaItem = (i, escaneado)=>`
+    <li>
+      <span class="dat">
+        <span class="codigo">${i.a}
+          <span class="pill">${i.c}</span>
+          <span class="pill v">${i.t}</span>
+          ${!escaneado && i.ub ? `<span class="pill u">${i.ub}</span>` : ''}
+        </span>
+        <span class="desc">${i.d}${i.mat?` · ${i.mat}`:''}</span>
+      </span>
+      ${escaneado
+        ? `<span class="badge-u ok">✓ ${i.q}</span>`
+        : `<span class="badge-u ${i.esc>0?'on':''}">${i.esc>0?`${i.esc}/${i.q}`:`×${i.q}`}</span>
+           <button class="tick" data-tick="${i.a}" title="Marcar el artículo sin escanear (si la cámara no lo lee)" aria-label="Marcar ${i.a}">✓</button>`}
+    </li>`;
+
+  return `
+    <button class="volver" data-volver>‹ ${'Mis repos'}</button>
+
+    ${t.tipo==='armado' ? `
+      <div class="secc nuevo" style="--pcol:${P.color}">${P.icon} Armado de pedido
+        <span class="n" style="background:${P.color}22;border-color:${P.color}55;color:${P.color}">${P.label}</span>
+      </div>` : ''}
+
+    <div class="panel">
+      <div class="p1">
+        <span class="nom">
+          <b>${t.tipo==='armado' ? `Pedido N° ${t.nro}` : t.nombre}</b>
+          <span>
+            ${t.tipo==='armado'
+              ? `<span class="chip" style="background:${P.color}26;color:${P.color};border-color:${P.color}55">${t.cliente}</span>`
+              : `<span class="chip">${t.local}</span>`}
+            <span aria-hidden>·</span> ⏱ <span class="reloj ${s==='en_curso'?'on':''}" id="reloj">${reloj(t.sesion.seg)}</span>
+            ${s==='pausada'?'<span style="color:#fbbf24">en pausa</span>':''}
+          </span>
+        </span>
+        ${s==='inactiva' ? `<button class="sesion iniciar" data-sesion="iniciar">▶ Iniciar</button>`:''}
+        ${s==='en_curso'  ? `<button class="sesion pausar" data-sesion="pausar">⏸ Pausar</button>`:''}
+        ${s==='pausada'   ? `<button class="sesion reanudar" data-sesion="reanudar">▶ Reanudar</button>`:''}
+      </div>
+
+      <div class="prog-fila">
+        <div class="bar ${todo?'ok':''}"><span style="width:${p}%"></span></div>
+        <span class="contador">${hechas(t)}<small>/${totalU(t)}</small></span>
+      </div>
+
+      ${s==='en_curso' ? `
+        <form class="scan" id="formScan">
+          <input name="codigo" autocomplete="off" placeholder="Escaneá o escribí el código…" aria-label="Código de barra" />
+          <button type="button" class="cam" id="btnCam" title="${camara?'Cerrar cámara':'Abrir cámara'}" aria-label="Cámara"
+            style="${camara?'border-color:rgba(56,189,248,.6);background:rgba(56,189,248,.16);color:#7dd3fc':''}">📷</button>
+        </form>` : ''}
+
+      ${camara && s==='en_curso' ? `
+        <div class="camara">
+          <div class="vf">
+            <span class="ley">📷 Cámara · apuntá al código de la prenda</span>
+            ${lectura ? `<span class="lectura">✓ ${lectura.codigo} · ${lectura.fmt}</span>` : ''}
+          </div>
+          <div class="fmts">Leemos:
+            <b class="${lectura&&lectura.fmt==='QR'?'on':''}">QR</b>
+            <b class="${lectura&&lectura.fmt==='CODE_39'?'on':''}">Code 39</b>
+            <b class="${lectura&&lectura.fmt==='CODE_128'?'on':''}">Code 128</b>
+            <b class="${lectura&&lectura.fmt==='EAN_13'?'on':''}">EAN-13</b>
+            <b class="${lectura&&lectura.fmt==='tilde manual'?'on':''}">tilde manual</b>
+          </div>
+          <div class="btns">
+            <button class="btn-verde" id="btnLeerCam" style="height:36px">📷 Simular lectura</button>
+            <button class="btn-ghost" id="btnCerrarCam" style="height:36px">Cerrar cámara</button>
+          </div>
+          <p class="muted" style="font-size:11px">Si el código no se lee, usá la <b style="color:var(--ink)">✓ tilde</b> de al lado del artículo: marca la línea sin escribir nada.</p>
+        </div>` : ''}
+
+      ${mensaje ? `<div class="feedback ${mensaje.ok?'ok':'err'}">
+          <span>${mensaje.ok?'✓':'⚠'} ${mensaje.texto}</span>
+          ${mensaje.ok && ultimo && s==='en_curso' ? `<button class="desh" id="btnDesh">↺ Deshacer</button>`:''}
+        </div>` : ''}
+    </div>
+
+    <div class="lista-tareas">
+      <div class="lh">Faltan escanear <span class="n">${totalFalta} u.</span></div>
+      ${pend.length === 0
+        ? `<div class="vacio-ok">✓ ¡Está todo escaneado!<span>Tocá ${t.tipo==='armado'?'“Finalizar armado”':'“Finalizar repo”'} para cerrar y guardar tu tiempo.</span></div>`
+        : `<ul>${pend.map(i=>filaItem(i,false)).join('')}</ul>`}
+    </div>
+
+    ${t.tipo==='armado' ? `
+      <div class="secc" style="color:#fca5a5">↗ Al finalizar le avisa al mayorista</div>` : ''}
+
+    <button class="finalizar ${todo?'listo':''}" data-fin>
+      🏁 ${t.tipo==='armado' ? (todo?'Finalizar armado':'Finalizar con faltantes') : (todo?'Finalizar repo':'Finalizar con faltantes')}
+    </button>
+
+    ${listos.length ? `
+      <div class="lista-tareas" style="border-color:rgba(34,197,94,.25)">
+        <div class="lh">✓ Escaneados <span class="n ok">${listos.reduce((s2,i)=>s2+i.q,0)} u.</span></div>
+        <ul>${listos.map(i=>filaItem(i,true)).join('')}</ul>
+      </div>` : ''}
+  `;
+}
+
+/* ---------------- columna del mayorista ---------------- */
+function renderMayorista(){
+  const a = armados.find(x => x.nro === 10032) || armados[0];
+  const cont = $('#mayorista');
+
+  if (!a){
+    cont.innerHTML = `<div class="sub" style="font-size:12.5px">
+      Todavía no se pidió ningún armado. Tocá <b style="color:var(--ink)">▶ Ver demo</b> o
+      <b style="color:var(--ink)">🔔 Simular pedido nuevo</b> para que entre la tarea al repo del legajo.</div>`;
+    return;
+  }
+
+  const P = PRIOS[a.prioridad];
+  const p = pctDe(a);
+  const estado =
+    a.estado === 'pendiente' ? `<div class="mk-estado"><span class="dot"></span> ${P.icon} Armado ${P.label} · esperando que alguien lo acepte</div>` :
+    a.estado === 'aceptado'  ? `<div class="mk-estado"><span class="dot"></span> ✅ En curso con Juan Pérez (legajo 4471)</div>` :
+                               `<div class="mk-estado ok"><span class="dot" style="animation:none"></span> 🏁 Armado terminado${a.faltantes?` con ${faltantes(a.faltantes)}`:''} · listo para facturar</div>`;
+
+  cont.innerHTML = `
+    <div class="mk-cab">
+      <div><span class="n">${a.nro}</span><b>${a.cliente}</b>
+        <span class="muted">${a.items.length} líneas · ${totalU(a)} unidades · ${a.prioridad}</span>
+      </div>
+      <span class="chip" style="background:${P.color}26;color:${P.color};border-color:${P.color}55">${P.icon} ${P.label}</span>
+    </div>
+
+    ${estado}
+
+    <div>
+      <div class="mk-pie"><span>Avance del armado</span><b>${hechas(a)}/${totalU(a)} unidades · ${listas(a)}/${a.items.length} artículos</b></div>
+      <div class="bar ${p===100?'ok':''}" style="height:8px;margin-top:6px"><span style="width:${p}%"></span></div>
+    </div>
+
+    <div class="mk-items">
+      ${a.items.map(i=>`<div class="${i.esc>=i.q?'ok':''}">
+        <span class="a">${i.a}</span>
+        <span>${i.d}<br><span class="muted">${i.c} · Talle ${i.t}</span></span>
+        <span class="av">${i.esc>=i.q?'✓':`${i.esc}/${i.q}`}</span>
+      </div>`).join('')}
+    </div>
+
+    <p class="muted">Se pinta línea por línea <b style="color:#86efac">mientras el repo escanea</b> en Mi Repo (columna Avance + barra). No hay que recargar.</p>
+  `;
+}
+
+/* ---------------- eventos ---------------- */
+function bindear(){
+  $$('#pantalla [data-abrir]').forEach(b => b.onclick = ()=>{
+    const v = b.dataset.abrir;
+    abrir(v === 'asig' ? asig : armados.find(a => a.nro === +v.split(':')[1]));
+  });
+  $$('#pantalla [data-aceptar]').forEach(b => b.onclick = ()=> aceptar(+b.dataset.aceptar));
+  $$('#pantalla [data-omitir]').forEach(b => b.onclick = ()=> omitir(+b.dataset.omitir));
+  $$('#pantalla [data-volver]').forEach(b => b.onclick = cerrar);
+  $$('#pantalla [data-sesion]').forEach(b => b.onclick = ()=> accionSesion(abierto, b.dataset.sesion));
+  $$('#pantalla [data-fin]').forEach(b => b.onclick = ()=> finalizar(abierto));
+  const form = $('#formScan');
+  if (form) form.onsubmit = (e)=>{
+    e.preventDefault();
+    const v = form.codigo.value.trim();
+    if (v){ lectura = {codigo:v, fmt:'CODE_128'}; leer(abierto, 'CODE_128'); }
+    else leer(abierto);
+  };
+  const cam = $('#btnCam');
+  if (cam) cam.onclick = ()=>{ camara = !camara; render(); };
+  const btnLeer = $('#btnLeerCam');
+  if (btnLeer) btnLeer.onclick = ()=> leerCamara(abierto);
+  const btnCerr = $('#btnCerrarCam');
+  if (btnCerr) btnCerr.onclick = ()=>{ camara = false; render(); };
+  $$('#pantalla [data-tick]').forEach(b => b.onclick = ()=> marcarLinea(abierto, b.dataset.tick));
+  const desh = $('#btnDesh');
+  if (desh) desh.onclick = deshacer;
+  const inp = $('#formScan input');
+  if (inp) inp.focus();
+}
+
+$('#dlgNo').onclick = ()=>{ $('#overlay').classList.remove('on'); dlgCb = null; };
+$('#overlay').onclick = (e)=>{ if (e.target.id === 'overlay'){ $('#overlay').classList.remove('on'); dlgCb = null; } };
+$('#dlgSi').onclick = ()=>{ $('#overlay').classList.remove('on'); const cb = dlgCb; dlgCb = null; if (cb) cb(); };
+
+$('#btnNuevo').onclick = pedidoNuevo;
+$('#btnDiez').onclick = diezPedidos;
+$('#btnReset').onclick = reiniciar;
+function reiniciar(){
+  armados = [];
+  asig = baseAsig();
+  vista = 'lista'; abierto = null; mensaje = null; ultimo = null;
+  resumen = null; omitidos = new Set(); idxNuevo = 0;
+  $('#log').innerHTML = '';
+  render();
+  log('Mockup Mi Repo listo · lo verde es lo que ya tenés, lo rojo es lo nuevo', 'info');
+}
+
+/* ---------------- demo ---------------- */
+let demo = null;
+const pararDemo = ()=>{ demo.forEach(clearTimeout); demo = null; $('#btnDemo').textContent = '▶ Ver demo'; };
+$('#btnDemo').onclick = ()=>{
+  if (demo) return pararDemo();
+  reiniciar();
+  $('#btnDemo').textContent = '⏸ Detener';
+  const abrirY = (fn, ms)=> setTimeout(fn, ms);
+  const sec = [
+    [300,  ()=>{ pedidoNuevo(); }],
+    [1600, ()=>log('Tarea visible arriba de todo, con prioridad Urgente', 'info')],
+    [2400, ()=>aceptar(10032)],
+    [3200, ()=>accionSesion(abierto, 'iniciar')],
+    [3900, ()=>leer(abierto)],
+    [4300, ()=>leer(abierto)],
+    [4700, ()=>leer(abierto)],
+    [5100, ()=>leer(abierto)],
+    [5500, ()=>leer(abierto)],
+    [5900, ()=>leer(abierto)],
+    [6500, ()=>log('Cada escaneo pinta la línea en verde en la pantalla del mayorista →', 'info')],
+    [7200, ()=>pedidoNuevo()],
+    [8400, ()=>{ omitir(10031); log('10031 queda para otro legajo', 'warn'); }],
+    [9200, ()=>{ vista='lista'; abierto=null; render(); }],
+    [10200,()=>{ cerrar(); log('Probá “Finalizar armado”: si faltan unidades, cierra con faltantes (✕)', 'ok'); }],
+  ];
+  demo = sec.map(([ms,fn])=> abrirY(fn, ms));
+  demo.push(setTimeout(pararDemo, sec[sec.length-1][0] + 1500));
+};
+
+/* ---------------- init ---------------- */
+reiniciar();
+</script>
+</body>
+</html>

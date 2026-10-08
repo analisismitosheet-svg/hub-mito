@@ -1,0 +1,1091 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mockup · Pedir armado (Mayorista → Legajos)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --paper:#050508;
+    --surface:rgba(255,255,255,.035);
+    --surface2:rgba(255,255,255,.07);
+    --surface-solid:#101016;
+    --surface2-solid:#17171f;
+    --line:rgba(255,255,255,.08);
+    --line2:rgba(255,255,255,.18);
+    --ink:#f8fafc;
+    --sub:#94a3b8;
+    --brand:#ef4444;
+    --brand600:#e11d2e;
+    --amber:#f59e0b;
+    --sky:#38bdf8;
+    --emerald:#22c55e;
+    --violet:#a78bfa;
+    --radius:16px;
+    --shadow:0 20px 50px rgba(0,0,0,.55);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:
+      radial-gradient(900px 500px at 12% -10%, rgba(239,68,68,.14), transparent 60%),
+      radial-gradient(800px 500px at 95% 0%, rgba(56,189,248,.10), transparent 55%),
+      var(--paper);
+    color:var(--ink);
+    font-family:'Plus Jakarta Sans',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    font-size:14px; line-height:1.45;
+    min-height:100vh;
+    padding:24px clamp(12px,3vw,36px) 64px;
+  }
+  h1,h2,h3,h4{margin:0;font-weight:800;letter-spacing:-.02em}
+  p{margin:0}
+  button{font-family:inherit;cursor:pointer}
+  .sub{color:var(--sub)}
+  .muted{color:var(--sub);font-size:12px}
+
+  /* ---------- header ---------- */
+  .head{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start;justify-content:space-between;margin-bottom:18px}
+  .badge-mock{
+    display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;
+    background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.35);
+    font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+  }
+  .head h1{font-size:clamp(20px,3vw,30px);margin:8px 0 4px}
+  .actions{display:flex;flex-wrap:wrap;gap:8px}
+  .btn{
+    display:inline-flex;align-items:center;gap:7px;height:38px;padding:0 14px;border-radius:12px;
+    border:1px solid var(--line);background:var(--surface);color:var(--ink);
+    font-size:13px;font-weight:600;transition:.15s;
+  }
+  .btn:hover{background:var(--surface2);border-color:var(--line2)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn-primary{background:linear-gradient(180deg,#ef4444,#dc2626);border-color:#ef4444;color:#fff;box-shadow:0 8px 22px rgba(239,68,68,.28)}
+  .btn-primary:hover{background:linear-gradient(180deg,#f87171,#ef4444);border-color:#f87171}
+  .btn-ghost{background:transparent}
+
+  /* ---------- pasos ---------- */
+  .steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:18px}
+  .step{
+    display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:14px;
+    border:1px solid var(--line);background:var(--surface);
+  }
+  .step .n{
+    flex:0 0 26px;height:26px;border-radius:999px;display:grid;place-items:center;
+    background:var(--surface2);border:1px solid var(--line2);font-size:12px;font-weight:800;color:var(--sub)
+  }
+  .step.on{border-color:rgba(239,68,68,.5);background:rgba(239,68,68,.10)}
+  .step.on .n{background:var(--brand600);border-color:var(--brand);color:#fff}
+  .step b{display:block;font-size:13px}
+  .step span{font-size:11.5px;color:var(--sub)}
+
+  /* ---------- layout ---------- */
+  .grid{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(0,1fr);gap:16px;align-items:start}
+  @media (max-width:1080px){ .grid{grid-template-columns:1fr} .steps{grid-template-columns:1fr} }
+
+  .card{border:1px solid var(--line);background:var(--surface);border-radius:var(--radius);overflow:hidden}
+  .card-h{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.02)}
+  .card-h h3{font-size:13.5px;display:flex;align-items:center;gap:8px}
+  .tag{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:999px;border:1px solid var(--line2);color:var(--sub)}
+
+  /* ---------- app (pantalla pedidos) ---------- */
+  .app{display:grid;grid-template-columns:300px minmax(0,1fr);min-height:520px}
+  @media (max-width:760px){ .app{grid-template-columns:1fr} .list{max-height:230px} }
+  .list{border-right:1px solid var(--line);background:rgba(0,0,0,.2);overflow:auto;max-height:560px}
+  .toolbar{display:flex;gap:8px;padding:10px;border-bottom:1px solid var(--line)}
+  .search{
+    flex:1;height:34px;border-radius:10px;border:1px solid var(--line);background:var(--surface2);
+    color:var(--ink);padding:0 10px;font-size:12.5px;font-family:inherit;outline:none
+  }
+  .search::placeholder{color:var(--sub)}
+  .row{display:flex;gap:10px;width:100%;text-align:left;padding:10px 12px;border:0;background:transparent;color:inherit;transition:.12s;border-bottom:1px solid rgba(255,255,255,.04)}
+  .row:hover{background:var(--surface2)}
+  .row.on{background:rgba(245,158,11,.15)}
+  /* pedidos que los legajos ya fueron marcando → verdes */
+  .row.verde{background:rgba(34,197,94,.12);box-shadow:inset 3px 0 0 #22c55e}
+  .row.verde .num{color:#4ade80}
+  .row.sel{box-shadow:inset 3px 0 0 var(--sky)}
+  .cbx{
+    flex:0 0 18px;width:18px;height:18px;border-radius:6px;border:1.5px solid var(--line2);
+    display:grid;place-items:center;font-size:11px;font-weight:900;color:transparent;margin-top:2px;transition:.12s
+  }
+  .cbx:hover{border-color:var(--sky)}
+  .cbx.on{background:var(--sky);border-color:var(--sky);color:#04202e}
+  .selbar{
+    display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--line);
+    background:rgba(56,189,248,.10);font-size:12px;flex-wrap:wrap
+  }
+  .selbar[hidden]{display:none}   /* el [hidden] necesita ganarle a display:flex */
+  .selbar b{color:#7dd3fc}
+  .filtros{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .chip-per{
+    height:27px;padding:0 11px;border-radius:999px;border:1px solid var(--line);background:transparent;
+    color:var(--sub);font-size:11.5px;font-weight:700;transition:.12s
+  }
+  .chip-per:hover{border-color:var(--line2);color:var(--ink)}
+  .chip-per.on{background:rgba(245,158,11,.16);border-color:rgba(245,158,11,.55);color:#fcd34d}
+  .chip-per.todo{margin-left:auto;border-style:dashed;color:#7dd3fc;border-color:rgba(56,189,248,.45)}
+  .chip-per.todo:hover{background:rgba(56,189,248,.14);color:#bae6fd}
+  #mResumen{display:flex;flex-direction:column;gap:8px}
+  #mResumen .resumen{margin:0}
+  .row > span > span{display:block}
+  .row .num{font-weight:800;font-variant-numeric:tabular-nums;font-size:13px}
+  .row.on .num{color:var(--amber)}
+  .row .cli{font-size:12.5px;font-weight:600;opacity:.9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .row .meta{font-size:11px;color:var(--sub);display:flex;gap:6px;align-items:center;margin-top:2px}
+  .chip-motivo{font-size:9.5px;font-weight:800;padding:1px 6px;border-radius:6px;background:rgba(56,189,248,.16);color:#7dd3fc}
+  .chip-estado{font-size:9.5px;font-weight:800;padding:1px 6px;border-radius:6px;letter-spacing:.04em}
+  .p-bruto{margin-left:auto;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
+
+  .detail{padding:14px;min-width:0}
+  .barra{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+  .barra .der{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+  .icon-btn{
+    height:36px;padding:0 12px;border-radius:11px;border:1px solid var(--line);background:var(--surface);
+    color:var(--ink);font-size:12.5px;font-weight:600;display:inline-flex;align-items:center;gap:6px;transition:.15s
+  }
+  .icon-btn:hover{background:var(--surface2);border-color:var(--line2)}
+  .icon-btn:disabled{opacity:.4;cursor:not-allowed}
+  .btn-armado{
+    height:36px;padding:0 14px;border-radius:11px;border:1px solid var(--brand);color:#fff;font-size:12.5px;font-weight:800;
+    display:inline-flex;align-items:center;gap:7px;background:linear-gradient(180deg,#ef4444,#dc2626);
+    box-shadow:0 8px 20px rgba(239,68,68,.3);transition:.15s
+  }
+  .btn-armado:hover{filter:brightness(1.1)}
+  .btn-cancel{background:transparent;border-color:var(--line2);color:var(--sub);box-shadow:none}
+
+  .cab{border:1px solid var(--line);background:var(--surface2);border-radius:14px;padding:14px;display:flex;gap:16px;flex-wrap:wrap}
+  .campos{flex:1;display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px 16px;min-width:0}
+  .campo label{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--sub);font-weight:700;margin-bottom:2px}
+  .campo div{font-size:13px;font-weight:600}
+  .campo .amber{color:var(--amber)}
+  .sel-off{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--sub);border:1px dashed var(--line2);border-radius:14px;padding:48px 12px;text-align:center}
+
+  table.items{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:12px;min-width:520px}
+  .tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+  table.items th{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--sub);text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);font-weight:800}
+  table.items td{padding:9px 12px;border-bottom:1px solid rgba(255,255,255,.045)}
+  table.items tr:last-child td{border-bottom:0}
+  table.items .num{text-align:right;font-variant-numeric:tabular-nums}
+  table.items tr.ok td{background:rgba(34,197,94,.09)}
+  .av{font-variant-numeric:tabular-nums;font-weight:800}
+  .av.ok{color:#4ade80}
+  .prog{height:7px;border-radius:99px;background:rgba(255,255,255,.10);overflow:hidden;margin-top:6px}
+  .prog span{display:block;height:100%;background:linear-gradient(90deg,#22c55e,#86efac);transition:width .35s cubic-bezier(.23,1,.32,1)}
+  .items-mini{margin:7px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:3px;font-size:10.5px;max-height:104px;overflow:auto}
+  .items-mini li{display:flex;gap:6px;align-items:center;color:var(--sub)}
+  .items-mini li b{color:var(--ink);font-weight:700;font-variant-numeric:tabular-nums}
+  .items-mini li.ok{color:#86efac;text-decoration:line-through;opacity:.75}
+  .btn-mini{
+    height:30px;padding:0 10px;border-radius:9px;border:1px solid var(--line2);background:var(--surface2);
+    color:var(--ink);font-size:11.5px;font-weight:700;display:inline-flex;align-items:center;gap:6px;transition:.12s
+  }
+  .btn-mini:hover{background:var(--line);border-color:var(--line2)}
+  .btn-mini.scan{border-color:rgba(56,189,248,.5);color:#7dd3fc}
+  .btn-mini:disabled{opacity:.4;cursor:not-allowed}
+  .tot{display:flex;justify-content:flex-end;gap:18px;padding:11px 12px;border-top:1px solid var(--line);font-size:13px}
+  .tot b{font-size:15px;font-variant-numeric:tabular-nums}
+
+  .chip-estado-bar{
+    margin-top:12px;display:flex;align-items:center;gap:10px;padding:11px 13px;border-radius:13px;
+    border:1px solid rgba(245,158,11,.4);background:rgba(245,158,11,.10);font-size:12.5px;flex-wrap:wrap
+  }
+  .chip-estado-bar.ok{border-color:rgba(34,197,94,.4);background:rgba(34,197,94,.10)}
+  .dot{width:8px;height:8px;border-radius:999px;background:var(--amber);box-shadow:0 0 0 0 rgba(245,158,11,.6);animation:pulso 1.6s infinite}
+  .chip-estado-bar.ok .dot{background:var(--emerald);animation:none}
+  @keyframes pulso{0%{box-shadow:0 0 0 0 rgba(245,158,11,.5)}70%{box-shadow:0 0 0 10px rgba(245,158,11,0)}100%{box-shadow:0 0 0 0 rgba(245,158,11,0)}}
+
+  /* ---------- campana header ---------- */
+  .bell{position:relative;display:inline-grid;place-items:center;width:34px;height:34px;border-radius:11px;border:1px solid var(--line);background:var(--surface)}
+  .bell .cnt{position:absolute;top:-6px;right:-6px;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:#ef4444;color:#fff;font-size:9.5px;font-weight:800;display:grid;place-items:center}
+
+  /* ---------- celulares ---------- */
+  .phones{display:flex;flex-direction:column;gap:12px}
+  .phone{
+    border:1px solid var(--line);border-radius:22px;background:linear-gradient(180deg,#0c0c12,#111119);
+    padding:10px;box-shadow:var(--shadow);position:relative;overflow:hidden
+  }
+  .phone.ring{animation:ring .45s ease-in-out infinite alternate;border-color:rgba(239,68,68,.55)}
+  @keyframes ring{from{transform:translateX(-2px)}to{transform:translateX(2px)}}
+  .ph-top{display:flex;align-items:center;justify-content:space-between;font-size:10.5px;color:var(--sub);padding:2px 6px 8px}
+  .ph-screen{border-radius:16px;background:#07070c;border:1px solid rgba(255,255,255,.07);padding:12px;min-height:132px;position:relative}
+  .ph-user{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+  .avatar{width:26px;height:26px;border-radius:999px;display:grid;place-items:center;font-size:11px;font-weight:800;background:rgba(167,139,250,.18);color:#c4b5fd;border:1px solid rgba(167,139,250,.35)}
+  .ph-user b{font-size:12px}
+  .ph-user span{font-size:10.5px;color:var(--sub);display:block}
+  .vacio{font-size:11.5px;color:var(--sub);text-align:center;padding:16px 4px}
+
+  .stack{display:flex;flex-direction:column;gap:8px}
+  .orden{font-size:10px;letter-spacing:.05em;color:var(--sub);display:flex;align-items:center;gap:6px;margin-bottom:2px;text-transform:uppercase;font-weight:800}
+  .orden b{color:#fcd34d}
+  .toast{
+    border-radius:13px;border:1px solid var(--line2);background:rgba(255,255,255,.05);
+    padding:10px;animation:in .35s cubic-bezier(.23,1,.32,1);position:relative;overflow:hidden
+  }
+  @keyframes in{from{opacity:0;transform:translateY(-10px) scale(.97)}to{opacity:1;transform:none}}
+  .toast::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--pcol,var(--amber))}
+  .toast .tt{font-size:9.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--pcol);display:flex;align-items:center;gap:5px}
+  .toast h4{font-size:13.5px;margin:4px 0 2px}
+  .toast .cli{font-size:11.5px;color:#cbd5e1}
+  .toast .obs{font-size:10.5px;color:var(--sub);margin-top:5px;font-style:italic}
+  .toast .qui{font-size:10.5px;color:#86efac;margin-top:6px;font-weight:700}
+  .toast .btns{display:flex;gap:7px;margin-top:9px}
+  .toast .aceptar{
+    flex:1;height:31px;border-radius:9px;border:0;background:linear-gradient(180deg,#22c55e,#16a34a);color:#fff;
+    font-size:12px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;gap:6px
+  }
+  .toast .omitir{height:31px;padding:0 11px;border-radius:9px;border:1px solid var(--line2);background:transparent;color:var(--sub);font-size:12px;font-weight:700}
+  .toast.done{opacity:.72;border-color:rgba(34,197,94,.35);background:rgba(34,197,94,.07)}
+  .toast.done .aceptar{background:var(--surface2);color:var(--sub);pointer-events:none}
+  .sonando{position:absolute;right:8px;top:8px;font-size:9.5px;font-weight:800;color:#fca5a5;background:rgba(239,68,68,.18);border:1px solid rgba(239,68,68,.4);padding:2px 6px;border-radius:999px;animation:blink 1s infinite}
+  @keyframes blink{50%{opacity:.35}}
+
+  /* ---------- modal ---------- */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(4px);display:none;place-items:center;z-index:60;padding:16px}
+  .overlay.on{display:grid}
+  .modal{
+    width:min(520px,100%);border-radius:20px;border:1px solid var(--line2);background:var(--surface-solid,#101016);
+    box-shadow:0 30px 80px rgba(0,0,0,.7);overflow:hidden;animation:in .3s cubic-bezier(.23,1,.32,1)
+  }
+  .modal-h{padding:16px 18px;border-bottom:1px solid var(--line);display:flex;gap:11px;align-items:flex-start}
+  .modal-h .ic{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;background:rgba(239,68,68,.15);color:#f87171;border:1px solid rgba(239,68,68,.35)}
+  .modal-h h3{font-size:15px}
+  .modal-h p{font-size:12px;color:var(--sub);margin-top:2px}
+  .modal-b{padding:16px 18px;display:flex;flex-direction:column;gap:14px}
+  .resumen{display:flex;gap:12px;align-items:center;padding:11px 13px;border-radius:13px;border:1px solid var(--line);background:var(--surface2)}
+  .resumen .n{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:17px;font-weight:800;color:var(--amber)}
+  .resumen .d{font-size:12px}
+  .resumen .d b{display:block;font-size:13px}
+  label.lbl{font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--sub)}
+  .prio{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  @media (max-width:460px){ .prio{grid-template-columns:1fr} }
+  .p{
+    text-align:left;padding:11px 12px;border-radius:13px;border:1.5px solid var(--line);background:var(--surface);
+    transition:.15s;position:relative;color:var(--ink)
+  }
+  .p:hover{border-color:var(--line2);transform:translateY(-2px)}
+  .p b{display:flex;align-items:center;gap:6px;font-size:13px}
+  .p span{display:block;font-size:10.5px;color:var(--sub);margin-top:3px;line-height:1.35}
+  .p .sw{width:9px;height:9px;border-radius:99px}
+  .p.on{border-color:var(--pcol);background:color-mix(in srgb, var(--pcol) 14%, transparent);box-shadow:0 6px 18px color-mix(in srgb, var(--pcol) 25%, transparent)}
+  .p.on b{color:var(--pcol)}
+  textarea{
+    width:100%;min-height:64px;resize:vertical;border-radius:12px;border:1px solid var(--line);background:var(--surface2);
+    color:var(--ink);font-family:inherit;font-size:12.5px;padding:10px 12px;outline:none
+  }
+  textarea:focus{border-color:var(--line2)}
+  .alcance{display:flex;align-items:center;gap:9px;padding:10px 12px;border-radius:12px;border:1px dashed var(--line2);font-size:11.5px;color:var(--sub)}
+  .modal-f{padding:13px 18px;border-top:1px solid var(--line);display:flex;gap:9px;justify-content:flex-end;background:rgba(255,255,255,.02)}
+
+  /* ---------- log + notas ---------- */
+  .log{max-height:190px;overflow:auto;padding:10px 14px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;display:flex;flex-direction:column;gap:5px}
+  .log div{display:flex;gap:9px;animation:in .25s}
+  .log time{color:var(--sub);flex:0 0 auto}
+  .log .ok{color:#86efac}.log .warn{color:#fcd34d}.log .info{color:#7dd3fc}.log .err{color:#fca5a5}
+
+  .notas{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:22px}
+  .nota{border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:16px}
+  .nota h4{font-size:13.5px;display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .nota ul{margin:0;padding-left:16px;display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:#cbd5e1}
+  .nota li b{color:var(--ink)}
+  pre{
+    margin:10px 0 0;padding:12px;border-radius:12px;border:1px solid var(--line);background:#07070c;
+    overflow:auto;font-size:11px;line-height:1.55;color:#cbd5e1;font-family:ui-monospace,Menlo,Consolas,monospace
+  }
+  pre .kw{color:#fca5a5}.pre .cm{color:#64748b}
+  .cm2{color:#64748b}
+  .flow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:11.5px;margin-top:10px}
+  .flow i{font-style:normal;padding:5px 9px;border-radius:999px;border:1px solid var(--line2);background:var(--surface2);color:#cbd5e1}
+  .flow em{color:var(--sub);font-style:normal}
+</style>
+</head>
+<body>
+
+<!-- ============ HEADER ============ -->
+<div class="head">
+  <div>
+    <span class="badge-mock">● Mockup · no es código real</span>
+    <h1>Pedir armado → se lo asigno a los legajos</h1>
+    <p class="sub" style="max-width:640px">
+      Flujo: en <b>Pedidos de venta</b> elegís el pedido 10032 (GPaz), tocás <b>Pedir armado</b>,
+      elegís la prioridad y se la mandás al repo. A los <b>legajos logueados</b> les aparece la tarjeta
+      en su celular <b>y les suena</b>, hasta que uno la acepta.
+    </p>
+  </div>
+  <div class="actions">
+    <button class="btn" id="btnSonido">🔊 Probar sonido</button>
+    <button class="btn" id="btnAuto">▶ Ver flujo automático</button>
+    <button class="btn btn-ghost" id="btnReset">↺ Reiniciar</button>
+  </div>
+</div>
+
+<!-- ============ PASOS ============ -->
+<div class="steps" id="steps">
+  <div class="step on" data-step="1"><span class="n">1</span><div><b>Pedidos de venta</b><span>Botón “Pedir armado” en el pedido abierto</span></div></div>
+  <div class="step" data-step="2"><span class="n">2</span><div><b>Elegir prioridad</b><span>Card modal: urgente / normal / baja + obs.</span></div></div>
+  <div class="step" data-step="3"><span class="n">3</span><div><b>Legajos reciben</b><span>Notificación + sonido en el celular, uno acepta</span></div></div>
+</div>
+
+<div class="grid">
+  <!-- =================== APP MAYORISTA =================== -->
+  <div class="card">
+    <div class="card-h">
+      <h3>🖥️ Mayorista · Pedidos de venta <span class="tag">pantalla existente</span></h3>
+      <div class="bell" title="Campana de notificaciones (header)">🔔<span class="cnt" id="bellCnt" style="display:none">1</span></div>
+    </div>
+
+    <div class="app">
+      <!-- lista -->
+      <aside class="list">
+        <div class="toolbar">
+          <input class="search" placeholder="Buscar por n° o cliente…" />
+          <button class="icon-btn" style="height:34px;padding:0 10px">⟳</button>
+        </div>
+        <!-- filtro de fecha + tildar todo lo del filtro -->
+        <div class="filtros" id="filtros">
+          <button class="chip-per on" data-per="hoy">Hoy</button>
+          <button class="chip-per" data-per="semana">Esta semana</button>
+          <button class="chip-per" data-per="todas">Todas</button>
+          <button class="chip-per todo" id="btnSelTodo" title="Selecciona todos los pedidos que muestra el filtro">☑ Tildar todo</button>
+        </div>
+        <div class="selbar" id="selBar" hidden>
+          <b id="selTxt">0 pedidos</b>
+          <span class="muted" id="selTotal"></span>
+          <button class="btn-armado" style="height:30px;margin-left:auto" id="btnArmadoSel">🔔 Pedir armado</button>
+          <button class="icon-btn" style="height:30px" id="btnSelLimpiar">Limpiar</button>
+        </div>
+        <div id="lista"></div>
+      </aside>
+
+      <!-- detalle -->
+      <section class="detail">
+        <div class="barra">
+          <button class="icon-btn">← Pedidos</button>
+          <div class="der">
+            <button class="icon-btn">‹</button>
+            <button class="icon-btn">›</button>
+            <button class="icon-btn">⤓ Excel</button>
+            <button class="icon-btn">🖨 Imprimir</button>
+            <!-- NUEVO BOTÓN -->
+            <button class="btn-armado" id="btnPedirArmado">🔔 Pedir armado</button>
+          </div>
+        </div>
+
+        <div class="cab">
+          <div class="campos">
+            <div class="campo" style="grid-column:span 2"><label>Cliente</label><div><span class="amber" id="dCodigo">GPAZ</span> <span id="dCliente">GPAZ S.A. Distribuidora</span></div></div>
+            <div class="campo"><label>Motivo</label><div>Reposición locales</div></div>
+            <div class="campo"><label>Vendedor</label><div>M. Ferreyra</div></div>
+            <div class="campo" style="grid-column:span 2"><label>Observación</label><div id="dObs">Retirar por puerta 2, llamar antes</div></div>
+            <div class="campo"><label>Usuario</label><div>vendedora07</div></div>
+            <div class="campo"><label>Fecha</label><div id="dFecha">06/10/2026</div></div>
+          </div>
+          <div style="text-align:right">
+            <p class="muted" style="text-transform:uppercase;letter-spacing:.07em;font-weight:800">Número</p>
+            <p style="font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:800;font-size:15px" id="dComp">X 0001-00010032</p>
+            <p class="muted" style="margin-top:8px;text-transform:uppercase;letter-spacing:.07em;font-weight:800">Total</p>
+            <p style="font-weight:800;font-size:15px" id="dTotal">$ 1.284.500,00</p>
+          </div>
+        </div>
+
+        <div class="tbl-wrap">
+          <table class="items">
+            <thead><tr><th>Artículo</th><th>Descripción</th><th>Color</th><th>Talle</th><th class="num">Cant.</th><th class="num">Precio</th><th class="num">Avance</th></tr></thead>
+            <tbody id="items"></tbody>
+          </table>
+          <div class="tot"><span class="sub" id="totIzq">12 artículos</span><span>Total <b id="tTotal">$ 1.284.500,00</b></span></div>
+        </div>
+
+        <!-- avance artículo por artículo (lo que va marcando el legajo) -->
+        <div id="progArmado"></div>
+
+        <!-- barra de estado del armado -->
+        <div id="estadoArmado"></div>
+      </section>
+    </div>
+  </div>
+
+  <!-- =================== CELULARES =================== -->
+  <div class="card">
+    <div class="card-h">
+      <h3>📱 Celulares de los legajos <span class="tag">los que están logueados</span></h3>
+      <span class="tag" id="conectados">3 en línea</span>
+    </div>
+    <div class="phones" id="phones" style="padding:14px"></div>
+    <div style="border-top:1px solid var(--line);padding:0">
+      <div class="card-h" style="border-bottom:1px solid var(--line)">
+        <h3>🧾 Log del sistema</h3>
+        <span class="tag">simulación</span>
+      </div>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+</div>
+
+<!-- =================== MODAL =================== -->
+<div class="overlay" id="overlay">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-h">
+      <div class="ic">🔔</div>
+      <div>
+        <h3 id="mTitulo">Pedir armado</h3>
+        <p id="mSub">Se publica la tarea en el repo de todos los legajos conectados.</p>
+      </div>
+    </div>
+    <div class="modal-b">
+      <div id="mResumen"><!-- lo llena JS: 1 o varios pedidos --></div>
+
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <label class="lbl">Prioridad</label>
+        <div class="prio" id="prio">
+          <button class="p on" data-p="urgente" style="--pcol:#ef4444"><b><span class="sw" style="background:#ef4444"></span>Urgente</b><span>Suena ya en todos los celulares y sale primero</span></button>
+          <button class="p" data-p="normal" style="--pcol:#f59e0b"><b><span class="sw" style="background:#f59e0b"></span>Normal</b><span>En cola: se arma hoy, aviso más suave</span></button>
+          <button class="p" data-p="baja" style="--pcol:#38bdf8"><b><span class="sw" style="background:#38bdf8"></span>Baja</b><span>Cuando haya tiempo, sin apuro</span></button>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <label class="lbl" for="obsArmado">Observación para el que lo tome</label>
+        <textarea id="obsArmado" placeholder="Ej: armar completo, controlar 2 faltantes, retirar por puerta 2…"></textarea>
+      </div>
+
+      <div class="alcance">👥 Aviso a <b style="color:var(--ink)">&nbsp;3 legajos conectados</b> · le suena el celular al que lo tenga en pantalla (o push si está cerrada la app).</div>
+    </div>
+    <div class="modal-f">
+      <button class="btn" id="btnCancelar">Cancelar</button>
+      <button class="btn-primary btn" id="btnEnviar">📣 Enviar al repo</button>
+    </div>
+  </div>
+</div>
+
+<!-- =================== NOTAS DE IMPLEMENTACIÓN =================== -->
+<div class="notas">
+  <div class="nota">
+    <h4>🗄️ 1 · Datos (Supabase)</h4>
+    <ul>
+      <li>Tabla nueva <b>mayorista_armados</b>: un registro por pedido mientras esté activo.</li>
+      <li><b>Insert atómico</b> (<span class="cm2">on conflict pedido</span>) para que no se pida dos veces.</li>
+      <li>Un registro por pedido activo (<span class="cm2">pedido_codigo unique</span>): <b>varios pedidos a la vez = varias filas</b>, todas con la misma prioridad si se mandan juntos.</li>
+      <li><b>Cuando alguien acepta</b>: <b>update condicionado</b> a <span class="cm2">estado='pendiente'</span> → sólo uno gana la carrera.</li>
+      <li>Orden de lectura en los celulares: <span class="cm2">order by case prioridad when 'urgente' then 0 when 'normal' then 1 else 2 end, created_at</span></li>
+    </ul>
+<pre><span class="cm2">-- crea la tarea y avisa (RLS: repo la lee, todos la aceptan)</span>
+<span class="kw">create table</span> mayorista_armados (
+  id           uuid primary key default gen_random_uuid(),
+  pedido_codigo text not null unique,   <span class="cm2">-- '10032'</span>
+  cliente      text,
+  prioridad    text not null default 'normal', <span class="cm2">-- urgente|normal|baja</span>
+  estado       text not null default 'pendiente', <span class="cm2">-- pendiente|aceptado|hecho|cancelado</span>
+  solicitado_por uuid,
+  aceptado_por uuid,             <span class="cm2">-- legajo que lo tomó</span>
+  observacion  text,
+  created_at   timestamptz default now(),
+  aceptado_en  timestamptz
+);
+
+<span class="kw">update</span> mayorista_armados
+   <span class="kw">set</span> estado='aceptado', aceptado_por=:yo, aceptado_en=now()
+ <span class="kw">where</span> pedido_codigo=:pedido <span class="kw">and</span> estado='pendiente'
+<span class="kw">returning</span> id;   <span class="cm2">-- 1 fila = lo tomé yo · 0 filas = ya lo tomó otro</span></pre>
+  </div>
+
+  <div class="nota">
+    <h4>📡 2 · Cómo se enteran (y suena)</h4>
+    <ul>
+      <li><b>Realtime de Supabase</b> en <span class="cm2">mayorista_armados</span> → el celular se entera en ~1 s (hoy la campana ya hace polling cada 30 s; para esto baja a 5 s o usa realtime).</li>
+      <li><b>Sonido:</b> un archivo corto en <span class="cm2">public/</span> + <span class="cm2">new Audio().play()</span> desde el click/evento (navegador bloquea autoplay si nadie tocó nada).</li>
+      <li><b>Vibración:</b> <span class="cm2">navigator.vibrate([200,80,200])</span> en Android.</li>
+      <li><b>Notificación nativa:</b> <span class="cm2">Notification.requestPermission()</span> → banner en el celular.</li>
+      <li><b>Que suene con la app cerrada</b> ⇒ Web Push (service worker + FCM/OneSignal) o Supabase Edge Function que mande push al crear la fila. Sin eso, sólo suena con la pestaña abierta.</li>
+    </ul>
+    <div class="flow">
+      <i>insert fila</i><em>→</em><i>realtime broadcast</i><em>→</em><i>tarjeta + sonido</i><em>→</em><i>click Aceptar</i><em>→</em><i>update condicionado</i><em>→</em><i>los otros ven “lo tomó Juan”</i>
+    </div>
+  </div>
+
+  <div class="nota">
+    <h4>🧩 3 · En la UI</h4>
+    <ul>
+      <li><b>Botón “Pedir armado”</b>: en la barra de acciones del pedido abierto (junto a Imprimir) + uno chico en cada fila de la lista.</li>
+      <li><b>Filtro de fecha “Hoy”</b> al lado del de periodo + <b>☑ Tildar todo (N)</b>: filtrás el día, tildás todos y mandás un solo “Pedir armado” (una tarea por pedido).</li>
+      <li><b>Selección múltiple</b>: checkbox por fila; la barra azul muestra cantidad y total, y de ahí se envía todo junto.</li>
+      <li><b>Orden en el celular</b>: las tareas se apilan <b>por prioridad</b> (urgente → normal → baja); a igual prioridad, la más vieja arriba. Suena con cada tarea nueva, aunque ya haya otras activas.</li>
+      <li><b>Estados visibles</b>: <span style="color:var(--amber)">Pendiente</span> → <span style="color:var(--emerald)">En curso con Juan P. (4471)</span> → Hecho. <b>Cada vez que un legajo marca, la fila del pedido queda en verde</b> (EN CURSO ✓ / ARMADO 🏁).</li>
+      <li><b>Avance artículo por artículo</b>: el pedido tiene una columna <b>Avance</b> y una barra con <span class="cm2">unidades marcadas / totales</span>. A medida que el legajo escanea o tilda en el celular, el pedido del mayorista se va pintando en verde línea por línea; cuando queda todo, el armado se cierra solo (🏁) y la fila entera queda verde.</li>
+      <li><b>Campana del header</b>: suma el ítem “Armado pedido N° 10032” con la prioridad.</li>
+      <li><b>Mi Repo</b>: se abre en la tarea nueva con botón Aceptar / Omitir; al aceptar aparece el pedido armable con escaneo.</li>
+      <li><b>Permisos</b>: sólo rol mayorista/admin puede pedir; cualquier legajo con rol repo puede aceptar.</li>
+      <li>Al terminar el armado vuelve a <span class="cm2">hecho</span> y desaparece de los celulares.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   Mockup interactivo — simulación, no toca Supabase
+   ========================================================= */
+const HOY_ISO = '2026-10-08';           // día de hoy en el mockup
+const SEMANA_DESDE = '2026-10-05';      // lunes de la semana
+
+const PEDIDOS = [
+  { n:10032, cli:'GPAZ', nombre:'GPAZ S.A. Distribuidora', total:1284500, fecha:'08/10/2026', iso:HOY_ISO, motivo:'Reposición locales',
+    items:[
+      {a:'784512', d:'Remera Básica Algodón Pércal', c:'Negro', t:'M', q:48, p:8450},
+      {a:'784533', d:'Buzo Canguro Canelado', c:'Gris', t:'L', q:36, p:16900},
+      {a:'784610', d:'Pantalón Jogger Slim', c:'Verde', t:'40', q:30, p:14200},
+      {a:'784688', d:'Campera Terciopelo Offside', c:'Bordo', t:'XL', q:18, p:29800},
+    ]},
+  { n:10031, cli:'DSR', nombre:'Deportes Rosario', total:642300, fecha:'08/10/2026', iso:HOY_ISO, motivo:'Reposición locales', items:[] },
+  { n:10030, cli:'ALS', nombre:'Almacén El Sol', total:318900, fecha:'08/10/2026', iso:HOY_ISO, motivo:'Venta directa', items:[] },
+  { n:10029, cli:'KNO', nombre:'Kiosco Norte', total:154200, fecha:'07/10/2026', iso:'2026-10-07', motivo:'Reposición locales', items:[] },
+  { n:10027, cli:'VMA', nombre:'Valema Representaciones', total:742600, fecha:'06/10/2026', iso:'2026-10-06', motivo:'Venta directa', items:[] },
+  { n:10025, cli:'FCE', nombre:'Farmacia Central', total:987500, fecha:'04/10/2026', iso:'2026-10-04', motivo:'Donación', items:[] },
+];
+
+/* rank = orden en que se apilan en el celular (0 = primero) */
+const PRIOS = {
+  urgente:{label:'Urgente', color:'#ef4444', beeps:3, icon:'🚨', rank:0},
+  normal :{label:'Normal',  color:'#f59e0b', beeps:2, icon:'⏰', rank:1},
+  baja   :{label:'Baja',    color:'#38bdf8', beeps:1, icon:'🌙', rank:2},
+};
+
+/* Artículos de cada pedido: lo que el repo va a escanear / tildar */
+const ITEMS_BASE = [
+  {a:'784512', d:'Remera Básica Algodón Pércal', c:'Negro', t:'M', q:48, p:8450},
+  {a:'784533', d:'Buzo Canguro Canelado', c:'Gris', t:'L', q:36, p:16900},
+  {a:'784610', d:'Pantalón Jogger Slim', c:'Verde', t:'40', q:30, p:14200},
+  {a:'784688', d:'Campera Terciopelo Offside', c:'Bordo', t:'XL', q:18, p:29800},
+];
+const itemsDe = (p) => (p.items && p.items.length ? p.items : ITEMS_BASE);
+/** Avance del armado */
+const unidades    = (a) => a.items.reduce((s,i)=> s + i.q, 0);
+const marcadas    = (a) => a.items.reduce((s,i)=> s + Math.min(i.esc, i.q), 0);
+const articulosOk = (a) => a.items.filter(i => i.esc >= i.q).length;
+
+const LEGAJOS = [
+  { id:'4471', nombre:'Juan Pérez',    rol:'Repo · turno mañana' },
+  { id:'4482', nombre:'Lucía Gómez',   rol:'Repo · turno mañana' },
+  { id:'4510', nombre:'Martín Duarte', rol:'Depósito' },
+];
+
+const $  = (s)=>document.querySelector(s);
+const $$ = (s)=>document.querySelectorAll(s);
+const money = (v)=> '$ ' + new Intl.NumberFormat('es-AR',{minimumFractionDigits:2}).format(v);
+
+let sel = 10032;
+let prioElegida = 'urgente';
+/** Todos los armados activos: [{nro, cliente, total, prioridad, obs, estado, por, creado, secs}] */
+let armados = [];
+/** `${nro}|${legajo}` → el legajo lo descartó y ya no se lo vuelvo a mostrar */
+const omitidos = new Set();
+
+const activoDe = (n) => armados.find(a => a.nro === n);
+/** Prioridad primero (urgente → normal → baja); a igual prioridad, el más viejo arriba */
+const ordenar = (lista) => [...lista].sort((a, b) =>
+  (PRIOS[a.prioridad].rank - PRIOS[b.prioridad].rank) || (a.creado - b.creado));
+const pendientes = () => armados.filter(a => a.estado === 'pendiente');
+/** Varios pedidos marcados con el checkbox (tildes de la lista) */
+const seleccion = new Set();
+
+/* ---------------- sonido (Web Audio, sin archivo) ---------------- */
+let ctxAudio = null;
+function chime(beeps = 2, hz = 880){
+  try{
+    ctxAudio = ctxAudio || new (window.AudioContext || window.webkitAudioContext)();
+    if (ctxAudio.state === 'suspended') ctxAudio.resume();
+    const t0 = ctxAudio.currentTime;
+    for (let i = 0; i < beeps; i++){
+      const t = t0 + i * 0.30;
+      const osc = ctxAudio.createOscillator();
+      const g   = ctxAudio.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(hz, t);
+      osc.frequency.exponentialRampToValueAtTime(hz * 1.5, t + 0.16);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.28, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
+      osc.connect(g).connect(ctxAudio.destination);
+      osc.start(t); osc.stop(t + 0.26);
+    }
+  }catch(e){ /* sin audio disponible */ }
+}
+function vibrar(){ if (navigator.vibrate) navigator.vibrate([220,90,220]); }
+
+/* ---------------- log ---------------- */
+function log(txt, tipo='info'){
+  const d = document.createElement('div');
+  const h = new Date().toLocaleTimeString('es-AR');
+  d.innerHTML = `<time>${h}</time><span class="${tipo}">${txt}</span>`;
+  $('#log').prepend(d);
+}
+function paso(n){ $$('#steps .step').forEach(s => s.classList.toggle('on', +s.dataset.step === n)); }
+
+/* ---------------- render ---------------- */
+function pedidoActual(){ return PEDIDOS.find(p => p.n === sel); }
+
+function renderLista(){
+  const filas = visibles();                 // respeta el filtro de fecha (Hoy / Esta semana / Todas)
+  if (!filas.length){
+    $('#lista').innerHTML = `<p style="padding:22px 14px;text-align:center;font-size:12px;color:var(--sub)">Sin pedidos en “${periodo==='hoy'?'Hoy':periodo==='semana'?'Esta semana':'Todas'}”.</p>`;
+  } else {
+  $('#lista').innerHTML = filas.map(p=>{
+    const a = activoDe(p.n);
+    // verde: el legajo lo aceptó / lo marcó terminado
+    const verde = a && a.estado !== 'pendiente';
+    const clase = ['row', p.n===sel?'on':'', seleccion.has(p.n)?'sel':'', verde?'verde':''].filter(Boolean).join(' ');
+    let chip = '';
+    if (a && a.estado === 'pendiente') chip = `<span class="chip-estado" style="background:${PRIOS[a.prioridad].color}22;color:${PRIOS[a.prioridad].color}">${PRIOS[a.prioridad].label.toUpperCase()}</span>`;
+    if (a && a.estado === 'aceptado')  chip = `<span class="chip-estado" style="background:#22c55e22;color:#4ade80">EN CURSO ✓</span>`;
+    if (a && a.estado === 'hecho')     chip = `<span class="chip-estado" style="background:#22c55e33;color:#86efac">ARMADO 🏁</span>`;
+    return `<button class="${clase}" data-n="${p.n}">
+      <span class="cbx ${seleccion.has(p.n)?'on':''}" data-cbx="${p.n}" role="checkbox" aria-label="Seleccionar pedido ${p.n}" title="Seleccionar varios pedidos">✓</span>
+      <span style="min-width:0;flex:1">
+        <span class="num">N° ${p.n}</span>
+        <span class="cli">${p.nombre}</span>
+        <span class="meta">
+          ${p.fecha}
+          <span class="chip-motivo">${p.motivo}</span>
+          ${chip}
+        </span>
+      </span>
+      <span class="p-bruto">${money(p.total)}</span>
+    </button>`;
+  }).join('');
+  }
+
+  $$('#lista .row').forEach(b => b.onclick = ()=>{ sel = +b.dataset.n; render(); });
+  $$('#lista .cbx').forEach(c => c.onclick = (e)=>{
+    e.stopPropagation();
+    const n = +c.dataset.cbx;
+    seleccion.has(n) ? seleccion.delete(n) : seleccion.add(n);
+    render();
+  });
+
+  // barra de selección múltiple
+  const bar = $('#selBar');
+  bar.hidden = seleccion.size === 0;
+  $('#selTxt').textContent = `${seleccion.size} pedido${seleccion.size===1?'':'s'}`;
+}
+
+function renderDetalle(){
+  const p = pedidoActual();
+  $('#dCodigo').textContent = p.cli;
+  $('#dCliente').textContent = p.nombre;
+  $('#dFecha').textContent = p.fecha;
+  $('#dTotal').textContent = money(p.total);
+  $('#tTotal').textContent = money(p.total);
+  $('#dComp').textContent = 'X 0001-' + String(p.n).padStart(8,'0');
+
+  const a = activoDe(p.n);
+  // avance artículo por artículo (lo que el legajo ya escaneó / tildó)
+  const items = itemsDe(p).map((i, idx) => {
+    const esc = a && a.items && a.items[idx] ? a.items[idx].esc : 0;
+    return { ...i, esc, ok: esc >= i.q };
+  });
+  const uTot = items.reduce((s,i)=> s + i.q, 0);
+  const uOk  = items.reduce((s,i)=> s + Math.min(i.esc, i.q), 0);
+  const aOk  = items.filter(i => i.ok).length;
+
+  $('#items').innerHTML = items.map(i=>`<tr class="${i.ok ? 'ok' : ''}">
+      <td style="font-family:ui-monospace,monospace;color:${i.ok ? '#4ade80' : 'var(--amber)'}">${i.a}</td>
+      <td>${i.d}</td><td>${i.c}</td><td>${i.t}</td>
+      <td class="num">${i.q}</td><td class="num">${money(i.p)}</td>
+      <td class="num"><span class="av ${i.ok ? 'ok' : ''}">${i.ok ? '✓' : Math.min(i.esc, i.q) + '/' + i.q}</span></td>
+    </tr>`).join('');
+
+  $('#totIzq').textContent = a
+    ? `${aOk}/${items.length} artículos · ${uOk}/${uTot} unidades`
+    : `${items.length} artículos · ${uTot} unidades`;
+
+  $('#progArmado').innerHTML = a ? `
+    <div style="margin-top:10px">
+      <div style="display:flex;justify-content:space-between;gap:10px;font-size:11.5px;color:var(--sub)">
+        <span>Avance del armado${a.por ? ` · ${a.por.nombre} (legajo ${a.por.id})` : ''}</span>
+        <b style="color:#4ade80">${uOk}/${uTot} unidades · ${aOk}/${items.length} artículos</b>
+      </div>
+      <div class="prog"><span style="width:${uTot ? Math.round(uOk / uTot * 100) : 0}%"></span></div>
+    </div>` : '';
+
+  // botón + barra de estado
+  const btn = $('#btnPedirArmado');
+  if (a){
+    btn.textContent = '✕ Cancelar armado';
+    btn.classList.add('btn-cancel');
+    btn.classList.remove('btn-armado');
+  } else {
+    btn.innerHTML = '🔔 Pedir armado';
+    btn.classList.remove('btn-cancel');
+    btn.classList.add('btn-armado');
+  }
+
+  const cont = $('#estadoArmado');
+  const otros = armados.filter(x => x.nro !== p.n);
+  const pieOtros = otros.length
+    ? `<span style="margin-left:auto;color:#fcd34d">· ${otros.length} armado(s) más en curso</span>` : '';
+  if (!a){
+    cont.innerHTML = `<div class="chip-estado-bar" style="border-style:dashed;border-color:var(--line);background:transparent;color:var(--sub)">
+      💡 Tocá <b style="color:var(--ink)">&nbsp;Pedir armado&nbsp;</b> para mandar este pedido al repo de los legajos.${pieOtros}</div>`;
+  } else if (a.estado === 'pendiente'){
+    const P = PRIOS[a.prioridad];
+    cont.innerHTML = `<div class="chip-estado-bar" style="border-color:${P.color}66;background:${P.color}14">
+      <span class="dot" style="background:${P.color}"></span>
+      <b style="color:${P.color}">${P.icon} Armado ${P.label}</b>
+      <span>Pedido N° ${a.nro} · esperando que algún legajo lo acepte…</span>
+      <span class="muted" style="margin-left:auto">avisado hace ${a.secs}s</span>
+    </div>`;
+  } else if (a.estado === 'aceptado'){
+    cont.innerHTML = `<div class="chip-estado-bar ok">
+      <span class="dot"></span>
+      <b style="color:#86efac">✅ En curso con ${a.por.nombre} (legajo ${a.por.id})</b>
+      <span>Pedido N° ${a.nro} · prioridad ${PRIOS[a.prioridad].label.toLowerCase()}</span>
+      <span class="muted" style="margin-left:auto">tomada hace ${a.secs}s</span>
+    </div>`;
+  } else {
+    cont.innerHTML = `<div class="chip-estado-bar ok" style="border-color:rgba(34,197,94,.65);background:rgba(34,197,94,.18)">
+      <span class="dot" style="background:#4ade80;animation:none"></span>
+      <b style="color:#4ade80">🏁 Armado terminado por ${a.por.nombre} (legajo ${a.por.id})</b>
+      <span>Pedido N° ${a.nro} listo para facturar / retirar</span>
+      <span class="muted" style="margin-left:auto">hace ${a.secs}s</span>
+    </div>`;
+  }
+}
+
+function tarjetaArmado(a, L){
+  const P = PRIOS[a.prioridad];
+  const mio    = a.estado === 'aceptado' && a.por && a.por.id === L.id;
+  const termin = a.estado === 'hecho'     && a.por && a.por.id === L.id;
+  const tomado = a.estado !== 'pendiente' && a.por && a.por.id !== L.id;
+
+  if (termin) return `<div class="toast done" style="--pcol:#22c55e;opacity:.6">
+      <div class="tt" style="color:#86efac">🏁 Terminado</div>
+      <h4>Pedido N° ${a.nro}</h4>
+      <div class="cli">${a.cliente} · armado completo</div>
+    </div>`;
+
+  if (tomado) return `<div class="toast done" style="--pcol:${P.color};opacity:.55">
+      <div class="tt">${P.icon} ${P.label} · ya lo tomó otro</div>
+      <h4>Pedido N° ${a.nro}</h4>
+      <div class="cli">${a.cliente}</div>
+      <div class="qui">👤 Lo tomó ${a.por.nombre} · legajo ${a.por.id}</div>
+    </div>`;
+
+  if (mio){
+    const tot = unidades(a), ok = marcadas(a), aOk = articulosOk(a);
+    const pct = tot ? Math.round(ok / tot * 100) : 0;
+    const lista = a.items.map((i, idx) => {
+      const completo = i.esc >= i.q;
+      return `<li class="${completo ? 'ok' : ''}">${completo ? '✓' : '○'} <b>${i.a}</b> ${i.d.slice(0,18)}… ${completo ? '' : `${Math.min(i.esc,i.q)}/${i.q}`}</li>`;
+    }).join('');
+    return `<div class="toast done" style="--pcol:${P.color}">
+      <div class="tt">${P.icon} ${P.label} · lo tomaste vos</div>
+      <h4>Pedido N° ${a.nro}</h4>
+      <div class="cli">${a.cliente} · <b style="color:#86efac">${ok}/${tot} unidades</b> · ${aOk}/${a.items.length} artículos</div>
+      <div class="prog"><span style="width:${pct}%"></span></div>
+      <ul class="items-mini">${lista}</ul>
+      <div class="btns">
+        <button class="btn-mini scan" data-escanear="${a.nro}" data-legajo="${L.id}">📷 Escanear / tildar</button>
+        <button class="btn-mini" data-tildar="${a.nro}" data-legajo="${L.id}">✓ Marcar resto</button>
+      </div>
+      <div class="btns">
+        <button class="aceptar" data-terminar="${a.nro}" data-legajo="${L.id}">🏁 Marcar terminado</button>
+      </div>
+    </div>`;
+  }
+
+  return `<div class="toast" style="--pcol:${P.color}">
+      <div class="tt">${P.icon} Armado ${P.label}</div>
+      <h4>Pedido N° ${a.nro}</h4>
+      <div class="cli">${a.cliente} · ${money(a.total)}</div>
+      ${a.obs ? `<div class="obs">“${a.obs}”</div>` : ''}
+      <div class="btns">
+        <button class="aceptar" data-aceptar="${a.nro}" data-legajo="${L.id}">✅ Acepto</button>
+        <button class="omitir" data-omitir="${a.nro}" data-legajo="${L.id}">Omitir</button>
+      </div>
+    </div>`;
+}
+
+function renderPhones(){
+  $('#phones').innerHTML = LEGAJOS.map(L=>{
+    // TODAS las tareas de este legajo, ordenadas por prioridad (urgente arriba)
+    const tareas = ordenar(armados.filter(a => !omitidos.has(`${a.nro}|${L.id}`)));
+    const pend   = tareas.filter(a => a.estado === 'pendiente');
+    // suena con cualquier tarea nueva, aunque ya haya otras activas
+    const suena  = pend.some(a => a.secs < 6);
+
+    const cuerpo = tareas.length
+      ? `<div class="stack">
+          ${tareas.length > 1 ? `<div class="orden">↕ Orden por prioridad <b>urgente → normal → baja</b></div>` : ''}
+          ${tareas.map(a => tarjetaArmado(a, L)).join('')}
+        </div>`
+      : `<div class="vacio">Sin tareas nuevas 🙂<br><span style="font-size:10px">repo · en espera</span></div>`;
+
+    return `<div class="phone ${pend.length ? 'ring' : ''}">
+      <div class="ph-top"><span>09:${(12 + LEGAJOS.indexOf(L)).toString().padStart(2,'0')}</span><span>MITO · ${L.id}</span></div>
+      <div class="ph-screen">
+        ${suena ? '<div class="sonando">🔔 SUENA</div>' : ''}
+        <div class="ph-user">
+          <span class="avatar">${L.nombre.split(' ').map(x=>x[0]).join('').slice(0,2)}</span>
+          <span><b>${L.nombre}</b><span>${L.rol}</span></span>
+        </div>
+        ${cuerpo}
+      </div>
+    </div>`;
+  }).join('');
+
+  $$('#phones [data-aceptar]').forEach(b => b.onclick = ()=> aceptar(+b.dataset.aceptar, b.dataset.legajo));
+  $$('#phones [data-terminar]').forEach(b => b.onclick = ()=> terminar(+b.dataset.terminar, b.dataset.legajo));
+  $$('#phones [data-escanear]').forEach(b => b.onclick = ()=> escanear(+b.dataset.escanear, b.dataset.legajo));
+  $$('#phones [data-tildar]').forEach(b => b.onclick = ()=> tildarResto(+b.dataset.tildar, b.dataset.legajo));
+  $$('#phones [data-omitir]').forEach(b => b.onclick = ()=>{
+    omitidos.add(`${b.dataset.omitir}|${b.dataset.legajo}`);
+    log(`Legajo ${b.dataset.legajo} omitió el armado del ${b.dataset.omitir} (queda para otro)`, 'warn');
+    renderPhones();
+  });
+  $$('#phones [data-abrir]').forEach(b => b.onclick = ()=>{
+    sel = +b.dataset.abrir; render();
+    window.scrollTo({ top:0, behavior:'smooth' });
+  });
+}
+
+/* ---------------- filtro de fecha (al lado del de la lista) ---------------- */
+let periodo = 'hoy';   // 'hoy' | 'semana' | 'todas'
+function visibles(){
+  if (periodo === 'hoy')    return PEDIDOS.filter(p => p.iso === HOY_ISO);
+  if (periodo === 'semana') return PEDIDOS.filter(p => p.iso >= SEMANA_DESDE);
+  return PEDIDOS;
+}
+
+function render(){
+  renderLista(); renderDetalle(); renderPhones();
+
+  // campana del header: un punto por cada pedido esperando legajo
+  const n = pendientes().length;
+  $('#bellCnt').style.display = n ? 'grid' : 'none';
+  $('#bellCnt').textContent = n > 9 ? '9+' : n;
+
+  // chips de filtro + "tildar todo"
+  $$('#filtros .chip-per[data-per]').forEach(b => b.classList.toggle('on', b.dataset.per === periodo));
+  $('#btnSelTodo').textContent = `☑ Tildar todo (${visibles().length})`;
+
+  // barra de selección
+  const bar = $('#selBar');
+  const elegidos = [...seleccion];
+  bar.hidden = elegidos.length === 0;
+  $('#selTxt').textContent = `${elegidos.length} pedido${elegidos.length===1?'':'s'}`;
+  const tot = elegidos.reduce((s,n2)=> s + (PEDIDOS.find(p=>p.n===n2)?.total || 0), 0);
+  $('#selTotal').textContent = `· ${money(tot)}`;
+}
+
+/* ---------------- enviar (1 o varios pedidos) ---------------- */
+let envio = [];   // nro de pedidos que van a crear tarea
+
+function abrirModal(nros){
+  envio = nros.filter(n => !activoDe(n));          // los que ya tienen armado activo se saltean
+  if (!envio.length){ log('Esos pedidos ya tienen un armado activo', 'warn'); return; }
+  const ps = envio.map(n => PEDIDOS.find(p => p.n === n));
+  const tot = ps.reduce((s,p)=> s + p.total, 0);
+
+  $('#mResumen').innerHTML = ps.map(p=>`
+    <div class="resumen">
+      <span class="n">${p.n}</span>
+      <div class="d"><b>${p.nombre}</b><span class="muted">${p.motivo} · ${money(p.total)}</span></div>
+    </div>`).join('') + (ps.length > 1
+      ? `<div class="alcance">📦 ${ps.length} pedidos · ${money(tot)} — se crea una tarea por pedido, todas con la misma prioridad.</div>` : '');
+
+  $('#mTitulo').textContent = ps.length > 1 ? `Pedir armado · ${ps.length} pedidos` : 'Pedir armado';
+  $('#mSub').textContent = ps.length > 1
+    ? 'Se publican todas las tareas en el repo de los legajos conectados.'
+    : 'Se publica la tarea en el repo de todos los legajos conectados.';
+  $('#btnEnviar').textContent = `📣 Enviar al repo (${ps.length})`;
+  $('#obsArmado').value = '';
+  setPrio('urgente');
+  $('#overlay').classList.add('on');
+  paso(2);
+}
+function cerrarModal(){ $('#overlay').classList.remove('on'); paso(armados.length ? 3 : 1); }
+
+function setPrio(p){
+  prioElegida = p;
+  $$('#prio .p').forEach(b => b.classList.toggle('on', b.dataset.p === p));
+}
+
+function startTick(){
+  clearInterval(window.__tick);
+  window.__tick = setInterval(()=>{
+    if (!armados.length){ clearInterval(window.__tick); return; }
+    armados.forEach(a => a.secs++);
+    renderDetalle();
+    if (!document.querySelector('#overlay.on')) renderPhones();   // refresca el badge "SUENA"
+  }, 1000);
+}
+
+function enviar(){
+  const obs = $('#obsArmado').value.trim();
+  const lista = envio.map(n => PEDIDOS.find(p => p.n === n)).filter(Boolean);
+  cerrarModal();
+  if (!lista.length) return;
+
+  const P = PRIOS[prioElegida];
+  const cuando = Date.now();
+  lista.forEach(p => armados.push({
+    nro:p.n, cliente:p.nombre, total:p.total, prioridad:prioElegida, obs,
+    estado:'pendiente', por:null, creado:cuando, secs:0,
+    items: itemsDe(p).map(i => ({ ...i, esc: 0 })),   // copia: lo que el vaya marcando
+  }));
+  seleccion.clear();
+  render(); paso(3);
+
+  // suena SIEMPRE, aunque ya haya otros armados activos
+  chime(P.beeps, 700);
+  vibrar();
+  log(`INSERT mayorista_armados → ${lista.length} fila(s) · prioridad ${P.label}`, 'ok');
+  lista.forEach(p => log(`   · pedido ${p.n} (${p.cli}) → pendiente`, 'ok'));
+  log(`REALTIME broadcast → suena el celular de los 3 legajos (aunque ya tenían tareas)`, 'err');
+  log(`Orden en el celular: ${ordenar(armados).map(x => `${x.nro} ${PRIOS[x.prioridad].label.toLowerCase()}`).join('  →  ')}`, 'info');
+  startTick();
+}
+
+function cancelarArmado(n){
+  const i = armados.findIndex(a => a.nro === n);
+  if (i < 0) return;
+  const [muerto] = armados.splice(i, 1);
+  if (!armados.length) clearInterval(window.__tick);
+  log(`DELETE/estado=cancelado → armado del pedido ${muerto.nro} (por el mayorista)`, 'warn');
+  render(); paso(armados.length ? 3 : 1);
+}
+
+/* ---------------- aceptar (carrera: uno solo gana) ---------------- */
+function aceptar(nro, id){
+  const a = activoDe(nro);
+  if (!a || a.estado !== 'pendiente') return;
+  const L = LEGAJOS.find(x => x.id === id);
+  a.estado = 'aceptado';
+  a.por = { id:L.id, nombre:L.nombre };
+  a.secs = 0;
+  chime(1, 1200);
+  log(`UPDATE … set estado='aceptado' where nro=${nro} and estado='pendiente' → 1 fila ✅`, 'ok');
+  log(`Legajo ${L.id} ${L.nombre} aceptó el pedido ${nro} → la fila queda EN VERDE en Pedidos`, 'ok');
+  render();
+}
+
+/** El legajo termina de armarlo: el pedido queda marcado en verde con 🏁 */function terminar(nro, id){
+  const a = activoDe(nro);
+  if (!a || a.estado !== 'aceptado' || (a.por && a.por.id !== id)) return;
+  a.estado = 'hecho';
+  a.secs = 0;
+  chime(2, 1400);
+  log(`Legajo ${id} marcó el pedido ${nro} como ARMADO 🏁 → fila verde en la lista`, 'ok');
+  render();
+}
+
+/* ---------------- avance artículo por artículo ---------------- */
+/** Escanea (o tilda) la siguiente línea pendiente del pedido */
+function escanear(nro, id){
+  const a = activoDe(nro);
+  if (!a || a.estado !== 'aceptado' || (a.por && a.por.id !== id)) return;
+  const i = a.items.find(x => x.esc < x.q);
+  if (!i) return terminar(nro, id);
+  i.esc = i.q;
+  log(`Escané/tildó ${i.a} · ${i.d.slice(0,22)} → ${i.esc}/${i.q} u. (pedido ${nro})`, 'info');
+  revisarFin(a);
+  render();
+}
+/** Marca de una todas las líneas que faltan */
+function tildarResto(nro, id){
+  const a = activoDe(nro);
+  if (!a || a.estado !== 'aceptado' || (a.por && a.por.id !== id)) return;
+  const faltan = a.items.filter(i => i.esc < i.q);
+  if (!faltan.length) return terminar(nro, id);
+  faltan.forEach(i => i.esc = i.q);
+  log(`Marcó el resto del pedido ${nro}: ${faltan.length} línea(s)`, 'info');
+  revisarFin(a);
+  render();
+}
+/** Si quedó todo marcado, el armado se cierra solo */
+function revisarFin(a){
+  if (a.estado !== 'aceptado' || articulosOk(a) !== a.items.length) return;
+  a.estado = 'hecho';
+  a.secs = 0;
+  chime(2, 1400);
+  log(`Todos los artículos marcados → pedido ${a.nro} ARMADO 🏁 (fila en verde)`, 'ok');
+}
+
+/* ---------------- eventos ---------------- */
+$('#btnPedirArmado').onclick = ()=>{
+  const a = activoDe(sel);
+  if (a) cancelarArmado(sel);          // si ya está pedido, lo cancela
+  else abrirModal([sel]);
+};
+$('#btnArmadoSel').onclick = ()=> abrirModal([...seleccion]);
+$('#btnSelLimpiar').onclick = ()=>{ seleccion.clear(); render(); };
+$('#btnSelTodo').onclick = ()=>{
+  const vis = visibles();
+  const todos = vis.length > 0 && vis.every(p => seleccion.has(p.n));
+  vis.forEach(p => todos ? seleccion.delete(p.n) : seleccion.add(p.n));
+  render();
+  log(todos ? 'Deseleccioné los pedidos del filtro'
+            : `☑ Tildé los ${vis.length} pedidos del filtro “${$('#filtros .on')?.textContent || periodo}”`, 'info');
+};
+$$('#filtros .chip-per[data-per]').forEach(b => b.onclick = ()=>{
+  periodo = b.dataset.per;
+  const vis = visibles();
+  if (vis.length && !vis.some(p => p.n === sel)) sel = vis[0].n;   // si el pedido abierto quedó fuera del filtro, paso al primero
+  render();
+  log(`Filtro de fecha → “${b.textContent}”: ${vis.length} pedidos en pantalla`, 'info');
+});
+$('#btnCancelar').onclick = cerrarModal;
+$('#overlay').onclick = (e)=>{ if (e.target.id === 'overlay') cerrarModal(); };
+$('#btnEnviar').onclick = enviar;
+document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarModal(); });
+$$('#prio .p').forEach(b => b.onclick = ()=>{
+  setPrio(b.dataset.p);
+  chime(1, b.dataset.p === 'urgente' ? 950 : b.dataset.p === 'normal' ? 750 : 520);
+});
+$('#btnSonido').onclick = ()=>{ chime(3, 880); vibrar(); log('Prueba de sonido 🔊 (urgente)', 'info'); };
+$('#btnReset').onclick = ()=>{
+  armados = []; omitidos.clear(); seleccion.clear();
+  clearInterval(window.__tick);
+  periodo = 'hoy'; sel = 10032;
+  $('#log').innerHTML = '';
+  render(); paso(1);
+  log('Reinicio del mockup · filtro “Hoy” activo', 'info');
+};
+
+/* ---------------- demo automática ---------------- */
+let auto = null;
+const pararAuto = ()=>{ auto.forEach(clearTimeout); auto = null; $('#btnAuto').textContent = '▶ Ver flujo automático'; };
+$('#btnAuto').onclick = ()=>{
+  if (auto) return pararAuto();
+  $('#btnReset').click();
+  $('#btnAuto').textContent = '⏸ Detener';
+  const seq = [
+    [400,  ()=>{ seleccion.clear(); seleccion.add(10031); seleccion.add(10030); render(); paso(1); }],
+    [1200, ()=>log('Filtro “Hoy” → tildé 2 pedidos', 'info')],
+    [1700, ()=>abrirModal([...seleccion])],
+    [2400, ()=>setPrio('normal')],
+    [3100, ()=>enviar()],
+    [3700, ()=>{ seleccion.clear(); sel = 10032; render(); }],
+    [4300, ()=>abrirModal([10032])],
+    [4900, ()=>setPrio('urgente')],
+    [5500, ()=>enviar()],
+    [6400, ()=>log('El 10032 (urgente) aparece ARRIBA en el celular aunque llegó después', 'info')],
+    [7400, ()=>aceptar(10032,'4471')],
+    [8200, ()=>log('Juan empieza a escanear: los artículos se van marcando en el pedido', 'info')],
+    [8700, ()=>escanear(10032,'4471')],
+    [9300, ()=>escanear(10032,'4471')],
+    [9900, ()=>tildarResto(10032,'4471')],
+    [10700,()=>aceptar(10031,'4482')],
+    [11500,()=>log('Los pedidos que van marcando los legajos quedan EN VERDE en la lista', 'ok')],
+  ];
+  auto = seq.map(([ms, fn]) => setTimeout(fn, ms));
+  auto.push(setTimeout(pararAuto, seq[seq.length-1][0] + 1500));
+};
+
+/* ---------------- init ---------------- */
+render();
+paso(1);
+log('Mockup listo · filtro “Hoy”: tildá todos y mandalos a pedir armado', 'info');
+</script>
+</body>
+</html>
