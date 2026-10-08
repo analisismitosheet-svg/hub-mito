@@ -6,7 +6,7 @@ import {
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
-import { descripcionesDeArticulos } from '@/lib/mapeo'
+import { descripcionesMaestro } from '@/lib/descripcionArticulos'
 
 /* ------------------------------------------------------------------ */
 /*  Pedidos de compra (Compras / Depósito)                             */
@@ -155,7 +155,7 @@ export default function PedidosCompra() {
         const its = (data as ItemPedido[] | null) ?? []
         setItems(its)
         setCargandoItems(false)
-        descripcionesDeArticulos(its.map((i) => i.articulo ?? ''))
+        descripcionesMaestro(its.map((i) => i.articulo ?? ''))
           .then((m) => { if (vivo) setDescripciones((prev) => new Map([...prev, ...m])) })
           .catch(() => { /* sin descripciones */ })
       })

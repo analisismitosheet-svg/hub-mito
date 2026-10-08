@@ -5,6 +5,7 @@ import {
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
+import { descripcionesMaestro } from '@/lib/descripcionArticulos'
 import { imprimirPedido } from '@/lib/imprimirPedido'
 import { cargarStockSku, stockSkuDe, stockArticuloDe, type StockSku } from '@/lib/stockSku'
 
@@ -185,7 +186,8 @@ export default function PedidosVenta() {
     void cargar()
   }, [cargar])
 
-  // Ítems del pedido elegido (la descripción ya viene de Dragonfish)
+  // Ítems del pedido elegido. La descripción es la ADICIONAL del maestro de artículos
+  // (public.articulos, igual que en todo el hub); si no está, la del renglón de Dragonfish.
   useEffect(() => {
     if (!sel || !supabase) {
       setItems([])
@@ -199,11 +201,16 @@ export default function PedidosVenta() {
       .eq('codigo', sel)
       .order('linea', { ascending: true })
       .range(0, 4999)
-      .then(({ data, error: e }) => {
+      .then(async ({ data, error: e }) => {
         if (!vivo) return
         if (e) setError(e.message)
-        setItems((data as ItemPedido[] | null) ?? [])
+        const its = (data as ItemPedido[] | null) ?? []
+        setItems(its)
         setCargandoItems(false)
+        const desc = await descripcionesMaestro(its.map((i) => i.articulo ?? '')).catch(() => new Map<string, string>())
+        if (vivo && desc.size) {
+          setItems(its.map((i) => ({ ...i, descripcion: desc.get(String(i.articulo ?? '').toUpperCase()) || i.descripcion })))
+        }
       })
     return () => { vivo = false }
   }, [sel, version])

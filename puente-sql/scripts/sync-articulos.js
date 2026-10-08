@@ -1,6 +1,8 @@
 /**
  * Copia el maestro de artículos del SQL Server a Supabase (tabla public.articulos),
- * para mostrar la descripción de cada artículo en el hub (Mapeo depósito, etc.).
+ * para mostrar la descripción de cada artículo en el hub (Mapeo depósito, etc.):
+ * la descripción ADICIONAL (ARTICULO_ADICIONAL; si viene vacía, ARTICULO). Los códigos
+ * con espacios (ej. " VS061103") se dejan afuera.
  *
  *   node scripts/sync-articulos.js        (lo corre la tarea "MITO - Sync articulos")
  *
@@ -111,20 +113,25 @@ async function main() {
   let filas
   try {
     const r = await pool.request().query(
-      `SELECT ID_ART, ARTICULO, ID_PROV, ID_GRUPO, ID_FLIA, ID_TEMPORADA, ID_MATERIAL, ID_LINEA,
+      // Los códigos con espacios (ej. " VS061103", " NE050184") se dejan afuera: no son artículos
+      // válidos (antes se les sacaba el espacio y podían pisar al artículo real). El relleno a la
+      // derecha del char no cuenta.
+      `SELECT ID_ART, ARTICULO, ARTICULO_ADICIONAL, ID_PROV, ID_GRUPO, ID_FLIA, ID_TEMPORADA, ID_MATERIAL, ID_LINEA,
               PUBLICADO, PRECIO_PUBLICO, [AÑO] AS ANIO
-       FROM [${base}].[${esquema}].[${objeto}]`,
+       FROM [${base}].[${esquema}].[${objeto}]
+       WHERE CHARINDEX(' ', RTRIM(ID_ART)) = 0`,
     )
     filas = r.recordset ?? []
   } finally {
     await pool.close()
   }
 
-  // Normaliza (sin espacios de relleno); solo artículos con descripción, uno por código
+  // Solo artículos con descripción, uno por código. La descripción del hub es la ADICIONAL
+  // (ARTICULO_ADICIONAL, la más completa); si viene vacía, ARTICULO.
   const porCodigo = new Map()
   for (const f of filas) {
-    const art = String(f.ID_ART ?? '').replace(/\s/g, '').toUpperCase()
-    const descripcion = txt(f.ARTICULO)
+    const art = String(f.ID_ART ?? '').trim().toUpperCase()
+    const descripcion = txt(f.ARTICULO_ADICIONAL) || txt(f.ARTICULO)
     if (!art || !descripcion || porCodigo.has(art)) continue
     porCodigo.set(art, {
       id_art: art,

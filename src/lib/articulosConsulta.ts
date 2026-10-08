@@ -319,7 +319,8 @@ async function armar(crudas: FilaSql[], q: string): Promise<Articulo[]> {
   for (const fila of base) {
     const m = maestro.get(fila.idArticulo)
     if (m) {
-      fila.nombre = fila.nombre || m.descripcion
+      // La descripción del hub es la ADICIONAL del maestro (sync-articulos); la de la vista queda de respaldo
+      fila.nombre = m.descripcion || fila.nombre
       fila.material = fila.material || m.material
       fila.grupo = fila.grupo || m.grupo
       fila.precio = fila.precio ?? m.precio
