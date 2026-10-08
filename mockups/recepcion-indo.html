@@ -184,6 +184,21 @@
   .grid{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px;align-items:start;margin-top:16px}
   @media (max-width:1180px){ .grid{grid-template-columns:1fr} }
 
+  /* ---------- selector de OC (fila con 📄) ---------- */
+  .oc-row{display:flex;align-items:center;gap:4px;border-radius:9px;padding-right:4px;transition:.12s}
+  .oc-row:hover{background:rgba(255,255,255,.05)}
+  .oc-row.on{background:rgba(245,158,11,.10)}
+  .oc-row > .oc-main{display:flex;flex:1;min-width:0;align-items:center;gap:8px;padding:4px 8px;background:transparent;border:0;color:inherit;text-align:left;cursor:pointer;font-family:inherit}
+  .oc-cbx{flex:0 0 16px;width:16px;height:16px;border-radius:5px;border:1.5px solid var(--line2);display:grid;place-items:center;font-size:10px;font-weight:900;color:transparent}
+  .oc-row.on .oc-cbx{background:#f59e0b;border-color:#f59e0b;color:#241a02}
+  .oc-num{width:52px;flex:0 0 auto;font-weight:700;font-variant-numeric:tabular-nums;font-size:12px}
+  .oc-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--sub);font-size:12px}
+  .oc-fec{color:rgba(148,163,184,.7);font-size:11.5px;font-variant-numeric:tabular-nums}
+  .oc-info{flex:0 0 auto;background:transparent;border:0;color:rgba(148,163,184,.6);cursor:pointer;border-radius:6px;padding:4px;font-size:12px;transition:.12s}
+  .oc-info:hover{background:rgba(255,255,255,.08);color:var(--ink)}
+  .oc-anul{color:#f87171;font-size:10.5px;margin-left:4px}
+  @media (max-width:900px){ .sel-grid{grid-template-columns:1fr !important} .oc-campos{grid-template-columns:repeat(2,1fr) !important} }
+
   /* ---------- modal nuevo registro ---------- */
   .overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(4px);display:none;place-items:center;z-index:60;padding:16px}
   .overlay.on{display:grid}
@@ -517,6 +532,96 @@
   </div>
 </div>
 
+<!-- ============ N° OC: BUSCADOR + TARJETA DE DETALLE ============ -->
+<div class="card" style="margin-top:16px">
+  <div class="card-h">
+    <h3>📄 N° OC · buscador con tarjeta de detalle <span class="tag">nuevo</span></h3>
+    <span class="tag">tocá 📄 en una fila</span>
+  </div>
+  <div style="padding:14px 16px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:16px;align-items:start" class="sel-grid">
+    <!-- SelectorOc real -->
+    <div style="border:1px solid var(--line);background:var(--surface2);border-radius:14px;padding:10px">
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;min-height:26px;align-items:center">
+        <span style="display:inline-flex;align-items:center;gap:5px;background:rgba(245,158,11,.15);color:#f59e0b;border-radius:7px;padding:2px 6px;font-size:12px">
+          <b>15183</b><span style="font-size:10px;opacity:.8">· Tarco SA</span><span style="cursor:pointer;opacity:.7">✕</span>
+        </span>
+        <span style="font-size:11px;color:var(--sub);font-style:italic">15347 · (elegir abajo)</span>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;border-bottom:1px solid var(--line);padding-bottom:7px;margin-bottom:6px">
+        <span style="color:var(--sub);font-size:12px">🔍</span>
+        <input id="ocBusca" placeholder="Buscar por N° de OC o proveedor…" style="flex:1;background:transparent;border:0;color:var(--ink);font-size:12px;outline:none;font-family:inherit" />
+      </div>
+      <label style="display:flex;gap:6px;align-items:center;font-size:11px;color:var(--sub);margin-bottom:4px;cursor:pointer">
+        <input type="checkbox" checked style="accent-color:#f59e0b" /> Solo las de Tarco SA (2)
+      </label>
+      <div id="ocLista" style="max-height:210px;overflow:auto"></div>
+    </div>
+
+    <!-- explicación -->
+    <div style="font-size:12.5px;color:#cbd5e1;display:flex;flex-direction:column;gap:9px">
+      <p style="margin:0">En cada fila del buscador hay <b style="color:var(--ink)">dos acciones separadas</b>:</p>
+      <ul style="margin:0;padding-left:16px;display:flex;flex-direction:column;gap:6px">
+        <li><b style="color:#f59e0b">Tilde / número</b> — selecciona la OC y la agrega a la celda N° OC (como hasta ahora).</li>
+        <li><b style="color:var(--ink)">📄 Detalle</b> — abre la tarjeta <b style="color:var(--ink)">sin seleccionar nada</b>: cabecera, campos del pedido, ítems con descripción y link al pedido completo.</li>
+        <li>La tarjeta se cachea por sesión: reabrirla no vuelve a pedir el mismo pedido a la base.</li>
+        <li><b style="color:var(--ink)">Esc</b> cierra <i>solo</i> la tarjeta, no el buscador de detrás.</li>
+        <li>Si el usuario no tiene el permiso <span class="cm2">pedidos_compra.view</span>, la tarjeta lo avisa en vez de fallar en silencio (la última fila de ejemplo lo muestra).</li>
+      </ul>
+      <p style="margin:0" class="muted">En la app real: <span class="cm2">src/components/DetalleOc.tsx</span> + botón 📄 en <span class="cm2">src/components/SelectorOc.tsx</span>.</p>
+    </div>
+  </div>
+</div>
+
+<!-- tarjeta de detalle (modal) -->
+<div class="overlay" id="ocOverlay">
+  <div class="modal" style="width:min(640px,100%)" role="dialog" aria-modal="true" aria-label="Detalle de la OC">
+    <div class="modal-h" style="align-items:center">
+      <div style="width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:#f59e0b;flex:0 0 auto;font-size:18px">📦</div>
+      <div style="flex:1;min-width:0">
+        <h3 style="font-size:15px">Orden de compra <span style="color:#f59e0b;font-variant-numeric:tabular-nums" id="ocT">N° —</span> <span id="ocAnul" style="display:none;background:rgba(239,68,68,.15);color:#f87171;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;padding:2px 6px;border-radius:6px">anulada</span></h3>
+        <p style="font-size:12.5px;color:var(--sub)" id="ocProv">—</p>
+      </div>
+      <button class="btn btn-ghost" style="height:30px;padding:0 8px" id="ocCerrarX">✕</button>
+    </div>
+
+    <div id="ocCarga" style="display:none;padding:28px;text-align:center;color:var(--sub);font-size:13px">⏳ Cargando el pedido…</div>
+
+    <div id="ocError" style="display:none;padding:16px">
+      <p style="border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.1);color:#f87171;border-radius:13px;padding:11px 13px;font-size:13px;margin:0">No pude cargar la OC: falta el permiso «pedidos_compra.view».</p>
+      <p style="font-size:11.5px;color:var(--sub);margin-top:8px">Para ver el detalle hace falta el permiso <b style="color:var(--ink)">pedidos_compra.view</b> (es el mismo que usa la pantalla Compras → Pedidos de compra). Mientras tanto podés escribir el N° de OC a mano.</p>
+    </div>
+
+    <div id="ocCuerpo" style="display:none">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px 16px;padding:16px" class="oc-campos">
+        <div><p style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:rgba(148,163,184,.75)">Fecha OC</p><p style="font-size:13px;font-weight:600" id="ocFecha">—</p></div>
+        <div><p style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:rgba(148,163,184,.75)">Fecha de alta</p><p style="font-size:13px;font-weight:600" id="ocAlta">—</p></div>
+        <div><p style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:rgba(148,163,184,.75)">Lista</p><p style="font-size:13px;font-weight:600" id="ocLista2">—</p></div>
+        <div><p style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:rgba(148,163,184,.75)">Usuario</p><p style="font-size:13px;font-weight:600" id="ocUser">—</p></div>
+        <div style="grid-column:span 3"><p style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:rgba(148,163,184,.75)">Observación</p><p style="font-size:13px" id="ocObs">—</p></div>
+        <div style="text-align:right"><p style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:rgba(148,163,184,.75)">Total</p><p style="font-size:15px;font-weight:800;font-variant-numeric:tabular-nums" id="ocTot">—</p></div>
+      </div>
+      <div style="padding:0 16px 10px">
+        <div style="overflow-x:auto;border:1px solid var(--line);border-radius:12px">
+          <table class="ri" style="min-width:440px">
+            <thead><tr><th>Artículo</th><th>Color</th><th>Talle</th><th class="num">Cant.</th><th class="num">Precio</th><th class="num">Total</th></tr></thead>
+            <tbody id="ocItems"></tbody>
+            <tfoot><tr style="border-top:1px solid var(--line);background:rgba(255,255,255,.03);font-weight:700;font-size:12px">
+              <td style="padding:8px 11px" id="ocRen">—</td><td></td><td></td>
+              <td class="num" style="padding:8px 11px" id="ocCant">—</td><td></td>
+              <td class="num" style="padding:8px 11px" id="ocBruto">—</td>
+            </tr></tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-f">
+      <button class="btn" id="ocCerrar">Cerrar</button>
+      <button class="btn" style="background:linear-gradient(180deg,#f59e0b,#d97706);border-color:#f59e0b;color:#fff;box-shadow:0 8px 20px rgba(245,158,11,.25)">↗ Abrir pedido completo</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ NOTAS DE IMPLEMENTACIÓN ============ -->
 <div class="notas">
   <div class="nota">
@@ -559,7 +664,113 @@
   document.getElementById('btnCerrar').onclick = () => ov.classList.remove('on')
   document.getElementById('btnCancelar').onclick = () => ov.classList.remove('on')
   ov.addEventListener('click', (e) => { if (e.target === ov) ov.classList.remove('on') })
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') ov.classList.remove('on') })
+
+  /* ===== Buscador de OC + tarjeta de detalle (como SelectorOc + DetalleOc) ===== */
+  const OCs = [
+    { numero: '15183', proveedor: 'Tarco SA', fecha: '04/10/2026', lista: 'GENERAL', user: 'compras01',
+      alta: '02/10/2026', obs: 'Entrega en depósito Remotos. Controlar bultos contra remito RC-002195.',
+      total: 3874500, anulada: false,
+      items: [
+        { art: 'MOCHILA-45', desc: 'Mochila urbana 45L impermeable', color: 'Negro', talle: 'Único', cant: 24, precio: 68000 },
+        { art: 'GORRA-TRUCK', desc: 'Gorra trucker bordada 6 paneles', color: 'Rojo', talle: 'Único', cant: 50, precio: 12500 },
+        { art: 'CINTURON-L', desc: 'Cinturón cuero hebilla pinch', color: 'Marrón', talle: 'L', cant: 30, precio: 21350 },
+      ] },
+    { numero: '15347', proveedor: 'Tarco SA', fecha: '07/10/2026', lista: 'MAYORISTA', user: 'compras02',
+      alta: '06/10/2026', obs: '', total: 1250000, anulada: false,
+      items: [
+        { art: 'RELOJ-DIG1', desc: 'Reloj digital deportivo resistente al agua', color: 'Gris', talle: 'Único', cant: 15, precio: 55000 },
+        { art: 'LINTERNA-LED', desc: 'Linterna LED recargable 1000lm', color: 'Negro', talle: 'Único', cant: 20, precio: 16666.67 },
+      ] },
+    { numero: '15390', proveedor: 'Tarco SA', fecha: '08/10/2026', lista: 'GENERAL', user: 'compras01',
+      alta: '08/10/2026', obs: 'Muestra de temporada, revisar talles.', total: 0, anulada: false, items: [] },
+    { numero: '1042', proveedor: 'Rusty', fecha: '01/10/2026', lista: 'MAYORISTA', user: 'compras03',
+      alta: '28/09/2026', obs: 'OC anulada por duplicado.', total: 890000, anulada: true,
+      items: [ { art: 'LONG-80', desc: 'Longboard cruising 80"', color: 'Natural', talle: 'Único', cant: 8, precio: 111250 } ] },
+  ]
+  // El 4to ejemplo no tiene permiso pedidos_compra.view
+  const SIN_PERMISO = '14999'
+  const elegidas = new Set(['15183'])
+  const $ = (v) => Number(v).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+  function pintarLista(filtro = '') {
+    const l = document.getElementById('ocLista')
+    const t = filtro.trim().toUpperCase()
+    const vis = OCs.filter((o) => !t || o.numero.includes(t) || o.proveedor.toUpperCase().includes(t))
+    l.innerHTML = vis.map((o) => `
+      <div class="oc-row ${elegidas.has(o.numero) ? 'on' : ''}" data-n="${o.numero}">
+        <button class="oc-main" data-toggle="${o.numero}">
+          <span class="oc-cbx">${elegidas.has(o.numero) ? '✓' : ''}</span>
+          <span class="oc-num">${o.numero}</span>
+          <span class="oc-name">${o.proveedor}${o.anulada ? '<span class="oc-anul">(anulado)</span>' : ''}</span>
+          <span class="oc-fec">${o.fecha}</span>
+        </button>
+        <button class="oc-info" data-detalle="${o.numero}" title="Ver el detalle de la OC ${o.numero}">📄</button>
+      </div>`).join('') || '<p style="padding:8px;font-size:11px;color:var(--sub)">No hay OC que coincidan.</p>'
+  }
+  pintarLista()
+  document.getElementById('ocBusca').addEventListener('input', (e) => pintarLista(e.target.value))
+
+  const ocOv = document.getElementById('ocOverlay')
+  function abrirDetalle(n) {
+    const o = OCs.find((x) => x.numero === n)
+    document.getElementById('ocT').textContent = `N° ${n}`
+    document.getElementById('ocAnul').style.display = o?.anulada ? 'inline' : 'none'
+    document.getElementById('ocProv').textContent = o ? `${o.proveedor}  ·  X 00001-0000${n}` : '—'
+    ocOv.classList.add('on')
+    // estados: cargando → cuerpo o error
+    document.getElementById('ocCarga').style.display = 'block'
+    document.getElementById('ocCuerpo').style.display = 'none'
+    document.getElementById('ocError').style.display = 'none'
+    setTimeout(() => {
+      document.getElementById('ocCarga').style.display = 'none'
+      if (n === SIN_PERMISO) { document.getElementById('ocError').style.display = 'block'; return }
+      if (!o) return
+      document.getElementById('ocFecha').textContent = o.fecha
+      document.getElementById('ocAlta').textContent = o.alta
+      document.getElementById('ocLista2').textContent = o.lista
+      document.getElementById('ocUser').textContent = o.user
+      document.getElementById('ocObs').textContent = o.obs || '—'
+      document.getElementById('ocObs').style.color = o.obs ? '' : 'rgba(148,163,184,.5)'
+      document.getElementById('ocTot').textContent = '$ ' + $(o.total)
+      document.getElementById('ocItems').innerHTML = o.items.length
+        ? o.items.map((i) => `
+          <tr style="border-bottom:1px solid rgba(255,255,255,.04)">
+            <td style="padding:6px 11px"><b style="font-weight:600">${i.art}</b><span style="display:block;font-size:10px;color:rgba(148,163,184,.8)">${i.desc}</span></td>
+            <td style="padding:6px 11px;color:var(--sub)">${i.color}</td>
+            <td style="padding:6px 11px;color:var(--sub)">${i.talle}</td>
+            <td class="num" style="padding:6px 11px">${i.cant}</td>
+            <td class="num" style="padding:6px 11px;color:var(--sub)">${$(i.precio)}</td>
+            <td class="num" style="padding:6px 11px">${$(i.cant * i.precio)}</td>
+          </tr>`).join('')
+        : '<tr><td colspan="6" style="padding:14px;text-align:center;color:var(--sub)">Este pedido no tiene ítems en la copia sincronizada.</td></tr>'
+      const cant = o.items.reduce((a, i) => a + i.cant, 0)
+      const bruto = o.items.reduce((a, i) => a + i.cant * i.precio, 0)
+      document.getElementById('ocRen').textContent = `${o.items.length} ${o.items.length === 1 ? 'renglón' : 'renglones'}`
+      document.getElementById('ocCant').textContent = cant
+      document.getElementById('ocBruto').textContent = '$ ' + $(bruto)
+      document.getElementById('ocCuerpo').style.display = 'block'
+    }, 500)
+  }
+  document.getElementById('ocLista').addEventListener('click', (e) => {
+    const det = e.target.closest('[data-detalle]')
+    if (det) { abrirDetalle(det.dataset.detalle); return }
+    const tog = e.target.closest('[data-toggle]')
+    if (tog) {
+      const n = tog.dataset.toggle
+      elegidas.has(n) ? elegidas.delete(n) : elegidas.add(n)
+      pintarLista(document.getElementById('ocBusca').value)
+    }
+  })
+  const cerrarOc = () => ocOv.classList.remove('on')
+  document.getElementById('ocCerrar').onclick = cerrarOc
+  document.getElementById('ocCerrarX').onclick = cerrarOc
+  ocOv.addEventListener('click', (e) => { if (e.target === ocOv) cerrarOc() })
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return
+    if (ocOv.classList.contains('on')) { cerrarOc(); return } // Esc cierra SOLO la tarjeta
+    ov.classList.remove('on')
+  })
 </script>
 </body>
 </html>
