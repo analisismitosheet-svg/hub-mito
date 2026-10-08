@@ -81,8 +81,10 @@ const PAGINA = 1000 // filas por pedido a Supabase (su tope por consulta)
 const MAX_PEDIDOS = 20000
 
 /** Qué pedidos se listan (como los repos de Mayorista). Por defecto la semana vigente, lunes a domingo. */
-type Periodo = 'semana' | 'anterior' | 'cuatro' | 'todas'
+type Periodo = 'hoy' | 'semana' | 'anterior' | 'cuatro' | 'todas'
+/** Un solo filtro de fecha: Hoy es una opción más (no se combina con las semanas) */
 const PERIODOS: { id: Periodo; label: string }[] = [
+  { id: 'hoy', label: '📅 Hoy' },
   { id: 'semana', label: 'Esta semana' },
   { id: 'anterior', label: 'Semana pasada' },
   { id: 'cuatro', label: 'Últimas 4 semanas' },
@@ -97,12 +99,13 @@ function lunesAR(semanasAtras = 0): string {
   return d.toISOString().slice(0, 10)
 }
 
-/** Hoy (AAAA-MM-DD, hora Argentina) — el filtro "Hoy" de al lado del período. */
+/** Hoy (AAAA-MM-DD, hora Argentina) — el período "Hoy". */
 function hoyAR(): string {
   return new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' })
 }
 
 function rangoDe(p: Periodo): { desde: string | null; hasta: string | null } {
+  if (p === 'hoy') return { desde: hoyAR(), hasta: null }
   if (p === 'semana') return { desde: lunesAR(0), hasta: null }
   if (p === 'anterior') return { desde: lunesAR(1), hasta: lunesAR(0) }
   if (p === 'cuatro') return { desde: lunesAR(3), hasta: null }
@@ -208,7 +211,6 @@ export default function PedidosVenta() {
   const [armados, setArmados] = useState<Record<string, Armado>>({}) // por código de pedido
   const [avanceArmados, setAvanceArmados] = useState<Record<string, AvanceArmado>>({})
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set())
-  const [soloHoy, setSoloHoy] = useState(false)
   const [pedirA, setPedirA] = useState<string[] | null>(null)
   const [prioridadElegida, setPrioridadElegida] = useState<PrioridadArmado>('normal')
   const [obsArmado, setObsArmado] = useState('')
@@ -432,6 +434,8 @@ export default function PedidosVenta() {
       return ia - ib || a.nombre.localeCompare(b.nombre, 'es')
     })
   }, [pedidos])
+  // Si el motivo guardado no tiene pedidos en este período (ej. Hoy sin reposiciones), se ven todos
+  const motivoActivo = fMotivo && motivos.some((m) => m.clave === fMotivo) ? fMotivo : ''
   const colorDeMotivo = (clave: string) => colorMotivo(clave, Math.max(0, motivos.findIndex((m) => m.clave === clave)))
 
   const q = busqueda.trim().toUpperCase()
@@ -462,15 +466,15 @@ export default function PedidosVenta() {
   }, [q])
 
   const visibles = useMemo(() => {
-    const porFecha = soloHoy ? pedidos.filter((p) => p.fecha === hoyAR()) : pedidos
-    const porMotivo = fMotivo ? porFecha.filter((p) => (p.motivo || SIN_MOTIVO) === fMotivo) : porFecha
+    const porFecha = pedidos
+    const porMotivo = motivoActivo ? porFecha.filter((p) => (p.motivo || SIN_MOTIVO) === motivoActivo) : porFecha
     if (!q) return porMotivo
     return porMotivo.filter(
       (p) =>
         [String(p.numero ?? ''), p.descripcion, p.cliente, p.cliente_nombre, p.observacion, fechaCorta(p.fecha)]
           .some((v) => String(v ?? '').toUpperCase().includes(q)) || !!porArticulo?.has(p.codigo),
     )
-  }, [pedidos, q, fMotivo, porArticulo, soloHoy])
+  }, [pedidos, q, motivoActivo, porArticulo])
 
   // Selección múltiple para pedir el armado de varios pedidos de una
   const alternarSeleccion = (codigo: string) =>
@@ -676,22 +680,6 @@ export default function PedidosVenta() {
             {p.label}
           </button>
         ))}
-        {/* Al lado del período: sólo los pedidos de hoy (para mandarlos a armar de una) */}
-        <span aria-hidden className="self-center px-0.5 text-sub">·</span>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={soloHoy}
-          onClick={() => setSoloHoy((v) => !v)}
-          title="Ver sólo los pedidos de hoy"
-          className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-            soloHoy
-              ? 'border-brand-500/50 bg-brand-500/15 text-brand-400'
-              : 'border-line text-sub hover:border-line2 hover:text-ink'
-          }`}
-        >
-          📅 Hoy
-        </button>
       </div>
 
       {/* Motivo: separa los pedidos por el motivo de Dragonfish */}
@@ -699,7 +687,7 @@ export default function PedidosVenta() {
         <div role="tablist" aria-label="Motivo" className="mb-3 flex items-center gap-1.5 overflow-x-auto pb-1">
           <span className="shrink-0 text-xs font-medium text-sub">Motivo:</span>
           {[{ clave: '', nombre: 'Todos', n: pedidos.length }, ...motivos].map((m) => {
-            const activo = fMotivo === m.clave
+            const activo = motivoActivo === m.clave
             const color = m.clave ? colorDeMotivo(m.clave) : '#f59e0b'
             return (
               <button
@@ -772,7 +760,7 @@ export default function PedidosVenta() {
               </div>
             ) : visibles.length === 0 ? (
               <p className="px-4 py-10 text-center text-sm text-sub">
-                {q ? 'No hay pedidos que coincidan.' : fMotivo ? 'No hay pedidos con ese motivo en este período.' : 'No hay pedidos en este período.'}
+                {q ? 'No hay pedidos que coincidan.' : motivoActivo ? 'No hay pedidos con ese motivo en este período.' : 'No hay pedidos en este período.'}
                 {periodo !== 'todas' && (
                   <button onClick={() => setPeriodo('todas')} className="mt-2 block w-full text-amber-500 hover:underline">
                     Buscar en todos los pedidos
