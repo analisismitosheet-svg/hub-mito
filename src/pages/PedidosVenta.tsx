@@ -838,6 +838,13 @@ export default function PedidosVenta() {
                               👤 {arm.aceptado_nombre}{arm.aceptado_legajo ? ` (#${arm.aceptado_legajo})` : ''}
                             </span>
                           )}
+                          {/* Todavía sin empezar: a quién le toca (responsable del local) */}
+                          {arm?.estado === 'pendiente' && (arm.asignado_nombre || arm.aceptado_nombre) && (
+                            <span className="block truncate text-[11px] font-semibold text-amber-500">
+                              👤 {arm.asignado_nombre || arm.aceptado_nombre}
+                              {(arm.asignado_legajo || arm.aceptado_legajo) ? ` (#${arm.asignado_legajo || arm.aceptado_legajo})` : ''} · sin empezar
+                            </span>
+                          )}
                           <span className="flex items-center gap-1.5 text-[11px] text-sub">
                             {fechaCorta(p.fecha)}
                             <span
