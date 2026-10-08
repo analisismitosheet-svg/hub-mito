@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Estadística VTD</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{--paper:#050508;--surface:rgba(255,255,255,.04);--line:rgba(255,255,255,.08);--ink:#f8fafc;--sub:#94a3b8;
+    --sky:#38bdf8;--emerald:#22c55e;--violet:#a78bfa;--amber:#f59e0b;--red:#f87171}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(900px 500px at 10% -10%,rgba(56,189,248,.12),transparent 60%),var(--paper);color:var(--ink);
+    font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:14px;padding:22px 16px 60px;min-height:100vh}
+  .wrap{max-width:1250px;margin:0 auto}
+  .badge{display:inline-block;padding:3px 10px;border-radius:999px;background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.35);font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+  h1{font-size:22px;margin:8px 0 2px;letter-spacing:-.02em}
+  .sub{color:var(--sub)}
+  .top{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between;margin-bottom:16px}
+  .ctrl{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .seg button{background:transparent;border:0;color:var(--sub);padding:8px 18px;font:inherit;font-weight:700;cursor:pointer}
+  .seg button.on{background:rgba(56,189,248,.15);color:var(--sky)}
+  .nav{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:12px;padding:4px 6px}
+  .nav button{background:transparent;border:0;color:var(--ink);font-size:16px;cursor:pointer;padding:2px 8px;border-radius:8px}
+  .nav button:hover{background:var(--line)} .nav b{min-width:150px;text-align:center;font-size:13px}
+  .kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:14px}
+  @media(max-width:900px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .k{border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:12px 14px}
+  .k .l{font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+  .k .v{font-size:26px;font-weight:800;margin-top:2px;font-variant-numeric:tabular-nums}
+  .k .d{font-size:12px;margin-top:2px}
+  .up{color:var(--emerald)} .down{color:var(--red)}
+  .card{border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:14px;overflow-x:auto;margin-bottom:14px}
+  .card h3{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--sub)}
+  table{width:100%;border-collapse:collapse;font-size:13px;min-width:820px}
+  th{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--sub);text-align:center;padding:6px;border-bottom:1px solid var(--line);vertical-align:bottom}
+  th:first-child,td:first-child{text-align:left}
+  th .prom{display:block;color:var(--amber);font-size:13px;font-weight:800;letter-spacing:0;margin-bottom:2px}
+  td{padding:7px 6px;border-bottom:1px solid var(--line);text-align:center;font-variant-numeric:tabular-nums}
+  tr:hover td{background:rgba(255,255,255,.03)}
+  .venta{color:var(--emerald);font-weight:800} .falt{color:var(--red);font-weight:700}
+  .chip{font-size:10px;font-weight:800;border-radius:6px;padding:2px 7px}
+  .fin{background:rgba(34,197,94,.15);color:var(--emerald)} .proc{background:rgba(245,158,11,.15);color:var(--amber)} .nada{background:rgba(148,163,184,.15);color:var(--sub)}
+  .barra{height:6px;border-radius:4px;background:var(--line);overflow:hidden;margin-top:3px;min-width:90px}
+  .barra i{display:block;height:100%;background:var(--emerald)}
+  .nota{margin-top:6px;font-size:13px;color:#cbd5e1;line-height:1.55}
+  .nota li{margin:4px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span class="badge">Maqueta · no está subida</span>
+  <div class="top">
+    <div>
+      <h1>📊 Estadística VTD (repos)</h1>
+      <p class="sub">Se arma sola con la repo y lo que se hace en Mi repo · datos reales</p>
+    </div>
+    <div class="ctrl">
+      <div class="nav"><button onclick="mover(-1)">◀</button><b id="periodo"></b><button onclick="mover(1)">▶</button></div>
+      <div class="seg"><button id="bDia" class="on" onclick="modo('dia')">Hoy</button><button id="bSem" onclick="modo('sem')">Por semana</button></div>
+    </div>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+  <div class="card" id="cDias"><h3>Repos de la semana (como tu planilla)</h3><table><thead id="thD"></thead><tbody id="tbD"></tbody></table></div>
+  <div class="card"><h3 id="tLoc"></h3><table><thead id="thL"></thead><tbody id="tbL"></tbody></table></div>
+
+  <div class="nota">
+    <ul>
+      <li><b>Hoy</b> muestra solo la repo del día (con ◀ ▶ vas a otro día). <b>Por semana</b> muestra las repos de lunes a domingo, una fila por día como tu Excel, y el cuadro por local sumado.</li>
+      <li><b>Horas</b>: el tiempo trabajado en Mi repo (Iniciar → Finalizar, sin las pausas), sumado por persona. <b>HS x per</b> = esas horas; <b>Horas</b> = HS x per ÷ personas. Si nadie usó el cronómetro ese día, queda «—».</li>
+      <li><b>Personas</b>: responsables asignados en la repo. <b>Cant repo</b>: escaneado/tildado. <b>No mandados</b>: venta − repo.</li>
+    </ul>
+  </div>
+</div>
+<script>
+// Por local: [local, venta, repo, horas Mi repo (null = sin cronómetro), responsable]
+const LOC={
+ '2/10':[['NCEND2',56,56,null,'Gil Leguizamon'],['LIBED',44,44,null,'Gil Leguizamon'],['MUNOD',40,39,.45,'Cussi'],['9DEJU2',40,37,.53,'Cussi'],['ESPID',39,36,.52,'Cussi'],['BUSTD',31,29,.45,'Cussi'],['RIVED',23,22,.42,'Gil Leguizamon'],['CFD',22,22,null,'Cussi'],['VCPD',21,20,.35,'Gil Leguizamon'],['CFR4',20,20,.16,'Cussi'],['CFRA',16,16,.16,'Cussi'],['CFPO',15,15,.19,'Cussi'],['R9D',13,13,.22,'Cussi'],['WALTD',13,13,.16,'Gil Leguizamon'],['DINOD',13,13,.18,'Gil Leguizamon'],['GPAZD',12,12,.12,'Cussi'],['CFR9',10,10,.2,'Cussi']],
+ '8/10':[['NCEND2',53,0,null,'Ojeda'],['BUSTD',52,0,null,'Maldonado'],['ESPID',51,0,null,'Maldonado'],['CFPO',43,43,null,'Ojeda'],['VCPD',30,0,null,'Maldonado'],['9DEJU2',28,0,null,'Maldonado'],['CFRA',28,28,null,'Ojeda'],['GPAZD',28,0,null,'Maldonado'],['MUNOD',25,0,null,'Maldonado'],['CFD',24,0,null,'Ojeda'],['CFR4',23,23,null,'Ojeda'],['RIVED',22,0,null,'Ojeda'],['R9D',19,0,null,'Maldonado'],['WALTD',19,0,null,'Ojeda'],['DINOD',16,0,null,'Ojeda'],['CFR9',10,10,null,'Ojeda'],['LIBED',10,0,null,'Ojeda']],
+};
+// Repos por día: [día, venta de, cant venta, cant repo, hs Mi repo (persona), personas, estado]
+const DIAS={
+ 'sem 29/9':[['29/9','25/9 – 27/9',2506,2477,null,5,'fin'],['30/9','29/9',503,493,2.64,4,'fin'],['1/10','30/9',540,527,5.55,3,'fin'],['2/10','1/10',430,415,4.1,2,'fin']],
+ 'sem 5/10':[['5/10','2/10 – 4/10',2515,2467,6.19,6,'fin'],['6/10','5/10',429,422,null,4,'fin'],['7/10','6/10',411,409,null,3,'fin'],['8/10','7/10',481,104,null,2,'proc']],
+};
+const n0=v=>v.toLocaleString('es-AR');
+const n2=v=>v==null||!isFinite(v)?'—':v.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const dif=(a,b)=>{if(!b)return'';const p=Math.round((a-b)/b*100);return `<span class="${p>=0?'up':'down'}">${p>=0?'▲':'▼'} ${Math.abs(p)}%</span>`};
+function kpi(l,c,v,d){return `<div class="k" style="border-color:${c}40"><div class="l" style="color:${c}">${l}</div><div class="v">${v}</div><div class="d sub">${d}</div></div>`}
+let m='dia', dia='8/10', sem='sem 5/10';
+function mover(d){ if(m==='dia'){dia=dia==='8/10'?(d<0?'2/10':'8/10'):(d>0?'8/10':'2/10')} else {sem=d<0?'sem 29/9':'sem 5/10'} pintar() }
+function modo(x){m=x;pintar()}
+function tablaLocal(filas,titulo){
+  document.getElementById('tLoc').textContent=titulo;
+  document.getElementById('thL').innerHTML='<tr><th>Local</th><th>Responsable</th><th>Cant venta</th><th>Cant repo</th><th>No mandados</th><th>Avance</th><th>Horas (Mi repo)</th><th>Prendas/HS</th><th>Estado</th></tr>';
+  document.getElementById('tbL').innerHTML=filas.map(f=>{const pct=f[2]/f[1]*100,est=f[2]>=f[1]-2&&f[2]>0?'fin':f[2]>0?'proc':'nada';
+    return `<tr><td><b>${f[0]}</b></td><td class="sub">${f[4]}</td><td class="venta">${n0(f[1])}</td><td>${n0(f[2])}</td><td class="falt">${f[2]?n0(f[1]-f[2]):'—'}</td>
+    <td><div class="barra"><i style="width:${pct}%"></i></div></td><td>${f[3]==null?'<span class="sub">—</span>':n2(f[3])}</td><td>${f[3]?n2(f[2]/f[3]):'—'}</td>
+    <td><span class="chip ${est}">${est==='fin'?'LISTO':est==='proc'?'EN PROCESO':'SIN EMPEZAR'}</span></td></tr>`}).join('');
+}
+function pintar(){
+  document.getElementById('bDia').classList.toggle('on',m==='dia');document.getElementById('bSem').classList.toggle('on',m==='sem');
+  document.getElementById('cDias').style.display=m==='sem'?'':'none';
+  if(m==='dia'){
+    const f=LOC[dia], v=f.reduce((s,x)=>s+x[1],0), r=f.reduce((s,x)=>s+x[2],0), hs=f.reduce((s,x)=>s+(x[3]||0),0), pers=new Set(f.map(x=>x[4])).size;
+    const otro=LOC[dia==='8/10'?'2/10':'8/10'];
+    document.getElementById('periodo').textContent=(dia==='8/10'?'Hoy · ':'')+'Repo del '+dia+(dia==='8/10'?' (venta 7/10)':' (venta 1/10)');
+    document.getElementById('kpis').innerHTML=
+      kpi('Cant venta','#22c55e',n0(v),`${f.length} locales`)+
+      kpi('Cant repo','#38bdf8',n0(r),`${Math.round(r/v*100)}% de avance`)+
+      kpi('No mandados','#f87171',n0(dia==='8/10'?1:15),dia==='8/10'?'hasta ahora':'3,5% de la venta')+
+      kpi('Horas (Mi repo)','#a78bfa',hs?n2(hs):'—',hs?`${n2(r/hs)} prendas/HS`:'nadie usó el cronómetro todavía')+
+      kpi('Personas','#f59e0b',pers,'responsables de la repo');
+    tablaLocal([...f].sort((a,b)=>b[1]-a[1]),'Por local · repo del '+dia);
+  } else {
+    const rows=DIAS[sem];
+    document.getElementById('periodo').textContent=sem==='sem 5/10'?'Semana 5/10 – 11/10':'Semana 29/9 – 4/10';
+    const hxp=r=>r[4], horas=r=>r[4]==null?null:r[4]/r[5], pph=r=>r[4]?r[3]/r[4]:null;
+    const conH=rows.filter(r=>r[4]!=null), prom=(fn)=>conH.length?conH.reduce((s,r)=>s+fn(r),0)/conH.length:null;
+    document.getElementById('thD').innerHTML=`<tr><th>Día de reposición</th><th>Venta</th><th>Cant venta</th><th>Cant repo</th><th>Art no mandados</th><th>Locales</th><th><span class="prom">${n2(prom(horas))}</span>Horas</th><th>Personas</th><th>HS x per</th><th><span class="prom">${n2(prom(pph))}</span>Prendas/HS</th><th>Estado</th></tr>`;
+    document.getElementById('tbD').innerHTML=rows.map(r=>`<tr><td><b>${r[0]}</b></td><td class="sub">${r[1]}</td><td class="venta">${n0(r[2])}</td><td>${n0(r[3])}</td><td class="falt">${n0(r[2]-r[3])}</td><td>17</td><td>${n2(horas(r))}</td><td>${r[5]}</td><td>${n2(hxp(r))}</td><td><b>${n2(pph(r))}</b></td><td><span class="chip ${r[6]}">${r[6]==='fin'?'FINALIZADA':'EN PROCESO'}</span></td></tr>`).join('');
+    const v=rows.reduce((s,r)=>s+r[2],0), rp=rows.reduce((s,r)=>s+r[3],0), o=DIAS[sem==='sem 5/10'?'sem 29/9':'sem 5/10'], vo=o.reduce((s,r)=>s+r[2],0), ro=o.reduce((s,r)=>s+r[3],0);
+    const hs=conH.reduce((s,r)=>s+r[4],0);
+    document.getElementById('kpis').innerHTML=
+      kpi('Cant venta','#22c55e',n0(v),`${dif(v,vo)} vs semana ${sem==='sem 5/10'?'anterior':'siguiente'}`)+
+      kpi('Cant repo','#38bdf8',n0(rp),`${dif(rp,ro)} vs la otra semana`)+
+      kpi('No mandados','#f87171',n0(v-rp),`${(Math.round((v-rp)/v*1000)/10).toLocaleString('es-AR')}% de la venta`)+
+      kpi('HS x per','#a78bfa',n2(hs),`${n2(prom(pph))} prendas/HS promedio`)+
+      kpi('Repos','#f59e0b',rows.length,'en la semana');
+    // por local sumado (ejemplo con la repo del 2/10 x semana)
+    const base=sem==='sem 5/10'?LOC['8/10']:LOC['2/10'];
+    tablaLocal(base.map(f=>[f[0],f[1]*4,f[2]?f[2]*4:Math.round(f[1]*3.1),f[3]?f[3]*4:null,f[4]]).sort((a,b)=>b[1]-a[1]),'Por local · suma de la semana (ilustrativo)');
+  }
+}
+pintar();
+</script>
+</body>
+</html>

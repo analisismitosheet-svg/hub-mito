@@ -6,3 +6,5 @@
 - Estado **En proceso / Finalizado** (`sql/mayorista_lote_estado.sql`): se finaliza solo al tildar el 100 %; las viejas quedaron finalizadas con la fecha de carga.
 - `EstadisticasRendimiento.tsx` (`/mayorista/estadisticas`).
 - El filtro rápido de esta pantalla se replicó en [[Transferencias]].
+- **Eficiencia mayorista** (`/mayorista/estadisticas`, `EstadisticasRendimiento.tsx`): arriba la **Estadística VTD** (`src/components/EstadisticaVtd.tsx`, RPC `estadistica_vtd` en `sql/estadistica_vtd.sql`): Hoy (repo del día, ◀ ▶) / Por semana (una fila por repo como la planilla), cuadro por local. Horas = cronómetro de Mi repo; Prendas/HS = prendas escaneadas con cronómetro ÷ esas horas. Abajo, Tiempo real en piso. La tabla vieja por empleado (items separados) se sacó.
+- Mi repo: **Pausar tiene cooldown de 15 min** (`sql/repo_pausa_cooldown.sql`, `repo_proxima_pausa`).

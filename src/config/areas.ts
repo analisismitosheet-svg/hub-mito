@@ -352,7 +352,7 @@ export const APPS: AppDef[] = [
     areaId: 'mayorista',
     areaIds: ['rrhh'],
     title: 'Eficiencia mayorista',
-    description: 'Rendimiento por empleado: items separados, unidades y tiempo.',
+    description: 'Repos VTD por día, semana y local, y tiempo real en piso.',
     icon: TrendingUp,
     kind: 'internal',
     target: '/mayorista/estadisticas',
