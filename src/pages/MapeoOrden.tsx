@@ -70,9 +70,10 @@ function chipStock(v: number | null) {
 
 /** Mapeo depósito · Orden mapeado: planta → pasillo (desplegables) → niveles en columnas */
 export default function MapeoOrden() {
-  const { isAdmin } = useAuth()
-  /** El botón de sacar a mano de la lista lo ve solo el admin */
-  const veBorrar = isAdmin
+  const { isAdmin, can } = useAuth()
+  /** El botón de sacar a mano de la lista: admin o quien tenga el permiso de borrar del mapeo
+   *  (hoy dado de forma individual, no por rol; la RLS de mapeo_deposito pide lo mismo) */
+  const veBorrar = isAdmin || can('mayorista.mapeo.borrar')
 
   const [filas, setFilas] = useState<Mapeo[]>([])
   const [cargando, setCargando] = useState(true)
