@@ -344,6 +344,22 @@ export default function PedidosVenta() {
     return () => { vivo = false }
   }, [sel, version])
 
+  // Estado de cada renglón (armado o repo diaria, sql/estado_lineas_pedido.sql): se pinta en verde
+  // lo que ya salió. Se vuelve a pedir cuando cambia el avance del armado/repo (refresco de 12 s).
+  const [estadoLineas, setEstadoLineas] = useState<Record<number, { enviadas: number; estado: string }>>({})
+  const huellaAvance = sel ? `${armados[sel]?.estado ?? ''}|${armados[sel] ? (avanceArmados[armados[sel].id]?.unidadesOk ?? '') : ''}` : ''
+  useEffect(() => {
+    if (!sel || !supabase) { setEstadoLineas({}); return }
+    let vivo = true
+    void supabase.rpc('estado_lineas_pedido', { p_codigo: sel }).then(({ data }) => {
+      if (!vivo) return
+      const m: Record<number, { enviadas: number; estado: string }> = {}
+      for (const f of (data as { linea: number; enviadas: number; estado: string }[] | null) ?? []) m[f.linea] = { enviadas: f.enviadas, estado: f.estado }
+      setEstadoLineas(m)
+    })
+    return () => { vivo = false }
+  }, [sel, version, huellaAvance])
+
   // Stock por SKU (color y talle) de las líneas: la lib lo baja una vez por
   // sesión y lo guarda; mientras no llegue, la columna muestra "—".
   useEffect(() => {
@@ -1016,18 +1032,32 @@ export default function PedidosVenta() {
                           </td>
                         </tr>
                       ) : (
-                        items.map((i) => (
-                          <tr key={i.linea} className="hover:bg-surface2/60">
+                        items.map((i) => {
+                          const el = estadoLineas[i.linea]
+                          const fondo = el?.estado === 'hecho'
+                            ? 'bg-emerald-500/15 hover:bg-emerald-500/20'
+                            : el?.estado === 'faltante'
+                              ? 'bg-red-500/10 hover:bg-red-500/15'
+                              : el && el.enviadas > 0
+                                ? 'bg-emerald-500/5 hover:bg-emerald-500/10'
+                                : 'hover:bg-surface2/60'
+                          return (
+                          <tr key={i.linea} className={fondo}>
                             <td className="whitespace-nowrap px-3 py-1.5 font-semibold text-ink">{i.articulo}</td>
                             <td className="max-w-[18rem] truncate px-3 py-1.5 text-ink/90" title={i.descripcion ?? ''}>{i.descripcion || '—'}</td>
                             <td className="whitespace-nowrap px-3 py-1.5 tabular-nums text-sub">{colorDe(i)}</td>
                             <td className="px-3 py-1.5 text-sub">{i.talle}</td>
-                            <td className="px-3 py-1.5 text-right tabular-nums text-ink">{n0.format(i.cantidad ?? 0)}</td>
+                            <td className="px-3 py-1.5 text-right tabular-nums text-ink">
+                              {el?.estado === 'hecho' && <span className="mr-1 text-emerald-400">✓</span>}
+                              {el && el.estado !== 'hecho' && el.enviadas > 0 && <span className="mr-1 text-[11px] text-emerald-400">{el.enviadas}/</span>}
+                              {n0.format(i.cantidad ?? 0)}
+                            </td>
                             <td className="px-3 py-1.5 text-right tabular-nums">{celdaStock(i)}</td>
                             <td className="px-3 py-1.5 text-right tabular-nums text-ink">{plata(i.precio)}</td>
                             <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-ink">{plata(i.neto)}</td>
                           </tr>
-                        ))
+                          )
+                        })
                       )}
                     </tbody>
                     <tfoot>
