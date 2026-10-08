@@ -11,6 +11,7 @@
 - `server.js` en :3128, token `PUENTE_TOKEN` (= `SQL_BRIDGE_TOKEN` en Vercel). Filtro por lista blanca de columnas.
 - Publicado con Tailscale Funnel: `https://desktop-oa4gu6i.tail8a2a01.ts.net/sql-bridge`. **No renombrar la PC.** Si desde afuera falla y desde la oficina anda → reaplicar el funnel (ver `CONTEXTO.md`, sección del túnel).
 - Se reinicia solo: tarea "MITO - Puente SQL" (`scripts/servicio.ps1`, log `puente-sql/data/servicio.log`).
+- `src/lib/sqlApi.ts`: si el servidor responde 401 (sesión cerrada en Supabase con token local vigente) renueva la sesión y reintenta; si no puede, pide volver a entrar.
 - Vistas habilitadas: Configuraciones → Conexión SQL, o fijas en env `SQL_VIEWS` de Vercel (`vw_STOCK_SKU_MITO`, `vw_STOCK_ARTICULO_MITO`).
 
 ## Syncs a Supabase (`puente-sql/scripts/`, tareas en `instalar-tarea.ps1`)

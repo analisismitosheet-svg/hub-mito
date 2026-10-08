@@ -5,7 +5,7 @@ Mayorista pide armar un pedido de venta; el piso lo toma y lo arma en Mi repo.
 - SQL `sql/mayorista_armados.sql`: tablas `mayorista_armados` (prioridad, estado, quién, faltantes; un solo armado activo por pedido) y `mayorista_armados_items` (`escaneadas` por línea). RLS select para `pedidos_venta.view` o `mayorista.repos_piso`.
 - RPC: `pedir_armado`, `armado_aceptar` (gana el primero), `armado_escanear`, `armado_marcar_item` (tilde manual), `armado_deshacer`, `armado_finalizar`, `private.armado_cerrar_si_listo`.
 - Front: `PedidosVenta.tsx` (botón Pedir armado, selección múltiple, prioridad urgente/normal/baja, pedido en verde EN CURSO/ARMADO), `MiRepo.tsx` + `src/components/ArmadoPedido.tsx` (cámara QR/Code39/Code128/EAN, ✓ manual por artículo), `src/lib/armados.ts` (tipos, `ordenArmados`).
-- Aviso: `src/lib/alarma.ts` + `CampanaNotificaciones.tsx` miran cada 10 s y suenan/vibran. Con la app cerrada o bloqueado: ver Avisos push abajo.
+- Aviso: `src/lib/alarma.ts` + `CampanaNotificaciones.tsx` miran cada 10 s y suenan/vibran. **Si nadie lo acepta, repica con backoff 1, 2, 4, 8 min y después cada 8** (`REPIQUES` / `esperaRepique`); si se libera vuelve a empezar. Con la app cerrada o bloqueado: ver Avisos push abajo.
 - Tests: `scripts/test-armados.sql`, `scripts/test-armados-rls.sql`. Mockups `mockups/pedir-armado.html`, `mockups/mi-repo.html`.
 
 Ver [[Repos Mayorista y Mi repo]], [[Pedidos compra, venta y cancelaciones]].
@@ -25,3 +25,5 @@ Ver [[Repos Mayorista y Mi repo]], [[Pedidos compra, venta y cancelaciones]].
 - **Sacar armado** (solo admin): botón en el detalle de Pedidos de venta → RPC `armado_quitar(p_id)` (borra el armado y sus ítems).
 - **Ubicación en el armado**: `ArmadoPedido.tsx` muestra el chip de ubicación del Mapeo depósito y ordena "Faltan escanear" por ubicación, igual que el repo.
 - **✓ manual de a 1 unidad** (`sql/armado_marcar_unidad.sql`): `armado_marcar_item` suma +1 (si piden 2 y hay 1, queda 1/2 y la otra va a faltante al Finalizar). En pantalla, si la cantidad es >1 el botón dice «+1». Se arregló el bug que trababa todos los ✓ después del primero (faltaba bajar `enViaje`).
+- Al tildar o deshacer **no se vuelve a enfocar el casillero del escáner** (en el celular abría el teclado): se hace `blur`.
+- Pausa del armado con motivo y cooldown: ver [[Repos Mayorista y Mi repo]] (`piso_pausas`).
