@@ -67,15 +67,17 @@ export default function CampanaNotificaciones() {
   /**
    * Armados de pedidos (sql/mayorista_armados.sql): se miran cada 10 segundos
    * para que el celular suene apenas el mayorista pide uno.
-   * El sonido va acá y no en Mi repo, así suena aunque estés en otra pantalla
-   * (y sólo una vez por tarea nueva, sin importar cuántas haya activas).
+   * El sonido va acá y no en Mi repo, así suena aunque estés en otra pantalla.
+   * Si nadie lo toma, el pedido REPICA con backoff (1, 2, 4, 8 y después cada
+   * 8 minutos) hasta que alguien lo acepte o el mayorista lo cierre.
    */
   // El audio del celular arranca trabado hasta el primer toque: se destraba ahí
   useEffect(() => { if (verArmados) prepararAudio() }, [verArmados])
 
   const [armados, setArmados] = useState<Armado[]>([])
   const [avisoArmados, setAvisoArmados] = useState(false)
-  const vistosRef = useRef<Set<string> | null>(null)
+  /** id → { n: cuántas veces sonó, próxima: cuándo toca el repique } */
+  const vistosRef = useRef<Map<string, { n: number; proxima: number }> | null>(null)
 
   useEffect(() => {
     if (!supabase || !verArmados) {
@@ -104,29 +106,41 @@ export default function CampanaNotificaciones() {
       setArmados(lista.sort(ordenArmados))
       setAvisoArmados(true)
 
-      // Nueva tarea → suena el celular + notificación del sistema
+      // Nueva tarea → suena el celular; si nadie la toma, repica con backoff
       // Al piso solo le suenan los suyos (asignados a su legajo) o los sin asignar
       const pendientes = lista.filter((a) => a.estado === 'pendiente' && (isAdmin || esMayorista || paraLegajo(a, perfil?.legajo)))
+      const t = Date.now()
       if (vistosRef.current === null) {
-        // Primera carga: se registran las que ya estaban (no suena por arrancar la app)
-        vistosRef.current = new Set(pendientes.map((a) => a.id))
+        // Primera carga: no suena por arrancar la app, pero queda programado el
+        // primer repique (1 min): si la tarea sigue sin nadie, empieza a sonar.
+        vistosRef.current = new Map<string, { n: number; proxima: number }>(
+          pendientes.map((a) => [a.id, { n: 1, proxima: t + esperaRepique(1) }]),
+        )
       } else {
+        const mapa = vistosRef.current
         for (const a of pendientes) {
-          if (vistosRef.current.has(a.id)) continue
-          vistosRef.current.add(a.id)
+          const visto = mapa.get(a.id)
+          if (visto && t < visto.proxima) continue // todavía no le toca repicar
+          const n = (visto?.n ?? 0) + 1
+          mapa.set(a.id, { n, proxima: t + esperaRepique(n) })
+          const repique = !!visto
           const P = PRIORIDADES[a.prioridad as PrioridadArmado] ?? PRIORIDADES.normal
+          const cliente = a.cliente_nombre || a.cliente || 'Cliente'
           sonarArmado(a.prioridad as PrioridadArmado)
           if (typeof document !== 'undefined' && document.hidden) {
             notificarArmado(
-              `🔔 ${P.icono} Pedido N° ${nroDePedido(a)} a armar`,
-              `${P.label} · ${a.cliente_nombre || a.cliente || 'Cliente'}`,
+              repique
+                ? `⏳ Sigue sin aceptarse: pedido N° ${nroDePedido(a)}`
+                : `🔔 ${P.icono} Pedido N° ${nroDePedido(a)} a armar`,
+              repique ? `${P.label} · ${cliente} · todavía esperando a alguien` : `${P.label} · ${cliente}`,
               '/mayorista/mi-repo',
             )
           }
         }
-        // Los que ya no están pendientes (alguien los tomó o cerró) se vuelven a sonar si vuelven
-        const ahora = new Set(pendientes.map((a) => a.id))
-        for (const id of Array.from(vistosRef.current)) if (!ahora.has(id)) vistosRef.current.delete(id)
+        // Los que ya no están pendientes (alguien los tomó o cerró) empiezan de
+        // cero: si vuelven a quedar libres, vuelven a sonar como nuevos.
+        const siguen = new Set(pendientes.map((a) => a.id))
+        for (const id of Array.from(mapa.keys())) if (!siguen.has(id)) mapa.delete(id)
       }
     }
     void cargar()
