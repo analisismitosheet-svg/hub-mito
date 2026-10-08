@@ -19,6 +19,14 @@ import { PRIORIDADES, avanceDe, nroDePedido, COLUMNAS_ITEM_ARMADO, type Armado, 
 
 type EstadoSesion = 'inactiva' | 'en_curso' | 'pausada'
 
+/** Cronómetro del armado en la base (armado_crono / armado_iniciar) */
+interface CronoArmado {
+  estado: string
+  segundos: number
+  desde: string | null
+  ahora: string
+}
+
 interface FilaEscaneo {
   item_linea: number
   item_escaneadas: number
@@ -65,6 +73,25 @@ export default function ArmadoPedido({ armado, alVolver, alCambiar }: Props) {
     window.setTimeout(() => inputRef.current?.focus(), 0)
   }, [])
 
+  /** Pone en pantalla el cronómetro que devuelve la base (estado + segundos acumulados + desde cuándo corre) */
+  const aplicarCrono = useCallback((c: CronoArmado) => {
+    const corriendo = c.estado === 'en_curso' && c.desde
+    const extra = corriendo ? Math.max(0, (new Date(c.ahora).getTime() - new Date(c.desde as string).getTime()) / 1000) : 0
+    setSegundos(Math.floor((c.segundos ?? 0) + extra))
+    setSesion(c.estado === 'en_curso' ? 'en_curso' : c.estado === 'pausada' ? 'pausada' : 'inactiva')
+  }, [])
+
+  /** Iniciar / Reanudar: arranca este armado y pausa solo lo que tenías en marcha (otro pedido o repo) */
+  const iniciar = useCallback(async () => {
+    if (!supabase) return
+    const { data, error } = await supabase.rpc('armado_iniciar', { p_id: armado.id })
+    if (error) { setMensaje({ ok: false, texto: error.message }); return }
+    const c = ((Array.isArray(data) ? data[0] : data) ?? null) as CronoArmado | null
+    if (c) aplicarCrono(c)
+    else setSesion('en_curso')
+    enfocar()
+  }, [armado.id, aplicarCrono, enfocar])
+
   useEffect(() => {
     let vivo = true
     setCargando(true)
@@ -90,12 +117,19 @@ export default function ArmadoPedido({ armado, alVolver, alCambiar }: Props) {
         setItems((data as ArmadoItem[] | null) ?? [])
         setCargando(false)
       })
+    // Cronómetro guardado en la base (sql/una_tarea_a_la_vez.sql): sigue corriendo
+    // aunque se vuelva al menú o se cierre la app
+    void supabase.rpc('armado_crono', { p_id: armado.id }).then(({ data }) => {
+      if (!vivo) return
+      const c = ((Array.isArray(data) ? data[0] : data) ?? null) as CronoArmado | null
+      if (c) aplicarCrono(c)
+    })
     return () => {
       vivo = false
     }
-  }, [armado.id])
+  }, [armado.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Cronómetro (en memoria: el tiempo exacto del armado se guarda al finalizar)
+  // Cronómetro: se redibuja cada segundo mientras está en curso (el valor real está en la base)
   useEffect(() => {
     if (sesion !== 'en_curso') return
     const id = window.setInterval(() => setSegundos((s) => s + 1), 1000)
@@ -142,9 +176,7 @@ export default function ArmadoPedido({ armado, alVolver, alCambiar }: Props) {
     setMensaje(null)
   }
   function reanudar() {
-    if (supabase) void supabase.rpc('armado_reanudar', { p_id: armado.id })
-    setSesion('en_curso')
-    enfocar()
+    void iniciar()
   }
 
   const avance = useMemo(() => avanceDe(items), [items])
@@ -416,7 +448,7 @@ export default function ArmadoPedido({ armado, alVolver, alCambiar }: Props) {
               (sesion === 'inactiva' ? (
                 <button
                   type="button"
-                  onClick={() => { setSesion('en_curso'); enfocar() }}
+                  onClick={() => void iniciar()}
                   className="btn-press inline-flex h-9 items-center gap-1 rounded-xl bg-emerald-600 px-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
                 >
                   <Play size={14} aria-hidden /> Iniciar
