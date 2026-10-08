@@ -6,6 +6,7 @@ import ScannerCamara from '@/components/ScannerCamara'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { normalizaCodigo } from '@/lib/loginEmpleado'
+import { compararUbicaciones, ubicacionesDeArticulos } from '@/lib/mapeo'
 import { PRIORIDADES, avanceDe, nroDePedido, COLUMNAS_ITEM_ARMADO, type Armado, type ArmadoItem } from '@/lib/armados'
 
 /* ------------------------------------------------------------------ */
@@ -100,8 +101,26 @@ export default function ArmadoPedido({ armado, alVolver, alCambiar }: Props) {
     return () => window.clearInterval(id)
   }, [sesion])
 
+  // Ubicaciones del Mapeo depósito (como en el repo): chip al lado del código y orden del recorrido
+  const [ubicaciones, setUbicaciones] = useState<Map<string, string[]>>(new Map())
+  const codigosItems = useMemo(() => [...new Set(items.map((i) => String(i.articulo ?? '').trim().toUpperCase()).filter(Boolean))].sort().join(','), [items])
+  useEffect(() => {
+    if (!codigosItems) return
+    void ubicacionesDeArticulos(codigosItems.split(',')).then(setUbicaciones).catch(() => { /* sin mapeo: sin ubicaciones */ })
+  }, [codigosItems])
+  const ubicacionesDe = useCallback((i: ArmadoItem) => ubicaciones.get(String(i.articulo ?? '').trim().toUpperCase()) ?? [], [ubicaciones])
+
   const avance = useMemo(() => avanceDe(items), [items])
-  const pendientes = useMemo(() => items.filter((i) => i.estado !== 'hecho' && i.escaneadas < i.cantidad), [items])
+  const pendientes = useMemo(
+    () => items
+      .filter((i) => i.estado !== 'hecho' && i.escaneadas < i.cantidad)
+      .sort((a, b) => {
+        const ua = ubicacionesDe(a)[0]
+        const ub = ubicacionesDe(b)[0]
+        return (ua && ub ? compararUbicaciones(ua, ub) : ua ? -1 : ub ? 1 : 0) || a.linea - b.linea
+      }),
+    [items, ubicacionesDe],
+  )
   const listos = useMemo(() => items.filter((i) => i.estado === 'hecho' || i.escaneadas >= i.cantidad), [items])
   const totalFaltan = avance.unidades - avance.unidadesOk
   const todoListo = totalFaltan === 0 && items.length > 0
@@ -252,6 +271,11 @@ export default function ArmadoPedido({ armado, alVolver, alCambiar }: Props) {
           <span className="font-display text-sm font-bold text-ink">{i.articulo || '—'}</span>
           {i.color && <span className="rounded-md bg-sky-500/15 px-1.5 py-px text-[11px] font-semibold text-sky-400">{i.color}</span>}
           {i.talle && <span className="rounded-md bg-violet-500/15 px-1.5 py-px text-[11px] font-semibold text-violet-300">{i.talle}</span>}
+          {ubicacionesDe(i).length > 0 && (
+            <span className="rounded-md bg-amber-500/15 px-1.5 py-px text-[11px] font-semibold text-amber-500" title="Ubicación en el depósito">
+              ({ubicacionesDe(i).join(' · ')})
+            </span>
+          )}
         </span>
         <span className="block truncate text-xs text-sub" title={i.descripcion ?? ''}>
           {i.descripcion || '—'}

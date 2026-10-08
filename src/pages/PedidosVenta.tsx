@@ -6,6 +6,7 @@ import {
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/context/AuthContext'
 import { descripcionesMaestro } from '@/lib/descripcionArticulos'
 import { imprimirPedido } from '@/lib/imprimirPedido'
 import { cargarStockSku, stockSkuDe, stockArticuloDe, type StockSku } from '@/lib/stockSku'
@@ -203,6 +204,7 @@ export default function PedidosVenta() {
   /*  Se refresca cada 12 s: así el pedido se pone en verde en vivo      */
   /*  a medida que el legajo escanea.                                    */
   /* ------------------------------------------------------------------ */
+  const { isAdmin } = useAuth()
   const [armados, setArmados] = useState<Record<string, Armado>>({}) // por código de pedido
   const [avanceArmados, setAvanceArmados] = useState<Record<string, AvanceArmado>>({})
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set())
@@ -260,6 +262,15 @@ export default function PedidosVenta() {
     const id = window.setInterval(() => void cargarArmados(), 12000)
     return () => window.clearInterval(id)
   }, [cargarArmados])
+
+  /** Admin: borra el armado pedido (sql/armado_sin_asignar_y_quitar.sql). */
+  async function sacarArmado(id: string, numero: number | null) {
+    if (!supabase) return
+    if (!window.confirm(`¿Sacar el armado del pedido N° ${numero ?? ''}? Se borra lo escaneado de ese armado.`)) return
+    const { error: e } = await supabase.rpc('armado_quitar', { p_id: id })
+    setAvisoArmado(e ? { ok: false, texto: e.message } : { ok: true, texto: `Se sacó el armado del pedido N° ${numero ?? ''}.` })
+    await cargarArmados()
+  }
 
   /** Abre el selector de prioridad para esos pedidos (sin los que ya están pedidos). */
   function pedirArmadoDe(codigos: string[]) {
@@ -929,6 +940,16 @@ export default function PedidosVenta() {
                         ? 'Pedido a armar'
                         : 'Pedir armado'}
                   </button>
+                  {/* Solo admin: saca el armado pedido (el pedido vuelve a como estaba) */}
+                  {isAdmin && armPedido && !armPedido.repo && (
+                    <button
+                      onClick={() => void sacarArmado(armPedido.id, pedido.numero)}
+                      className="btn-press inline-flex h-10 items-center gap-1.5 rounded-xl border border-brand-600/40 bg-brand-600/10 px-3 text-sm font-semibold text-brand-400 transition hover:bg-brand-600/20"
+                      title="Borra el armado pedido de este pedido (solo administrador)"
+                    >
+                      <X size={15} aria-hidden /> Sacar armado
+                    </button>
+                  )}
                 </div>
               </div>
 
