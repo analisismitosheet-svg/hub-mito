@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Buscador de OC</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --paper:#050508; --surface:rgba(255,255,255,.035); --surface2:rgba(255,255,255,.07);
+    --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.18);
+    --ink:#f8fafc; --sub:#94a3b8; --amber:#f59e0b; --sky:#38bdf8; --emerald:#22c55e; --red:#ef4444; --lime:#a3e635; --violet:#a78bfa;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(900px 500px at 12% -10%, rgba(234,88,12,.13), transparent 60%),var(--paper);
+    color:var(--ink);font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:14px;line-height:1.45;padding:24px 16px 64px;min-height:100vh}
+  h1{font-size:22px;margin:6px 0 4px;letter-spacing:-.02em}
+  .badge{display:inline-block;padding:3px 10px;border-radius:999px;background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.35);font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+  .sub{color:var(--sub)}
+  .wrap{max-width:1180px;margin:0 auto}
+  .grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:20px;margin-top:18px}
+  @media (max-width:900px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px;backdrop-filter:blur(12px)}
+  .ctx{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:12px;margin-bottom:10px}
+  .ctx b{color:var(--ink)}
+  .chips{display:flex;flex-wrap:wrap;gap:5px;min-height:28px;align-items:center;margin-bottom:8px}
+  .chip{display:inline-flex;align-items:center;gap:5px;background:rgba(245,158,11,.15);color:var(--amber);border-radius:8px;padding:2px 4px 2px 8px;font-size:12px}
+  .chip b{font-variant-numeric:tabular-nums}
+  .chip button{background:none;border:0;color:inherit;padding:0 4px;font-size:13px}
+  .search{display:flex;align-items:center;gap:8px;border:1px solid var(--line2);background:var(--surface2);border-radius:12px;padding:8px 10px}
+  .search input{flex:1;background:transparent;border:0;outline:0;color:var(--ink);font:inherit;font-size:14px}
+  .kbd{font-size:10px;color:var(--sub);border:1px solid var(--line2);border-radius:5px;padding:1px 5px}
+  .filtros{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+  .f{border:1px solid var(--line);background:transparent;color:var(--sub);border-radius:999px;padding:3px 10px;font-size:12px}
+  .f.on{border-color:var(--amber);color:var(--amber);background:rgba(245,158,11,.1)}
+  .f.on.sky{border-color:var(--sky);color:var(--sky);background:rgba(56,189,248,.1)}
+  .f.on.vio{border-color:var(--violet);color:var(--violet);background:rgba(167,139,250,.1)}
+  .grupo{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--sub);margin:10px 4px 4px}
+  .lista{max-height:430px;overflow:auto}
+  .row{display:flex;gap:10px;align-items:flex-start;padding:7px 8px;border-radius:10px;cursor:pointer}
+  .row:hover{background:rgba(255,255,255,.04)}
+  .row.act{outline:1px solid var(--sky);background:rgba(56,189,248,.07)}
+  .row.sel{background:rgba(245,158,11,.1)}
+  .box{width:16px;height:16px;border:1px solid var(--line2);border-radius:4px;margin-top:2px;flex:none;display:flex;align-items:center;justify-content:center;font-size:11px}
+  .sel .box{background:var(--amber);border-color:var(--amber);color:#fff}
+  .num{width:58px;font-weight:700;font-variant-numeric:tabular-nums;flex:none}
+  .prov{flex:1;min-width:0;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fecha{color:var(--sub);font-size:12px;font-variant-numeric:tabular-nums;flex:none}
+  .estado{flex:none;font-size:11px;font-weight:700;border-radius:6px;padding:1px 7px}
+  .e-pend{background:rgba(245,158,11,.15);color:var(--amber)}
+  .e-parc{background:rgba(56,189,248,.15);color:var(--sky)}
+  .e-comp{background:rgba(34,197,94,.15);color:var(--emerald)}
+  .bar{height:4px;border-radius:4px;background:var(--line);margin-top:4px;overflow:hidden}
+  .bar i{display:block;height:100%;background:var(--sky)}
+  .arts{font-size:11px;color:var(--sky);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  mark{background:rgba(250,204,21,.28);color:inherit;border-radius:3px;padding:0 1px}
+  .vacio{padding:14px;color:var(--sub);font-size:13px}
+  .manual{color:#f87171;font-size:13px;padding:7px 8px}
+  .pie{display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--line);padding-top:10px;margin-top:8px;font-size:12px}
+  .btn{border:0;border-radius:10px;background:#d97706;color:#fff;font-weight:700;padding:7px 14px;font:inherit;font-size:13px;font-weight:700}
+  ol{padding-left:18px;margin:6px 0}
+  li{margin:5px 0}
+  .nota h3{font-size:14px;margin:12px 0 4px}
+  .nota h3:first-child{margin-top:0}
+  .nota p,.nota li{font-size:13px;color:#cbd5e1}
+  .prueba button{border:1px dashed var(--line2);background:transparent;color:var(--sub);border-radius:8px;padding:3px 8px;font-size:12px;margin:3px 3px 0 0;font-family:inherit}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span class="badge">Maqueta · no está subida</span>
+  <h1>Recepción INDO · buscador de N° OC</h1>
+  <p class="sub">Datos reales de pedidos de compra (muestra). Probá escribir: <b>1042</b>, <b>vans black</b>, <b>thrash</b>, <b>RU2251</b>, o pegá <b>15183/15347</b>.</p>
+
+  <div class="grid">
+    <div class="card">
+      <div class="ctx">
+        <span>Recepción: <b>Guía 48211</b> · remito 0003-00012874</span>
+        <span>Proveedor: <b>VANS</b></span>
+      </div>
+
+      <div class="chips" id="chips"></div>
+
+      <div class="search">
+        <span>🔍</span>
+        <input id="q" autofocus placeholder="N°, proveedor, artículo o descripción… (podés pegar 15183/15347)" autocomplete="off" />
+        <span class="kbd">↑↓</span><span class="kbd">Enter</span>
+      </div>
+
+      <div class="filtros">
+        <button class="f on" data-f="prov">Solo VANS</button>
+        <button class="f on sky" data-f="pend">Con saldo por recibir</button>
+        <button class="f vio" data-f="anio">Últimos 6 meses</button>
+      </div>
+
+      <div class="lista" id="lista"></div>
+
+      <div class="pie">
+        <span class="sub" id="cuenta"></span>
+        <span><button class="f" onclick="limpiar()">Cancelar</button> <button class="btn" id="guardar">Guardar</button></span>
+      </div>
+      <div class="prueba" style="margin-top:10px">
+        <span class="sub" style="font-size:12px">Probar:</span>
+        <button onclick="probar('1042')">1042</button>
+        <button onclick="probar('104')">104</button>
+        <button onclick="probar('vans black')">vans black</button>
+        <button onclick="probar('thrash')">thrash</button>
+        <button onclick="probar('RU2251')">RU2251</button>
+        <button onclick="probar('15183/15347')">15183/15347</button>
+        <button onclick="probar('99999')">99999</button>
+      </div>
+    </div>
+
+    <div class="card nota">
+      <h3>Qué cambia</h3>
+      <ol>
+        <li><b>Búsqueda en la base, en una sola llamada</b> (función <code>buscar_oc</code>): busca por N°, proveedor, código de artículo y descripción (la adicional) a la vez. Hoy son 3 consultas desde el navegador y la de descripción se corta en 80 artículos.</li>
+        <li><b>Varias palabras</b>: «vans black» trae las OC que cumplen las dos (proveedor VANS + artículo black). Hoy busca la frase entera.</li>
+        <li><b>Orden por relevancia</b>: primero el N° exacto, después los que empiezan igual, después proveedor y artículos. Hoy «104» mezcla 1042, 10713, 15104… sin orden.</li>
+        <li><b>Estado de cada OC</b> con el picking: <span class="estado e-pend">Pendiente</span> <span class="estado e-parc">Parcial 48%</span> <span class="estado e-comp">Completa</span> y un filtro <b>«Con saldo por recibir»</b> prendido de entrada, así no aparecen las ya recibidas.</li>
+        <li><b>Agrupado</b>: primero las del proveedor de la recepción, después «Otros proveedores».</li>
+        <li><b>Teclado</b>: ↑ ↓ para moverte, Enter tilda la marcada. Si escribís un N° exacto, Enter lo tilda directo.</li>
+        <li><b>Pegar varias</b>: «15183/15347» (o con comas/espacios) tilda todas las que existen y avisa cuáles no.</li>
+        <li>Lo que coincide queda <mark>resaltado</mark> y se ve qué artículo hizo match.</li>
+      </ol>
+      <h3>Del lado de la base</h3>
+      <p>Índices trigram (<code>pg_trgm</code>) en la descripción de artículos y en los ítems de las OC, para que el «contiene» sea rápido aunque el maestro tenga 92 mil artículos. No se toca el SQL Server.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+const OCS = [
+ {n:1044,f:'2026-10-07',p:'VANS',ped:37,rec:0,a:[['VS021122','VN0A5FCCBKA SKATE SK8-HI BLACK/BLACK']]},
+ {n:15264,f:'2026-08-28',p:'VANS',ped:104,rec:0,a:[['VS060117','MALIGNO HALF BOX CURVED BLACK'],['VS265119','MALIGNO BMX SS TEE BLACK'],['VS266200','MALIGNO BMX PULLOVER WALNUT']]},
+ {n:15253,f:'2026-08-26',p:'VANS',ped:77,rec:76,a:[['VS061128','U UPLAND WHITE/BLACK'],['VS061136','UPLAND BLACK/WHITE']]},
+ {n:1020,f:'2026-08-19',p:'VANS',ped:120,rec:100,a:[['VS031147','SK8-HI TAPERED STACKFORM']]},
+ {n:15172,f:'2026-07-23',p:'VANS',ped:5515,rec:2662,a:[['VS255132','HEX SS'],['VS255136','LOWER CORECASE SS TEE']]},
+ {n:15173,f:'2026-07-22',p:'VANS',ped:7886,rec:2938,a:[['VS061132','K OLD SKOOL LEOPARD POP INCENSE/PINK'],['VS061134','U KNU SKOOL STACKLITE BLACK/WHITE']]},
+ {n:1000,f:'2026-06-10',p:'VANS',ped:884,rec:0,a:[['VS051106','U HYLANE'],['VS051127','UPLAND BLACK/BLACK/WHITE']]},
+ {n:14953,f:'2026-06-08',p:'VANS',ped:1183,rec:0,a:[['VS081123','SK8-HI BLK BLK WHT VANS'],['VS081155','VANS SK8-HI PLATF BLK/WHT']]},
+ {n:1042,f:'2026-10-02',p:'VANS',ped:96,rec:0,a:[['VS031150','OLD SKOOL BLACK/WHITE']]},
+ {n:1042,f:'2026-09-29',p:'RUSTY',ped:60,rec:0,a:[['RU162504','TRACKER TRACKPANT BLACK']]},
+ {n:1042,f:'2026-09-25',p:'47 STREET',ped:120,rec:120,a:[['47051231','THRASH BEIGE ZAPATILLAS 47 STREET']]},
+ {n:15444,f:'2026-10-08',p:'Elordi S.A.',ped:144,rec:0,a:[['RU265114','WILD PEACE TEE RX PROCESS BLACK']]},
+ {n:15432,f:'2026-10-07',p:'RUSTY',ped:84,rec:0,a:[['RU262102','STEVEN 5 JEAN GREY']]},
+ {n:15429,f:'2026-10-06',p:'47 STREET',ped:2308,rec:0,a:[['47262102','JEAN BOOTCUT SKY CELESTE']]},
+ {n:15392,f:'2026-09-30',p:'47 STREET (Midding S.R.L)',ped:984,rec:972,a:[['47051232','THRASH BLANCO ZAPATILLA 47STREET']]},
+ {n:15391,f:'2026-09-30',p:'47 STREET (Midding S.R.L)',ped:684,rec:442,a:[['47051231','THRASH BEIGE ZAPATILLAS 47 STREET'],['47051271','RING GRIS ZAPATILLA 47STREET']]},
+ {n:15363,f:'2026-09-21',p:'Elordi S.A.',ped:146,rec:122,a:[['RU225113','COMPETITION TEE NEGRO'],['RY030104','ANCHOR MAN CAP BLANCO RUSTY']]},
+ {n:15347,f:'2026-09-16',p:'Tarco SA',ped:411,rec:411,a:[['ET265500','JAP OG MUSCLE NEGRO 2'],['ET265501','JAP OG MUSCLE BEIGE']]},
+ {n:15183,f:'2026-08-07',p:'Tarco SA',ped:5717,rec:4262,a:[['BG060037','STACKED TRUCKER'],['BG265115','SURFING BOXY TEE']]},
+ {n:1031,f:'2026-09-14',p:'Elordi S.A.',ped:120,rec:0,a:[['RU225113','COMPETITION TEE NEGRO']]},
+ {n:15116,f:'2026-07-24',p:'Elordi S.A.',ped:14858,rec:7968,a:[['RG265109','POLLY ANNA POINTELLE BABY TEE BLACK']]},
+ {n:1002,f:'2026-06-11',p:'47 STREET (Midding S.R.L)',ped:492,rec:144,a:[['47061243','THRASH VISON ZAPATILLA 47STREET']]},
+ {n:14518,f:'2026-03-05',p:'47 STREET',ped:192,rec:0,a:[['47031178','LOCKIE NEGRO ZAPATILLA 47STREET']]},
+ {n:14467,f:'2026-03-03',p:'47 STREET',ped:336,rec:336,a:[['47041149','SCHEME NEGRO ZAPATILLA 47STREET']]},
+ {n:10713,f:'2025-11-02',p:'RUSTY',ped:240,rec:240,a:[['RG162100','LIZZY MID RISE JEAN GIRLS AZUL']]},
+].map((o,i)=>({...o,id:i}));
+
+const PROV='VANS', HOY=new Date('2026-10-08');
+const flt={prov:true,pend:true,anio:false};
+let sel=[{id:15,n:15391,p:'47 STREET (Midding S.R.L)'}], activo=0, filas=[], aviso='';
+const $=s=>document.querySelector(s);
+const norm=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
+const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+function resaltar(txt,palabras){let h=esc(txt);for(const w of palabras){if(!w)continue;h=h.replace(new RegExp('('+w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','ig'),'<mark>$1</mark>')}return h}
+function estado(o){const s=o.ped-o.rec;if(s<=0)return['Completa','e-comp',100];if(o.rec===0)return['Pendiente','e-pend',0];const p=Math.round(o.rec/o.ped*100);return['Parcial '+p+'%','e-parc',p]}
+
+function puntaje(o,ws,txt){
+  // Cada palabra tiene que coincidir con algo (N°, proveedor, artículo o descripción)
+  let pts=0;const arts=[];
+  for(const w of ws){
+    let ok=false;
+    if(String(o.n)===w){pts+=1000;ok=true}
+    else if(String(o.n).startsWith(w)&&/^\d+$/.test(w)){pts+=500-String(o.n).length;ok=true}
+    else if(String(o.n).includes(w)&&/^\d+$/.test(w)){pts+=100;ok=true}
+    if(norm(o.p).includes(w)){pts+=80;ok=true}
+    for(const [c,d] of o.a){ if(c.includes(w)||norm(d).includes(w)){ok=true;pts+=40;if(!arts.includes(c))arts.push(c)} }
+    if(!ok)return null;
+  }
+  return {pts,arts};
+}
+
+function render(){
+  const txt=$('#q').value.trim();
+  const ws=norm(txt).split(/[\s\/,;]+/).filter(Boolean);
+  const pegado=/[\/,;]/.test(txt)&&ws.every(w=>/^\d+$/.test(w));
+  let base=OCS.filter(o=>!flt.pend||o.ped>o.rec).filter(o=>!flt.anio||(HOY-new Date(o.f))/864e5<=183);
+  let res;
+  if(!ws.length||pegado){ res=base.map(o=>({o,pts:0,arts:[]})); if(flt.prov) res=res.filter(r=>r.o.p===PROV) }
+  else res=base.map(o=>{const r=puntaje(o,ws,txt);return r&&{o,...r}}).filter(Boolean);
+  res.sort((a,b)=>b.pts-a.pts||(a.o.p===PROV?-1:0)-(b.o.p===PROV?-1:0)||b.o.f.localeCompare(a.o.f));
+  const mios=res.filter(r=>r.o.p===PROV), otros=res.filter(r=>r.o.p!==PROV);
+  filas=[...mios,...otros];
+  if(activo>=filas.length)activo=Math.max(0,filas.length-1);
+  const html=[];
+  const fila=(r,i)=>{const o=r.o,[et,cl,p]=estado(o),s=sel.some(x=>x.id===o.id);
+    return `<div class="row ${s?'sel':''} ${i===activo?'act':''}" onclick="tildar(${o.id})" onmouseenter="activo=${i};marcar()">
+      <span class="box">${s?'✓':''}</span>
+      <span style="flex:1;min-width:0">
+        <span style="display:flex;gap:8px;align-items:center">
+          <span class="num">${resaltar(String(o.n),ws.filter(w=>/^\d+$/.test(w)))}</span>
+          <span class="prov">${resaltar(o.p,ws)}</span>
+          <span class="estado ${cl}">${et}</span>
+          <span class="fecha">${o.f.split('-').reverse().join('/')}</span>
+        </span>
+        <span class="sub" style="font-size:11px">${o.rec.toLocaleString('es-AR')} de ${o.ped.toLocaleString('es-AR')} u. recibidas · saldo ${(Math.max(0,o.ped-o.rec)).toLocaleString('es-AR')}</span>
+        <span class="bar"><i style="width:${p}%;${p===100?'background:var(--emerald)':''}"></i></span>
+        ${r.arts.length?`<span class="arts">📦 ${r.arts.map(c=>{const d=o.a.find(a=>a[0]===c)[1];return resaltar(c+' '+d,ws)}).join(' · ')}</span>`:''}
+      </span></div>`};
+  if(pegado){
+    const nums=[...new Set(ws)];
+    html.push(`<div class="grupo">Pegaste ${nums.length} N° — Enter tilda las que existen</div>`);
+    for(const n of nums){const hay=OCS.filter(o=>String(o.n)===n);
+      html.push(hay.length?`<div class="row"><span class="box" style="border-color:var(--emerald);color:var(--emerald)">✓</span><span><b>${n}</b> <span class="sub">· ${hay.map(h=>h.p).join(', ')}</span></span></div>`
+        :`<div class="manual">✗ ${n} no existe como OC · se agrega a mano</div>`)}
+  } else {
+    if(mios.length) html.push(`<div class="grupo">${PROV} · ${mios.length}</div>`);
+    mios.forEach((r,i)=>html.push(fila(r,i)));
+    if(otros.length) html.push(`<div class="grupo">Otros proveedores · ${otros.length}</div>`);
+    otros.forEach((r,i)=>html.push(fila(r,i+mios.length)));
+    if(!filas.length) html.push(/^\d+$/.test(txt)?`<div class="manual">No hay OC ${esc(txt)}. Enter la agrega a mano.</div>`
+      :`<div class="vacio">Nada coincide${flt.pend?' — probá apagar «Con saldo por recibir»':''}.</div>`);
+  }
+  $('#lista').innerHTML=html.join('');
+  $('#cuenta').textContent=aviso||(pegado?'':`${filas.length} OC`);
+  $('#chips').innerHTML=sel.length?sel.map(x=>`<span class="chip"><b>${x.n}</b><span style="opacity:.8;font-size:11px">· ${x.p||'(manual)'}</span><button onclick="sacar('${x.id}')">×</button></span>`).join(''):'<span class="sub" style="font-size:12px;font-style:italic">Ninguna OC elegida</span>';
+  $('#guardar').textContent='Guardar'+(sel.length?` (${sel.length})`:'');
+  document.querySelectorAll('.f[data-f]').forEach(b=>b.classList.toggle('on',flt[b.dataset.f]));
+}
+function marcar(){document.querySelectorAll('.row').forEach(r=>r.classList.remove('act'));const r=document.querySelectorAll('.lista .row[onclick]')[activo];r&&r.classList.add('act')}
+function tildar(id){const o=OCS[id];const i=sel.findIndex(x=>x.id===id);if(i>=0)sel.splice(i,1);else sel.push({id,n:o.n,p:o.p});aviso='';render()}
+function sacar(id){sel=sel.filter(x=>String(x.id)!==String(id));render()}
+function limpiar(){$('#q').value='';aviso='';render()}
+function probar(t){$('#q').value=t;activo=0;aviso='';render();$('#q').focus()}
+$('#q').addEventListener('input',()=>{activo=0;aviso='';render()});
+$('#q').addEventListener('keydown',e=>{
+  const txt=$('#q').value.trim();
+  if(e.key==='ArrowDown'){e.preventDefault();activo=Math.min(filas.length-1,activo+1);marcar();document.querySelector('.row.act')?.scrollIntoView({block:'nearest'})}
+  if(e.key==='ArrowUp'){e.preventDefault();activo=Math.max(0,activo-1);marcar();document.querySelector('.row.act')?.scrollIntoView({block:'nearest'})}
+  if(e.key==='Enter'){e.preventDefault();
+    const ws=txt.split(/[\s\/,;]+/).filter(Boolean);
+    if(/[\/,;]/.test(txt)&&ws.every(w=>/^\d+$/.test(w))){let ok=0,mal=[];
+      for(const n of new Set(ws)){const hay=OCS.filter(o=>String(o.n)===n);
+        const una=hay.find(o=>o.p===PROV)||hay[0];
+        if(una){if(!sel.some(x=>x.id===una.id)){sel.push({id:una.id,n:una.n,p:una.p});ok++}}else{sel.push({id:'m'+n,n,p:null});mal.push(n)}}
+      $('#q').value='';aviso=`Se tildaron ${ok}`+(mal.length?` · a mano: ${mal.join(', ')}`:'');render();return}
+    if(filas[activo]){tildar(filas[activo].o.id);$('#q').select()}
+    else if(/^\d+$/.test(txt)){sel.push({id:'m'+txt,n:txt,p:null});$('#q').value='';render()}
+  }
+});
+document.querySelectorAll('.f[data-f]').forEach(b=>b.onclick=()=>{flt[b.dataset.f]=!flt[b.dataset.f];render()});
+render();
+</script>
+</body>
+</html>

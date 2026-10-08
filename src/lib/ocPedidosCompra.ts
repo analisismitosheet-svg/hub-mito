@@ -81,56 +81,75 @@ export function unirOcs(ocs: string[]): string {
   return [...new Set(ocs.map((s) => s.trim()).filter(Boolean))].join('/')
 }
 
-/** Artículo que coincidió en los ítems de una OC (buscador por artículo). */
+/** Artículo que coincidió en los ítems de una OC (buscador). */
 export interface ArticuloOc {
   articulo: string
-  cantidad: number
+  descripcion: string | null
 }
 
-const cacheArticulos = new Map<string, Map<string, ArticuloOc[]>>()
+/** Resultado del buscador para una OC: puntaje para ordenar y artículos que coincidieron. */
+export interface CoincidenciaOc {
+  puntaje: number
+  arts: ArticuloOc[]
+}
+
+const cacheBusqueda = new Map<string, Promise<Map<string, CoincidenciaOc>>>()
 
 /**
- * Busca las OC cuyos ÍTEMS coinciden con el texto: código del artículo
- * (pedidos_compra_items.articulo) o descripción del maestro (public.articulos).
- * Devuelve el codigo interno de cada OC -> artículos que coincidieron.
- *
- * Silencioso si no hay permiso 'pedidos_compra.view' (lo que exige la RLS de
- * esas tablas): devuelve vacío y el buscador sigue andando por N° y proveedor,
- * igual que los links de la columna N° OC.
+ * Busca OC en la base en una sola llamada (sql/buscar_oc.sql): cada palabra tiene que
+ * coincidir con el N°, el proveedor o algún artículo de la OC (código o descripción del
+ * maestro). Devuelve codigo interno de la OC -> puntaje + artículos. Se cachea por texto.
+ * Silencioso si falla o no hay permiso: devuelve vacío.
  */
-export function buscarOcsPorArticulo(texto: string): Promise<Map<string, ArticuloOc[]>> {
-  const t = texto.trim().toUpperCase()
-  if (t.length < 2 || !supabase) return Promise.resolve(new Map())
-  const ya = cacheArticulos.get(t)
-  if (ya) return Promise.resolve(ya)
-  return (async () => {
-    const out = new Map<string, ArticuloOc[]>()
-    const anotar = (filas: { codigo: string | null; articulo: string | null; cantidad: number | null }[] | null) => {
-      for (const f of filas ?? []) {
-        if (!f.codigo || !f.articulo) continue
-        const lista = out.get(f.codigo) ?? []
-        if (!lista.some((a) => a.articulo === f.articulo)) {
-          lista.push({ articulo: f.articulo, cantidad: Number(f.cantidad ?? 0) })
-        }
-        out.set(f.codigo, lista)
+export function buscarOc(texto: string): Promise<Map<string, CoincidenciaOc>> {
+  const t = texto.trim().toUpperCase().replace(/\s+/g, ' ')
+  if (!t || !supabase) return Promise.resolve(new Map())
+  let p = cacheBusqueda.get(t)
+  if (!p) {
+    p = (async () => {
+      const out = new Map<string, CoincidenciaOc>()
+      const { data, error } = await supabase.rpc('buscar_oc', { p_texto: t })
+      if (error) {
+        cacheBusqueda.delete(t)
+        return out
       }
-    }
-    // En paralelo: por código de artículo y por descripción del maestro
-    const [porCodigo, porDescripcion] = await Promise.all([
-      supabase.from('pedidos_compra_items').select('codigo,articulo,cantidad').ilike('articulo', `%${t}%`).limit(400),
-      supabase.from('articulos').select('id_art').ilike('descripcion', `%${t}%`).limit(80),
-    ])
-    if (!porCodigo.error) anotar(porCodigo.data as Parameters<typeof anotar>[0])
-    if (!porDescripcion.error) {
-      const ids = ((porDescripcion.data as { id_art: string }[] | null) ?? []).map((a) => a.id_art).filter(Boolean)
-      if (ids.length) {
-        const r = await supabase.from('pedidos_compra_items').select('codigo,articulo,cantidad').in('articulo', ids).limit(400)
-        if (!r.error) anotar(r.data as Parameters<typeof anotar>[0])
+      for (const f of (data as { codigo: string; puntaje: number; arts: ArticuloOc[] | null }[] | null) ?? []) {
+        out.set(f.codigo, { puntaje: f.puntaje, arts: f.arts ?? [] })
       }
-    }
-    cacheArticulos.set(t, out)
-    return out
-  })()
+      return out
+    })()
+    cacheBusqueda.set(t, p)
+  }
+  return p
+}
+
+/** Cuánto se pidió, se recibió (picking) y se canceló de una OC. */
+export interface AvanceOc {
+  pedido: number
+  recibido: number
+  cancelado: number
+}
+
+let promesaAvance: Promise<Map<string, AvanceOc>> | null = null
+
+/** Avance de todas las OC (pedidos_compra_oc_avance), una vez por sesión. Vacío si falla. */
+export function avanceOcs(): Promise<Map<string, AvanceOc>> {
+  if (!promesaAvance) {
+    promesaAvance = (async () => {
+      const out = new Map<string, AvanceOc>()
+      if (!supabase) return out
+      const { data, error } = await supabase.rpc('pedidos_compra_oc_avance')
+      if (error) {
+        promesaAvance = null
+        return out
+      }
+      for (const f of (data as { codigo: string; pedido: number; recibido: number; cancelado: number }[] | null) ?? []) {
+        out.set(f.codigo, { pedido: Number(f.pedido) || 0, recibido: Number(f.recibido) || 0, cancelado: Number(f.cancelado) || 0 })
+      }
+      return out
+    })()
+  }
+  return promesaAvance
 }
 
 /** El Excel a veces trae varias OC en una celda: "15183/15347/15329". */

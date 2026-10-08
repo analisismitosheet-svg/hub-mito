@@ -24,6 +24,19 @@ FROM (VALUES ('deposito'), ('compras')) AS r(rol)
 WHERE NOT EXISTS (SELECT 1 FROM public.rol_permisos WHERE rol = r.rol AND permiso_clave = 'deposito.view');
 
 -- ---- Helpers ----
+-- ---- Orden por estado (aplicado en la migración recepcion_indo_orden_estado) ----
+-- "Listo para controlar" arriba, después "En depósito", después el resto.
+CREATE OR REPLACE FUNCTION private.recepcion_indo_orden_estado(p_estado text)
+RETURNS integer
+LANGUAGE sql IMMUTABLE
+AS $$
+  SELECT CASE
+    WHEN translate(upper(btrim(coalesce(p_estado, ''))), 'ÁÉÍÓÚ', 'AEIOU') LIKE 'LISTO PARA CONTROL%' THEN 0
+    WHEN translate(upper(btrim(coalesce(p_estado, ''))), 'ÁÉÍÓÚ', 'AEIOU') LIKE 'EN DEPOSITO%' THEN 1
+    ELSE 2
+  END
+$$;
+
 CREATE OR REPLACE FUNCTION private.tengo_permiso(p_clave text)
 RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
@@ -394,7 +407,8 @@ AS $$
   ), pagina AS (
     SELECT f.*, count(*) OVER () AS total
     FROM f
-    ORDER BY f.fecha_ingreso DESC NULLS LAST, f.n_guia, f.clave
+    -- Primero "Listo para controlar", después "En depósito", después el resto
+    ORDER BY private.recepcion_indo_orden_estado(f.estado), f.fecha_ingreso DESC NULLS LAST, f.n_guia, f.clave
     LIMIT greatest(1, least(coalesce(p_limite, 200), 1000))
     OFFSET greatest(0, coalesce(p_desde, 0))
   )
@@ -623,7 +637,8 @@ AS $function$
     SELECT f.*, count(*) OVER () AS total
     FROM f
     WHERE coalesce(p_control, '') NOT IN ('errores', 'errores_pendientes') OR cardinality(f.errs) > 0
-    ORDER BY f.fecha_ingreso DESC NULLS LAST, f.n_guia, f.clave
+    -- Primero "Listo para controlar", después "En depósito", después el resto
+    ORDER BY private.recepcion_indo_orden_estado(f.estado), f.fecha_ingreso DESC NULLS LAST, f.n_guia, f.clave
     LIMIT greatest(1, least(coalesce(p_limite, 200), 1000))
     OFFSET greatest(0, coalesce(p_desde, 0))
   )
@@ -638,3 +653,4 @@ AS $function$
 $function$;
 GRANT EXECUTE ON FUNCTION public.recepcion_indo_filas(text, text, text, text, text, text, integer, integer) TO authenticated;
 REVOKE EXECUTE ON FUNCTION public.recepcion_indo_filas(text, text, text, text, text, text, integer, integer) FROM anon, public;
+
