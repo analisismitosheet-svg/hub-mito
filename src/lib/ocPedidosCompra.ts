@@ -81,6 +81,58 @@ export function unirOcs(ocs: string[]): string {
   return [...new Set(ocs.map((s) => s.trim()).filter(Boolean))].join('/')
 }
 
+/** Artículo que coincidió en los ítems de una OC (buscador por artículo). */
+export interface ArticuloOc {
+  articulo: string
+  cantidad: number
+}
+
+const cacheArticulos = new Map<string, Map<string, ArticuloOc[]>>()
+
+/**
+ * Busca las OC cuyos ÍTEMS coinciden con el texto: código del artículo
+ * (pedidos_compra_items.articulo) o descripción del maestro (public.articulos).
+ * Devuelve el codigo interno de cada OC -> artículos que coincidieron.
+ *
+ * Silencioso si no hay permiso 'pedidos_compra.view' (lo que exige la RLS de
+ * esas tablas): devuelve vacío y el buscador sigue andando por N° y proveedor,
+ * igual que los links de la columna N° OC.
+ */
+export function buscarOcsPorArticulo(texto: string): Promise<Map<string, ArticuloOc[]>> {
+  const t = texto.trim().toUpperCase()
+  if (t.length < 2 || !supabase) return Promise.resolve(new Map())
+  const ya = cacheArticulos.get(t)
+  if (ya) return Promise.resolve(ya)
+  return (async () => {
+    const out = new Map<string, ArticuloOc[]>()
+    const anotar = (filas: { codigo: string | null; articulo: string | null; cantidad: number | null }[] | null) => {
+      for (const f of filas ?? []) {
+        if (!f.codigo || !f.articulo) continue
+        const lista = out.get(f.codigo) ?? []
+        if (!lista.some((a) => a.articulo === f.articulo)) {
+          lista.push({ articulo: f.articulo, cantidad: Number(f.cantidad ?? 0) })
+        }
+        out.set(f.codigo, lista)
+      }
+    }
+    // En paralelo: por código de artículo y por descripción del maestro
+    const [porCodigo, porDescripcion] = await Promise.all([
+      supabase.from('pedidos_compra_items').select('codigo,articulo,cantidad').ilike('articulo', `%${t}%`).limit(400),
+      supabase.from('articulos').select('id_art').ilike('descripcion', `%${t}%`).limit(80),
+    ])
+    if (!porCodigo.error) anotar(porCodigo.data as Parameters<typeof anotar>[0])
+    if (!porDescripcion.error) {
+      const ids = ((porDescripcion.data as { id_art: string }[] | null) ?? []).map((a) => a.id_art).filter(Boolean)
+      if (ids.length) {
+        const r = await supabase.from('pedidos_compra_items').select('codigo,articulo,cantidad').in('articulo', ids).limit(400)
+        if (!r.error) anotar(r.data as Parameters<typeof anotar>[0])
+      }
+    }
+    cacheArticulos.set(t, out)
+    return out
+  })()
+}
+
 /** El Excel a veces trae varias OC en una celda: "15183/15347/15329". */
 export function ocsDeFila(nOc: string | null | undefined): string[] {
   return String(nOc ?? '')

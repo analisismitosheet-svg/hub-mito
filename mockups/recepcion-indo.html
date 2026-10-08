@@ -549,7 +549,7 @@
       </div>
       <div style="display:flex;gap:6px;align-items:center;border-bottom:1px solid var(--line);padding-bottom:7px;margin-bottom:6px">
         <span style="color:var(--sub);font-size:12px">🔍</span>
-        <input id="ocBusca" placeholder="Buscar por N° de OC o proveedor…" style="flex:1;background:transparent;border:0;color:var(--ink);font-size:12px;outline:none;font-family:inherit" />
+        <input id="ocBusca" placeholder="Buscar por N°, proveedor o artículo…" style="flex:1;background:transparent;border:0;color:var(--ink);font-size:12px;outline:none;font-family:inherit" />
       </div>
       <label style="display:flex;gap:6px;align-items:center;font-size:11px;color:var(--sub);margin-bottom:4px;cursor:pointer">
         <input type="checkbox" checked style="accent-color:#f59e0b" /> Solo las de Tarco SA (2)
@@ -563,11 +563,15 @@
       <ul style="margin:0;padding-left:16px;display:flex;flex-direction:column;gap:6px">
         <li><b style="color:#f59e0b">Tilde / número</b> — selecciona la OC y la agrega a la celda N° OC (como hasta ahora).</li>
         <li><b style="color:var(--ink)">📄 Detalle</b> — abre la tarjeta <b style="color:var(--ink)">sin seleccionar nada</b>: cabecera, campos del pedido, ítems con descripción y link al pedido completo.</li>
+      </ul>
+      <p style="margin:0">El buscador filtra por <b style="color:var(--ink)">N°, proveedor o artículo</b>. Probá escribir <b style="color:#7dd3fc">reloj</b> (código o descripción): aparecen las OC que tienen ese artículo y cada fila muestra en celeste cuáles coincidieron.</p>
+      <ul style="margin:0;padding-left:16px;display:flex;flex-direction:column;gap:6px">
+        <li>El texto se busca en los ítems (<span class="cm2">pedidos_compra_items.articulo</span>) y en la descripción del maestro (<span class="cm2">public.articulos</span>), con debounce y caché por sesión.</li>
         <li>La tarjeta se cachea por sesión: reabrirla no vuelve a pedir el mismo pedido a la base.</li>
         <li><b style="color:var(--ink)">Esc</b> cierra <i>solo</i> la tarjeta, no el buscador de detrás.</li>
-        <li>Si el usuario no tiene el permiso <span class="cm2">pedidos_compra.view</span>, la tarjeta lo avisa en vez de fallar en silencio (la última fila de ejemplo lo muestra).</li>
+        <li>Si el usuario no tiene el permiso <span class="cm2">pedidos_compra.view</span>, la tarjeta lo avisa y la búsqueda por artículo queda deshabilitada (sigue funcionando por N° y proveedor).</li>
       </ul>
-      <p style="margin:0" class="muted">En la app real: <span class="cm2">src/components/DetalleOc.tsx</span> + botón 📄 en <span class="cm2">src/components/SelectorOc.tsx</span>.</p>
+      <p style="margin:0" class="muted">En la app real: <span class="cm2">src/components/DetalleOc.tsx</span>, botón 📄 y filtro por artículo en <span class="cm2">src/components/SelectorOc.tsx</span>, búsqueda en <span class="cm2">src/lib/ocPedidosCompra.ts</span>.</p>
     </div>
   </div>
 </div>
@@ -674,6 +678,7 @@
         { art: 'MOCHILA-45', desc: 'Mochila urbana 45L impermeable', color: 'Negro', talle: 'Único', cant: 24, precio: 68000 },
         { art: 'GORRA-TRUCK', desc: 'Gorra trucker bordada 6 paneles', color: 'Rojo', talle: 'Único', cant: 50, precio: 12500 },
         { art: 'CINTURON-L', desc: 'Cinturón cuero hebilla pinch', color: 'Marrón', talle: 'L', cant: 30, precio: 21350 },
+        { art: 'RELOJ-DIG1', desc: 'Reloj digital deportivo resistente al agua', color: 'Gris', talle: 'Único', cant: 12, precio: 55000 },
       ] },
     { numero: '15347', proveedor: 'Tarco SA', fecha: '07/10/2026', lista: 'MAYORISTA', user: 'compras02',
       alta: '06/10/2026', obs: '', total: 1250000, anulada: false,
@@ -695,17 +700,31 @@
   function pintarLista(filtro = '') {
     const l = document.getElementById('ocLista')
     const t = filtro.trim().toUpperCase()
-    const vis = OCs.filter((o) => !t || o.numero.includes(t) || o.proveedor.toUpperCase().includes(t))
-    l.innerHTML = vis.map((o) => `
+    // coincide por N°, proveedor o ARTÍCULO (código o descripción), como el SelectorOc real
+    const coincide = (o) => {
+      if (!t) return { ok: true, arts: [] }
+      const texto = [o.numero, o.proveedor.toUpperCase()]
+      if (texto.some((v) => v.includes(t))) return { ok: true, arts: [] }
+      const arts = o.items.filter((i) => i.art.toUpperCase().includes(t) || i.desc.toUpperCase().includes(t))
+      return { ok: arts.length > 0, arts }
+    }
+    const vis = OCs.map((o) => ({ o, ...coincide(o) })).filter((x) => x.ok)
+    l.innerHTML = vis.map(({ o, arts }) => `
       <div class="oc-row ${elegidas.has(o.numero) ? 'on' : ''}" data-n="${o.numero}">
         <button class="oc-main" data-toggle="${o.numero}">
           <span class="oc-cbx">${elegidas.has(o.numero) ? '✓' : ''}</span>
-          <span class="oc-num">${o.numero}</span>
-          <span class="oc-name">${o.proveedor}${o.anulada ? '<span class="oc-anul">(anulado)</span>' : ''}</span>
-          <span class="oc-fec">${o.fecha}</span>
+          <span style="flex:1;min-width:0">
+            <span style="display:flex;align-items:center;gap:8px">
+              <span class="oc-num">${o.numero}</span>
+              <span class="oc-name">${o.proveedor}${o.anulada ? '<span class="oc-anul">(anulado)</span>' : ''}</span>
+              <span class="oc-fec">${o.fecha}</span>
+            </span>
+            ${arts.length ? `<span style="display:block;margin-top:1px;padding-left:60px;font-size:10px;color:#7dd3fc">📦 ${arts.slice(0, 3).map((i) => i.art).join(', ')}${arts.length > 3 ? ` +${arts.length - 3}` : ''}</span>` : ''}
+          </span>
         </button>
         <button class="oc-info" data-detalle="${o.numero}" title="Ver el detalle de la OC ${o.numero}">📄</button>
-      </div>`).join('') || '<p style="padding:8px;font-size:11px;color:var(--sub)">No hay OC que coincidan.</p>'
+      </div>`).join('') ||
+      `<p style="padding:8px;font-size:11px;color:var(--sub)">${t.length >= 2 && !/^\d+$/.test(t) ? `No hay OC con el artículo «${t}» ni con ese N° o proveedor.` : 'No hay OC que coincidan.'}</p>`
   }
   pintarLista()
   document.getElementById('ocBusca').addEventListener('input', (e) => pintarLista(e.target.value))

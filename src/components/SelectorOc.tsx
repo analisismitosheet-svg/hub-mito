@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Check, FileText, Search, X } from 'lucide-react'
+import { Check, FileText, Package, Search, X } from 'lucide-react'
 import { normalizar } from '@/lib/recepcionIndo'
-import { ocsDeFila, unirOcs, type PedidoCompraOc } from '@/lib/ocPedidosCompra'
+import { buscarOcsPorArticulo, ocsDeFila, unirOcs, type PedidoCompraOc } from '@/lib/ocPedidosCompra'
 import DetalleOc from '@/components/DetalleOc'
 
 /* ------------------------------------------------------------------ */
@@ -70,6 +70,30 @@ export default function SelectorOc({
   const [soloProveedor, setSoloProveedor] = useState(true)
   /** OC de la que se está viendo la tarjeta de detalle (por código de la lista) */
   const [verDetalle, setVerDetalle] = useState<PedidoCompraOc | null>(null)
+  /** Ítems que coincidieron con lo buscado: codigo OC -> artículos (por artículo o descripción) */
+  const [porArticulo, setPorArticulo] = useState<Map<string, { articulo: string; cantidad: number }[]>>(new Map())
+  const [buscandoArt, setBuscandoArt] = useState(false)
+
+  // Búsqueda por artículo: con debounce, y solo cuando el texto no es un N° (el N° ya
+  // se filtra en memoria). La caché vive en ocPedidosCompra, así repetir no cuesta nada.
+  const tArt = texto.trim()
+  useEffect(() => {
+    if (tArt.length < 2 || /^\d+$/.test(tArt)) {
+      setPorArticulo(new Map())
+      setBuscandoArt(false)
+      return
+    }
+    let vivo = true
+    setBuscandoArt(true)
+    const timer = setTimeout(() => {
+      void buscarOcsPorArticulo(tArt).then((m) => {
+        if (!vivo) return
+        setPorArticulo(m)
+        setBuscandoArt(false)
+      })
+    }, 350)
+    return () => { vivo = false; clearTimeout(timer) }
+  }, [tArt])
 
   const cambiar = (nuevas: Elegida[]) => {
     tocado.current = true
@@ -89,8 +113,13 @@ export default function SelectorOc({
   const delProv = useMemo(() => pedidos.filter((p) => delProveedor(p, cod, nom)), [pedidos, cod, nom])
   const t = texto.trim().toUpperCase()
   const base = soloProveedor && delProv.length && !t ? delProv : pedidos
+  // Se busca por N°, proveedor O artículo (los artículos coinciden por código o por la
+  // descripción del maestro; el mapa viene de buscarOcsPorArticulo con debounce).
   const visibles = (t
-    ? base.filter((p) => [String(p.numero), p.proveedor ?? '', p.proveedor_nombre ?? ''].some((v) => v.toUpperCase().includes(t)))
+    ? base.filter((p) =>
+        [String(p.numero), p.proveedor ?? '', p.proveedor_nombre ?? ''].some((v) => v.toUpperCase().includes(t))
+          || porArticulo.has(p.codigo),
+      )
     : base
   ).slice(0, 80)
   const manual = texto.trim().replace(/\s+/g, '')
@@ -131,7 +160,7 @@ export default function SelectorOc({
               setTexto('')
             }
           }}
-          placeholder="Buscar por N° de OC o proveedor…"
+          placeholder="Buscar por N°, proveedor o artículo…"
           className="w-full bg-transparent px-1 py-0.5 text-xs text-ink outline-none placeholder:text-sub/60"
         />
         {texto && (
@@ -159,6 +188,8 @@ export default function SelectorOc({
         )}
         {visibles.map((p) => {
           const si = marcada(p)
+          // Artículos que hicieron match (solo se muestran si hay búsqueda activa)
+          const arts = t ? porArticulo.get(p.codigo) : undefined
           return (
             <div
               key={p.codigo}
@@ -167,17 +198,28 @@ export default function SelectorOc({
               <button
                 type="button"
                 onClick={() => alternar(p)}
-                className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left text-xs"
+                className="flex min-w-0 flex-1 items-start gap-2 px-2 py-1 text-left text-xs"
               >
-                <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${si ? 'border-amber-500 bg-amber-500 text-white' : 'border-line2'}`}>
+                <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${si ? 'border-amber-500 bg-amber-500 text-white' : 'border-line2'}`}>
                   {si && <Check size={11} strokeWidth={3} aria-hidden />}
                 </span>
-                <span className="w-14 shrink-0 font-semibold tabular-nums text-ink">{p.numero}</span>
-                <span className="min-w-0 flex-1 truncate text-sub">
-                  {p.proveedor_nombre || p.proveedor}
-                  {p.anulado && <span className="ml-1 text-brand-400">(anulado)</span>}
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2">
+                    <span className="w-14 shrink-0 font-semibold tabular-nums text-ink">{p.numero}</span>
+                    <span className="min-w-0 flex-1 truncate text-sub">
+                      {p.proveedor_nombre || p.proveedor}
+                      {p.anulado && <span className="ml-1 text-brand-400">(anulado)</span>}
+                    </span>
+                    <span className="shrink-0 tabular-nums text-sub/70">{fecha(p.fecha)}</span>
+                  </span>
+                  {arts && arts.length > 0 && (
+                    <span className="mt-0.5 block truncate pl-[3.75rem] text-[10px] text-sky-400">
+                      <Package size={9} className="mr-0.5 inline align-[-1px]" aria-hidden />
+                      {arts.slice(0, 3).map((a) => a.articulo).join(', ')}
+                      {arts.length > 3 ? ` +${arts.length - 3}` : ''}
+                    </span>
+                  )}
                 </span>
-                <span className="shrink-0 tabular-nums text-sub/70">{fecha(p.fecha)}</span>
               </button>
               {/* Tarjeta de detalle: no tilda la OC, solo la muestra */}
               <button
@@ -185,7 +227,7 @@ export default function SelectorOc({
                 onClick={() => setVerDetalle(p)}
                 title={`Ver el detalle de la OC ${p.numero}`}
                 aria-label={`Ver el detalle de la OC ${p.numero}`}
-                className="shrink-0 rounded-md p-1 text-sub/60 transition hover:bg-line hover:text-ink"
+                className="mt-1 shrink-0 rounded-md p-1 text-sub/60 transition hover:bg-line hover:text-ink"
               >
                 <FileText size={12} aria-hidden />
               </button>
@@ -194,7 +236,13 @@ export default function SelectorOc({
         })}
         {visibles.length === 0 && !puedeManual && (
           <p className="px-2 py-1.5 text-[11px] text-sub">
-            {pedidos.length === 0 ? 'Cargando las órdenes de compra… (si no aparecen, escribí el N° y Enter)' : 'No hay OC que coincidan.'}
+            {pedidos.length === 0
+              ? 'Cargando las órdenes de compra… (si no aparecen, escribí el N° y Enter)'
+              : buscandoArt
+                ? 'Buscando artículos…'
+                : t.length >= 2 && !/^\d+$/.test(t)
+                  ? `No hay OC con el artículo «${t}» ni con ese N° o proveedor.`
+                  : 'No hay OC que coincidan.'}
           </p>
         )}
       </div>
