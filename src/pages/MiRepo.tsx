@@ -15,7 +15,7 @@ import { normalizaCodigo } from '@/lib/loginEmpleado'
 import { compararUbicaciones, ubicacionesDeArticulos } from '@/lib/mapeo'
 import { nombreMaterial } from '@/lib/imprimirRepo'
 import {
-  COLUMNAS_ARMADO, PRIORIDADES, avanceDeArmados, esMio, nroDePedido, ordenArmados,
+  COLUMNAS_ARMADO, PRIORIDADES, avanceDeArmados, esMio, nroDePedido, ordenArmados, paraLegajo,
   type Armado, type AvanceArmado,
 } from '@/lib/armados'
 import { pedirPermisoNotificaciones } from '@/lib/alarma'
@@ -470,8 +470,9 @@ export default function MiRepo() {
   // Armados: los que esperan a alguien (por prioridad) y los que tomé yo
   const armadoSel = useMemo(() => armados.find((a) => a.id === selArmado) ?? null, [armados, selArmado])
   const armadosPendientes = useMemo(
-    () => armados.filter((a) => a.estado === 'pendiente' && !omitidos.has(a.id)).sort(ordenArmados),
-    [armados, omitidos],
+    // Los asignados al responsable del local solo le aparecen a él (el administrador ve todos)
+    () => armados.filter((a) => a.estado === 'pendiente' && !omitidos.has(a.id) && (modoAdmin || paraLegajo(a, perfil?.legajo))).sort(ordenArmados),
+    [armados, omitidos, modoAdmin, perfil?.legajo],
   )
   const armadosMios = useMemo(
     () => armados.filter((a) => a.estado === 'aceptado' && esMio(a, perfil?.id)).sort(ordenArmados),
@@ -783,6 +784,11 @@ export default function MiRepo() {
             <BellRing size={12} aria-hidden /> {P.icono} Armado {P.label}
           </p>
           <p className="mt-1 font-display text-base font-bold text-ink">Pedido N° {nroDePedido(a)}</p>
+          {a.asignado_legajo && (
+            <p className="mt-0.5 text-xs font-semibold text-emerald-500">
+              {modoAdmin ? `Para ${a.asignado_nombre ?? `#${a.asignado_legajo}`}` : 'Asignado a vos'} · responsable de {a.asignado_local}
+            </p>
+          )}
           <p className="text-xs text-sub">
             {a.cliente_nombre || a.cliente || 'Cliente'}
             {av ? ` · ${av.lineas} línea${av.lineas === 1 ? '' : 's'} · ${av.unidades} unidades` : ''}
@@ -980,7 +986,7 @@ export default function MiRepo() {
           {armadosPendientes.map((a) => tarjetaArmado(a))}
           <p className="text-xs text-sub">
             Van {armadosPendientes.length} pedido{armadosPendientes.length === 1 ? '' : 's'}: se apilan por prioridad
-            (urgente arriba) y los tomás de a uno. Si no lo tomás, sigue sonándole a los demás legajos.
+            (urgente arriba) y los tomás de a uno. Los de tus locales te suenan solo a vos; los demás, al primero que los tome.
           </p>
         </div>
       )}

@@ -5,7 +5,7 @@ import {
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
-import { COLUMNAS_ARMADO, PRIORIDADES, nroDePedido, ordenArmados, type Armado, type PrioridadArmado } from '@/lib/armados'
+import { COLUMNAS_ARMADO, PRIORIDADES, nroDePedido, ordenArmados, paraLegajo, type Armado, type PrioridadArmado } from '@/lib/armados'
 import { notificarArmado, prepararAudio, sonarArmado } from '@/lib/alarma'
 
 interface Notificacion {
@@ -31,6 +31,17 @@ function fmtFecha(iso: string): string {
   } catch {
     return iso
   }
+}
+
+/**
+ * Minutos entre cada repique de un armado que nadie acepta: el primero cae a
+ * los 1 min y de ahí afloja 2, 4, 8… (y sigue cada 8 hasta que alguien lo tome).
+ */
+const REPIQUES = [1, 2, 4, 8]
+
+/** Cuánto espero para el repique n° `n` (n arranca en 1 = el aviso original). */
+function esperaRepique(n: number): number {
+  return REPIQUES[Math.min(Math.max(n - 1, 0), REPIQUES.length - 1)] * 60_000
 }
 
 /**
@@ -94,7 +105,8 @@ export default function CampanaNotificaciones() {
       setAvisoArmados(true)
 
       // Nueva tarea → suena el celular + notificación del sistema
-      const pendientes = lista.filter((a) => a.estado === 'pendiente')
+      // Al piso solo le suenan los suyos (asignados a su legajo) o los sin asignar
+      const pendientes = lista.filter((a) => a.estado === 'pendiente' && (isAdmin || esMayorista || paraLegajo(a, perfil?.legajo)))
       if (vistosRef.current === null) {
         // Primera carga: se registran las que ya estaban (no suena por arrancar la app)
         vistosRef.current = new Set(pendientes.map((a) => a.id))
@@ -123,7 +135,7 @@ export default function CampanaNotificaciones() {
       activo = false
       clearInterval(intervalo)
     }
-  }, [isAdmin, esMayorista, verArmados])
+  }, [isAdmin, esMayorista, verArmados, perfil?.legajo])
 
   // Notificaciones que salen de los armados
   const notisArmados = useMemo<Notificacion[]>(() => {

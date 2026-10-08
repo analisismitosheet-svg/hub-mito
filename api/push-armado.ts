@@ -33,10 +33,12 @@ interface Armado {
   cliente: string | null
   cliente_nombre: string | null
   prioridad: 'urgente' | 'normal' | 'baja'
+  asignado_legajo: string | null
 }
 
 interface Suscripcion {
   endpoint: string
+  usuario_id: string
   p256dh: string
   auth: string
 }
@@ -88,7 +90,7 @@ export default async function handler(req: Req, res: Res) {
   // Armados pendientes que pidió este usuario y todavía no se avisaron (últimas 2 h)
   const desde = new Date(Date.now() - 2 * 3600_000).toISOString()
   const rA = await rest(
-    `mayorista_armados?select=id,pedido_numero,pedido_codigo,cliente,cliente_nombre,prioridad` +
+    `mayorista_armados?select=id,pedido_numero,pedido_codigo,cliente,cliente_nombre,prioridad,asignado_legajo` +
       `&estado=eq.pendiente&push_at=is.null&creado_por=eq.${uid}&creado_at=gte.${desde}&order=creado_at.asc`,
   )
   if (!rA.ok) return res.status(502).json({ error: `No se pudieron leer los armados (${rA.status})` })
@@ -103,51 +105,70 @@ export default async function handler(req: Req, res: Res) {
     headers: { Prefer: 'return=minimal' },
   })
 
-  const rS = await rest('push_suscripciones?select=endpoint,p256dh,auth')
+  const rS = await rest('push_suscripciones?select=endpoint,usuario_id,p256dh,auth')
   if (!rS.ok) return res.status(502).json({ error: `No se pudieron leer las suscripciones (${rS.status})` })
   const subs = (await rS.json()) as Suscripcion[]
 
-  // Un aviso por tanda: si es uno, el detalle; si son varios, el resumen
-  const urgente = armados.some((a) => a.prioridad === 'urgente')
-  const a0 = armados[0]
-  const payload = JSON.stringify(
-    armados.length === 1
-      ? {
-          title: `🔔 Pedido N° ${a0.pedido_numero ?? a0.pedido_codigo} a armar`,
-          body: `${PRIORIDAD[a0.prioridad] ?? ''} · ${a0.cliente_nombre || a0.cliente || 'Cliente'}`,
-          url: '/mayorista/mi-repo',
-          urgente,
-        }
-      : {
-          title: `🔔 ${armados.length} pedidos a armar`,
-          body: armados.map((a) => `N° ${a.pedido_numero ?? a.pedido_codigo}`).join(' · '),
-          url: '/mayorista/mi-repo',
-          urgente,
-        },
-  )
+  // Legajo de cada usuario suscripto: los armados asignados al responsable del local
+  // (sql/armado_responsable.sql) le llegan solo a él; los sin asignar, a todos.
+  const legajoDe = new Map<string, string>()
+  const uids = [...new Set(subs.map((x) => x.usuario_id))]
+  if (uids.length) {
+    const rU = await rest(`usuarios?select=id,legajo&id=in.(${uids.join(',')})`)
+    if (rU.ok) for (const u of (await rU.json()) as { id: string; legajo: string | null }[]) legajoDe.set(u.id, String(u.legajo ?? '').trim())
+  }
+  const grupos = new Map<string, Armado[]>() // '' = sin asignar
+  for (const a of armados) {
+    const k = String(a.asignado_legajo ?? '').trim()
+    grupos.set(k, [...(grupos.get(k) ?? []), a])
+  }
+
+  /** Un aviso por tanda: si es uno, el detalle; si son varios, el resumen */
+  const aviso = (lista: Armado[]) => {
+    const a0 = lista[0]
+    const urgente = lista.some((a) => a.prioridad === 'urgente')
+    return JSON.stringify(
+      lista.length === 1
+        ? {
+            title: `🔔 Pedido N° ${a0.pedido_numero ?? a0.pedido_codigo} a armar`,
+            body: `${PRIORIDAD[a0.prioridad] ?? ''} · ${a0.cliente_nombre || a0.cliente || 'Cliente'}`,
+            url: '/mayorista/mi-repo',
+            urgente,
+          }
+        : {
+            title: `🔔 ${lista.length} pedidos a armar`,
+            body: lista.map((a) => `N° ${a.pedido_numero ?? a.pedido_codigo}`).join(' · '),
+            url: '/mayorista/mi-repo',
+            urgente,
+          },
+    )
+  }
 
   webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'https://hub-mito.vercel.app', pub, priv)
   let enviados = 0
   const vencidas: string[] = []
-  await Promise.all(
-    subs.map(async (s) => {
-      try {
-        await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, {
-          TTL: 3600,
-          urgency: 'high',
-        })
-        enviados++
-      } catch (e) {
-        const code = (e as { statusCode?: number }).statusCode
-        if (code === 404 || code === 410) vencidas.push(s.endpoint)
-      }
-    }),
-  )
+  const usadas = new Set<string>()
+  const envios: Promise<void>[] = []
+  for (const [legajo, lista] of grupos) {
+    const payload = aviso(lista)
+    for (const s of subs) {
+      if (legajo && legajoDe.get(s.usuario_id) !== legajo) continue
+      envios.push(
+        webpush
+          .sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 3600, urgency: 'high' })
+          .then(() => { enviados++; usadas.add(s.endpoint) })
+          .catch((e: { statusCode?: number }) => {
+            if (e.statusCode === 404 || e.statusCode === 410) vencidas.push(s.endpoint)
+          }),
+      )
+    }
+  }
+  await Promise.all(envios)
   if (vencidas.length) {
     await rest(`push_suscripciones?endpoint=in.(${vencidas.map((v) => `"${v.replace(/"/g, '')}"`).join(',')})`, { method: 'DELETE' })
   }
-  if (enviados) {
-    await rest(`push_suscripciones?endpoint=in.(${subs.filter((s) => !vencidas.includes(s.endpoint)).map((s) => `"${s.endpoint.replace(/"/g, '')}"`).join(',')})`, {
+  if (usadas.size) {
+    await rest(`push_suscripciones?endpoint=in.(${subs.filter((s) => usadas.has(s.endpoint)).map((s) => `"${s.endpoint.replace(/"/g, '')}"`).join(',')})`, {
       method: 'PATCH',
       body: JSON.stringify({ usado_at: new Date().toISOString() }),
       headers: { Prefer: 'return=minimal' },

@@ -28,6 +28,10 @@ export interface Armado {
   aceptado_nombre: string | null
   hecho_at: string | null
   faltantes: number
+  /** Responsable del local en Repos Mayorista (sql/armado_responsable.sql): si está, el armado es solo suyo */
+  asignado_legajo: string | null
+  asignado_nombre: string | null
+  asignado_local: string | null
 }
 
 /** Renglón del pedido copiado al armado, con su avance. */
@@ -52,7 +56,7 @@ export interface AvanceArmado {
 
 export const COLUMNAS_ARMADO =
   'id,pedido_codigo,pedido_numero,cliente,cliente_nombre,prioridad,estado,obs,creado_at,creado_por,' +
-  'aceptado_at,aceptado_por,aceptado_legajo,aceptado_nombre,hecho_at,faltantes'
+  'aceptado_at,aceptado_por,aceptado_legajo,aceptado_nombre,hecho_at,faltantes,asignado_legajo,asignado_nombre,asignado_local'
 
 export const COLUMNAS_ITEM_ARMADO = 'armado_id,linea,articulo,descripcion,color,talle,cantidad,escaneadas,estado'
 
@@ -68,6 +72,10 @@ const RANK: Record<PrioridadArmado, number> = { urgente: 0, normal: 1, baja: 2 }
 export function ordenArmados(a: Armado, b: Armado): number {
   return RANK[a.prioridad] - RANK[b.prioridad] || a.creado_at.localeCompare(b.creado_at)
 }
+
+/** ¿Le toca a este legajo? Los asignados, solo a su responsable; los sin asignar, a todos. */
+export const paraLegajo = (a: Armado, legajo: string | null | undefined): boolean =>
+  !a.asignado_legajo || String(a.asignado_legajo).trim() === String(legajo ?? '').trim()
 
 export const esMio = (a: Armado, uid: string | null | undefined): boolean => !!uid && a.aceptado_por === uid
 

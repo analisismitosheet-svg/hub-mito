@@ -932,7 +932,9 @@ export default function PedidosVenta() {
                     {armPedido.estado === 'pendiente' && (
                       <>
                         {PRIORIDADES[armPedido.prioridad]?.icono} Armado {PRIORIDADES[armPedido.prioridad]?.label} ·
-                        esperando que alguien lo acepte
+                        {armPedido.asignado_legajo
+                          ? `para ${armPedido.asignado_nombre ?? `#${armPedido.asignado_legajo}`} (responsable de ${armPedido.asignado_local})`
+                          : 'esperando que alguien lo acepte'}
                       </>
                     )}
                     {armPedido.estado === 'aceptado' && (

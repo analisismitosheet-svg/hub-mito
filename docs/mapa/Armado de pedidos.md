@@ -16,3 +16,7 @@ Ver [[Repos Mayorista y Mi repo]], [[Pedidos compra, venta y cancelaciones]].
 - `public/push-sw.js` (importado por el SW de la PWA vía `workbox.importScripts`): muestra la notificación con vibración y abre Mi repo al tocarla.
 - `src/lib/push.ts` + `src/components/AvisosCelular.tsx`: cartel «Activar avisos» en Mi repo (cada celular lo toca una vez). iPhone: solo con la app instalada en la pantalla de inicio.
 - `alarma.ts` `prepararAudio()`: destraba el audio en el primer toque (sin eso el pitido dentro de la app no sonaba).
+
+## Responsable del local (sincronizado con Repos Mayorista)
+- `sql/armado_responsable.sql`: trigger al crear el armado → si el **cliente** del pedido es un local (mismo código que en la repo, o sinónimo de `locales_sinonimos`) con responsable en `mayorista_responsables` (la repo más reciente), queda en `asignado_legajo/nombre/local`. `private.responsable_de_local()` usa `public.empleados` (no `empleados_basico`, que filtra por usuario).
+- Asignado ⇒ solo le aparece/suena a ese legajo (Mi repo `paraLegajo()`, campana y push) y solo él lo acepta (`armado_aceptar`; mayorista/admin también). Sin asignar ⇒ como antes, el primero que acepta.
