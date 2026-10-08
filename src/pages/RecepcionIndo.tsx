@@ -199,7 +199,7 @@ function CeldaOcEditable({
   const [abierto, setAbierto] = useState(false)
   const [borrador, setBorrador] = useState(valor)
   const botonRef = useRef<HTMLButtonElement>(null)
-  const [caja, setCaja] = useState<{ top: number; left: number; width: number; arriba: boolean } | null>(null)
+  const [caja, setCaja] = useState<{ top: number; left: number; width: number; arriba: boolean; maxAlto: number } | null>(null)
 
   function abrir() {
     setBorrador(valor)
@@ -211,15 +211,17 @@ function CeldaOcEditable({
     const medir = () => {
       const r = botonRef.current?.getBoundingClientRect()
       if (!r) return
-      const alto = 420
+      const alto = 560
       const abajo = window.innerHeight - r.bottom
       const arriba = abajo < alto && r.top > abajo
-      const ancho = Math.max(r.width, 380)
+      const ancho = Math.min(window.innerWidth - 24, Math.max(r.width, 760))
       setCaja({
         top: arriba ? Math.max(8, r.top - 8) : r.bottom + 4,
         left: Math.max(8, Math.min(r.left, window.innerWidth - ancho - 12)),
         width: ancho,
         arriba,
+        // que nunca se salga de la pantalla: si no entra, scrollea adentro
+        maxAlto: Math.max(240, arriba ? r.top - 16 : window.innerHeight - r.bottom - 16),
       })
     }
     medir()
@@ -269,9 +271,10 @@ function CeldaOcEditable({
               top: caja.top,
               left: caja.left,
               width: caja.width,
+              maxHeight: caja.maxAlto,
               transform: caja.arriba ? 'translateY(-100%)' : undefined,
             }}
-            className="fixed z-[91] max-w-[92vw] rounded-xl border border-line bg-surface p-2 shadow-2xl"
+            className="fixed z-[91] max-w-[96vw] overflow-y-auto rounded-xl border border-line bg-surface p-2 shadow-2xl"
             role="dialog"
             aria-label="Órdenes de compra"
           >
@@ -282,7 +285,7 @@ function CeldaOcEditable({
               proveedorNombre={proveedorNombre}
               proveedorCodigo={proveedorCodigo}
               autoFocus
-              alto="max-h-60"
+              alto="max-h-[26rem]"
             />
             <div className="mt-2 flex items-center justify-end gap-1.5 border-t border-line pt-2">
               <button type="button" onClick={() => setAbierto(false)} className="rounded-lg px-2.5 py-1 text-xs text-sub hover:text-ink">

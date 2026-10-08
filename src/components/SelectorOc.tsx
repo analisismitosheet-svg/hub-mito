@@ -273,15 +273,18 @@ export default function SelectorOc({
               <span className="shrink-0 tabular-nums text-sub/70">{fecha(p.fecha)}</span>
             </span>
             {t && f.arts.length > 0 && (
-              <span className="mt-0.5 block truncate pl-[3.75rem] text-[10px] text-sky-400">
-                <Package size={9} className="mr-0.5 inline align-[-1px]" aria-hidden />
-                {f.arts.slice(0, 3).map((a, k) => (
-                  <Fragment key={a.articulo}>
-                    {k > 0 && ' · '}
-                    <Resaltado texto={`${a.articulo}${a.descripcion ? ` ${a.descripcion}` : ''}`} palabras={palabras} />
-                  </Fragment>
+              // Un artículo por renglón, con la descripción adicional completa
+              <span className="mt-0.5 block space-y-0.5 pl-[3.75rem] text-[11px] leading-snug text-sky-400">
+                {f.arts.slice(0, 4).map((a) => (
+                  <span key={a.articulo} className="flex items-start gap-1">
+                    <Package size={10} className="mt-[3px] shrink-0" aria-hidden />
+                    <span className="min-w-0 break-words">
+                      <span className="font-semibold"><Resaltado texto={a.articulo} palabras={palabras} /></span>
+                      {a.descripcion && <span className="text-sky-300/90"> · <Resaltado texto={a.descripcion} palabras={palabras} /></span>}
+                    </span>
+                  </span>
                 ))}
-                {f.arts.length > 3 ? ` +${f.arts.length - 3}` : ''}
+                {f.arts.length > 4 && <span className="block text-sub">+{f.arts.length - 4} artículos más</span>}
               </span>
             )}
           </span>
