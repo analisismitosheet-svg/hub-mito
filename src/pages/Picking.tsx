@@ -185,6 +185,49 @@ function Cantidad({ valor, cantidad, etiqueta, onRestar, onSumar, onFijar }: {
   )
 }
 
+/**
+ * "Llegaron": se escribe solo lo que llegó ahora (ej. 10) y se SUMA a lo ya
+ * recibido (30 + 10 = 40), sin tener que volver a cargar el total.
+ */
+function Llegaron({ faltan, etiqueta, onSumar }: { faltan: number; etiqueta: string; onSumar: (n: number) => void }) {
+  const [valor, setValor] = useState('')
+  const sumar = () => {
+    const n = Number(valor.replace(',', '.'))
+    if (!Number.isFinite(n) || n <= 0) return
+    onSumar(Math.round(n * 100) / 100)
+    setValor('')
+  }
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault()
+        sumar()
+      }}
+      className="mx-auto flex w-fit items-center gap-1"
+    >
+      <input
+        type="number"
+        inputMode="decimal"
+        min={0}
+        value={valor}
+        onChange={(e) => setValor(e.target.value)}
+        placeholder={faltan > 0 ? `faltan ${n0.format(faltan)}` : 'llegaron'}
+        aria-label={`Llegaron ahora: ${etiqueta}`}
+        title="Escribí lo que llegó ahora y Enter: se suma a lo ya recibido"
+        className="h-8 w-20 rounded-lg border border-line bg-surface px-1 text-center text-sm tabular-nums text-ink outline-none placeholder:text-[11px] placeholder:text-sub/70 focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+      />
+      <button
+        type="submit"
+        disabled={!valor}
+        aria-label={`Sumar lo que llegó: ${etiqueta}`}
+        className="btn-press flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-30"
+      >
+        <Plus size={14} aria-hidden />
+      </button>
+    </form>
+  )
+}
+
 /** ✓ completo / desmarcar */
 function Tilde({ completo, etiqueta, onClick }: { completo: boolean; etiqueta: string; onClick: () => void }) {
   return (
@@ -541,6 +584,24 @@ ${avisoNo}` : ''}
       const asignar = k === variantes.length - 1 ? resto : Math.min(v.cantidad, resto)
       resto -= asignar
       if (asignar !== v.recibido) cambiar(sel!, v, asignar)
+    })
+  }
+  /** Suma lo que llegó: completa en orden los colores/talles que faltan; lo que sobra va al último. */
+  function sumarLlegada(variantes: ItemPicking[], llegaron: number) {
+    let resto = llegaron
+    variantes.forEach((v, k) => {
+      if (resto <= 0) return
+      const falta = Math.max(0, v.cantidad - v.recibido)
+      const suma = k === variantes.length - 1 ? resto : Math.min(falta, resto)
+      if (suma > 0) cambiar(sel!, v, v.recibido + suma)
+      resto -= suma
+    })
+    const qué = variantes.length === 1 ? `${variantes[0].articulo} ${variantes[0].color} ${variantes[0].talle}`.trim() : variantes[0].articulo
+    const antes = variantes.reduce((a, v) => a + v.recibido, 0)
+    const pedido = variantes.reduce((a, v) => a + v.cantidad, 0)
+    setAviso({
+      ok: antes + llegaron <= pedido,
+      texto: `${qué}: +${n0.format(llegaron)} → ${n0.format(antes + llegaron)} de ${n0.format(pedido)}${antes + llegaron > pedido ? ' (llegó de más)' : antes + llegaron === pedido ? ' (completo)' : `, faltan ${n0.format(pedido - antes - llegaron)}`}.`,
     })
   }
   /** +1 al primer color/talle que falta (o al último); -1 al último que tiene algo. */
@@ -1105,7 +1166,7 @@ ${avisoNo}` : ''}
                 {/* Tabla: una fila por artículo (se marca por el total); el desplegable abre color y talle */}
                 <div className="overflow-hidden rounded-2xl border border-line bg-surface">
                   <div className="overflow-x-auto">
-                    <table className="w-full min-w-[46rem] text-sm">
+                    <table className="w-full min-w-[54rem] text-sm">
                       <thead>
                         <tr className="border-b border-line bg-surface2 text-left text-[11px] font-semibold uppercase tracking-wide text-sub">
                           <th className="px-3 py-2">Artículo</th>
@@ -1114,18 +1175,19 @@ ${avisoNo}` : ''}
                           <th className="px-3 py-2">Talle</th>
                           <th className="px-3 py-2 text-right">Pedido</th>
                           <th className="px-3 py-2 text-center">Recibido</th>
+                          <th className="px-3 py-2 text-center" title="Lo que llegó ahora: se suma a lo ya recibido">Llegaron</th>
                           <th className="px-3 py-2 text-center">✓</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-line/50">
                         {cargandoItems ? (
                           <tr>
-                            <td colSpan={7} className="px-3 py-8 text-center text-sub">
+                            <td colSpan={8} className="px-3 py-8 text-center text-sub">
                               <Loader2 size={16} className="mr-1.5 inline animate-spin" aria-hidden /> Cargando artículos…
                             </td>
                           </tr>
                         ) : gruposPedido.length === 0 ? (
-                          <tr><td colSpan={7} className="px-3 py-8 text-center text-sub">No hay artículos {filtro === 'pendientes' ? 'pendientes' : filtro === 'completos' ? 'completos' : ''}.</td></tr>
+                          <tr><td colSpan={8} className="px-3 py-8 text-center text-sub">No hay artículos {filtro === 'pendientes' ? 'pendientes' : filtro === 'completos' ? 'completos' : ''}.</td></tr>
                         ) : (
                           gruposPedido.flatMap((g) => {
                             const varios = g.variantes.length > 1
@@ -1166,6 +1228,13 @@ ${avisoNo}` : ''}
                                     onFijar={(n) => fijarTotal(g.variantes, n)}
                                   />
                                 </td>
+                                <td className="px-3 py-1">
+                                  <Llegaron
+                                    faltan={Math.max(0, g.cantidad - g.recibido)}
+                                    etiqueta={g.articulo}
+                                    onSumar={(n) => sumarLlegada(g.variantes, n)}
+                                  />
+                                </td>
                                 <td className="px-3 py-1 text-center">
                                   {g.cantidad === 0 && g.cancelado > 0 ? (
                                     <span className="text-[11px] font-bold uppercase text-red-400" title="Cancelado entero: no debería ingresar">Cancelado</span>
@@ -1199,6 +1268,13 @@ ${avisoNo}` : ''}
                                       onFijar={(n) => cambiar(sel!, i, n)}
                                     />
                                   </td>
+                                  <td className="px-3 py-1">
+                                    <Llegaron
+                                      faltan={Math.max(0, i.cantidad - i.recibido)}
+                                      etiqueta={`${i.articulo} ${i.color} ${i.talle}`}
+                                      onSumar={(n) => sumarLlegada([i], n)}
+                                    />
+                                  </td>
                                   <td className="px-3 py-1 text-center">
                                     {i.cantidad === 0 && (i.cancelado ?? 0) > 0 ? (
                                       <span className="text-[10px] font-bold uppercase text-red-400" title="Cancelado: no debería ingresar">Cancelado</span>
@@ -1221,6 +1297,7 @@ ${avisoNo}` : ''}
                           <td colSpan={4} className="px-3 py-2 text-sub">Artículos: {new Set(items.map((i) => i.articulo)).size} · renglones: {items.length}</td>
                           <td className="px-3 py-2 text-right tabular-nums text-ink">{n0.format(tot.pedidas)}</td>
                           <td className="px-3 py-2 text-center tabular-nums text-ink">{n0.format(tot.recibidas + tot.demas)}</td>
+                          <td className="px-3 py-2 text-center text-xs font-normal tabular-nums text-sub">faltan {n0.format(Math.max(0, tot.pedidas - tot.recibidas))}</td>
                           <td />
                         </tr>
                       </tfoot>
