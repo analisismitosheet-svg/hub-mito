@@ -1,0 +1,565 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mockup · Recepción INDO (Depósito)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --paper:#050508;
+    --surface:rgba(255,255,255,.035);
+    --surface2:rgba(255,255,255,.07);
+    --line:rgba(255,255,255,.08);
+    --line2:rgba(255,255,255,.18);
+    --ink:#f8fafc;
+    --sub:#94a3b8;
+    --brand:#ef4444;
+    --brand600:#e11d2e;
+    --amber:#f59e0b;
+    --sky:#38bdf8;
+    --emerald:#22c55e;
+    --teal:#0d9488;
+    --orange:#ea580c;
+    --radius:16px;
+    --shadow:0 20px 50px rgba(0,0,0,.55);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:
+      radial-gradient(900px 500px at 12% -10%, rgba(234,88,12,.13), transparent 60%),
+      radial-gradient(800px 500px at 95% 0%, rgba(239,68,68,.10), transparent 55%),
+      var(--paper);
+    color:var(--ink);
+    font-family:'Plus Jakarta Sans',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    font-size:14px; line-height:1.45;
+    min-height:100vh;
+    padding:24px clamp(12px,3vw,36px) 64px;
+  }
+  h1,h2,h3,h4{margin:0;font-weight:800;letter-spacing:-.02em}
+  p{margin:0}
+  button{font-family:inherit;cursor:pointer}
+  .sub{color:var(--sub)}
+  .muted{color:var(--sub);font-size:12px}
+
+  /* ---------- header ---------- */
+  .head{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start;justify-content:space-between;margin-bottom:18px}
+  .badge-mock{
+    display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;
+    background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.35);
+    font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+  }
+  .head h1{font-size:clamp(20px,3vw,28px);margin:8px 0 4px;display:flex;align-items:center;gap:10px}
+  .head h1 .ic{color:var(--orange)}
+  .actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .btn{
+    display:inline-flex;align-items:center;gap:7px;height:38px;padding:0 14px;border-radius:12px;
+    border:1px solid var(--line);background:var(--surface);color:var(--ink);
+    font-size:13px;font-weight:600;transition:.15s;
+  }
+  .btn:hover{background:var(--surface2);border-color:var(--line2)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn-primary{background:linear-gradient(180deg,#10b981,#059669);border-color:#10b981;color:#fff;box-shadow:0 8px 22px rgba(16,185,129,.25)}
+  .btn-primary:hover{background:linear-gradient(180deg,#34d399,#10b981);border-color:#34d399}
+  .btn-brand{background:linear-gradient(180deg,#ef4444,#dc2626);border-color:#ef4444;color:#fff;box-shadow:0 8px 22px rgba(239,68,68,.28)}
+  .btn-brand:hover{background:linear-gradient(180deg,#f87171,#ef4444);border-color:#f87171}
+  .btn-ghost{background:transparent}
+
+  /* ---------- layout ---------- */
+  .card{border:1px solid var(--line);background:var(--surface);border-radius:var(--radius);overflow:hidden}
+  .card-h{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.02)}
+  .card-h h3{font-size:13.5px;display:flex;align-items:center;gap:8px}
+  .tag{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:999px;border:1px solid var(--line2);color:var(--sub)}
+
+  /* ---------- KPIs ---------- */
+  .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:12px}
+  @media (max-width:1080px){ .kpis{grid-template-columns:repeat(2,minmax(0,1fr))} }
+  .kpi{border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:13px 14px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+  .kpi .lbl{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:rgba(148,163,184,.75)}
+  .kpi .val{font-size:25px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:3px}
+  .kpi .pie{font-size:11px;color:rgba(148,163,184,.8);margin-top:2px}
+  .kpi.orange .val{color:var(--orange)} .kpi.orange .lbl span{color:var(--orange)}
+  .kpi.amber  .val{color:var(--amber)}  .kpi.amber .lbl span{color:var(--amber)}
+  .kpi.green  .val{color:#16a34a}        .kpi.green .lbl span{color:#16a34a}
+  .kpi.teal   .val{color:var(--teal)}    .kpi.teal .lbl span{color:var(--teal)}
+
+  /* ---------- progreso ---------- */
+  .prog-card{border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:12px 14px;margin-bottom:14px}
+  .prog-top{display:flex;justify-content:space-between;font-size:12px;color:var(--sub);flex-wrap:wrap;gap:6px}
+  .prog{height:8px;border-radius:99px;background:var(--surface2);overflow:hidden;margin-top:8px}
+  .prog span{display:block;height:100%;width:61%;background:linear-gradient(90deg,#22c55e,#4ade80)}
+
+  /* ---------- filtros ---------- */
+  .filtros{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-bottom:12px}
+  .search-wrap{position:relative;min-width:250px;flex:1}
+  .search-wrap .mag{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:rgba(148,163,184,.7);font-size:13px;pointer-events:none}
+  .search{
+    width:100%;height:34px;border-radius:10px;border:1px solid var(--line);background:var(--surface2);
+    color:var(--ink);padding:0 10px 0 30px;font-size:12.5px;font-family:inherit;outline:none
+  }
+  .search::placeholder{color:var(--sub)}
+  .ff{display:flex;flex-direction:column;gap:3px}
+  .ff label{font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--sub)}
+  .ff select{
+    height:34px;border-radius:10px;border:1px solid var(--line);background:var(--surface2);color:var(--ink);
+    font-size:12px;font-family:inherit;padding:0 8px;outline:none;min-width:120px
+  }
+
+  /* ---------- banners ---------- */
+  .banner{
+    display:flex;gap:9px;align-items:flex-start;padding:11px 13px;border-radius:13px;font-size:12px;
+    margin-bottom:12px;border:1px solid rgba(245,158,11,.28);background:rgba(245,158,11,.06);color:var(--sub)
+  }
+  .banner .ic{color:var(--amber);flex:0 0 auto}
+  .banner b{color:var(--ink)}
+
+  /* ---------- tabla ---------- */
+  .tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:0 8px 24px rgba(0,0,0,.25)}
+  table.ri{width:100%;min-width:1080px;border-collapse:collapse;font-size:12px}
+  table.ri th{
+    font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:rgba(148,163,184,.75);
+    text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);font-weight:700;white-space:nowrap
+  }
+  table.ri th.num,table.ri td.num{text-align:right}
+  table.ri td{padding:8px 11px;border-bottom:1px solid rgba(255,255,255,.045);vertical-align:top}
+  table.ri tr:last-child td{border-bottom:0}
+  table.ri tr.ok td{background:rgba(34,197,94,.055)}
+  .cell{border-radius:6px;padding:2px 5px;transition:.12s;cursor:pointer;display:inline-block;max-width:100%}
+  .cell:hover{background:rgba(255,255,255,.06);text-decoration:underline dotted;text-underline-offset:3px}
+  .cell .lock{font-size:9px;color:#4ade80}
+  .guia{font-weight:600}
+  .mini{font-size:10.5px;color:var(--sub)}
+  .mini .cell{margin-right:4px}
+  .chip-err{
+    display:inline-flex;align-items:center;gap:3px;background:rgba(239,68,68,.10);color:#f87171;
+    font-size:9px;font-weight:600;padding:1px 5px;border-radius:5px;margin:0 3px 3px 0
+  }
+  .badge-cerrada{
+    display:inline-flex;align-items:center;gap:4px;background:rgba(34,197,94,.10);color:#4ade80;
+    font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:1px 5px;border-radius:5px;margin-bottom:3px
+  }
+  .oc-link{color:var(--amber);font-weight:700;font-variant-numeric:tabular-nums;border-radius:5px;padding:1px 4px}
+  .oc-link:hover{background:rgba(245,158,11,.15)}
+  .oc-plain{color:var(--ink)}
+  .oc-dragon{font-size:10px;color:#22c55e;margin-left:3px}
+  .btn-pick{
+    display:inline-flex;align-items:center;gap:4px;margin-top:4px;padding:2px 7px;border-radius:7px;
+    border:1px solid rgba(34,197,94,.4);background:rgba(34,197,94,.10);color:#22c55e;font-size:10px;font-weight:700
+  }
+  .btn-pick:hover{background:rgba(34,197,94,.2)}
+  .pencil{color:var(--sub);font-size:10px;margin-left:4px}
+  .prov-btn{
+    display:flex;width:100%;align-items:center;justify-content:space-between;gap:6px;
+    border:1px solid var(--line);background:var(--surface2);border-radius:9px;padding:4px 8px;
+    color:var(--ink);font-size:12px;text-align:left
+  }
+  .prov-btn:hover{background:rgba(255,255,255,.09)}
+  .prov-warn{font-size:10px;color:var(--amber);margin-top:2px}
+  .est{
+    max-width:130px;border:1px solid var(--line);border-radius:6px;padding:2px 6px;font-size:11px;font-weight:600;
+    background:rgba(34,197,94,.15);color:#4ade80
+  }
+  .est.flexx{background:rgba(56,189,248,.15);color:#7dd3fc}
+  .drive{color:#7dd3fc;font-size:11px;font-weight:600;border-radius:5px;padding:1px 4px}
+  .drive:hover{background:rgba(56,189,248,.15)}
+  .cambiar{font-size:10px;color:var(--sub)}
+  .pend{color:rgba(148,163,184,.5);font-style:italic}
+  .ctrl-ok{color:#4ade80}
+  .atr{font-size:10px;color:rgba(245,158,11,.9)}
+  td.num{font-variant-numeric:tabular-nums}
+
+  /* ---------- paginación ---------- */
+  .pag{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 4px 0;font-size:12px;color:var(--sub);flex-wrap:wrap}
+  .pag .der{display:flex;gap:8px;align-items:center}
+  .pg-btn{
+    display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 10px;border-radius:9px;
+    border:1px solid var(--line);background:transparent;color:var(--ink);font-size:12px;font-weight:600
+  }
+  .pg-btn:hover{background:var(--surface2)}
+  .pg-btn:disabled{opacity:.4;cursor:not-allowed}
+
+  /* ---------- grid ---------- */
+  .grid{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px;align-items:start;margin-top:16px}
+  @media (max-width:1180px){ .grid{grid-template-columns:1fr} }
+
+  /* ---------- modal nuevo registro ---------- */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(4px);display:none;place-items:center;z-index:60;padding:16px}
+  .overlay.on{display:grid}
+  .modal{
+    width:min(720px,100%);max-height:92vh;overflow:auto;border-radius:20px;border:1px solid var(--line2);
+    background:#101016;box-shadow:0 30px 80px rgba(0,0,0,.7);animation:in .3s cubic-bezier(.23,1,.32,1)
+  }
+  @keyframes in{from{opacity:0;transform:translateY(-10px) scale(.97)}to{opacity:1;transform:none}}
+  .modal-h{padding:16px 18px;border-bottom:1px solid var(--line);display:flex;gap:11px;align-items:flex-start}
+  .modal-h h3{font-size:15px}
+  .modal-f{padding:13px 18px;border-top:1px solid var(--line);display:flex;gap:9px;justify-content:flex-end;background:rgba(255,255,255,.02)}
+  .form{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:16px 18px}
+  @media (max-width:640px){ .form{grid-template-columns:1fr} }
+  .form .span2{grid-column:span 2}.form .span3{grid-column:span 3}
+  .form label{display:block}
+  .form label span{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--sub);margin-bottom:4px}
+  .form input[type=text],.form input[type=date],.form input[type=number],.form input[type=url],.form select{
+    width:100%;height:38px;border-radius:12px;border:1px solid var(--line);background:var(--surface2);
+    color:var(--ink);font-family:inherit;font-size:13px;padding:0 10px;outline:none
+  }
+  .form .hint{font-size:11px;color:#22c55e;margin-top:3px}
+  .form .check{display:flex;align-items:center;gap:8px;height:38px;font-size:13px;color:var(--sub);cursor:pointer}
+
+  /* ---------- notas ---------- */
+  .notas{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px;margin-top:22px}
+  .nota{border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:16px}
+  .nota h4{font-size:13.5px;display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .nota ul{margin:0;padding-left:16px;display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:#cbd5e1}
+  .nota li b{color:var(--ink)}
+  .cm2{color:#64748b}
+  pre{
+    margin:10px 0 0;padding:12px;border-radius:12px;border:1px solid var(--line);background:#07070c;
+    overflow:auto;font-size:11px;line-height:1.55;color:#cbd5e1;font-family:ui-monospace,Menlo,Consolas,monospace
+  }
+  .flow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:11.5px;margin-top:10px}
+  .flow i{font-style:normal;padding:5px 9px;border-radius:999px;border:1px solid var(--line2);background:var(--surface2);color:#cbd5e1}
+  .flow em{color:var(--sub);font-style:normal}
+</style>
+</head>
+<body>
+
+<!-- ============ HEADER ============ -->
+<div class="head">
+  <div>
+    <span class="badge-mock">● Mockup · no es código real</span>
+    <h1><span class="ic">📦</span> Recepción INDO</h1>
+    <p class="sub" style="max-width:680px">
+      Ruta <b>/deposito/recepcion-indo</b> · permiso <b>deposito.view</b>.
+      Se sube el Excel “Recepción de Mercadería” una sola vez y queda guardado en
+      <b>public.recepcion_indo</b>; después el depósito va <b>marcando qué ya controló</b>
+      sin volver a tocar el Excel. El proveedor se elige del catálogo de
+      <span class="cm2">DRAGONFISH_INDOD.dbo.PROVEEDORES_INDO</span> (1.518 proveedores).
+    </p>
+  </div>
+  <div class="actions">
+    <button class="btn btn-primary" id="btnNuevo">＋ Nuevo registro</button>
+    <!-- "Subir Excel" y "Exportar" solo para administradores -->
+    <button class="btn btn-brand" id="btnSubir">⬆ Subir Excel</button>
+    <button class="btn">⤓ Exportar</button>
+  </div>
+</div>
+
+<!-- ============ KPIs ============ -->
+<div class="kpis">
+  <div class="kpi orange">
+    <div class="lbl"><span>📦</span> Bultos sin controlar</div>
+    <div class="val">418</div>
+    <div class="pie">263 recepciones · 91 OC</div>
+  </div>
+  <div class="kpi amber">
+    <div class="lbl"><span>🕐</span> Días de atraso prom.</div>
+    <div class="val">3,42</div>
+    <div class="pie">de las ya controladas</div>
+  </div>
+  <div class="kpi green">
+    <div class="lbl"><span>✔✔</span> Controladas</div>
+    <div class="val">397 / 660</div>
+    <div class="pie">60% de las recepciones</div>
+  </div>
+  <div class="kpi teal">
+    <div class="lbl"><span>🏢</span> IVA pendiente</div>
+    <div class="val">$ 18.240.500</div>
+    <div class="pie">la más vieja del 12/08/2026</div>
+  </div>
+</div>
+
+<!-- ============ PROGRESO ============ -->
+<div class="prog-card">
+  <div class="prog-top">
+    <span>482 de 812 bultos con ingreso controlado</span>
+    <span>106 proveedores · importado 07/10/2026 09:42</span>
+  </div>
+  <div class="prog"><span></span></div>
+</div>
+
+<!-- ============ FILTROS ============ -->
+<div class="filtros">
+  <div class="ff search-wrap">
+    <label>Buscar</label>
+    <span class="mag">🔍</span>
+    <input class="search" placeholder="Guía, remito, factura, OC, proveedor o detalle…" />
+  </div>
+  <div class="ff"><label>Depósito</label><select><option>Todos</option><option>REMOTOS</option><option>INSUMOS</option></select></div>
+  <div class="ff"><label>Proveedor</label><select><option>Todos</option><option>Tarco SA</option><option>FLEXXUS</option></select></div>
+  <div class="ff"><label>Transporte</label><select><option>Todos</option><option>ANDREANI</option><option>EXPRESO</option></select></div>
+  <div class="ff"><label>Estado</label><select><option>Todos</option><option>FLEXXUS</option><option>OK</option></select></div>
+  <div class="ff"><label>Control</label><select><option>Sin controlar</option><option>Controladas</option><option>Con errores (sin controlar)</option><option>Con errores (todas)</option><option>Todas</option></select></div>
+  <button class="btn" style="height:34px" title="Limpiar filtros">✕</button>
+</div>
+
+<!-- ============ BANNER DE CONTEXTO ============ -->
+<div class="banner">
+  <span class="ic">📋</span>
+  <p><b>263 recepciones sin controlar</b> con estos filtros · la más vieja ingresó el 12/08/2026.
+  Tocá la fecha de la columna <b>Control</b> para marcarla como controlada (vaciala para volver a pendiente).</p>
+</div>
+
+<!-- ============ TABLA ============ -->
+<div class="tbl-wrap">
+  <table class="ri">
+    <thead>
+      <tr>
+        <th>Guía</th><th>Ingreso</th><th class="num">Bultos</th><th>Proveedor</th>
+        <th>Remito</th><th>N° OC</th><th>Factura</th><th>Estado</th>
+        <th class="num">IVA</th><th>Detalle</th><th>Control</th>
+      </tr>
+    </thead>
+    <tbody>
+
+      <!-- fila 1: pendiente con errores de validación -->
+      <tr>
+        <td>
+          <div style="margin-bottom:3px">
+            <span class="chip-err" title="Falta el N° de remito">⚠ falta remito</span>
+            <span class="chip-err" title="Proveedor fuera del catálogo">⚠ proveedor fuera de catálogo</span>
+          </div>
+          <span class="cell guia">88-5408</span>
+          <div class="mini"><span class="cell">EXPRESO</span><span class="cell">REMOTOS</span></div>
+        </td>
+        <td><span class="cell">12/08/2026</span></td>
+        <td class="num"><span class="cell">24</span></td>
+        <td>
+          <button class="prov-btn"><span>TARCO S.A.</span><span class="pencil">✎</span></button>
+          <div class="prov-warn">no está en el catálogo</div>
+        </td>
+        <td>
+          <span class="cell pend">—</span>
+          <div class="mini"><span class="cell">12/08/2026</span></div>
+        </td>
+        <td>
+          <span class="oc-plain">15183</span>
+          <span class="oc-dragon">dragon</span>
+          <button class="btn-pick">📦 Picking</button>
+        </td>
+        <td>
+          <span class="cell">0004-0000912</span>
+          <div class="mini"><span class="cell">10/08/2026</span></div>
+          <div><span class="drive">🔗 Drive</span> <span class="cambiar cell">+ link</span></div>
+        </td>
+        <td><span class="est">OK</span></td>
+        <td class="num"><span class="cell">$ 412.800</span></td>
+        <td><span class="cell pend" style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Falta remito, esperar OC 15347</span></td>
+        <td><span class="cell pend">pendiente</span></td>
+      </tr>
+
+      <!-- fila 2: controlada (fila verde + candado) -->
+      <tr class="ok">
+        <td>
+          <div class="badge-cerrada">🔒 controlado</div><br>
+          <span class="cell guia">88-5402</span>
+          <div class="mini"><span class="cell">ANDREANI</span><span class="cell">INSUMOS</span></div>
+        </td>
+        <td><span class="cell" style="opacity:.7">05/08/2026</span></td>
+        <td class="num"><span class="cell" style="opacity:.7">6</span></td>
+        <td>
+          <button class="prov-btn" disabled style="opacity:.8;cursor:default"><span>FLEXXUS</span></button>
+        </td>
+        <td>
+          <span class="cell" style="opacity:.7">RC-002188</span>
+          <div class="mini"><span class="cell">03/08/2026</span></div>
+        </td>
+        <td><span class="oc-link">15347 🔗</span></td>
+        <td>
+          <span class="cell" style="opacity:.7">0004-0000901</span>
+          <div class="mini"><span class="cell">02/08/2026</span></div>
+          <div><span class="drive">🔗 Drive</span></div>
+        </td>
+        <td><span class="est flexx">FLEXXUS</span></td>
+        <td class="num"><span class="cell" style="opacity:.7">$ 98.400</span></td>
+        <td><span class="cell" style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.7">OK, controlado por M. Sosa</span></td>
+        <td>
+          <span class="cell ctrl-ok">05/08/2026</span>
+          <div class="mini">m.sosa</div>
+          <div class="atr">4 días de atraso</div>
+        </td>
+      </tr>
+
+      <!-- fila 3: pendiente normal, OC conocida con link -->
+      <tr>
+        <td>
+          <span class="cell guia">88-5411</span>
+          <div class="mini"><span class="cell">EXPRESO</span><span class="cell">REMOTOS</span></div>
+        </td>
+        <td><span class="cell">07/10/2026</span></td>
+        <td class="num"><span class="cell">18</span></td>
+        <td>
+          <button class="prov-btn"><span>Tarco SA</span><span class="pencil">✎</span></button>
+        </td>
+        <td>
+          <span class="cell">RC-002195</span>
+          <div class="mini"><span class="cell">04/10/2026</span></div>
+        </td>
+        <td>
+          <span class="oc-link">15183 🔗</span> <span class="oc-plain">/</span> <span class="oc-link">15390 🔗</span>
+          <span class="pencil">✎</span>
+        </td>
+        <td>
+          <span class="cell">0004-0000930</span>
+          <div class="mini"><span class="cell">03/10/2026</span></div>
+          <div><span class="drive">🔗 Drive</span> <span class="cambiar cell">cambiar link</span></div>
+        </td>
+        <td><span class="est">OK</span></td>
+        <td class="num"><span class="cell">$ 1.250.000</span></td>
+        <td><span class="cell pend" style="max-width:150px"></span></td>
+        <td><span class="cell pend">pendiente</span></td>
+      </tr>
+
+    </tbody>
+  </table>
+</div>
+
+<!-- ============ PAGINACIÓN ============ -->
+<div class="pag">
+  <span>1–200 de 660</span>
+  <div class="der">
+    <button class="pg-btn" disabled>← Anterior</button>
+    <span>página 1 de 4</span>
+    <button class="pg-btn">Siguiente →</button>
+  </div>
+</div>
+
+<!-- ============ COLUMNAS DE LA TABLA ============ -->
+<div class="grid">
+  <div class="card">
+    <div class="card-h"><h3>🧩 Cómo se edita la tabla</h3><span class="tag">interacción</span></div>
+    <div style="padding:14px 16px;font-size:12.5px;color:#cbd5e1;display:flex;flex-direction:column;gap:10px">
+      <p><b style="color:var(--ink)">CeldaEditable</b> — casi todas las celdas: tocar convierte la celda en input;
+      <b style="color:var(--ink)">Enter</b> o salir del campo guarda (update a <span class="cm2">public.recepcion_indo</span> por <span class="cm2">clave</span>),
+      <b style="color:var(--ink)">Esc</b> cancela. Transporte y depósito tienen datalist con lo que ya existe.</p>
+      <p><b style="color:var(--ink)">CeldaProveedor</b> — desplegable con buscador (posicionado con <span class="cm2">position:fixed</span>
+      vía portal, para que las filas de abajo no lo tapen dentro del <span class="cm2">overflow-x</span>). Filtra sin acentos ni puntos:
+      “TARCO S.A.” del Excel matchea “Tarco SA” del catálogo. Si no está, hay opción
+      <i>“Usar tal cual”</i> y la fila queda marcada <span style="color:var(--amber)">no está en el catálogo</span>.</p>
+      <p><b style="color:var(--ink)">CeldaOcEditable</b> — lupa ✎ abre el <b>SelectorOc</b>: buscador de pedidos de compra de Dragonfish,
+      filtrado por el proveedor de la fila. Se guardan como las guarda el Excel: <span class="cm2">"15183/15347"</span>.
+      Cada OC numérica que exista en <span class="cm2">public.pedidos_compra</span> es link a
+      <span class="cm2">/compras/pedidos-compra?numero=…</span>; si no existe, se muestra texto plano (no se linkea algo sin destino).</p>
+      <p><b style="color:var(--ink)">CeldaEstado</b> — desplegable con los estados existentes + <i>“+ Agregar estado…”</i>
+      al final (crea uno nuevo con <span class="cm2">window.prompt</span>). FLEXXUS se pinta celeste, el resto verde.</p>
+      <p><b style="color:var(--ink)">Fila cerrada 🔒</b> — si tiene <b>fecha de control</b>, la fila queda “cerrada”: todos los campos se muestran
+      fijos (igual que la regla <span class="cm2">private.recepcion_indo_completa</span> en la base). <b>Administradores pueden todo igual.</b>
+      La única excepción siempre: el <b>Detalle</b> se puede editar aunque esté cerrada.</p>
+      <p><b style="color:var(--ink)">Picking</b> — botón verde por cada OC que exista como pedido de compra:
+      lleva a <span class="cm2">/deposito/picking?oc=…&amp;prov=…</span>. Se ve si el usuario tiene permiso <b>picking.view</b>.</p>
+    </div>
+  </div>
+
+  <!-- flujo de importación -->
+  <div class="card">
+    <div class="card-h"><h3>⬆ Flujo del Excel</h3><span class="tag">importar</span></div>
+    <div style="padding:14px 16px;font-size:12.5px;color:#cbd5e1;display:flex;flex-direction:column;gap:10px">
+      <div class="flow">
+        <i>xlsx</i> <em>→</em> <i>leerRecepcionIndo()</i> <em>→</em> <i>RPC recepcion_indo_importar</i> <em>→</em> <i>public.recepcion_indo</i>
+      </div>
+      <ul style="margin:0;padding-left:16px;display:flex;flex-direction:column;gap:6px">
+        <li>Se lee la hoja que <b>no</b> se llama SEGUIMIENTO, con <span class="cm2">raw:true</span> para que las fechas lleguen como serial y el casteo sea determinístico.</li>
+        <li>Los encabezados sucios se resuelven por <b>nombre tolerante</b> (tildes, “N de Guia”, “N° Remito”…).</li>
+        <li>Antes de guardar hay un <b>ConfirmDialog</b> con el conteo y los avisos (columnas faltantes, filas vacías, duplicadas, fechas que no eran fecha).</li>
+        <li>Se manda en <b>bloques de 500</b> al RPC, con progreso en el botón.</li>
+        <li>La <b>clave natural</b> = guía + depósito + proveedor + remito + fechas (en mayúsculas y sin tildes). El merge es en el RPC (no un upsert del navegador): reimportar el mismo Excel <b>actualiza en el lugar</b> y <b>no pisa el control cargado a mano</b>.</li>
+        <li>“Subir Excel” y “Exportar” son <b>solo admin</b>. “Nuevo registro” lo puede cualquiera con <span class="cm2">deposito.view</span>.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: NUEVO REGISTRO ============ -->
+<div class="overlay" id="overlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Nuevo registro de recepción">
+    <div class="modal-h">
+      <div style="flex:1">
+        <h3>Nuevo registro de recepción</h3>
+        <p class="muted">Alta a mano con todas las columnas del Excel. Se guarda por el mismo camino que la importación.</p>
+      </div>
+      <button class="btn btn-ghost" style="height:32px;padding:0 10px" id="btnCerrar">✕</button>
+    </div>
+    <div class="form">
+      <label><span>N° guía</span><input type="text" placeholder="88-5408" /></label>
+      <label><span>Transporte</span><input type="text" list="d-transportes" /></label>
+      <label><span>Bultos</span><input type="number" min="0" /></label>
+
+      <label><span>Depósito</span><input type="text" list="d-depositos" /></label>
+      <label class="span2"><span>Proveedor</span><input type="text" placeholder="Escribí y elegí del catálogo" />
+        <div class="hint">Del catálogo: Tarco SA (00128)</div>
+      </label>
+
+      <label><span>N° remito</span><input type="text" /></label>
+      <label><span>Fecha remito</span><input type="date" /></label>
+      <label><span>Fecha ingreso</span><input type="date" value="2026-10-08" /></label>
+
+      <label class="span2"><span>N° OC (una o varias)</span><input type="text" placeholder="Buscá por proveedor o escribí el número…" /></label>
+      <label class="check"><input type="checkbox" /> OC cargada en Dragonfish</label>
+
+      <label><span>N° factura</span><input type="text" /></label>
+      <label><span>Fecha factura</span><input type="date" /></label>
+      <label><span>IVA ($)</span><input type="text" placeholder="125000,50" /></label>
+
+      <label class="span2"><span>Link de la factura (Drive)</span><input type="url" placeholder="https://drive.google.com/…" /></label>
+      <label><span>Estado</span><input type="text" list="d-estados" /></label>
+
+      <label class="span3"><span>Detalle</span><input type="text" /></label>
+
+      <datalist id="d-transportes"><option>ANDREANI</option><option>EXPRESO</option></datalist>
+      <datalist id="d-depositos"><option>REMOTOS</option><option>INSUMOS</option></datalist>
+      <datalist id="d-estados"><option>OK</option><option>FLEXXUS</option></datalist>
+    </div>
+    <div class="modal-f">
+      <button class="btn" id="btnCancelar">Cancelar</button>
+      <button class="btn btn-brand">💾 Guardar registro</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ NOTAS DE IMPLEMENTACIÓN ============ -->
+<div class="notas">
+  <div class="nota">
+    <h4>🗄️ 1 · Datos (Supabase)</h4>
+    <ul>
+      <li>Tabla <b>public.recepcion_indo</b>: una fila por recepción, con <span class="cm2">clave</span> (clave natural), índices en fecha de ingreso/control, depósito y proveedor.</li>
+      <li>Tabla <b>public.recepcion_indo_proveedores</b>: catálogo de 1.518 proveedores, sembrado con <span class="cm2">sql/recepcion_indo_proveedores.sql</span> y refrescado por el puente cada 1 hora desde <span class="cm2">PROVEEDORES_INDO</span>.</li>
+      <li><b>RLS</b>: alcanza el permiso <span class="cm2">deposito.view</span> para ver, importar y marcar.</li>
+      <li>5 RPC: <span class="cm2">recepcion_indo_filas</span>, <span class="cm2">_resumen</span>, <span class="cm2">_opciones</span>, <span class="cm2">_importar</span>, <span class="cm2">_proveedores_sync</span>. Vista privada <span class="cm2">recepcion_indo_errores</span> que detecta faltantes, OC inexistente y fechas cruzadas.</li>
+    </ul>
+  </div>
+  <div class="nota">
+    <h4>🧱 2 · Archivos</h4>
+    <ul>
+      <li><b>src/pages/RecepcionIndo.tsx</b> — la pantalla completa (KPIs, filtros, tabla editable, importación).</li>
+      <li><b>src/lib/recepcionIndo.ts</b> — casteo tolerante del Excel, clave natural, normalizar (sin tildes/mayúsculas).</li>
+      <li><b>src/lib/proveedoresIndo.ts</b> — catálogo cacheado en el navegador (clave localStorage v2), fallback al RPC.</li>
+      <li><b>src/components/NuevaRecepcionIndo.tsx</b> — el modal de alta a mano (mismo camino que la importación).</li>
+      <li><b>src/components/SelectorOc.tsx</b> — buscador de OC por proveedor (compartido con la tabla y el alta).</li>
+      <li><b>sql/recepcion_indo.sql</b> + <span class="cm2">recepcion_indo_proveedores.sql</span> — tablas, RLS, trigger y RPC.</li>
+      <li><b>scripts/test-recepcion-indo.mjs</b> — prueba el parseo contra el Excel real sin tocar red ni base.</li>
+    </ul>
+  </div>
+  <div class="nota">
+    <h4>🎯 3 · Reglas de negocio</h4>
+    <ul>
+      <li><b>Controlada</b> = tiene fecha en la columna Control. Vaciás la fecha y vuelve a pendiente.</li>
+      <li>Fila controlada = <b>cerrada</b> (solo admin edita todo; el Detalle lo puede editar cualquiera siempre).</li>
+      <li>Reimportar el Excel <b>no duplica</b> (clave natural) y <b>no pisa el control manual</b> si el Excel viene sin fecha de controlada.</li>
+      <li>KPIs = los mismos tres de la hoja “Seguimiento” del Excel, más IVA pendiente.</li>
+      <li>Paginación de 200 en 200; los filtros se mandan al RPC (no se filtra en el navegador).</li>
+      <li>Errores de Supabase “could not find the function” se aclaran: falta correr el SQL o recachear PostgREST (<span class="cm2">NOTIFY pgrst, 'reload schema';</span>).</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+  const ov = document.getElementById('overlay')
+  document.getElementById('btnNuevo').onclick = () => ov.classList.add('on')
+  document.getElementById('btnCerrar').onclick = () => ov.classList.remove('on')
+  document.getElementById('btnCancelar').onclick = () => ov.classList.remove('on')
+  ov.addEventListener('click', (e) => { if (e.target === ov) ov.classList.remove('on') })
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') ov.classList.remove('on') })
+</script>
+</body>
+</html>

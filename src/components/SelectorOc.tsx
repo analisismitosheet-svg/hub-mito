@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Check, Search, X } from 'lucide-react'
+import { Check, FileText, Search, X } from 'lucide-react'
 import { normalizar } from '@/lib/recepcionIndo'
 import { ocsDeFila, unirOcs, type PedidoCompraOc } from '@/lib/ocPedidosCompra'
+import DetalleOc from '@/components/DetalleOc'
 
 /* ------------------------------------------------------------------ */
 /*  Selector de N° OC (Recepción INDO: "Nuevo registro" y la tabla).    */
@@ -67,6 +68,8 @@ export default function SelectorOc({
 
   const [texto, setTexto] = useState('')
   const [soloProveedor, setSoloProveedor] = useState(true)
+  /** OC de la que se está viendo la tarjeta de detalle (por código de la lista) */
+  const [verDetalle, setVerDetalle] = useState<PedidoCompraOc | null>(null)
 
   const cambiar = (nuevas: Elegida[]) => {
     tocado.current = true
@@ -157,22 +160,36 @@ export default function SelectorOc({
         {visibles.map((p) => {
           const si = marcada(p)
           return (
-            <button
+            <div
               key={p.codigo}
-              type="button"
-              onClick={() => alternar(p)}
-              className={`flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left text-xs hover:bg-line/40 ${si ? 'bg-amber-500/10' : ''}`}
+              className={`flex w-full items-center gap-1 rounded-lg pr-1 hover:bg-line/40 ${si ? 'bg-amber-500/10' : ''}`}
             >
-              <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${si ? 'border-amber-500 bg-amber-500 text-white' : 'border-line2'}`}>
-                {si && <Check size={11} strokeWidth={3} aria-hidden />}
-              </span>
-              <span className="w-14 shrink-0 font-semibold tabular-nums text-ink">{p.numero}</span>
-              <span className="min-w-0 flex-1 truncate text-sub">
-                {p.proveedor_nombre || p.proveedor}
-                {p.anulado && <span className="ml-1 text-brand-400">(anulado)</span>}
-              </span>
-              <span className="shrink-0 tabular-nums text-sub/70">{fecha(p.fecha)}</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => alternar(p)}
+                className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left text-xs"
+              >
+                <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${si ? 'border-amber-500 bg-amber-500 text-white' : 'border-line2'}`}>
+                  {si && <Check size={11} strokeWidth={3} aria-hidden />}
+                </span>
+                <span className="w-14 shrink-0 font-semibold tabular-nums text-ink">{p.numero}</span>
+                <span className="min-w-0 flex-1 truncate text-sub">
+                  {p.proveedor_nombre || p.proveedor}
+                  {p.anulado && <span className="ml-1 text-brand-400">(anulado)</span>}
+                </span>
+                <span className="shrink-0 tabular-nums text-sub/70">{fecha(p.fecha)}</span>
+              </button>
+              {/* Tarjeta de detalle: no tilda la OC, solo la muestra */}
+              <button
+                type="button"
+                onClick={() => setVerDetalle(p)}
+                title={`Ver el detalle de la OC ${p.numero}`}
+                aria-label={`Ver el detalle de la OC ${p.numero}`}
+                className="shrink-0 rounded-md p-1 text-sub/60 transition hover:bg-line hover:text-ink"
+              >
+                <FileText size={12} aria-hidden />
+              </button>
+            </div>
           )
         })}
         {visibles.length === 0 && !puedeManual && (
@@ -181,6 +198,16 @@ export default function SelectorOc({
           </p>
         )}
       </div>
+
+      {/* Tarjeta de detalle de la OC elegida (portal al body, z-[120] sobre el popup) */}
+      {verDetalle && (
+        <DetalleOc
+          codigo={verDetalle.codigo}
+          numero={String(verDetalle.numero)}
+          proveedorNombre={verDetalle.proveedor_nombre || verDetalle.proveedor}
+          onCerrar={() => setVerDetalle(null)}
+        />
+      )}
     </div>
   )
 }
