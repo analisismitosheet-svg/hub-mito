@@ -591,6 +591,20 @@ export default function MiRepo() {
     return () => window.clearInterval(id)
   }, [sesion?.estado])
 
+  // Pausar tiene cooldown de 15 min (sql/repo_pausa_cooldown.sql): desde cuándo se puede volver a pausar
+  const [pausaLibre, setPausaLibre] = useState<number | null>(null)
+  useEffect(() => {
+    setPausaLibre(null)
+    const sb = supabase
+    if (!sb || !sesion?.id) return
+    let vivo = true
+    void sb.rpc('repo_proxima_pausa', { p_sesion: sesion.id }).then(({ data }) => {
+      if (vivo && typeof data === 'string') setPausaLibre(new Date(data).getTime())
+    })
+    return () => { vivo = false }
+  }, [sesion?.id])
+  const faltaPausa = pausaLibre ? Math.max(0, Math.ceil((pausaLibre - Date.now()) / 1000)) : 0
+
   const recordarSesion = useCallback((a: Asignacion, s: Sesion | null) => {
     const k = claveDe(a)
     setAbiertos((prev) => {
@@ -618,6 +632,7 @@ export default function MiRepo() {
         const fila = filaDe<FilaSesion>(data)
         if (!fila) throw new Error('La base no confirmó el cambio. Probá de nuevo.')
         const s = aSesion(fila)
+        if (fn === 'repo_pausar') setPausaLibre(Date.now() + 15 * 60 * 1000)
         setSesion(s.estado === 'finalizada' ? null : s)
         recordarSesion(asignacionSel, s)
         if (s.estado === 'en_curso') enfocar()
@@ -1163,10 +1178,12 @@ export default function MiRepo() {
               {sesion?.estado === 'en_curso' && (
                 <button
                   onClick={() => void accion('repo_pausar')}
-                  disabled={accionSesion}
+                  disabled={accionSesion || faltaPausa > 0}
+                  title={faltaPausa > 0 ? 'Después de una pausa hay que esperar 15 minutos para volver a pausar' : undefined}
                   className="btn-press inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/15 px-3 text-sm font-semibold text-amber-400 transition hover:bg-amber-500/25 disabled:opacity-60"
                 >
-                  {accionSesion ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Pause size={16} aria-hidden />} Pausar
+                  {accionSesion ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Pause size={16} aria-hidden />}{' '}
+                  {faltaPausa > 0 ? `Pausar ${Math.floor(faltaPausa / 60)}:${String(faltaPausa % 60).padStart(2, '0')}` : 'Pausar'}
                 </button>
               )}
               {sesion?.estado === 'pausada' && (
