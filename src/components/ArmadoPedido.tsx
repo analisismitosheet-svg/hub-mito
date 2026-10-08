@@ -209,11 +209,12 @@ export default function ArmadoPedido({ armado, alVolver, alCambiar }: Props) {
         } finally {
           // (antes faltaba esto: después del primer ✓ quedaban todos los botones trabados)
           setEnViaje((n) => n - 1)
-          enfocar()
+          // No se vuelve a enfocar el casillero del escáner: en el celular abre el teclado
+          ;(document.activeElement as HTMLElement | null)?.blur?.()
         }
       })()
     },
-    [aplicarFila, alCambiar, armado.id, enfocar, items, terminado],
+    [aplicarFila, alCambiar, armado.id, items, terminado],
   )
 
   const deshacerUltimo = useCallback(() => {
@@ -231,10 +232,10 @@ export default function ArmadoPedido({ armado, alVolver, alCambiar }: Props) {
         setMensaje({ ok: false, texto: e instanceof Error ? e.message : 'No se pudo deshacer.' })
       } finally {
         setUltimo(null)
-        enfocar()
+        ;(document.activeElement as HTMLElement | null)?.blur?.()
       }
     })()
-  }, [alCambiar, aplicarFila, armado.id, enfocar, terminado, ultimo])
+  }, [alCambiar, aplicarFila, armado.id, terminado, ultimo])
 
   const finalizar = useCallback(async () => {
     if (!supabase) return
