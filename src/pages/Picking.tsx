@@ -143,7 +143,19 @@ function compararTalle(a: string, b: string): number {
 function colorFila(recibido: number, cantidad: number, cancelado = 0): string {
   // Cancelado entero: no hay nada que ingresar (rojo; si entró algo, rojo fuerte)
   if (cantidad === 0 && cancelado > 0) return recibido > 0 ? 'bg-red-500/20' : 'bg-red-500/5'
-  return recibido > cantidad ? 'bg-brand-600/10' : recibido >= cantidad ? 'bg-emerald-500/10' : recibido > 0 ? 'bg-amber-500/10' : 'hover:bg-surface2/60'
+  // Llegó de más: verde flúor; si el artículo tenía cancelaciones es mercadería cancelada que entró (rojo)
+  if (recibido > cantidad) return cancelado > 0 ? 'bg-red-500/15' : 'bg-lime-400/20'
+  return recibido >= cantidad ? 'bg-emerald-500/10' : recibido > 0 ? 'bg-amber-500/10' : 'hover:bg-surface2/60'
+}
+
+/** Recibido; si se pasó de lo pedido, en verde flúor con el excedente (rojo si era mercadería cancelada) */
+function CeldaRecibido({ recibido, cantidad, cancelado = 0 }: { recibido: number; cantidad: number; cancelado?: number }) {
+  if (recibido <= cantidad) return <>{n0.format(recibido)}</>
+  return (
+    <span className={`font-semibold ${cancelado > 0 ? 'text-red-400' : 'text-lime-400'}`} title={`Llegaron ${n0.format(recibido - cantidad)} de más`}>
+      {n0.format(recibido)} <span className="text-[10px]">+{n0.format(recibido - cantidad)}</span>
+    </span>
+  )
 }
 
 /** "3 colores" o el único valor */
@@ -154,9 +166,11 @@ function resumenDe(valores: string[], uno: string, varios: string): string {
 }
 
 /** − cantidad + (lo recibido) */
-function Cantidad({ valor, cantidad, etiqueta, onRestar, onSumar, onFijar }: {
+function Cantidad({ valor, cantidad, etiqueta, onRestar, onSumar, onFijar, cancelado = 0 }: {
   valor: number
   cantidad: number
+  /** si hay cancelaciones, pasarse es mercadería cancelada (rojo); si no, llegó de más (verde flúor) */
+  cancelado?: number
   etiqueta: string
   onRestar: () => void
   onSumar: () => void
@@ -183,7 +197,7 @@ function Cantidad({ valor, cantidad, etiqueta, onRestar, onSumar, onFijar }: {
         onFocus={(e) => e.target.select()}
         aria-label={etiqueta}
         className={`h-8 w-16 rounded-lg border bg-surface2 px-1 text-center text-sm font-semibold tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40 ${
-          demas ? 'border-brand-500 text-brand-400' : completo ? 'border-emerald-500/60 text-emerald-500' : 'border-line text-ink'
+          demas ? (cancelado > 0 ? 'border-red-500 text-red-400' : 'border-lime-400 text-lime-400') : completo ? 'border-emerald-500/60 text-emerald-500' : 'border-line text-ink'
         }`}
       />
       <button
@@ -893,7 +907,7 @@ ${avisoNo}` : ''}
                                 <span className="text-amber-500">{f.proveedor}</span> {f.proveedor_nombre}
                               </td>
                               <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-ink"><CeldaPedido i={f} /></td>
-                              <td className="px-3 py-1.5 text-right tabular-nums text-ink">{n0.format(f.recibido)}</td>
+                              <td className="px-3 py-1.5 text-right tabular-nums text-ink"><CeldaRecibido recibido={f.recibido} cantidad={f.cantidad} cancelado={f.cancelado ?? 0} /></td>
                               <td className={`px-3 py-1.5 text-right font-bold tabular-nums ${saldo > 0 ? 'text-amber-500' : 'text-emerald-500'}`}>
                                 {f.cantidad === 0 && (f.cancelado ?? 0) > 0 ? <span className="text-[10px] uppercase text-red-400">Cancelado</span> : n0.format(saldo)}
                               </td>
@@ -1025,7 +1039,7 @@ ${avisoNo}` : ''}
                       <p className={`font-display text-3xl font-bold tabular-nums ${pct >= 100 ? 'text-emerald-500' : 'text-amber-500'}`}>{pct}%</p>
                       <p className="text-xs tabular-nums text-sub">
                         {n0.format(tot.recibidas)} de {n0.format(tot.pedidas)} unidades recibidas · saldo {n0.format(Math.max(0, tot.pedidas - tot.recibidas))}
-                        {tot.demas > 0 && <span className="text-brand-400"> · {n0.format(tot.demas)} de más</span>}
+                        {tot.demas > 0 && <span className="font-semibold text-lime-400"> · {n0.format(tot.demas)} de más</span>}
                       </p>
                     </div>
                   </div>
@@ -1248,7 +1262,7 @@ ${avisoNo}` : ''}
                                   {varios ? resumenDe(g.variantes.map((v) => v.talle), 'talle', 'talles') : unaSola.talle}
                                 </td>
                                 <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-ink"><CeldaPedido i={g} /></td>
-                                <td className="px-3 py-1.5 text-right tabular-nums text-ink">{n0.format(g.recibido)}</td>
+                                <td className="px-3 py-1.5 text-right tabular-nums text-ink"><CeldaRecibido recibido={g.recibido} cantidad={g.cantidad} cancelado={g.cancelado} /></td>
                                 <td className={`px-3 py-1.5 text-right font-bold tabular-nums ${g.saldo - g.este > 0 ? 'text-amber-500' : 'text-emerald-500'}`}>
                                   {n0.format(Math.max(0, g.saldo - g.este))}
                                 </td>
@@ -1259,6 +1273,7 @@ ${avisoNo}` : ''}
                                     <Cantidad
                                       valor={g.este}
                                       cantidad={g.saldo}
+                                      cancelado={g.cancelado}
                                       etiqueta={`Picking de ${g.articulo} (total)`}
                                       onRestar={() => sumarEste(g.variantes, -1)}
                                       onSumar={() => sumarEste(g.variantes, 1)}
@@ -1291,7 +1306,7 @@ ${avisoNo}` : ''}
                                     <td className="px-3 py-1 tabular-nums text-ink">{i.color}</td>
                                     <td className="px-3 py-1 text-ink">{i.talle}</td>
                                     <td className="px-3 py-1 text-right tabular-nums text-ink"><CeldaPedido i={i} /></td>
-                                    <td className="px-3 py-1 text-right tabular-nums text-ink">{n0.format(i.recibido)}</td>
+                                    <td className="px-3 py-1 text-right tabular-nums text-ink"><CeldaRecibido recibido={i.recibido} cantidad={i.cantidad} cancelado={i.cancelado ?? 0} /></td>
                                     <td className={`px-3 py-1 text-right font-bold tabular-nums ${saldo - este > 0 ? 'text-amber-500' : 'text-emerald-500'}`}>
                                       {n0.format(Math.max(0, saldo - este))}
                                     </td>
@@ -1302,6 +1317,7 @@ ${avisoNo}` : ''}
                                         <Cantidad
                                           valor={este}
                                           cantidad={saldo}
+                                          cancelado={i.cancelado ?? 0}
                                           etiqueta={`Picking de ${i.articulo} ${i.color} ${i.talle}`}
                                           onRestar={() => fijarEste([i], este - 1)}
                                           onSumar={() => fijarEste([i], este + 1)}
