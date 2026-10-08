@@ -337,6 +337,21 @@ class LectorDahua(threading.Thread):
         with self.lock:
             return self.nro, self.cuadro
 
+    SIN_CUADROS_MAX = 30  # segundos conectado sin una imagen nueva -> el video se trabó: reconectar
+
+    def _vigilar(self) -> None:
+        """A veces el DVR sigue mandando datos pero el decodificador deja de sacar imágenes y la
+        cámara queda congelada (pasó en Paseo Rivera). Si pasa, se corta y el bucle reconecta."""
+        import logging
+        import time
+        log = logging.getLogger("contador")
+        while not self._fin:
+            time.sleep(5)
+            if self._tubo is not None and self._t_cuadro and time.time() - self._t_cuadro > self.SIN_CUADROS_MAX:
+                log.warning("[%s] %d s sin imagen nueva (video trabado): reconectando", self.nombre, self.SIN_CUADROS_MAX)
+                self._t_cuadro = 0.0
+                self._tubo.cerrar()
+
     def run(self) -> None:
         import logging
         import time
@@ -347,6 +362,8 @@ class LectorDahua(threading.Thread):
         d = sdk.dll
         x = self.datos
         espera = 5
+        self._t_cuadro = 0.0
+        threading.Thread(target=self._vigilar, daemon=True, name=f"vigia-{self.nombre}").start()
         while not self._fin:
             h, info, motivo = sdk.login(x["host"], int(x.get("puerto", 37777)), x["usuario"], x["clave"],
                                         p2p=bool(x.get("p2p")))
@@ -369,6 +386,7 @@ class LectorDahua(threading.Thread):
                 time.sleep(espera)
                 continue
             self._tubo = _Tubo()
+            self._t_cuadro = time.time()  # el vigilante cuenta desde que se conecta
             d.CLIENT_SetRealDataCallBackEx2(rh, self._cb, 0, 0x1)
             log.info("[%s] conectado por SDK Dahua (serie %s, canal %s)", self.nombre,
                      info.serie.decode(errors="replace"), x.get("canal"))
@@ -380,6 +398,7 @@ class LectorDahua(threading.Thread):
                     with self.lock:
                         self.cuadro = img
                         self.nro += 1
+                    self._t_cuadro = time.time()
                     if self.error:
                         self.error, espera = None, 5
                 self.error = "se cortó el video"
