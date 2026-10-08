@@ -231,15 +231,23 @@ export default function PedidosVenta() {
 
     // Pedidos VTD = repo diaria: su avance sale de la repo de ese día y local
     // (sql/repos_de_pedidos_vtd.sql) y se muestra igual que un armado.
-    const desde = new Date(Date.now() - 60 * 24 * 3600 * 1000).toISOString().slice(0, 10)
-    const { data: reposVtd } = await supabase.rpc('repos_de_pedidos_vtd', { p_desde: desde })
+    // Todos los VTD: los de antes de cargar repos en el hub vienen como terminados (pedidos_vtd_cerrados)
+    const desde = '2025-01-01'
     type RepoVtd = {
       codigo: string; lote_id: string; local: string; lineas: number; lineas_ok: number; unidades: number
       unidades_ok: number; faltantes: number; pendientes: number; responsable: string | null; legajo: string | null; ultimo_at: string | null
     }
-    for (const r of (reposVtd as RepoVtd[] | null) ?? []) {
+    // Son más de 1000 filas (tope de Supabase por pedido): se piden de a 1000
+    const reposVtd: RepoVtd[] = []
+    for (let d = 0; d < 20000; d += 1000) {
+      const { data, error: eR } = await supabase.rpc('repos_de_pedidos_vtd', { p_desde: desde }).order('codigo').range(d, d + 999)
+      if (eR || !data) break
+      reposVtd.push(...(data as RepoVtd[]))
+      if ((data as RepoVtd[]).length < 1000) break
+    }
+    for (const r of reposVtd) {
       if (porCodigo[r.codigo]) continue // si además le pidieron un armado, manda el armado
-      const id = `repo:${r.lote_id}:${r.local}`
+      const id = r.lote_id ? `repo:${r.lote_id}:${r.local}` : `repo:cerrado:${r.codigo}`
       const estado = r.pendientes === 0 ? 'hecho' : r.lineas_ok > 0 ? 'aceptado' : 'pendiente'
       porCodigo[r.codigo] = {
         id, pedido_codigo: r.codigo, pedido_numero: null, cliente: r.local, cliente_nombre: null, prioridad: 'normal',
@@ -247,7 +255,7 @@ export default function PedidosVenta() {
         aceptado_legajo: r.legajo, aceptado_nombre: r.responsable, hecho_at: estado === 'hecho' ? r.ultimo_at : null,
         faltantes: r.faltantes, asignado_legajo: r.legajo, asignado_nombre: r.responsable, asignado_local: r.local, repo: true,
       }
-      avances[id] = { lineas: r.lineas, lineasOk: r.lineas_ok, unidades: r.unidades, unidadesOk: r.unidades_ok }
+      if (r.lineas > 0) avances[id] = { lineas: r.lineas, lineasOk: r.lineas_ok, unidades: r.unidades, unidadesOk: r.unidades_ok }
     }
     setArmados(porCodigo)
     setAvanceArmados(avances)
@@ -969,7 +977,9 @@ export default function PedidosVenta() {
                     {armPedido.estado === 'hecho' && (
                       <>
                         {armPedido.repo
-                          ? `🏁 Repo terminada por ${armPedido.aceptado_nombre || 'el responsable'}${armPedido.aceptado_legajo ? ` (#${armPedido.aceptado_legajo})` : ''}`
+                          ? armPedido.aceptado_nombre
+                            ? `🏁 Repo terminada por ${armPedido.aceptado_nombre}${armPedido.aceptado_legajo ? ` (#${armPedido.aceptado_legajo})` : ''}`
+                            : '🏁 Repo terminada'
                           : '🏁 Armado terminado'}
                         {armPedido.faltantes > 0 ? ` con ${armPedido.faltantes} faltante${armPedido.faltantes === 1 ? '' : 's'}` : ''}
                         {avancePedido ? ` · ${avancePedido.unidadesOk}/${avancePedido.unidades} unidades` : ''}

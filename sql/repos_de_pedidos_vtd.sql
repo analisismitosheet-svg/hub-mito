@@ -49,9 +49,37 @@ BEGIN
          max(i.hecho_at)
     FROM pl
     JOIN public.mayorista_items i ON i.lote_id = pl.lote_id AND upper(btrim(i.local)) = pl.local
-   GROUP BY pl.codigo, pl.lote_id, pl.local;
+   GROUP BY pl.codigo, pl.lote_id, pl.local
+  UNION ALL
+  -- Los cerrados por única vez (pedidos_vtd_cerrados, abajo): repo terminada sin detalle
+  SELECT c.codigo, NULL::uuid, upper(btrim(pv.cliente)), 0, 0, 0, 0, 0, 0, NULL::text, NULL::text, c.cerrado_at
+    FROM public.pedidos_vtd_cerrados c
+    JOIN public.pedidos_venta pv ON pv.codigo = c.codigo
+   WHERE pv.fecha >= p_desde;
 END;
 $$;
 
 REVOKE ALL ON FUNCTION public.repos_de_pedidos_vtd(date) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.repos_de_pedidos_vtd(date) TO authenticated;
+
+-- ---- Por única vez (2026-10-08): los VTD sin repo en el hub quedan como terminados ----
+-- Son los de antes de que las repos se cargaran en el hub. Se guardan en
+-- pedidos_vtd_cerrados y repos_de_pedidos_vtd los devuelve como repo terminada
+-- (sin unidades ni responsable). Los que tienen repo siguen el avance real.
+CREATE TABLE IF NOT EXISTS public.pedidos_vtd_cerrados (
+  codigo     text PRIMARY KEY,
+  cerrado_at timestamptz NOT NULL DEFAULT now(),
+  motivo     text NOT NULL DEFAULT 'historico'
+);
+ALTER TABLE public.pedidos_vtd_cerrados ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.pedidos_vtd_cerrados FROM anon, authenticated;
+
+INSERT INTO public.pedidos_vtd_cerrados (codigo)
+SELECT pv.codigo
+  FROM public.pedidos_venta pv
+ WHERE pv.motivo = 'VTD' AND pv.fecha <= DATE '2026-10-08'
+   AND NOT EXISTS (
+     SELECT 1 FROM public.mayorista_lotes l
+      WHERE l.fecha = pv.fecha
+        AND EXISTS (SELECT 1 FROM public.mayorista_items i WHERE i.lote_id = l.id AND upper(btrim(i.local)) = upper(btrim(pv.cliente))))
+ON CONFLICT (codigo) DO NOTHING;
