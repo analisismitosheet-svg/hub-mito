@@ -62,7 +62,8 @@ const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart
 const deIso = (s: string) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d) }
 const sumarDias = (s: string, n: number) => { const d = deIso(s); d.setDate(d.getDate() + n); return iso(d) }
 const lunesDe = (s: string) => { const d = deIso(s); const dow = (d.getDay() + 6) % 7; d.setDate(d.getDate() - dow); return iso(d) }
-const corta = (s: string | null) => { if (!s) return '—'; const [, m, d] = s.split('-'); return `${Number(d)}/${Number(m)}` }
+/** Fecha completa dd/mm/aaaa */
+const corta = (s: string | null) => { if (!s) return '—'; const [y, m, d] = s.split('-'); return `${d}/${m}/${y}` }
 const nombreCorto = (n: string | null) => {
   if (!n) return '—'
   const p = n.trim().split(/\s+/)
@@ -203,7 +204,7 @@ export default function EstadisticaVtd() {
         <div className="flex flex-wrap items-center gap-2">
           <div className="inline-flex items-center gap-1 rounded-xl border border-line bg-surface px-1 py-1">
             <button type="button" onClick={() => mover(-1)} className="rounded-lg p-1.5 text-ink hover:bg-line" aria-label="Anterior"><ChevronLeft size={16} /></button>
-            <span className="min-w-[9.5rem] text-center text-xs font-semibold text-ink">{etiqueta}</span>
+            <span className="min-w-[9.5rem] max-w-[15rem] text-center leading-tight text-xs font-semibold text-ink">{etiqueta}</span>
             <button type="button" onClick={() => mover(1)} disabled={dia >= hoy} className="rounded-lg p-1.5 text-ink hover:bg-line disabled:opacity-30" aria-label="Siguiente"><ChevronRight size={16} /></button>
           </div>
           <div className="inline-flex overflow-hidden rounded-xl border border-line">
@@ -245,7 +246,7 @@ export default function EstadisticaVtd() {
               <table className="w-full table-fixed text-[12px] sm:text-[13px]">
                 <thead>
                   <tr className="text-[10px] uppercase tracking-wide text-sub">
-                    <th className="w-[16%] py-1.5 text-left">Repo</th>
+                    <th className="w-[23%] sm:w-[14%] py-1.5 text-left">Repo</th>
                     <th className="hidden py-1.5 md:table-cell">Venta</th>
                     <th className="py-1.5 text-right">Cant venta</th>
                     <th className="py-1.5 text-right">Cant repo</th>
