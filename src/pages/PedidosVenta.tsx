@@ -11,7 +11,7 @@ import { imprimirPedido } from '@/lib/imprimirPedido'
 import { cargarStockSku, stockSkuDe, stockArticuloDe, type StockSku } from '@/lib/stockSku'
 import { avisarArmados } from '@/lib/push'
 import {
-  COLUMNAS_ARMADO, PRIORIDADES, avanceDeArmados,
+  PRIORIDADES,
   type Armado, type AvanceArmado, type PrioridadArmado,
 } from '@/lib/armados'
 
@@ -213,54 +213,47 @@ export default function PedidosVenta() {
   const [enviando, setEnviando] = useState(false)
   const [avisoArmado, setAvisoArmado] = useState<{ ok: boolean; texto: string } | null>(null)
 
+  // Quién tiene / hizo cada pedido y su avance: sale ya armado de pedidos_venta_estado
+  // (sql/pedidos_venta_estado.sql, la mantienen triggers en la base), solo del período elegido.
   const cargarArmados = useCallback(async () => {
     if (!supabase) return
-    const { data, error } = await supabase
-      .from('mayorista_armados')
-      .select(COLUMNAS_ARMADO)
-      .order('creado_at', { ascending: false })
-      .limit(500)
-    if (error || !data) return
-    const lista = data as unknown as Armado[]
+    const { desde: fDesde, hasta: fHasta } = rangoDe(periodo)
+    type FilaEstado = {
+      codigo: string; fecha: string | null; origen: 'armado' | 'repo' | 'cerrado'; estado: Armado['estado']
+      armado_id: string | null; lote_id: string | null; local: string | null; prioridad: string | null; obs: string | null
+      legajo: string | null; nombre: string | null; lineas: number; lineas_ok: number; unidades: number
+      unidades_ok: number; faltantes: number; actualizado_at: string
+    }
+    const filas: FilaEstado[] = []
+    for (let d = 0; d < 50000; d += 1000) {
+      let q = supabase.from('pedidos_venta_estado').select('*')
+      if (fDesde) q = q.gte('fecha', fDesde)
+      if (fHasta) q = q.lt('fecha', fHasta)
+      const { data, error } = await q.order('codigo').range(d, d + 999)
+      if (error || !data) return
+      filas.push(...(data as FilaEstado[]))
+      if (data.length < 1000) break
+    }
     const porCodigo: Record<string, Armado> = {}
-    for (const a of lista) {
-      // Con dos del mismo pedido (uno cerrado y otro nuevo) manda el más nuevo
-      if (!porCodigo[a.pedido_codigo]) porCodigo[a.pedido_codigo] = a
-    }
-    const avances = await avanceDeArmados(lista.filter((a) => a.estado !== 'hecho').map((a) => a.id))
-
-    // Pedidos VTD = repo diaria: su avance sale de la repo de ese día y local
-    // (sql/repos_de_pedidos_vtd.sql) y se muestra igual que un armado.
-    // Todos los VTD: los de antes de cargar repos en el hub vienen como terminados (pedidos_vtd_cerrados)
-    const desde = '2025-01-01'
-    type RepoVtd = {
-      codigo: string; lote_id: string; local: string; lineas: number; lineas_ok: number; unidades: number
-      unidades_ok: number; faltantes: number; pendientes: number; responsable: string | null; legajo: string | null; ultimo_at: string | null
-    }
-    // Son más de 1000 filas (tope de Supabase por pedido): se piden de a 1000
-    const reposVtd: RepoVtd[] = []
-    for (let d = 0; d < 20000; d += 1000) {
-      const { data, error: eR } = await supabase.rpc('repos_de_pedidos_vtd', { p_desde: desde }).order('codigo').range(d, d + 999)
-      if (eR || !data) break
-      reposVtd.push(...(data as RepoVtd[]))
-      if ((data as RepoVtd[]).length < 1000) break
-    }
-    for (const r of reposVtd) {
-      // Si además le pidieron un armado, gana el legajo que lo aceptó (decisión del 08/10/2026)
-      if (porCodigo[r.codigo]) continue
-      const id = r.lote_id ? `repo:${r.lote_id}:${r.local}` : `repo:cerrado:${r.codigo}`
-      const estado = r.pendientes === 0 ? 'hecho' : r.lineas_ok > 0 ? 'aceptado' : 'pendiente'
-      porCodigo[r.codigo] = {
-        id, pedido_codigo: r.codigo, pedido_numero: null, cliente: r.local, cliente_nombre: null, prioridad: 'normal',
-        estado, obs: null, creado_at: r.ultimo_at ?? '', creado_por: null, aceptado_at: null, aceptado_por: null,
-        aceptado_legajo: r.legajo, aceptado_nombre: r.responsable, hecho_at: estado === 'hecho' ? r.ultimo_at : null,
-        faltantes: r.faltantes, asignado_legajo: r.legajo, asignado_nombre: r.responsable, asignado_local: r.local, repo: true,
+    const avances: Record<string, AvanceArmado> = {}
+    for (const f of filas) {
+      const id = f.armado_id ?? (f.lote_id ? `repo:${f.lote_id}:${f.local}` : `repo:cerrado:${f.codigo}`)
+      const esRepo = f.origen !== 'armado'
+      // pendiente = a quién le toca; aceptado/hecho = quién lo tomó
+      const empezado = f.estado !== 'pendiente'
+      porCodigo[f.codigo] = {
+        id, pedido_codigo: f.codigo, pedido_numero: null, cliente: f.local, cliente_nombre: null,
+        prioridad: (f.prioridad as Armado['prioridad']) ?? 'normal', estado: f.estado, obs: f.obs,
+        creado_at: f.actualizado_at, creado_por: null, aceptado_at: null, aceptado_por: null,
+        aceptado_legajo: empezado ? f.legajo : null, aceptado_nombre: empezado ? f.nombre : null,
+        hecho_at: f.estado === 'hecho' ? f.actualizado_at : null, faltantes: f.faltantes,
+        asignado_legajo: f.legajo, asignado_nombre: f.nombre, asignado_local: f.local, repo: esRepo,
       }
-      if (r.lineas > 0) avances[id] = { lineas: r.lineas, lineasOk: r.lineas_ok, unidades: r.unidades, unidadesOk: r.unidades_ok }
+      if (f.lineas > 0) avances[id] = { lineas: f.lineas, lineasOk: f.lineas_ok, unidades: f.unidades, unidadesOk: f.unidades_ok }
     }
     setArmados(porCodigo)
     setAvanceArmados(avances)
-  }, [])
+  }, [periodo])
 
   useEffect(() => {
     void cargarArmados()
