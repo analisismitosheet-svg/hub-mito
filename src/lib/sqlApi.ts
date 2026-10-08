@@ -10,19 +10,33 @@ export interface VistaDef {
 }
 
 /**
- * Lee una vista del SQL Server vía el proxy /api/sql/<vista>.
- * Requiere sesión activa: el JWT de Supabase viaja en el header Authorization.
+ * GET a /api/sql/* con el JWT de la sesión. Si el servidor responde 401 (la sesión se
+ * cerró en Supabase, por ejemplo al entrar desde otro lado, aunque el token local todavía
+ * no venció) se renueva la sesión y se reintenta una vez. Si tampoco anda, hay que
+ * volver a entrar.
  */
-export async function leerVista(vista: string, limit?: number): Promise<FilaSql[]> {
+async function fetchConSesion(url: string): Promise<Response> {
   if (!supabase) throw new Error('Supabase no está configurado.')
   const { data } = await supabase.auth.getSession()
   const token = data.session?.access_token
   if (!token) throw new Error('Sin sesión activa.')
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  if (res.status !== 401) return res
+  const { data: nueva } = await supabase.auth.refreshSession()
+  const token2 = nueva.session?.access_token
+  if (!token2) throw new Error('Tu sesión se cerró: salí y volvé a entrar al hub.')
+  const res2 = await fetch(url, { headers: { Authorization: `Bearer ${token2}` } })
+  if (res2.status === 401) throw new Error('Tu sesión se cerró: salí y volvé a entrar al hub.')
+  return res2
+}
 
+/**
+ * Lee una vista del SQL Server vía el proxy /api/sql/<vista>.
+ * Requiere sesión activa: el JWT de Supabase viaja en el header Authorization.
+ */
+export async function leerVista(vista: string, limit?: number): Promise<FilaSql[]> {
   const qs = limit ? `?limit=${encodeURIComponent(String(limit))}` : ''
-  const res = await fetch(`/api/sql/${encodeURIComponent(vista)}${qs}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
+  const res = await fetchConSesion(`/api/sql/${encodeURIComponent(vista)}${qs}`)
   const body = (await res.json().catch(() => null)) as
     | { error?: string; detalle?: string; filas?: FilaSql[] }
     | null
@@ -61,20 +75,13 @@ export interface OpcionesLectura {
 
 /** Igual que leerVista, pero con filtro en el SQL (WHERE [col] LIKE @v). */
 export async function leerVistaFiltrada(vista: string, opts: OpcionesLectura = {}): Promise<FilaSql[]> {
-  if (!supabase) throw new Error('Supabase no está configurado.')
-  const { data } = await supabase.auth.getSession()
-  const token = data.session?.access_token
-  if (!token) throw new Error('Sin sesión activa.')
-
   const q = new URLSearchParams()
   if (opts.limit) q.set('limit', String(opts.limit))
   if (opts.donde?.length) q.set('where', opts.donde.join(','))
   if (opts.valor) q.set('value', opts.valor)
   if (opts.coincide) q.set('match', opts.coincide)
 
-  const res = await fetch(`/api/sql/${encodeURIComponent(vista)}${q.size ? `?${q}` : ''}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
+  const res = await fetchConSesion(`/api/sql/${encodeURIComponent(vista)}${q.size ? `?${q}` : ''}`)
   const body = (await res.json().catch(() => null)) as
     | { error?: string; detalle?: string; filas?: FilaSql[] }
     | null
@@ -191,11 +198,7 @@ export interface EstadoSql {
 }
 
 export async function estadoConexion(): Promise<EstadoSql> {
-  if (!supabase) throw new Error('Supabase no está configurado.')
-  const { data } = await supabase.auth.getSession()
-  const token = data.session?.access_token
-  if (!token) throw new Error('Sin sesión activa.')
-  const res = await fetch('/api/sql/status', { headers: { Authorization: `Bearer ${token}` } })
+  const res = await fetchConSesion('/api/sql/status')
   const body = (await res.json().catch(() => null)) as (EstadoSql & { error?: string }) | null
   if (!res.ok || !body) throw new Error(body?.error ?? `Error ${res.status} consultando el estado`)
   return body
@@ -210,12 +213,8 @@ export interface ObjetoSql {
 
 /** Explorador (solo admins): GET /api/sql/catalogo con los parámetros dados. */
 async function catalogo<T>(params: Record<string, string>): Promise<T> {
-  if (!supabase) throw new Error('Supabase no está configurado.')
-  const { data } = await supabase.auth.getSession()
-  const token = data.session?.access_token
-  if (!token) throw new Error('Sin sesión activa.')
   const qs = new URLSearchParams(params).toString()
-  const res = await fetch(`/api/sql/catalogo${qs ? `?${qs}` : ''}`, { headers: { Authorization: `Bearer ${token}` } })
+  const res = await fetchConSesion(`/api/sql/catalogo${qs ? `?${qs}` : ''}`)
   const body = (await res.json().catch(() => null)) as (T & { error?: string }) | null
   if (!res.ok || !body) throw new Error(body?.error ?? `Error ${res.status} consultando el explorador`)
   return body
