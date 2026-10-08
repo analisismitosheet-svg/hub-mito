@@ -830,6 +830,12 @@ export default function PedidosVenta() {
                             )}
                           </span>
                           <span className="block truncate text-xs font-medium text-ink/90">{p.cliente_nombre || p.cliente}</span>
+                          {/* Quién lo aceptó / lo hizo (armado o repo diaria) */}
+                          {(enCurso || terminado) && arm?.aceptado_nombre && (
+                            <span className="block truncate text-[11px] font-semibold text-emerald-400">
+                              👤 {arm.aceptado_nombre}{arm.aceptado_legajo ? ` (#${arm.aceptado_legajo})` : ''}
+                            </span>
+                          )}
                           <span className="flex items-center gap-1.5 text-[11px] text-sub">
                             {fechaCorta(p.fecha)}
                             <span
