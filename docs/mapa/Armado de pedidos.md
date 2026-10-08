@@ -24,3 +24,4 @@ Ver [[Repos Mayorista y Mi repo]], [[Pedidos compra, venta y cancelaciones]].
 - **Sin asignación automática (08/10/2026)**: se sacó el trigger `mayorista_armados_responsable` (`sql/armado_sin_asignar_y_quitar.sql`); el armado le llega a todo el piso y gana el primero que acepta. Las columnas `asignado_*` quedan pero ya no se llenan.
 - **Sacar armado** (solo admin): botón en el detalle de Pedidos de venta → RPC `armado_quitar(p_id)` (borra el armado y sus ítems).
 - **Ubicación en el armado**: `ArmadoPedido.tsx` muestra el chip de ubicación del Mapeo depósito y ordena "Faltan escanear" por ubicación, igual que el repo.
+- **✓ manual de a 1 unidad** (`sql/armado_marcar_unidad.sql`): `armado_marcar_item` suma +1 (si piden 2 y hay 1, queda 1/2 y la otra va a faltante al Finalizar). En pantalla, si la cantidad es >1 el botón dice «+1». Se arregló el bug que trababa todos los ✓ después del primero (faltaba bajar `enViaje`).

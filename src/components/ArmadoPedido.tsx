@@ -181,7 +181,10 @@ export default function ArmadoPedido({ armado, alVolver, alCambiar }: Props) {
     [aplicarFila, armado.id, enfocar, items, sesion, terminado, alCambiar],
   )
 
-  /** ✓ al lado del artículo: la cámara no lo leyó y no se quiere escribir el código. */
+  /**
+   * ✓ al lado del artículo: la cámara no lo leyó y no se quiere escribir el código.
+   * Suma DE A UNA unidad (si piden 2 y hay 1, se toca una vez y la otra queda faltante al finalizar).
+   */
   const marcarLinea = useCallback(
     (item: ArmadoItem) => {
       if (terminado || item.estado === 'hecho' || item.escaneadas >= item.cantidad) return
@@ -198,11 +201,14 @@ export default function ArmadoPedido({ armado, alVolver, alCambiar }: Props) {
           if (fila) aplicarFila(fila)
           const etiqueta = etiquetaDe(item)
           setUltimo({ linea: item.linea, etiqueta })
-          setMensaje({ ok: true, texto: `${etiqueta} · marcado a mano (${item.cantidad} u.)` })
-          if (items.every((x) => (x.linea === item.linea ? true : x.escaneadas >= x.cantidad))) alCambiar()
+          const van = fila ? fila.item_escaneadas : item.escaneadas + 1
+          setMensaje({ ok: true, texto: `${etiqueta} · marcado a mano: ${van} de ${item.cantidad}` })
+          if (items.every((x) => (x.linea === item.linea ? van >= x.cantidad : x.escaneadas >= x.cantidad))) alCambiar()
         } catch (e) {
           setMensaje({ ok: false, texto: e instanceof Error ? e.message : 'No se pudo marcar el artículo.' })
         } finally {
+          // (antes faltaba esto: después del primer ✓ quedaban todos los botones trabados)
+          setEnViaje((n) => n - 1)
           enfocar()
         }
       })()
@@ -298,11 +304,11 @@ export default function ArmadoPedido({ armado, alVolver, alCambiar }: Props) {
             type="button"
             onClick={() => marcarLinea(i)}
             disabled={terminado || sesion !== 'en_curso' || enViaje > 0}
-            title="Marcar el artículo sin escanear (si la cámara no lo lee)"
+            title={i.cantidad > 1 ? 'Marcar 1 unidad sin escanear (tocá de nuevo para la siguiente)' : 'Marcar el artículo sin escanear (si la cámara no lo lee)'}
             aria-label={`Marcar ${i.articulo ?? i.linea}`}
             className="btn-press flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-line2 bg-surface2 text-sub transition hover:border-emerald-500/50 hover:bg-emerald-500/15 hover:text-emerald-400 disabled:opacity-40"
           >
-            <Check size={16} aria-hidden />
+            {i.cantidad > 1 ? <span className="text-[11px] font-bold">+1</span> : <Check size={16} aria-hidden />}
           </button>
         </>
       )}
