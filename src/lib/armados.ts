@@ -32,6 +32,8 @@ export interface Armado {
   asignado_legajo: string | null
   asignado_nombre: string | null
   asignado_local: string | null
+  /** true = no es un armado: es la repo diaria (pedido VTD) que se hace en Repos Mayorista / Mi repo */
+  repo?: boolean
 }
 
 /** Renglón del pedido copiado al armado, con su avance. */

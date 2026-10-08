@@ -227,8 +227,30 @@ export default function PedidosVenta() {
       // Con dos del mismo pedido (uno cerrado y otro nuevo) manda el más nuevo
       if (!porCodigo[a.pedido_codigo]) porCodigo[a.pedido_codigo] = a
     }
+    const avances = await avanceDeArmados(lista.filter((a) => a.estado !== 'hecho').map((a) => a.id))
+
+    // Pedidos VTD = repo diaria: su avance sale de la repo de ese día y local
+    // (sql/repos_de_pedidos_vtd.sql) y se muestra igual que un armado.
+    const desde = new Date(Date.now() - 60 * 24 * 3600 * 1000).toISOString().slice(0, 10)
+    const { data: reposVtd } = await supabase.rpc('repos_de_pedidos_vtd', { p_desde: desde })
+    type RepoVtd = {
+      codigo: string; lote_id: string; local: string; lineas: number; lineas_ok: number; unidades: number
+      unidades_ok: number; faltantes: number; pendientes: number; responsable: string | null; legajo: string | null; ultimo_at: string | null
+    }
+    for (const r of (reposVtd as RepoVtd[] | null) ?? []) {
+      if (porCodigo[r.codigo]) continue // si además le pidieron un armado, manda el armado
+      const id = `repo:${r.lote_id}:${r.local}`
+      const estado = r.pendientes === 0 ? 'hecho' : r.lineas_ok > 0 ? 'aceptado' : 'pendiente'
+      porCodigo[r.codigo] = {
+        id, pedido_codigo: r.codigo, pedido_numero: null, cliente: r.local, cliente_nombre: null, prioridad: 'normal',
+        estado, obs: null, creado_at: r.ultimo_at ?? '', creado_por: null, aceptado_at: null, aceptado_por: null,
+        aceptado_legajo: r.legajo, aceptado_nombre: r.responsable, hecho_at: estado === 'hecho' ? r.ultimo_at : null,
+        faltantes: r.faltantes, asignado_legajo: r.legajo, asignado_nombre: r.responsable, asignado_local: r.local, repo: true,
+      }
+      avances[id] = { lineas: r.lineas, lineasOk: r.lineas_ok, unidades: r.unidades, unidadesOk: r.unidades_ok }
+    }
     setArmados(porCodigo)
-    setAvanceArmados(await avanceDeArmados(lista.filter((a) => a.estado !== 'hecho').map((a) => a.id)))
+    setAvanceArmados(avances)
   }, [])
 
   useEffect(() => {
@@ -774,12 +796,12 @@ export default function PedidosVenta() {
                             )}
                             {terminado && (
                               <span className="rounded-md bg-emerald-500/25 px-1.5 py-0.5 text-[10px] font-bold text-emerald-400">
-                                ARMADO 🏁{av ? ` ${av.lineasOk}/${av.lineas}` : ''}
+                                {arm?.repo ? 'REPO ✓' : 'ARMADO 🏁'}{av ? ` ${arm?.repo ? `${av.unidadesOk}/${av.unidades}` : `${av.lineasOk}/${av.lineas}`}` : ''}
                               </span>
                             )}
                             {!terminado && enCurso && (
                               <span className="rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-400">
-                                EN CURSO ✓{av ? ` ${av.unidadesOk}/${av.unidades}` : ''}
+                                {arm?.repo ? 'REPO EN CURSO' : 'EN CURSO ✓'}{av ? ` ${av.unidadesOk}/${av.unidades}` : ''}
                               </span>
                             )}
                           </span>
@@ -931,7 +953,7 @@ export default function PedidosVenta() {
                     <PackageCheck size={13} aria-hidden />
                     {armPedido.estado === 'pendiente' && (
                       <>
-                        {PRIORIDADES[armPedido.prioridad]?.icono} Armado {PRIORIDADES[armPedido.prioridad]?.label} ·
+                        {armPedido.repo ? 'Repo diaria ·' : <>{PRIORIDADES[armPedido.prioridad]?.icono} Armado {PRIORIDADES[armPedido.prioridad]?.label} ·</>}
                         {armPedido.asignado_legajo
                           ? `para ${armPedido.asignado_nombre ?? `#${armPedido.asignado_legajo}`} (responsable de ${armPedido.asignado_local})`
                           : 'esperando que alguien lo acepte'}
@@ -939,14 +961,16 @@ export default function PedidosVenta() {
                     )}
                     {armPedido.estado === 'aceptado' && (
                       <>
-                        ✓ En curso con {armPedido.aceptado_nombre || 'un legajo'}
+                        ✓ {armPedido.repo ? 'Repo en curso' : 'En curso'} con {armPedido.aceptado_nombre || 'un legajo'}
                         {armPedido.aceptado_legajo ? ` (#${armPedido.aceptado_legajo})` : ''}
                         {avancePedido ? ` · ${avancePedido.unidadesOk}/${avancePedido.unidades} unidades` : ''}
                       </>
                     )}
                     {armPedido.estado === 'hecho' && (
                       <>
-                        🏁 Armado terminado
+                        {armPedido.repo
+                          ? `🏁 Repo terminada por ${armPedido.aceptado_nombre || 'el responsable'}${armPedido.aceptado_legajo ? ` (#${armPedido.aceptado_legajo})` : ''}`
+                          : '🏁 Armado terminado'}
                         {armPedido.faltantes > 0 ? ` con ${armPedido.faltantes} faltante${armPedido.faltantes === 1 ? '' : 's'}` : ''}
                         {avancePedido ? ` · ${avancePedido.unidadesOk}/${avancePedido.unidades} unidades` : ''}
                       </>
