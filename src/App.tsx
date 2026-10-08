@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { SpeedInsights } from '@vercel/speed-insights/react'
 import { AuthProvider } from '@/context/AuthContext'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import PermissionRoute from '@/components/PermissionRoute'
@@ -535,6 +536,7 @@ export default function App() {
           />
         </Routes>
       </BrowserRouter>
+      <SpeedInsights />
     </AuthProvider>
   )
 }
