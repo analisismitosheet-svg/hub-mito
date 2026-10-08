@@ -1014,7 +1014,8 @@ export default function MiRepo() {
         </div>
       )}
 
-      {!aviso && !error && !asignacionSel && asignaciones.length > 0 && conPendientes.length === 0 && (
+      {!aviso && !error && !asignacionSel && asignaciones.length > 0 && conPendientes.length === 0 &&
+        armadosPendientes.length === 0 && armadosMios.length === 0 && (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-14 text-center text-emerald-400">
           <Check size={28} aria-hidden />
           <p className="font-medium">{modoAdmin ? 'No hay repos asignados' : 'Terminaste todos tus repos'}</p>
