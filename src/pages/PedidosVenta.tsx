@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Loader2, Search, ChevronLeft, ChevronRight, RefreshCw, Download, ClipboardList, Ban, ArrowLeft, Printer,
+  PackageCheck, X,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -8,6 +9,10 @@ import { supabase } from '@/lib/supabase'
 import { descripcionesMaestro } from '@/lib/descripcionArticulos'
 import { imprimirPedido } from '@/lib/imprimirPedido'
 import { cargarStockSku, stockSkuDe, stockArticuloDe, type StockSku } from '@/lib/stockSku'
+import {
+  COLUMNAS_ARMADO, PRIORIDADES, avanceDeArmados,
+  type Armado, type AvanceArmado, type PrioridadArmado,
+} from '@/lib/armados'
 
 /* ------------------------------------------------------------------ */
 /*  Pedidos de venta (Mayorista)                                       */
@@ -88,6 +93,11 @@ function lunesAR(semanasAtras = 0): string {
   const d = new Date(`${hoy}T12:00:00Z`)
   d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7) - semanasAtras * 7)
   return d.toISOString().slice(0, 10)
+}
+
+/** Hoy (AAAA-MM-DD, hora Argentina) — el filtro "Hoy" de al lado del período. */
+function hoyAR(): string {
+  return new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' })
 }
 
 function rangoDe(p: Periodo): { desde: string | null; hasta: string | null } {
@@ -185,6 +195,92 @@ export default function PedidosVenta() {
   useEffect(() => {
     void cargar()
   }, [cargar])
+
+  /* ------------------------------------------------------------------ */
+  /*  Pedir armado (sql/mayorista_armados.sql)                           */
+  /*  Se pide desde el pedido abierto o en bloque con la selección.      */
+  /*  Se refresca cada 12 s: así el pedido se pone en verde en vivo      */
+  /*  a medida que el legajo escanea.                                    */
+  /* ------------------------------------------------------------------ */
+  const [armados, setArmados] = useState<Record<string, Armado>>({}) // por código de pedido
+  const [avanceArmados, setAvanceArmados] = useState<Record<string, AvanceArmado>>({})
+  const [seleccion, setSeleccion] = useState<Set<string>>(new Set())
+  const [soloHoy, setSoloHoy] = useState(false)
+  const [pedirA, setPedirA] = useState<string[] | null>(null)
+  const [prioridadElegida, setPrioridadElegida] = useState<PrioridadArmado>('normal')
+  const [obsArmado, setObsArmado] = useState('')
+  const [enviando, setEnviando] = useState(false)
+  const [avisoArmado, setAvisoArmado] = useState<{ ok: boolean; texto: string } | null>(null)
+
+  const cargarArmados = useCallback(async () => {
+    if (!supabase) return
+    const { data, error } = await supabase
+      .from('mayorista_armados')
+      .select(COLUMNAS_ARMADO)
+      .order('creado_at', { ascending: false })
+      .limit(500)
+    if (error || !data) return
+    const lista = data as unknown as Armado[]
+    const porCodigo: Record<string, Armado> = {}
+    for (const a of lista) {
+      // Con dos del mismo pedido (uno cerrado y otro nuevo) manda el más nuevo
+      if (!porCodigo[a.pedido_codigo]) porCodigo[a.pedido_codigo] = a
+    }
+    setArmados(porCodigo)
+    setAvanceArmados(await avanceDeArmados(lista.filter((a) => a.estado !== 'hecho').map((a) => a.id)))
+  }, [])
+
+  useEffect(() => {
+    void cargarArmados()
+    const id = window.setInterval(() => void cargarArmados(), 12000)
+    return () => window.clearInterval(id)
+  }, [cargarArmados])
+
+  /** Abre el selector de prioridad para esos pedidos (sin los que ya están pedidos). */
+  function pedirArmadoDe(codigos: string[]) {
+    const nuevos = codigos.filter((c) => !armados[c] || armados[c].estado === 'hecho')
+    if (nuevos.length === 0) {
+      setAvisoArmado({ ok: false, texto: 'Esos pedidos ya tienen un armado activo.' })
+      return
+    }
+    setAvisoArmado(null)
+    setPrioridadElegida('normal')
+    setObsArmado('')
+    setPedirA(nuevos)
+  }
+
+  async function enviarArmado() {
+    if (!supabase || !pedirA || enviando) return
+    setEnviando(true)
+    try {
+      const { data, error } = await supabase.rpc('pedir_armado', {
+        p_codigos: pedirA,
+        p_prioridad: prioridadElegida,
+        p_obs: obsArmado.trim() ? obsArmado.trim() : null,
+      })
+      if (error) throw new Error(error.message)
+      const n = typeof data === 'number' ? data : 0
+      const descartados = pedirA.length - n
+      setAvisoArmado(
+        n > 0
+          ? {
+              ok: true,
+              texto:
+                `Se pidió el armado de ${n} pedido${n === 1 ? '' : 's'} · prioridad ${PRIORIDADES[prioridadElegida].label}. ` +
+                'Le llega a todos los legajos con el celular sonando.' +
+                (descartados ? ` ${descartados} no se pidieron (anulados o ya pedidos).` : ''),
+            }
+          : { ok: false, texto: 'Ningún pedido se pudo pedir: ya tienen un armado activo.' },
+      )
+      setSeleccion(new Set())
+      setPedirA(null)
+      await cargarArmados()
+    } catch (e) {
+      setAvisoArmado({ ok: false, texto: e instanceof Error ? e.message : 'No se pudo pedir el armado.' })
+    } finally {
+      setEnviando(false)
+    }
+  }
 
   // Ítems del pedido elegido. La descripción es la ADICIONAL del maestro de artículos
   // (public.articulos, igual que en todo el hub); si no está, la del renglón de Dragonfish.
@@ -312,17 +408,32 @@ export default function PedidosVenta() {
   }, [q])
 
   const visibles = useMemo(() => {
-    const porMotivo = fMotivo ? pedidos.filter((p) => (p.motivo || SIN_MOTIVO) === fMotivo) : pedidos
+    const porFecha = soloHoy ? pedidos.filter((p) => p.fecha === hoyAR()) : pedidos
+    const porMotivo = fMotivo ? porFecha.filter((p) => (p.motivo || SIN_MOTIVO) === fMotivo) : porFecha
     if (!q) return porMotivo
     return porMotivo.filter(
       (p) =>
         [String(p.numero ?? ''), p.descripcion, p.cliente, p.cliente_nombre, p.observacion, fechaCorta(p.fecha)]
           .some((v) => String(v ?? '').toUpperCase().includes(q)) || !!porArticulo?.has(p.codigo),
     )
-  }, [pedidos, q, fMotivo, porArticulo])
+  }, [pedidos, q, fMotivo, porArticulo, soloHoy])
+
+  // Selección múltiple para pedir el armado de varios pedidos de una
+  const alternarSeleccion = (codigo: string) =>
+    setSeleccion((prev) => {
+      const s = new Set(prev)
+      if (s.has(codigo)) s.delete(codigo)
+      else s.add(codigo)
+      return s
+    })
+  const tildarTodo = () => setSeleccion(new Set(visibles.map((p) => p.codigo)))
+  const limpiarSeleccion = () => setSeleccion(new Set())
 
   const idx = visibles.findIndex((p) => p.codigo === sel)
   const pedido = pedidos.find((p) => p.codigo === sel) ?? null
+  /** Estado del armado de este pedido (si está pedido a armar). */
+  const armPedido = pedido ? (armados[pedido.codigo] ?? null) : null
+  const avancePedido = armPedido ? avanceArmados[armPedido.id] : undefined
   const ir = (d: number) => {
     const p = visibles[idx + d]
     if (p) setSel(p.codigo)
@@ -470,6 +581,19 @@ export default function PedidosVenta() {
         </p>
       )}
 
+      {avisoArmado && (
+        <p
+          role="status"
+          className={`mb-3 rounded-xl border p-3 text-sm ${
+            avisoArmado.ok
+              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+              : 'border-brand-600/30 bg-brand-600/10 text-brand-400'
+          }`}
+        >
+          {avisoArmado.texto}
+        </p>
+      )}
+
       {error && (
         <p role="alert" className="mb-3 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>
       )}
@@ -498,6 +622,22 @@ export default function PedidosVenta() {
             {p.label}
           </button>
         ))}
+        {/* Al lado del período: sólo los pedidos de hoy (para mandarlos a armar de una) */}
+        <span aria-hidden className="self-center px-0.5 text-sub">·</span>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={soloHoy}
+          onClick={() => setSoloHoy((v) => !v)}
+          title="Ver sólo los pedidos de hoy"
+          className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+            soloHoy
+              ? 'border-brand-500/50 bg-brand-500/15 text-brand-400'
+              : 'border-line text-sub hover:border-line2 hover:text-ink'
+          }`}
+        >
+          📅 Hoy
+        </button>
       </div>
 
       {/* Motivo: separa los pedidos por el motivo de Dragonfish */}
@@ -544,6 +684,33 @@ export default function PedidosVenta() {
               className="h-11 w-full rounded-xl border border-line bg-surface pl-9 pr-3 text-sm text-ink outline-none transition placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40"
             />
           </div>
+
+          {/* Selección múltiple: para pedir el armado de varios pedidos de una */}
+          <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
+            <button
+              type="button"
+              onClick={tildarTodo}
+              disabled={visibles.length === 0}
+              className="btn-press rounded-lg border border-line px-2.5 py-1.5 font-medium text-sub transition hover:border-line2 hover:text-ink disabled:opacity-40"
+            >
+              Tildar todo ({visibles.length.toLocaleString('es-AR')})
+            </button>
+            {seleccion.size > 0 && (
+              <>
+                <span className="font-semibold tabular-nums text-amber-500">
+                  {seleccion.size} seleccionado{seleccion.size === 1 ? '' : 's'}
+                </span>
+                <button
+                  type="button"
+                  onClick={limpiarSeleccion}
+                  className="rounded-lg px-1.5 py-1 font-medium text-sub transition hover:text-ink"
+                >
+                  Limpiar
+                </button>
+              </>
+            )}
+          </div>
+
           <div className="overflow-hidden rounded-2xl border border-line bg-surface lg:max-h-[calc(100vh-15rem)] lg:overflow-y-auto">
             {cargando ? (
               <div className="flex items-center justify-center gap-2 py-10 text-sub">
@@ -562,21 +729,55 @@ export default function PedidosVenta() {
               <ul className="divide-y divide-line/60">
                 {visibles.map((p) => {
                   const activo = p.codigo === sel
+                  const arm = armados[p.codigo]
+                  const av = arm ? avanceArmados[arm.id] : undefined
+                  const enCurso = arm?.estado === 'aceptado'
+                  const terminado = arm?.estado === 'hecho'
+                  const estaSel = seleccion.has(p.codigo)
+                  // El pedido se pone en verde a medida que el legajo lo va armando
+                  const fondo = terminado
+                    ? 'bg-emerald-500/20'
+                    : enCurso
+                      ? 'bg-emerald-500/10'
+                      : activo
+                        ? 'bg-amber-500/15'
+                        : 'hover:bg-surface2'
                   return (
-                    <li key={p.codigo}>
+                    <li key={p.codigo} className="flex items-stretch">
+                      <label
+                        className="flex shrink-0 cursor-pointer items-center pl-3"
+                        title="Seleccionar para pedir el armado"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={estaSel}
+                          onChange={() => alternarSeleccion(p.codigo)}
+                          aria-label={`Seleccionar pedido N° ${p.numero ?? p.codigo}`}
+                          className="h-4 w-4 cursor-pointer accent-amber-500"
+                        />
+                      </label>
                       <button
                         onClick={() => setSel(p.codigo)}
-                        className={`flex w-full items-start gap-3 px-3 py-2.5 text-left transition ${
-                          activo ? 'bg-amber-500/15' : 'hover:bg-surface2'
-                        }`}
+                        className={`flex min-w-0 flex-1 items-start gap-3 px-3 py-2.5 text-left transition ${fondo}`}
                       >
                         <span className="min-w-0 flex-1">
-                          <span className="flex items-center gap-1.5">
+                          <span className="flex flex-wrap items-center gap-1.5">
                             <span className={`font-display text-sm font-bold tabular-nums ${activo ? 'text-amber-500' : 'text-ink'}`}>
                               N° {p.numero ?? '—'}
                             </span>
                             {p.anulado && (
                               <span className="rounded-md bg-brand-600/15 px-1.5 py-0.5 text-[10px] font-semibold text-brand-400">ANULADO</span>
+                            )}
+                            {terminado && (
+                              <span className="rounded-md bg-emerald-500/25 px-1.5 py-0.5 text-[10px] font-bold text-emerald-400">
+                                ARMADO 🏁{av ? ` ${av.lineasOk}/${av.lineas}` : ''}
+                              </span>
+                            )}
+                            {!terminado && enCurso && (
+                              <span className="rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-400">
+                                EN CURSO ✓{av ? ` ${av.unidadesOk}/${av.unidades}` : ''}
+                              </span>
                             )}
                           </span>
                           <span className="block truncate text-xs font-medium text-ink/90">{p.cliente_nombre || p.cliente}</span>
@@ -650,6 +851,27 @@ export default function PedidosVenta() {
                   >
                     <Printer size={15} aria-hidden /> Imprimir
                   </button>
+                  <button
+                    onClick={() => pedirArmadoDe([pedido.codigo])}
+                    disabled={!!armPedido && armPedido.estado !== 'hecho'}
+                    className={`btn-press inline-flex h-10 items-center gap-1.5 rounded-xl px-3 text-sm font-semibold transition disabled:opacity-50 ${
+                      armPedido && armPedido.estado !== 'hecho'
+                        ? 'border border-emerald-500/40 bg-emerald-500/15 text-emerald-400'
+                        : 'bg-brand-600 text-white shadow-soft hover:bg-brand-700'
+                    }`}
+                    title={
+                      armPedido && armPedido.estado !== 'hecho'
+                        ? 'Este pedido ya está pedido a armar'
+                        : 'Pedir el armado de este pedido a los legajos'
+                    }
+                  >
+                    <PackageCheck size={15} aria-hidden />
+                    {armPedido && armPedido.estado === 'aceptado'
+                      ? 'En curso ✓'
+                      : armPedido && armPedido.estado === 'pendiente'
+                        ? 'Pedido a armar'
+                        : 'Pedir armado'}
+                  </button>
                 </div>
               </div>
 
@@ -689,6 +911,41 @@ export default function PedidosVenta() {
                 {pedido.anulado && (
                   <p className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-brand-600/15 px-2.5 py-1 text-xs font-semibold text-brand-400">
                     <Ban size={13} aria-hidden /> Pedido anulado
+                  </p>
+                )}
+
+                {/* Armado: lo pide el mayorista y lo va marcando el legajo */}
+                {armPedido && (
+                  <p
+                    className={`mt-3 inline-flex flex-wrap items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold ${
+                      armPedido.estado === 'hecho'
+                        ? 'bg-emerald-500/20 text-emerald-400'
+                        : armPedido.estado === 'aceptado'
+                          ? 'bg-emerald-500/15 text-emerald-400'
+                          : 'bg-amber-500/15 text-amber-500'
+                    }`}
+                  >
+                    <PackageCheck size={13} aria-hidden />
+                    {armPedido.estado === 'pendiente' && (
+                      <>
+                        {PRIORIDADES[armPedido.prioridad]?.icono} Armado {PRIORIDADES[armPedido.prioridad]?.label} ·
+                        esperando que alguien lo acepte
+                      </>
+                    )}
+                    {armPedido.estado === 'aceptado' && (
+                      <>
+                        ✓ En curso con {armPedido.aceptado_nombre || 'un legajo'}
+                        {armPedido.aceptado_legajo ? ` (#${armPedido.aceptado_legajo})` : ''}
+                        {avancePedido ? ` · ${avancePedido.unidadesOk}/${avancePedido.unidades} unidades` : ''}
+                      </>
+                    )}
+                    {armPedido.estado === 'hecho' && (
+                      <>
+                        🏁 Armado terminado
+                        {armPedido.faltantes > 0 ? ` con ${armPedido.faltantes} faltante${armPedido.faltantes === 1 ? '' : 's'}` : ''}
+                        {avancePedido ? ` · ${avancePedido.unidadesOk}/${avancePedido.unidades} unidades` : ''}
+                      </>
+                    )}
                   </p>
                 )}
               </div>
@@ -775,6 +1032,136 @@ export default function PedidosVenta() {
           )}
         </section>
       </div>
+
+      {/* ---------- Barra de selección: pedir el armado de varios de una ---------- */}
+      {seleccion.size > 0 && !pedirA && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur">
+          <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-3">
+            <span className="text-sm font-semibold text-ink">
+              {seleccion.size} pedido{seleccion.size === 1 ? '' : 's'} seleccionado{seleccion.size === 1 ? '' : 's'}
+            </span>
+            <button
+              type="button"
+              onClick={() => pedirArmadoDe([...seleccion])}
+              className="btn-press ml-auto inline-flex h-10 items-center gap-1.5 rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white shadow-soft transition hover:bg-brand-700"
+            >
+              <PackageCheck size={16} aria-hidden /> Pedir armado
+            </button>
+            <button
+              type="button"
+              onClick={limpiarSeleccion}
+              className="btn-press inline-flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-surface text-sub transition hover:text-ink"
+              aria-label="Quitar la selección"
+            >
+              <X size={16} aria-hidden />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ---------- Elegir la prioridad del armado ---------- */}
+      {pedirA && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Pedir armado"
+        >
+          <div className="w-full max-w-md animate-enter rounded-2xl border border-line bg-surface p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h3 className="text-base font-semibold text-ink">Pedir armado</h3>
+                <p className="text-xs text-sub">
+                  {pedirA.length} pedido{pedirA.length === 1 ? '' : 's'} · le llega a todos los legajos con el celular
+                  sonando hasta que alguien lo acepte
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPedirA(null)}
+                className="rounded-lg p-1 text-sub transition hover:bg-line hover:text-ink"
+                aria-label="Cerrar"
+              >
+                <X size={16} aria-hidden />
+              </button>
+            </div>
+
+            <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-sub">Prioridad</p>
+            <div className="grid gap-2">
+              {(['urgente', 'normal', 'baja'] as PrioridadArmado[]).map((p) => {
+                const P = PRIORIDADES[p]
+                const on = prioridadElegida === p
+                const detalle =
+                  p === 'urgente'
+                    ? 'Suena 3 veces y aparece arriba de todo'
+                    : p === 'normal'
+                      ? 'Suena 2 veces'
+                      : 'Un pitido, después de las otras prioridades'
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setPrioridadElegida(p)}
+                    aria-pressed={on}
+                    className="flex items-center gap-3 rounded-xl border px-3 py-3 text-left transition"
+                    style={
+                      on
+                        ? { borderColor: `${P.color}99`, backgroundColor: `${P.color}1f` }
+                        : { borderColor: 'var(--line)' }
+                    }
+                  >
+                    <span className="text-xl" aria-hidden>
+                      {P.icono}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-bold text-ink">{P.label}</span>
+                      <span className="block text-xs text-sub">{detalle}</span>
+                    </span>
+                    <span
+                      className="h-4 w-4 shrink-0 rounded-full border-2"
+                      style={on ? { borderColor: P.color, backgroundColor: P.color } : { borderColor: 'var(--line2)' }}
+                      aria-hidden
+                    />
+                  </button>
+                )
+              })}
+            </div>
+
+            <label className="mt-4 block">
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-sub">
+                Observación (opcional)
+              </span>
+              <textarea
+                value={obsArmado}
+                onChange={(e) => setObsArmado(e.target.value)}
+                rows={2}
+                placeholder="Ej: armar y dejar en puerta 1"
+                className="w-full resize-none rounded-xl border border-line bg-surface2 px-3 py-2 text-sm text-ink outline-none transition placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40"
+              />
+            </label>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPedirA(null)}
+                disabled={enviando}
+                className="btn-press rounded-xl border border-line bg-surface2 px-4 py-2 text-sm font-medium text-ink transition hover:bg-line disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void enviarArmado()}
+                disabled={enviando}
+                className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:opacity-60"
+              >
+                <PackageCheck size={15} aria-hidden />
+                {enviando ? 'Enviando…' : `Pedir armado (${pedirA.length})`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   )
 }

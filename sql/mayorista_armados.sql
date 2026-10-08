@@ -91,7 +91,7 @@ CREATE POLICY mayorista_armados_ver ON public.mayorista_armados
   USING (
     private.tengo_permiso('pedidos_venta.view')
     OR private.tengo_permiso('mayorista.repos_piso')
-    OR private.tengo_permiso('area_mayorista.view')
+
   );
 
 DROP POLICY IF EXISTS mayorista_armados_items_ver ON public.mayorista_armados_items;
@@ -104,7 +104,7 @@ CREATE POLICY mayorista_armados_items_ver ON public.mayorista_armados_items
         AND (
           private.tengo_permiso('pedidos_venta.view')
           OR private.tengo_permiso('mayorista.repos_piso')
-          OR private.tengo_permiso('area_mayorista.view')
+      
         )
     )
   );
@@ -246,7 +246,7 @@ BEGIN
   IF NOT (
     private.tengo_permiso('pedidos_venta.view')
     OR private.tengo_permiso('mayorista.repos_piso')
-    OR private.tengo_permiso('area_mayorista.view')
+
   ) THEN
     RAISE EXCEPTION 'Sin permiso para tomar armados' USING ERRCODE = '42501';
   END IF;
@@ -276,6 +276,7 @@ AS $$
 DECLARE
   v_cod   text := upper(regexp_replace(coalesce(p_codigo, ''), '\s', '', 'g'));
   v_acept uuid;
+  v_est   text;
   v_linea integer;
 BEGIN
   IF auth.uid() IS NULL THEN
@@ -285,19 +286,17 @@ BEGIN
     RAISE EXCEPTION 'Código vacío' USING ERRCODE = '22023';
   END IF;
 
-  SELECT a.aceptado_por, a.estado INTO v_acept, v_linea
+  SELECT a.aceptado_por, a.estado INTO v_acept, v_est
     FROM public.mayorista_armados a WHERE a.id = p_id;
-  -- v_linea guarda el estado mientras tanto (nombre corto a propósito)
   IF v_acept IS NULL THEN
     RAISE EXCEPTION 'Ese armado no existe' USING ERRCODE = 'P0002';
   END IF;
   IF v_acept <> auth.uid() AND NOT private.tengo_permiso('pedidos_venta.view') THEN
     RAISE EXCEPTION 'Ese armado lo está haciendo otro legajo' USING ERRCODE = '42501';
   END IF;
-  IF v_linea <> 'aceptado' THEN
+  IF v_est <> 'aceptado' THEN
     RAISE EXCEPTION 'Ese armado ya no está en curso' USING ERRCODE = 'P0002';
   END IF;
-  v_linea := NULL;
 
   SELECT i.linea INTO v_linea
     FROM public.mayorista_armados_items i
@@ -374,17 +373,22 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
 AS $$
 DECLARE
   v_acept uuid;
+  v_est   text;
 BEGIN
   IF auth.uid() IS NULL THEN
     RAISE EXCEPTION 'No autenticado' USING ERRCODE = '28000';
   END IF;
 
-  SELECT a.aceptado_por INTO v_acept FROM public.mayorista_armados a WHERE a.id = p_id;
+  SELECT a.aceptado_por, a.estado INTO v_acept, v_est
+    FROM public.mayorista_armados a WHERE a.id = p_id;
   IF v_acept IS NULL THEN
     RAISE EXCEPTION 'Ese armado no existe' USING ERRCODE = 'P0002';
   END IF;
   IF v_acept <> auth.uid() AND NOT private.tengo_permiso('pedidos_venta.view') THEN
     RAISE EXCEPTION 'Ese armado lo está haciendo otro legajo' USING ERRCODE = '42501';
+  END IF;
+  IF v_est <> 'aceptado' THEN
+    RAISE EXCEPTION 'Ese armado ya no está en curso' USING ERRCODE = 'P0002';
   END IF;
 
   RETURN QUERY

@@ -1,12 +1,23 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Bell, UserCheck, ClipboardList, Truck, CalendarX, FileText, ArrowRightLeft, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Bell, UserCheck, ClipboardList, Truck, CalendarX, FileText, ArrowRightLeft, PackageCheck, X,
+} from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
+import { COLUMNAS_ARMADO, PRIORIDADES, nroDePedido, ordenArmados, type Armado, type PrioridadArmado } from '@/lib/armados'
+import { notificarArmado, sonarArmado } from '@/lib/alarma'
 
 interface Notificacion {
   id: string
-  tipo: 'usuarios' | 'guias' | 'facturacion' | 'facturacion_sin_fact' | 'nota_credito' | 'transferencias'
+  tipo:
+    | 'usuarios'
+    | 'guias'
+    | 'facturacion'
+    | 'facturacion_sin_fact'
+    | 'nota_credito'
+    | 'transferencias'
+    | 'armados'
   titulo: string
   detalle: string
   ruta: string
@@ -29,7 +40,7 @@ function fmtFecha(iso: string): string {
  * - Rol mayorista: cada guía sin finalizar y cada registro de facturación sin fecha de envío.
  */
 export default function CampanaNotificaciones() {
-  const { isAdmin, perfil } = useAuth()
+  const { isAdmin, perfil, soloPiso, esLegajo } = useAuth()
   const navigate = useNavigate()
   const [abierto, setAbierto] = useState(false)
   const [items, setItems] = useState<Notificacion[]>([])
@@ -37,7 +48,111 @@ export default function CampanaNotificaciones() {
 
   const esMayorista = String(perfil?.rol) === 'mayorista' || (perfil?.roles ?? []).includes('mayorista')
   const esLocal = (perfil?.roles ?? []).includes('locales') || String(perfil?.rol) === 'locales'
-  const visible = isAdmin || esMayorista || esLocal
+  // Los del piso (Mi repo) también miran la campana: es por donde les llega el armado
+  const esPiso = soloPiso || esLegajo
+  const verArmados = isAdmin || esMayorista || esPiso
+  const visible = isAdmin || esMayorista || esLocal || verArmados
+
+  /**
+   * Armados de pedidos (sql/mayorista_armados.sql): se miran cada 10 segundos
+   * para que el celular suene apenas el mayorista pide uno.
+   * El sonido va acá y no en Mi repo, así suena aunque estés en otra pantalla
+   * (y sólo una vez por tarea nueva, sin importar cuántas haya activas).
+   */
+  const [armados, setArmados] = useState<Armado[]>([])
+  const [avisoArmados, setAvisoArmados] = useState(false)
+  const vistosRef = useRef<Set<string> | null>(null)
+
+  useEffect(() => {
+    if (!supabase || !verArmados) {
+      setArmados([])
+      setAvisoArmados(false)
+      return
+    }
+    let activo = true
+    const sb = supabase
+    async function cargar() {
+      let q = sb
+        .from('mayorista_armados')
+        .select(COLUMNAS_ARMADO)
+        .order('creado_at', { ascending: false })
+        .limit(100)
+      // El piso sólo necesita las tareas que están esperando a alguien;
+      // el mayorista además mira las que están en curso.
+      if (!isAdmin && !esMayorista) q = q.eq('estado', 'pendiente')
+      const { data, error } = await q
+      if (!activo) return
+      if (error || !data) {
+        setAvisoArmados(true) // sin conexión: no dejamos la campana cargando para siempre
+        return
+      }
+      const lista = data as unknown as Armado[]
+      setArmados(lista.sort(ordenArmados))
+      setAvisoArmados(true)
+
+      // Nueva tarea → suena el celular + notificación del sistema
+      const pendientes = lista.filter((a) => a.estado === 'pendiente')
+      if (vistosRef.current === null) {
+        // Primera carga: se registran las que ya estaban (no suena por arrancar la app)
+        vistosRef.current = new Set(pendientes.map((a) => a.id))
+      } else {
+        for (const a of pendientes) {
+          if (vistosRef.current.has(a.id)) continue
+          vistosRef.current.add(a.id)
+          const P = PRIORIDADES[a.prioridad as PrioridadArmado] ?? PRIORIDADES.normal
+          sonarArmado(a.prioridad as PrioridadArmado)
+          if (typeof document !== 'undefined' && document.hidden) {
+            notificarArmado(
+              `🔔 ${P.icono} Pedido N° ${nroDePedido(a)} a armar`,
+              `${P.label} · ${a.cliente_nombre || a.cliente || 'Cliente'}`,
+              '/mayorista/mi-repo',
+            )
+          }
+        }
+        // Los que ya no están pendientes (alguien los tomó o cerró) se vuelven a sonar si vuelven
+        const ahora = new Set(pendientes.map((a) => a.id))
+        for (const id of Array.from(vistosRef.current)) if (!ahora.has(id)) vistosRef.current.delete(id)
+      }
+    }
+    void cargar()
+    const intervalo = setInterval(cargar, 10000)
+    return () => {
+      activo = false
+      clearInterval(intervalo)
+    }
+  }, [isAdmin, esMayorista, verArmados])
+
+  // Notificaciones que salen de los armados
+  const notisArmados = useMemo<Notificacion[]>(() => {
+    if (!verArmados || !avisoArmados) return []
+    const out: Notificacion[] = []
+    for (const a of armados) {
+      const P = PRIORIDADES[a.prioridad as PrioridadArmado] ?? PRIORIDADES.normal
+      const mio = !!perfil?.id && a.aceptado_por === perfil.id
+      if (a.estado === 'pendiente') {
+        out.push({
+          id: `arm-${a.id}`,
+          tipo: 'armados',
+          titulo: `Armado ${P.label}: pedido N° ${nroDePedido(a)}`,
+          detalle: `${P.icono} ${a.cliente_nombre || a.cliente || 'Cliente'} · esperando a alguien`,
+          ruta: '/mayorista/mi-repo',
+          fecha: a.creado_at,
+          destinoId: a.id,
+        })
+      } else if (mio) {
+        out.push({
+          id: `arm-${a.id}`,
+          tipo: 'armados',
+          titulo: `En curso: pedido N° ${nroDePedido(a)}`,
+          detalle: `${P.icono} Tuyo · para cerrarlo entrá a Mi repo`,
+          ruta: '/mayorista/mi-repo',
+          fecha: a.aceptado_at ?? a.creado_at,
+          destinoId: a.id,
+        })
+      }
+    }
+    return out
+  }, [armados, avisoArmados, perfil?.id, verArmados])
 
   // Variantes del local del usuario (misma lógica que Transferencias)
   const origenesUsuario = useMemo(() => {
@@ -144,7 +259,11 @@ export default function CampanaNotificaciones() {
 
   if (!visible || !supabase) return null
 
-  const total = items.length
+  // Todo junto: las notificaciones de siempre + los armados de pedidos
+  const lista = [...items, ...notisArmados].sort(
+    (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime(),
+  )
+  const total = lista.length
 
   const iconos = {
     usuarios: <UserCheck size={15} aria-hidden />,
@@ -153,6 +272,7 @@ export default function CampanaNotificaciones() {
     facturacion_sin_fact: <CalendarX size={15} aria-hidden />,
     nota_credito: <FileText size={15} aria-hidden />,
     transferencias: <ArrowRightLeft size={15} aria-hidden />,
+    armados: <PackageCheck size={15} aria-hidden />,
   }
   const colores = {
     usuarios: 'bg-amber-500/15 text-amber-400',
@@ -161,6 +281,7 @@ export default function CampanaNotificaciones() {
     facturacion_sin_fact: 'bg-red-500/15 text-red-400',
     nota_credito: 'bg-orange-500/15 text-orange-400',
     transferencias: 'bg-violet-500/15 text-violet-400',
+    armados: 'bg-brand-600/15 text-brand-400',
   }
 
   return (
@@ -189,13 +310,13 @@ export default function CampanaNotificaciones() {
               <button onClick={() => setAbierto(false)} className="rounded-lg p-1 text-sub hover:bg-line hover:text-ink" aria-label="Cerrar"><X size={15} aria-hidden /></button>
             </div>
             <div className="max-h-96 overflow-y-auto">
-              {cargando ? (
+              {cargando || (verArmados && !avisoArmados) ? (
                 <p className="px-4 py-8 text-center text-sm text-sub">Cargando...</p>
-              ) : items.length === 0 ? (
+              ) : lista.length === 0 ? (
                 <p className="px-4 py-8 text-center text-sm text-sub">Sin notificaciones.</p>
               ) : (
                 <ul className="divide-y divide-line/50">
-                  {items.map((n) => (
+                  {lista.map((n) => (
                     <li key={n.id}>
                       <button
                         onClick={() => { setAbierto(false); navigate(n.ruta) }}

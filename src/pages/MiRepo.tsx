@@ -1,17 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
   ScanLine, Loader2, Store, Check, Undo2, Camera, CameraOff, ChevronRight, AlertTriangle,
-  Play, Pause, Flag, Timer,
+  Play, Pause, Flag, Timer, BellRing,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import ScannerCamara from '@/components/ScannerCamara'
+import ArmadoPedido from '@/components/ArmadoPedido'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { normalizaCodigo } from '@/lib/loginEmpleado'
 import { compararUbicaciones, ubicacionesDeArticulos } from '@/lib/mapeo'
 import { nombreMaterial } from '@/lib/imprimirRepo'
+import {
+  COLUMNAS_ARMADO, PRIORIDADES, avanceDeArmados, esMio, nroDePedido, ordenArmados,
+  type Armado, type AvanceArmado,
+} from '@/lib/armados'
+import { pedirPermisoNotificaciones } from '@/lib/alarma'
 
 type EstadoM = 'pendiente' | 'hecho' | 'faltante'
 
@@ -166,6 +172,99 @@ export default function MiRepo() {
     // El escáner inalámbrico escribe como teclado: el foco tiene que volver siempre.
     window.setTimeout(() => inputRef.current?.focus(), 0)
   }, [])
+
+  /* ------------------------------------------------------------------ */
+  /*  Armados de pedidos (sql/mayorista_armados.sql)                     */
+  /*  El mayorista los pide y entran acá: primero los pendientes         */
+  /*  (por prioridad) y los que ya tomé. Se refrescan cada 15 segundos.  */
+  /* ------------------------------------------------------------------ */
+  const [armados, setArmados] = useState<Armado[]>([])
+  const [avanceArmados, setAvanceArmados] = useState<Record<string, AvanceArmado>>({})
+  const [selArmado, setSelArmado] = useState<string | null>(null)
+  const [omitidos, setOmitidos] = useState<Set<string>>(new Set())
+  const [aceptando, setAceptando] = useState<string | null>(null)
+  const [avisoArmado, setAvisoArmado] = useState<string | null>(null)
+  // El armado que estoy mirando no se cae de la pantalla aunque quede cerrado
+  const selArmadoRef = useRef<string | null>(null)
+  useEffect(() => {
+    selArmadoRef.current = selArmado
+  }, [selArmado])
+
+  const cargarArmados = useCallback(async () => {
+    if (!supabase) return
+    const { data, error } = await supabase
+      .from('mayorista_armados')
+      .select(COLUMNAS_ARMADO)
+      .in('estado', ['pendiente', 'aceptado'])
+      .order('creado_at', { ascending: false })
+      .limit(200)
+    if (error || !data) return
+    const crudos = data as unknown as Armado[]
+    const lista = crudos.filter((a) => a.estado === 'aceptado' || !omitidos.has(a.id))
+    setArmados((prev) => {
+      // Si el que tengo abierto se cerró (o lo cerró otro), queda en pantalla como "hecho"
+      const abierto = selArmadoRef.current ? prev.find((a) => a.id === selArmadoRef.current) : null
+      if (abierto && abierto.estado === 'aceptado' && !lista.some((a) => a.id === abierto.id)) {
+        return [...lista, { ...abierto, estado: 'hecho' as const, hecho_at: new Date().toISOString() }]
+      }
+      return lista
+    })
+    const activos = crudos.filter((a) => a.estado !== 'hecho').map((a) => a.id)
+    setAvanceArmados(await avanceDeArmados(activos))
+  }, [omitidos])
+
+  useEffect(() => {
+    void cargarArmados()
+    const id = window.setInterval(() => void cargarArmados(), 15000)
+    return () => window.clearInterval(id)
+  }, [cargarArmados])
+
+  // Para que suene el celular hay que pedirlo con una acción del usuario
+  useEffect(() => {
+    pedirPermisoNotificaciones()
+  }, [])
+
+  /** Toco "Acepto": gana el primero (update … where estado='pendiente'). */
+  const aceptarArmado = useCallback(
+    async (a: Armado) => {
+      if (!supabase || aceptando) return
+      setAceptando(a.id)
+      setAvisoArmado(null)
+      try {
+        const { data, error } = await supabase.rpc('armado_aceptar', {
+          p_id: a.id,
+          p_legajo: String(perfil?.legajo ?? ''),
+          p_nombre: String(perfil?.nombre ?? ''),
+        })
+        if (error) throw new Error(error.message)
+        if (data === true) {
+          setArmados((prev) =>
+            prev.map((x) =>
+              x.id === a.id
+                ? {
+                    ...x,
+                    estado: 'aceptado' as const,
+                    aceptado_at: new Date().toISOString(),
+                    aceptado_por: perfil?.id ?? null,
+                    aceptado_legajo: perfil?.legajo ?? null,
+                    aceptado_nombre: perfil?.nombre ?? null,
+                  }
+                : x,
+            ),
+          )
+          setSelArmado(a.id)
+        } else {
+          setArmados((prev) => prev.filter((x) => x.id !== a.id))
+          setAvisoArmado(`El pedido N° ${nroDePedido(a)} ya lo tomó otro legajo.`)
+        }
+      } catch (e) {
+        setAvisoArmado(e instanceof Error ? e.message : 'No se pudo aceptar el armado.')
+      } finally {
+        setAceptando(null)
+      }
+    },
+    [aceptando, perfil?.id, perfil?.legajo, perfil?.nombre],
+  )
 
   /* ------------------------------------------------------------------ */
   /*  Carga: legajo -> empleado -> mis (lote, local) -> sus ítems        */
@@ -365,6 +464,17 @@ export default function MiRepo() {
   const asignacionSel = useMemo(
     () => asignaciones.find((a) => claveDe(a) === sel) ?? null,
     [asignaciones, sel],
+  )
+
+  // Armados: los que esperan a alguien (por prioridad) y los que tomé yo
+  const armadoSel = useMemo(() => armados.find((a) => a.id === selArmado) ?? null, [armados, selArmado])
+  const armadosPendientes = useMemo(
+    () => armados.filter((a) => a.estado === 'pendiente' && !omitidos.has(a.id)).sort(ordenArmados),
+    [armados, omitidos],
+  )
+  const armadosMios = useMemo(
+    () => armados.filter((a) => a.estado === 'aceptado' && esMio(a, perfil?.id)).sort(ordenArmados),
+    [armados, perfil?.id],
   )
 
   const itemsDe = useCallback(
@@ -653,6 +763,90 @@ export default function MiRepo() {
     setSesion(null)
   }
 
+  /** Tarjeta de un ARMADO de pedido (lo que pidió el mayorista) */
+  function tarjetaArmado(a: Armado) {
+    const P = PRIORIDADES[a.prioridad] ?? PRIORIDADES.normal
+    const av = avanceArmados[a.id]
+    const mio = a.estado === 'aceptado'
+    const pct = av && av.unidades > 0 ? Math.round((av.unidadesOk / av.unidades) * 100) : 0
+
+    // Esperando a que alguien lo tome: con Acepto / Omitir
+    if (!mio) {
+      return (
+        <div
+          key={a.id}
+          className="rounded-2xl border p-4"
+          style={{ borderColor: `${P.color}66`, backgroundColor: `${P.color}12` }}
+        >
+          <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide" style={{ color: P.color }}>
+            <BellRing size={12} aria-hidden /> {P.icono} Armado {P.label}
+          </p>
+          <p className="mt-1 font-display text-base font-bold text-ink">Pedido N° {nroDePedido(a)}</p>
+          <p className="text-xs text-sub">
+            {a.cliente_nombre || a.cliente || 'Cliente'}
+            {av ? ` · ${av.lineas} línea${av.lineas === 1 ? '' : 's'} · ${av.unidades} unidades` : ''}
+          </p>
+          {a.obs && <p className="mt-1 text-xs italic text-sub">“{a.obs}”</p>}
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={() => void aceptarArmado(a)}
+              disabled={aceptando !== null}
+              className="btn-press inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+            >
+              {aceptando === a.id ? 'Aceptando…' : '✅ Acepto'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setOmitidos((prev) => new Set(prev).add(a.id))}
+              disabled={aceptando !== null}
+              className="btn-press inline-flex h-10 items-center justify-center rounded-xl border border-line px-3 text-sm font-semibold text-sub transition hover:border-line2 hover:text-ink disabled:opacity-60"
+            >
+              Omitir
+            </button>
+          </div>
+        </div>
+      )
+    }
+
+    // Ya es mío: se abre con un toque y muestra el avance
+    return (
+      <button
+        key={a.id}
+        type="button"
+        onClick={() => setSelArmado(a.id)}
+        className="flex min-h-[4.5rem] w-full items-center gap-3 rounded-2xl border bg-surface px-4 py-3.5 text-left shadow-soft transition hover:bg-surface2 active:scale-[0.99]"
+        style={{ borderColor: `${P.color}66` }}
+      >
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-1.5">
+            <span
+              className="rounded-full px-2 py-0.5 text-[11px] font-bold"
+              style={{ color: P.color, backgroundColor: `${P.color}26`, border: `1px solid ${P.color}66` }}
+            >
+              {P.icono} {P.label}
+            </span>
+            <span className="font-display text-sm font-bold text-ink">Pedido N° {nroDePedido(a)}</span>
+            <span className="rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-400">
+              En curso
+            </span>
+          </span>
+          <span className="block truncate text-xs text-sub">
+            {a.cliente_nombre || a.cliente || 'Cliente'}
+            {av ? ` · ${av.unidadesOk}/${av.unidades} unidades` : ''}
+          </span>
+          <span className="mt-2 block h-1.5 overflow-hidden rounded-full bg-line">
+            <span
+              className={`block h-full rounded-full transition-all ${pct === 100 ? 'bg-emerald-500' : 'bg-amber-500'}`}
+              style={{ width: `${pct}%` }}
+            />
+          </span>
+        </span>
+        <ChevronRight size={18} aria-hidden className="shrink-0 text-sub" />
+      </button>
+    )
+  }
+
   /** Tarjeta de un repo (local + archivo + avance) */
   function tarjeta(a: Asignacion) {
     const lote = lotes[a.lote_id]
@@ -700,6 +894,21 @@ export default function MiRepo() {
   /* ------------------------------------------------------------------ */
   /*  Render                                                              */
   /* ------------------------------------------------------------------ */
+
+  // Armado de pedido abierto (la tarea que pidió el mayorista)
+  if (armadoSel) {
+    return (
+      <Layout>
+        {!soloPiso && <BackButton label="Menú" />}
+        <ArmadoPedido
+          armado={armadoSel}
+          alVolver={() => setSelArmado(null)}
+          alCambiar={() => void cargarArmados()}
+        />
+      </Layout>
+    )
+  }
+
   if (cargando) {
     return (
       <Layout>
@@ -732,6 +941,15 @@ export default function MiRepo() {
         </div>
       )}
 
+      {avisoArmado && (
+        <p
+          role="status"
+          className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm font-medium text-amber-500"
+        >
+          {avisoArmado}
+        </p>
+      )}
+
       {error && (
         <p role="alert" className="mb-4 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">
           {error}
@@ -743,6 +961,35 @@ export default function MiRepo() {
           <p className="flex items-start gap-2 font-medium">
             <AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden /> {aviso}
           </p>
+        </div>
+      )}
+
+      {/* ---------- Armados de pedidos (lo que pidió el mayorista) ---------- */}
+      {!asignacionSel && armadosPendientes.length > 0 && (
+        <div className="space-y-3">
+          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-400">
+            <BellRing size={13} aria-hidden /> Armados pedidos
+            <span className="rounded-full bg-brand-600/15 px-2 py-0.5 font-bold tabular-nums text-brand-400">
+              {armadosPendientes.length}
+            </span>
+          </p>
+          {armadosPendientes.map((a) => tarjetaArmado(a))}
+          <p className="text-xs text-sub">
+            Van {armadosPendientes.length} pedido{armadosPendientes.length === 1 ? '' : 's'}: se apilan por prioridad
+            (urgente arriba) y los tomás de a uno. Si no lo tomás, sigue sonándole a los demás legajos.
+          </p>
+        </div>
+      )}
+
+      {!asignacionSel && armadosMios.length > 0 && (
+        <div className="space-y-3">
+          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-emerald-500">
+            <Flag size={13} aria-hidden /> Armados en curso
+            <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 font-bold tabular-nums text-emerald-500">
+              {armadosMios.length}
+            </span>
+          </p>
+          {armadosMios.map((a) => tarjetaArmado(a))}
         </div>
       )}
 
