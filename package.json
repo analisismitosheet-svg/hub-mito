@@ -23,6 +23,8 @@
     "react-konva": "^18.2.16",
     "react-router-dom": "^6.23.1",
     "recharts": "^3.10.1",
+    "satori": "^0.47.1",
+    "sharp": "^0.35.5",
     "web-push": "^3.6.7",
     "webfontloader": "^1.6.28",
     "xlsx": "^0.18.5"

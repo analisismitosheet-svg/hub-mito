@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import {
-  AlertTriangle, Check, Clock, Eye, FileText, Loader2, Pencil, Plus,
+  AlertTriangle, Check, Clock, Eye, FileText, Image as ImageIcon, Loader2, Pencil, Plus,
   RefreshCw, Send, Trash2, X,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
@@ -10,10 +10,10 @@ import { supabase } from '@/lib/supabase'
 import { usePermisosArea } from '@/hooks/usePermisosArea'
 import { COLUMNAS_BUSQUEDA, cargarVistas, type VistaDef } from '@/lib/sqlApi'
 import {
-  DIAS, FUENTES, TIPOS_APP, cuandoLabel, fuenteLabel, normalizarTelefono, resumenInforme,
-  telefonoValido, ultimoLabel,
+  DIAS, FORMATOS, FUENTES, TIPOS_APP, cuandoLabel, formatoDe, fuenteLabel, normalizarTelefono,
+  resumenInforme, telefonoValido, ultimoLabel,
   type ConfigApp, type ConfigTexto, type ConfigVista, type Destinatario, type EnvioInforme,
-  type FuenteInforme, type Informe, type ModoInforme,
+  type FormatoInforme, type FuenteInforme, type Informe, type ModoInforme,
 } from '@/lib/informes'
 
 const inputCls =
@@ -21,7 +21,7 @@ const inputCls =
 const labelCls = 'mb-1 block text-xs font-medium text-sub'
 
 /** POST a /api/informe con el JWT de la sesión. */
-async function apiInforme(payload: Record<string, unknown>): Promise<{ texto?: string; detalle?: string; enviados?: number }> {
+async function apiInforme(payload: Record<string, unknown>): Promise<{ texto?: string; imagen?: string; detalle?: string; enviados?: number }> {
   if (!supabase) throw new Error('Supabase no está configurado.')
   const { data } = await supabase.auth.getSession()
   const token = data.session?.access_token
@@ -32,7 +32,7 @@ async function apiInforme(payload: Record<string, unknown>): Promise<{ texto?: s
     body: JSON.stringify(payload),
   })
   const body = (await res.json().catch(() => null)) as
-    | { error?: string; texto?: string; detalle?: string; enviados?: number; ok?: boolean }
+    | { error?: string; texto?: string; imagen?: string; detalle?: string; enviados?: number; ok?: boolean }
     | null
   if (!res.ok) throw new Error(body?.error ?? `Error ${res.status}`)
   if (body?.error) throw new Error(body.error)
@@ -183,6 +183,9 @@ export default function Informes() {
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="font-display text-base font-semibold text-ink">{i.nombre}</h2>
                       <span className="rounded-full border border-line bg-surface2 px-2 py-0.5 text-[11px] font-medium text-sub">{fuenteLabel(i.fuente)}</span>
+                      {formatoDe(i) === 'imagen' && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[11px] font-medium text-violet-300"><ImageIcon size={11} aria-hidden /> Imagen</span>
+                      )}
                       {i.modo === 'diario'
                         ? <span className="inline-flex items-center gap-1 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-[11px] font-medium text-cyan-300"><Clock size={11} aria-hidden /> {cuandoLabel(i)}</span>
                         : <span className="rounded-full border border-line bg-surface2 px-2 py-0.5 text-[11px] font-medium text-sub">A mano</span>}
@@ -288,6 +291,7 @@ function InformeForm({
   const [hora, setHora] = useState(inicial?.hora ?? '08:00')
   const [dias, setDias] = useState<string[]>(inicial?.dias ?? [])
   const [activo, setActivo] = useState(inicial?.activo ?? true)
+  const [formato, setFormato] = useState<FormatoInforme>(inicial ? formatoDe(inicial) : 'texto')
 
   // Fuente texto / app
   const [plantilla, setPlantilla] = useState<string>((inicial?.config as unknown as ConfigTexto)?.plantilla ?? '')
@@ -307,6 +311,7 @@ function InformeForm({
 
   const [vistas, setVistas] = useState<VistaDef[]>([])
   const [preview, setPreview] = useState('')
+  const [previewImg, setPreviewImg] = useState('')
   const [probando, setProbando] = useState(false)
   const [guardando, setGuardando] = useState(false)
 
@@ -315,15 +320,16 @@ function InformeForm({
   }, [])
 
   const config = useMemo<Record<string, unknown>>(() => {
-    if (fuente === 'texto') return { plantilla }
-    if (fuente === 'app') return { tipo: tipoApp }
+    if (fuente === 'texto') return { formato, plantilla }
+    if (fuente === 'app') return { formato, tipo: tipoApp }
     return {
+      formato,
       vista: vistaSel,
       ...(filtroValor.trim() && filtroCol ? { donde: [filtroCol], valor: filtroValor.trim(), coincide } : {}),
       ...(columnas.trim() ? { columnas: columnas.split(',').map((c) => c.trim()).filter(Boolean) } : {}),
       tope: Number(tope) || 50,
     }
-  }, [fuente, plantilla, tipoApp, vistaSel, filtroCol, filtroValor, coincide, tope, columnas])
+  }, [fuente, formato, plantilla, tipoApp, vistaSel, filtroCol, filtroValor, coincide, tope, columnas])
 
   const informeActual = (): Informe => ({
     id: inicial?.id ?? '',
@@ -345,9 +351,11 @@ function InformeForm({
 
   async function verVista() {
     setProbando(true)
+    setPreviewImg('')
     try {
       const r = await apiInforme({ informe: informeActual(), preview: true })
-      setPreview(r.texto ?? '(vacío)')
+      if (r.imagen) { setPreviewImg(r.imagen); setPreview('') }
+      else setPreview(r.texto ?? '(vacío)')
     } catch (e) {
       setPreview(`⚠ ${(e as Error).message}`)
     } finally {
@@ -491,6 +499,24 @@ function InformeForm({
           )}
         </section>
 
+        {/* Formato de entrega */}
+        <section className="rounded-2xl border border-line bg-surface p-4 shadow-soft">
+          <h2 className="mb-2 font-display text-sm font-semibold text-ink">Formato</h2>
+          <div className="flex flex-wrap gap-2">
+            {FORMATOS.map((f) => (
+              <button
+                type="button"
+                key={f.id}
+                onClick={() => setFormato(f.id)}
+                className={`rounded-xl border px-3 py-1.5 text-sm font-medium transition ${formato === f.id ? 'border-violet-500/50 bg-violet-500/10 text-violet-300' : 'border-line bg-surface2 text-sub hover:bg-line'}`}
+              >
+                {formato === f.id && <Check size={13} className="mr-1 inline" aria-hidden />}{f.label}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-sub">{FORMATOS.find((f) => f.id === formato)?.desc}</p>
+        </section>
+
         {/* Encabezado / pie */}
         <section className="rounded-2xl border border-line bg-surface p-4 shadow-soft">
           <div className="grid gap-3 sm:grid-cols-2">
@@ -507,9 +533,11 @@ function InformeForm({
             <button type="button" onClick={() => void verVista()} disabled={probando} className="btn-press inline-flex items-center gap-1.5 rounded-xl border border-line bg-surface2 px-3 py-1.5 text-sm font-medium text-ink hover:bg-line disabled:opacity-50">
               {probando ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Eye size={14} aria-hidden />} Ver vista previa
             </button>
-            {preview && (
+            {previewImg ? (
+              <img src={previewImg} alt="Vista previa del informe" className="mt-2 max-h-96 w-auto max-w-full rounded-xl border border-line bg-white" />
+            ) : preview ? (
               <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-xl border border-line bg-surface2/60 p-3 text-xs text-ink">{preview}</pre>
-            )}
+            ) : null}
           </div>
         </section>
 

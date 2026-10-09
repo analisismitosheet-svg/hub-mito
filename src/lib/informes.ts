@@ -5,6 +5,8 @@
 
 export type FuenteInforme = 'vista' | 'app' | 'texto'
 export type ModoInforme = 'manual' | 'diario'
+/** Cómo se entrega: mensaje de texto o una imagen PNG con el cuadro del informe. */
+export type FormatoInforme = 'texto' | 'imagen'
 
 export interface Destinatario {
   nombre: string
@@ -63,6 +65,11 @@ export const FUENTES: { id: FuenteInforme; label: string; desc: string }[] = [
   { id: 'vista', label: 'Vista del SQL Server', desc: 'Una vista habilitada en Datos SQL, con filtro y columnas.' },
 ]
 
+export const FORMATOS: { id: FormatoInforme; label: string; desc: string }[] = [
+  { id: 'texto', label: 'Texto', desc: 'Un mensaje de WhatsApp, como hasta ahora.' },
+  { id: 'imagen', label: 'Imagen (PNG)', desc: 'Un cuadro con el informe, cómodo para reenviar.' },
+]
+
 export const TIPOS_APP: { id: TipoApp; label: string }[] = [
   { id: 'recepcion_indo', label: 'Recepción INDO (pendientes de controlar)' },
   { id: 'armados', label: 'Armados de pedidos (pendientes y en curso)' },
@@ -81,6 +88,12 @@ export const DIAS: { id: string; label: string }[] = [
 
 export function fuenteLabel(f: FuenteInforme): string {
   return FUENTES.find((x) => x.id === f)?.label ?? f
+}
+
+/** Formato de entrega (vive dentro de `config`; por defecto, texto). */
+export function formatoDe(i: Informe): FormatoInforme {
+  const f = (i?.config as Record<string, unknown> | null | undefined)?.formato
+  return f === 'imagen' ? 'imagen' : 'texto'
 }
 
 export function tipoAppLabel(t: string | undefined): string {

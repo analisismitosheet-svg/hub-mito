@@ -12,8 +12,8 @@
  * Variables de entorno en Vercel (sin prefijo VITE_): CRON_SECRET, SUPABASE_URL,
  * SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, WHATSAPP_TOKEN, WHATSAPP_PHONE_ID.
  */
-import { armarCuerpo, enviarInforme, tienePermiso, usuarioDe } from '../src/lib/informesServidor.js'
-import type { Informe } from '../src/lib/informes.js'
+import { armarCuerpo, enviarInforme, generarImagenInforme, tienePermiso, usuarioDe } from '../src/lib/informesServidor.js'
+import { formatoDe, type Informe } from '../src/lib/informes.js'
 
 type Req = {
   method?: string
@@ -145,6 +145,10 @@ async function manual(req: Req, res: Res) {
     const informe = datos.informe as Informe | undefined
     if (!informe) return res.status(400).json({ error: 'Falta el informe' })
     try {
+      if (formatoDe(informe) === 'imagen') {
+        const { png, caption } = await generarImagenInforme(informe)
+        return res.status(200).json({ ok: true, texto: caption, imagen: `data:image/png;base64,${png.toString('base64')}` })
+      }
       const texto = await armarCuerpo(informe)
       return res.status(200).json({ ok: true, texto })
     } catch (e) {

@@ -13,7 +13,9 @@
  *   SQL_LOGICAPP_URL / SQL_BRIDGE_TOKEN / SQL_VIEWS / SQL_MAX_ROWS (para la fuente "vista")
  */
 import { postAlPuente } from './puenteRetry.js'
+import { renderReporteImagen, type BloqueImagen, type ReporteImagen } from './informesImagen.js'
 import {
+  formatoDe,
   normalizarTelefono,
   type ConfigApp,
   type ConfigTexto,
@@ -314,6 +316,72 @@ export async function armarCuerpo(informe: Informe): Promise<string> {
 }
 
 // ---------------------------------------------------------------------------
+// Imagen del informe (PNG)
+// ---------------------------------------------------------------------------
+
+/** Saca los adornos de WhatsApp (*negrita*) y los emojis, que la imagen no dibuja. */
+function limpiarParaImagen(texto: string): string {
+  return (texto || '')
+    .replace(/\*/g, '')
+    .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{2190}-\u{21FF}\u{FE0F}\u{200D}]/gu, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .trim()
+}
+
+/** Arma el contenido de la imagen (título, subtítulo, bloques y pie). */
+async function construirReporteImagen(informe: Informe): Promise<{ reporte: ReporteImagen; caption: string }> {
+  const d = ahoraAr()
+  const enc = informe.encabezado ? conVariables(informe.encabezado).trim() : ''
+  const titulo = limpiarParaImagen(enc || informe.nombre || 'Informe')
+  const subtitulo = `${d.fechaLarga} · ${d.hora}`
+  const pie = limpiarParaImagen((informe.pie ? conVariables(informe.pie).trim() : '') || 'Hub Mito · Sistemas')
+  const txt = (v: unknown) => (v === null || v === undefined ? '' : String(v))
+
+  let bloques: BloqueImagen[]
+  switch (informe.fuente) {
+    case 'vista': {
+      const cfg = informe.config as unknown as ConfigVista
+      const vista = String(cfg.vista ?? '').trim()
+      if (!vista) throw new Error('Falta elegir la vista')
+      const filas = await leerVistaRemota(vista, cfg)
+      if (!filas.length) {
+        bloques = [{ tipo: 'texto', texto: `${vista}: sin datos.` }]
+      } else {
+        const columnas = (cfg.columnas?.length ? cfg.columnas : Object.keys(filas[0] ?? {})).slice(0, 9)
+        bloques = [
+          { tipo: 'texto', texto: `${vista} — ${filas.length} línea(s)` },
+          { tipo: 'tabla', columnas, filas: filas.map((f) => columnas.map((c) => txt(f[c]))) },
+        ]
+      }
+      break
+    }
+    case 'app':
+      bloques = [{ tipo: 'texto', texto: limpiarParaImagen(await cuerpoApp(informe.config as unknown as ConfigApp)) }]
+      break
+    case 'texto': {
+      const t = conVariables(String((informe.config as unknown as ConfigTexto)?.plantilla ?? '')).trim()
+      if (!t) throw new Error('El texto libre está vacío')
+      bloques = [{ tipo: 'texto', texto: limpiarParaImagen(t) }]
+      break
+    }
+    default:
+      throw new Error('Fuente desconocida')
+  }
+
+  return {
+    reporte: { titulo, subtitulo, pie, bloques },
+    caption: limpiarParaImagen(enc || informe.nombre || 'Informe').slice(0, 900),
+  }
+}
+
+/** Genera el PNG del informe (lo usan la vista previa y el envío). */
+export async function generarImagenInforme(informe: Informe): Promise<{ png: Buffer; caption: string }> {
+  const { reporte, caption } = await construirReporteImagen(informe)
+  const png = await renderReporteImagen(reporte)
+  return { png, caption }
+}
+
+// ---------------------------------------------------------------------------
 // WhatsApp Cloud API (Meta)
 // ---------------------------------------------------------------------------
 
@@ -351,6 +419,56 @@ export async function enviarWhatsapp(telefono: string, texto: string): Promise<{
   }
 }
 
+/**
+ * Manda una imagen PNG: primero la sube a Meta (endpoint /media) y después manda
+ * el mensaje de tipo "image" con ese id. Mismo criterio de "no configurado" que el texto.
+ */
+export async function enviarWhatsappImagen(telefono: string, png: Buffer, caption?: string): Promise<{ ok: boolean; detalle: string }> {
+  const token = process.env.WHATSAPP_TOKEN
+  const phoneId = process.env.WHATSAPP_PHONE_ID
+  if (!token || !phoneId) {
+    return { ok: false, detalle: 'WhatsApp no configurado: faltan WHATSAPP_TOKEN y/o WHATSAPP_PHONE_ID en Vercel' }
+  }
+  const version = process.env.WHATSAPP_VERSION || 'v21.0'
+  const destino = normalizarTelefono(telefono)
+  if (!destino) return { ok: false, detalle: 'Teléfono vacío o inválido' }
+  try {
+    // 1) Subir la imagen y quedarnos con su id de Meta.
+    const form = new FormData()
+    form.append('messaging_product', 'whatsapp')
+    form.append('type', 'image/png')
+    form.append('file', new Blob([new Uint8Array(png)], { type: 'image/png' }), 'informe.png')
+    const rSub = await fetch(`https://graph.facebook.com/${version}/${phoneId}/media`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    })
+    const sub = (await rSub.json().catch(() => null)) as { id?: string; error?: { message?: string } } | null
+    if (!rSub.ok || !sub?.id) {
+      return { ok: false, detalle: sub?.error?.message || `No se pudo subir la imagen (${rSub.status})` }
+    }
+
+    // 2) Mandar el mensaje con la imagen.
+    const r = await fetch(`https://graph.facebook.com/${version}/${phoneId}/messages`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to: destino,
+        type: 'image',
+        image: { id: sub.id, ...(caption ? { caption: caption.slice(0, 1000) } : {}) },
+      }),
+    })
+    const body = (await r.json().catch(() => null)) as
+      | { messages?: Array<{ id?: string }>; error?: { message?: string } }
+      | null
+    if (!r.ok) return { ok: false, detalle: body?.error?.message || `WhatsApp respondió ${r.status}` }
+    return { ok: true, detalle: body?.messages?.[0]?.id ? `id ${body.messages[0].id}` : 'enviado' }
+  } catch (e) {
+    return { ok: false, detalle: `No se pudo contactar WhatsApp: ${(e as Error).message}` }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Orquestación: enviar un informe y registrar el resultado
 // ---------------------------------------------------------------------------
@@ -364,21 +482,40 @@ export interface ResultadoEnvio {
 
 export async function enviarInforme(informe: Informe & { id?: string }, origen: 'manual' | 'cron' | 'prueba'): Promise<ResultadoEnvio> {
   const destinos = (informe.destinatarios ?? []).filter((d: Destinatario) => d.telefono && normalizarTelefono(d.telefono))
-  let texto: string
-  try {
-    texto = await armarCuerpo(informe)
-  } catch (e) {
-    const detalle = `No se pudo armar el informe: ${(e as Error).message}`
-    return { ok: false, texto: '', enviados: 0, detalle }
-  }
   if (!destinos.length) {
-    return { ok: false, texto, enviados: 0, detalle: 'El informe no tiene destinatarios' }
+    return { ok: false, texto: '', enviados: 0, detalle: 'El informe no tiene destinatarios' }
+  }
+
+  // Contenido: imagen PNG (si el formato es "imagen") o el texto de siempre.
+  let texto: string
+  let png: Buffer | null = null
+  let notaImagen = ''
+  if (formatoDe(informe) === 'imagen') {
+    try {
+      const r = await generarImagenInforme(informe)
+      png = r.png
+      texto = r.caption || '(imagen)'
+    } catch (e) {
+      // Si falla el render, mandamos el texto para no perder el aviso.
+      try {
+        texto = await armarCuerpo(informe)
+        notaImagen = ` (la imagen falló: ${(e as Error).message})`
+      } catch (e2) {
+        return { ok: false, texto: '', enviados: 0, detalle: `No se pudo armar el informe: ${(e2 as Error).message}` }
+      }
+    }
+  } else {
+    try {
+      texto = await armarCuerpo(informe)
+    } catch (e) {
+      return { ok: false, texto: '', enviados: 0, detalle: `No se pudo armar el informe: ${(e as Error).message}` }
+    }
   }
 
   let enviados = 0
   const detalles: string[] = []
   for (const d of destinos) {
-    const r = await enviarWhatsapp(d.telefono, texto)
+    const r = png ? await enviarWhatsappImagen(d.telefono, png, texto) : await enviarWhatsapp(d.telefono, texto)
     if (r.ok) enviados++
     detalles.push(`${d.nombre || d.telefono}: ${r.ok ? 'OK' : r.detalle}`)
     if (informe.id) {
@@ -396,7 +533,7 @@ export async function enviarInforme(informe: Informe & { id?: string }, origen: 
     }
   }
   const ok = enviados === destinos.length
-  const detalle = detalles.join(' · ')
+  const detalle = detalles.join(' · ') + notaImagen
   if (informe.id) {
     await rest(`informes?id=eq.${informe.id}`, {
       method: 'PATCH',
