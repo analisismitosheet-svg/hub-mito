@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Bell, UserCheck, ClipboardList, Truck, CalendarX, FileText, ArrowRightLeft, PackageCheck, X,
+  Bell, UserCheck, ClipboardList, Truck, CalendarX, FileText, ArrowRightLeft, PackageCheck, X, Pause,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { COLUMNAS_ARMADO, PRIORIDADES, nroDePedido, ordenArmados, paraLegajo, type Armado, type PrioridadArmado } from '@/lib/armados'
 import { notificarArmado, prepararAudio, sonarArmado } from '@/lib/alarma'
+import { nombreMotivoPausa } from '@/components/MotivoPausa'
+import { suscribirCambios } from '@/lib/realtime'
 
 interface Notificacion {
   id: string
@@ -18,11 +20,28 @@ interface Notificacion {
     | 'nota_credito'
     | 'transferencias'
     | 'armados'
+    | 'pausas'
   titulo: string
   detalle: string
   ruta: string
   fecha: string
   destinoId: string | null
+}
+
+/** Pedido de pausa esperando autorización (RPC pausas_pendientes). */
+interface PausaPendiente {
+  pausa_id: string
+  tipo: string
+  motivo: string
+  detalle: string | null
+  solicitada_at: string
+  usuario_id: string
+  legajo: string | null
+  nombre: string | null
+  sesion_id: string | null
+  armado_id: string | null
+  local: string | null
+  cliente: string | null
 }
 
 function fmtFecha(iso: string): string {
@@ -51,7 +70,7 @@ function esperaRepique(n: number): number {
  * - Rol mayorista: cada guía sin finalizar y cada registro de facturación sin fecha de envío.
  */
 export default function CampanaNotificaciones() {
-  const { isAdmin, perfil, soloPiso, esLegajo } = useAuth()
+  const { isAdmin, perfil, soloPiso, esLegajo, can } = useAuth()
   const navigate = useNavigate()
   const [abierto, setAbierto] = useState(false)
   const [items, setItems] = useState<Notificacion[]>([])
@@ -62,11 +81,13 @@ export default function CampanaNotificaciones() {
   // Los del piso (Mi repo) también miran la campana: es por donde les llega el armado
   const esPiso = soloPiso || esLegajo
   const verArmados = isAdmin || esMayorista || esPiso
-  const visible = isAdmin || esMayorista || esLocal || verArmados
+  // Quien autoriza las pausas del piso (sql/pausas_autorizacion.sql): le llegan acá
+  const puedeAutorizarPausas = can('mayorista.pausas.autorizar')
+  const visible = isAdmin || esMayorista || esLocal || verArmados || puedeAutorizarPausas
 
   /**
-   * Armados de pedidos (sql/mayorista_armados.sql): se miran cada 10 segundos
-   * para que el celular suene apenas el mayorista pide uno.
+   * Armados de pedidos (sql/mayorista_armados.sql): se miran en vivo con
+   * Supabase Realtime para que el celular suene apenas el mayorista pide uno.
    * El sonido va acá y no en Mi repo, así suena aunque estés en otra pantalla.
    * Si nadie lo toma, el pedido REPICA con backoff (1, 2, 4, 8 y después cada
    * 8 minutos) hasta que alguien lo acepte o el mayorista lo cierre.
@@ -144,9 +165,15 @@ export default function CampanaNotificaciones() {
       }
     }
     void cargar()
-    const intervalo = setInterval(cargar, 10000)
+    // En vivo: apenas el mayorista pide un armado (o alguien lo acepta) la base avisa,
+    // así el celular suena al toque. El temporizador queda de respaldo (revisa el repique).
+    const desuscribir = suscribirCambios(['mayorista_armados'], () => void cargar())
+    const intervalo = setInterval(() => {
+      if (document.visibilityState === 'visible') void cargar()
+    }, 60000)
     return () => {
       activo = false
+      desuscribir()
       clearInterval(intervalo)
     }
   }, [isAdmin, esMayorista, verArmados, perfil?.legajo])
@@ -182,6 +209,43 @@ export default function CampanaNotificaciones() {
     }
     return out
   }, [armados, avisoArmados, perfil?.id, verArmados])
+
+  // Pausas del piso esperando autorización (sql/pausas_autorizacion.sql)
+  const [pausas, setPausas] = useState<PausaPendiente[]>([])
+  const [avisoPausas, setAvisoPausas] = useState(false)
+  useEffect(() => {
+    if (!supabase || !puedeAutorizarPausas) { setPausas([]); setAvisoPausas(false); return }
+    let activo = true
+    const sb = supabase
+    async function cargar() {
+      const { data, error } = await sb.rpc('pausas_pendientes')
+      if (!activo) return
+      if (error) { setAvisoPausas(true); return }
+      setPausas((data as PausaPendiente[] | null) ?? [])
+      setAvisoPausas(true)
+    }
+    void cargar()
+    const desuscribir = suscribirCambios(['piso_pausas'], () => void cargar())
+    const intervalo = setInterval(() => {
+      if (document.visibilityState === 'visible') void cargar()
+    }, 30000)
+    return () => { activo = false; desuscribir(); clearInterval(intervalo) }
+  }, [puedeAutorizarPausas])
+
+  const notisPausas = useMemo<Notificacion[]>(() => {
+    if (!puedeAutorizarPausas || !avisoPausas) return []
+    return pausas.map((p) => ({
+      id: `pa-${p.pausa_id}`,
+      tipo: 'pausas' as const,
+      titulo: 'Pausa por autorizar',
+      detalle: `${p.nombre ?? p.legajo ?? 'Legajo'} · ${nombreMotivoPausa(p.motivo)} · ${
+        p.tipo === 'armado' ? `Armado ${p.cliente ?? ''}` : `Repo ${p.local ?? ''}`
+      }`,
+      ruta: '/mayorista/pausas',
+      fecha: p.solicitada_at,
+      destinoId: p.pausa_id,
+    }))
+  }, [pausas, avisoPausas, puedeAutorizarPausas])
 
   // Variantes del local del usuario (misma lógica que Transferencias)
   const origenesUsuario = useMemo(() => {
@@ -288,8 +352,8 @@ export default function CampanaNotificaciones() {
 
   if (!visible || !supabase) return null
 
-  // Todo junto: las notificaciones de siempre + los armados de pedidos
-  const lista = [...items, ...notisArmados].sort(
+  // Todo junto: las notificaciones de siempre + los armados de pedidos + las pausas
+  const lista = [...items, ...notisArmados, ...notisPausas].sort(
     (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime(),
   )
   const total = lista.length
@@ -302,6 +366,7 @@ export default function CampanaNotificaciones() {
     nota_credito: <FileText size={15} aria-hidden />,
     transferencias: <ArrowRightLeft size={15} aria-hidden />,
     armados: <PackageCheck size={15} aria-hidden />,
+    pausas: <Pause size={15} aria-hidden />,
   }
   const colores = {
     usuarios: 'bg-amber-500/15 text-amber-400',
@@ -311,6 +376,7 @@ export default function CampanaNotificaciones() {
     nota_credito: 'bg-orange-500/15 text-orange-400',
     transferencias: 'bg-violet-500/15 text-violet-400',
     armados: 'bg-brand-600/15 text-brand-400',
+    pausas: 'bg-amber-500/15 text-amber-400',
   }
 
   return (
@@ -339,7 +405,7 @@ export default function CampanaNotificaciones() {
               <button onClick={() => setAbierto(false)} className="rounded-lg p-1 text-sub hover:bg-line hover:text-ink" aria-label="Cerrar"><X size={15} aria-hidden /></button>
             </div>
             <div className="max-h-96 overflow-y-auto">
-              {cargando || (verArmados && !avisoArmados) ? (
+              {cargando || (verArmados && !avisoArmados) || (puedeAutorizarPausas && !avisoPausas) ? (
                 <p className="px-4 py-8 text-center text-sm text-sub">Cargando...</p>
               ) : lista.length === 0 ? (
                 <p className="px-4 py-8 text-center text-sm text-sub">Sin notificaciones.</p>

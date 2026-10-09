@@ -39,6 +39,7 @@ import {
   PackageSearch,
   Package,
   QrCode,
+  Pause,
   type LucideIcon,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -225,6 +226,17 @@ export const APPS: AppDef[] = [
     color: '#d97706',
     permiso: 'mayorista.repos_piso',
     soloLegajo: true,
+  },
+  {
+    id: 'mayorista-pausas',
+    areaId: 'mayorista',
+    title: 'Pausas por autorizar',
+    description: 'Pedidos de pausa del piso: autorizar quién puede parar y por qué.',
+    icon: Pause,
+    kind: 'internal',
+    target: '/mayorista/pausas',
+    color: '#f59e0b',
+    permiso: 'mayorista.pausas.autorizar',
   },
   {
     id: 'mayorista-transportes',

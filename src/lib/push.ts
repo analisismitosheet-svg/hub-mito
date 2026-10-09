@@ -97,3 +97,16 @@ export async function avisarArmados(): Promise<void> {
     /* el aviso dentro de la app (campana) sigue andando */
   }
 }
+
+/** Después de pedir una pausa: avisa por push a los que autorizan (no rompe si falla). */
+export async function avisarPausa(): Promise<void> {
+  try {
+    if (!supabase) return
+    const { data } = await supabase.auth.getSession()
+    const token = data.session?.access_token
+    if (!token) return
+    await fetch('/api/push-pausa', { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
+  } catch {
+    /* el aviso dentro de la app (campana) sigue andando */
+  }
+}

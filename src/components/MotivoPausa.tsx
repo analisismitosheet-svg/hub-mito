@@ -8,18 +8,21 @@ import { Pause, X } from 'lucide-react'
 /*  Eficiencia mayorista.                                              */
 /* ------------------------------------------------------------------ */
 
-export type MotivoPausa = 'bano' | 'comida' | 'otra_tarea' | 'falta_mercaderia' | 'equipo' | 'otro'
+export type MotivoPausa = 'bano' | 'otra_tarea' | 'falta_mercaderia' | 'equipo' | 'otro'
 
 export const MOTIVOS_PAUSA: { id: MotivoPausa; label: string; icono: string }[] = [
   { id: 'bano', label: 'Baño', icono: '🚻' },
-  { id: 'comida', label: 'Almuerzo / merienda', icono: '🍽️' },
   { id: 'otra_tarea', label: 'Me pidieron otra tarea', icono: '📋' },
   { id: 'falta_mercaderia', label: 'Falta mercadería / no la encuentro', icono: '📦' },
   { id: 'equipo', label: 'Problema con el celular o escáner', icono: '📱' },
   { id: 'otro', label: 'Otro (contalo)', icono: '✏️' },
 ]
 
-export const nombreMotivoPausa = (m: string) => MOTIVOS_PAUSA.find((x) => x.id === m)?.label ?? m
+/** Motivos que ya no se eligen pero quedan en el historial (pausas viejas). */
+const MOTIVOS_VIEJOS: Record<string, string> = { comida: 'Almuerzo / merienda' }
+
+export const nombreMotivoPausa = (m: string) =>
+  MOTIVOS_PAUSA.find((x) => x.id === m)?.label ?? MOTIVOS_VIEJOS[m] ?? m
 
 export default function MotivoPausaDialog({
   abierto, enviando, error, onCancelar, onConfirmar,
@@ -74,7 +77,9 @@ export default function MotivoPausaDialog({
             className="mt-2 w-full rounded-xl border border-line bg-surface2 px-3 py-2 text-sm text-ink outline-none focus-visible:border-amber-500"
           />
         )}
-        <p className="mt-2 text-[11px] text-sub">La pausa queda registrada con el motivo y cuánto dura.</p>
+        <p className="mt-2 text-[11px] text-sub">
+          La pausa la tiene que autorizar el puesto: seguí trabajando hasta que te la aprueben.
+        </p>
         {error && <p className="mt-2 text-xs font-medium text-brand-400">{error}</p>}
         <div className="mt-3 flex justify-end gap-2">
           <button type="button" onClick={onCancelar} className="rounded-xl px-3 py-2 text-sm text-sub hover:text-ink">
@@ -86,7 +91,7 @@ export default function MotivoPausaDialog({
             onClick={() => motivo && onConfirmar(motivo, detalle.trim())}
             className="rounded-xl bg-amber-600 px-4 py-2 text-sm font-bold text-white hover:bg-amber-700 disabled:opacity-50"
           >
-            {enviando ? 'Pausando…' : 'Pausar'}
+            {enviando ? 'Pidiendo…' : 'Pedir pausa'}
           </button>
         </div>
       </div>

@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
-  ChevronRight, Check, AlertTriangle, Timer, Pause, Play, Flag, Camera, CameraOff, PackageCheck,
+  ChevronRight, Check, AlertTriangle, Timer, Pause, Play, Flag, Camera, CameraOff, PackageCheck, Loader2,
 } from 'lucide-react'
 import ScannerCamara from '@/components/ScannerCamara'
 import ConfirmDialog from '@/components/ConfirmDialog'
-import MotivoPausaDialog, { type MotivoPausa } from '@/components/MotivoPausa'
+import MotivoPausaDialog, { nombreMotivoPausa, type MotivoPausa } from '@/components/MotivoPausa'
+import { useAuth } from '@/context/AuthContext'
+import { avisarPausa } from '@/lib/push'
+import { suscribirCambios } from '@/lib/realtime'
 import { supabase } from '@/lib/supabase'
 import { normalizaCodigo } from '@/lib/loginEmpleado'
 import { compararUbicaciones, ubicacionesDeArticulos } from '@/lib/mapeo'
@@ -52,6 +55,7 @@ interface Props {
 }
 
 export default function ArmadoPedido({ armado, alVolver, alCambiar }: Props) {
+  const { perfil } = useAuth()
   const P = PRIORIDADES[armado.prioridad] ?? PRIORIDADES.normal
   const terminado = armado.estado === 'hecho'
 
@@ -145,11 +149,14 @@ export default function ArmadoPedido({ armado, alVolver, alCambiar }: Props) {
   }, [codigosItems])
   const ubicacionesDe = useCallback((i: ArmadoItem) => ubicaciones.get(String(i.articulo ?? '').trim().toUpperCase()) ?? [], [ubicaciones])
 
-  // Pausa con motivo y cooldown de 15 min (sql/piso_pausas.sql): queda registrada para medirla
+  // Pausa con motivo y cooldown de 15 min (sql/pausas_autorizacion.sql): se pide y el
+  // cronómetro sigue hasta que el puesto la autoriza (o la rechaza).
   const [pidiendoMotivo, setPidiendoMotivo] = useState(false)
   const [pausando, setPausando] = useState(false)
   const [errorPausa, setErrorPausa] = useState<string | null>(null)
   const [pausaLibre, setPausaLibre] = useState<number | null>(null)
+  const [pausaPendiente, setPausaPendiente] = useState<{ id: string; motivo: string } | null>(null)
+  const pausaPendienteRef = useRef<string | null>(null)
   const [, setTic] = useState(0)
   useEffect(() => {
     if (!supabase) return
@@ -163,17 +170,82 @@ export default function ArmadoPedido({ armado, alVolver, alCambiar }: Props) {
     const id = window.setInterval(() => setTic((t) => t + 1), 1000)
     return () => window.clearInterval(id)
   }, [faltaPausa > 0]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Refleja en vivo si el puesto autorizó (o rechazó) la pausa pedida
+  const refrescarPausa = useCallback(async () => {
+    const sb = supabase
+    if (!sb) return
+    let q = sb.from('piso_pausas')
+      .select('id,estado,motivo,motivo_rechazo')
+      .eq('armado_id', armado.id)
+      .order('solicitada_at', { ascending: false })
+      .limit(1)
+    if (perfil?.id) q = q.eq('usuario_id', perfil.id)
+    const { data } = await q
+    const fila = (data?.[0] as
+      | { id: string; estado: string; motivo: string; motivo_rechazo: string | null }
+      | undefined) ?? null
+    if (!fila) {
+      if (pausaPendienteRef.current) { pausaPendienteRef.current = null; setPausaPendiente(null) }
+      return
+    }
+    if (fila.estado === 'pendiente') {
+      pausaPendienteRef.current = fila.id
+      setPausaPendiente({ id: fila.id, motivo: fila.motivo })
+      return
+    }
+    if (pausaPendienteRef.current !== fila.id) return
+    pausaPendienteRef.current = null
+    setPausaPendiente(null)
+    if (fila.estado === 'autorizada') {
+      const { data: cdata } = await sb.rpc('armado_crono', { p_id: armado.id })
+      const c = ((Array.isArray(cdata) ? cdata[0] : cdata) ?? null) as CronoArmado | null
+      if (c) aplicarCrono(c)
+      setPausaLibre(Date.now() + 15 * 60 * 1000)
+      setMensaje({ ok: true, texto: 'Te autorizaron la pausa: el tiempo no corre hasta que reanudes.' })
+    } else if (fila.estado === 'rechazada') {
+      setMensaje({ ok: false, texto: `Te rechazaron la pausa${fila.motivo_rechazo ? `: ${fila.motivo_rechazo}` : ''}. Seguí trabajando.` })
+    }
+  }, [armado.id, perfil?.id, aplicarCrono])
+
+  useEffect(() => { void refrescarPausa() }, [refrescarPausa])
+  useEffect(() => {
+    const desuscribir = suscribirCambios(['piso_pausas'], () => void refrescarPausa(), { espera: 400 })
+    return () => desuscribir()
+  }, [refrescarPausa])
+
   async function pausarCon(motivo: MotivoPausa, detalle: string) {
     if (!supabase) return
     setPausando(true)
     setErrorPausa(null)
-    const { error } = await supabase.rpc('armado_pausar', { p_id: armado.id, p_motivo: motivo, p_detalle: detalle || null })
+    const { error } = await supabase.rpc('armado_solicitar_pausa', { p_id: armado.id, p_motivo: motivo, p_detalle: detalle || null })
     setPausando(false)
     if (error) { setErrorPausa(error.message); return }
-    setPausaLibre(Date.now() + 15 * 60 * 1000)
+    const { data } = await supabase
+      .from('piso_pausas')
+      .select('id,motivo')
+      .eq('armado_id', armado.id)
+      .eq('estado', 'pendiente')
+      .order('solicitada_at', { ascending: false })
+      .limit(1)
+    const fila = (data?.[0] as { id: string; motivo: string } | undefined) ?? null
+    if (fila) { pausaPendienteRef.current = fila.id; setPausaPendiente({ id: fila.id, motivo: fila.motivo }) }
     setPidiendoMotivo(false)
-    setSesion('pausada')
-    setMensaje(null)
+    setMensaje({ ok: true, texto: 'Pediste la pausa: seguí trabajando hasta que la autoricen.' })
+    void avisarPausa()
+  }
+  async function cancelarPausa() {
+    if (!supabase || !pausaPendiente) return
+    setPausando(true)
+    const { error } = await supabase.rpc('pausa_cancelar', { p_pausa: pausaPendiente.id })
+    setPausando(false)
+    if (!error) {
+      pausaPendienteRef.current = null
+      setPausaPendiente(null)
+      setMensaje({ ok: true, texto: 'Cancelaste el pedido de pausa.' })
+    } else {
+      setMensaje({ ok: false, texto: error.message })
+    }
   }
   function reanudar() {
     void iniciar()
@@ -457,12 +529,22 @@ export default function ArmadoPedido({ armado, alVolver, alCambiar }: Props) {
                 <button
                   type="button"
                   onClick={() => { setErrorPausa(null); setPidiendoMotivo(true) }}
-                  disabled={faltaPausa > 0}
-                  title={faltaPausa > 0 ? 'Después de una pausa hay que esperar 15 minutos para volver a pausar' : undefined}
+                  disabled={faltaPausa > 0 || !!pausaPendiente}
+                  title={
+                    pausaPendiente
+                      ? 'Pediste la pausa: esperá que la autoricen'
+                      : faltaPausa > 0
+                        ? 'Después de una pausa hay que esperar 15 minutos para volver a pausar'
+                        : undefined
+                  }
                   className="btn-press inline-flex h-9 items-center gap-1 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 text-sm font-semibold text-amber-500 transition hover:bg-amber-500/20 disabled:opacity-50"
                 >
                   <Pause size={14} aria-hidden />{' '}
-                  {faltaPausa > 0 ? `Pausar ${Math.floor(faltaPausa / 60)}:${String(faltaPausa % 60).padStart(2, '0')}` : 'Pausar'}
+                  {pausaPendiente
+                    ? 'Pausa pedida'
+                    : faltaPausa > 0
+                      ? `Pausar ${Math.floor(faltaPausa / 60)}:${String(faltaPausa % 60).padStart(2, '0')}`
+                      : 'Pausar'}
                 </button>
               ) : (
                 <button
@@ -475,6 +557,29 @@ export default function ArmadoPedido({ armado, alVolver, alCambiar }: Props) {
               ))}
           </span>
         </div>
+
+        {/* Pausa pedida: el cronómetro sigue hasta que el puesto la autoriza */}
+        {pausaPendiente && !terminado && (
+          <div
+            className="flex items-center justify-between gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-500"
+            aria-live="polite"
+          >
+            <span className="flex min-w-0 items-center gap-1.5">
+              <Loader2 size={13} className="animate-spin" aria-hidden />
+              <span className="truncate">
+                Pediste la pausa ({nombreMotivoPausa(pausaPendiente.motivo)}): esperando que la autoricen.
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={() => void cancelarPausa()}
+              disabled={pausando}
+              className="btn-press shrink-0 rounded-lg border border-amber-500/40 px-2 py-0.5 text-[11px] font-semibold hover:bg-amber-500/20 disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+          </div>
+        )}
 
         {/* Barra de avance + contador */}
         <div className="flex items-center gap-3">

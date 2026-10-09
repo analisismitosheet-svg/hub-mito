@@ -11,6 +11,7 @@ import { descripcionesMaestro } from '@/lib/descripcionArticulos'
 import { imprimirPedido } from '@/lib/imprimirPedido'
 import { cargarStockSku, stockSkuDe, stockArticuloDe, type StockSku } from '@/lib/stockSku'
 import { avisarArmados } from '@/lib/push'
+import { suscribirCambios } from '@/lib/realtime'
 import {
   PRIORIDADES,
   type Armado, type AvanceArmado, type PrioridadArmado,
@@ -79,6 +80,8 @@ const plata = (v: number | null | undefined) => (v == null ? '—' : $.format(v)
 const fechaCorta = (f: string | null) => (f ? f.split('-').reverse().join('/') : '—')
 const PAGINA = 1000 // filas por pedido a Supabase (su tope por consulta)
 const MAX_PEDIDOS = 20000
+/** Tope de pedir_armado (SQL): no se pueden pedir más de 100 armados de una. */
+const MAX_ARMADO_BULK = 100
 
 /** Qué pedidos se listan (como los repos de Mayorista). Por defecto la semana vigente, lunes a domingo. */
 type Periodo = 'hoy' | 'semana' | 'anterior' | 'cuatro' | 'todas'
@@ -204,8 +207,8 @@ export default function PedidosVenta() {
   /* ------------------------------------------------------------------ */
   /*  Pedir armado (sql/mayorista_armados.sql)                           */
   /*  Se pide desde el pedido abierto o en bloque con la selección.      */
-  /*  Se refresca cada 12 s: así el pedido se pone en verde en vivo      */
-  /*  a medida que el legajo escanea.                                    */
+  /*  El estado se refresca en vivo (Supabase Realtime): el pedido se    */
+  /*  pone en verde a medida que el legajo escanea.                      */
   /* ------------------------------------------------------------------ */
   const { isAdmin } = useAuth()
   const [armados, setArmados] = useState<Record<string, Armado>>({}) // por código de pedido
@@ -230,7 +233,7 @@ export default function PedidosVenta() {
     }
     const filas: FilaEstado[] = []
     for (let d = 0; d < 50000; d += 1000) {
-      let q = supabase.from('pedidos_venta_estado').select('*')
+      let q = supabase.from('pedidos_venta_estado').select('codigo,fecha,origen,estado,armado_id,lote_id,local,prioridad,obs,legajo,nombre,lineas,lineas_ok,unidades,unidades_ok,faltantes,actualizado_at')
       if (fDesde) q = q.gte('fecha', fDesde)
       if (fHasta) q = q.lt('fecha', fHasta)
       const { data, error } = await q.order('codigo').range(d, d + 999)
@@ -261,8 +264,17 @@ export default function PedidosVenta() {
 
   useEffect(() => {
     void cargarArmados()
-    const id = window.setInterval(() => void cargarArmados(), 12000)
-    return () => window.clearInterval(id)
+    // En vivo: pedidos_venta_estado lo actualizan los triggers apenas el piso escanea
+    // (sql/pedidos_realtime.sql publica la tabla en Supabase Realtime).
+    const desuscribir = suscribirCambios(['pedidos_venta_estado'], () => void cargarArmados())
+    // Respaldo por si Realtime no está disponible: refresco lento, solo con la pestaña visible.
+    const id = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void cargarArmados()
+    }, 60000)
+    return () => {
+      desuscribir()
+      window.clearInterval(id)
+    }
   }, [cargarArmados])
 
   /** Admin: borra el armado pedido (sql/armado_sin_asignar_y_quitar.sql). */
@@ -292,7 +304,16 @@ export default function PedidosVenta() {
     setAvisoArmado(null)
     setPrioridadElegida('normal')
     setObsArmado('')
-    setPedirA(nuevos)
+    // pedir_armado rechaza más de 100: se recorta y se avisa, en vez de fallar con error seco.
+    if (nuevos.length > MAX_ARMADO_BULK) {
+      setAvisoArmado({
+        ok: false,
+        texto: `Se puede pedir el armado de hasta ${MAX_ARMADO_BULK} pedidos por vez. Quedan afuera ${nuevos.length - MAX_ARMADO_BULK} de esta selección.`,
+      })
+      setPedirA(nuevos.slice(0, MAX_ARMADO_BULK))
+    } else {
+      setPedirA(nuevos)
+    }
   }
 
   async function enviarArmado() {

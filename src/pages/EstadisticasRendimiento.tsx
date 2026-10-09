@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Loader2, TrendingUp, User, Timer } from 'lucide-react'
+import { Loader2, TrendingUp, User, Timer, Hourglass } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import EstadisticaVtd from '@/components/EstadisticaVtd'
@@ -30,6 +30,18 @@ interface FilaPiso {
   faltaron: number
 }
 
+/** Tiempo sin trabajar entre una tarea terminada y la siguiente del mismo legajo
+ *  (RPC estadistica_tiempos_muertos, sql/armado_tiempos_muertos.sql). */
+interface TiempoMuerto {
+  usuario_id: string
+  legajo: string | null
+  nombre: string | null
+  cortes: number
+  muerto: number
+  promedio: number
+  maximo: number
+}
+
 const inputCls = 'w-full rounded-xl border border-line bg-surface2 px-3 py-1.5 text-[13px] text-ink outline-none transition duration-250 placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40'
 
 function fmtDuracion(seg: number): string {
@@ -46,6 +58,7 @@ export default function EstadisticasRendimiento() {
   const { ver: puedeVer } = usePermisosArea('mayorista.estadisticas')
   const [empleados, setEmpleados] = useState<Empleado[]>([])
   const [tiempos, setTiempos] = useState<TiempoPiso[]>([])
+  const [muertos, setMuertos] = useState<TiempoMuerto[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [desde, setDesde] = useState('')
@@ -60,13 +73,16 @@ export default function EstadisticasRendimiento() {
       const desdeQ = desdeF || hace90dias
       const hastaQ = hastaF || new Date().toISOString().slice(0, 10)
 
-      const [empData, tiemposData] = await Promise.all([
+      const [empData, tiemposData, muertosData] = await Promise.all([
         sb.from('empleados_basico').select('id,legajo,nombre').or(FILTRO_EMPLEADOS_ACTIVOS).order('nombre'),
         sb.from('vw_tiempos_piso').select('empleado_id,fecha,sesiones,repos,unidades,segundos,pendientes_fin').gte('fecha', desdeQ).lte('fecha', hastaQ),
+        sb.rpc('estadistica_tiempos_muertos', { p_desde: desdeQ, p_hasta: hastaQ }),
       ])
       setEmpleados((empData.data as Empleado[] | null) ?? [])
       // Si la vista todavía no existe (sql/piso_tiempos.sql sin aplicar) simplemente no se muestra
       setTiempos(tiemposData.error ? [] : ((tiemposData.data as TiempoPiso[] | null) ?? []))
+      // Igual con el tiempo muerto: si el RPC no está aplicado, la sección no aparece
+      setMuertos(muertosData.error ? [] : ((muertosData.data as TiempoMuerto[] | null) ?? []))
       if (empData.error) setError(empData.error.message)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error de red')
@@ -159,6 +175,48 @@ export default function EstadisticasRendimiento() {
                     <td className="px-3 py-2 text-center text-ink whitespace-nowrap">{fmtDuracion(f.segundos)}</td>
                     <td className="px-3 py-2 text-center text-sub whitespace-nowrap">{f.segundos > 0 ? (f.unidades / (f.segundos / 3600)).toFixed(1) : '—'}</td>
                     <td className={'px-3 py-2 text-center whitespace-nowrap ' + (f.faltaron > 0 ? 'text-amber-500' : 'text-sub')}>{f.faltaron || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* Tiempo muerto entre tareas (fin de una → inicio de la siguiente), con las mismas fechas */}
+      {!cargando && muertos.length > 0 && (
+        <section className="mb-6">
+          <h2 className="mb-1 flex items-center gap-2 font-display text-lg font-semibold text-ink">
+            <Hourglass size={17} className="text-amber-500" aria-hidden /> Tiempo muerto entre tareas
+          </h2>
+          <p className="mb-2 text-xs text-sub/70">
+            Desde que se finaliza una tarea (armado o repo) hasta que se inicia la siguiente, el mismo día.
+            Un “corte” es cada vez que terminó una y tardó en arrancar la próxima.
+          </p>
+          <div className="w-full overflow-x-auto rounded-2xl border border-line">
+            <table className="w-full table-auto border-collapse text-sm leading-tight">
+              <thead>
+                <tr className="table-head text-left text-[11px] font-semibold uppercase tracking-wider">
+                  <th className="px-3 py-2 whitespace-nowrap">N° Empleado</th>
+                  <th className="px-3 py-2 text-center whitespace-nowrap">Cortes</th>
+                  <th className="px-3 py-2 text-center whitespace-nowrap">Tiempo muerto</th>
+                  <th className="px-3 py-2 text-center whitespace-nowrap">Promedio</th>
+                  <th className="px-3 py-2 text-center whitespace-nowrap">Máximo</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line/50 bg-surface">
+                {[...muertos].sort((a, b) => b.muerto - a.muerto).map((m) => (
+                  <tr key={m.usuario_id}>
+                    <td className="px-3 py-2">
+                      <span className="flex items-center gap-2 font-medium text-ink">
+                        <User size={13} className="text-sub" aria-hidden /> {m.legajo ? `#${m.legajo}` : (m.nombre ?? '—')}{' '}
+                        {m.legajo ? <span className="text-[10px] font-normal text-sub/70">{m.nombre}</span> : null}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-center text-sub">{m.cortes}</td>
+                    <td className="px-3 py-2 text-center font-semibold text-amber-500 whitespace-nowrap">{fmtDuracion(m.muerto)}</td>
+                    <td className="px-3 py-2 text-center text-sub whitespace-nowrap">{fmtDuracion(m.promedio)}</td>
+                    <td className="px-3 py-2 text-center text-sub whitespace-nowrap">{fmtDuracion(m.maximo)}</td>
                   </tr>
                 ))}
               </tbody>

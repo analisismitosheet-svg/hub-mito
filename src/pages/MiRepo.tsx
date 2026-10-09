@@ -9,7 +9,7 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import ScannerCamara from '@/components/ScannerCamara'
 import ArmadoPedido from '@/components/ArmadoPedido'
 import AvisosCelular from '@/components/AvisosCelular'
-import MotivoPausaDialog, { type MotivoPausa } from '@/components/MotivoPausa'
+import MotivoPausaDialog, { nombreMotivoPausa, type MotivoPausa } from '@/components/MotivoPausa'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { normalizaCodigo } from '@/lib/loginEmpleado'
@@ -20,6 +20,8 @@ import {
   type Armado, type AvanceArmado,
 } from '@/lib/armados'
 import { pedirPermisoNotificaciones } from '@/lib/alarma'
+import { avisarPausa } from '@/lib/push'
+import { suscribirCambios } from '@/lib/realtime'
 
 type EstadoM = 'pendiente' | 'hecho' | 'faltante'
 
@@ -178,7 +180,8 @@ export default function MiRepo() {
   /* ------------------------------------------------------------------ */
   /*  Armados de pedidos (sql/mayorista_armados.sql)                     */
   /*  El mayorista los pide y entran acá: primero los pendientes         */
-  /*  (por prioridad) y los que ya tomé. Se refrescan cada 15 segundos.  */
+  /*  (por prioridad) y los que ya tomé. Se actualizan en vivo           */
+  /*  (Supabase Realtime) y, de respaldo, cada minuto.                    */
   /* ------------------------------------------------------------------ */
   const [armados, setArmados] = useState<Armado[]>([])
   const [avanceArmados, setAvanceArmados] = useState<Record<string, AvanceArmado>>({})
@@ -217,8 +220,16 @@ export default function MiRepo() {
 
   useEffect(() => {
     void cargarArmados()
-    const id = window.setInterval(() => void cargarArmados(), 15000)
-    return () => window.clearInterval(id)
+    // En vivo: cuando el mayorista pide un armado (o alguien lo toma) la base avisa.
+    // Se refresca además cada minuto como respaldo (solo con la pestaña visible).
+    const desuscribir = suscribirCambios(['mayorista_armados'], () => void cargarArmados())
+    const id = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void cargarArmados()
+    }, 60000)
+    return () => {
+      desuscribir()
+      window.clearInterval(id)
+    }
   }, [cargarArmados])
 
   // Para que suene el celular hay que pedirlo con una acción del usuario
@@ -604,10 +615,13 @@ export default function MiRepo() {
     })
     return () => { vivo = false }
   }, [sesion?.id])
-  // Pausar pide motivo (sql/piso_pausas.sql): se abre el cuadro y recién ahí se pausa
+  // Pausar pide motivo (sql/piso_pausas.sql): se abre el cuadro y recién ahí se pausa.
+  // Desde sql/pausas_autorizacion.sql la pausa queda PENDIENTE hasta que el puesto la autoriza.
   const [pidiendoMotivo, setPidiendoMotivo] = useState(false)
   const [errorPausa, setErrorPausa] = useState<string | null>(null)
   const faltaPausa = pausaLibre ? Math.max(0, Math.ceil((pausaLibre - Date.now()) / 1000)) : 0
+  const [pausaPendiente, setPausaPendiente] = useState<{ id: string; motivo: string; solicitada_at: string } | null>(null)
+  const pausaPendienteRef = useRef<string | null>(null)
 
   const recordarSesion = useCallback((a: Asignacion, s: Sesion | null) => {
     const k = claveDe(a)
@@ -621,7 +635,7 @@ export default function MiRepo() {
   }, [])
 
   const accion = useCallback(
-    async (fn: 'repo_iniciar' | 'repo_pausar' | 'repo_reanudar' | 'repo_finalizar', extra?: Record<string, unknown>) => {
+    async (fn: 'repo_iniciar' | 'repo_reanudar' | 'repo_finalizar', extra?: Record<string, unknown>) => {
       const sb = supabase
       if (!sb || !asignacionSel || accionSesion) return null
       setAccionSesion(true)
@@ -636,7 +650,6 @@ export default function MiRepo() {
         const fila = filaDe<FilaSesion>(data)
         if (!fila) throw new Error('La base no confirmó el cambio. Probá de nuevo.')
         const s = aSesion(fila)
-        if (fn === 'repo_pausar') setPausaLibre(Date.now() + 15 * 60 * 1000)
         setSesion(s.estado === 'finalizada' ? null : s)
         recordarSesion(asignacionSel, s)
         if (s.estado === 'en_curso') enfocar()
@@ -650,6 +663,92 @@ export default function MiRepo() {
     },
     [asignacionSel, accionSesion, sesion?.id, recordarSesion, enfocar],
   )
+
+  /* --- Pausa autorizada por el puesto (sql/pausas_autorizacion.sql) ---
+     El legajo pide la pausa y sigue trabajando; el cronómetro no frena hasta
+     que la autorizan. Si la rechazan, no pasó nada. Se mira en vivo. */
+  const refrescarPausa = useCallback(async () => {
+    const sb = supabase
+    if (!sb || !asignacionSel || !sesion?.id || !perfil?.id) { setPausaPendiente(null); return }
+    const { data } = await sb
+      .from('piso_pausas')
+      .select('id,estado,motivo,solicitada_at,motivo_rechazo')
+      .eq('sesion_id', sesion.id)
+      .eq('usuario_id', perfil.id)
+      .order('solicitada_at', { ascending: false })
+      .limit(1)
+    const fila = (data?.[0] as
+      | { id: string; estado: string; motivo: string; solicitada_at: string; motivo_rechazo: string | null }
+      | undefined) ?? null
+    if (!fila) {
+      if (pausaPendienteRef.current) { pausaPendienteRef.current = null; setPausaPendiente(null) }
+      return
+    }
+    if (fila.estado === 'pendiente') {
+      pausaPendienteRef.current = fila.id
+      setPausaPendiente({ id: fila.id, motivo: fila.motivo, solicitada_at: fila.solicitada_at })
+      return
+    }
+    // Resuelta: solo reaccionamos si era la que teníamos pedida
+    if (pausaPendienteRef.current !== fila.id) return
+    pausaPendienteRef.current = null
+    setPausaPendiente(null)
+    if (fila.estado === 'autorizada') {
+      const { data: sdata } = await sb.rpc('repo_sesion_actual', { p_lote: asignacionSel.lote_id, p_local: asignacionSel.local })
+      const f = filaDe<FilaSesion>(sdata)
+      if (f) setSesion(aSesion(f))
+      setPausaLibre(Date.now() + 15 * 60 * 1000)
+      setMensaje({ ok: true, texto: 'Te autorizaron la pausa: el tiempo no corre hasta que reanudes.' })
+    } else if (fila.estado === 'rechazada') {
+      setMensaje({ ok: false, texto: `Te rechazaron la pausa${fila.motivo_rechazo ? `: ${fila.motivo_rechazo}` : ''}. Seguí trabajando.` })
+    }
+  }, [asignacionSel, sesion?.id, perfil?.id])
+
+  useEffect(() => { void refrescarPausa() }, [refrescarPausa])
+  useEffect(() => {
+    const desuscribir = suscribirCambios(['piso_pausas'], () => void refrescarPausa(), { espera: 400 })
+    return () => desuscribir()
+  }, [refrescarPausa])
+
+  async function solicitarPausa(motivo: MotivoPausa, detalle: string) {
+    const sb = supabase
+    if (!sb || !asignacionSel || !sesion) return
+    setAccionSesion(true)
+    setErrorPausa(null)
+    try {
+      const { data, error } = await sb.rpc('repo_solicitar_pausa', {
+        p_sesion: sesion.id, p_motivo: motivo, p_detalle: detalle || null,
+      })
+      if (error) throw new Error(error.message)
+      const f = filaDe<{ pausa_id: string; estado: string; solicitada_at: string; motivo: string }>(data)
+      if (f) {
+        pausaPendienteRef.current = f.pausa_id
+        setPausaPendiente({ id: f.pausa_id, motivo: f.motivo, solicitada_at: f.solicitada_at })
+      }
+      setPidiendoMotivo(false)
+      setMensaje({ ok: true, texto: 'Pediste la pausa: seguí trabajando hasta que la autoricen.' })
+      void avisarPausa()
+    } catch (e) {
+      setErrorPausa(e instanceof Error ? e.message : 'No se pudo pedir la pausa')
+    } finally {
+      setAccionSesion(false)
+    }
+  }
+
+  async function cancelarPausa() {
+    const sb = supabase
+    if (!sb || !pausaPendiente) return
+    setAccionSesion(true)
+    const { error } = await sb.rpc('pausa_cancelar', { p_pausa: pausaPendiente.id })
+    setAccionSesion(false)
+    if (!error) {
+      pausaPendienteRef.current = null
+      setPausaPendiente(null)
+      setMensaje({ ok: true, texto: 'Cancelaste el pedido de pausa.' })
+    } else {
+      setMensaje({ ok: false, texto: error.message })
+    }
+  }
 
   async function finalizar() {
     setConfirmarFin(false)
@@ -1182,12 +1281,22 @@ export default function MiRepo() {
               {sesion?.estado === 'en_curso' && (
                 <button
                   onClick={() => { setErrorPausa(null); setPidiendoMotivo(true) }}
-                  disabled={accionSesion || faltaPausa > 0}
-                  title={faltaPausa > 0 ? 'Después de una pausa hay que esperar 15 minutos para volver a pausar' : undefined}
+                  disabled={accionSesion || faltaPausa > 0 || !!pausaPendiente}
+                  title={
+                    pausaPendiente
+                      ? 'Pediste la pausa: esperá que la autoricen'
+                      : faltaPausa > 0
+                        ? 'Después de una pausa hay que esperar 15 minutos para volver a pausar'
+                        : undefined
+                  }
                   className="btn-press inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/15 px-3 text-sm font-semibold text-amber-400 transition hover:bg-amber-500/25 disabled:opacity-60"
                 >
                   {accionSesion ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Pause size={16} aria-hidden />}{' '}
-                  {faltaPausa > 0 ? `Pausar ${Math.floor(faltaPausa / 60)}:${String(faltaPausa % 60).padStart(2, '0')}` : 'Pausar'}
+                  {pausaPendiente
+                    ? 'Pausa pedida'
+                    : faltaPausa > 0
+                      ? `Pausar ${Math.floor(faltaPausa / 60)}:${String(faltaPausa % 60).padStart(2, '0')}`
+                      : 'Pausar'}
                 </button>
               )}
               {sesion?.estado === 'pausada' && (
@@ -1200,6 +1309,29 @@ export default function MiRepo() {
                 </button>
               )}
             </div>
+
+            {/* Pausa pedida: el cronómetro sigue hasta que el puesto la autoriza */}
+            {pausaPendiente && (
+              <div
+                className="flex items-center justify-between gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-400"
+                aria-live="polite"
+              >
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <Loader2 size={13} className="animate-spin" aria-hidden />
+                  <span className="truncate">
+                    Pediste la pausa ({nombreMotivoPausa(pausaPendiente.motivo)}): esperando que la autoricen.
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void cancelarPausa()}
+                  disabled={accionSesion}
+                  className="btn-press shrink-0 rounded-lg border border-amber-500/40 px-2 py-0.5 text-[11px] font-semibold hover:bg-amber-500/20 disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+              </div>
+            )}
 
             {/* Fila 2: barra + contador que sube */}
             <div className="flex items-center gap-2.5" aria-live="polite">
@@ -1452,10 +1584,7 @@ export default function MiRepo() {
           error={errorPausa}
           onCancelar={() => setPidiendoMotivo(false)}
           onConfirmar={(motivo: MotivoPausa, detalle: string) => {
-            void accion('repo_pausar', { p_motivo: motivo, p_detalle: detalle || null }).then((fila) => {
-              if (fila) setPidiendoMotivo(false)
-              else setErrorPausa('No se pudo pausar: mirá el mensaje de arriba.')
-            })
+            void solicitarPausa(motivo, detalle)
           }}
         />
       )}

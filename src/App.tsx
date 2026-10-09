@@ -51,6 +51,7 @@ import FacturacionFabrica from '@/pages/FacturacionFabrica'
 import Guias from '@/pages/Guias'
 import NotasCredito from '@/pages/NotasCredito'
 import EstadisticasRendimiento from '@/pages/EstadisticasRendimiento'
+import PausasPendientes from '@/pages/PausasPendientes'
 import MapeoEscanear from '@/pages/MapeoEscanear'
 import MapeoOrden from '@/pages/MapeoOrden'
 import MapeoUbicaciones from '@/pages/MapeoUbicaciones'
@@ -194,6 +195,14 @@ export default function App() {
             element={
               <PermissionRoute permiso="mayorista.repos_piso" soloLegajo>
                 <MiRepo />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/mayorista/pausas"
+            element={
+              <PermissionRoute permiso="mayorista.pausas.autorizar">
+                <PausasPendientes />
               </PermissionRoute>
             }
           />

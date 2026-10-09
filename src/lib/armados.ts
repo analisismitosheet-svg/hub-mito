@@ -107,16 +107,23 @@ export async function avanceDeArmados(ids: string[]): Promise<Record<string, Ava
   const porId = new Map<string, Pick<ArmadoItem, 'cantidad' | 'escaneadas' | 'estado'>[]>()
   for (let i = 0; i < ids.length; i += 100) {
     const lote = ids.slice(i, i + 100)
-    const { data, error } = await supabase
-      .from('mayorista_armados_items')
-      .select('armado_id,cantidad,escaneadas,estado')
-      .in('armado_id', lote)
-      .limit(5000)
-    if (error || !data) continue
-    for (const f of data as { armado_id: string; cantidad: number; escaneadas: number; estado: EstadoItemArmado }[]) {
-      const arr = porId.get(f.armado_id) ?? []
-      arr.push(f)
-      porId.set(f.armado_id, arr)
+    // Se pagina porque un lote de 100 armados puede tener más de 1000 renglones:
+    // con un tope fijo el avance quedaba cortado y el pedido no se ponía en verde.
+    for (let desde = 0; ; desde += 1000) {
+      const { data, error } = await supabase
+        .from('mayorista_armados_items')
+        .select('armado_id,linea,cantidad,escaneadas,estado')
+        .in('armado_id', lote)
+        .order('armado_id', { ascending: true })
+        .order('linea', { ascending: true })
+        .range(desde, desde + 999)
+      if (error || !data) break
+      for (const f of data as { armado_id: string; cantidad: number; escaneadas: number; estado: EstadoItemArmado }[]) {
+        const arr = porId.get(f.armado_id) ?? []
+        arr.push(f)
+        porId.set(f.armado_id, arr)
+      }
+      if (data.length < 1000) break
     }
   }
   for (const [id, its] of porId) out[id] = avanceDe(its)
