@@ -36,6 +36,7 @@ import Opinar from '@/pages/Opinar'
 import EncuestasAdmin from '@/pages/EncuestasAdmin'
 import QrEtiquetaEditor from '@/pages/QrEtiquetaEditor'
 import Configuraciones from '@/pages/Configuraciones'
+import Informes from '@/pages/Informes'
 import SectoresQr from '@/pages/SectoresQr'
 import QrLocales from '@/pages/QrLocales'
 import Usuarios from '@/pages/Usuarios'
@@ -468,6 +469,14 @@ export default function App() {
               <ProtectedRoute>
                 <Replicas />
               </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/informes"
+            element={
+              <PermissionRoute permiso="sistemas.informes.view">
+                <Informes />
+              </PermissionRoute>
             }
           />
           <Route

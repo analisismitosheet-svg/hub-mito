@@ -592,6 +592,17 @@ export const APPS: AppDef[] = [
     target: '/replicas',
     color: '#7c3aed',
   },
+  {
+    id: 'informes',
+    areaId: 'sistemas',
+    title: 'Informes y reportes',
+    description: 'Creá informes y recibilos por WhatsApp, a mano o todos los días.',
+    icon: FileText,
+    kind: 'internal',
+    target: '/informes',
+    color: '#0891b2',
+    permiso: 'sistemas.informes.view',
+  },
 ]
 
 export function appsDeArea(areaId: string): AppDef[] {
