@@ -275,10 +275,18 @@ export default function PedidosVenta() {
   }
 
   /** Abre el selector de prioridad para esos pedidos (sin los que ya están pedidos). */
+  /** Completo = todo en verde (hecho y sin faltantes): solo el admin lo puede volver a pedir (sql/pedidos_completos.sql) */
+  const esCompleto = (c: string) => armados[c]?.estado === 'hecho' && (armados[c]?.faltantes ?? 0) === 0
+
   function pedirArmadoDe(codigos: string[]) {
-    const nuevos = codigos.filter((c) => !armados[c] || armados[c].estado === 'hecho')
+    const nuevos = codigos.filter((c) => (!armados[c] || armados[c].estado === 'hecho') && (isAdmin || !esCompleto(c)))
     if (nuevos.length === 0) {
-      setAvisoArmado({ ok: false, texto: 'Esos pedidos ya tienen un armado activo.' })
+      setAvisoArmado({
+        ok: false,
+        texto: codigos.some((c) => esCompleto(c))
+          ? 'Esos pedidos ya están completos (todo en verde): solo el administrador los puede volver a pedir.'
+          : 'Esos pedidos ya tienen un armado activo.',
+      })
       return
     }
     setAvisoArmado(null)
@@ -909,7 +917,7 @@ export default function PedidosVenta() {
                   </button>
                   <button
                     onClick={() => pedirArmadoDe([pedido.codigo])}
-                    disabled={!!armPedido && armPedido.estado !== 'hecho'}
+                    disabled={(!!armPedido && armPedido.estado !== 'hecho') || (!isAdmin && esCompleto(pedido.codigo))}
                     className={`btn-press inline-flex h-10 items-center gap-1.5 rounded-xl px-3 text-sm font-semibold transition disabled:opacity-50 ${
                       armPedido && armPedido.estado !== 'hecho'
                         ? 'border border-emerald-500/40 bg-emerald-500/15 text-emerald-400'
@@ -922,7 +930,9 @@ export default function PedidosVenta() {
                     }
                   >
                     <PackageCheck size={15} aria-hidden />
-                    {armPedido && armPedido.estado === 'aceptado'
+                    {!isAdmin && esCompleto(pedido.codigo)
+                      ? 'Completo ✓'
+                      : armPedido && armPedido.estado === 'aceptado'
                       ? 'En curso ✓'
                       : armPedido && armPedido.estado === 'pendiente'
                         ? 'Pedido a armar'
