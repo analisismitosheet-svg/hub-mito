@@ -407,10 +407,10 @@ BEGIN
 
   PERFORM private.pausar_lo_demas(auth.uid(), p_id, NULL, 'Pasó al pedido N° ' || coalesce(v_num::text, v_cod));
 
-  UPDATE public.piso_pausas SET hasta = now()
-   WHERE armado_id = p_id AND estado = 'autorizada' AND hasta IS NULL;
-  UPDATE public.piso_pausas SET estado = 'cancelada', hasta = coalesce(hasta, now())
-   WHERE armado_id = p_id AND estado = 'pendiente';
+  UPDATE public.piso_pausas AS pp SET hasta = now()
+   WHERE pp.armado_id = p_id AND pp.estado = 'autorizada' AND pp.hasta IS NULL;
+  UPDATE public.piso_pausas AS pp SET estado = 'cancelada', hasta = coalesce(pp.hasta, now())
+   WHERE pp.armado_id = p_id AND pp.estado = 'pendiente';
   UPDATE public.mayorista_armados
      SET crono_estado = 'en_curso',
          iniciado_at = coalesce(iniciado_at, now()),
