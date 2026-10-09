@@ -13,7 +13,7 @@
  * de los permisos del usuario SQL del puente. Mismas variables de entorno que [view].ts.
  */
 
-import { postAlPuente } from '../../src/lib/puenteRetry.js'
+import { postAlPuente } from './puenteRetry.js'
 
 type Req = {
   method?: string

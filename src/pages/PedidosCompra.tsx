@@ -60,7 +60,7 @@ export default function PedidosCompra() {
   const [busqueda, setBusqueda] = useState('')
   const [sel, setSel] = useState<string | null>(null)
 
-  // Botón "Actualizar datos": fuerza la copia desde el SQL (api/pedidos-compra-sync.ts)
+  // Botón "Actualizar datos": fuerza la copia desde el SQL (api/pedidos-sync.ts?tipo=compra)
   const [forzando, setForzando] = useState(false)
   const [avisoSync, setAvisoSync] = useState<{ ok: boolean; texto: string } | null>(null)
   // Sube al actualizar: vuelve a traer los artículos del pedido abierto
@@ -168,7 +168,7 @@ export default function PedidosCompra() {
     setAvisoSync(null)
     try {
       const { data } = await supabase.auth.getSession()
-      const r = await fetch('/api/pedidos-compra-sync', {
+      const r = await fetch('/api/pedidos-sync?tipo=compra', {
         method: 'POST',
         headers: { Authorization: `Bearer ${data.session?.access_token ?? ''}` },
       })

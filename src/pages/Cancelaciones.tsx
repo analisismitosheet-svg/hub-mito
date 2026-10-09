@@ -104,7 +104,7 @@ export default function Cancelaciones() {
     setAvisoSync(null)
     try {
       const { data } = await supabase.auth.getSession()
-      const r = await fetch('/api/pedidos-compra-sync', { method: 'POST', headers: { Authorization: `Bearer ${data.session?.access_token ?? ''}` } })
+      const r = await fetch('/api/pedidos-sync?tipo=compra', { method: 'POST', headers: { Authorization: `Bearer ${data.session?.access_token ?? ''}` } })
       const cuerpo = (await r.json().catch(() => null)) as { ok?: boolean; error?: string } | null
       if (!r.ok || !cuerpo?.ok) throw new Error(cuerpo?.error ?? `Error ${r.status}`)
       await cargar()

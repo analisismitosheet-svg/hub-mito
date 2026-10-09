@@ -15,7 +15,7 @@
  * }
  */
 
-import { getAlDestino } from '../../src/lib/puenteRetry.js'
+import { getAlDestino } from './puenteRetry.js'
 
 type Req = { headers: { authorization?: string } }
 

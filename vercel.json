@@ -8,10 +8,7 @@
     }
   ],
   "functions": {
-    "api/pedidos-compra-sync.ts": {
-      "maxDuration": 60
-    },
-    "api/pedidos-venta-sync.ts": {
+    "api/pedidos-sync.ts": {
       "maxDuration": 60
     },
     "api/informe.ts": {

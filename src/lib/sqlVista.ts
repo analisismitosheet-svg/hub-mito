@@ -25,7 +25,7 @@
  *   - Whitelist efectiva = SQL_VIEWS (env) + vistas guardadas en config_app clave 'sql_vistas'
  */
 
-import { postAlPuente } from '../../src/lib/puenteRetry.js'
+import { postAlPuente } from './puenteRetry.js'
 
 type Req = {
   method?: string

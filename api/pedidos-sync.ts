@@ -1,12 +1,18 @@
 /**
- * Botón "Actualizar datos" de Pedidos de compra: fuerza la copia en el momento.
+ * Botón "Actualizar datos" de Pedidos de compra y de venta: fuerza la copia en el momento.
+ *
+ *   POST /api/pedidos-sync?tipo=compra   (default) -> accion sync_pedidos_compra
+ *   POST /api/pedidos-sync?tipo=venta               -> accion sync_pedidos_venta
  *
  * Flujo:  PWA (JWT Supabase) -> esta función -> Puente SQL (PC con el SQL local)
- *         -> scripts/sync-pedidos-compra.js -> Supabase
+ *         -> scripts/sync-pedidos-compra.js / sync-pedidos-venta.js -> Supabase
  *
- * Solo pasa quien puede ver los pedidos: se consulta pedidos_compra_sync con el JWT
- * del usuario y la RLS (pedidos_compra.view o admin) decide. El token del puente
- * (SQL_BRIDGE_TOKEN) nunca llega al navegador.
+ * Solo pasa quien puede ver los pedidos: se consulta la tabla *_sync con el JWT del
+ * usuario y la RLS (pedidos_compra.view / pedidos_venta.view o admin) lo decide. El
+ * token del puente (SQL_BRIDGE_TOKEN) nunca llega al navegador.
+ *
+ * Antes eran dos funciones (pedidos-compra-sync / pedidos-venta-sync); se unificaron
+ * para no pasar el tope de 12 Serverless Functions del plan Hobby de Vercel.
  *
  * Variables de entorno (las mismas de api/sql): SUPABASE_URL, SUPABASE_ANON_KEY,
  * SUPABASE_SERVICE_ROLE_KEY, SQL_BRIDGE_TOKEN (+ SQL_LOGICAPP_URL como respaldo).
@@ -15,6 +21,7 @@
 type Req = {
   method?: string
   headers: { authorization?: string }
+  query: Record<string, string | string[] | undefined>
 }
 
 type Res = {
@@ -23,13 +30,23 @@ type Res = {
   json(body: unknown): void
 }
 
-/** ¿El usuario puede ver pedidos de compra? (la RLS de pedidos_compra_sync lo decide) */
-async function puedeVer(token: string): Promise<boolean> {
+interface Sync {
+  tabla: string
+  accion: string
+}
+
+const TIPOS: Record<string, Sync> = {
+  compra: { tabla: 'pedidos_compra_sync', accion: 'sync_pedidos_compra' },
+  venta: { tabla: 'pedidos_venta_sync', accion: 'sync_pedidos_venta' },
+}
+
+/** ¿El usuario puede ver esos pedidos? (la RLS de la tabla *_sync lo decide) */
+async function puedeVer(token: string, tabla: string): Promise<boolean> {
   const url = process.env.SUPABASE_URL
   const anon = process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY
   if (!url || !anon) return false
   try {
-    const res = await fetch(`${url}/rest/v1/pedidos_compra_sync?id=eq.1&select=id`, {
+    const res = await fetch(`${url}/rest/v1/${tabla}?id=eq.1&select=id`, {
       headers: { Authorization: `Bearer ${token}`, apikey: anon },
     })
     if (!res.ok) return false
@@ -65,8 +82,12 @@ export default async function handler(req: Req, res: Res) {
   res.setHeader('Cache-Control', 'no-store')
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' })
 
+  const q = req.query?.tipo
+  const tipo = (Array.isArray(q) ? q[0] : q) === 'venta' ? 'venta' : 'compra'
+  const { tabla, accion } = TIPOS[tipo]
+
   const token = (req.headers.authorization ?? '').replace(/^Bearer\s+/i, '')
-  if (!token || !(await puedeVer(token))) return res.status(401).json({ error: 'No autorizado' })
+  if (!token || !(await puedeVer(token, tabla))) return res.status(401).json({ error: 'No autorizado' })
 
   const destino = await urlPuente()
   if (!destino || /\.logic\.azure\.com/i.test(destino)) {
@@ -81,7 +102,7 @@ export default async function handler(req: Req, res: Res) {
     r = await fetch(destino, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Puente-Token': process.env.SQL_BRIDGE_TOKEN },
-      body: JSON.stringify({ accion: 'sync_pedidos_compra' }),
+      body: JSON.stringify({ accion }),
       signal: AbortSignal.timeout(55_000),
     })
   } catch {

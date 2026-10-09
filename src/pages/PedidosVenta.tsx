@@ -153,7 +153,7 @@ export default function PedidosVenta() {
     try { localStorage.setItem('pedidosVenta.periodo', p) } catch { /* sin almacenamiento: no pasa nada */ }
   }
 
-  // Botón "Actualizar datos": fuerza la copia desde el SQL (api/pedidos-venta-sync.ts)
+  // Botón "Actualizar datos": fuerza la copia desde el SQL (api/pedidos-sync.ts?tipo=venta)
   const [forzando, setForzando] = useState(false)
   const [avisoSync, setAvisoSync] = useState<{ ok: boolean; texto: string } | null>(null)
   // Sube al actualizar: vuelve a traer los artículos del pedido abierto
@@ -447,7 +447,7 @@ export default function PedidosVenta() {
     setAvisoSync(null)
     try {
       const { data } = await supabase.auth.getSession()
-      const r = await fetch('/api/pedidos-venta-sync', {
+      const r = await fetch('/api/pedidos-sync?tipo=venta', {
         method: 'POST',
         headers: { Authorization: `Bearer ${data.session?.access_token ?? ''}` },
       })

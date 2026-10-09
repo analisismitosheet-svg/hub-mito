@@ -3,7 +3,7 @@
 - **Frontend**: React 18 + Vite + Tailwind + TypeScript, PWA. Repo `D:\pwa mito`, rama `main`.
 - **Deploy**: Vercel, auto-deploy al pushear a `main` → https://hub-mito.vercel.app. La PWA puede quedar con la versión vieja en caché: el usuario tiene que recargar (Ctrl+F5) o cerrar y abrir.
 - **Base**: Supabase, proyecto `qwlugajzxrrwckrqlrjp`. RLS en todas las tablas; lo que escribe con lógica pasa por funciones `SECURITY DEFINER`. Ver [[Permisos y usuarios]].
-- **Funciones de Vercel** (`api/`): `api/sql/[view].ts` (lee vistas del SQL Server vía puente), `api/sql/status`, `api/replicas.ts`, `api/enviar-transferencia.ts` (mails por Microsoft Graph), `api/push-armado.ts` (avisos push web-push, ver [[Armado de pedidos]]).
+- **Funciones de Vercel** (`api/`, tope 12 en plan Hobby): `api/sql/[...ruta].ts` (vistas del SQL Server + estado + explorador vía puente), `api/pedidos-sync.ts` (sync de pedidos de compra/venta), `api/replicas.ts`, `api/enviar-transferencia.ts` (mails por Microsoft Graph), `api/push.ts` (avisos push web-push, ver [[Armado de pedidos]]), `api/informe.ts` (informes por WhatsApp).
 - **Puente SQL**: Node en la PC `DESKTOP-OA4GU6I`, publicado por Tailscale Funnel. Ver [[Puente SQL y syncs]].
 - **Agentes IA**: servidor aparte `D:\PWA\mito-server` (Fastify + Ollama); `VITE_URL_AGENTES` en Vercel.
 
