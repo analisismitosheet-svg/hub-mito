@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
-  ChevronRight, Check, AlertTriangle, Timer, Pause, Play, Flag, Camera, CameraOff, PackageCheck, Loader2,
+  ChevronRight, Check, AlertTriangle, Timer, Pause, Play, Flag, Camera, CameraOff, PackageCheck, Loader2, LogOut,
 } from 'lucide-react'
 import ScannerCamara from '@/components/ScannerCamara'
 import ConfirmDialog from '@/components/ConfirmDialog'
@@ -70,6 +70,11 @@ export default function ArmadoPedido({ armado, alVolver, alCambiar }: Props) {
   const [confirmando, setConfirmando] = useState(false)
   const [finalizando, setFinalizando] = useState(false)
   const [resumen, setResumen] = useState<string | null>(null)
+  // Soltar la tarea: vuelve a pendiente para todo el piso (sql/armado_rechazar.sql)
+  const [confirmandoSoltar, setConfirmandoSoltar] = useState(false)
+  const [motivoSoltar, setMotivoSoltar] = useState('')
+  const [errorSoltar, setErrorSoltar] = useState<string | null>(null)
+  const [soltando, setSoltando] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const enfocar = useCallback(() => {
@@ -249,6 +254,25 @@ export default function ArmadoPedido({ armado, alVolver, alCambiar }: Props) {
   }
   function reanudar() {
     void iniciar()
+  }
+
+  /** Suelta el armado que estoy armando: vuelve a pendiente para todo el piso (armado_rechazar). */
+  async function soltarTarea() {
+    if (!supabase) return
+    setSoltando(true)
+    setErrorSoltar(null)
+    const { error } = await supabase.rpc('armado_rechazar', { p_id: armado.id, p_motivo: motivoSoltar.trim() })
+    setSoltando(false)
+    if (error) { setErrorSoltar(error.message); return }
+    setConfirmandoSoltar(false)
+    setMotivoSoltar('')
+    // Ya no es mío: se apaga el cronómetro local y se avisa al padre para que refresque
+    setSesion('inactiva')
+    setSegundos(0)
+    setCamara(false)
+    setMensaje({ ok: true, texto: 'Soltaste el armado: vuelve a quedar pendiente para todo el piso.' })
+    alCambiar()
+    window.setTimeout(() => alVolver(), 1100)
   }
 
   const avance = useMemo(() => avanceDe(items), [items])
@@ -555,6 +579,18 @@ export default function ArmadoPedido({ armado, alVolver, alCambiar }: Props) {
                   <Play size={14} aria-hidden /> Reanudar
                 </button>
               ))}
+            {!terminado && (
+              <button
+                type="button"
+                onClick={() => setConfirmandoSoltar(true)}
+                title="Soltar la tarea: vuelve a quedar pendiente para todo el piso"
+                aria-label="Soltar la tarea"
+                className="btn-press inline-flex h-9 shrink-0 items-center gap-1 rounded-xl border border-line bg-surface px-2.5 text-sm font-medium text-sub transition hover:border-brand-600/40 hover:bg-brand-600/10 hover:text-brand-400 sm:px-3"
+              >
+                <LogOut size={14} aria-hidden />
+                <span className="hidden sm:inline">Soltar</span>
+              </button>
+            )}
           </span>
         </div>
 
@@ -740,6 +776,55 @@ export default function ArmadoPedido({ armado, alVolver, alCambiar }: Props) {
         onCancel={() => setConfirmando(false)}
         onConfirm={() => void finalizar()}
       />
+
+      {/* Soltar la tarea: vuelve a pendiente para todo el piso */}
+      {confirmandoSoltar && (
+        <div
+          className="fixed inset-0 z-[70] grid place-items-center bg-black/60 p-4"
+          onClick={() => { if (!soltando) setConfirmandoSoltar(false) }}
+        >
+          <form
+            onSubmit={(e) => { e.preventDefault(); void soltarTarea() }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-2xl border border-line2 bg-surface-solid p-5 shadow-soft"
+          >
+            <h3 className="flex items-center gap-2 font-display text-base font-bold text-ink">
+              <LogOut size={17} aria-hidden className="text-brand-400" /> ¿Soltar la tarea?
+            </h3>
+            <p className="mt-1.5 text-sm text-sub">
+              Se conserva lo escaneado; el armado vuelve a quedar <b className="font-semibold text-ink">pendiente</b> y
+              lo puede tomar otro legajo. Contá brevemente por qué lo soltás.
+            </p>
+            <textarea
+              autoFocus
+              value={motivoSoltar}
+              onChange={(e) => setMotivoSoltar(e.target.value)}
+              maxLength={200}
+              placeholder="Ej.: me mandaron a otra tarea, no lo puedo atender…"
+              aria-label="Motivo por el que soltás la tarea"
+              className="mt-3 min-h-[68px] w-full resize-none rounded-xl border border-line bg-surface2 px-3 py-2 text-sm text-ink outline-none transition placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40"
+            />
+            {errorSoltar && <p className="mt-2 text-xs font-medium text-brand-400">{errorSoltar}</p>}
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmandoSoltar(false)}
+                disabled={soltando}
+                className="btn-press h-10 rounded-xl border border-line px-3 text-sm font-semibold text-sub transition hover:bg-surface2 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={soltando || motivoSoltar.trim().length < 3}
+                className="btn-press inline-flex h-10 items-center gap-1.5 rounded-xl bg-brand-600 px-3 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:opacity-50"
+              >
+                {soltando ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <LogOut size={14} aria-hidden />} Soltar tarea
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   )
 }

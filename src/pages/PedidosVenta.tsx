@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Loader2, Search, ChevronLeft, ChevronRight, RefreshCw, Download, ClipboardList, Ban, ArrowLeft, Printer,
-  PackageCheck, X,
+  PackageCheck, X, RefreshCcw,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -230,10 +230,11 @@ export default function PedidosVenta() {
       armado_id: string | null; lote_id: string | null; local: string | null; prioridad: string | null; obs: string | null
       legajo: string | null; nombre: string | null; lineas: number; lineas_ok: number; unidades: number
       unidades_ok: number; faltantes: number; actualizado_at: string
+      liberado_motivo: string | null; liberado_nombre: string | null; liberado_at: string | null
     }
     const filas: FilaEstado[] = []
     for (let d = 0; d < 50000; d += 1000) {
-      let q = supabase.from('pedidos_venta_estado').select('codigo,fecha,origen,estado,armado_id,lote_id,local,prioridad,obs,legajo,nombre,lineas,lineas_ok,unidades,unidades_ok,faltantes,actualizado_at')
+      let q = supabase.from('pedidos_venta_estado').select('codigo,fecha,origen,estado,armado_id,lote_id,local,prioridad,obs,legajo,nombre,lineas,lineas_ok,unidades,unidades_ok,faltantes,actualizado_at,liberado_motivo,liberado_nombre,liberado_at')
       if (fDesde) q = q.gte('fecha', fDesde)
       if (fHasta) q = q.lt('fecha', fHasta)
       const { data, error } = await q.order('codigo').range(d, d + 999)
@@ -255,6 +256,8 @@ export default function PedidosVenta() {
         aceptado_legajo: empezado ? f.legajo : null, aceptado_nombre: empezado ? f.nombre : null,
         hecho_at: f.estado === 'hecho' ? f.actualizado_at : null, faltantes: f.faltantes,
         asignado_legajo: f.legajo, asignado_nombre: f.nombre, asignado_local: f.local, repo: esRepo,
+        liberado_motivo: f.liberado_motivo, liberado_nombre: f.liberado_nombre,
+        liberado_at: f.liberado_at, liberado_veces: f.liberado_motivo ? 1 : 0,
       }
       if (f.lineas > 0) avances[id] = { lineas: f.lineas, lineasOk: f.lineas_ok, unidades: f.unidades, unidadesOk: f.unidades_ok }
     }
@@ -1049,6 +1052,15 @@ export default function PedidosVenta() {
                         {avancePedido ? ` · ${avancePedido.unidadesOk}/${avancePedido.unidades} unidades` : ''}
                       </>
                     )}
+                  </p>
+                )}
+                {armPedido && armPedido.estado === 'pendiente' && armPedido.liberado_motivo && (
+                  <p className="mt-1.5 flex items-start gap-1.5 rounded-lg bg-brand-600/10 px-2.5 py-1.5 text-xs text-brand-400" role="note">
+                    <RefreshCcw size={12} className="mt-px shrink-0" aria-hidden />
+                    <span>
+                      Lo soltó {armPedido.liberado_nombre ? `el legajo ${armPedido.liberado_nombre}` : 'el piso'}: “{armPedido.liberado_motivo}”.
+                      Vuelve a quedar {armPedido.asignado_legajo ? `para ${armPedido.asignado_nombre ?? `#${armPedido.asignado_legajo}`}` : 'pendiente para todo el piso'}.
+                    </span>
                   </p>
                 )}
               </div>

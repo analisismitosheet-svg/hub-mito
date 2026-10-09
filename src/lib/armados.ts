@@ -34,6 +34,12 @@ export interface Armado {
   asignado_local: string | null
   /** true = no es un armado: es la repo diaria (pedido VTD) que se hace en Repos Mayorista / Mi repo */
   repo?: boolean
+  /** Última vez que un legajo soltó este armado estando en curso (sql/armado_rechazar.sql) */
+  liberado_motivo?: string | null
+  liberado_nombre?: string | null
+  liberado_at?: string | null
+  /** Cuántas veces se soltó; > 0 = alguna vez lo soltaron */
+  liberado_veces?: number
 }
 
 /** Renglón del pedido copiado al armado, con su avance. */
@@ -58,7 +64,8 @@ export interface AvanceArmado {
 
 export const COLUMNAS_ARMADO =
   'id,pedido_codigo,pedido_numero,cliente,cliente_nombre,prioridad,estado,obs,creado_at,creado_por,' +
-  'aceptado_at,aceptado_por,aceptado_legajo,aceptado_nombre,hecho_at,faltantes,asignado_legajo,asignado_nombre,asignado_local'
+  'aceptado_at,aceptado_por,aceptado_legajo,aceptado_nombre,hecho_at,faltantes,asignado_legajo,asignado_nombre,asignado_local,' +
+  'liberado_motivo,liberado_nombre,liberado_at,liberado_veces'
 
 export const COLUMNAS_ITEM_ARMADO = 'armado_id,linea,articulo,descripcion,color,talle,cantidad,escaneadas,estado'
 

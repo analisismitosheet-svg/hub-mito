@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mockup · Avisar faltantes de stock (armado de pedidos)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --paper:#050508;
+    --surface:rgba(255,255,255,.035);
+    --surface2:rgba(255,255,255,.07);
+    --surface-solid:#101016;
+    --line:rgba(255,255,255,.08);
+    --line2:rgba(255,255,255,.18);
+    --ink:#f8fafc;
+    --sub:#94a3b8;
+    --brand:#ef4444;
+    --amber:#f59e0b;
+    --sky:#38bdf8;
+    --emerald:#22c55e;
+    --violet:#a78bfa;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;padding:24px clamp(12px,3vw,36px) 64px;
+    background:
+      radial-gradient(900px 500px at 10% -10%, rgba(239,68,68,.13), transparent 60%),
+      radial-gradient(800px 500px at 96% 0%, rgba(245,158,11,.10), transparent 55%),
+      var(--paper);
+    color:var(--ink);
+    font-family:'Plus Jakarta Sans',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    font-size:14px;line-height:1.45;
+  }
+  h1,h2,h3,h4{margin:0;font-weight:800;letter-spacing:-.02em}
+  p{margin:0}
+  button{font-family:inherit;cursor:pointer}
+  .sub{color:var(--sub)}
+  .muted{color:var(--sub);font-size:12px}
+
+  .head{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start;justify-content:space-between;margin-bottom:14px}
+  .badge-mock{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.35);font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+  .head h1{font-size:clamp(20px,3vw,29px);margin:8px 0 4px}
+  .actions{display:flex;flex-wrap:wrap;gap:8px}
+  .btn{display:inline-flex;align-items:center;gap:7px;height:38px;padding:0 14px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:13px;font-weight:600;transition:.15s}
+  .btn:hover{background:var(--surface2);border-color:var(--line2)}
+  .btn-red{background:linear-gradient(180deg,#ef4444,#dc2626);border-color:#ef4444;color:#fff;box-shadow:0 8px 22px rgba(239,68,68,.28)}
+  .btn-red:hover{filter:brightness(1.08)}
+
+  .leyenda{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+  .lg{display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border-radius:999px;font-size:11.5px;font-weight:700;border:1px solid var(--line);background:var(--surface);color:var(--sub)}
+  .lg i{width:9px;height:9px;border-radius:99px;display:block}
+  .lg.on{border-color:rgba(239,68,68,.5);background:rgba(239,68,68,.12);color:#fca5a5}
+  .lg.on i{background:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.25)}
+  .lg.off i{background:var(--emerald)}
+
+  .grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:16px;align-items:start}
+  @media (max-width:1040px){.grid{grid-template-columns:1fr}}
+  .card{border:1px solid var(--line);background:var(--surface);border-radius:18px;overflow:hidden}
+  .card-h{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.02)}
+  .card-h h3{font-size:13.5px;display:flex;align-items:center;gap:8px}
+  .tag{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:999px;border:1px solid var(--line2);color:var(--sub)}
+  .tag.nuevo{border-color:rgba(239,68,68,.5);background:rgba(239,68,68,.14);color:#fca5a5}
+
+  /* dispositivo */
+  .disp{padding:16px;background:radial-gradient(600px 300px at 50% 0%, rgba(255,255,255,.03), transparent 70%)}
+  .device{max-width:430px;margin:0 auto;border:1px solid var(--line2);border-radius:28px;background:var(--surface-solid);box-shadow:0 30px 70px rgba(0,0,0,.6);overflow:hidden}
+  .appbar{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.03)}
+  .appbar .logo{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:linear-gradient(180deg,#ef4444,#b91c1c);font-weight:900;font-size:13px;color:#fff}
+  .appbar b{font-size:13px}
+  .appbar .bell{margin-left:auto;position:relative;width:32px;height:32px;border-radius:10px;border:1px solid var(--line);display:grid;place-items:center;background:var(--surface)}
+  .appbar .cnt{position:absolute;top:-5px;right:-5px;min-width:15px;height:15px;padding:0 4px;border-radius:999px;background:#ef4444;color:#fff;font-size:9px;font-weight:800;display:grid;place-items:center}
+  .screen{padding:14px;min-height:640px;display:flex;flex-direction:column;gap:12px}
+
+  .panel{border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:13px;display:flex;flex-direction:column;gap:11px}
+  .p1{display:flex;align-items:center;gap:10px}
+  .p1 .nom{min-width:0;flex:1}
+  .p1 .nom b{display:block;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .p1 .nom span{font-size:11.5px;color:var(--sub);display:flex;gap:6px;align-items:center}
+  .reloj{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink)}
+  .sesion{height:34px;padding:0 12px;border-radius:11px;font-size:12.5px;font-weight:800;display:inline-flex;align-items:center;gap:6px;background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.4);color:#fbbf24}
+  .prog-fila{display:flex;align-items:center;gap:10px}
+  .bar{flex:1;height:8px;border-radius:99px;background:var(--line);overflow:hidden;margin:0}
+  .bar span{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#f59e0b,#fbbf24)}
+  .contador{font-size:19px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .contador small{font-size:13px;color:var(--sub);font-weight:700}
+
+  /* aviso de faltantes de stock */
+  .aviso-stock{
+    display:flex;gap:11px;align-items:flex-start;padding:12px 13px;border-radius:14px;
+    border:1px solid rgba(239,68,68,.42);background:linear-gradient(180deg, rgba(239,68,68,.16), rgba(239,68,68,.07));
+    animation:in .3s
+  }
+  .aviso-stock .ic{width:34px;height:34px;flex:0 0 34px;border-radius:10px;display:grid;place-items:center;background:rgba(239,68,68,.2);border:1px solid rgba(239,68,68,.45);font-size:17px}
+  .aviso-stock .txt{min-width:0;flex:1}
+  .aviso-stock b{font-size:13.5px;display:block;color:#fecaca}
+  .aviso-stock p{font-size:12px;color:#fca5a5;margin-top:2px}
+  .aviso-stock .acc{display:flex;gap:7px;margin-top:9px;flex-wrap:wrap}
+  .mini{height:31px;padding:0 11px;border-radius:9px;font-size:12px;font-weight:800;display:inline-flex;align-items:center;gap:6px}
+  .mini.primary{background:linear-gradient(180deg,#ef4444,#dc2626);border:0;color:#fff}
+  .mini.primary:hover{filter:brightness(1.08)}
+  .mini.ghost{background:transparent;border:1px solid rgba(239,68,68,.45);color:#fca5a5}
+  .mini.ghost:hover{background:rgba(239,68,68,.12)}
+
+  .scan{display:flex;gap:8px}
+  .scan input{flex:1;height:44px;min-width:0;border-radius:12px;border:1px solid var(--line);background:var(--surface2);color:var(--ink);padding:0 12px;font-size:15px;font-family:inherit;outline:none}
+  .scan input::placeholder{color:var(--sub)}
+  .scan .cam{width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--surface2);color:var(--ink);font-size:17px}
+
+  .lista-tareas{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--surface)}
+  .lista-tareas .lh{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-bottom:1px solid var(--line);font-size:13.5px;font-weight:800}
+  .lista-tareas .lh .n{border-radius:999px;padding:1px 9px;font-size:11.5px;background:rgba(245,158,11,.15);color:#fbbf24}
+  .lista-tareas ul{list-style:none;margin:0;padding:0}
+  .lista-tareas li{display:flex;align-items:center;gap:11px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.05);animation:in .25s}
+  .lista-tareas li:last-child{border-bottom:0}
+  .lista-tareas li.con-falta{background:rgba(239,68,68,.06);box-shadow:inset 3px 0 0 #ef4444}
+  .lista-tareas li .dat{min-width:0;flex:1}
+  .codigo{font-size:15px;font-weight:700}
+  .pill{border-radius:7px;padding:1px 7px;font-size:11.5px;font-weight:800;background:rgba(56,189,248,.15);color:#7dd3fc}
+  .pill.v{background:rgba(167,139,250,.15);color:#c4b5fd}
+  .desc{font-size:11.5px;color:var(--sub);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .badge-u{border-radius:9px;padding:5px 9px;font-size:13px;font-weight:800;font-variant-numeric:tabular-nums;background:var(--line);color:var(--sub)}
+  .badge-u.on{background:rgba(245,158,11,.15);color:#fbbf24}
+  .stock-linea{display:flex;align-items:center;gap:6px;margin-top:5px}
+  .stock-chip{border-radius:8px;padding:2px 8px;font-size:11px;font-weight:800;border:1px solid rgba(239,68,68,.45);background:rgba(239,68,68,.14);color:#fca5a5}
+  .stock-chip.ok{border-color:rgba(34,197,94,.45);background:rgba(34,197,94,.14);color:#86efac}
+  .stock-chip.warn{border-color:rgba(245,158,11,.45);background:rgba(245,158,11,.14);color:#fcd34d}
+  .stock-chip.avisado{border-color:rgba(56,189,248,.5);background:rgba(56,189,248,.14);color:#7dd3fc}
+  .tick{width:38px;height:38px;flex:0 0 38px;border-radius:12px;border:1px solid var(--line2);background:var(--surface2);color:var(--sub);font-size:17px;font-weight:900;transition:.12s;display:grid;place-items:center}
+  .tick:hover{background:rgba(34,197,94,.18);border-color:rgba(34,197,94,.55);color:#86efac;transform:scale(1.06)}
+  .tick.bell:hover{background:rgba(239,68,68,.18);border-color:rgba(239,68,68,.55);color:#fca5a5}
+  .tick.avisado{background:rgba(56,189,248,.16);border-color:rgba(56,189,248,.45);color:#7dd3fc;pointer-events:none}
+
+  .finalizar{height:54px;border-radius:16px;font-size:15.5px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:9px;border:1px solid rgba(239,68,68,.4);background:rgba(239,68,68,.10);color:#fca5a5;width:100%}
+
+  .nota-tareas{display:flex;gap:8px;align-items:flex-start;font-size:11.5px;color:var(--sub);border:1px dashed var(--line2);border-radius:12px;padding:9px 11px}
+
+  /* columna derecha: mayorista */
+  .mayorista{padding:14px;display:flex;flex-direction:column;gap:12px;background:radial-gradient(600px 300px at 50% 0%, rgba(239,68,68,.05), transparent 70%)}
+  .mk-cab{display:flex;gap:12px;align-items:flex-start;justify-content:space-between}
+  .mk-cab .n{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:17px;font-weight:800;color:var(--amber)}
+  .mk-cab b{display:block;font-size:13.5px}
+  .mk-estado{display:flex;align-items:center;gap:9px;padding:10px 12px;border-radius:12px;font-size:12.5px;font-weight:700;border:1px solid rgba(245,158,11,.4);background:rgba(245,158,11,.10);color:#fcd34d;flex-wrap:wrap}
+  .mk-estado.rojo{border-color:rgba(239,68,68,.45);background:rgba(239,68,68,.12);color:#fecaca}
+  .dot{width:8px;height:8px;border-radius:99px;background:currentColor;animation:pulso 1.6s infinite}
+  @keyframes pulso{0%{box-shadow:0 0 0 0 rgba(239,68,68,.5)}70%{box-shadow:0 0 0 9px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}
+  .mk-items{border:1px solid var(--line);border-radius:13px;overflow:hidden}
+  .mk-items .fila{display:flex;gap:10px;align-items:center;padding:9px 11px;border-bottom:1px solid rgba(255,255,255,.05);font-size:12.5px}
+  .mk-items .fila:last-child{border-bottom:0}
+  .mk-items .fila.falta{background:rgba(239,68,68,.09)}
+  .mk-items .a{font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--amber);font-weight:700}
+  .mk-items .fila.falta .a{color:#fca5a5}
+  .mk-items .d{min-width:0;flex:1}
+  .mk-items .d small{color:var(--sub);display:block;font-size:11px}
+  .mk-items .av{margin-left:auto;font-weight:800;font-variant-numeric:tabular-nums;color:var(--sub)}
+  .flecha{text-align:center;font-size:22px;color:var(--sub);line-height:1}
+
+  /* campana de notificaciones (panel) */
+  .campana{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--surface)}
+  .campana .ch{padding:11px 14px;border-bottom:1px solid var(--line);font-size:13px;font-weight:800;display:flex;align-items:center;gap:8px}
+  .campana .ch .cnt{margin-left:auto;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#ef4444;color:#fff;font-size:10.5px;font-weight:800;display:grid;place-items:center}
+  .noti{display:flex;gap:11px;padding:11px 14px;border-bottom:1px solid rgba(255,255,255,.05)}
+  .noti:last-child{border-bottom:0}
+  .noti .nic{width:30px;height:30px;flex:0 0 30px;border-radius:9px;display:grid;place-items:center;background:rgba(239,68,68,.15);color:#fca5a5;font-size:15px}
+  .noti b{font-size:12.5px;display:block}
+  .noti p{font-size:11.5px;color:var(--sub);margin-top:1px}
+  .noti .hace{margin-left:auto;font-size:10.5px;color:var(--sub);white-space:nowrap}
+  .vacio{display:flex;flex-direction:column;align-items:center;gap:6px;padding:26px 14px;text-align:center;color:var(--sub);font-size:12.5px}
+  .vacio .e{font-size:26px;opacity:.6}
+
+  .notas{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px;margin-top:20px}
+  .nota{border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:16px}
+  .nota h4{font-size:13.5px;display:flex;align-items:center;gap:8px;margin-bottom:9px}
+  .nota ul{margin:0;padding-left:16px;display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:#cbd5e1}
+  .nota li b{color:var(--ink)}
+  .nota rojo{border-color:rgba(239,68,68,.35)}
+
+  /* diálogo */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);display:none;place-items:center;z-index:60;padding:16px}
+  .overlay.on{display:grid}
+  .dialogo{width:min(440px,100%);border-radius:18px;border:1px solid var(--line2);background:var(--surface-solid);padding:18px;box-shadow:0 30px 70px rgba(0,0,0,.7);animation:in .25s}
+  .dialogo h3{font-size:16px;display:flex;align-items:center;gap:9px}
+  .dialogo .lead{font-size:13px;color:var(--sub);margin-top:8px}
+  .dialogo .lista{list-style:none;margin:12px 0 0;padding:0;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .dialogo .lista li{display:flex;gap:10px;align-items:center;padding:9px 11px;border-bottom:1px solid rgba(255,255,255,.05);font-size:12.5px}
+  .dialogo .lista li:last-child{border-bottom:0}
+  .dialogo .lista .a{font-family:ui-monospace,Menlo,Consolas,monospace;color:#fca5a5;font-weight:700}
+  .dialogo .lista .av{margin-left:auto;font-weight:800;color:var(--sub);font-variant-numeric:tabular-nums}
+  .dialogo textarea{width:100%;margin-top:12px;min-height:64px;border-radius:12px;border:1px solid var(--line);background:var(--surface2);color:var(--ink);padding:10px 12px;font-family:inherit;font-size:13px;outline:none;resize:vertical}
+  .dialogo textarea:focus{border-color:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.25)}
+  .dialogo .f{display:flex;gap:9px;justify-content:flex-end;margin-top:16px}
+  .btn-ghost{height:38px;padding:0 14px;border-radius:11px;border:1px solid var(--line2);background:transparent;color:var(--sub);font-size:13px;font-weight:700}
+  .btn-ghost:hover{color:var(--ink)}
+
+  @keyframes in{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+
+<div class="head">
+  <div>
+    <span class="badge-mock">● Mockup · idea a validar</span>
+    <h1>Avisar faltantes de stock al armar un pedido</h1>
+    <p class="sub" style="max-width:720px">
+      Idea: al abrir el armado (o al escanear), el hub ya tiene el stock por <b>SKU (color + talle)</b> de
+      la vista de stock. Cuando lo pedido supera lo que hay, la línea se marca en rojo y aparece un
+      <b>aviso arriba del panel</b>. El legajo puede <b>avisar el faltante</b> en un toque: le llega al
+      mayorista en la campana (y al celular por push) con el detalle, y la línea queda marcada en el pedido.
+    </p>
+  </div>
+  <div class="actions">
+    <button class="btn" id="btnAbrir">⚠️ Avisar faltantes</button>
+    <button class="btn btn-red" id="btnDemo">▶ Ver demo</button>
+    <button class="btn" id="btnReset">↺ Reiniciar</button>
+  </div>
+</div>
+
+<div class="leyenda">
+  <span class="lg off"><i></i> El armado ya funciona (escaneo, ✓ manual, pausar)</span>
+  <span class="lg on"><i></i> Nuevo: aviso de stock insuficiente + avisar al mayorista</span>
+  <span class="lg">🔔 Notificación a la campana y push</span>
+</div>
+
+<div class="grid">
+  <!-- ================= LEGAJO ================= -->
+  <div class="card">
+    <div class="card-h">
+      <h3>📱 Armado del pedido <span class="tag">celular del legajo</span></h3>
+      <span class="tag nuevo">Juan Pérez · 4471</span>
+    </div>
+    <div class="disp">
+      <div class="device">
+        <div class="appbar">
+          <span class="logo">M</span>
+          <b>Mi repo</b>
+          <span class="bell">🔔</span>
+        </div>
+        <div class="screen">
+
+          <!-- Panel compacto -->
+          <div class="panel">
+            <div class="p1">
+              <span class="nom">
+                <b>Pedido N° 48231</b>
+                <span>Verdulería San José · <span style="color:#fbbf24">● Normal</span></span>
+              </span>
+              <span class="reloj" id="reloj">12:34</span>
+              <button class="sesion">⏸ Pausar</button>
+            </div>
+            <div class="prog-fila">
+              <div class="bar"><span style="width:45%"></span></div>
+              <span class="contador">18<small>/40 u.</small></span>
+            </div>
+          </div>
+
+          <!-- Aviso de faltantes (aparece al detectar stock insuficiente) -->
+          <div class="aviso-stock" id="avisoStock">
+            <span class="ic">⚠️</span>
+            <div class="txt">
+              <b>2 artículos no tienen stock suficiente</b>
+              <p>Faltan <b>5 unidades</b> para completar el pedido.</p>
+              <div class="acc">
+                <button class="mini primary" id="btnAvisarLineas">🔔 Avisar faltantes al mayorista</button>
+                <button class="mini ghost">Ver solo faltantes</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="scan">
+            <input placeholder="Escaneá el código…" />
+            <button class="cam">📷</button>
+          </div>
+
+          <div class="lista-tareas">
+            <div class="lh">Faltan escanear <span class="n" id="contLineas">7</span></div>
+            <ul id="lineas">
+              <li class="con-falta">
+                <div class="dat">
+                  <div class="codigo">260345 <span class="pill">ROJO</span> <span class="pill v">M</span></div>
+                  <div class="desc">Buzo cuello redondo frisa</div>
+                  <div class="stock-linea">
+                    <span class="stock-chip ok">En stock: 8</span>
+                    <span class="muted">pide 4</span>
+                  </div>
+                </div>
+                <button class="badge-u on">2/4</button>
+                <button class="tick">✓</button>
+              </li>
+
+              <li class="con-falta" id="lineaFalta1">
+                <div class="dat">
+                  <div class="codigo">301188 <span class="pill">AZUL</span> <span class="pill v">L</span></div>
+                  <div class="desc">Campera puffer canguro</div>
+                  <div class="stock-linea">
+                    <span class="stock-chip">En stock: 1 · pide 6</span>
+                    <span class="stock-chip" id="chipFalta1" style="display:none" ></span>
+                  </div>
+                </div>
+                <button class="badge-u on">1/6</button>
+                <button class="tick bell" id="bell1" title="Avisar que no hay stock">🔔</button>
+              </li>
+
+              <li id="lineaFalta2">
+                <div class="dat">
+                  <div class="codigo">298764 <span class="pill">NEGRO</span> <span class="pill u">UNICO</span></div>
+                  <div class="desc">Riñonera urbana 3 bolsillos</div>
+                  <div class="stock-linea">
+                    <span class="stock-chip">En stock: 0 · pide 3</span>
+                    <span class="stock-chip" id="chipFalta2" style="display:none"></span>
+                  </div>
+                </div>
+                <button class="badge-u">0/3</button>
+                <button class="tick bell" id="bell2" title="Avisar que no hay stock">🔔</button>
+              </li>
+
+              <li>
+                <div class="dat">
+                  <div class="codigo">275901 <span class="pill">VERDE</span> <span class="pill v">S</span></div>
+                  <div class="desc">Remera oversize algodón</div>
+                  <div class="stock-linea"><span class="stock-chip ok">En stock: 12</span> <span class="muted">pide 2</span></div>
+                </div>
+                <button class="badge-u">2/2</button>
+                <button class="tick">✓</button>
+              </li>
+            </ul>
+          </div>
+
+          <button class="finalizar">🏁 Finalizar armado</button>
+          <div class="nota-tareas">💡 Los faltantes avisados quedan marcados en el pedido del mayorista; no hay que escribir nada por WhatsApp.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MAYORISTA ================= -->
+  <div class="card">
+    <div class="card-h">
+      <h3>💻 Lo que ve el mayorista <span class="tag">lado pedido</span></h3>
+      <span class="tag nuevo">En vivo</span>
+    </div>
+    <div class="mayorista">
+
+      <div class="campana">
+        <div class="ch">🔔 Avisos <span class="cnt" id="cntCampana">0</span></div>
+        <div id="notis">
+          <div class="vacio" id="vacioCampana">
+            <span class="e">🔕</span>
+            Sin avisos de faltantes todavía.
+          </div>
+        </div>
+      </div>
+
+      <div class="flecha">↓</div>
+
+      <div class="mk-cab">
+        <div>
+          <span class="n">Pedido N° 48231</span>
+          <b>Verdulería San José</b>
+        </div>
+      </div>
+
+      <div class="mk-estado rojo" id="estadoPedido" style="display:none">
+        <span class="dot"></span> Faltantes de stock avisados por el piso (#4471)
+      </div>
+      <div class="mk-estado" id="estadoNormal">
+        <span class="dot"></span> En armado · piso #4471
+      </div>
+
+      <div class="mk-items">
+        <div class="fila"><span class="a">260345</span><span class="d">Buzo cuello redondo · ROJO · M<small>pedido 4</small></span><span class="av">2</span></div>
+        <div class="fila falta" id="fila1"><span class="a">301188</span><span class="d">Campera puffer · AZUL · L<small>pedido 6 · hay 1</small></span><span class="av">1</span></div>
+        <div class="fila falta" id="fila2"><span class="a">298764</span><span class="d">Riñonera urbana · NEGRO · UNICO<small>pedido 3 · hay 0</small></span><span class="av">0</span></div>
+        <div class="fila"><span class="a">275901</span><span class="d">Remera oversize · VERDE · S<small>pedido 2</small></span><span class="av">2</span></div>
+      </div>
+
+      <div class="nota">ℹ️ Al avisar, cada línea salta sola en el pedido con el faltante y la observación del legajo. El mayorista decide ahí si repone o anula la línea.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= NOTAS ================= -->
+<div class="notas">
+  <div class="nota">
+    <h4>🔎 Cómo se detecta</h4>
+    <ul>
+      <li>El stock por <b>SKU (artículo + color + talle)</b> ya está en la vista de stock que usa el pedido.</li>
+      <li>Se compara lo <b>pedido</b> contra lo que <b>hay</b>; si no alcanza, la línea se marca.</li>
+      <li>No frena el armado: el legajo sigue escaneando lo que hay.</li>
+    </ul>
+  </div>
+  <div class="nota">
+    <h4>🔔 Qué llega</h4>
+    <ul>
+      <li>A la <b>campana</b> del mayorista: "Faltan X u. del pedido N° …".</li>
+      <li>Al <b>celular</b> por push (app cerrada), igual que los armados y las pausas.</li>
+      <li>La línea queda <b>marcada en el pedido</b> con el detalle.</li>
+    </ul>
+  </div>
+  <div class="nota">
+    <h4>🧩 A definir con vos</h4>
+    <ul>
+      <li>¿Aviso <b>automático</b> al abrir, o sólo cuando el legajo toca "Avisar"?</li>
+      <li>¿Quién recibe: mayorista que pidió el armado, o un rol aparte?</li>
+      <li>¿La línea se marca <b>faltante</b> sola o la cierra el mayorista?</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ================= DIÁLOGO ================= -->
+<div class="overlay" id="overlay">
+  <div class="dialogo">
+    <h3>⚠️ Avisar faltantes de stock</h3>
+    <p class="lead">Se avisa al mayorista con estos artículos. Podés dejar una observación.</p>
+    <ul class="lista" id="listaDialogo">
+      <li><span class="a">301188</span> Campera puffer · AZUL · L <span class="av">faltan 5</span></li>
+      <li><span class="a">298764</span> Riñonera urbana · NEGRO · UNICO <span class="av">faltan 3</span></li>
+    </ul>
+    <textarea id="obs" placeholder="Ej.: del puffer azul L sólo hay 1, y la riñonera negra no hay ninguna."></textarea>
+    <div class="f">
+      <button class="btn-ghost" id="btnCancelar">Cancelar</button>
+      <button class="btn btn-red" id="btnEnviar">🔔 Avisar al mayorista</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id)
+  const faltan = [
+    { linea: 1, art: '301188', desc: 'Campera puffer · AZUL · L', u: 5 },
+    { linea: 2, art: '298764', desc: 'Riñonera urbana · NEGRO · UNICO', u: 3 },
+  ]
+
+  function abrir() { $('overlay').classList.add('on') }
+  function cerrar() { $('overlay').classList.remove('on') }
+
+  function enviar() {
+    cerrar()
+    // marca cada línea avisada
+    faltan.forEach((f) => {
+      const chip = $('chipFalta' + f.linea)
+      const bell = $('bell' + f.linea)
+      if (bell) { bell.classList.add('avisado'); bell.textContent = '✓' }
+      if (chip) { chip.style.display = 'inline-block'; chip.className = 'stock-chip avisado'; chip.textContent = 'Avisado al mayorista' }
+      const fila = $('fila' + f.linea)
+      if (fila) fila.querySelector('.av').textContent = '⏳'
+    })
+    // campana
+    $('vacioCampana').style.display = 'none'
+    const noti = document.createElement('div')
+    noti.className = 'noti'
+    noti.innerHTML = '<span class="nic">⚠️</span><div><b>Faltan 8 u. de stock · Pedido N° 48231</b><p>301188 (faltan 5) · 298764 (faltan 3) · piso #4471</p></div><span class="hace">ahora</span>'
+    $('notis').prepend(noti)
+    $('cntCampana').textContent = '1'
+    // estado del pedido
+    $('estadoNormal').style.display = 'none'
+    $('estadoPedido').style.display = 'flex'
+    // banner del legajo: pasa a "avisado"
+    $('avisoStock').querySelector('b').textContent = 'Faltantes avisados al mayorista'
+    $('avisoStock').querySelector('p').innerHTML = 'Ya le llegó el aviso. Podés seguir armando lo que hay.'
+    $('btnAvisarLineas').style.display = 'none'
+  }
+
+  function reset() {
+    cerrar()
+    $('cntCampana').textContent = '0'
+    $('notis').innerHTML = '<div class="vacio" id="vacioCampana"><span class="e">🔕</span>Sin avisos de faltantes todavía.</div>'
+    $('estadoNormal').style.display = 'flex'
+    $('estadoPedido').style.display = 'none'
+    $('avisoStock').querySelector('b').textContent = '2 artículos no tienen stock suficiente'
+    $('avisoStock').querySelector('p').innerHTML = 'Faltan <b>5 unidades</b> para completar el pedido.'
+    $('btnAvisarLineas').style.display = 'inline-flex'
+    faltan.forEach((f) => {
+      const chip = $('chipFalta' + f.linea); if (chip) chip.style.display = 'none'
+      const bell = $('bell' + f.linea); if (bell) { bell.classList.remove('avisado'); bell.textContent = '🔔' }
+      const fila = $('fila' + f.linea); if (fila) fila.querySelector('.av').textContent = f.linea === 1 ? '1' : '0'
+    })
+  }
+
+  $('btnAbrir').onclick = abrir
+  $('btnAvisarLineas').onclick = abrir
+  $('btnCancelar').onclick = cerrar
+  $('btnEnviar').onclick = enviar
+  $('btnReset').onclick = reset
+  $('btnDemo').onclick = () => { reset(); setTimeout(abrir, 350); setTimeout(enviar, 1400) }
+  $('overlay').addEventListener('click', (e) => { if (e.target === $('overlay')) cerrar() })
+</script>
+</body>
+</html>

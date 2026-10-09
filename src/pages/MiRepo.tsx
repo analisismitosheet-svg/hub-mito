@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
   ScanLine, Loader2, Store, Check, Undo2, Camera, CameraOff, ChevronRight, AlertTriangle,
-  Play, Pause, Flag, Timer, BellRing,
+  Play, Pause, Flag, Timer, BellRing, RefreshCcw,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -912,6 +912,15 @@ export default function MiRepo() {
             {av ? ` · ${av.lineas} línea${av.lineas === 1 ? '' : 's'} · ${av.unidades} unidades` : ''}
           </p>
           {a.obs && <p className="mt-1 text-xs italic text-sub">“{a.obs}”</p>}
+          {a.liberado_veces && a.liberado_veces > 0 && (
+            <p className="mt-1.5 flex items-start gap-1.5 rounded-lg bg-brand-600/10 px-2 py-1.5 text-xs text-brand-400" role="note">
+              <RefreshCcw size={12} className="mt-px shrink-0" aria-hidden />
+              <span className="min-w-0">
+                Lo soltó {a.liberado_nombre ? (modoAdmin ? a.liberado_nombre : 'otro legajo') : 'un legajo'}
+                {a.liberado_motivo ? <>: “{a.liberado_motivo}”</> : '.'} Vuelve a estar pendiente.
+              </span>
+            </p>
+          )}
           <div className="mt-3 flex gap-2">
             <button
               type="button"
