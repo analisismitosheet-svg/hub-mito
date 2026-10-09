@@ -17,6 +17,8 @@
  * Además NO construir el req de la vista con spread ({ ...req }): el req del runtime
  * tiene propiedades no enumerables (headers) que el spread pierde, y sqlVista explota.
  * Se reutiliza el mismo req y solo se setea req.query.view.
+ * Y ojo: el rewrite ruta=$1 entrega el segmento URL-encodificado (los ':' del alias de
+ * servidor llegan como %3A). Hay que decodeURIComponent antes de comparar la whitelist.
  */
 import vista from '../../src/lib/sqlVista.js'
 import status from '../../src/lib/sqlStatus.js'
@@ -40,8 +42,22 @@ function primero(q: string | string[] | undefined): string {
   return q ?? ''
 }
 
+/**
+ * En el rewrite de Vercel el segmento se inyecta como ruta=$1 y llega URL-encodificado:
+ * los ':' del alias de servidor (DESKTOP-OA4GU6I:VISTAS_...) aparecen como %3A, y así
+ * no matchean la whitelist ni el regex. Lo decodificamos antes de comparar.
+ */
+function decodificar(s: string): string {
+  if (!s.includes('%')) return s
+  try {
+    return decodeURIComponent(s)
+  } catch {
+    return s
+  }
+}
+
 export default async function handler(req: Req, res: Res) {
-  const ruta = primero(req.query.ruta)
+  const ruta = decodificar(primero(req.query.ruta))
 
   if (ruta === 'status') return status(req, res)
   if (ruta === 'catalogo') return catalogo(req, res)
