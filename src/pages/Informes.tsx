@@ -20,13 +20,13 @@ const inputCls =
   'w-full rounded-xl border border-line bg-surface2 px-3 py-2 text-sm text-ink outline-none transition duration-250 placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40'
 const labelCls = 'mb-1 block text-xs font-medium text-sub'
 
-/** POST a /api/informe-enviar con el JWT de la sesión. */
+/** POST a /api/informe con el JWT de la sesión. */
 async function apiInforme(payload: Record<string, unknown>): Promise<{ texto?: string; detalle?: string; enviados?: number }> {
   if (!supabase) throw new Error('Supabase no está configurado.')
   const { data } = await supabase.auth.getSession()
   const token = data.session?.access_token
   if (!token) throw new Error('Sin sesión activa.')
-  const res = await fetch('/api/informe-enviar', {
+  const res = await fetch('/api/informe', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify(payload),
@@ -78,7 +78,7 @@ export default function Informes() {
       const { data } = await supabase.auth.getSession()
       const token = data.session?.access_token
       if (!token) return
-      const res = await fetch('/api/informe-cron', { headers: { Authorization: `Bearer ${token}` } })
+      const res = await fetch('/api/informe', { headers: { Authorization: `Bearer ${token}` } })
       if (!res.ok) return
       const body = (await res.json().catch(() => null)) as { procesados?: number } | null
       if (body?.procesados) await cargar()
@@ -143,7 +143,7 @@ export default function Informes() {
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 font-display text-xl font-semibold text-ink">
-            <FileText size={20} className="text-cyan-500" aria-hidden /> Informes y reportes
+            <FileText size={20} className="text-cyan-500" aria-hidden /> Envío informes y reportes
           </h1>
           <p className="mt-1 text-sm text-sub">Se mandan por WhatsApp: a mano, o solos todos los días a la hora que elijas.</p>
         </div>

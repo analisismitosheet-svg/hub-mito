@@ -595,7 +595,7 @@ export const APPS: AppDef[] = [
   {
     id: 'informes',
     areaId: 'sistemas',
-    title: 'Informes y reportes',
+    title: 'Envío informes y reportes',
     description: 'Creá informes y recibilos por WhatsApp, a mano o todos los días.',
     icon: FileText,
     kind: 'internal',

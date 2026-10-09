@@ -1,7 +1,7 @@
 /* ------------------------------------------------------------------ */
 /*  Avisos push en el celular (armado de pedidos).                      */
 /*  activarAvisos() anota este celular (pide permiso de notificaciones,  */
-/*  se suscribe con la clave VAPID de /api/push-armado y lo guarda con   */
+/*  se suscribe con la clave VAPID de /api/push?tipo=armado y lo guarda  */
 /*  push_suscribir). avisarArmados() lo llama el mayorista después de    */
 /*  pedir_armado para que suene en los celulares aunque estén bloqueados.*/
 /* ------------------------------------------------------------------ */
@@ -60,7 +60,7 @@ export async function activarAvisos(): Promise<string | null> {
   try {
     let sub = await reg.pushManager.getSubscription()
     if (!sub) {
-      const r = await fetch('/api/push-armado')
+      const r = await fetch('/api/push?tipo=armado')
       const { publicKey } = (await r.json()) as { publicKey?: string }
       if (!publicKey) return 'No se pudo obtener la clave de avisos.'
       sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: aBytes(publicKey) as BufferSource })
@@ -92,7 +92,7 @@ export async function avisarArmados(): Promise<void> {
     const { data } = await supabase.auth.getSession()
     const token = data.session?.access_token
     if (!token) return
-    await fetch('/api/push-armado', { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
+    await fetch('/api/push?tipo=armado', { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
   } catch {
     /* el aviso dentro de la app (campana) sigue andando */
   }
@@ -105,7 +105,7 @@ export async function avisarPausa(): Promise<void> {
     const { data } = await supabase.auth.getSession()
     const token = data.session?.access_token
     if (!token) return
-    await fetch('/api/push-pausa', { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
+    await fetch('/api/push?tipo=pausa', { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
   } catch {
     /* el aviso dentro de la app (campana) sigue andando */
   }
@@ -119,7 +119,7 @@ export async function avisarFaltantes(armadoId: string): Promise<void> {
     const { data } = await supabase.auth.getSession()
     const token = data.session?.access_token
     if (!token) return
-    await fetch('/api/push-faltantes', {
+    await fetch('/api/push?tipo=faltantes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ armado_id: armadoId }),

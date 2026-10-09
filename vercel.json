@@ -14,16 +14,13 @@
     "api/pedidos-venta-sync.ts": {
       "maxDuration": 60
     },
-    "api/informe-enviar.ts": {
-      "maxDuration": 60
-    },
-    "api/informe-cron.ts": {
+    "api/informe.ts": {
       "maxDuration": 60
     }
   },
   "crons": [
     {
-      "path": "/api/informe-cron",
+      "path": "/api/informe",
       "schedule": "0 11 * * *"
     }
   ]
