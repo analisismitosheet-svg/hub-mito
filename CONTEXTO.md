@@ -59,7 +59,7 @@ Documento para retomar el trabajo en otra PC. El código está en GitHub (`main`
 - **Fix:** un único endpoint con **segmento dinámico simple** `api/sql/[ruta].ts` (como el viejo `[view].ts`, que sí puebla `req.query.<nombre>`) que rutea status/catálogo/vista y le pasa a la vista **el mismo `req`** seteando `req.query.view` — jamás un spread.
 
 ## F12 Consulta artículos (Mayorista)
-- Pantalla: `src/pages/ConsultaArticulos.tsx` → `src/lib/articulosConsulta.ts` → `src/lib/sqlApi.ts` (`leerVistaFiltrada`) → `GET /api/sql/<vista>?where=&value=&match=` (`api/sql/[view].ts`) → Logic App → Puente → `VISTAS_CONSOLIDADAS` → servidor vinculado `MITO` → `DRAGONFISH_MITO`.
+- Pantalla: `src/pages/ConsultaArticulos.tsx` → `src/lib/articulosConsulta.ts` → `src/lib/sqlApi.ts` (`leerVistaFiltrada`) → `GET /api/sql/<vista>?where=&value=&match=` (`api/sql/[ruta].ts`) → Logic App → Puente → `VISTAS_CONSOLIDADAS` → servidor vinculado `MITO` → `DRAGONFISH_MITO`.
 - Muestra `id articulo` (+ color/talle como chips), `nombre completo`, `material`, `grupo`, `stock en mito`, `ubicacion`, `precio`. Granularidad **por SKU (artículo + color + talle)**. Buscador por código o descripción con debounce de 400 ms + botón "Consultar"/Enter (inmediato) y export a Excel.
 - La Logic App **ignora** los parámetros del filtro → la vista devuelve el TOP y la pantalla **vuelve a filtrar en el navegador**; si detecta que el SQL no aplicó el filtro muestra el aviso "el SQL no aplicó el filtro: se acotó en el navegador".
 - Vista en el SQL Server: **`DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.vw_ARTICULOS_MITO`**, creada con `node scripts/sql.mjs --alias -f sql/vw_ARTICULOS_MITO.sql`. `--alias` es obligatorio: sin él el script entra a `ZOOLOGIC`, que es donde **estaba antes** (en `DRAGONFISH_MITO.ZooLogic`, ya borrada) y donde no está ahora.
@@ -238,7 +238,7 @@ Hecho:
 - `src/pages/Cumpleanios.tsx` + `src/components/EditorCumple.tsx` — cumpleaños + editor de imagen (konva, plantilla por URL en `public/plantilla-cumpleanos.jpeg`).
 - `src/pages/Rma.tsx` + `src/pages/ProveedoresPacho.tsx` + `src/pages/GuiaPacho.tsx` — RMA con proveedores/guía.
 - `src/pages/Replicas.tsx` + `src/lib/replicas.ts` + `api/replicas.ts` — estado de las réplicas (Replicador SQL de la PC central); `puente-sql/sql/replicas.sql` + `scripts/mock-replicas.mjs`.
-- `src/pages/ConsultaArticulos.tsx` + `src/lib/articulosConsulta.ts` — F12 Consulta artículos (Mayorista); `src/lib/sqlApi.ts` (`leerVistaFiltrada`) + `api/sql/[view].ts` + `puente-sql/server.js` (filtro del puente).
+- `src/pages/ConsultaArticulos.tsx` + `src/lib/articulosConsulta.ts` — F12 Consulta artículos (Mayorista); `src/lib/sqlApi.ts` (`leerVistaFiltrada`) + `api/sql/[ruta].ts` + `puente-sql/server.js` (filtro del puente).
 - `sql/consulta_articulos.sql` (Supabase: permiso + RLS) y `sql/vw_ARTICULOS_MITO.sql` (la vista, en `VISTAS_CONSOLIDADAS`; se corre con `--alias`).
 - `src/pages/RecepcionIndo.tsx` + `src/lib/recepcionIndo.ts` — Recepción INDO (Depósito): import del Excel "Recepción de Mercadería" + marcado de control.
   - `src/lib/proveedoresIndo.ts` — catálogo de proveedores del desplegable, sembrado en `recepcion_indo_proveedores` para que ande sin el Puente SQL; se refresca con la vista `DRAGONFISH_INDOD.dbo.PROVEEDORES_INDO`.
