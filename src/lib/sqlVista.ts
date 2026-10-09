@@ -176,21 +176,6 @@ export default async function handler(req: Req, res: Res) {
 
   const vista = primerQuery(req.query.view)
   const habilitadas = new Set([...SQL_VIEWS, ...(await vistasDeDb())])
-
-  // ECHO TEMPORAL de diagnóstico (se quita): qué recibe y contra qué se compara.
-  if (primerQuery(req.query.debug) === '1') {
-    const vistasDb = await vistasDeDb()
-    return res.status(200).json({
-      debugSqlVista: true,
-      vistaRecibida: JSON.stringify(vista),
-      regexOK: /^([A-Za-z0-9_-]+:)?[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+){0,2}$/.test(vista),
-      enSQL_VIEWS: SQL_VIEWS.includes(vista),
-      enDb: vistasDb.includes(vista),
-      vistasDb: vistasDb,
-      sqlViews: SQL_VIEWS,
-    })
-  }
-
   if (!/^([A-Za-z0-9_-]+:)?[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+){0,2}$/.test(vista) || !habilitadas.has(vista)) {
     return res.status(400).json({ error: 'Vista no habilitada' })
   }
