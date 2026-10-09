@@ -57,16 +57,6 @@ function decodificar(s: string): string {
 }
 
 export default async function handler(req: Req, res: Res) {
-  // ECHO TEMPORAL de diagnóstico (se quita): muestra qué entrega Vercel en req.query.
-  if (primero(req.query.debug) === '1') {
-    return res.status(200).json({
-      debug: true,
-      rutaCruda: req.query.ruta ?? null,
-      query: req.query,
-      url: (req as unknown as { url?: string }).url ?? null,
-    })
-  }
-
   const ruta = decodificar(primero(req.query.ruta))
 
   if (ruta === 'status') return status(req, res)
