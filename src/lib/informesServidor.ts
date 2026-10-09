@@ -9,7 +9,7 @@
  *   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
  *   WHATSAPP_TOKEN      - token de acceso de la app de Meta
  *   WHATSAPP_PHONE_ID   - id del número emisor (Phone number ID)
- *   WHATSAPP_VERSION     - opcional, default v21.0
+ *   WHATSAPP_VERSION     - opcional, default v23.0
  *   SQL_LOGICAPP_URL / SQL_BRIDGE_TOKEN / SQL_VIEWS / SQL_MAX_ROWS (para la fuente "vista")
  */
 import { postAlPuente } from './puenteRetry.js'
@@ -395,7 +395,7 @@ export async function enviarWhatsapp(telefono: string, texto: string): Promise<{
   if (!token || !phoneId) {
     return { ok: false, detalle: 'WhatsApp no configurado: faltan WHATSAPP_TOKEN y/o WHATSAPP_PHONE_ID en Vercel' }
   }
-  const version = process.env.WHATSAPP_VERSION || 'v21.0'
+  const version = process.env.WHATSAPP_VERSION || 'v23.0'
   const destino = normalizarTelefono(telefono)
   if (!destino) return { ok: false, detalle: 'Teléfono vacío o inválido' }
   try {
@@ -429,7 +429,7 @@ export async function enviarWhatsappImagen(telefono: string, png: Buffer, captio
   if (!token || !phoneId) {
     return { ok: false, detalle: 'WhatsApp no configurado: faltan WHATSAPP_TOKEN y/o WHATSAPP_PHONE_ID en Vercel' }
   }
-  const version = process.env.WHATSAPP_VERSION || 'v21.0'
+  const version = process.env.WHATSAPP_VERSION || 'v23.0'
   const destino = normalizarTelefono(telefono)
   if (!destino) return { ok: false, detalle: 'Teléfono vacío o inválido' }
   try {
