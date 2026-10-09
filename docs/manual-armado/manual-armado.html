@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>Manual · Armado de pedidos</title>
+<style>
+  @page { size: A4; margin: 14mm 14mm 16mm; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, -apple-system, Roboto, Arial, sans-serif; color: #1e293b; font-size: 10.5pt; line-height: 1.45; margin: 0; }
+  h1 { font-size: 24pt; margin: 0 0 4px; color: #0f172a; letter-spacing: -.02em; }
+  h2 { font-size: 15pt; margin: 0 0 8px; color: #0f172a; border-bottom: 2px solid #ef4444; padding-bottom: 4px; }
+  h3 { font-size: 12pt; margin: 14px 0 4px; color: #0f172a; }
+  p { margin: 4px 0; }
+  ul, ol { margin: 4px 0; padding-left: 18px; }
+  li { margin: 2px 0; }
+  .portada { height: 255mm; display: flex; flex-direction: column; justify-content: center; page-break-after: always; }
+  .marca { display: inline-flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+  .logo { width: 42px; height: 42px; border-radius: 50%; background: #e11d2e; color: #fff; font-weight: 800; font-size: 20px; display: flex; align-items: center; justify-content: center; }
+  .sub { color: #64748b; }
+  .indice { margin-top: 28px; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 18px; background: #f8fafc; }
+  .indice li { margin: 5px 0; }
+  .seccion { page-break-before: always; }
+  .paso { display: flex; gap: 16px; align-items: flex-start; margin: 12px 0 18px; page-break-inside: avoid; }
+  .paso .texto { flex: 1; }
+  .num { display: inline-flex; width: 24px; height: 24px; border-radius: 50%; background: #0f172a; color: #fff; font-weight: 700; font-size: 11pt; align-items: center; justify-content: center; margin-right: 6px; }
+  .cel { width: 62mm; flex: none; border-radius: 14px; border: 1px solid #cbd5e1; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+  .pc { width: 100%; border-radius: 10px; border: 1px solid #cbd5e1; box-shadow: 0 2px 8px rgba(0,0,0,.12); margin: 6px 0 4px; }
+  .bloque-pc { page-break-inside: avoid; margin: 10px 0 16px; }
+  .nota { border-left: 4px solid #f59e0b; background: #fffbeb; padding: 8px 12px; border-radius: 0 8px 8px 0; margin: 10px 0; page-break-inside: avoid; }
+  .ok { border-left-color: #22c55e; background: #f0fdf4; }
+  .rojo { border-left-color: #ef4444; background: #fef2f2; }
+  .chip { display: inline-block; border-radius: 6px; padding: 0 6px; font-weight: 700; font-size: 9.5pt; }
+  .urg { background: #fee2e2; color: #b91c1c; } .nor { background: #fef3c7; color: #b45309; } .baj { background: #e0f2fe; color: #0369a1; }
+  .verde { background: #dcfce7; color: #15803d; } .ambar { background: #fef3c7; color: #b45309; }
+  table { width: 100%; border-collapse: collapse; margin: 6px 0; font-size: 10pt; page-break-inside: avoid; }
+  th, td { border: 1px solid #e2e8f0; padding: 5px 8px; text-align: left; vertical-align: top; }
+  th { background: #f1f5f9; }
+  .pie { color: #94a3b8; font-size: 8.5pt; margin-top: 24px; }
+</style>
+</head>
+<body>
+
+<section class="portada">
+  <div class="marca"><div class="logo">M</div><b style="font-size:14pt">Hub MITO</b></div>
+  <h1>Armado de pedidos</h1>
+  <p class="sub" style="font-size:13pt">Manual de uso · Mayorista pide · el piso arma en Mi repo</p>
+  <div class="indice">
+    <b>Contenido</b>
+    <ol>
+      <li>Cómo funciona (resumen)</li>
+      <li>Mayorista: pedir el armado desde Pedidos de venta</li>
+      <li>Piso: aceptar el pedido en Mi repo</li>
+      <li>Piso: armar el pedido (iniciar, escanear o tildar, pausar)</li>
+      <li>Piso: finalizar</li>
+      <li>Mayorista: seguir el avance y sacar un armado</li>
+      <li>Preguntas frecuentes</li>
+    </ol>
+  </div>
+  <p class="pie">Capturas tomadas del hub con un pedido de ejemplo (N° 10090 GPAZD). Octubre 2026.</p>
+</section>
+
+<section>
+  <h2>1. Cómo funciona</h2>
+  <ol>
+    <li><b>El mayorista</b> elige uno o varios pedidos en <b>Pedidos de venta</b> y toca <b>Pedir armado</b>, con una prioridad.</li>
+    <li><b>A todos los legajos del piso</b> les aparece el pedido en <b>Mi repo</b> y les suena el celular (aunque esté bloqueado, si activaron los avisos).</li>
+    <li><b>El primero que toca «Acepto» se lo queda.</b> A los demás les desaparece.</li>
+    <li>El legajo toca <b>Iniciar</b> y arma: escanea con la cámara o el escáner, o tilda a mano.</li>
+    <li>Al terminar toca <b>Finalizar</b>. Lo que faltó queda como <b>faltante</b>.</li>
+    <li>El mayorista ve todo el tiempo cómo va: el pedido se pone en <b>verde</b> y dice quién lo está armando.</li>
+  </ol>
+  <h3>Prioridades</h3>
+  <table>
+    <tr><th>Prioridad</th><th>Cómo avisa</th><th>Dónde aparece</th></tr>
+    <tr><td><span class="chip urg">🚨 Urgente</span></td><td>Suena 3 veces</td><td>Arriba de todo</td></tr>
+    <tr><td><span class="chip nor">⏰ Normal</span></td><td>Suena 2 veces</td><td>Después de los urgentes</td></tr>
+    <tr><td><span class="chip baj">🌙 Baja</span></td><td>Un pitido</td><td>Al final</td></tr>
+  </table>
+  <p>Dentro de la misma prioridad, primero el más viejo.</p>
+  <div class="nota ok"><b>Una tarea a la vez:</b> cada legajo tiene un solo pedido (o repo) en marcha. Si está con uno Normal y entra un Urgente, al tocar <b>Iniciar</b> en el Urgente el Normal se pausa solo, y queda registrado como pausa por «otra tarea».</div>
+</section>
+
+<section class="seccion">
+  <h2>2. Mayorista: pedir el armado</h2>
+  <div class="bloque-pc">
+    <p><span class="num">1</span>Entrá a <b>Mayorista → Pedidos de venta</b>. Elegí el período (<b>📅 Hoy</b>, Esta semana…) y abrí el pedido. Arriba a la derecha está el botón rojo <b>Pedir armado</b>.</p>
+    <img class="pc" src="img/01-pedidos.jpg" alt="Pedidos de venta" />
+  </div>
+  <div class="bloque-pc">
+    <p><span class="num">2</span>Elegí la <b>prioridad</b> y, si querés, una <b>observación</b> para el piso (por ejemplo, «Sale hoy con el transporte»). Tocá <b>Pedir armado</b>.</p>
+    <img class="pc" src="img/02-modal-prioridad.jpg" alt="Elegir prioridad" />
+  </div>
+  <div class="bloque-pc">
+    <p><span class="num">3</span>Listo: arriba aparece la confirmación y el pedido dice <span class="chip ambar">Armado Urgente · esperando que alguien lo acepte</span>. El botón cambia a <b>Pedido a armar</b>.</p>
+    <img class="pc" src="img/03-pedido-a-armar.jpg" alt="Pedido enviado" />
+  </div>
+  <div class="bloque-pc">
+    <p><span class="num">4</span><b>Varios a la vez:</b> tildá los pedidos en la lista (o <b>Tildar todo</b>). Abajo aparece una barra con <b>Pedir armado</b> para todos los seleccionados.</p>
+    <img class="pc" src="img/04-seleccion-varios.jpg" alt="Selección múltiple" />
+  </div>
+  <div class="nota">Un pedido no se puede pedir dos veces mientras su armado siga abierto.</div>
+</section>
+
+<section class="seccion">
+  <h2>3. Piso: aceptar el pedido</h2>
+  <div class="paso">
+    <img class="cel" src="img/05-mi-repo-armados.jpg" alt="Armados pedidos" />
+    <div class="texto">
+      <p><span class="num">1</span>En <b>Mi repo</b>, arriba, está <b>Armados pedidos</b> con los pedidos que esperan a alguien, ordenados por prioridad.</p>
+      <p>Cada tarjeta muestra la prioridad, el N° de pedido, el cliente y la observación del mayorista.</p>
+      <p><span class="num">2</span>Tocá <b>✅ Acepto</b> para quedártelo. Si no lo vas a hacer vos, <b>Omitir</b> lo saca de tu pantalla (les sigue apareciendo a los demás).</p>
+      <div class="nota">Si dos tocan Acepto al mismo tiempo, se lo queda el primero. Al otro le avisa que ya lo tomó otro legajo.</div>
+      <h3>Avisos en el celular</h3>
+      <p>La primera vez, tocá <b>Activar avisos</b> en Mi repo y aceptá el permiso. Así suena aunque el celular esté bloqueado.</p>
+      <ul>
+        <li>En <b>iPhone</b> solo funciona con la app instalada en la pantalla de inicio (Compartir → Agregar a pantalla de inicio).</li>
+        <li>Con el celular en <b>silencio</b> vibra pero no suena.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="seccion">
+  <h2>4. Piso: armar el pedido</h2>
+  <div class="paso">
+    <img class="cel" src="img/06-armado-antes-de-iniciar.jpg" alt="Antes de iniciar" />
+    <div class="texto">
+      <p><span class="num">1</span>Al aceptar se abre el pedido con la lista <b>Faltan escanear</b>. Cada artículo muestra:</p>
+      <ul>
+        <li>Código, <span class="chip baj">color</span> y <span class="chip" style="background:#ede9fe;color:#6d28d9">talle</span>.</li>
+        <li>La <span class="chip ambar">(ubicación)</span> en el depósito. La lista está ordenada por ubicación para hacer el recorrido.</li>
+        <li>La cantidad pedida (×1, ×3…).</li>
+      </ul>
+      <p><span class="num">2</span>Tocá <b>Iniciar</b>. Arranca el cronómetro y se habilitan el escáner y los tildes.</p>
+      <div class="nota ok">El cronómetro queda guardado: si volvés al menú o cerrás la app, sigue corriendo. Solo se frena con <b>Pausar</b>, al iniciar otro pedido o al <b>Finalizar</b>.</div>
+    </div>
+  </div>
+  <div class="paso">
+    <img class="cel" src="img/07-armado-en-curso.jpg" alt="Armando" />
+    <div class="texto">
+      <p><span class="num">3</span><b>Escanear:</b> con el escáner inalámbrico, escribiendo el código o con el botón de la <b>cámara</b> (lee QR, Code 39, Code 128 y EAN). Cada escaneo suma una unidad.</p>
+      <p><span class="num">4</span><b>Tildar a mano</b> (si la cámara no lee):</p>
+      <ul>
+        <li>Si piden <b>1</b>, el botón es ✓ y lo marca.</li>
+        <li>Si piden <b>2 o más</b>, el botón dice <b>+1</b>: cada toque suma una unidad. Si hay 1 y piden 2, tocás una vez y queda <b>1/2</b>. La que falta va a faltante al finalizar.</li>
+      </ul>
+      <p><span class="num">5</span>Lo marcado pasa a <b>✓ Escaneados</b>. Si te equivocaste, tocá <b>↺ Deshacer</b> en el cartel verde.</p>
+      <p>La barra de arriba muestra el avance (2/7 unidades).</p>
+    </div>
+  </div>
+  <div class="paso">
+    <img class="cel" src="img/08-pausa-motivo.jpg" alt="Motivo de la pausa" />
+    <div class="texto">
+      <h3>Pausar</h3>
+      <p><span class="num">6</span>Tocá <b>Pausar</b> y elegí el motivo:</p>
+      <ul>
+        <li>🚻 Baño</li>
+        <li>🍽️ Almuerzo / merienda</li>
+        <li>📋 Me pidieron otra tarea</li>
+        <li>📦 Falta mercadería / no la encuentro</li>
+        <li>📱 Problema con el celular o escáner</li>
+        <li>✏️ Otro (hay que escribir el motivo)</li>
+      </ul>
+      <div class="nota rojo">Sin motivo no se puede pausar. Cada pausa queda registrada con su motivo y cuánto duró, y se ve en <b>Eficiencia mayorista → Pausas en piso</b>. Después de una pausa hay que esperar <b>15 minutos</b> para volver a pausar (el botón muestra la cuenta regresiva).</div>
+    </div>
+  </div>
+  <div class="paso">
+    <img class="cel" src="img/09-en-pausa.jpg" alt="En pausa" />
+    <div class="texto">
+      <p><span class="num">7</span>En pausa el reloj se frena y los tildes quedan bloqueados. Para seguir, tocá <b>Reanudar</b>.</p>
+    </div>
+  </div>
+  <div class="paso">
+    <img class="cel" src="img/10-menu-en-curso.jpg" alt="Armados en curso" />
+    <div class="texto">
+      <p><span class="num">8</span>Si volvés a <b>Mis repos</b>, el pedido aparece en <b>Armados en curso</b>. Tocalo para seguir donde lo dejaste.</p>
+      <p>Si en el medio entra un <b>Urgente</b>: aceptalo y tocá <b>Iniciar</b>. El que estabas haciendo se pausa solo. Cuando termines el urgente, volvé al otro y tocá <b>Reanudar</b>.</p>
+    </div>
+  </div>
+</section>
+
+<section class="seccion">
+  <h2>5. Piso: finalizar</h2>
+  <div class="paso">
+    <img class="cel" src="img/11-finalizar.jpg" alt="Finalizar" />
+    <div class="texto">
+      <p><span class="num">1</span>Cuando está todo, el pedido se cierra solo. Si falta algo que no hay, tocá <b>Finalizar con faltantes</b>.</p>
+      <p><span class="num">2</span>Confirmá. Las unidades que no se marcaron quedan como <b>faltantes (✕)</b> y se guarda tu tiempo.</p>
+    </div>
+  </div>
+  <div class="paso">
+    <img class="cel" src="img/12-terminado.jpg" alt="Terminado" />
+    <div class="texto">
+      <p><span class="num">3</span>Aparece el cartel <span class="chip verde">Armado terminado con 3 faltantes · 07:54</span>. Al mayorista se le pone el pedido en verde en su lista.</p>
+    </div>
+  </div>
+</section>
+
+<section class="seccion">
+  <h2>6. Mayorista: seguir el avance</h2>
+  <p>En <b>Pedidos de venta</b>, cada pedido muestra en la lista:</p>
+  <table>
+    <tr><th>Cómo se ve</th><th>Qué significa</th></tr>
+    <tr><td>Sin color</td><td>Todavía nadie lo aceptó.</td></tr>
+    <tr><td><span class="chip ambar">👤 NOMBRE · sin empezar</span></td><td>A quién le toca (en repos diarias, el responsable del local).</td></tr>
+    <tr><td><span class="chip verde">EN CURSO ✓ 3/7</span> + 👤 NOMBRE (#legajo)</td><td>Lo está armando ese legajo; van 3 de 7 unidades. Fondo verde claro.</td></tr>
+    <tr><td><span class="chip verde">ARMADO 🏁</span> o <span class="chip verde">REPO ✓</span></td><td>Terminado. Fondo verde fuerte.</td></tr>
+  </table>
+  <p>Al abrir el pedido, cada artículo se pinta según lo que salió:</p>
+  <ul>
+    <li><b>Verde con ✓</b>: se mandó entero.</li>
+    <li><b>Verde suave con «1/»</b>: salió una parte.</li>
+    <li><b>Rojo</b>: quedó como faltante.</li>
+  </ul>
+  <p>La lista se actualiza sola cada 12 segundos.</p>
+  <h3>Sacar un armado (solo administrador)</h3>
+  <p>Si un armado se pidió por error, el administrador ve en el detalle del pedido el botón <b>Sacar armado</b>. Pide confirmación y borra el armado y lo escaneado en él; el pedido vuelve a como estaba.</p>
+  <h3>Medir tiempos y pausas</h3>
+  <p>En <b>Mayorista → Eficiencia mayorista</b>: la estadística de repos por día y semana, el <b>Tiempo real en piso</b> y <b>Pausas en piso</b> (cuántas pausas hizo cada empleado, cuánto duraron y por qué motivo).</p>
+</section>
+
+<section class="seccion">
+  <h2>7. Preguntas frecuentes</h2>
+  <h3>No me suena el celular</h3>
+  <ul>
+    <li>Tocá <b>Activar avisos</b> en Mi repo y aceptá el permiso.</li>
+    <li>Revisá que el celular no esté en silencio ni en «No molestar».</li>
+    <li>En Samsung o Xiaomi, sacá Chrome del ahorro de batería.</li>
+  </ul>
+  <h3>No me deja tildar</h3>
+  <p>El cronómetro tiene que estar en marcha: tocá <b>Iniciar</b> o <b>Reanudar</b>.</p>
+  <h3>No me deja pausar</h3>
+  <p>Tenés que elegir un motivo. Si el botón dice <b>Pausar 12:34</b>, es la espera de 15 minutos desde la última pausa.</p>
+  <h3>Volví al menú y el reloj sigue corriendo</h3>
+  <p>Es a propósito: el tiempo sigue hasta que pauses, inicies otro pedido o finalices.</p>
+  <h3>Dice «Actualizá la app»</h3>
+  <p>Cerrá la app del todo (sacala de las apps abiertas) y volvé a abrirla.</p>
+  <h3>El pedido ya lo tomó otro</h3>
+  <p>Se lo queda el primero que toca Acepto; a los demás les desaparece.</p>
+  <p class="pie">Hub MITO · Armado de pedidos · manual generado el 09/10/2026.</p>
+</section>
+
+</body>
+</html>

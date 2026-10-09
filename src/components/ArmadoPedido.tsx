@@ -628,7 +628,7 @@ export default function ArmadoPedido({ armado, alVolver, alCambiar }: Props) {
         message={
           todoListo
             ? `Se marcaron los ${avance.unidadesOk} artículos del pedido N° ${nroDePedido(armado)}.\nTiempo: ${fmtReloj(segundos)}.`
-            : `Quedan ${totalFaltan} unidades sin escaneear: se van a marcar como faltantes (✕).\nSe guarda tu tiempo (${fmtReloj(segundos)}).`
+            : `Quedan ${totalFaltan} unidades sin escanear: se van a marcar como faltantes (✕).\nSe guarda tu tiempo (${fmtReloj(segundos)}).`
         }
         confirmLabel="Finalizar"
         busy={finalizando}

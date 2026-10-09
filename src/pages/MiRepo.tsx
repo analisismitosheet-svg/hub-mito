@@ -1005,7 +1005,7 @@ export default function MiRepo() {
           {armadosPendientes.map((a) => tarjetaArmado(a))}
           <p className="text-xs text-sub">
             Van {armadosPendientes.length} pedido{armadosPendientes.length === 1 ? '' : 's'}: se apilan por prioridad
-            (urgente arriba) y los tomás de a uno. Los de tus locales te suenan solo a vos; los demás, al primero que los tome.
+            (urgente arriba) y los tomás de a uno: se lo queda el primero que toca Acepto.
           </p>
         </div>
       )}

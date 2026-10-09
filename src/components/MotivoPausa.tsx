@@ -40,7 +40,7 @@ export default function MotivoPausaDialog({
       <div
         role="dialog"
         aria-label="Motivo de la pausa"
-        className="w-full max-w-md rounded-2xl border border-line bg-surface-solid p-4 shadow-2xl"
+        className="w-full max-w-md rounded-2xl border border-line bg-surface p-4 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between gap-2">
