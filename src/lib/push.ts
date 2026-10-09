@@ -110,3 +110,21 @@ export async function avisarPausa(): Promise<void> {
     /* el aviso dentro de la app (campana) sigue andando */
   }
 }
+
+/** Después de finalizar un armado con faltantes: avisa por push a los que ven los
+ * faltantes de stock (permiso mayorista.faltantes.ver o admin). No rompe si falla. */
+export async function avisarFaltantes(armadoId: string): Promise<void> {
+  try {
+    if (!supabase) return
+    const { data } = await supabase.auth.getSession()
+    const token = data.session?.access_token
+    if (!token) return
+    await fetch('/api/push-faltantes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ armado_id: armadoId }),
+    })
+  } catch {
+    /* el aviso dentro de la app (campana) sigue andando */
+  }
+}

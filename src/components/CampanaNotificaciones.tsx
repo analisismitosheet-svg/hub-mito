@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Bell, UserCheck, ClipboardList, Truck, CalendarX, FileText, ArrowRightLeft, PackageCheck, X, Pause,
+  Bell, UserCheck, ClipboardList, Truck, CalendarX, FileText, ArrowRightLeft, PackageCheck, X, Pause, AlertTriangle,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
@@ -21,6 +21,7 @@ interface Notificacion {
     | 'transferencias'
     | 'armados'
     | 'pausas'
+    | 'faltantes'
   titulo: string
   detalle: string
   ruta: string
@@ -83,7 +84,10 @@ export default function CampanaNotificaciones() {
   const verArmados = isAdmin || esMayorista || esPiso
   // Quien autoriza las pausas del piso (sql/pausas_autorizacion.sql): le llegan acá
   const puedeAutorizarPausas = can('mayorista.pausas.autorizar')
-  const visible = isAdmin || esMayorista || esLocal || verArmados || puedeAutorizarPausas
+  // Avisos de faltantes de stock al cerrar un armado (sql/armado_faltantes_aviso.sql):
+  // lo recibe puesto3 (permiso) y siempre los administradores.
+  const puedeVerFaltantes = can('mayorista.faltantes.ver')
+  const visible = isAdmin || esMayorista || esLocal || verArmados || puedeAutorizarPausas || puedeVerFaltantes
 
   /**
    * Armados de pedidos (sql/mayorista_armados.sql): se miran en vivo con
@@ -101,7 +105,7 @@ export default function CampanaNotificaciones() {
   const vistosRef = useRef<Map<string, { n: number; proxima: number }> | null>(null)
 
   useEffect(() => {
-    if (!supabase || !verArmados) {
+    if (!supabase || (!verArmados && !puedeVerFaltantes)) {
       setArmados([])
       setAvisoArmados(false)
       return
@@ -115,8 +119,9 @@ export default function CampanaNotificaciones() {
         .order('creado_at', { ascending: false })
         .limit(100)
       // El piso sólo necesita las tareas que están esperando a alguien;
-      // el mayorista además mira las que están en curso.
-      if (!isAdmin && !esMayorista) q = q.eq('estado', 'pendiente')
+      // el mayorista además mira las que están en curso y las terminadas
+      // con faltantes (que son el aviso de stock de la campana).
+      if (esPiso) q = q.eq('estado', 'pendiente')
       const { data, error } = await q
       if (!activo) return
       if (error || !data) {
@@ -176,7 +181,7 @@ export default function CampanaNotificaciones() {
       desuscribir()
       clearInterval(intervalo)
     }
-  }, [isAdmin, esMayorista, verArmados, perfil?.legajo])
+  }, [isAdmin, esMayorista, verArmados, puedeVerFaltantes, esPiso, perfil?.legajo])
 
   // Notificaciones que salen de los armados
   const notisArmados = useMemo<Notificacion[]>(() => {
@@ -209,6 +214,28 @@ export default function CampanaNotificaciones() {
     }
     return out
   }, [armados, avisoArmados, perfil?.id, verArmados])
+
+  // Avisos de FALTANTES DE STOCK: armados que se cerraron con faltantes (las
+  // líneas se marcan solas como ✕). Lo recibe quien tenga el permiso (puesto3)
+  // y siempre los administradores. Aparecen solos: el armado pasa a 'hecho'
+  // con faltantes > 0 y acá se ve en vivo por Realtime.
+  const notisFaltantes = useMemo<Notificacion[]>(() => {
+    if (!avisoArmados || !(isAdmin || puedeVerFaltantes)) return []
+    const out: Notificacion[] = []
+    for (const a of armados) {
+      if (a.estado !== 'hecho' || (a.faltantes ?? 0) <= 0) continue
+      out.push({
+        id: `falta-${a.id}`,
+        tipo: 'faltantes',
+        titulo: `Faltantes de stock · Pedido N° ${nroDePedido(a)}`,
+        detalle: `Faltan ${a.faltantes} u. · ${a.cliente_nombre || a.cliente || 'Cliente'} · armado por ${a.aceptado_nombre || 'el piso'}`,
+        ruta: `/mayorista/pedidos-venta?abrir=${encodeURIComponent(a.pedido_codigo)}`,
+        fecha: a.hecho_at ?? a.creado_at,
+        destinoId: a.id,
+      })
+    }
+    return out
+  }, [armados, avisoArmados, isAdmin, puedeVerFaltantes])
 
   // Pausas del piso esperando autorización (sql/pausas_autorizacion.sql)
   const [pausas, setPausas] = useState<PausaPendiente[]>([])
@@ -353,7 +380,7 @@ export default function CampanaNotificaciones() {
   if (!visible || !supabase) return null
 
   // Todo junto: las notificaciones de siempre + los armados de pedidos + las pausas
-  const lista = [...items, ...notisArmados, ...notisPausas].sort(
+  const lista = [...items, ...notisArmados, ...notisPausas, ...notisFaltantes].sort(
     (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime(),
   )
   const total = lista.length
@@ -367,6 +394,7 @@ export default function CampanaNotificaciones() {
     transferencias: <ArrowRightLeft size={15} aria-hidden />,
     armados: <PackageCheck size={15} aria-hidden />,
     pausas: <Pause size={15} aria-hidden />,
+    faltantes: <AlertTriangle size={15} aria-hidden />,
   }
   const colores = {
     usuarios: 'bg-amber-500/15 text-amber-400',
@@ -377,6 +405,7 @@ export default function CampanaNotificaciones() {
     transferencias: 'bg-violet-500/15 text-violet-400',
     armados: 'bg-brand-600/15 text-brand-400',
     pausas: 'bg-amber-500/15 text-amber-400',
+    faltantes: 'bg-red-500/15 text-red-400',
   }
 
   return (
@@ -405,7 +434,7 @@ export default function CampanaNotificaciones() {
               <button onClick={() => setAbierto(false)} className="rounded-lg p-1 text-sub hover:bg-line hover:text-ink" aria-label="Cerrar"><X size={15} aria-hidden /></button>
             </div>
             <div className="max-h-96 overflow-y-auto">
-              {cargando || (verArmados && !avisoArmados) || (puedeAutorizarPausas && !avisoPausas) ? (
+              {cargando || (verArmados && !avisoArmados) || (puedeAutorizarPausas && !avisoPausas) || (puedeVerFaltantes && !avisoArmados) ? (
                 <p className="px-4 py-8 text-center text-sm text-sub">Cargando...</p>
               ) : lista.length === 0 ? (
                 <p className="px-4 py-8 text-center text-sm text-sub">Sin notificaciones.</p>

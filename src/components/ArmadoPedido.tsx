@@ -6,7 +6,7 @@ import ScannerCamara from '@/components/ScannerCamara'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import MotivoPausaDialog, { nombreMotivoPausa, type MotivoPausa } from '@/components/MotivoPausa'
 import { useAuth } from '@/context/AuthContext'
-import { avisarPausa } from '@/lib/push'
+import { avisarFaltantes, avisarPausa } from '@/lib/push'
 import { suscribirCambios } from '@/lib/realtime'
 import { supabase } from '@/lib/supabase'
 import { normalizaCodigo } from '@/lib/loginEmpleado'
@@ -419,6 +419,8 @@ export default function ArmadoPedido({ armado, alVolver, alCambiar }: Props) {
       setMensaje(null)
       setUltimo(null)
       alCambiar()
+      // Quedaron faltantes: aviso automático a los que ven el stock (puesto3)
+      if (faltan > 0) void avisarFaltantes(armado.id)
     } catch (e) {
       setMensaje({ ok: false, texto: e instanceof Error ? e.message : 'No se pudo finalizar el armado.' })
     } finally {

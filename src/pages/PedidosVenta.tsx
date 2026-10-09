@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Loader2, Search, ChevronLeft, ChevronRight, RefreshCw, Download, ClipboardList, Ban, ArrowLeft, Printer,
-  PackageCheck, X, RefreshCcw,
+  PackageCheck, X, RefreshCcw, AlertTriangle,
 } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
@@ -164,6 +165,18 @@ export default function PedidosVenta() {
   const [stock, setStock] = useState<StockSku | null>(null)
   const [cargandoStock, setCargandoStock] = useState(true)
   const [stockNota, setStockNota] = useState<string | null>(null)
+
+  // Deep-link: ?abrir=CODIGO abre ese pedido directo (viene de la campana, por
+  // ejemplo un aviso de faltantes de stock).
+  const [params, setParams] = useSearchParams()
+  useEffect(() => {
+    const abrir = params.get('abrir')
+    if (!abrir) return
+    setSel(abrir)
+    const limpiar = new URLSearchParams(params)
+    limpiar.delete('abrir')
+    setParams(limpiar, { replace: true })
+  }, [params, setParams])
 
   const cargar = useCallback(async () => {
     if (!supabase) return
@@ -1063,6 +1076,14 @@ export default function PedidosVenta() {
                     </span>
                   </p>
                 )}
+                {armPedido && armPedido.estado === 'hecho' && (armPedido.faltantes ?? 0) > 0 && (
+                  <p className="mt-1.5 flex items-start gap-1.5 rounded-lg bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-400" role="note">
+                    <AlertTriangle size={13} className="mt-px shrink-0" aria-hidden />
+                    <span>
+                      Faltantes de stock: {armPedido.faltantes} u. — las líneas se cerraron solas como faltantes (✕).
+                    </span>
+                  </p>
+                )}
               </div>
 
               {/* Artículos */}
@@ -1111,6 +1132,11 @@ export default function PedidosVenta() {
                               {el?.estado === 'hecho' && <span className="mr-1 text-emerald-400">✓</span>}
                               {el && el.estado !== 'hecho' && el.enviadas > 0 && <span className="mr-1 text-[11px] text-emerald-400">{el.enviadas}/</span>}
                               {n0.format(i.cantidad ?? 0)}
+                              {el?.estado === 'faltante' && (
+                                <span className="ml-1.5 inline-flex items-center gap-1 rounded-md bg-red-500/15 px-1.5 py-0.5 text-[10px] font-bold text-red-400">
+                                  ✕ Faltan {n0.format(Math.max((i.cantidad ?? 0) - (el.enviadas ?? 0), 0))}
+                                </span>
+                              )}
                             </td>
                             <td className="px-3 py-1.5 text-right tabular-nums">{celdaStock(i)}</td>
                             <td className="px-3 py-1.5 text-right tabular-nums text-ink">{plata(i.precio)}</td>
