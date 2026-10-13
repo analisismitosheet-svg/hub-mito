@@ -110,57 +110,6 @@ const CSS = `
   @media print { .barra, .corte { display: none !important; } }
 `
 
-(function () {
-  var MIN = 7, MAX = 16, NORMAL = 11, CLAVE = 'pedido.imprimir.fs';
-  var hoja = document.getElementById('hoja');
-  var medida = document.createElement('div');
-  medida.style.cssText = 'position:absolute;visibility:hidden;height:277mm;width:1px';
-  document.body.appendChild(medida);
-  var altoA4 = medida.getBoundingClientRect().height; // alto útil (A4 con márgenes de 10 mm)
-  medida.remove();
-  var cortes = [];
-  function hojas() { return Math.max(1, Math.ceil((hoja.offsetHeight - 2) / altoA4)); }
-  function poner(fs, guardar) {
-    fs = Math.max(MIN, Math.min(MAX, Math.round(fs * 4) / 4));
-    hoja.style.setProperty('--fs', fs + 'px');
-    document.getElementById('fs').textContent = 'Letra ' + String(fs).replace('.', ',') + ' px';
-    var n = hojas(), el = document.getElementById('hojas');
-    el.textContent = n === 1 ? 'entra en 1 hoja' : 'ocupa ' + n + ' hojas';
-    el.className = n === 1 ? 'ok' : 'mal';
-    cortes.forEach(function (c) { c.remove(); });
-    cortes = [];
-    hoja.style.position = 'relative';
-    for (var i = 1; i < n; i++) {
-      var c = document.createElement('div');
-      c.className = 'corte';
-      c.style.top = (i * altoA4) + 'px';
-      c.innerHTML = '<span>corte de hoja ' + i + '</span>';
-      hoja.appendChild(c);
-      cortes.push(c);
-    }
-    if (guardar) { try { localStorage.setItem(CLAVE, String(fs)); } catch (e) {} }
-    return fs;
-  }
-  function ajustar(guardar) {
-    // Solo achica: arranca en la letra normal (agrandar se hace a mano con A+)
-    var fs = NORMAL;
-    poner(fs, false);
-    while (fs > MIN && hojas() > 1) fs = poner(fs - 0.25, false);
-    // Si ni con la letra mínima entra en 1 hoja, achicar no sirve: tamaño normal y varias hojas
-    if (hojas() > 1) fs = NORMAL;
-    return poner(fs, guardar);
-  }
-  var actual, guardado = null;
-  try { guardado = parseFloat(localStorage.getItem(CLAVE)); } catch (e) {}
-  actual = guardado ? poner(guardado, false) : ajustar(false);
-  document.querySelectorAll('[data-d]').forEach(function (b) {
-    b.addEventListener('click', function () { actual = poner(actual + parseFloat(b.getAttribute('data-d')), true); });
-  });
-  document.getElementById('ajustar').addEventListener('click', function () { actual = ajustar(true); });
-  document.getElementById('imprimir').addEventListener('click', function () { window.print(); });
-})();
-`
-
 /** HTML completo de la hoja (separado para poder previsualizarlo sin abrir la ventana). */
 export function htmlPedido(
   p: PedidoImprimir,
