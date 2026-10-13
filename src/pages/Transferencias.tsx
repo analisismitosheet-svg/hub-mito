@@ -23,6 +23,7 @@ import { useAuth } from '@/context/AuthContext'
 import { usePermisosArea } from '@/hooks/usePermisosArea'
 import { cargarVistaSalidas, leerVista } from '@/lib/sqlApi'
 import { PERIODOS, rangoDe, periodoGuardado, guardarPeriodo, textoPeriodo, type Periodo } from '@/lib/periodoSemanas'
+import { imprimirCuandoCarguen } from '@/lib/ventanaImpresion'
 
 /** Cuántos archivos se piden a la vez al cargar las líneas */
 const LOTES_EN_PARALELO = 6
@@ -197,13 +198,10 @@ function imprimirCascada(origen: string, items: Item[], lote: Lote) {
     <thead><tr>${encabezados}</tr></thead>
     <tbody>${cuerpo}</tbody>
   </table>
-<script>
-  window.focus();
-  setTimeout(function(){ window.print(); }, 250);
-<\/script>
 </body></html>`,
   )
   w.document.close()
+  imprimirCuandoCarguen(w)
 }
 
 /** Exporta la cascada de un local a un archivo Excel (.csv con BOM UTF-8). */

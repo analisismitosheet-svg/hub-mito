@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { FILTRO_EMPLEADOS_ACTIVOS } from '@/lib/empleadosActivos'
 import { useAuth } from '@/context/AuthContext'
 import { SelectBuscar } from '@/components/MultiselectFiltro'
+import { imprimirCuandoCarguen } from '@/lib/ventanaImpresion'
 
 type EstadoM = 'pendiente' | 'hecho' | 'faltante'
 interface Lote {
@@ -679,12 +680,12 @@ export default function Deposito() {
   <thead><tr><th>Código</th><th>Descripción</th><th>Color</th><th>Talle</th>${thLocales}<th>Picking</th></tr></thead>
   <tbody>${tdRows}</tbody>
 </table>
-<script>window.onload=function(){window.print()}</script>
 </body></html>`
     const w = window.open('', '_blank')
     if (!w) return
     w.document.write(html)
     w.document.close()
+    imprimirCuandoCarguen(w)
   }
 
   return (

@@ -1,3 +1,4 @@
+import { imprimirCuandoCarguen } from '@/lib/ventanaImpresion'
 // Diseño e impresión de la etiqueta que acompaña al QR (optimizada para impresoras térmicas).
 
 export interface QrLabelConfig {
@@ -99,11 +100,6 @@ export function buildLabelHtml(c: QrLabelConfig, nombre: string, url: string) {
   @media screen { body { padding: 16px; background: #ddd; } .lbl { border: 1px dashed #999; } }
 </style></head>
 <body><div class="lbl">${partes.join('')}</div>
-<script>
-  var img = document.querySelector('img.qr');
-  function go(){ setTimeout(function(){ window.focus(); window.print(); }, 200); }
-  if (img.complete) { go(); } else { img.onload = go; img.onerror = go; }
-<\/script>
 </body></html>`
 }
 
@@ -113,6 +109,7 @@ export function imprimirEtiquetaQR(c: QrLabelConfig, nombre: string, url: string
   if (!w) return
   w.document.write(buildLabelHtml(c, nombre, url))
   w.document.close()
+  imprimirCuandoCarguen(w, 'img.qr', 200)
 }
 
 const MM = 3.78 // px por mm aprox (96dpi) para la vista previa en pantalla

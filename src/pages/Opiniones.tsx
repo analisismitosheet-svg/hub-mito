@@ -9,6 +9,7 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import StarRating from '@/components/StarRating'
 import { buildLabelHtml, qrImgUrl, QR_LABEL_DEFAULT, type QrLabelConfig } from '@/components/QrEtiqueta'
 import type { Encuesta, Pregunta, Sector, QrToken } from '@/types/encuestas'
+import { imprimirCuandoCarguen } from '@/lib/ventanaImpresion'
 
 interface Local {
   codigo: string
@@ -228,6 +229,7 @@ export default function Opiniones() {
     const nombre = `${nombrePorCodigo.get(localCode) ?? localCode} · ${sectorNombre}`
     w.document.write(buildLabelHtml(qrCfg, nombre, urlPublico(token)))
     w.document.close()
+    imprimirCuandoCarguen(w, 'img.qr', 200)
   }
 
   function imprimirTodosSectores(localCode: string) {
@@ -268,16 +270,12 @@ export default function Opiniones() {
   .cta { font-size: ${c.cta_pt}pt; margin-top: 1.5mm; }
   .url { font-size: ${c.url_pt}pt; word-break: break-all; margin-top: 1mm; }
   @media screen { body { padding: 16px; background: #ddd; } .lbl { border: 1px dashed #999; margin-bottom: 12px; } }
-</style></head><body>${parts.join('')}
-<script>
-var imgs=document.querySelectorAll('img.qr'),p=imgs.length;
-function go(){if(--p<=0)setTimeout(function(){window.focus();window.print()},300)}
-imgs.forEach(function(i){i.complete?go():(i.onload=go,i.onerror=go)});if(!p)go();
-<\/script></body></html>`
+</style></head><body>${parts.join('')}</body></html>`
     const w = window.open('', '_blank', 'width=480,height=680')
     if (!w) return
     w.document.write(html)
     w.document.close()
+    imprimirCuandoCarguen(w, 'img.qr', 300)
   }
 
   const resumenLocales = useMemo(() => {
@@ -376,6 +374,7 @@ imgs.forEach(function(i){i.complete?go():(i.onload=go,i.onerror=go)});if(!p)go()
       w.document.open()
       w.document.write(buildLabelHtml(cfg, nombre, url))
       w.document.close()
+      imprimirCuandoCarguen(w, 'img.qr', 200)
     })()
   }
   async function copiar(codigo: string) {
