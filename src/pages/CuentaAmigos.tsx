@@ -65,8 +65,31 @@ function iniciales(nombre: string | null): string {
   return ((p[0]?.[0] || '') + (p[1]?.[0] || '')).slice(0, 2).toUpperCase() || '?'
 }
 
-function FotoDni({ url }: { url: string | null }) {
+/**
+ * Ruta del archivo dentro del bucket privado `dni`. foto_url guarda la URL pública vieja
+ * (".../object/public/dni/nuevos/x.jpg") o, desde que el bucket es privado, "dni:nuevos/x.jpg".
+ */
+function rutaFotoDni(guardado: string): string | null {
+  if (guardado.startsWith('dni:')) return guardado.slice(4)
+  const i = guardado.indexOf('/object/public/dni/')
+  return i >= 0 ? decodeURIComponent(guardado.slice(i + '/object/public/dni/'.length)) : null
+}
+
+function FotoDni({ url: guardado }: { url: string | null }) {
   const [ok, setOk] = useState(true)
+  const [url, setUrl] = useState<string | null>(null)
+  // El bucket es privado: se pide una URL firmada que vence en 1 hora
+  useEffect(() => {
+    setOk(true)
+    setUrl(null)
+    const ruta = guardado ? rutaFotoDni(guardado) : null
+    if (!ruta || !supabase) return
+    let vigente = true
+    void supabase.storage.from('dni').createSignedUrl(ruta, 3600).then(({ data }) => {
+      if (vigente) setUrl(data?.signedUrl ?? null)
+    })
+    return () => { vigente = false }
+  }, [guardado])
   if (!url || !ok) return null
   return (
     <div className="border-b border-line bg-surface2">
@@ -350,7 +373,15 @@ function ClienteForm({
   const [titular, setTitular] = useState(inicial?.titular ?? '')
   const [estado, setEstado] = useState(inicial?.estado ?? 'ACTIVA')
   const [file, setFile] = useState<File | null>(null)
-  const [preview, setPreview] = useState<string | null>(inicial?.foto_url ?? null)
+  const [preview, setPreview] = useState<string | null>(null)
+  // Foto guardada: bucket privado, se muestra con URL firmada (si no se eligió otra)
+  useEffect(() => {
+    const ruta = inicial?.foto_url ? rutaFotoDni(inicial.foto_url) : null
+    if (!ruta || !supabase) return
+    void supabase.storage.from('dni').createSignedUrl(ruta, 3600).then(({ data }) => {
+      if (data?.signedUrl) setPreview((p) => p ?? data.signedUrl)
+    })
+  }, [inicial?.foto_url])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -368,12 +399,13 @@ function ClienteForm({
     const path = `nuevos/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
     const { error } = await supabase.storage
       .from('dni')
-      .upload(path, f, { upsert: true, contentType: f.type || 'image/jpeg' })
+      .upload(path, f, { upsert: false, contentType: f.type || 'image/jpeg' })
     if (error) {
       setError('No se pudo subir la foto: ' + error.message)
       return null
     }
-    return supabase.storage.from('dni').getPublicUrl(path).data.publicUrl
+    // Bucket privado: se guarda la ruta y la foto se muestra con URL firmada (FotoDni)
+    return `dni:${path}`
   }
 
   async function guardar(e: FormEvent) {
