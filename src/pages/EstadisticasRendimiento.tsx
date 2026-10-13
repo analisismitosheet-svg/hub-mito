@@ -54,6 +54,22 @@ function fmtDuracion(seg: number): string {
   return `${s}s`
 }
 
+/** Días que se muestran por defecto cuando no hay fechas elegidas (tiempo real, tiempo muerto y pausas). */
+const DIAS_DEFECTO = 90
+
+/** Fecha local en AAAA-MM-DD (evita el corrimiento de día de toISOString/UTC). */
+function fechaLocal(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+function hoyLocal(): string {
+  return fechaLocal(new Date())
+}
+function haceDias(dias: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() - dias)
+  return fechaLocal(d)
+}
+
 export default function EstadisticasRendimiento() {
   const { ver: puedeVer } = usePermisosArea('mayorista.estadisticas')
   const [empleados, setEmpleados] = useState<Empleado[]>([])
@@ -61,17 +77,19 @@ export default function EstadisticasRendimiento() {
   const [muertos, setMuertos] = useState<TiempoMuerto[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Fallas propias de cada fuente (antes se ocultaban y parecía "no hay datos")
+  const [avisoTiempos, setAvisoTiempos] = useState<string | null>(null)
+  const [avisoMuertos, setAvisoMuertos] = useState<string | null>(null)
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
 
   const cargar = useCallback(async (desdeF: string, hastaF: string) => {
     if (!supabase) { setCargando(false); return }
     const sb = supabase
-    setCargando(true); setError(null)
+    setCargando(true); setError(null); setAvisoTiempos(null); setAvisoMuertos(null)
     try {
-      const hace90dias = new Date(Date.now() - 90 * 24 * 3600 * 1000).toISOString().slice(0, 10)
-      const desdeQ = desdeF || hace90dias
-      const hastaQ = hastaF || new Date().toISOString().slice(0, 10)
+      const desdeQ = desdeF || haceDias(DIAS_DEFECTO)
+      const hastaQ = hastaF || hoyLocal()
 
       const [empData, tiemposData, muertosData] = await Promise.all([
         sb.from('empleados_basico').select('id,legajo,nombre').or(FILTRO_EMPLEADOS_ACTIVOS).order('nombre'),
@@ -79,10 +97,13 @@ export default function EstadisticasRendimiento() {
         sb.rpc('estadistica_tiempos_muertos', { p_desde: desdeQ, p_hasta: hastaQ }),
       ])
       setEmpleados((empData.data as Empleado[] | null) ?? [])
-      // Si la vista todavía no existe (sql/piso_tiempos.sql sin aplicar) simplemente no se muestra
+      // Si la vista todavía no existe (sql/piso_tiempos.sql sin aplicar) la sección no se muestra,
+      // pero se avisa por qué en vez de dejar la pantalla como "sin datos".
       setTiempos(tiemposData.error ? [] : ((tiemposData.data as TiempoPiso[] | null) ?? []))
-      // Igual con el tiempo muerto: si el RPC no está aplicado, la sección no aparece
+      // Igual con el tiempo muerto: si el RPC no está aplicado, se avisa.
       setMuertos(muertosData.error ? [] : ((muertosData.data as TiempoMuerto[] | null) ?? []))
+      setAvisoTiempos(tiemposData.error ? (tiemposData.error.message || 'No se pudo leer el tiempo real en piso.') : null)
+      setAvisoMuertos(muertosData.error ? (muertosData.error.message || 'No se pudo leer el tiempo muerto entre tareas.') : null)
       if (empData.error) setError(empData.error.message)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error de red')
@@ -93,10 +114,11 @@ export default function EstadisticasRendimiento() {
   useEffect(() => { void cargar(desde, hasta) }, [cargar, desde, hasta])
 
   const filasPiso = useMemo<FilaPiso[]>(() => {
+    const porId = new Map(empleados.map((e) => [e.id, e]))
     const mapa = new Map<string, FilaPiso>()
     for (const t of tiempos) {
       if (!t.empleado_id) continue
-      const emp = empleados.find((e) => e.id === t.empleado_id)
+      const emp = porId.get(t.empleado_id)
       let f = mapa.get(t.empleado_id)
       if (!f) {
         f = { empleadoId: t.empleado_id, nombre: emp?.nombre ?? 'Sin nombre', legajo: emp?.legajo ?? null, repos: 0, unidades: 0, segundos: 0, faltaron: 0 }
@@ -110,9 +132,7 @@ export default function EstadisticasRendimiento() {
     return Array.from(mapa.values()).sort((a, b) => b.unidades - a.unidades)
   }, [tiempos, empleados])
 
-  const PuedeVer = () => puedeVer
-
-  if (!PuedeVer()) {
+  if (!puedeVer) {
     return (
       <Layout>
         <BackButton />
@@ -140,8 +160,19 @@ export default function EstadisticasRendimiento() {
         {(desde || hasta) && (
           <button onClick={() => { setDesde(''); setHasta('') }} className="btn-press rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line">Limpiar fechas</button>
         )}
-        <span className="text-[11px] text-sub/70">Fechas para el tiempo real y las pausas</span>
+        <span className="text-[11px] text-sub/70">Fechas para el tiempo real y las pausas (por defecto, últimos {DIAS_DEFECTO} días)</span>
+        {cargando && (
+          <span role="status" className="inline-flex items-center gap-1.5 text-[11px] font-medium text-sub">
+            <Loader2 size={12} className="animate-spin" aria-hidden /> Actualizando…
+          </span>
+        )}
       </div>
+
+      {!cargando && avisoTiempos && (
+        <p role="status" className="mb-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-500">
+          No se pudo leer el tiempo real en piso: {avisoTiempos}
+        </p>
+      )}
 
       {!cargando && filasPiso.length > 0 && (
         <section className="mb-6">
@@ -184,6 +215,11 @@ export default function EstadisticasRendimiento() {
       )}
 
       {/* Tiempo muerto entre tareas (fin de una → inicio de la siguiente), con las mismas fechas */}
+      {!cargando && avisoMuertos && (
+        <p role="status" className="mb-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-500">
+          No se pudo leer el tiempo muerto entre tareas: {avisoMuertos}
+        </p>
+      )}
       {!cargando && muertos.length > 0 && (
         <section className="mb-6">
           <h2 className="mb-1 flex items-center gap-2 font-display text-lg font-semibold text-ink">
@@ -225,8 +261,8 @@ export default function EstadisticasRendimiento() {
         </section>
       )}
 
-      {/* Pausas con motivo (repo y armado), con las mismas fechas */}
-      <PausasPiso desde={desde} hasta={hasta} />
+      {/* Pausas con motivo (repo y armado), con las mismas fechas que el tiempo real y el tiempo muerto */}
+      <PausasPiso desde={desde || haceDias(DIAS_DEFECTO)} hasta={hasta || hoyLocal()} />
 
       {cargando && filasPiso.length === 0 && (
         <div className="flex items-center justify-center gap-2 py-10 text-sub"><Loader2 size={18} className="animate-spin" aria-hidden /> Cargando...</div>

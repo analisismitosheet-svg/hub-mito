@@ -48,9 +48,8 @@ export default function PausasPiso({ desde, hasta }: { desde: string; hasta: str
     if (!supabase) return
     let vivo = true
     setCargando(true)
-    const hoy = new Date().toISOString().slice(0, 10)
-    const d = desde || new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString().slice(0, 10)
-    void supabase.rpc('estadistica_pausas', { p_desde: d, p_hasta: hasta || hoy }).then(({ data, error: e }) => {
+    // El rango lo define la pantalla (mismas fechas que el tiempo real y el tiempo muerto).
+    void supabase.rpc('estadistica_pausas', { p_desde: desde, p_hasta: hasta }).then(({ data, error: e }) => {
       if (!vivo) return
       if (e) setError(e.message)
       else setFilas(((data as Fila[] | null) ?? []).map((f) => ({ ...f, pausas: Number(f.pausas) || 0, segundos: Number(f.segundos) || 0, abiertas: Number(f.abiertas) || 0 })))
@@ -83,7 +82,6 @@ export default function PausasPiso({ desde, hasta }: { desde: string; hasta: str
       </h2>
       <p className="mb-2 text-xs text-sub/70">
         Cada pausa en Mi repo (repo o armado) pide un motivo. Tiempo = cuánto duró hasta Reanudar o Finalizar.
-        {!desde && ' Últimos 30 días.'}
       </p>
       {error && <p className="mb-2 text-sm text-brand-400">{error}</p>}
       {cargando ? (
