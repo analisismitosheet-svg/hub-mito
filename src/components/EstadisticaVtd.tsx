@@ -263,7 +263,16 @@ export default function EstadisticaVtd() {
                   {semana.map((r) => {
                     const hp = horasPer(r)
                     return (
-                      <tr key={r.loteId} onClick={() => { setModo('dia'); setDia(r.fecha) }} className="cursor-pointer border-t border-line hover:bg-line/30" title={r.nombre}>
+                      <tr
+                        key={r.loteId}
+                        onClick={() => { setModo('dia'); setDia(r.fecha) }}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setModo('dia'); setDia(r.fecha) } }}
+                        tabIndex={0}
+                        role="button"
+                        aria-label={`Ver el repo del ${corta(r.fecha)}`}
+                        className="cursor-pointer border-t border-line outline-none hover:bg-line/30 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-500/60"
+                        title={r.nombre}
+                      >
                         <td className="truncate py-1.5 font-semibold text-ink">{corta(r.fecha)}</td>
                         <td className="hidden truncate py-1.5 text-center text-sub md:table-cell">{corta(r.ventaFecha)}</td>
                         <td className="py-1.5 text-right font-bold tabular-nums text-emerald-500">{n0.format(r.venta)}</td>

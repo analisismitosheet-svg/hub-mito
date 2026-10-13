@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Loader2, TrendingUp, User, Timer, Hourglass } from 'lucide-react'
+import { Loader2, TrendingUp, User, Timer, Hourglass, Download, Activity } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import EstadisticaVtd from '@/components/EstadisticaVtd'
-import PausasPiso from '@/components/PausasPiso'
+import PausasPiso, { type PausaFila } from '@/components/PausasPiso'
+import { nombreMotivoPausa } from '@/components/MotivoPausa'
 import { supabase } from '@/lib/supabase'
 import { FILTRO_EMPLEADOS_ACTIVOS } from '@/lib/empleadosActivos'
 import { usePermisosArea } from '@/hooks/usePermisosArea'
@@ -82,6 +83,8 @@ export default function EstadisticasRendimiento() {
   const [avisoMuertos, setAvisoMuertos] = useState<string | null>(null)
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
+  // Filas de pausas que expone PausasPiso, para incluirlas en el Excel de la pantalla
+  const [pausas, setPausas] = useState<PausaFila[]>([])
 
   const cargar = useCallback(async (desdeF: string, hastaF: string) => {
     if (!supabase) { setCargando(false); return }
@@ -132,6 +135,29 @@ export default function EstadisticasRendimiento() {
     return Array.from(mapa.values()).sort((a, b) => b.unidades - a.unidades)
   }, [tiempos, empleados])
 
+  const sinDatos = filasPiso.length === 0 && muertos.length === 0 && pausas.length === 0
+
+  /** Baja un Excel con las tres tablas de la pantalla (una hoja por bloque). */
+  async function exportar() {
+    const XLSX = await import('xlsx')
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasPiso.map((f) => ({
+      Legajo: f.legajo ?? '', Empleado: f.nombre, Repos: f.repos, Unidades: f.unidades,
+      'Tiempo real': fmtDuracion(f.segundos),
+      'Unid/h': f.segundos > 0 ? Number((f.unidades / (f.segundos / 3600)).toFixed(1)) : '',
+      Faltaron: f.faltaron,
+    }))), 'Tiempo real')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([...muertos].sort((a, b) => b.muerto - a.muerto).map((m) => ({
+      Legajo: m.legajo ?? '', Empleado: m.nombre ?? '', Cortes: m.cortes,
+      'Tiempo muerto': fmtDuracion(m.muerto), Promedio: fmtDuracion(m.promedio), 'Maximo': fmtDuracion(m.maximo),
+    }))), 'Tiempo muerto')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(pausas.map((p) => ({
+      Legajo: p.legajo ?? '', Empleado: p.nombre ?? '', Motivo: nombreMotivoPausa(p.motivo),
+      Pausas: p.pausas, 'En pausa': p.abiertas, Tiempo: fmtDuracion(p.segundos),
+    }))), 'Pausas')
+    XLSX.writeFile(wb, `eficiencia_mayorista_${hoyLocal()}.xlsx`)
+  }
+
   if (!puedeVer) {
     return (
       <Layout>
@@ -144,15 +170,34 @@ export default function EstadisticasRendimiento() {
   return (
     <Layout>
       <BackButton />
-      <header className="mb-3 mt-2">
-        <h1 className="flex items-center gap-2 font-display text-2xl font-semibold text-ink"><TrendingUp size={20} className="text-brand-600" aria-hidden /> Eficiencia mayorista</h1>
-        <p className="text-xs text-sub/70">Repos por día y por semana, y tiempo real en piso por empleado.</p>
+      <header className="mb-3 mt-2 flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h1 className="flex items-center gap-2 font-display text-2xl font-semibold text-ink"><TrendingUp size={20} className="text-brand-600" aria-hidden /> Eficiencia mayorista</h1>
+          <p className="text-xs text-sub/70">Repos por día y por semana, y tiempo real en piso por empleado.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void exportar()}
+          disabled={sinDatos}
+          className="btn-press inline-flex h-11 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-sm font-medium text-ink transition hover:bg-surface2 disabled:opacity-50"
+          title="Bajar un Excel con las tablas de la pantalla"
+        >
+          <Download size={16} aria-hidden /> Excel
+        </button>
       </header>
 
       {error && <p role="alert" className="mb-4 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
 
-      {/* Estadística de las repos (motivo VTD): por día, por semana y por local */}
+      {/* Repos (motivo VTD): por día, por semana y por local. Tiene su propia navegación. */}
       <EstadisticaVtd />
+
+      {/* Piso: las fechas de abajo aplican solo a esta parte (tiempo real, tiempo muerto y pausas) */}
+      <div className="mb-3 mt-4 border-t border-line pt-4">
+        <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-ink">
+          <Activity size={17} className="text-emerald-500" aria-hidden /> Piso
+        </h2>
+        <p className="text-xs text-sub/70">Tiempo real, tiempo muerto y pausas. Las fechas de abajo aplican solo a esta parte.</p>
+      </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className={inputCls + ' w-auto text-xs'} title="Desde" />
@@ -160,7 +205,7 @@ export default function EstadisticasRendimiento() {
         {(desde || hasta) && (
           <button onClick={() => { setDesde(''); setHasta('') }} className="btn-press rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line">Limpiar fechas</button>
         )}
-        <span className="text-[11px] text-sub/70">Fechas para el tiempo real y las pausas (por defecto, últimos {DIAS_DEFECTO} días)</span>
+        <span className="text-[11px] text-sub/70">Por defecto, últimos {DIAS_DEFECTO} días</span>
         {cargando && (
           <span role="status" className="inline-flex items-center gap-1.5 text-[11px] font-medium text-sub">
             <Loader2 size={12} className="animate-spin" aria-hidden /> Actualizando…
@@ -262,7 +307,7 @@ export default function EstadisticasRendimiento() {
       )}
 
       {/* Pausas con motivo (repo y armado), con las mismas fechas que el tiempo real y el tiempo muerto */}
-      <PausasPiso desde={desde || haceDias(DIAS_DEFECTO)} hasta={hasta || hoyLocal()} />
+      <PausasPiso desde={desde || haceDias(DIAS_DEFECTO)} hasta={hasta || hoyLocal()} onDatos={setPausas} />
 
       {cargando && filasPiso.length === 0 && (
         <div className="flex items-center justify-center gap-2 py-10 text-sub"><Loader2 size={18} className="animate-spin" aria-hidden /> Cargando...</div>

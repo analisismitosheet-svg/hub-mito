@@ -8,7 +8,7 @@ import { MOTIVOS_PAUSA, nombreMotivoPausa } from '@/components/MotivoPausa'
 /*  Sale de estadistica_pausas (sql/piso_pausas.sql): repo y armado.   */
 /* ------------------------------------------------------------------ */
 
-interface Fila {
+export interface PausaFila {
   usuario_id: string
   legajo: string | null
   nombre: string | null
@@ -39,8 +39,8 @@ function fmtDur(seg: number): string {
 
 const icono = (m: string) => MOTIVOS_PAUSA.find((x) => x.id === m)?.icono ?? '⏸'
 
-export default function PausasPiso({ desde, hasta }: { desde: string; hasta: string }) {
-  const [filas, setFilas] = useState<Fila[]>([])
+export default function PausasPiso({ desde, hasta, onDatos }: { desde: string; hasta: string; onDatos?: (filas: PausaFila[]) => void }) {
+  const [filas, setFilas] = useState<PausaFila[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -51,12 +51,18 @@ export default function PausasPiso({ desde, hasta }: { desde: string; hasta: str
     // El rango lo define la pantalla (mismas fechas que el tiempo real y el tiempo muerto).
     void supabase.rpc('estadistica_pausas', { p_desde: desde, p_hasta: hasta }).then(({ data, error: e }) => {
       if (!vivo) return
-      if (e) setError(e.message)
-      else setFilas(((data as Fila[] | null) ?? []).map((f) => ({ ...f, pausas: Number(f.pausas) || 0, segundos: Number(f.segundos) || 0, abiertas: Number(f.abiertas) || 0 })))
+      if (e) {
+        setError(e.message)
+        onDatos?.([])
+      } else {
+        const filasNuevas = ((data as PausaFila[] | null) ?? []).map((f) => ({ ...f, pausas: Number(f.pausas) || 0, segundos: Number(f.segundos) || 0, abiertas: Number(f.abiertas) || 0 }))
+        setFilas(filasNuevas)
+        onDatos?.(filasNuevas)
+      }
       setCargando(false)
     })
     return () => { vivo = false }
-  }, [desde, hasta])
+  }, [desde, hasta, onDatos])
 
   const empleados = useMemo<PorEmpleado[]>(() => {
     const m = new Map<string, PorEmpleado>()
