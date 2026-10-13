@@ -1,82 +1,67 @@
 -- ============================================================
--- VISTAS_CONSOLIDADAS.dbo.vw_ventas_TICKET
--- Tickets de venta: cruzar con contador de cámaras (ContadorClientes/TasaConversion).
+-- VISTAS_CONSOLIDADAS.dbo.vw_ventas_TICKET  (SQL Server de DESKTOP-OA4GU6I)
+-- Tickets de venta por local y día: para cruzar con el contador de cámaras
+-- (ContadorClientes.tsx / TasaConversion.tsx).
 --
--- Bases: DRAGONFISH_NVOCED2, DRAGONFISH_VCPD, DRAGONFISH_MUNOZ
--- Mapas:
---   DRAGONFISH_NVOCED2 -> NVOCED (las cámaras usan NVOCED, no NVOCED2)
---   DRAGONFISH_VCPD -> VCPD
---   DRAGONFISH_MUNOZ -> MUNOZ
+-- Bases: DRAGONFISH_MUNOZ, DRAGONFISH_VCPD y DRAGONFISH_NVOCED2, cada una
+-- sobre su propia COMPROBANTEV (cabecera; 1 fila = 1 comprobante, NO se une
+-- COMPROBANTEVDET porque infla las filas: 1 fila por artículo).
+-- Mapa de locales (deben coincidir con cámaras / tabla `locales`):
+--   DRAGONFISH_MUNOZ  -> MUNOZ
+--   DRAGONFISH_VCPD   -> VCPD
+--   DRAGONFISH_NVOCED2-> NVOCED   (las cámaras usan NVOCED, NO NVOCED2)
 --
--- Reglas:
--- - Solo TICKETFACTURA, no anulados (ANULADO=1). Notas de crédito (TICKETNOTADECREDITO)
---   no incrementan 'tickets', pero su FTOTAL (negativo) se resta de TOTAL.
--- - Agregado por LOCAL, FECHA (CAST(FFCH AS date)). 'tickets' = COUNT(DISTINCT COMPROBANTEV.CODIGO) de TICKETFACTURA válidos.
--- - 'total' = SUM(FTOTAL de TICKETFACTURA válidos) + SUM(FTOTAL de TICKETNOTADECREDITO vinculadas/no vinculadas? Se suma neto por día: lo que aplica es lo facturado neto de devoluciones del día)
---   Pero para simplificar y ser consistente con lo que pide "el total", aquí
---   calculamos: TOTAL_NETO_DIA = SUM(FTOTAL) de todos los comprobantes TICKETFACTURA/TICKETNOTADECREDITO NO anulados, agrupados por LOCAL, FECHA.
---   Alternativa conservadora: total = solo FTOTAL de TICKETFACTURA válidos. Con la respuesta elegida (neto con NC), lo más fiel es sumar FTOTAL de ambos tipos (negativos restan).
+-- Criterio (elegido 2026-10-13):
+--   * Se toman los comprobantes DESCFW LIKE 'TICKET%' no anulados.
+--   * TICKETS = cantidad de TICKETFACTURA (ventas reales).
+--   * TOTAL   = suma de FTOTAL de todos los TICKET% -> las TICKETNOTADECREDITO
+--               vienen en negativo, así que el total queda NETO de devoluciones.
+--   * Ventana de 180 días: la vista se lee completa desde el navegador (tope de
+--     5000 filas de /api/sql) y el tablero solo compara hasta ~30 días atrás.
 --
--- Ventana: últimos 180 días (ajustable cambiando DATEADD).
--- (Aplicado para permitir cruce con la pantalla Tasa de conversión.)
+-- Igual que el resto de las consolidadas, el filtro, la unión y la agrupación
+-- corren en el servidor de MITO (OPENQUERY): por la red vuelven solo las ~500
+-- filas ya agrupadas. Si se hiciera desde acá (4 partes), esta PC bajaría las
+-- COMPROBANTEV enteras y tardaría de más.
+--
+-- Aplicar:  node scripts/sql.mjs --alias DESKTOP-OA4GU6I -f sql/sqlserver/vw_ventas_TICKET.sql
 -- ============================================================
 USE VISTAS_CONSOLIDADAS;
 GO
 CREATE OR ALTER VIEW dbo.vw_ventas_TICKET AS
 SELECT
-  LOCAL,
-  CONVERT(char(10), FECHA, 23) AS FECHA,   -- 'yyyy-mm-dd' explícito (evita corrimientos de zona horaria al serializar la fecha)
-  COUNT_BIG(CASE WHEN TIPO = 'TICKETFACTURA' THEN CODIGO END) AS TICKETS,
-  CAST(SUM(FTOTAL) AS decimal(15,2)) AS TOTAL
-FROM (
-  -- MUNOZ
-  SELECT
-    'MUNOZ' AS LOCAL,
-    CAST(C.FFCH AS date) AS FECHA,
-    LEFT(LTRIM(RTRIM(C.DESCFW)), CHARINDEX(' ', LTRIM(RTRIM(C.DESCFW)) + ' ') - 1) AS TIPO,
-    C.CODIGO,
-    C.FTOTAL
-  FROM DRAGONFISH_MUNOZ.ZooLogic.COMPROBANTEV AS C
-  WHERE C.ANULADO = 0
-    AND C.FFCH >= DATEADD(day, -180, CONVERT(date, GETDATE()))
-    AND (
-      LEFT(LTRIM(RTRIM(C.DESCFW)), CHARINDEX(' ', LTRIM(RTRIM(C.DESCFW)) + ' ') - 1) = 'TICKETFACTURA'
-      OR LEFT(LTRIM(RTRIM(C.DESCFW)), CHARINDEX(' ', LTRIM(RTRIM(C.DESCFW)) + ' ') - 1) = 'TICKETNOTADECREDITO'
-    )
+  CAST(Q.LOCAL   AS varchar(20))   COLLATE DATABASE_DEFAULT AS LOCAL,
+  CAST(Q.FECHA   AS varchar(10))   COLLATE DATABASE_DEFAULT AS FECHA,  -- 'yyyy-mm-dd'
+  CAST(Q.TICKETS AS bigint)                                  AS TICKETS,
+  CAST(Q.TOTAL   AS decimal(15,2))                           AS TOTAL
+FROM OPENQUERY([MITO], '
+  SELECT LOCAL,
+         CONVERT(varchar(10), FECHA, 23) AS FECHA,
+         COUNT_BIG(CASE WHEN DESCFW LIKE ''TICKETFACTURA%'' THEN 1 END) AS TICKETS,
+         CAST(SUM(FTOTAL) AS decimal(15,2)) AS TOTAL
+  FROM (
+    SELECT ''MUNOZ'' AS LOCAL, CAST(C.FFCH AS date) AS FECHA, C.DESCFW, C.FTOTAL
+    FROM DRAGONFISH_MUNOZ.ZooLogic.COMPROBANTEV AS C
+    WHERE C.ANULADO = 0
+      AND C.DESCFW LIKE ''TICKET%''
+      AND C.FFCH >= DATEADD(day, -180, CONVERT(date, GETDATE()))
 
-  UNION ALL
+    UNION ALL
 
-  -- VCPD
-  SELECT
-    'VCPD' AS LOCAL,
-    CAST(C.FFCH AS date) AS FECHA,
-    LEFT(LTRIM(RTRIM(C.DESCFW)), CHARINDEX(' ', LTRIM(RTRIM(C.DESCFW)) + ' ') - 1) AS TIPO,
-    C.CODIGO,
-    C.FTOTAL
-  FROM DRAGONFISH_VCPD.ZooLogic.COMPROBANTEV AS C
-  WHERE C.ANULADO = 0
-    AND C.FFCH >= DATEADD(day, -180, CONVERT(date, GETDATE()))
-    AND (
-      LEFT(LTRIM(RTRIM(C.DESCFW)), CHARINDEX(' ', LTRIM(RTRIM(C.DESCFW)) + ' ') - 1) = 'TICKETFACTURA'
-      OR LEFT(LTRIM(RTRIM(C.DESCFW)), CHARINDEX(' ', LTRIM(RTRIM(C.DESCFW)) + ' ') - 1) = 'TICKETNOTADECREDITO'
-    )
+    SELECT ''VCPD'' AS LOCAL, CAST(C.FFCH AS date) AS FECHA, C.DESCFW, C.FTOTAL
+    FROM DRAGONFISH_VCPD.ZooLogic.COMPROBANTEV AS C
+    WHERE C.ANULADO = 0
+      AND C.DESCFW LIKE ''TICKET%''
+      AND C.FFCH >= DATEADD(day, -180, CONVERT(date, GETDATE()))
 
-  UNION ALL
+    UNION ALL
 
-  -- NVOCED2 -> NVOCED
-  SELECT
-    'NVOCED' AS LOCAL,
-    CAST(C.FFCH AS date) AS FECHA,
-    LEFT(LTRIM(RTRIM(C.DESCFW)), CHARINDEX(' ', LTRIM(RTRIM(C.DESCFW)) + ' ') - 1) AS TIPO,
-    C.CODIGO,
-    C.FTOTAL
-  FROM DRAGONFISH_NVOCED2.ZooLogic.COMPROBANTEV AS C
-  WHERE C.ANULADO = 0
-    AND C.FFCH >= DATEADD(day, -180, CONVERT(date, GETDATE()))
-    AND (
-      LEFT(LTRIM(RTRIM(C.DESCFW)), CHARINDEX(' ', LTRIM(RTRIM(C.DESCFW)) + ' ') - 1) = 'TICKETFACTURA'
-      OR LEFT(LTRIM(RTRIM(C.DESCFW)), CHARINDEX(' ', LTRIM(RTRIM(C.DESCFW)) + ' ') - 1) = 'TICKETNOTADECREDITO'
-    )
-) AS T
-GROUP BY LOCAL, FECHA;
+    SELECT ''NVOCED'' AS LOCAL, CAST(C.FFCH AS date) AS FECHA, C.DESCFW, C.FTOTAL
+    FROM DRAGONFISH_NVOCED2.ZooLogic.COMPROBANTEV AS C
+    WHERE C.ANULADO = 0
+      AND C.DESCFW LIKE ''TICKET%''
+      AND C.FFCH >= DATEADD(day, -180, CONVERT(date, GETDATE()))
+  ) AS T
+  GROUP BY LOCAL, FECHA
+') AS Q;
 GO

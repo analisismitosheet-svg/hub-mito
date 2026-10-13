@@ -4,8 +4,9 @@
 
 ## Servidores
 - **ZOOLOGIC** (principal / DWH, auth SQL): `DRAGONFISH_*`, `DWH` (`vw_DIM_ARTICULO`).
-- **DESKTOP-OA4GU6I** (local, auth Windows): `VISTAS_CONSOLIDADAS` (`vw_ARTICULOS_MITO`, `vw_STOCK_*`, `vw_comprobantes_PEDIDO_VENTA`, `PEDIDO_COMPRA`…). El hub la pide con alias: `DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.vista`.
+- **DESKTOP-OA4GU6I** (local, auth Windows): `VISTAS_CONSOLIDADAS` (`vw_ARTICULOS_MITO`, `vw_STOCK_*`, `vw_comprobantes_PEDIDO_VENTA`, `vw_ventas_TICKET`, `PEDIDO_COMPRA`…). El hub la pide con alias: `DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.vista`.
 - Servidor vinculado `MITO` = `192.168.0.222\ZOOLOGIC` (nombre de 4 partes `MITO.DRAGONFISH_MITO.ZooLogic.X`).
+- **Ventas del contador** — `DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.vw_ventas_TICKET` (`sql/sqlserver/vw_ventas_TICKET.sql`, se aplica con `--alias DESKTOP-OA4GU6I`): tickets por local y día de `DRAGONFISH_MUNOZ`, `DRAGONFISH_VCPD` y `DRAGONFISH_NVOCED2` (locales `MUNOZ`, `VCPD`, `NVOCED`). Sale de `COMPROBANTEV` (cabecera; **no** se une `COMPROBANTEVDET`, que multiplica las filas) con `DESCFW LIKE 'TICKET%'` y `ANULADO = 0`: `TICKETS` = cantidad de `TICKETFACTURA` y `TOTAL` = suma de `FTOTAL` (las `TICKETNOTADECREDITO` vienen negativas, así que resta). Ventana de 180 días. Como el resto de las consolidadas, usa `OPENQUERY([MITO], ...)` para que el filtro, la unión y la agrupación corran en el servidor principal y por la red vuelvan solo las ~500 filas agrupadas; si no, esta PC bajaría las `COMPROBANTEV` enteras. Se habilita en `sql_vistas` y la lee el contador por `config_app.contador_vista_ventas` ([[Otros módulos]]).
 
 ## Puente (`puente-sql/`)
 - `server.js` en :3128, token `PUENTE_TOKEN` (= `SQL_BRIDGE_TOKEN` en Vercel). Filtro por lista blanca de columnas.
