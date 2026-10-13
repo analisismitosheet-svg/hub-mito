@@ -27,3 +27,18 @@ CREATE POLICY dni_actualizar ON storage.objects FOR UPDATE TO authenticated
 -- La tabla tenía además una lectura abierta a cualquier logueado (qual = true) que
 -- anulaba ca_view (cuentas_amigos.view): nombres, DNI y teléfonos para cualquiera.
 DROP POLICY IF EXISTS cuentas_amigos_select_auth ON public.cuentas_amigos;
+
+-- ---- #2 Endpoints /api que solo validaban el JWT ----
+-- El registro es abierto y el usuario nuevo queda 'pendiente' pero con un JWT válido.
+-- Los endpoints ahora llaman a esta RPC con el JWT del usuario: aprobado (o admin) y,
+-- si se pasan claves, con al menos uno de esos permisos.
+CREATE OR REPLACE FUNCTION public.api_autorizado(p_claves text[] DEFAULT '{}')
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT auth.uid() IS NOT NULL
+     AND (private.es_admin() OR private.usuario_aprobado())
+     AND (coalesce(cardinality(p_claves), 0) = 0
+          OR private.es_admin()
+          OR EXISTS (SELECT 1 FROM unnest(p_claves) AS c WHERE private.tiene_permiso(c)))
+$$;
+REVOKE ALL ON FUNCTION public.api_autorizado(text[]) FROM public, anon;
+GRANT EXECUTE ON FUNCTION public.api_autorizado(text[]) TO authenticated;

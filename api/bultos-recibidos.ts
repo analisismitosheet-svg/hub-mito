@@ -15,6 +15,7 @@
  *   TRANSPORTE_ANON_KEY            - anon key de transporte (pública)
  *   MITO_CRUCE_KEY                 - secret compartido con la edge function de transporte
  */
+import { autorizado } from '../src/lib/apiAuth.js'
 
 type Req = {
   method?: string
@@ -27,20 +28,8 @@ type Res = {
   json(body: unknown): void
 }
 
-/** Valida el JWT de Mito contra /auth/v1/user. */
-async function usuarioValido(token: string): Promise<boolean> {
-  const url = process.env.SUPABASE_URL
-  const anon = process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY
-  if (!url || !anon) return false
-  try {
-    const res = await fetch(`${url}/auth/v1/user`, {
-      headers: { Authorization: `Bearer ${token}`, apikey: anon },
-    })
-    return res.ok
-  } catch {
-    return false
-  }
-}
+/** Usuario aprobado en la base (no alcanza con un JWT válido: el registro es abierto); Facturación fábrica (única pantalla que lo usa). */
+const usuarioValido = (token: string) => autorizado(token, ['mayorista.facturacion.view'])
 
 export default async function handler(req: Req, res: Res) {
   res.setHeader('Cache-Control', 'no-store')

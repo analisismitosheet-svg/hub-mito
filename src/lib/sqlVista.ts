@@ -26,6 +26,7 @@
  */
 
 import { postAlPuente } from './puenteRetry.js'
+import { autorizado } from './apiAuth.js'
 
 type Req = {
   method?: string
@@ -90,20 +91,8 @@ function filtroDe(q: Record<string, string | string[] | undefined>): Filtro | nu
   return { donde, valor, coincide }
 }
 
-/** Valida el JWT de Supabase contra /auth/v1/user. */
-async function usuarioValido(token: string): Promise<boolean> {
-  const url = process.env.SUPABASE_URL
-  const anon = process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY
-  if (!url || !anon) return false
-  try {
-    const res = await fetch(`${url}/auth/v1/user`, {
-      headers: { Authorization: `Bearer ${token}`, apikey: anon },
-    })
-    return res.ok
-  } catch {
-    return false
-  }
-}
+/** Usuario aprobado en la base (no alcanza con un JWT válido: el registro es abierto); usuario aprobado (las vistas las usan muchas pantallas). */
+const usuarioValido = (token: string) => autorizado(token, [])
 
 function serviceHeaders(): Record<string, string> | null {
   const url = process.env.SUPABASE_URL

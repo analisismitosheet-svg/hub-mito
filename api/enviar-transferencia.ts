@@ -21,6 +21,7 @@
  *   AZURE_CLIENT_SECRET           - secreto de cliente de la app registrada
  *   MAIL_FROM                     - email remitente de los mails (debe tener permiso Mail.Send)
  */
+import { autorizado, esUuid } from '../src/lib/apiAuth.js'
 
 type Req = {
   method?: string
@@ -237,7 +238,8 @@ export default async function handler(req: Req, res: Res) {
   const auth = req.headers.authorization ?? ''
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
   const autor = await usuarioAutenticado(token)
-  if (!autor) {
+  // Además del JWT: usuario aprobado y con acceso a Transferencias (el registro es abierto)
+  if (!autor || !(await autorizado(token, ['transferencias.view']))) {
     return res.status(401).json({ error: 'No autorizado' })
   }
 
@@ -246,6 +248,8 @@ export default async function handler(req: Req, res: Res) {
 
   const loteId = typeof body.lote_id === 'string' ? body.lote_id.trim() : ''
   if (!loteId) return res.status(400).json({ error: 'Falta lote_id' })
+  // Va pegado en filtros de PostgREST con service role: solo un UUID
+  if (!esUuid(loteId)) return res.status(400).json({ error: 'lote_id inválido' })
 
   const dryRun = body.dry_run === true || body.dry_run === 'true'
   const soloOrigenes = Array.isArray(body.origenes) ? (body.origenes as string[]).map((o) => String(o).trim()).filter(Boolean) : null
