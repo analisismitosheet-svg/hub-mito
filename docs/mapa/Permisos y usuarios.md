@@ -24,7 +24,7 @@
 - `sistemas.informes.view` / `.create` / `.edit` / `.delete` → [[Informes por WhatsApp]].
 - `transferencias.view` → [[Transferencias]].
 - `contador.view` → contador de clientes ([[Otros módulos]]).
-- `compras_precios.view` → [[Comparativa de precios]] (asignado a administrador).
+- `compras_precios.view` → [[Comparativa de precios]] (asignado a administrador y compras).
 
 ## Pruebas de RLS
 Patrón: `begin; select set_config('request.jwt.claims', '{"sub":"<uuid>","role":"authenticated"}', true); set local role authenticated; ...; rollback;`

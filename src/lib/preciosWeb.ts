@@ -1,16 +1,26 @@
 /**
- * Lectura de precios en la web de la marca (por ahora vans.com.ar), para Compras >
- * Comparativa de precios. La usan api/precios-sync.ts (botón y cron, por tandas) y
+ * Lectura de precios en la web de la marca, para Compras > Comparativa de
+ * precios. La usan api/precios-sync.ts (botón y cron, por tandas) y
  * scripts/precios-sync.ts (corrida completa desde una PC).
  *
- * Por cada código VN0… de la descripción de los artículos:
- *   GET https://www.vans.com.ar/Product/Detail/{cod}
- *   - existe si el JSON-LD trae "sku":"{cod}" (sin distinguir mayúsculas). La web
- *     responde 200 aunque el código no exista, con una página sin sku.
- *   - si no existe y termina en un sufijo de variante (CA, SM, …) se prueba sin el
- *     sufijo, siempre que queden al menos 9 caracteres; ahí se guarda cod_web.
- *   - precios del objeto a nivel PRODUCTO (`var productData={…"descripcionCorta"…}`),
- *     no del array por talle, que repite precioAnterior con valores que no corresponden.
+ * Está preparada para VARIAS marcas: cada una define su loader (URL + cómo
+ * interpretar la respuesta). Hoy solo hay `vans` porque es la única cuyo
+ * sitio publica precios reales y permite buscar por código:
+ *
+ *   - vans.com.ar: por cada código VN0… de la descripción
+ *     GET https://www.vans.com.ar/Product/Detail/{cod}
+ *     - existe si el JSON-LD trae "sku":"{cod}" (sin distinguir mayúsculas). La web
+ *       responde 200 aunque el código no exista, con una página sin sku.
+ *     - si no existe y termina en un sufijo de variante (CA, SM, …) se prueba sin el
+ *       sufijo, siempre que queden al menos 9 caracteres; ahí se guarda cod_web.
+ *     - precios del objeto a nivel PRODUCTO (`var productData={…"descripcionCorta"…}`),
+ *       no del array por talle, que repite precioAnterior con valores que no corresponden.
+ *
+ * Converse y Topper quedaron afuera por sus fuentes, no por el código:
+ *   - converse.com.ar es un SPA sobre un backend propio (backend.converse.com.ar/
+ *     shop-api/…) que NO publica precios reales (los productos responden price 0/1/10,
+ *     "encontralas en locales") y su búsqueda no encuentra por código MITO.
+ *   - topper: no hay artículos Topper identificables en el maestro MITO.
  *
  * Sin dependencias ni imports: corre igual en Vercel y en Node 24 (`node archivo.ts`).
  */
@@ -27,8 +37,20 @@ export interface PrecioWeb {
   encontrado: boolean
 }
 
-export const MARCAS: Record<string, { url: (cod: string) => string }> = {
-  vans: { url: (cod) => `https://www.vans.com.ar/Product/Detail/${encodeURIComponent(cod)}` },
+export interface LoaderMarca {
+  /** URL de la página (o del JSON) del producto en la web de la marca. */
+  url: (cod: string) => string
+  /** Interpreta la respuesta de esa marca; null = la página no es de ese código. */
+  leer: (respuesta: string, cod: string) => Omit<PrecioWeb, 'cod' | 'cod_web' | 'url'> | null
+}
+
+/** Marcas con loader. Sumar una marca = agregar su entrada acá (más el patrón de
+ *  código + filtro de descripción en sql/precios_web.sql). */
+export const MARCAS: Record<string, LoaderMarca> = {
+  vans: {
+    url: (cod) => `https://www.vans.com.ar/Product/Detail/${encodeURIComponent(cod)}`,
+    leer: leerPagina,
+  },
 }
 
 /** Del más largo al más corto, para que CAS gane sobre CA y SMU sobre SM. */
@@ -105,7 +127,7 @@ export async function leerCodigo(marca: string, cod: string): Promise<PrecioWeb>
   const candidatos = [cod, sinSufijo(cod)].filter((c): c is string => !!c)
   for (const c of candidatos) {
     const url = m.url(c)
-    const datos = leerPagina(await bajar(url), c)
+    const datos = m.leer(await bajar(url), c)
     if (datos) return { cod, cod_web: c === cod ? null : c, url, ...datos }
   }
   return { cod, cod_web: null, nombre_web: null, precio: null, precio_lista: null, desc_pct: null, con_stock: null, url: null, encontrado: false }

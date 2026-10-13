@@ -3,6 +3,7 @@
  *
  *   POST /api/informe   { id }                        -> envía el informe guardado
  *   POST /api/informe   { informe, preview: true }     -> devuelve el texto sin enviar
+ *   POST /api/informe   { estado: true }               -> ¿WhatsApp conectado? (número y nombre en Meta)
  *   GET  /api/informe   (Bearer $CRON_SECRET ó JWT)    -> dispara los diarios vencidos
  *
  * Antes eran dos funciones (informe-enviar e informe-cron); se unificaron para no
@@ -12,7 +13,7 @@
  * Variables de entorno en Vercel (sin prefijo VITE_): CRON_SECRET, SUPABASE_URL,
  * SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, WHATSAPP_TOKEN, WHATSAPP_PHONE_ID.
  */
-import { armarCuerpo, enviarInforme, generarImagenInforme, tienePermiso, usuarioDe } from '../src/lib/informesServidor.js'
+import { armarCuerpo, enviarInforme, estadoWhatsapp, generarImagenInforme, tienePermiso, usuarioDe } from '../src/lib/informesServidor.js'
 import { formatoDe, type Informe } from '../src/lib/informes.js'
 
 type Req = {
@@ -136,6 +137,12 @@ async function manual(req: Req, res: Res) {
 
   const datos = cuerpo(req)
   const preview = datos.preview === true
+
+  // --- Estado de la conexión con WhatsApp (Meta) ---
+  if (datos.estado === true) {
+    if (!(await tienePermiso(token, ['sistemas.informes.view']))) return res.status(403).json({ error: 'No tenés permiso para esta acción' })
+    return res.status(200).json(await estadoWhatsapp())
+  }
 
   const permitido = await tienePermiso(token, preview ? ['sistemas.informes.view'] : ['sistemas.informes.edit'])
   if (!permitido) return res.status(403).json({ error: 'No tenés permiso para esta acción' })

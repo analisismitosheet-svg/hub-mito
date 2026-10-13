@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import { compararUbicaciones, ubicacionesDeArticulos } from '@/lib/mapeo'
+import { controlesHojaPedido } from './ventanaImpresion'
 
 /* ------------------------------------------------------------------ */
 /*  Impresión de un pedido (Pedidos de venta): hoja A4 que combina el  */
@@ -109,13 +110,6 @@ const CSS = `
   @media print { .barra, .corte { display: none !important; } }
 `
 
-/**
- * Script de la vista previa: tamaño de letra (A− / A+, queda guardado en este navegador) y
- * "Ajustar a 1 hoja" (achica la letra hasta que entre en el alto útil de un A4, sin bajar de 7 px;
- * si ni así entra, deja la letra normal y sale en varias hojas).
- * Si nunca se eligió un tamaño, arranca ajustado a 1 hoja.
- */
-const SCRIPT_HOJA = `
 (function () {
   var MIN = 7, MAX = 16, NORMAL = 11, CLAVE = 'pedido.imprimir.fs';
   var hoja = document.getElementById('hoja');
@@ -244,7 +238,6 @@ export function htmlPedido(
     </table>
     <div class="pie"><span>Hub MITO · copia de Dragonfish</span><span>Impreso ${esc(impreso)}</span></div>
     </div>
-    <script>${SCRIPT_HOJA}</script>
   </body></html>`
 }
 
@@ -286,6 +279,8 @@ export async function imprimirPedido(p: PedidoImprimir, items: ItemPedidoImprimi
   w.document.open()
   w.document.write(htmlPedido(p, items, { ubicaciones, materiales }))
   w.document.close()
+  // Controles de la hoja (letra, ajustar a 1 hoja, imprimir): corren desde acá, no inline (CSP)
+  controlesHojaPedido(w)
   // Queda la vista previa: se ajusta la letra y se imprime con el botón de la barra
   w.focus()
 }

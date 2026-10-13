@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUp, ExternalLink, Loader2, RefreshCw, Search } from 'lu
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
+import { cargarStockArticulos, stockDe, VISTA_STOCK_ARTICULO_REAL, type StockArticulos } from '@/lib/stockArticulos'
 import { useAuth } from '@/context/AuthContext'
 
 /* ------------------------------------------------------------------ */
@@ -27,7 +28,6 @@ interface Fila {
   precio: number | null
   precio_lista: number | null
   desc_pct: number | null
-  con_stock: boolean | null
   url: string | null
   nombre_web: string | null
   dif: number | null
@@ -46,8 +46,8 @@ interface Sync {
 
 const MARCAS = [
   { id: 'vans', label: 'Vans · vans.com.ar', activa: true },
-  { id: 'converse', label: 'Converse (próximamente)', activa: false },
-  { id: 'topper', label: 'Topper (próximamente)', activa: false },
+  { id: 'converse', label: 'Converse · su web no publica precios', activa: false },
+  { id: 'topper', label: 'Topper · sin artículos en el maestro', activa: false },
 ]
 
 const nf = new Intl.NumberFormat('es-AR')
@@ -56,16 +56,16 @@ const pct = (n: number | null | undefined) =>
   n == null ? '—' : `${n > 0 ? '+' : ''}${(n * 100).toLocaleString('es-AR', { maximumFractionDigits: 1 })}%`
 
 const ESTADOS: Record<Estado, { label: string; clase: string }> = {
-  mas_caro: { label: 'Vos más caro', clase: 'bg-red-500/10 text-red-500' },
+  mas_caro: { label: 'Más caro', clase: 'bg-red-500/10 text-red-500' },
   igual: { label: 'Igual', clase: 'bg-blue-500/10 text-blue-500' },
-  mas_barato: { label: 'Vos más barato', clase: 'bg-emerald-500/10 text-emerald-500' },
+  mas_barato: { label: 'Más barato', clase: 'bg-emerald-500/10 text-emerald-500' },
   revisar: { label: 'Revisar', clase: 'bg-amber-500/15 text-amber-500' },
   sin_precio: { label: 'Sin precio', clase: 'bg-surface2 text-sub' },
 }
 
 type Stock = 'si' | 'no' | 'todos'
 type Kpi = 'todos' | 'mas_caro' | 'igual' | 'mas_barato' | 'oferta'
-type Col = 'descripcion' | 'mi_precio' | 'precio_lista' | 'dif_pct' | 'estado' | 'con_stock'
+type Col = 'descripcion' | 'mi_precio' | 'precio_lista' | 'dif_pct' | 'estado' | 'stock'
 
 const POR_PAGINA = 60
 
@@ -76,6 +76,8 @@ export default function ComparativaPrecios() {
   const [sync, setSync] = useState<Sync | null>(null)
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [stockData, setStockData] = useState<StockArticulos | null>(null)
+  const [stockEstado, setStockEstado] = useState<'cargando' | 'ok' | 'error'>('cargando')
 
   const [stock, setStock] = useState<Stock>('si')
   const [busqueda, setBusqueda] = useState('')
@@ -95,7 +97,7 @@ export default function ComparativaPrecios() {
     for (let desde = 0; desde < 20000; desde += 1000) {
       const { data, error: e } = await supabase
         .from('vw_comparativa_precios')
-        .select('codigo,id_art,descripcion,familia,anio,publicado,mi_precio,precio,precio_lista,desc_pct,con_stock,url,nombre_web,dif,dif_pct,estado')
+        .select('codigo,id_art,descripcion,familia,anio,publicado,mi_precio,precio,precio_lista,desc_pct,url,nombre_web,dif,dif_pct,estado')
         .eq('marca', marca)
         .order('codigo')
         .order('id_art')
@@ -115,6 +117,13 @@ export default function ComparativaPrecios() {
     setFilas(todas)
     const { data: s } = await supabase.from('precios_web_sync').select('ultima_at,consultados,encontrados,errores,proximo,total').eq('marca', marca).maybeSingle()
     setSync((s as Sync | null) ?? null)
+    try {
+      setStockData(await cargarStockArticulos(VISTA_STOCK_ARTICULO_REAL))
+      setStockEstado('ok')
+    } catch {
+      setStockData(null)
+      setStockEstado('error')
+    }
     setCargando(false)
   }, [marca])
 
@@ -158,12 +167,16 @@ export default function ComparativaPrecios() {
   /* ---- Filtros: stock, búsqueda y publicados (los contadores se calculan sobre esto) ---- */
   const base = useMemo(() => {
     const t = busqueda.trim().toUpperCase()
-    return filas.filter((f) =>
-      (stock === 'todos' || (stock === 'si' ? f.con_stock === true : f.con_stock !== true)) &&
-      (!soloPublicados || f.publicado === true) &&
-      (!t || f.codigo.includes(t) || f.id_art.toUpperCase().includes(t) || f.descripcion.toUpperCase().includes(t)),
-    )
-  }, [filas, stock, busqueda, soloPublicados])
+    return filas.filter((f) => {
+      const s = stockDe(stockData, f.id_art)
+      const stockOk = stock === 'todos' || (stock === 'si' ? (s ?? 0) > 0 : (s ?? 0) <= 0)
+      return (
+        stockOk &&
+        (!soloPublicados || f.publicado === true) &&
+        (!t || f.codigo.includes(t) || f.id_art.toUpperCase().includes(t) || f.descripcion.toUpperCase().includes(t))
+      )
+    })
+  }, [filas, stock, busqueda, soloPublicados, stockData])
 
   const contadores = useMemo(() => {
     const prom = (xs: Fila[]) => (xs.length ? xs.reduce((s, f) => s + (f.dif_pct ?? 0), 0) / xs.length : null)
@@ -191,7 +204,7 @@ export default function ComparativaPrecios() {
         case 'precio_lista': return f.precio_lista
         case 'dif_pct': return f.dif_pct
         case 'estado': return ESTADOS[f.estado].label
-        case 'con_stock': return f.con_stock ? 1 : 0
+        case 'stock': return stockDe(stockData, f.id_art)
       }
     }
     return [...lista].sort((a, b) => {
@@ -203,7 +216,11 @@ export default function ComparativaPrecios() {
       const c = typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb), 'es')
       return orden.asc ? c : -c
     })
-  }, [base, kpi, orden])
+  }, [base, kpi, orden, stockData])
+
+  useEffect(() => {
+    if (stockEstado === 'error' && stock !== 'todos') setStock('todos')
+  }, [stockEstado, stock])
 
   useEffect(() => { setMostrar(POR_PAGINA) }, [stock, busqueda, soloPublicados, kpi, orden])
 
@@ -242,6 +259,21 @@ export default function ComparativaPrecios() {
       {pie && <span className="text-xs tabular-nums text-sub">{pie}</span>}
     </button>
   )
+
+  const stockCelda = (s: number | null) =>
+    s == null ? (
+      <span className="text-sub">—</span>
+    ) : s > 0 ? (
+      <span className="flex items-center justify-end gap-1.5 tabular-nums text-ink">
+        <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
+        {nf.format(s)}
+      </span>
+    ) : (
+      <span className="flex items-center justify-end gap-1.5 tabular-nums text-sub">
+        <span className="inline-block h-1.5 w-1.5 rounded-full bg-sub" aria-hidden />
+        Sin stock
+      </span>
+    )
 
   const fecha = sync?.ultima_at
     ? new Date(sync.ultima_at).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })
@@ -300,20 +332,25 @@ export default function ComparativaPrecios() {
         </p>
       )}
       {error && <p role="alert" className="mb-3 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
+      {stockEstado === 'error' && (
+        <p role="status" className="mb-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-500">
+          No se pudo leer el stock (conexión SQL): la columna Stock queda sin dato y el filtro pasó a "Todos".
+        </p>
+      )}
 
       {/* Contadores (filtran la tabla) */}
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {tarjeta('todos', 'Artículos comparados', contadores.todos, null, null)}
-        {tarjeta('mas_caro', 'Vos más caro', contadores.mas_caro, contadores.promCaro != null ? `promedio ${pct(contadores.promCaro)}` : null, 'bg-red-500')}
+        {tarjeta('mas_caro', 'Más caro', contadores.mas_caro, contadores.promCaro != null ? `promedio ${pct(contadores.promCaro)}` : null, 'bg-red-500')}
         {tarjeta('igual', 'Igual (±2%)', contadores.igual, null, 'bg-blue-500')}
-        {tarjeta('mas_barato', 'Vos más barato', contadores.mas_barato, contadores.promBarato != null ? `promedio ${pct(contadores.promBarato)}` : null, 'bg-emerald-500')}
+        {tarjeta('mas_barato', 'Más barato', contadores.mas_barato, contadores.promBarato != null ? `promedio ${pct(contadores.promBarato)}` : null, 'bg-emerald-500')}
         {tarjeta('oferta', 'En oferta en la marca', contadores.oferta, null, 'bg-amber-500')}
       </div>
 
       {/* Filtros */}
       <div className="mb-3 flex flex-wrap items-center gap-2.5">
-        <div className="inline-flex rounded-xl border border-line bg-surface p-0.5" role="group" aria-label="Stock en la web">
-          {([['si', 'Con stock en web'], ['no', 'Sin stock'], ['todos', 'Todos']] as [Stock, string][]).map(([id, label]) => (
+        <div className="inline-flex rounded-xl border border-line bg-surface p-0.5" role="group" aria-label="Stock propio">
+          {([['si', 'Con stock'], ['no', 'Sin stock'], ['todos', 'Todos']] as [Stock, string][]).map(([id, label]) => (
             <button
               key={id}
               type="button"
@@ -348,11 +385,11 @@ export default function ComparativaPrecios() {
             <thead className="bg-surface2 text-xs text-sub">
               <tr className="border-b border-line">
                 {th('descripcion', 'Artículo')}
-                {th('mi_precio', 'Mi precio', true)}
+                {th('mi_precio', 'Precio público', true)}
                 {th('precio_lista', 'Precio marca', true)}
                 {th('dif_pct', 'Diferencia', true)}
                 {th('estado', 'Estado')}
-                {th('con_stock', 'Stock web')}
+                {th('stock', 'Stock', true)}
                 <th className="px-3 py-2.5"><span className="sr-only">Ver en la web</span></th>
               </tr>
             </thead>
@@ -383,10 +420,7 @@ export default function ComparativaPrecios() {
                     <td className="whitespace-nowrap px-3 py-2">
                       <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${e.clase}`}>{e.label}</span>
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2 text-xs text-sub">
-                      <span className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle ${f.con_stock ? 'bg-emerald-500' : 'bg-sub'}`} />
-                      {f.con_stock ? 'Con stock' : 'Sin stock'}
-                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-xs">{stockCelda(stockDe(stockData, f.id_art))}</td>
                     <td className="px-3 py-2">
                       {f.url && (
                         <a
@@ -428,7 +462,8 @@ export default function ComparativaPrecios() {
         La diferencia es tu precio público contra el precio de lista de la marca (antes de la oferta). Igual = hasta ±2%.
         Si la marca tiene el artículo en oferta, se muestra debajo el precio de hoy y el % OFF. El precio de la marca no
         incluye promociones bancarias, y cuando la web no tiene stock suele quedar el último precio de liquidación.
-        "Revisar" = algún precio menor a $10.000.
+        "Revisar" = algún precio menor a $10.000. La columna Stock es tu stock total en MITO (el mismo número que F12
+        Consulta artículos), no el de la web de la marca.
       </p>
     </Layout>
   )

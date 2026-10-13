@@ -24,7 +24,7 @@ function sb() {
  * acá solo se leen. El tablero se agrega en la base (`contador_resumen`).
  *
  * Conversión: si en config_app hay una vista SQL en 'contador_vista_ventas'
- * (columnas local, fecha, tickets — agregada por local y día), se cruzan
+ * (columnas local, fecha, tickets y total — agregada por local y día), se cruzan
  * tickets / entradas.
  */
 
@@ -45,7 +45,7 @@ export interface Dispositivo {
   estado: { version?: string; camaras?: { nombre: string; ok: boolean; fps: number; error: string | null; entradas_hoy?: number; vista_base?: string | null; kbps?: number | null; resolucion?: string }[] } | null
 }
 
-export type Venta = { local: string; fecha: string; tickets: number }
+export type Venta = { local: string; fecha: string; tickets: number; total?: number }
 
 export const CLAVE_VISTA = 'contador_vista_ventas'
 const REFRESCO_MS = 60000
@@ -67,6 +67,7 @@ const iso = (d: Date) => {
 }
 const sumarDias = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x }
 const nf = (n: number) => Math.round(n).toLocaleString('es-AR')
+const nfMoneda = (n: number) => '$' + Math.round(n).toLocaleString('es-AR')
 
 type Preset = 'hoy' | 'ayer' | '7d' | '30d' | 'mes'
 const PRESETS: { id: Preset; label: string }[] = [
@@ -96,7 +97,10 @@ export function aVentas(filas: Record<string, unknown>[]): Venta[] {
     const local = String(col(f, 'local', 'sucursal', 'codigo_local') ?? '').trim().toUpperCase()
     const fecha = String(col(f, 'fecha', 'dia') ?? '').slice(0, 10)
     const tickets = Number(col(f, 'tickets', 'cantidad', 'comprobantes', 'ventas'))
-    return local && /^\d{4}-\d{2}-\d{2}$/.test(fecha) && Number.isFinite(tickets) ? [{ local, fecha, tickets }] : []
+    const totalBruto = col(f, 'total', 'importe', 'monto', 'facturado')
+    const total = Number(totalBruto)
+    if (!local || !/^\d{4}-\d{2}-\d{2}$/.test(fecha) || !Number.isFinite(tickets)) return []
+    return [{ local, fecha, tickets, ...(totalBruto != null && Number.isFinite(total) ? { total } : {}) }]
   })
 }
 
@@ -165,6 +169,20 @@ export default function ContadorClientes() {
       porLocal.set(v.local, (porLocal.get(v.local) ?? 0) + v.tickets)
     }
     return porLocal
+  }, [ventas, rango, fLocal])
+
+  // Total facturado del rango, por local (y general). Solo si la vista trae 'total'.
+  const hayTotal = !!ventas?.some((v) => v.total != null)
+  const totales = useMemo(() => {
+    const porLocal = new Map<string, number>()
+    let general = 0
+    for (const v of ventas ?? []) {
+      if (v.fecha < rango.desde || v.fecha > rango.hasta || (fLocal && v.local !== fLocal)) continue
+      const t = v.total ?? 0
+      porLocal.set(v.local, (porLocal.get(v.local) ?? 0) + t)
+      general += t
+    }
+    return { porLocal, general }
   }, [ventas, rango, fLocal])
 
   const conversion = (entradas: number, tk: number | undefined) => (entradas > 0 && tk != null ? (tk / entradas) * 100 : null)
@@ -247,7 +265,7 @@ export default function ContadorClientes() {
                   nota={datos.totales.transeuntes ? `${nf(datos.totales.nuevos)} únicos` : `${nf(datos.totales.empleados)} entradas de personal (no suman)`} />
                 <Kpi icono={<Percent size={16} className="text-pink-500" />} label="Conversión"
                   valor={convTotal != null ? `${convTotal.toFixed(1)}%` : '—'}
-                  nota={ventas ? `${nf(totalTickets ?? 0)} tickets` : 'configurá la vista de ventas en Cámaras'} />
+                  nota={ventas ? `${nf(totalTickets ?? 0)} tickets${hayTotal ? ` · ${nfMoneda(totales.general)}` : ''}` : 'configurá la vista de ventas en Cámaras'} />
               </div>
 
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -294,6 +312,7 @@ export default function ContadorClientes() {
                           <th className="py-1.5 pr-3 text-right">Entradas</th>
                           <th className="py-1.5 pr-3 text-right">Salidas</th>
                           {ventas && <th className="py-1.5 pr-3 text-right">Tickets</th>}
+                          {ventas && hayTotal && <th className="py-1.5 pr-3 text-right">Total</th>}
                           {ventas && <th className="py-1.5 text-right">Conversión</th>}
                         </tr>
                       </thead>
@@ -309,6 +328,7 @@ export default function ContadorClientes() {
                               <td className="py-1.5 pr-3 text-right tabular-nums">{nf(l.entradas)}</td>
                               <td className="py-1.5 pr-3 text-right tabular-nums">{nf(l.salidas)}</td>
                               {ventas && <td className="py-1.5 pr-3 text-right tabular-nums">{nf(tk ?? 0)}</td>}
+                              {ventas && hayTotal && <td className="py-1.5 pr-3 text-right tabular-nums">{nfMoneda(totales.porLocal.get(l.local) ?? 0)}</td>}
                               {ventas && <td className="py-1.5 text-right tabular-nums">{conv != null ? `${conv.toFixed(1)}%` : '—'}</td>}
                             </tr>
                           )
@@ -411,7 +431,7 @@ export function Camaras({ dispositivos, locales, onCambio, tarjeta, btnChico }: 
 
   const guardarVista = async () => {
     const v = vista.trim()
-    if (v && !/^[A-Za-z0-9_]+$/.test(v)) return setMsg('Nombre de vista inválido.')
+    if (v && !/^([A-Za-z0-9_-]+:)?[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+){0,2}$/.test(v)) return setMsg('Nombre de vista inválido.')
     const { error } = await sb().from('config_app').upsert({ clave: CLAVE_VISTA, valor: v }, { onConflict: 'clave' })
     setMsg(error ? error.message : 'Vista de ventas guardada. Recargá el tablero.')
   }
@@ -511,11 +531,13 @@ export function Camaras({ dispositivos, locales, onCambio, tarjeta, btnChico }: 
         <div className={tarjeta}>
           <h3 className="mb-1 text-sm font-semibold text-ink">Cruce con ventas</h3>
           <p className="mb-3 text-xs text-sub">
-            Vista del SQL Server con columnas <code>local</code>, <code>fecha</code>, <code>tickets</code>, agrupada por local y día
-            (últimos ~90 días). Tiene que estar habilitada también en Configuraciones → Conexión SQL.
+            Vista del SQL Server con columnas <code>local</code>, <code>fecha</code>, <code>tickets</code> (y <code>total</code> para el
+            importe), agrupada por local y día (últimos ~180 días). Se escribe completa, con el servidor adelante:
+            <br /><code>DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.vw_ventas_TICKET</code>.
+            Tiene que estar habilitada también en Configuraciones → Conexión SQL.
           </p>
           <div className="flex flex-wrap items-end gap-2">
-            <input value={vista} onChange={(e) => setVista(e.target.value)} placeholder="vw_tickets_diarios" className="h-8 rounded-lg border border-line bg-surface2 px-2 text-xs" />
+            <input value={vista} onChange={(e) => setVista(e.target.value)} placeholder="DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.vw_ventas_TICKET" className="h-8 min-w-[22rem] flex-1 rounded-lg border border-line bg-surface2 px-2 text-xs" />
             <button onClick={() => void guardarVista()} className={btnChico}>Guardar</button>
           </div>
         </div>

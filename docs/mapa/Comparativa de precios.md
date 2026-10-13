@@ -1,10 +1,16 @@
 # Comparativa de precios
 
-Compras > **Comparativa de precios** (`/compras/comparativa-precios`, permiso `compras_precios.view`). Mi **precio público** (`articulos.precio_publico`) contra el **precio de lista** de la web de la marca (antes de la oferta). El precio vigente y el % OFF se muestran como dato. Por ahora solo Vans (vans.com.ar).
+Compras > **Comparativa de precios** (`/compras/comparativa-precios`, permiso `compras_precios.view`). Mi **precio público** (`articulos.precio_publico`) contra el **precio de lista** de la web de la marca (antes de la oferta). El precio vigente y el % OFF se muestran como dato. Hoy solo **Vans** (vans.com.ar).
 
-- Pantalla: `src/pages/ComparativaPrecios.tsx`. Lee `vw_comparativa_precios` y `precios_web_sync`. Contadores clickeables, filtros (stock web, búsqueda, solo publicados), tabla ordenable de a 60. Botón **Actualizar ahora** solo admin.
-- Base: `sql/precios_web.sql` → `precios_web` (PK marca+cod), `precios_web_sync` (última lectura + `proximo` = por dónde va la lectura en curso), vista `vw_comparativa_precios` (código `VN0[A-Z0-9]{6,10}` sacado de la descripción; `dif`, `dif_pct`, `estado`: sin_precio / revisar (<$10.000) / igual (±2%) / mas_caro / mas_barato). RPC `precios_web_codigos` y `precios_web_guardar`: aceptan admin logueado o la clave de sync `precios` (`private.sync_claves`, valor en el Vault como `precios_sync_token`).
-- Lectura de la web: `src/lib/preciosWeb.ts` (6 en paralelo, 1 reintento en 5xx; existe si el JSON-LD trae `"sku"`; si no, prueba sin sufijo CA/SM/CS/…; precios del bloque `productData` a nivel producto, nunca del array por talle).
+- Pantalla: `src/pages/ComparativaPrecios.tsx`. Lee `vw_comparativa_precios` y `precios_web_sync`. Contadores clickeables, filtros (stock propio, búsqueda, solo publicados), tabla ordenable de a 60. Botón **Actualizar ahora** solo admin.
+  - Columna **Stock** = stock TOTAL del artículo en MITO de **todas las bases** (vía `cargarStockArticulos(VISTA_STOCK_ARTICULO_REAL)` → `/api/sql` → `vw_STOCK_ARTICULO_REAL`, agregada sobre `vw_STOCK_SUCURSALES_REAL` sumando `CANTIDAD_REAL` por artículo; bases CARLOZ PAZ, MUNOZ, NUEVO CENTRO), **no** el stock de la web de la marca. Con "Con stock" + la tarjeta "Más caro"/"Más barato" se ve lo que tengo en stock y tiene diferencia.
+  - Estados: **Más caro** / **Igual (±2%)** / **Más barato** / Revisar / Sin precio.
+- Base: `sql/precios_web.sql` → `precios_web` (PK marca+cod), `precios_web_sync` (última lectura + `proximo` = por dónde va la lectura en curso), vista `vw_comparativa_precios` **multi-marca**: cada marca define en un `VALUES` el patrón de código sobre la descripción y sus filtros (`busca`, `word`).
+  - **vans** (activa): código `VN0[A-Z0-9]{6,10}`, descripción `%VN0%`.
+  - **converse** (deshabilitada): patrón `[0-9]{6}B` + `%CONVERSE%`; converse.com.ar no publica precios reales (SPA sobre backend propio sin precios ni búsqueda por código MITO), así que no tiene loader.
+  - **topper**: no hay artículos Topper identificables en el maestro.
+  - `estado`: sin_precio / revisar (<$10.000) / igual (±2%) / mas_caro / mas_barato. RPC `precios_web_codigos` (multi-marca) y `precios_web_guardar`: aceptan admin logueado o la clave de sync `precios` (`private.sync_claves`, valor en el Vault como `precios_sync_token`).
+- Lectura de la web: `src/lib/preciosWeb.ts` con **loader por marca** (`MARCAS` = `url` + `leer`; hoy solo `vans`). 6 en paralelo, 1 reintento en 5xx; existe si el JSON-LD trae `"sku"`; si no, prueba sin sufijo CA/SM/CS/…; precios del bloque `productData` a nivel producto, nunca del array por talle.
 - Sync: `api/precios-sync.ts?marca=vans&desde=N` **por tandas** (~42 s cada una; una corrida completa son ~1700 códigos y ~3 min). El botón encadena tandas desde el navegador. Corrida completa desde una PC: `PRECIOS_SYNC_TOKEN=… node scripts/precios-sync.ts vans`.
 - Semanal: `sql/precios_web_cron.sql` (pg_cron + pg_net, lunes 03:00 AR cada 2 min hasta terminar). Vercel Cron no sirve (Hobby: 1 por día y 60 s).
-- Primera lectura (13/10/2026): 1704 códigos, 392 encontrados (27 por código sin sufijo), 3 errores. `VN0A3TKN6BT1` = 129000, 32% OFF, lista 189900.
+- Primera lectura (13/10/2026): 1704 códigos, 392 encontrados (398 filas del view por códigos repetidos en varios id_art), 3 errores. `VN0A3TKN6BT1` = 129000, 32% OFF, lista 189900.

@@ -2,10 +2,14 @@
 -- COMPARATIVA DE PRECIOS (Compras): mis precios contra la web de la marca
 -- Ejecutar en Supabase SQL Editor. Idempotente.
 --
--- precios_web        lo que leyó /api/precios-sync de la web (vans.com.ar) por código
+-- precios_web        lo que leyó /api/precios-sync de la web de la marca por código
 -- precios_web_sync   última lectura y por dónde va (el sync corre por tandas: una
 --                    función de Vercel corta a los 60 s y son ~1700 códigos)
--- vw_comparativa_precios  articulos (código VN0… sacado de la descripción) x precios_web
+-- vw_comparativa_precios  articulos (código de la marca sacado de la descripción) x precios_web
+--
+-- La vista y precios_web_codigos manejan la marca por configuración (patrón de código +
+-- filtros de descripción por marca). Vans es la única activa: converse y topper están
+-- documentadas abajo (converse: patrón NNNNNNB, pero su web no publica precios).
 --
 -- La comparación es MI PRECIO PÚBLICO contra el PRECIO DE LISTA de la marca (antes de
 -- la oferta). El precio vigente y el % OFF se muestran como dato.
@@ -40,13 +44,14 @@ CREATE TABLE IF NOT EXISTS public.precios_web_sync (
   total        integer                 -- códigos a leer en la lectura en curso
 );
 
--- ---- Permiso + rol administrador (es_admin ya ve todo; queda asignado igual) ----
+-- ---- Permiso + roles (administrador ya ve todo por es_admin; se asigna igual por las dudas) ----
 INSERT INTO public.permisos (clave, modulo, accion, label, orden) VALUES
   ('compras_precios.view', 'compras', 'view', 'Ver comparativa de precios', 880)
 ON CONFLICT (clave) DO NOTHING;
 INSERT INTO public.rol_permisos (rol, permiso_clave)
-SELECT 'administrador', 'compras_precios.view'
-WHERE NOT EXISTS (SELECT 1 FROM public.rol_permisos WHERE rol = 'administrador' AND permiso_clave = 'compras_precios.view');
+SELECT r.rol, 'compras_precios.view'
+FROM (VALUES ('administrador'), ('compras')) AS r(rol)
+WHERE NOT EXISTS (SELECT 1 FROM public.rol_permisos WHERE rol = r.rol AND permiso_clave = 'compras_precios.view');
 
 -- ---- RLS: lectura con permiso; escritura solo por RPC ----
 ALTER TABLE public.precios_web ENABLE ROW LEVEL SECURITY;
@@ -63,18 +68,29 @@ CREATE POLICY precios_web_sync_ver ON public.precios_web_sync FOR SELECT TO auth
 -- ---- Vista ----
 -- security_invoker: respeta la RLS de precios_web (articulos se lee libre).
 -- Un código puede estar en varios id_art: una fila por id_art.
+-- Cada marca define su patrón de código sobre la descripción y qué descripciones
+-- son suyas (busca; word es un filtro extra de marca). Una marca entra a la vista
+-- aunque su web todavía no devuelva nada, porque el cruce es contra precios_web.
 CREATE OR REPLACE VIEW public.vw_comparativa_precios WITH (security_invoker = true) AS
-WITH a AS (
-  SELECT upper(substring(ar.descripcion FROM '(?i)VN0[A-Za-z0-9]{6,10}')) AS cod,
+WITH marcas AS (
+  SELECT * FROM (VALUES
+    ('vans',     '(?i)VN0[A-Za-z0-9]{6,10}', '%VN0%',      NULL::text),
+    ('converse', '([0-9]{6}B)',              '%B%',        '%CONVERSE%')
+  ) AS m(marca, patron, busca, word)
+), a AS (
+  SELECT m.marca,
+         upper(substring(ar.descripcion FROM m.patron)) AS cod,
          ar.id_art, ar.descripcion, ar.id_flia AS familia, ar.anio, ar.publicado,
          ar.precio_publico AS mi_precio
   FROM public.articulos ar
-  WHERE ar.descripcion ILIKE '%VN0%'
+  JOIN marcas m
+    ON ar.descripcion ILIKE m.busca
+   AND (m.word IS NULL OR ar.descripcion ILIKE m.word)
 ), c AS (
-  SELECT a.*, p.marca, p.precio, p.precio_lista, p.desc_pct, p.con_stock, p.url,
+  SELECT a.*, p.precio, p.precio_lista, p.desc_pct, p.con_stock, p.url,
          p.nombre_web, p.leido_at,
          a.mi_precio - p.precio_lista AS dif
-  FROM a JOIN public.precios_web p ON p.marca = 'vans' AND p.cod = a.cod AND p.encontrado
+  FROM a JOIN public.precios_web p ON p.marca = a.marca AND p.cod = a.cod AND p.encontrado
 )
 SELECT c.cod AS codigo, c.id_art, c.descripcion, c.familia, c.anio, c.publicado, c.marca,
        c.mi_precio, c.precio, c.precio_lista, c.desc_pct, c.con_stock, c.url, c.nombre_web, c.leido_at,
@@ -98,14 +114,28 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS
 $$;
 
 -- Códigos a leer (ordenados, sin repetir) sacados de la descripción de los artículos.
+-- Cada marca define su patrón + filtros, igual que la vista (ver arriba).
 CREATE OR REPLACE FUNCTION public.precios_web_codigos(p_marca text, p_token text DEFAULT NULL)
 RETURNS text[] LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_patron text;
+  v_busca  text;
+  v_word   text;
 BEGIN
   IF NOT private.precios_sync_ok(p_token) THEN RAISE EXCEPTION 'No autorizado'; END IF;
-  IF p_marca <> 'vans' THEN RAISE EXCEPTION 'Marca no soportada: %', p_marca; END IF;
+  SELECT (CASE p_marca
+            WHEN 'vans'     THEN '(?i)VN0[A-Za-z0-9]{6,10}'
+            WHEN 'converse' THEN '([0-9]{6}B)'
+          END),
+         (CASE p_marca WHEN 'vans' THEN '%VN0%' WHEN 'converse' THEN '%B%' END),
+         (CASE p_marca WHEN 'vans' THEN NULL::text WHEN 'converse' THEN '%CONVERSE%' END)
+    INTO v_patron, v_busca, v_word;
+  IF v_patron IS NULL THEN RAISE EXCEPTION 'Marca no soportada: %', p_marca; END IF;
   RETURN ARRAY(
-    SELECT DISTINCT upper(substring(descripcion FROM '(?i)VN0[A-Za-z0-9]{6,10}')) AS c
-    FROM public.articulos WHERE descripcion ILIKE '%VN0%'
+    SELECT DISTINCT upper(substring(descripcion FROM v_patron)) AS c
+    FROM public.articulos
+    WHERE descripcion ILIKE v_busca
+      AND (v_word IS NULL OR descripcion ILIKE v_word)
     ORDER BY 1);
 END $$;
 

@@ -39,6 +39,31 @@ async function apiInforme(payload: Record<string, unknown>): Promise<{ texto?: s
   return body ?? {}
 }
 
+/** Estado de la conexión con WhatsApp (Meta), lo consulta el servidor con el token de Vercel */
+interface EstadoWhatsapp {
+  configurado: boolean
+  ok: boolean
+  numero?: string
+  nombre?: string
+  calidad?: string
+  error?: string
+}
+
+async function consultarWhatsapp(): Promise<EstadoWhatsapp> {
+  if (!supabase) throw new Error('Supabase no está configurado.')
+  const { data } = await supabase.auth.getSession()
+  const token = data.session?.access_token
+  if (!token) throw new Error('Sin sesión activa.')
+  const res = await fetch('/api/informe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ estado: true }),
+  })
+  const body = (await res.json().catch(() => null)) as (EstadoWhatsapp & { error?: string }) | null
+  if (!res.ok || !body || typeof body.configurado !== 'boolean') throw new Error(body?.error ?? `Error ${res.status}`)
+  return body
+}
+
 export default function Informes() {
   const { crear: puedeCrear, editar: puedeEditar, borrar: puedeBorrar } = usePermisosArea('sistemas.informes')
   const [todos, setTodos] = useState<Informe[]>([])
@@ -50,6 +75,17 @@ export default function Informes() {
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
   const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
   const [verEnvios, setVerEnvios] = useState<Informe | null>(null)
+  // Conexión con WhatsApp: null = consultando
+  const [whatsapp, setWhatsapp] = useState<EstadoWhatsapp | null>(null)
+  const revisarWhatsapp = useCallback(async () => {
+    setWhatsapp(null)
+    try {
+      setWhatsapp(await consultarWhatsapp())
+    } catch (e) {
+      setWhatsapp({ configurado: false, ok: false, error: (e as Error).message })
+    }
+  }, [])
+  useEffect(() => { void revisarWhatsapp() }, [revisarWhatsapp])
 
   const mostrarToast = useCallback((msg: string, ok = true) => {
     setToast({ msg, ok })
@@ -157,6 +193,37 @@ export default function Informes() {
             </button>
           )}
         </div>
+      </div>
+
+      {/* Conexión con WhatsApp (Meta) */}
+      <div
+        className={`mb-3 flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 text-sm ${
+          whatsapp === null
+            ? 'border-line bg-surface2 text-sub'
+            : whatsapp.ok
+              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+              : whatsapp.configurado
+                ? 'border-red-500/30 bg-red-500/10 text-red-300'
+                : 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+        }`}
+      >
+        {whatsapp === null ? (
+          <><Loader2 size={14} className="animate-spin" aria-hidden /> Revisando la conexión con WhatsApp…</>
+        ) : whatsapp.ok ? (
+          <span>
+            <b>WhatsApp conectado</b>: {whatsapp.numero ?? '—'}{whatsapp.nombre ? ` (${whatsapp.nombre})` : ''}
+            {whatsapp.calidad ? ` · calidad ${whatsapp.calidad}` : ''}
+          </span>
+        ) : whatsapp.configurado ? (
+          <span><b>WhatsApp con error</b>: {whatsapp.error}</span>
+        ) : (
+          <span><b>WhatsApp sin configurar</b>: {whatsapp.error}</span>
+        )}
+        {whatsapp !== null && (
+          <button onClick={() => void revisarWhatsapp()} className="ml-auto text-xs font-medium underline-offset-2 hover:underline">
+            Volver a revisar
+          </button>
+        )}
       </div>
 
       {!puedeCrear && (

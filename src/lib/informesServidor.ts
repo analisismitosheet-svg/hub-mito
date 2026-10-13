@@ -389,6 +389,39 @@ export function whatsappConfigurado(): boolean {
   return Boolean(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_ID)
 }
 
+/**
+ * Estado real de la conexión: le pregunta a Meta por el número configurado.
+ * Si el token o el ID están mal, Meta lo dice. No devuelve nunca el token.
+ */
+export async function estadoWhatsapp(): Promise<{
+  configurado: boolean
+  ok: boolean
+  numero?: string
+  nombre?: string
+  calidad?: string
+  error?: string
+}> {
+  const token = process.env.WHATSAPP_TOKEN
+  const phoneId = process.env.WHATSAPP_PHONE_ID
+  if (!token || !phoneId) {
+    return { configurado: false, ok: false, error: 'Faltan WHATSAPP_TOKEN y/o WHATSAPP_PHONE_ID en Vercel' }
+  }
+  const version = process.env.WHATSAPP_VERSION || 'v23.0'
+  try {
+    const r = await fetch(
+      `https://graph.facebook.com/${version}/${encodeURIComponent(phoneId)}?fields=display_phone_number,verified_name,quality_rating`,
+      { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10_000) },
+    )
+    const j = (await r.json().catch(() => null)) as
+      | { display_phone_number?: string; verified_name?: string; quality_rating?: string; error?: { message?: string } }
+      | null
+    if (!r.ok) return { configurado: true, ok: false, error: j?.error?.message ?? `Meta respondió ${r.status}` }
+    return { configurado: true, ok: true, numero: j?.display_phone_number, nombre: j?.verified_name, calidad: j?.quality_rating }
+  } catch (e) {
+    return { configurado: true, ok: false, error: `No se pudo contactar a Meta: ${(e as Error).message}` }
+  }
+}
+
 export async function enviarWhatsapp(telefono: string, texto: string): Promise<{ ok: boolean; detalle: string }> {
   const token = process.env.WHATSAPP_TOKEN
   const phoneId = process.env.WHATSAPP_PHONE_ID

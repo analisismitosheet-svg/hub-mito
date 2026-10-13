@@ -18,7 +18,7 @@ import { ErrorVideo, pedirPase, urlVideo } from '@/lib/videoContador'
  * Video: lo sirve la PC contadora (contador-camaras/vista.py) con un pase temporal que
  * valida el usuario contra el hub (cada local ve solo lo suyo). El hub nunca recibe ni guarda imágenes.
  * Ventas: vista SQL configurada en config_app 'contador_vista_ventas'
- * (local, fecha, tickets). Si no hay, se muestra solo el conteo.
+ * (local, fecha, tickets, total). Si no hay, se muestra solo el conteo.
  */
 
 interface CamaraEstado { nombre: string; ok: boolean; fps: number; error: string | null; vista_base?: string | null }
@@ -40,6 +40,7 @@ const REFRESCO_MS = 30000
 const MINUTOS_VIDEO = 5 // el video en vivo se pausa solo (sale por la subida de internet de la PC contadora)
 const OFFLINE_MIN = 5
 const nf = (n: number) => Math.round(n).toLocaleString('es-AR')
+const nfMoneda = (n: number) => '$' + Math.round(n).toLocaleString('es-AR')
 const hoyIso = () => {
   const d = new Date()
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
@@ -95,11 +96,26 @@ export default function TasaConversion() {
     return m
   }, [ventas])
 
+  // Total facturado de hoy (solo si la vista trae la columna 'total').
+  const hayTotal = !!ventas?.some((v) => v.total != null)
+  const totalesHoy = useMemo(() => {
+    const hoy = hoyIso()
+    const m = new Map<string, number>()
+    let general = 0
+    for (const v of ventas ?? []) if (v.fecha === hoy) {
+      const t = v.total ?? 0
+      m.set(v.local, (m.get(v.local) ?? 0) + t)
+      general += t
+    }
+    return { porLocal: m, general }
+  }, [ventas])
+
   const locales = datos ?? []
   const elegido = locales.find((l) => l.local === params.get('local')) ?? locales[0]
   const conv = (entradas: number, tk: number | undefined) => (ticketsHoy && entradas > 0 ? (100 * (tk ?? 0)) / entradas : null)
   const totEntradas = locales.reduce((a, l) => a + l.entradas, 0)
   const totTickets = ticketsHoy ? [...ticketsHoy.values()].reduce((a, b) => a + b, 0) : null
+  const totTotal = hayTotal ? totalesHoy.general : null
 
   return (
     <Layout>
@@ -113,6 +129,7 @@ export default function TasaConversion() {
           <span className="text-xs text-sub">
             Total: <strong className="text-ink">{nf(totEntradas)}</strong> entradas
             {totTickets != null && <> · <strong className="text-ink">{nf(totTickets)}</strong> tickets · <strong className="text-ink">{totEntradas ? ((100 * totTickets) / totEntradas).toFixed(1) : '—'}%</strong></>}
+            {totTotal != null && <> · <strong className="text-ink">{nfMoneda(totTotal)}</strong></>}
           </span>
           <button onClick={() => void cargar()} className="btn-press inline-flex h-8 items-center gap-1 rounded-lg border border-line bg-surface2 px-2.5 text-xs font-medium text-ink hover:bg-line">
             <RefreshCw size={13} className={cargando ? 'animate-spin' : ''} aria-hidden /> Actualizar
@@ -148,7 +165,7 @@ export default function TasaConversion() {
             })}
           </div>
 
-          {elegido && <DetalleLocal l={elegido} nombre={nombres[elegido.local]} tickets={ticketsHoy?.get(elegido.local)} hayVentas={!!ticketsHoy} />}
+          {elegido && <DetalleLocal l={elegido} nombre={nombres[elegido.local]} tickets={ticketsHoy?.get(elegido.local)} hayVentas={!!ticketsHoy} total={totalesHoy.porLocal.get(elegido.local)} hayTotal={hayTotal} />}
 
           {/* Todos los locales (solo la central: cada local ve únicamente el suyo por RLS) */}
           {locales.length > 1 && <div className="overflow-x-auto rounded-2xl border border-line bg-surface p-4">
@@ -158,6 +175,7 @@ export default function TasaConversion() {
                   <th className="py-1.5 pr-3">Local</th>
                   <th className="py-1.5 pr-3 text-right">Entradas</th>
                   <th className="py-1.5 pr-3 text-right">Tickets</th>
+                  {hayTotal && <th className="py-1.5 pr-3 text-right">Total</th>}
                   <th className="py-1.5 text-right">Conversión</th>
                 </tr>
               </thead>
@@ -170,6 +188,7 @@ export default function TasaConversion() {
                       <td className="py-1.5 pr-3 font-medium text-ink">{l.local} <span className="text-xs font-normal text-sub">{nombres[l.local]}</span></td>
                       <td className="py-1.5 pr-3 text-right tabular-nums">{nf(l.entradas)}</td>
                       <td className="py-1.5 pr-3 text-right tabular-nums">{ticketsHoy ? nf(tk ?? 0) : '—'}</td>
+                      {hayTotal && <td className="py-1.5 pr-3 text-right tabular-nums">{nfMoneda(totalesHoy.porLocal.get(l.local) ?? 0)}</td>}
                       <td className="py-1.5 text-right font-semibold tabular-nums text-ink">{c != null ? `${c.toFixed(1)}%` : '—'}</td>
                     </tr>
                   )
@@ -183,7 +202,7 @@ export default function TasaConversion() {
   )
 }
 
-function DetalleLocal({ l, nombre, tickets, hayVentas }: { l: LocalHoy; nombre?: string; tickets?: number; hayVentas: boolean }) {
+function DetalleLocal({ l, nombre, tickets, hayVentas, total, hayTotal }: { l: LocalHoy; nombre?: string; tickets?: number; hayVentas: boolean; total?: number; hayTotal?: boolean }) {
   const camaras = l.dispositivos.filter((d) => d.activo).flatMap((d) => (d.estado?.camaras ?? []).map((c) => ({ ...c, online: enLinea(d) })))
   const [camIdx, setCamIdx] = useState(0)
   useEffect(() => setCamIdx(0), [l.local])
@@ -224,6 +243,7 @@ function DetalleLocal({ l, nombre, tickets, hayVentas }: { l: LocalHoy; nombre?:
             nota={cam ? (camaras.length > 1 ? cam.nombre : 'cuadros por segundo que analiza la IA') : undefined} />
           <Dato icono={<Footprints size={15} className="text-violet-500" />} label="Transeúntes" valor={nf(l.transeuntes)} />
           <Dato icono={<Receipt size={15} className="text-lime-500" />} label="Tickets hoy" valor={hayVentas ? nf(tickets ?? 0) : '—'} />
+          {hayTotal && <Dato icono={<Receipt size={15} className="text-amber-500" />} label="Total hoy" valor={hayVentas ? nfMoneda(total ?? 0) : '—'} />}
         </div>
 
         <div className="rounded-2xl border border-line bg-surface p-3">

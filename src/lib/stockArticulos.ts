@@ -9,20 +9,32 @@ import { estadoConexion, leerVista, type FilaSql } from '@/lib/sqlApi'
  * muestra al lado del código es el stock TOTAL del artículo: la suma del
  * stock de todos sus SKUs en MITO.
  *
- * Sale de la vista `vw_STOCK_ARTICULO_MITO` (una fila por artículo), creada
- * con `node scripts/sql.mjs --alias -f sql/vw_STOCK_ARTICULO_MITO.sql` sobre
- * vw_ARTICULOS_MITO, así el número es idéntico al de F12 Consulta artículos.
- * Hay que habilitarla en Configuraciones > Conexión SQL (si no, el proxy
- * contesta "Vista no habilitada"). El tope de filas de esa pantalla está en
- * 29 900 000, así que la vista (2 409 filas) llega entera; esta lib además
- * pide como máximo 60 000 y si contrae con cualquiera de los dos topes
- * marca `completo: false` (no se oculta ni se quita nada sin dato).
- * Se cambia el nombre con VITE_SQL_VISTA_STOCK_ARTICULO.
+ * Por defecto lee `vw_STOCK_ARTICULO_MITO` (una fila por artículo, base MITO).
+ * Para el stock REAL de todas las bases se llama
+ * `cargarStockArticulos(VISTA_STOCK_ARTICULO_REAL)`, que lee
+ * `vw_STOCK_ARTICULO_REAL` (vista agregada sobre `vw_STOCK_SUCURSALES_REAL`:
+ * suma CANTIDAD_REAL por artículo, sin importar color, talle ni base).
+ *
+ * Hay que habilitar la vista en Configuraciones > Conexión SQL (si no, el proxy
+ * contesta "Vista no habilitada"). Esta lib pide como máximo 60 000 filas y si
+ * contrae con el tope del proxy marca `completo: false` (no se oculta ni se
+ * quita nada sin dato). Los nombres se cambian con
+ * VITE_SQL_VISTA_STOCK_ARTICULO / VITE_SQL_VISTA_STOCK_ARTICULO_REAL.
  */
 
 export const VISTA_STOCK_ARTICULO =
   (import.meta.env.VITE_SQL_VISTA_STOCK_ARTICULO as string | undefined)?.trim() ||
   'DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.vw_STOCK_ARTICULO_MITO'
+
+/**
+ * Stock REAL total por artículo: `vw_STOCK_SUCURSALES_REAL` (una fila por
+ * artículo/color/talle/base) agregada por artículo, o sea la suma de todas
+ * las bases. Una fila por artículo (ID_ARTICULO, STOCK_MITO): es liviana y
+ * exacta, así no depende del tope de filas del proxy.
+ */
+export const VISTA_STOCK_ARTICULO_REAL =
+  (import.meta.env.VITE_SQL_VISTA_STOCK_ARTICULO_REAL as string | undefined)?.trim() ||
+  'DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.vw_STOCK_ARTICULO_REAL'
 
 /** Techo propio de esta lib. El servidor recorta antes con sql_conexion.max_rows
  *  (29 900 000 hoy): el que corte primero manda y eso se detecta con `limite`. */
@@ -87,7 +99,7 @@ function num(v: unknown): number | null {
 /** Columnas que se aceptan para cada campo (misma lista que F12 Consulta artículos). */
 const ALIAS: Record<'codigo' | 'stock', string[]> = {
   codigo: ['idarticulo', 'artcod', 'codigo', 'idart', 'articulo', 'art'],
-  stock: ['stockmito', 'stock', 'stockdisponible', 'existencia', 'cantidad', 'stocktotal', 'stockalmacen'],
+  stock: ['stockmito', 'stock', 'stockdisponible', 'existencia', 'cantidad', 'cantidadreal', 'stocktotal', 'stockalmacen'],
 }
 
 /** Columna de cada campo, resuelta por fila (si la vista cambia de nombre, no rompe). */
@@ -106,11 +118,11 @@ function columnasDe(fila: FilaSql): { codigo: string | null; stock: string | nul
  * Tira error si la vista no responde o viene vacía: la pantalla decide qué
  * mostrar, pero con una lista vacía NO se puede concluir que todo está en 0.
  */
-export async function cargarStockArticulos(): Promise<StockArticulos> {
+export async function cargarStockArticulos(vista: string = VISTA_STOCK_ARTICULO): Promise<StockArticulos> {
   // El tope efectivo sale del estado del proxy: sirve para saber si la vista
   // vino entera o cortada (sin eso, "no aparece" y "está en 0" se confunden).
   const [filas, estado] = await Promise.all([
-    leerVista(VISTA_STOCK_ARTICULO, TOPE_PEDIDO),
+    leerVista(vista, TOPE_PEDIDO),
     estadoConexion().catch(() => null),
   ])
   if (filas.length === 0) throw new Error('La vista de stock devolvió 0 filas.')
