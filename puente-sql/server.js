@@ -65,6 +65,15 @@ const fs = require('fs')
 const path = require('path')
 const os = require('os')
 const { execFile } = require('child_process')
+const crypto = require('crypto')
+
+/** Compara el token en tiempo constante (con !== se podía adivinar midiendo tiempos). */
+function mismoToken(recibido, esperado) {
+  if (typeof recibido !== 'string' || !recibido || !esperado) return false
+  const a = crypto.createHash('sha256').update(recibido).digest()
+  const b = crypto.createHash('sha256').update(String(esperado)).digest()
+  return crypto.timingSafeEqual(a, b)
+}
 
 /* ---- mini lector de .env (sin dependencias) ---- */
 try {
@@ -490,7 +499,7 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method !== 'POST') return enviar(res, 405, { error: 'Método no permitido' })
 
-    if ((req.headers['x-puente-token'] ?? '') !== PUENTE_TOKEN) {
+    if (!mismoToken(req.headers['x-puente-token'], PUENTE_TOKEN)) {
       return enviar(res, 401, { error: 'Token inválido' })
     }
 

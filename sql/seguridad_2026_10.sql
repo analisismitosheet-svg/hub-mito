@@ -80,3 +80,17 @@ REVOKE EXECUTE ON FUNCTION public.permisos_role(text) FROM public, anon, authent
 REVOKE EXECUTE ON FUNCTION public.permisos_tree(text) FROM public, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.get_scope(text, text) FROM public, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.get_scope(text, text, text) FROM public, anon, authenticated;
+
+-- ---- #12 Registro: nadie queda admin automáticamente ----
+-- Antes, quien se registraba con el mail de app_config.admin_email quedaba aprobado y
+-- administrador. Si esa cuenta se borraba o el mail cambiaba a uno sin registrar, cualquiera
+-- podía registrarse con ese mail y ser admin. Ahora todo registro nuevo queda pendiente.
+CREATE OR REPLACE FUNCTION private.handle_new_user()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $function$
+begin
+  insert into public.usuarios (id, email, nombre, estado, rol)
+  values (new.id, new.email, coalesce(new.raw_user_meta_data->>'nombre', split_part(new.email,'@',1)), 'pendiente', 'usuario')
+  on conflict (id) do nothing;
+  return new;
+end;
+$function$;

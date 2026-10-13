@@ -30,7 +30,9 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const url = (event.notification.data && event.notification.data.url) || '/'
+  // Solo rutas internas del hub: '/algo' sí; '//otro-sitio', barra invertida o 'https://…' no
+  const pedida = (event.notification.data && event.notification.data.url) || '/'
+  const url = typeof pedida === 'string' && /^\/(?![/\\])/.test(pedida) ? pedida : '/'
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((lista) => {
       for (const c of lista) {

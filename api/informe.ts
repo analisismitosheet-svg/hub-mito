@@ -15,6 +15,7 @@
  */
 import { armarCuerpo, enviarInforme, estadoWhatsapp, generarImagenInforme, tienePermiso, usuarioDe } from '../src/lib/informesServidor.js'
 import { formatoDe, type Informe } from '../src/lib/informes.js'
+import { mismoSecreto } from '../src/lib/apiAuth.js'
 
 type Req = {
   method?: string
@@ -59,11 +60,10 @@ function inicioHoyUtc(): string {
   return new Date(arStart + 3 * 3600_000).toISOString()
 }
 
+/** Solo por header (Vercel Cron manda Authorization: Bearer $CRON_SECRET): por query quedaba en logs. */
 function secretoDe(req: Req): string {
   const auth = req.headers.authorization ?? ''
-  if (auth.startsWith('Bearer ')) return auth.slice(7)
-  const q = req.query?.secret
-  return (Array.isArray(q) ? q[0] : q) ?? ''
+  return auth.startsWith('Bearer ') ? auth.slice(7) : ''
 }
 
 async function cron(req: Req, res: Res) {
@@ -74,7 +74,7 @@ async function cron(req: Req, res: Res) {
   // Autorización: el secreto del cron, o un usuario con permiso (respaldo desde la app).
   const token = secretoDe(req)
   const secreto = process.env.CRON_SECRET
-  let autorizado = Boolean(secreto && token === secreto)
+  let autorizado = Boolean(secreto) && mismoSecreto(token, secreto ?? '')
   if (!autorizado && token) {
     const uid = await usuarioDe(token)
     autorizado = Boolean(uid) && (await tienePermiso(token, ['sistemas.informes.view']))

@@ -5,8 +5,9 @@
  * usuario (RPC public.api_autorizado, sql/seguridad_2026_10.sql): usuario aprobado o admin
  * y, si se pasan claves, con al menos uno de esos permisos.
  *
- * Sin imports: lo usan las funciones de Vercel y src/lib/sql*.ts.
+ * Solo servidor: lo usan las funciones de Vercel y src/lib/sql*.ts.
  */
+import { createHash, timingSafeEqual } from 'node:crypto'
 
 /** Token Bearer del header Authorization ('' si no hay). */
 export function tokenDe(authorization: string | undefined): string {
@@ -36,3 +37,11 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /** ¿Es un UUID? (para ids que se pegan en filtros de PostgREST) */
 export const esUuid = (v: unknown): v is string => typeof v === 'string' && UUID.test(v)
+
+/** Compara secretos en tiempo constante (con === se puede adivinar de a un carácter midiendo tiempos). */
+export function mismoSecreto(a: string, b: string): boolean {
+  if (!a || !b) return false
+  const ha = createHash('sha256').update(a).digest()
+  const hb = createHash('sha256').update(b).digest()
+  return timingSafeEqual(ha, hb)
+}
