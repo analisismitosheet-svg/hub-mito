@@ -40,6 +40,7 @@ import {
   Package,
   QrCode,
   Pause,
+  Tag,
   type LucideIcon,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -515,6 +516,17 @@ export const APPS: AppDef[] = [
     target: '/compras/pedidos',
     color: '#65a30d',
     permiso: 'pedidos_compra.view',
+  },
+  {
+    id: 'comparativa-precios',
+    areaId: 'compras',
+    title: 'Comparativa de precios',
+    description: 'Tus precios contra la web de la marca: dónde estás arriba, abajo o igual.',
+    icon: Tag,
+    kind: 'internal',
+    target: '/compras/comparativa-precios',
+    color: '#0891b2',
+    permiso: 'compras_precios.view',
   },
   {
     id: 'transferencias-estadisticas',

@@ -19,6 +19,7 @@ import EstadisticasTransferencias from '@/pages/EstadisticasTransferencias'
 import PedidosCompra from '@/pages/PedidosCompra'
 import EstadoPedidos from '@/pages/EstadoPedidos'
 import Cancelaciones from '@/pages/Cancelaciones'
+import ComparativaPrecios from '@/pages/ComparativaPrecios'
 import PedidosHub from '@/pages/PedidosHub'
 import PedidosVenta from '@/pages/PedidosVenta'
 import Mayorista from '@/pages/Mayorista'
@@ -139,6 +140,14 @@ export default function App() {
             element={
               <PermissionRoute permiso="pedidos_compra.view">
                 <PedidosHub />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/compras/comparativa-precios"
+            element={
+              <PermissionRoute permiso="compras_precios.view">
+                <ComparativaPrecios />
               </PermissionRoute>
             }
           />
