@@ -63,3 +63,20 @@ END $$;
 DROP TRIGGER IF EXISTS config_app_validar ON public.config_app;
 CREATE TRIGGER config_app_validar BEFORE INSERT OR UPDATE ON public.config_app
   FOR EACH ROW EXECUTE FUNCTION private.config_app_validar();
+
+-- ---- #5 Push de faltantes: un solo aviso por armado ----
+ALTER TABLE public.mayorista_armados ADD COLUMN IF NOT EXISTS push_faltantes_at timestamptz;
+
+-- ---- #6 vw_estadisticas_rendimiento: la leía cualquiera sin sesión (vista definer) ----
+ALTER VIEW public.vw_estadisticas_rendimiento SET (security_invoker = true);
+REVOKE ALL ON public.vw_estadisticas_rendimiento FROM anon;
+
+-- ---- #8 / #9 Funciones SECURITY DEFINER que se podían llamar sin sesión y sin control ----
+-- Ninguna pantalla las usa; las que las necesitan (guardar_permisos) corren como dueño.
+REVOKE EXECUTE ON FUNCTION public.sincronizar_submodule_areas() FROM public, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.es_admin_user(uuid) FROM public, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.scopes_usuario(uuid) FROM public, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.permisos_role(text) FROM public, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.permisos_tree(text) FROM public, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.get_scope(text, text) FROM public, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.get_scope(text, text, text) FROM public, anon, authenticated;

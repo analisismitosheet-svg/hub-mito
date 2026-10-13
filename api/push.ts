@@ -14,6 +14,7 @@
  * SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY.
  */
 import webpush from 'web-push'
+import { autorizado, esUuid } from '../src/lib/apiAuth.js'
 
 type Req = {
   method?: string
@@ -280,7 +281,7 @@ async function avisarPausa(req: Req, res: Res, uid: string) {
 }
 
 /** Faltantes de stock: al cerrar un armado con faltantes, a los que pueden verlos. */
-async function avisarFaltantes(req: Req, res: Res) {
+async function avisarFaltantes(req: Req, res: Res, token: string) {
   let armadoId = ''
   try {
     armadoId = String(JSON.parse(req.body ?? '{}').armado_id ?? '')
@@ -288,9 +289,19 @@ async function avisarFaltantes(req: Req, res: Res) {
     armadoId = ''
   }
   if (!armadoId) return res.status(400).json({ error: 'Falta armado_id' })
+  // Va pegado en filtros de PostgREST con service role: solo un UUID
+  if (!esUuid(armadoId)) return res.status(400).json({ error: 'armado_id inválido' })
+  // Lo dispara quien cierra el armado (piso) o quien ve los pedidos de venta
+  if (!(await autorizado(token, ['mayorista.repos_piso', 'pedidos_venta.view']))) {
+    return res.status(403).json({ error: 'No autorizado' })
+  }
 
-  // El armado que se acaba de cerrar: solo se avisa si quedaron faltantes
-  const rA = await rest(`mayorista_armados?select=id,pedido_codigo,pedido_numero,cliente,aceptado_legajo,aceptado_nombre,faltantes&id=eq.${armadoId}`)
+  // Un solo aviso por armado: se reclama antes de mandar (dos llamadas no avisan dos veces)
+  const rA = await rest(
+    `mayorista_armados?id=eq.${armadoId}&push_faltantes_at=is.null&faltantes=gt.0` +
+      `&select=id,pedido_codigo,pedido_numero,cliente,aceptado_legajo,aceptado_nombre,faltantes`,
+    { method: 'PATCH', body: JSON.stringify({ push_faltantes_at: new Date().toISOString() }), headers: { Prefer: 'return=representation' } },
+  )
   if (!rA.ok) return res.status(502).json({ error: `No se pudo leer el armado (${rA.status})` })
   const armados = (await rA.json()) as Armado[]
   const armado = armados[0]
@@ -360,6 +371,6 @@ export default async function handler(req: Req, res: Res) {
 
   const tipo = primerQuery(req.query?.tipo)
   if (tipo === 'pausa') return avisarPausa(req, res, uid)
-  if (tipo === 'faltantes') return avisarFaltantes(req, res)
+  if (tipo === 'faltantes') return avisarFaltantes(req, res, token)
   return avisarArmado(req, res, uid)
 }
