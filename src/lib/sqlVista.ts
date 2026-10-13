@@ -255,5 +255,16 @@ export default async function handler(req: Req, res: Res) {
     return res.status(502).json({ error: 'Respuesta inesperada de la Logic App' })
   }
 
-  return res.status(200).json({ vista, filas })
+  // Vercel corta las respuestas de más de ~4,5 MB (y eso se veía como "se cayó la conexión"):
+  // si la vista es más grande, se mandan las primeras filas que entran y se avisa.
+  const LIMITE_BYTES = 4_000_000
+  const total = (filas as unknown[]).length
+  let enviar = filas as unknown[]
+  let bytes = Buffer.byteLength(JSON.stringify(enviar))
+  while (bytes > LIMITE_BYTES && enviar.length > 1) {
+    enviar = enviar.slice(0, Math.max(1, Math.floor(enviar.length * (LIMITE_BYTES / bytes) * 0.95)))
+    bytes = Buffer.byteLength(JSON.stringify(enviar))
+  }
+  const recortado = enviar.length < total ? { mostradas: enviar.length, total } : undefined
+  return res.status(200).json({ vista, filas: enviar, ...(recortado ? { recortado } : {}) })
 }

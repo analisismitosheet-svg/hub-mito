@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNo
 import { Check, ChevronRight, Database, Loader2, Pencil, Plus, RefreshCw, Search, Trash2, X } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
-import { cargarVistas, estadoConexion, guardarVistas, leerVista, type FilaSql, type VistaDef } from '@/lib/sqlApi'
+import { cargarVistas, estadoConexion, guardarVistas, leerVista, leerVistaConAviso, type FilaSql, type VistaDef } from '@/lib/sqlApi'
 import { usePermisosArea } from '@/hooks/usePermisosArea'
 
 const MAX_FILAS_UI = 300
@@ -18,6 +18,8 @@ interface DatosVista {
   filas: FilaSql[] | null
   error: string | null
   cargando: boolean
+  /** la vista era más grande de lo que entra en una respuesta: se muestran las primeras filas */
+  recortado?: { mostradas: number; total: number }
 }
 
 const fmtN = (n: number) => n.toLocaleString('es-AR')
@@ -134,6 +136,11 @@ function PanelVista({
             <p className="text-sm text-sub">La vista no devolvió filas.</p>
           ) : (
             <>
+              {datos?.recortado && (
+                <p className="mb-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-400">
+                  La vista es muy grande: se muestran las primeras {fmtN(datos.recortado.mostradas)} filas de {fmtN(datos.recortado.total)} que trajo el SQL.
+                </p>
+              )}
               <label className="mb-2 block">
                 <span className="sr-only">Buscar en {vista.label}</span>
                 <div className="relative">
@@ -229,8 +236,8 @@ export default function DatosSql() {
   const cargar = useCallback(async (v: string) => {
     setDatos((d) => ({ ...d, [v]: { filas: d[v]?.filas ?? null, error: null, cargando: true } }))
     try {
-      const filas = await leerVista(v)
-      setDatos((d) => ({ ...d, [v]: { filas, error: null, cargando: false } }))
+      const { filas, recortado } = await leerVistaConAviso(v)
+      setDatos((d) => ({ ...d, [v]: { filas, error: null, cargando: false, recortado } }))
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Error desconocido.'
       setDatos((d) => ({ ...d, [v]: { filas: null, error: msg, cargando: false } }))

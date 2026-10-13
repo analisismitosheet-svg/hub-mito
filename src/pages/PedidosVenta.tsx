@@ -850,10 +850,16 @@ export default function PedidosVenta() {
                       >
                         <span className="min-w-0 flex-1">
                           <span className="flex flex-wrap items-center gap-1.5">
-                            {/* Arriba y grande el cliente; el N° de pedido va abajo */}
+                            {/* Arriba y grande el cliente; el N° de pedido va abajo. En REP y VTD lo
+                                principal es el ID del cliente (ej. WALTD), con el nombre al lado. */}
                             <span className={`min-w-0 max-w-full truncate font-display text-[15px] font-bold leading-tight ${activo ? 'text-amber-500' : 'text-ink'}`}>
-                              {p.cliente_nombre || p.cliente}
+                              {p.motivo === 'REP' || p.motivo === 'VTD' ? p.cliente || '—' : p.cliente_nombre || p.cliente}
                             </span>
+                            {(p.motivo === 'REP' || p.motivo === 'VTD') && p.cliente_nombre && p.cliente !== p.cliente_nombre && (
+                              <span className="min-w-0 max-w-full truncate text-[11px] font-medium leading-tight text-sub" title={p.cliente_nombre}>
+                                {p.cliente_nombre}
+                              </span>
+                            )}
                             {p.anulado && (
                               <span className="rounded-md bg-brand-600/15 px-1.5 py-0.5 text-[10px] font-semibold text-brand-400">ANULADO</span>
                             )}

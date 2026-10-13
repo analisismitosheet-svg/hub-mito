@@ -2,6 +2,7 @@
  * Proxy de lectura al SQL Server (vía Logic App / Puente SQL), más el estado y el
  * explorador de la conexión. Un solo endpoint para los tres usos de /api/sql/*:
  *
+ *   GET /api/sql/ping                          -> { ok }: el puente responde desde afuera (vigilante)
  *   GET /api/sql/status                        -> estado de la conexión (Configuraciones > Conexión SQL)
  *   GET /api/sql/catalogo?...                  -> explorador de bases/objetos (solo admins)
  *   GET /api/sql/<vista>[?where=&value=&limit=] -> filas de una vista habilitada
@@ -40,8 +41,42 @@ function primero(q: string | string[] | undefined): string {
   return q ?? ''
 }
 
+/**
+ * GET /api/sql/ping -> { ok } : ¿el puente responde desde afuera? (Vercel -> Funnel -> puente)
+ * Sin datos ni secretos, sin sesión: lo usa el vigilante de la PC del puente
+ * (puente-sql/scripts/vigilante.ps1) para detectar el Funnel caído y reactivarlo.
+ */
+async function ping(res: Res) {
+  res.setHeader('Cache-Control', 'no-store')
+  const url = process.env.SUPABASE_URL
+  const service = process.env.SUPABASE_SERVICE_ROLE_KEY
+  let destino = process.env.SQL_LOGICAPP_URL?.trim() || ''
+  if (url && service) {
+    try {
+      const r = await fetch(`${url}/rest/v1/sql_conexion?id=eq.1&select=logicapp_url`, {
+        headers: { Authorization: `Bearer ${service}`, apikey: service },
+      })
+      const filas = (await r.json().catch(() => null)) as Array<{ logicapp_url?: string | null }> | null
+      destino = filas?.[0]?.logicapp_url?.trim() || destino
+    } catch {
+      /* respaldo: env */
+    }
+  }
+  if (!destino) return res.status(500).json({ ok: false })
+  // La URL guardada termina en /health (o se le agrega): GET sin token
+  const salud = /\/health\/?$/.test(destino) ? destino : destino.replace(/\/?$/, '/health')
+  try {
+    const r = await fetch(salud, { signal: AbortSignal.timeout(8000) })
+    return res.status(r.ok ? 200 : 502).json({ ok: r.ok })
+  } catch {
+    return res.status(504).json({ ok: false })
+  }
+}
+
 export default async function handler(req: Req, res: Res) {
   const ruta = primero(req.query.ruta)
+
+  if (ruta === 'ping') return ping(res)
 
   if (ruta === 'status') return status(req, res)
   if (ruta === 'catalogo') return catalogo(req, res)

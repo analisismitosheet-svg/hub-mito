@@ -13,6 +13,9 @@
     },
     "api/informe.ts": {
       "maxDuration": 60
+    },
+    "api/sql/[ruta].ts": {
+      "maxDuration": 60
     }
   },
   "crons": [

@@ -35,16 +35,24 @@ async function fetchConSesion(url: string): Promise<Response> {
  * Requiere sesión activa: el JWT de Supabase viaja en el header Authorization.
  */
 export async function leerVista(vista: string, limit?: number): Promise<FilaSql[]> {
+  return (await leerVistaConAviso(vista, limit)).filas
+}
+
+/** Como leerVista, pero avisa si el servidor recortó la respuesta (vista más grande de lo que entra). */
+export async function leerVistaConAviso(
+  vista: string,
+  limit?: number,
+): Promise<{ filas: FilaSql[]; recortado?: { mostradas: number; total: number } }> {
   const qs = limit ? `?limit=${encodeURIComponent(String(limit))}` : ''
   const res = await fetchConSesion(`/api/sql/${encodeURIComponent(vista)}${qs}`)
   const body = (await res.json().catch(() => null)) as
-    | { error?: string; detalle?: string; filas?: FilaSql[] }
+    | { error?: string; detalle?: string; filas?: FilaSql[]; recortado?: { mostradas: number; total: number } }
     | null
   if (!res.ok) {
     const msg = body?.error ?? `Error ${res.status} consultando ${vista}`
     throw new Error(body?.detalle ? `${msg} — ${body.detalle}` : msg)
   }
-  return body?.filas ?? []
+  return { filas: body?.filas ?? [], recortado: body?.recortado }
 }
 
 /**

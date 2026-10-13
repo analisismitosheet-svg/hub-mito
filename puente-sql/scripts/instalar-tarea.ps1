@@ -71,3 +71,14 @@ Register-ScheduledTask -TaskName 'MITO - Sync pedidos venta completo' -Force `
   -Trigger (New-ScheduledTaskTrigger -Daily -At '06:30') `
   -Settings $ajustesVentaTodo | Out-Null
 Write-Output 'OK  MITO - Sync pedidos venta completo (todos los dias 6:30)'
+
+# Vigilante: cada 5 minutos revisa puente local, Funnel y el camino desde el hub; arregla solo.
+$cada5 = New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval (New-TimeSpan -Minutes 5)
+$ajustesVig = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+  -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 4) -MultipleInstances IgnoreNew
+Register-ScheduledTask -TaskName 'MITO - Vigilante puente' -Force `
+  -Description 'Cada 5 min: si el puente SQL o el Funnel de Tailscale se cayeron, los levanta. Log: puente-sql\data\vigilante.log' `
+  -Action (Accion 'vigilante.ps1') `
+  -Trigger $cada5 `
+  -Settings $ajustesVig | Out-Null
+Write-Output 'OK  MITO - Vigilante puente (cada 5 minutos)'
