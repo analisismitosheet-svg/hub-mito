@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AuthProvider } from '@/context/AuthContext'
 import ProtectedRoute from '@/components/ProtectedRoute'
@@ -65,6 +66,10 @@ import DatosSql from '@/pages/DatosSql'
 import SqlConexion from '@/pages/SqlConexion'
 import ComingSoon from '@/pages/ComingSoon'
 import Replicas from '@/pages/Replicas'
+
+// Pantallas nuevas: se cargan bajo demanda para no agrandar el bundle principal
+// (el service worker no precachea archivos de más de 2 MB y la build falla).
+const ComparativaPrecios = lazy(() => import('@/pages/ComparativaPrecios'))
 
 export default function App() {
   return (
@@ -139,6 +144,16 @@ export default function App() {
             element={
               <PermissionRoute permiso="pedidos_compra.view">
                 <PedidosHub />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/compras/comparativa-precios"
+            element={
+              <PermissionRoute permiso="compras_precios.view">
+                <Suspense fallback={null}>
+                  <ComparativaPrecios />
+                </Suspense>
               </PermissionRoute>
             }
           />
