@@ -23,3 +23,11 @@
 - **Respuesta de una función de Vercel: máx. ~4,5 MB.** Si se pasa → 500 sin cuerpo ("Error 500 consultando <vista>"). Una vista para Datos SQL tiene que quedar bien por debajo (caso real: `equivalencias` 61 821 filas = 5,2 MB, se sacó de `config_app.sql_vistas`).
 - **No usar catch-all `[...ruta].ts` en `/api`** (09/10/2026): el segmento no llega en `req.query` y `{...req}` no copia `req.headers` → `FUNCTION_INVOCATION_FAILED` en todo `/api/sql/*`. Se usa segmento simple `[ruta].ts` y se pasa el mismo `req` seteando `req.query.view`, nunca un spread.
 - **Cron en Hobby: máximo 1 vez por día** (`*/10 * * * *` hace fallar el deploy).
+
+## Seguridad (revisión 13/10/2026, `sql/seguridad_2026_10.sql`)
+- **CSP en `vercel.json`** (`script-src 'self'`, sin inline ni eval). Un dominio externo nuevo que se cargue como script, iframe o fuente hay que sumarlo ahí; imágenes y `fetch` a `https:` ya están permitidos.
+- **Ventanas de impresión sin `<script>` inline**: heredan la CSP. Imprimir o agregar controles desde la ventana principal con `src/lib/ventanaImpresion.ts` (`imprimirCuandoCarguen`, `controlesHojaPedido`).
+- **Funciones `/api`**: no alcanza con un JWT válido (el registro es abierto y el usuario nuevo queda `pendiente`). Usar `autorizado(token, [permisos])` de `src/lib/apiAuth.ts` (RPC `api_autorizado`: aprobado + permiso). Ids que van en filtros de PostgREST con service role: validar con `esUuid` y `encodeURIComponent`.
+- **Storage**: el bucket `dni` es privado; las fotos se muestran con `createSignedUrl`. No crear buckets públicos con datos personales.
+- Valores de configuración que van a un `<style>` o HTML de impresión: sanear (ver `sanearQrConfig`).
+- `xlsx` viene del CDN de SheetJS (0.20.3), no de npm.
