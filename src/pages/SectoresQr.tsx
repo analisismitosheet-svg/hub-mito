@@ -26,8 +26,10 @@ import {
   qrImgUrl,
   QR_LABEL_DEFAULT,
   type QrLabelConfig,
+  sanearQrConfig,
 } from '@/components/QrEtiqueta'
 import type { Sector, QrToken } from '@/types/encuestas'
+import { imprimirCuandoCarguen } from '@/lib/ventanaImpresion'
 
 interface Local {
   codigo: string
@@ -271,6 +273,7 @@ export default function SectoresQr() {
     const nombre = `${nombreLocal.get(local) ?? local} · ${sector}`
     w.document.write(buildLabelHtml(qrCfg, nombre, urlPublico(token)))
     w.document.close()
+    imprimirCuandoCarguen(w, 'img.qr', 200)
   }
 
   function imprimirTodos(localCode: string) {
@@ -286,7 +289,7 @@ export default function SectoresQr() {
       setError('No hay sectores con QR activos para imprimir.')
       return
     }
-    const c = qrCfg
+    const c = sanearQrConfig(qrCfg) // va adentro de un <style>: sin valores arbitrarios
     const contentW = Math.max(10, c.ancho_mm - 4)
     const pageSize = c.alto_mm > 0 ? `${c.ancho_mm}mm ${c.alto_mm}mm` : `${c.ancho_mm}mm auto`
     const escHtml = (s: string) => s.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] as string))
@@ -322,18 +325,12 @@ export default function SectoresQr() {
   @media screen { body { padding: 16px; background: #ddd; } .lbl { border: 1px dashed #999; margin-bottom: 12px; } }
 </style></head>
 <body>${parts.join('')}
-<script>
-  var imgs = document.querySelectorAll('img.qr');
-  var pending = imgs.length;
-  function go(){ if(--pending<=0){ setTimeout(function(){ window.focus(); window.print(); }, 300); } }
-  imgs.forEach(function(img){ if(img.complete) go(); else { img.onload = go; img.onerror = go; } });
-  if(imgs.length===0) go();
-<\/script>
 </body></html>`
     const w = window.open('', '_blank', 'width=480,height=680')
     if (!w) return
     w.document.write(html)
     w.document.close()
+    imprimirCuandoCarguen(w, 'img.qr', 300)
   }
 
   function descargar(local: string, sector: string, token: string) {
