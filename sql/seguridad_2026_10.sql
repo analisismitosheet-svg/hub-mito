@@ -42,3 +42,24 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS
 $$;
 REVOKE ALL ON FUNCTION public.api_autorizado(text[]) FROM public, anon;
 GRANT EXECUTE ON FUNCTION public.api_autorizado(text[]) TO authenticated;
+
+-- ---- #4 Etiquetas QR: valores que van a un <style> ----
+-- config_app.qr_etiqueta la edita quien tiene banner.editar y se imprime en una ventana del
+-- mismo origen: los colores y la alineación se validan al guardar (además del saneo en el front).
+CREATE OR REPLACE FUNCTION private.config_app_validar()
+RETURNS trigger LANGUAGE plpgsql SET search_path = public AS $$
+BEGIN
+  IF NEW.clave = 'qr_etiqueta' THEN
+    IF coalesce(NEW.valor->>'bg_color', '#ffffff') !~* '^(#[0-9a-f]{3,8}|[a-z]{3,20})$'
+       OR coalesce(NEW.valor->>'text_color', '#000000') !~* '^(#[0-9a-f]{3,8}|[a-z]{3,20})$' THEN
+      RAISE EXCEPTION 'Color inválido en la etiqueta QR (usá #rrggbb)';
+    END IF;
+    IF coalesce(NEW.valor->>'align', 'center') NOT IN ('left', 'center', 'right') THEN
+      RAISE EXCEPTION 'Alineación inválida en la etiqueta QR';
+    END IF;
+  END IF;
+  RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS config_app_validar ON public.config_app;
+CREATE TRIGGER config_app_validar BEFORE INSERT OR UPDATE ON public.config_app
+  FOR EACH ROW EXECUTE FUNCTION private.config_app_validar();

@@ -7,7 +7,7 @@ import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import StarRating from '@/components/StarRating'
-import { buildLabelHtml, qrImgUrl, QR_LABEL_DEFAULT, type QrLabelConfig } from '@/components/QrEtiqueta'
+import { buildLabelHtml, qrImgUrl, QR_LABEL_DEFAULT, type QrLabelConfig, sanearQrConfig } from '@/components/QrEtiqueta'
 import type { Encuesta, Pregunta, Sector, QrToken } from '@/types/encuestas'
 import { imprimirCuandoCarguen } from '@/lib/ventanaImpresion'
 
@@ -242,7 +242,7 @@ export default function Opiniones() {
       labels.push({ nombre: `${nombrePorCodigo.get(localCode) ?? localCode} · ${s.nombre}`, url: urlPublico(t.token) })
     }
     if (labels.length === 0) return
-    const c = qrCfg
+    const c = sanearQrConfig(qrCfg) // va adentro de un <style>: sin valores arbitrarios
     const contentW = Math.max(10, c.ancho_mm - 4)
     const pageSize = c.alto_mm > 0 ? `${c.ancho_mm}mm ${c.alto_mm}mm` : `${c.ancho_mm}mm auto`
     const esc = (s: string) => s.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] as string))

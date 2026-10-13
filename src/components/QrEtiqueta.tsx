@@ -22,6 +22,38 @@ export interface QrLabelConfig {
   url_pt: number
 }
 
+const COLOR = /^(#[0-9a-f]{3,8}|[a-z]{3,20})$/i
+const num = (v: unknown, def: number, min: number, max: number) => {
+  const n = Number(v)
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : def
+}
+
+/**
+ * La configuración sale de config_app (la edita quien tiene banner.editar) y va adentro de
+ * un <style> de la ventana de impresión, que es del mismo origen que el hub: un color como
+ * "red}</style><script>…" sería un XSS. Antes de armar el HTML, todo valor que va al CSS se
+ * normaliza: colores hex o nombre simple, alineación de la lista y números acotados.
+ */
+export function sanearQrConfig(c: QrLabelConfig): QrLabelConfig {
+  const d = QR_LABEL_DEFAULT
+  const color = (v: unknown, def: string) => (typeof v === 'string' && COLOR.test(v.trim()) ? v.trim() : def)
+  return {
+    ...c,
+    align: c.align === 'left' || c.align === 'right' || c.align === 'center' ? c.align : d.align,
+    bg_color: color(c.bg_color, d.bg_color),
+    text_color: color(c.text_color, d.text_color),
+    ancho_mm: num(c.ancho_mm, d.ancho_mm, 10, 300),
+    alto_mm: num(c.alto_mm, d.alto_mm, 0, 400),
+    logo_alto_mm: num(c.logo_alto_mm, d.logo_alto_mm, 0, 200),
+    nombre_pt: num(c.nombre_pt, d.nombre_pt, 4, 96),
+    encabezado_pt: num(c.encabezado_pt, d.encabezado_pt, 4, 96),
+    qr_mm: num(c.qr_mm, d.qr_mm, 5, 300),
+    cta_pt: num(c.cta_pt, d.cta_pt, 4, 96),
+    url_pt: num(c.url_pt, d.url_pt, 4, 96),
+    nombre_bold: !!c.nombre_bold,
+  }
+}
+
 /** Tamaños de papel / etiqueta disponibles. h = 0 => alto automático (rollo). */
 export const PAPELES: { key: string; label: string; w: number; h: number }[] = [
   { key: '50x30', label: 'Etiqueta 50 × 30 mm', w: 50, h: 30 },
@@ -69,7 +101,8 @@ function escHtml(s: string) {
 }
 
 /** Construye el HTML de la etiqueta para impresión (mm reales). */
-export function buildLabelHtml(c: QrLabelConfig, nombre: string, url: string) {
+export function buildLabelHtml(cfg: QrLabelConfig, nombre: string, url: string) {
+  const c = sanearQrConfig(cfg)
   const contentW = Math.max(10, c.ancho_mm - 4) // margen 2mm cada lado
   const pageSize = c.alto_mm > 0 ? `${c.ancho_mm}mm ${c.alto_mm}mm` : `${c.ancho_mm}mm auto`
   const partes: string[] = []

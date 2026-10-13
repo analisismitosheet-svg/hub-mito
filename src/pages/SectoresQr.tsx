@@ -26,6 +26,7 @@ import {
   qrImgUrl,
   QR_LABEL_DEFAULT,
   type QrLabelConfig,
+  sanearQrConfig,
 } from '@/components/QrEtiqueta'
 import type { Sector, QrToken } from '@/types/encuestas'
 import { imprimirCuandoCarguen } from '@/lib/ventanaImpresion'
@@ -288,7 +289,7 @@ export default function SectoresQr() {
       setError('No hay sectores con QR activos para imprimir.')
       return
     }
-    const c = qrCfg
+    const c = sanearQrConfig(qrCfg) // va adentro de un <style>: sin valores arbitrarios
     const contentW = Math.max(10, c.ancho_mm - 4)
     const pageSize = c.alto_mm > 0 ? `${c.ancho_mm}mm ${c.alto_mm}mm` : `${c.ancho_mm}mm auto`
     const escHtml = (s: string) => s.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] as string))
