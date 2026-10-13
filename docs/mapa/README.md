@@ -19,6 +19,7 @@ El detalle largo y la historia de cada módulo siguen en `CONTEXTO.md` (raíz de
 - [[Mapeo depósito]]
 - [[Transferencias]]: reposiciones y estadísticas
 - [[Facturación, guías y notas de crédito]]
+- [[Informes por WhatsApp]]: Envío informes y reportes (Sistemas)
 - [[Otros módulos]]: RRHH, RMA, contador de clientes, encuestas, QR, réplicas
 - [[UI y estilo]]
 - [[Reglas y decisiones]]: lo que no hay que romper
@@ -36,6 +37,8 @@ El detalle largo y la historia de cada módulo siguen en `CONTEXTO.md` (raíz de
 | `/mayorista/pedidos-venta` | PedidosVenta.tsx | idem + [[Armado de pedidos]] |
 | `/transferencias`, `/transferencias/estadisticas` | Transferencias.tsx, EstadisticasTransferencias.tsx | [[Transferencias]] |
 | `/mayorista` , `/mayorista/mi-repo`, `/mayorista/estadisticas` | Mayorista.tsx, MiRepo.tsx, EstadisticasRendimiento.tsx | [[Repos Mayorista y Mi repo]] |
+| `/mayorista/pausas` | PausasPendientes.tsx | [[Repos Mayorista y Mi repo]] |
+| `/informes` | Informes.tsx | [[Informes por WhatsApp]] |
 | `/mayorista/mapeo` (+escanear, orden, ubicaciones) | MapeoEscanear/Orden/Ubicaciones.tsx | [[Mapeo depósito]] |
 | `/mayorista/consulta-articulos` | ConsultaArticulos.tsx | [[Artículos y F12]] |
 | `/mayorista/facturacion-fabrica`, `/guias`, `/notas-credito`, `/clientes`, `/transportes` | FacturacionFabrica, Guias, NotasCredito, Clientes, Transportes | [[Facturación, guías y notas de crédito]] |

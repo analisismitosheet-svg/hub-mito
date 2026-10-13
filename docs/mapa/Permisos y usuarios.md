@@ -19,6 +19,9 @@
 - `mayorista.repos_piso` → piso / Mi repo ([[Repos Mayorista y Mi repo]], [[Armado de pedidos]]).
 - `mayorista.articulos.view` → [[Artículos y F12]].
 - `mayorista.mapeo.view` / `.escanear` / `.borrar` → [[Mapeo depósito]]. **`.borrar` solo admin + puesto3indo@gmail.com (individual)**; se sacó del rol `mayorista`.
+- `mayorista.pausas.autorizar` → autorizar pausas del piso (`/mayorista/pausas`), dado a puesto3 ([[Repos Mayorista y Mi repo]]).
+- `mayorista.faltantes.ver` → aviso de faltantes de stock al cerrar un armado, dado a puesto3; admin siempre ([[Armado de pedidos]]).
+- `sistemas.informes.view` / `.create` / `.edit` / `.delete` → [[Informes por WhatsApp]].
 - `transferencias.view` → [[Transferencias]].
 - `contador.view` → contador de clientes ([[Otros módulos]]).
 
