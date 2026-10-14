@@ -479,6 +479,70 @@ export default function App() {
             }
           />
           <Route
+            path="/arquitectura/gestion-obras"
+            element={
+              <ProtectedRoute>
+                <CarpetaArea carpetaId="arquitectura-obras" titulo="Gestión de Obras" color="#0d9488" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/arquitectura/presupuestos/nuevo"
+            element={
+              <ProtectedRoute>
+                <ComingSoon title="Cargar presupuesto" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/arquitectura/pagos/nuevo"
+            element={
+              <ProtectedRoute>
+                <ComingSoon title="Solicitar pago" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/arquitectura/solicitudes/pendientes"
+            element={
+              <ProtectedRoute>
+                <ComingSoon title="Solicitudes pendientes" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/arquitectura/solicitudes/aprobadas"
+            element={
+              <ProtectedRoute>
+                <ComingSoon title="Solicitudes aprobadas" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/arquitectura/solicitudes/rechazadas"
+            element={
+              <ProtectedRoute>
+                <ComingSoon title="Solicitudes rechazadas" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/arquitectura/obras"
+            element={
+              <ProtectedRoute>
+                <ComingSoon title="Obras" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/arquitectura/reportes"
+            element={
+              <ProtectedRoute>
+                <ComingSoon title="Reportes" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/replicas"
             element={
               <ProtectedRoute>

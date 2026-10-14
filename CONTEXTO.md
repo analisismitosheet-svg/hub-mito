@@ -163,6 +163,13 @@ Leyendo las definiciones reales (`INFORMATION_SCHEMA.VIEWS`):
 ## Tope de funciones del plan Hobby (Vercel)
 - Hobby admite un máximo de **12 Serverless Functions** por deploy; si se pasa, el deploy **falla** con `exceeded_serverless_functions_per_deployment`. El proyecto se mantiene con **9**: los 3 de SQL se unieron en `api/sql/[...ruta].ts` (vista / status / catálogo), los 2 sync en `api/pedidos-sync.ts?tipo=compra|venta`, y los de push (`api/push.ts`) e informes (`api/informe.ts`) también son unificados. **Antes de agregar una función nueva, fusionar o pasar a Pro.**
 
+## Comparar precios con la web de Vans (herramienta suelta)
+- `scripts/comparar-vans.mjs` (`npm run vans`): dado un ID de Vans (ej. `VN0A3TKN6BT1`, el mismo que va en la URL `https://www.vans.com.ar/Product/Detail/<ID>` y que el usuario usa en sus productos), baja el precio de la ficha y arma un Excel para comparar.
+- **El precio sale del JSON-LD** (`<script type="application/ld+json">`, schema.org/Product → `offers.price`) que ya trae la página; no hace falta navegador ni renderizar JS. Un ID inexistente devuelve HTTP 200 pero **sin** JSON-LD (se marca "Encontrado = No").
+- Entrada: IDs sueltos por línea de comandos, o `--desde <archivo>` con `.xlsx` (usa la primera hoja) / `.csv` / `.txt`. La columna de ID y la de tu precio se autodetectan (`articulo/codigo/sku…`, `precio/venta/costo…`) y se pueden forzar con `--col-id` / `--col-precio`.
+- Salida (Excel, `--salida`, default `comparar-vans.xlsx`): `ID, Encontrado, Nombre, Color, Precio Vans, Moneda, Tu precio, Diferencia, Dif %, Disponible, Error, URL`. Opciones: `--concurrencia` (default 4), `--pausa` (ms entre pedidos), `--sin-precio` (solo trae el de Vans), `--json`.
+- **No toca el hub ni la base**: los IDs de Vans no viven en `articulos` ni en el F12 (`vw_ARTICULOS_MITO`) al día de hoy; la lista la provee el usuario. Si más adelante se quiere una pantalla en la PWA, la lógica de scraping es este mismo parseo del JSON-LD.
+
 ## Pendientes SQL (ejecutar en Supabase SQL Editor)
 ```sql
 -- Novedades: tabla de tipos (si no existe)

@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx",
     "test": "node scripts/test-consulta-articulos.mjs && node scripts/test-stock-articulos.mjs && node scripts/test-stock-sku.mjs",
-    "test:sql": "node scripts/test-puente-filtro.mjs && node scripts/test-consulta-articulos-sql.mjs"
+    "test:sql": "node scripts/test-puente-filtro.mjs && node scripts/test-consulta-articulos-sql.mjs",
+    "vans": "node scripts/comparar-vans.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

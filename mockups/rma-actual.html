@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RMA · cómo está hoy (Depósito)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --paper:#050508;
+    --surface:rgba(255,255,255,.035);
+    --surface2:rgba(255,255,255,.07);
+    --surface-solid:#101016;
+    --line:rgba(255,255,255,.08);
+    --line2:rgba(255,255,255,.18);
+    --ink:#f8fafc;
+    --sub:#94a3b8;
+    --brand:#ef4444;
+    --brand600:#e11d2e;
+    --amber:#f59e0b;
+    --orange:#ea580c;
+    --emerald:#22c55e;
+    --radius:16px;
+    --shadow:0 10px 30px -12px rgba(0,0,0,.6);
+    --shadow-lg:0 24px 50px -16px rgba(0,0,0,.8);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:
+      radial-gradient(900px 520px at 10% -12%, rgba(59,130,246,.15), transparent 60%),
+      radial-gradient(800px 500px at 96% -6%, rgba(168,85,247,.10), transparent 55%),
+      var(--paper);
+    color:var(--ink);
+    font-family:'Plus Jakarta Sans',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    font-size:14px; line-height:1.45; min-height:100vh;
+    padding:22px clamp(12px,3vw,40px) 70px;
+  }
+  h1,h2,h3,h4{margin:0;font-weight:800;letter-spacing:-.02em}
+  p{margin:0}
+  button{font-family:inherit;cursor:pointer;color:inherit}
+  .sub{color:var(--sub)}
+  .mini{font-size:11px;color:rgba(148,163,184,.8)}
+
+  /* ---------- barra superior del mockup ---------- */
+  .top{display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between;margin-bottom:20px}
+  .badge-mock{
+    display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;
+    background:rgba(34,197,94,.14);color:#86efac;border:1px solid rgba(34,197,94,.32);
+    font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+  }
+  .tabs{display:inline-flex;gap:4px;padding:4px;border:1px solid var(--line);background:var(--surface);border-radius:12px}
+  .tab{
+    border:0;background:transparent;border-radius:9px;padding:7px 14px;font-size:12.5px;font-weight:700;color:var(--sub)
+  }
+  .tab:hover{color:var(--ink)}
+  .tab.on{background:var(--surface2);color:var(--ink);box-shadow:0 1px 0 rgba(255,255,255,.05) inset}
+
+  /* ---------- "BackButton" ---------- */
+  .back{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 11px;border-radius:10px;border:1px solid var(--line);background:var(--surface2);color:var(--sub);font-size:12px;font-weight:600;margin-bottom:6px}
+  .back:hover{color:var(--ink)}
+
+  /* ---------- cabecera de pantalla ---------- */
+  .head{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start;justify-content:space-between;margin:10px 0 16px}
+  .head h1{font-size:clamp(20px,3vw,26px);display:flex;align-items:center;gap:10px}
+  .head h1 svg{width:22px;height:22px}
+  .title-ic-orange{color:var(--orange)} .title-ic-amber{color:var(--amber)}
+  .actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+  .btn{
+    display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 13px;border-radius:10px;
+    border:1px solid var(--line);background:var(--surface2);color:var(--ink);font-size:12.5px;font-weight:600;transition:.15s
+  }
+  .btn:hover{background:rgba(255,255,255,.1);border-color:var(--line2)}
+  .btn svg{width:13px;height:13px}
+  .btn-brand{background:var(--brand600);border-color:var(--brand600);color:#fff}
+  .btn-brand:hover{background:#c81a29;border-color:#c81a29}
+
+  /* ---------- hub cards ---------- */
+  .hub{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;max-width:820px}
+  @media (max-width:640px){ .hub{grid-template-columns:1fr} }
+  .hub-card{
+    display:flex;flex-direction:column;align-items:flex-start;gap:12px;text-align:left;
+    border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:20px;
+    box-shadow:var(--shadow);transition:.15s
+  }
+  .hub-card:hover{background:rgba(255,255,255,.06);border-color:var(--line2);transform:translateY(-1px)}
+  .hub-ic{width:40px;height:40px;border-radius:12px;display:grid;place-items:center}
+  .hub-ic svg{width:20px;height:20px}
+  .hub-ic.orange{background:rgba(234,88,12,.15);color:var(--orange)}
+  .hub-ic.amber{background:rgba(245,158,11,.15);color:var(--amber)}
+  .hub-card .t{font-size:18px;font-weight:700}
+  .hub-card .d{font-size:13px;color:var(--sub)}
+
+  /* ---------- búsqueda ---------- */
+  .search-wrap{position:relative;max-width:420px;margin-bottom:12px}
+  .search-wrap svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:var(--sub);pointer-events:none}
+  .search{
+    width:100%;height:36px;border-radius:12px;border:1px solid var(--line);background:var(--surface2);
+    color:var(--ink);padding:0 12px 0 34px;font-size:13px;font-family:inherit;outline:none
+  }
+  .search::placeholder{color:rgba(148,163,184,.7)}
+  .search:focus{border-color:var(--brand600);box-shadow:0 0 0 2px rgba(225,29,46,.35)}
+
+  /* ---------- tabla ---------- */
+  .tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow)}
+  table{width:100%;min-width:max-content;border-collapse:collapse;font-size:12px}
+  thead th{
+    position:sticky;top:0;background:rgba(23,23,31,.95);text-align:left;
+    font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--sub);
+    padding:9px 8px;border-bottom:1px solid var(--line);font-weight:700;white-space:nowrap
+  }
+  tbody td{padding:6px 8px;border-bottom:1px solid rgba(255,255,255,.05);white-space:nowrap;vertical-align:middle}
+  tbody tr:last-child td{border-bottom:0}
+  tbody tr:hover{background:rgba(255,255,255,.05)}
+  td.acc{text-align:right}
+  .ico-btn{border:1px solid var(--line);background:transparent;border-radius:6px;padding:3px;color:var(--sub);display:inline-grid;place-items:center}
+  .ico-btn:hover{color:var(--ink)}
+  .ico-btn.del:hover{color:#f87171}
+  .ico-btn svg{width:11px;height:11px}
+
+  .empty{color:rgba(148,163,184,.6);font-style:italic}
+  .acc-cell{display:inline-flex;gap:4px;justify-content:flex-end}
+
+  .screen{display:none}
+  .screen.on{display:block}
+
+  .foot{margin-top:34px;border-top:1px solid var(--line);padding-top:14px;color:rgba(148,163,184,.7);font-size:11.5px}
+  code{background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:11px}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <span class="badge-mock">● Así está hoy · no es código nuevo</span>
+  <div class="tabs">
+    <button class="tab on" data-s="hub">/deposito/rma</button>
+    <button class="tab" data-s="prov">Proveedores</button>
+    <button class="tab" data-s="guia">Guía</button>
+  </div>
+</div>
+
+<!-- ============================================================= -->
+<!-- PANTALLA 1 · HUB  (/deposito/rma · Rma.tsx)                   -->
+<!-- ============================================================= -->
+<section class="screen on" id="s-hub">
+  <button class="back">← Volver</button>
+  <header class="head">
+    <div>
+      <h1><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="title-ic-orange"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg> RMA</h1>
+      <p class="mini" style="margin-top:2px">Módulo de RMA y proveedores (Excel PROVEEDORES PACHO).</p>
+    </div>
+  </header>
+
+  <div class="hub">
+    <button class="hub-card" data-go="prov">
+      <div class="hub-ic orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+      <span class="t">Proveedores</span>
+      <span class="d">ABM de proveedores de flexus/dragon (código, razón social, CUIT, localidad, tipo).</span>
+    </button>
+
+    <button class="hub-card" data-go="guia">
+      <div class="hub-ic amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.62l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg></div>
+      <span class="t">Guía</span>
+      <span class="d">Guía de despacho: fecha, N dragon/flexus, planilla, mail, gestión, despacho, NC.</span>
+    </button>
+  </div>
+</section>
+
+<!-- ============================================================= -->
+<!-- PANTALLA 2 · PROVEEDORES  (ProveedoresPacho.tsx)              -->
+<!-- ============================================================= -->
+<section class="screen" id="s-prov">
+  <button class="back" data-go="hub">← Volver</button>
+  <header class="head">
+    <div>
+      <h1 style="font-size:24px">Proveedores Pacho</h1>
+      <p class="mini" style="margin-top:2px">Proveedores (hoja del Excel PROVEEDORES PACHO).</p>
+    </div>
+    <div class="actions">
+      <button class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Importar Excel</button>
+      <button class="btn btn-brand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Nuevo</button>
+    </div>
+  </header>
+
+  <div class="search-wrap">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input class="search" placeholder="Buscar por razón social, código o CUIT..." />
+  </div>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Código Flexus</th><th>Código Dragon</th><th>Razón Social</th><th>C.U.I.T.</th>
+          <th>Dirección</th><th>Teléfono</th><th>Mail</th><th>Provincia</th><th>Localidad</th><th>Tipo proveedor</th>
+          <th style="text-align:right">Acc</th>
+        </tr>
+      </thead>
+      <tbody id="tb-prov"></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============================================================= -->
+<!-- PANTALLA 3 · GUÍA  (GuiaPacho.tsx)                            -->
+<!-- ============================================================= -->
+<section class="screen" id="s-guia">
+  <button class="back" data-go="hub">← Volver</button>
+  <header class="head">
+    <div>
+      <h1 style="font-size:24px">Guía Pacho</h1>
+      <p class="mini" style="margin-top:2px">Guía de despacho (hoja del Excel PROVEEDORES PACHO).</p>
+    </div>
+    <div class="actions">
+      <button class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Importar Excel</button>
+      <button class="btn btn-brand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Nueva</button>
+    </div>
+  </header>
+
+  <div class="search-wrap">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input class="search" placeholder="Buscar por N dragon, flexus, mail o gestión..." />
+  </div>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha</th><th>N de Dragon</th><th>N de Flexus</th><th>Planilla Excel</th>
+          <th>Mail</th><th>Número de Gestión</th><th>Despacho</th><th>NC</th>
+          <th style="text-align:right">Acc</th>
+        </tr>
+      </thead>
+      <tbody id="tb-guia"></tbody>
+    </table>
+  </div>
+</section>
+
+<p class="foot">
+  Reproduce el código actual: <code>src/pages/Rma.tsx</code>, <code>src/pages/ProveedoresPacho.tsx</code>,
+  <code>src/pages/GuiaPacho.tsx</code>. Rutas <code>/deposito/rma</code>, <code>/deposito/rma/proveedores</code>,
+  <code>/deposito/rma/guia</code> — todas bajo el permiso <code>deposito.view</code>.
+  Datos de ejemplo; en la app salen de <code>proveedores_pacho</code> y <code>proveedores_pacho_guia</code>.
+</p>
+
+<script>
+  /* ---- datos de ejemplo ---- */
+  const PROV = [
+    ['FL-1042','DR-8801','TEXTIL FLEXUS S.A.','30-71045678-9','Av. Warnes 1234','011-4555-1010','ventas@flexus.com.ar','BUENOS AIRES','CABA','FLEXUS'],
+    ['FL-1088','—','DISTRIBUIDORA DRAGON SRL','30-70998877-1','Ruta 8 Km 52','011-4744-2020','info@dragon.com.ar','BUENOS AIRES','SAN MIGUEL','DRAGON'],
+    ['FL-2011','DR-7712','CONFECCIONES DEL NORTE SA','30-68877665-4','Ruta 9 Km 12','0388-466-3300','compras@conor.com.ar','JULUY','SAN SALVADOR DE JULUY','AMBOS'],
+    ['FL-2050','—','IMPORT EXPORT SUR SRL','30-65443322-8','Calle 8 N° 445','0221-483-9090','—','BUENOS AIRES','LA PLATA','FLEXUS'],
+    ['FL-3107','DR-9014','TEJIDOS INDOD LTDA','30-63322110-5','Colectora Oeste 900','011-5277-4411','pedidos@indod.com.ar','BUENOS AIRES','GARIN','DRAGON'],
+    ['FL-3110','DR-9050','UNIFORMES PACHO S.A.','30-61100223-7','Av. Rivadavia 8890','011-4611-7788','hola@pacho.com','BUENOS AIRES','CIUDADELA','AMBOS'],
+    ['FL-4002','—','ROPA DEPORTIVA AUSTRAL','30-59887112-3','San Martin 210','0341-424-1919','ventas@austal.com.ar','SANTA FE','ROSARIO','FLEXUS'],
+    ['FL-4220','DR-8888','MODA INTERNACIONAL SA','30-57766004-2','Av. Colon 456','0351-468-2900','—','CORDOBA','CORDOBA','AMBOS'],
+  ].map(r=>({flexus:r[0],dragon:r[1],rz:r[2],cuit:r[3],dir:r[4],tel:r[5],mail:r[6],prov:r[7],loc:r[8],tipo:r[9]}));
+
+  const GUIA = [
+    ['05/10/2026','D-4471','F-22019','Planilla octubre.xlsx','despacho@pacho.com','G-1092','Despachado','NC-0045'],
+    ['04/10/2026','D-4470','F-22018','Planilla octubre.xlsx','compras@flexus.com.ar','G-1091','Despachado','—'],
+    ['02/10/2026','D-4467','F-22010','—','info@dragon.com.ar','G-1088','Pendiente','—'],
+    ['01/10/2026','—','F-22003','Planilla sep.xlsx','ventas@austal.com.ar','G-1085','Despachado','NC-0041'],
+    ['29/09/2026','D-4459','F-21992','—','hola@pacho.com','G-1080','Anulada','NC-0038'],
+    ['27/09/2026','D-4455','F-21980','Planilla sep.xlsx','—','G-1077','Despachado','—'],
+  ].map(r=>({fec:r[0],dragon:r[1],flexus:r[2],planilla:r[3],mail:r[4],gestion:r[5],despacho:r[6],nc:r[7]}));
+
+  const esc = (s)=>String(s==='—'||s==null||s==='' ? '<span class="empty">-</span>' : s);
+
+  const IC_EDIT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>';
+  const IC_DEL  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+
+  document.getElementById('tb-prov').innerHTML = PROV.map(p=>`
+    <tr>
+      <td>${esc(p.flexus)}</td><td>${esc(p.dragon)}</td><td>${esc(p.rz)}</td><td>${esc(p.cuit)}</td>
+      <td>${esc(p.dir)}</td><td>${esc(p.tel)}</td><td>${esc(p.mail)}</td><td>${esc(p.prov)}</td><td>${esc(p.loc)}</td><td>${esc(p.tipo)}</td>
+      <td class="acc"><span class="acc-cell">
+        <button class="ico-btn" title="Editar">${IC_EDIT}</button>
+        <button class="ico-btn del" title="Eliminar">${IC_DEL}</button>
+      </span></td>
+    </tr>`).join('');
+
+  document.getElementById('tb-guia').innerHTML = GUIA.map(g=>`
+    <tr>
+      <td>${esc(g.fec)}</td><td>${esc(g.dragon)}</td><td>${esc(g.flexus)}</td><td>${esc(g.planilla)}</td>
+      <td>${esc(g.mail)}</td><td>${esc(g.gestion)}</td><td>${esc(g.despacho)}</td><td>${esc(g.nc)}</td>
+      <td class="acc"><span class="acc-cell">
+        <button class="ico-btn" title="Editar">${IC_EDIT}</button>
+        <button class="ico-btn del" title="Eliminar">${IC_DEL}</button>
+      </span></td>
+    </tr>`).join('');
+
+  /* ---- navegación del mockup ---- */
+  function show(id){
+    document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on', s.id==='s-'+id));
+    document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on', t.dataset.s===id));
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
+  document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>show(t.dataset.s));
+  document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));
+</script>
+</body>
+</html>

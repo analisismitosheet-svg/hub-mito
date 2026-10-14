@@ -41,7 +41,7 @@ export default function CarpetaArea({
         <div className="rounded-xl border p-3" style={{ color, backgroundColor: `${color}24`, borderColor: `${color}40` }}>
           <FolderOpen size={24} aria-hidden />
         </div>
-        <h1 className="font-display text-2xl font-bold text-ink capitalize">{titulo}</h1>
+        <h1 className={`font-display text-2xl font-bold text-ink ${tituloProp ? '' : 'capitalize'}`}>{titulo}</h1>
       </div>
 
       {apps.length === 0 ? (

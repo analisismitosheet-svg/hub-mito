@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RMA · propuesta (Devoluciones + Stock)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --paper:#050508;
+    --surface:rgba(255,255,255,.035);
+    --surface2:rgba(255,255,255,.07);
+    --surface-solid:#101016;
+    --line:rgba(255,255,255,.08);
+    --line2:rgba(255,255,255,.18);
+    --ink:#f8fafc;
+    --sub:#94a3b8;
+    --brand:#ef4444;
+    --brand600:#e11d2e;
+    --amber:#f59e0b;
+    --orange:#ea580c;
+    --sky:#0ea5e9;
+    --emerald:#22c55e;
+    --radius:16px;
+    --shadow:0 10px 30px -12px rgba(0,0,0,.6);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:
+      radial-gradient(900px 520px at 10% -12%, rgba(59,130,246,.15), transparent 60%),
+      radial-gradient(800px 500px at 96% -6%, rgba(168,85,247,.10), transparent 55%),
+      var(--paper);
+    color:var(--ink);font-family:'Plus Jakarta Sans',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    font-size:14px;line-height:1.45;min-height:100vh;
+    padding:22px clamp(12px,3vw,40px) 70px;
+  }
+  h1,h2,h3,h4{margin:0;font-weight:800;letter-spacing:-.02em}
+  p{margin:0}
+  button{font-family:inherit;cursor:pointer;color:inherit}
+  .mini{font-size:11px;color:rgba(148,163,184,.8)}
+
+  .top{display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between;margin-bottom:20px}
+  .badge-mock{
+    display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;
+    background:rgba(245,158,11,.14);color:#fcd34d;border:1px solid rgba(245,158,11,.32);
+    font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+  }
+  .tabs{display:inline-flex;gap:4px;padding:4px;border:1px solid var(--line);background:var(--surface);border-radius:12px;flex-wrap:wrap}
+  .tab{border:0;background:transparent;border-radius:9px;padding:7px 14px;font-size:12.5px;font-weight:700;color:var(--sub)}
+  .tab:hover{color:var(--ink)}
+  .tab.on{background:var(--surface2);color:var(--ink)}
+  .tab .nuevo{display:inline-block;margin-left:6px;font-size:9px;font-weight:800;color:#4ade80;border:1px solid rgba(34,197,94,.4);background:rgba(34,197,94,.12);border-radius:6px;padding:0 5px;vertical-align:middle}
+
+  .back{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 11px;border-radius:10px;border:1px solid var(--line);background:var(--surface2);color:var(--sub);font-size:12px;font-weight:600;margin-bottom:6px}
+  .head{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start;justify-content:space-between;margin:10px 0 16px}
+  .head h1{font-size:clamp(20px,3vw,26px);display:flex;align-items:center;gap:10px}
+  .title-ic-orange{color:var(--orange)}
+
+  .hub{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;max-width:900px}
+  @media (max-width:640px){ .hub{grid-template-columns:1fr} }
+  .hub-card{
+    position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:12px;text-align:left;
+    border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:20px;
+    box-shadow:var(--shadow);transition:.15s
+  }
+  .hub-card:hover{background:rgba(255,255,255,.06);border-color:var(--line2);transform:translateY(-1px)}
+  .hub-card.nuevo{border-color:rgba(34,197,94,.35)}
+  .flag{position:absolute;top:12px;right:12px;font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#4ade80;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.4);border-radius:999px;padding:2px 7px}
+  .hub-ic{width:40px;height:40px;border-radius:12px;display:grid;place-items:center}
+  .hub-ic svg{width:20px;height:20px}
+  .hub-ic.orange{background:rgba(234,88,12,.15);color:var(--orange)}
+  .hub-ic.amber{background:rgba(245,158,11,.15);color:var(--amber)}
+  .hub-ic.sky{background:rgba(14,165,233,.15);color:var(--sky)}
+  .hub-ic.emerald{background:rgba(34,197,94,.15);color:var(--emerald)}
+  .hub-card .t{font-size:18px;font-weight:700}
+  .hub-card .d{font-size:13px;color:var(--sub)}
+
+  .placeholder{
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;
+    border:1px dashed var(--line2);background:var(--surface);border-radius:18px;padding:54px 24px;max-width:720px
+  }
+  .placeholder .ic{width:52px;height:52px;border-radius:14px;display:grid;place-items:center}
+  .placeholder .ic.sky{background:rgba(14,165,233,.15);color:var(--sky)}
+  .placeholder .ic.emerald{background:rgba(34,197,94,.15);color:var(--emerald)}
+  .placeholder h3{font-size:17px}
+  .placeholder code{background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:11.5px}
+
+  .screen{display:none}
+  .screen.on{display:block}
+  .foot{margin-top:34px;border-top:1px solid var(--line);padding-top:14px;color:rgba(148,163,184,.7);font-size:11.5px}
+  code{background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:11px}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <span class="badge-mock">● Propuesta · sin subir</span>
+  <div class="tabs">
+    <button class="tab on" data-s="hub">/deposito/rma</button>
+    <button class="tab" data-s="prov">Proveedores</button>
+    <button class="tab" data-s="guia">Guía</button>
+    <button class="tab" data-s="dev">Devoluciones <span class="nuevo">NUEVO</span></button>
+    <button class="tab" data-s="stock">Stock <span class="nuevo">NUEVO</span></button>
+  </div>
+</div>
+
+<!-- ================= HUB ================= -->
+<section class="screen on" id="s-hub">
+  <button class="back">← Volver</button>
+  <header class="head">
+    <div>
+      <h1>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="title-ic-orange"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        RMA
+      </h1>
+      <p class="mini" style="margin-top:2px">Módulo de RMA y proveedores (Excel PROVEEDORES PACHO).</p>
+    </div>
+  </header>
+
+  <div class="hub">
+    <!-- existentes -->
+    <button class="hub-card" data-go="prov">
+      <div class="hub-ic orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+      <span class="t">Proveedores</span>
+      <span class="d">ABM de proveedores de flexus/dragon (código, razón social, CUIT, localidad, tipo).</span>
+    </button>
+    <button class="hub-card" data-go="guia">
+      <div class="hub-ic amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.62l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg></div>
+      <span class="t">Guía</span>
+      <span class="d">Guía de despacho: fecha, N dragon/flexus, planilla, mail, gestión, despacho, NC.</span>
+    </button>
+
+    <!-- nuevos -->
+    <button class="hub-card nuevo" data-go="dev">
+      <span class="flag">Nuevo</span>
+      <div class="hub-ic sky"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 8v8"/><path d="M9 11l-3 3 3 3h6l3-3-3-3"/></svg></div>
+      <span class="t">Devoluciones</span>
+      <span class="d">Comprobantes de devolución por base (por ahora MITO). Lee una vista del SQL Server.</span>
+    </button>
+    <button class="hub-card nuevo" data-go="stock">
+      <span class="flag">Nuevo</span>
+      <div class="hub-ic emerald"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></div>
+      <span class="t">Stock</span>
+      <span class="d">Consulta de stock (por ahora sin datos: falta definir la vista).</span>
+    </button>
+  </div>
+</section>
+
+<!-- ================= PROVEEDORES (igual que hoy) ================= -->
+<section class="screen" id="s-prov">
+  <button class="back" data-go="hub">← Volver</button>
+  <header class="head"><div><h1 style="font-size:24px">Proveedores Pacho</h1><p class="mini" style="margin-top:2px">Proveedores (hoja del Excel PROVEEDORES PACHO).</p></div></header>
+  <div class="placeholder">
+    <span class="mini">Pantalla existente, sin cambios.</span>
+  </div>
+</section>
+
+<!-- ================= GUÍA (igual que hoy) ================= -->
+<section class="screen" id="s-guia">
+  <button class="back" data-go="hub">← Volver</button>
+  <header class="head"><div><h1 style="font-size:24px">Guía Pacho</h1><p class="mini" style="margin-top:2px">Guía de despacho (hoja del Excel PROVEEDORES PACHO).</p></div></header>
+  <div class="placeholder">
+    <span class="mini">Pantalla existente, sin cambios.</span>
+  </div>
+</section>
+
+<!-- ================= DEVOLUCIONES (nueva) ================= -->
+<section class="screen" id="s-dev">
+  <button class="back" data-go="hub">← Volver</button>
+  <header class="head">
+    <div>
+      <h1 style="font-size:24px"><span class="hub-ic sky" style="width:34px;height:34px;display:inline-grid;vertical-align:middle;margin-right:8px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></span>Devoluciones</h1>
+      <p class="mini" style="margin-top:2px">Nueva pantalla · ruta <code>/deposito/rma/devoluciones</code> · permiso <code>deposito.view</code></p>
+    </div>
+  </header>
+  <div class="placeholder">
+    <div class="ic sky"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></div>
+    <h3>Devoluciones</h3>
+    <p class="mini" style="max-width:520px">
+      Acá va la lista de devoluciones. Falta definir <b>qué vista</b> y <b>qué columnas</b> mostrar
+      (mencionaste que va a ser <b>otra vista</b>, no la de comprobantes). Decime el nombre de la vista
+      y armo la tabla.
+    </p>
+  </div>
+</section>
+
+<!-- ================= STOCK (nueva) ================= -->
+<section class="screen" id="s-stock">
+  <button class="back" data-go="hub">← Volver</button>
+  <header class="head">
+    <div>
+      <h1 style="font-size:24px"><span class="hub-ic emerald" style="width:34px;height:34px;display:inline-grid;vertical-align:middle;margin-right:8px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></span>Stock</h1>
+      <p class="mini" style="margin-top:2px">Nueva pantalla · ruta <code>/deposito/rma/stock</code> · permiso <code>deposito.view</code></p>
+    </div>
+  </header>
+  <div class="placeholder">
+    <div class="ic emerald"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></div>
+    <h3>Stock</h3>
+    <p class="mini" style="max-width:520px">
+      Acá va la consulta de stock. Falta definir la <b>vista</b> y las <b>columnas</b>. Por ahora queda
+      vacía.
+    </p>
+  </div>
+</section>
+
+<p class="foot">
+  Propuesta para <code>src/pages/Rma.tsx</code> (2 tarjetas nuevas) + rutas <code>/deposito/rma/devoluciones</code>
+  y <code>/deposito/rma/stock</code> en <code>App.tsx</code> + 2 páginas nuevas. Nada de esto está subido todavía.
+</p>
+
+<script>
+  function show(id){
+    document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on', s.id==='s-'+id));
+    document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on', t.dataset.s===id));
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
+  document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>show(t.dataset.s));
+  document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));
+</script>
+</body>
+</html>

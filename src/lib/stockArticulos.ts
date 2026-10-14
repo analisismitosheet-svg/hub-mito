@@ -14,6 +14,8 @@ import { estadoConexion, leerVista, type FilaSql } from '@/lib/sqlApi'
  * `cargarStockArticulos(VISTA_STOCK_ARTICULO_REAL)`, que lee
  * `vw_STOCK_ARTICULO_REAL` (vista agregada sobre `vw_STOCK_SUCURSALES_REAL`:
  * suma CANTIDAD_REAL por artículo, sin importar color, talle ni base).
+ * OJO: `VISTA_STOCK_ARTICULO_REAL` es SOLO para Comparativa de precios. Mapeo
+ * depósito usa la de por defecto (`vw_STOCK_ARTICULO_MITO`); no mezclar.
  *
  * Hay que habilitar la vista en Configuraciones > Conexión SQL (si no, el proxy
  * contesta "Vista no habilitada"). Esta lib pide como máximo 60 000 filas y si
