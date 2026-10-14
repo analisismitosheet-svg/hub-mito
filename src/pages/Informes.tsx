@@ -253,7 +253,7 @@ export default function Informes() {
                       {formatoDe(i) === 'imagen' && (
                         <span className="inline-flex items-center gap-1 rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[11px] font-medium text-violet-300"><ImageIcon size={11} aria-hidden /> Imagen</span>
                       )}
-                      {i.modo === 'diario'
+                      {i.modo === 'diario' || i.modo === 'repo_completa'
                         ? <span className="inline-flex items-center gap-1 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-[11px] font-medium text-cyan-300"><Clock size={11} aria-hidden /> {cuandoLabel(i)}</span>
                         : <span className="rounded-full border border-line bg-surface2 px-2 py-0.5 text-[11px] font-medium text-sub">A mano</span>}
                       {!i.activo && <span className="rounded-full border border-line px-2 py-0.5 text-[11px] text-sub">Inactivo</span>}
@@ -363,6 +363,8 @@ function InformeForm({
   // Fuente texto / app
   const [plantilla, setPlantilla] = useState<string>((inicial?.config as unknown as ConfigTexto)?.plantilla ?? '')
   const [tipoApp, setTipoApp] = useState((inicial?.config as unknown as ConfigApp)?.tipo ?? 'recepcion_indo')
+  // Plantilla aprobada en Meta (para que llegue sin ventana de 24 h)
+  const [plantillaMeta, setPlantillaMeta] = useState(String((inicial?.config as Record<string, unknown> | undefined)?.plantillaMeta ?? ''))
 
   // Fuente vista
   const cfgV = (inicial?.config as unknown as ConfigVista) ?? {}
@@ -387,16 +389,18 @@ function InformeForm({
   }, [])
 
   const config = useMemo<Record<string, unknown>>(() => {
-    if (fuente === 'texto') return { formato, plantilla }
-    if (fuente === 'app') return { formato, tipo: tipoApp }
+    const meta = plantillaMeta.trim() ? { plantillaMeta: plantillaMeta.trim() } : {}
+    if (fuente === 'texto') return { formato, plantilla, ...meta }
+    if (fuente === 'app') return { formato, tipo: tipoApp, ...meta }
     return {
+      ...meta,
       formato,
       vista: vistaSel,
       ...(filtroValor.trim() && filtroCol ? { donde: [filtroCol], valor: filtroValor.trim(), coincide } : {}),
       ...(columnas.trim() ? { columnas: columnas.split(',').map((c) => c.trim()).filter(Boolean) } : {}),
       tope: Number(tope) || 50,
     }
-  }, [fuente, formato, plantilla, tipoApp, vistaSel, filtroCol, filtroValor, coincide, tope, columnas])
+  }, [fuente, formato, plantilla, plantillaMeta, tipoApp, vistaSel, filtroCol, filtroValor, coincide, tope, columnas])
 
   const informeActual = (): Informe => ({
     id: inicial?.id ?? '',
@@ -582,6 +586,11 @@ function InformeForm({
             ))}
           </div>
           <p className="mt-2 text-xs text-sub">{FORMATOS.find((f) => f.id === formato)?.desc}</p>
+          <div className="mt-3">
+            <label className={labelCls}>Plantilla de Meta (opcional)</label>
+            <input value={plantillaMeta} onChange={(e) => setPlantillaMeta(e.target.value)} className={inputCls} placeholder="Ej.: eficiencia_mayorista" />
+            <p className="mt-1 text-[11px] text-sub">Nombre exacto de una plantilla aprobada en WhatsApp Manager. Con plantilla el mensaje llega siempre; sin plantilla, sólo a quien le escribió al número en las últimas 24 h. El cuerpo usa {'{{1}}'} = nombre del destinatario y {'{{2}}'} = fecha.</p>
+          </div>
         </section>
 
         {/* Encabezado / pie */}
@@ -642,11 +651,17 @@ function InformeForm({
             <label className="inline-flex items-center gap-2 text-sm text-ink">
               <input type="radio" checked={modo === 'diario'} onChange={() => setModo('diario')} className="accent-cyan-600" /> Todos los días
             </label>
+            <label className="inline-flex items-center gap-2 text-sm text-ink">
+              <input type="radio" checked={modo === 'repo_completa'} onChange={() => setModo('repo_completa')} className="accent-cyan-600" /> Al completar la repo del día
+            </label>
             {modo === 'diario' && (
               <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} className={`${inputCls} w-auto`} />
             )}
           </div>
-          {modo === 'diario' && (
+          {modo === 'repo_completa' && (
+            <p className="mt-2 text-[11px] text-sub">Se manda solo, una vez por día, apenas la venta diaria (VTD) del día queda al 100% (todo mandado o marcado como no mandado). Se revisa cada 5 minutos, de lunes a sábado de 8 a 21.</p>
+          )}
+          {(modo === 'diario' || modo === 'repo_completa') && (
             <div className="mt-3">
               <label className={labelCls}>Días (vacío = todos)</label>
               <div className="flex flex-wrap gap-2">
@@ -664,7 +679,7 @@ function InformeForm({
                   )
                 })}
               </div>
-              <p className="mt-1 text-[11px] text-sub">Se dispara a la hora elegida (hora de Argentina). Como respaldo, también se procesan los que quedaron pendientes al abrir esta pantalla.</p>
+              {modo === 'diario' && <p className="mt-1 text-[11px] text-sub">Se dispara a la hora elegida (hora de Argentina). Como respaldo, también se procesan los que quedaron pendientes al abrir esta pantalla.</p>}
             </div>
           )}
         </section>

@@ -5,6 +5,8 @@
  *   POST /api/informe   { informe, preview: true }     -> devuelve el texto sin enviar
  *   POST /api/informe   { estado: true }               -> ¿WhatsApp conectado? (número y nombre en Meta)
  *   GET  /api/informe   (Bearer $CRON_SECRET ó JWT)    -> dispara los diarios vencidos
+ *   GET  /api/informe?evento=repo                      -> si la repo del día llegó al 100%, manda los
+ *        informes "al completar la repo" que no salieron hoy (lo llama pg_cron cada 5 min; sin datos sensibles)
  *
  * Antes eran dos funciones (informe-enviar e informe-cron); se unificaron para no
  * pasar el tope de 12 Serverless Functions del plan Hobby de Vercel. El método
@@ -13,7 +15,7 @@
  * Variables de entorno en Vercel (sin prefijo VITE_): CRON_SECRET, SUPABASE_URL,
  * SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, WHATSAPP_TOKEN, WHATSAPP_PHONE_ID.
  */
-import { armarCuerpo, enviarInforme, estadoWhatsapp, generarImagenInforme, tienePermiso, usuarioDe } from '../src/lib/informesServidor.js'
+import { armarCuerpo, enviarInforme, estadoWhatsapp, generarImagenInforme, repoCompleta, tienePermiso, usuarioDe } from '../src/lib/informesServidor.js'
 import { formatoDe, type Informe } from '../src/lib/informes.js'
 import { mismoSecreto } from '../src/lib/apiAuth.js'
 
@@ -66,7 +68,53 @@ function secretoDe(req: Req): string {
   return auth.startsWith('Bearer ') ? auth.slice(7) : ''
 }
 
+/** Reclamo atómico del envío de hoy: devuelve true sólo si este proceso lo ganó. */
+async function reclamarHoy(id: string): Promise<boolean> {
+  const corte = inicioHoyUtc()
+  const claim = await rest(
+    `informes?id=eq.${id}&or=(ultimo_envio.is.null,ultimo_envio.lt.${encodeURIComponent(corte)})`,
+    { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ ultimo_envio: new Date().toISOString() }) },
+  )
+  if (!claim.ok) return false
+  const reclamados = (await claim.json().catch(() => [])) as Informe[]
+  return Array.isArray(reclamados) && reclamados.length > 0
+}
+
+/**
+ * Disparo "al completar la repo": sin autenticación porque no recibe nada ni devuelve datos;
+ * sólo manda (una vez por día) lo que ya está configurado, y únicamente si la repo terminó.
+ */
+async function eventoRepo(res: Res) {
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return res.status(500).json({ error: 'Falta la configuración de Supabase' })
+  const rI = await rest('informes?select=*&activo=eq.true&modo=eq.repo_completa')
+  if (!rI.ok) return res.status(502).json({ error: 'No se pudieron leer los informes' })
+  const informes = ((await rI.json()) as Informe[]).filter((i) => {
+    const corte = inicioHoyUtc()
+    return !i.ultimo_envio || i.ultimo_envio < corte
+  })
+  if (!informes.length) return res.status(200).json({ pendientes: 0 })
+  const { fecha, dia } = ahoraAr()
+  let completa = false
+  try {
+    completa = await repoCompleta(fecha)
+  } catch (e) {
+    return res.status(200).json({ pendientes: informes.length, completa: false, error: (e as Error).message })
+  }
+  if (!completa) return res.status(200).json({ pendientes: informes.length, completa: false })
+  let enviados = 0
+  for (const i of informes) {
+    if (i.dias?.length && !i.dias.includes(dia)) continue
+    if (!(await reclamarHoy(i.id))) continue
+    const r = await enviarInforme(i, 'cron')
+    if (r.ok) enviados++
+    // Si no salió (plantilla todavía en revisión, falta de pago, etc.) se libera para reintentar en 5 min
+    else await rest(`informes?id=eq.${i.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ ultimo_envio: null }) }).catch(() => undefined)
+  }
+  return res.status(200).json({ pendientes: informes.length, completa: true, enviados })
+}
+
 async function cron(req: Req, res: Res) {
+  if (req.query?.evento === 'repo') return eventoRepo(res)
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return res.status(500).json({ error: 'Falta la configuración de Supabase' })
   }

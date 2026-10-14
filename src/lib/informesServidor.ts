@@ -14,9 +14,11 @@
  */
 import { postAlPuente } from './puenteRetry.js'
 import { renderReporteImagen, type BloqueImagen, type ReporteImagen } from './informesImagen.js'
+import { bloquesEficiencia, corta, porcentajes, type AvanceVtd, type FilaPiso, type FilaVtd } from './informeEficiencia.js'
 import {
   formatoDe,
   normalizarTelefono,
+  plantillaMetaDe,
   type ConfigApp,
   type ConfigTexto,
   type ConfigVista,
@@ -281,9 +283,55 @@ async function cuerpoApp(cfg: ConfigApp): Promise<string> {
         .join('\n')
       return `*Pedidos de compra (desde ${desde}):* ${filas.length} OC\nTotal: $ ${nAR(total)}\n\n_Últimas:_\n${listado}`
     }
+    case 'eficiencia_mayorista': {
+      const d = await datosEficiencia(ahoraAr().fecha)
+      const { subtitulo } = bloquesEficiencia(d)
+      const tot = d.vtd.reduce((s, f) => ({ venta: s.venta + Number(f.venta), repo: s.repo + Number(f.repo) }), { venta: 0, repo: 0 })
+      return `*Eficiencia mayorista*\n${subtitulo}\nVenta ${nAR(tot.venta)} · repo ${nAR(tot.repo)}`
+    }
     default:
       throw new Error('Tipo de informe desconocido')
   }
+}
+
+// ---------------------------------------------------------------------------
+// Eficiencia mayorista (repo del día)
+// ---------------------------------------------------------------------------
+
+async function rpc<T>(nombre: string, args: Record<string, unknown>): Promise<T[]> {
+  const r = await rest(`rpc/${nombre}`, { method: 'POST', body: JSON.stringify(args) })
+  if (!r.ok) throw new Error(`No se pudo leer ${nombre} (${r.status}): ${(await r.text().catch(() => '')).slice(0, 160)}`)
+  return (await r.json()) as T[]
+}
+
+/** Avance de la venta diaria (VTD) del día: total, mandadas y no mandadas. */
+async function avanceVtd(fecha: string): Promise<AvanceVtd | null> {
+  const filas = await rpc<AvanceVtd & { motivo: string }>('avance_vtd_rep', { p_desde: fecha, p_hasta: fecha })
+  const a = filas.find((f) => f.motivo === 'VTD')
+  return a ? { unidades: Number(a.unidades) || 0, unidades_ok: Number(a.unidades_ok) || 0, no_mandados: Number(a.no_mandados) || 0 } : null
+}
+
+/** ¿La repo del día llegó al 100% (todo mandado o marcado como no mandado)? */
+export async function repoCompleta(fecha: string): Promise<boolean> {
+  const a = await avanceVtd(fecha)
+  return Boolean(a && a.unidades > 0 && porcentajes(a.unidades, a.unidades_ok, a.no_mandados).terminado)
+}
+
+async function datosEficiencia(fecha: string): Promise<{ fecha: string; vtd: FilaVtd[]; piso: FilaPiso[]; avance: AvanceVtd | null }> {
+  const [vtd, avance, tiempos] = await Promise.all([
+    rpc<FilaVtd>('estadistica_vtd', { p_desde: fecha, p_hasta: fecha }),
+    avanceVtd(fecha),
+    jsonDe<{ empleado_id: string | null; repos: number; unidades: number; segundos: number; pendientes_fin: number }>(
+      `vw_tiempos_piso?select=empleado_id,repos,unidades,segundos,pendientes_fin&fecha=eq.${fecha}`,
+    ),
+  ])
+  const ids = [...new Set(tiempos.map((t) => t.empleado_id).filter((x): x is string => !!x))]
+  const emps = ids.length
+    ? await jsonDe<{ id: string; legajo: string | null; nombre: string | null }>(`empleados?select=id,legajo,nombre&id=in.(${ids.join(',')})`)
+    : []
+  const porId = new Map(emps.map((e) => [e.id, e]))
+  const piso: FilaPiso[] = tiempos.map((t) => ({ ...t, legajo: porId.get(t.empleado_id ?? '')?.legajo ?? null, nombre: porId.get(t.empleado_id ?? '')?.nombre ?? null }))
+  return { fecha, vtd, piso, avance }
 }
 
 // ---------------------------------------------------------------------------
@@ -355,9 +403,18 @@ async function construirReporteImagen(informe: Informe): Promise<{ reporte: Repo
       }
       break
     }
-    case 'app':
-      bloques = [{ tipo: 'texto', texto: limpiarParaImagen(await cuerpoApp(informe.config as unknown as ConfigApp)) }]
+    case 'app': {
+      const cfg = informe.config as unknown as ConfigApp
+      if (cfg.tipo === 'eficiencia_mayorista') {
+        const r = bloquesEficiencia(await datosEficiencia(d.fecha))
+        return {
+          reporte: { titulo: limpiarParaImagen(enc || 'Eficiencia mayorista'), subtitulo: r.subtitulo, pie, bloques: r.bloques },
+          caption: limpiarParaImagen(enc || informe.nombre || 'Eficiencia mayorista').slice(0, 900),
+        }
+      }
+      bloques = [{ tipo: 'texto', texto: limpiarParaImagen(await cuerpoApp(cfg)) }]
       break
+    }
     case 'texto': {
       const t = conVariables(String((informe.config as unknown as ConfigTexto)?.plantilla ?? '')).trim()
       if (!t) throw new Error('El texto libre está vacío')
@@ -456,7 +513,48 @@ export async function enviarWhatsapp(telefono: string, texto: string): Promise<{
  * Manda una imagen PNG: primero la sube a Meta (endpoint /media) y después manda
  * el mensaje de tipo "image" con ese id. Mismo criterio de "no configurado" que el texto.
  */
-export async function enviarWhatsappImagen(telefono: string, png: Buffer, caption?: string): Promise<{ ok: boolean; detalle: string }> {
+/** Plantilla de Meta a usar en el envío: nombre, idioma y valores de {{1}}, {{2}}… del cuerpo. */
+export interface PlantillaEnvio {
+  nombre: string
+  idioma: string
+  parametros: string[]
+}
+
+function componentesPlantilla(p: PlantillaEnvio, imagenId?: string) {
+  const comps: Array<Record<string, unknown>> = []
+  if (imagenId) comps.push({ type: 'header', parameters: [{ type: 'image', image: { id: imagenId } }] })
+  if (p.parametros.length) comps.push({ type: 'body', parameters: p.parametros.map((t) => ({ type: 'text', text: t.slice(0, 900) || '-' })) })
+  return comps
+}
+
+/** Manda una plantilla aprobada (sin imagen): llega aunque no haya ventana de 24 h. */
+export async function enviarWhatsappPlantilla(telefono: string, p: PlantillaEnvio): Promise<{ ok: boolean; detalle: string }> {
+  const token = process.env.WHATSAPP_TOKEN
+  const phoneId = process.env.WHATSAPP_PHONE_ID
+  if (!token || !phoneId) return { ok: false, detalle: 'WhatsApp no configurado: faltan WHATSAPP_TOKEN y/o WHATSAPP_PHONE_ID en Vercel' }
+  const version = process.env.WHATSAPP_VERSION || 'v23.0'
+  const destino = normalizarTelefono(telefono)
+  if (!destino) return { ok: false, detalle: 'Teléfono vacío o inválido' }
+  try {
+    const r = await fetch(`https://graph.facebook.com/${version}/${phoneId}/messages`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to: destino,
+        type: 'template',
+        template: { name: p.nombre, language: { code: p.idioma }, components: componentesPlantilla(p) },
+      }),
+    })
+    const body = (await r.json().catch(() => null)) as { messages?: Array<{ id?: string }>; error?: { message?: string } } | null
+    if (!r.ok) return { ok: false, detalle: body?.error?.message || `WhatsApp respondió ${r.status}` }
+    return { ok: true, detalle: body?.messages?.[0]?.id ? `id ${body.messages[0].id}` : 'enviado' }
+  } catch (e) {
+    return { ok: false, detalle: `No se pudo contactar WhatsApp: ${(e as Error).message}` }
+  }
+}
+
+export async function enviarWhatsappImagen(telefono: string, png: Buffer, caption?: string, plantilla?: PlantillaEnvio): Promise<{ ok: boolean; detalle: string }> {
   const token = process.env.WHATSAPP_TOKEN
   const phoneId = process.env.WHATSAPP_PHONE_ID
   if (!token || !phoneId) {
@@ -485,12 +583,22 @@ export async function enviarWhatsappImagen(telefono: string, png: Buffer, captio
     const r = await fetch(`https://graph.facebook.com/${version}/${phoneId}/messages`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        to: destino,
-        type: 'image',
-        image: { id: sub.id, ...(caption ? { caption: caption.slice(0, 1000) } : {}) },
-      }),
+      // Con plantilla: la imagen va en el encabezado y llega siempre (fuera de la ventana de 24 h).
+      body: JSON.stringify(
+        plantilla
+          ? {
+              messaging_product: 'whatsapp',
+              to: destino,
+              type: 'template',
+              template: { name: plantilla.nombre, language: { code: plantilla.idioma }, components: componentesPlantilla(plantilla, sub.id) },
+            }
+          : {
+              messaging_product: 'whatsapp',
+              to: destino,
+              type: 'image',
+              image: { id: sub.id, ...(caption ? { caption: caption.slice(0, 1000) } : {}) },
+            },
+      ),
     })
     const body = (await r.json().catch(() => null)) as
       | { messages?: Array<{ id?: string }>; error?: { message?: string } }
@@ -545,10 +653,21 @@ export async function enviarInforme(informe: Informe & { id?: string }, origen: 
     }
   }
 
+  // Plantilla de Meta (opcional): {{1}} = primer nombre del destinatario, {{2}} = fecha de hoy
+  const pm = plantillaMetaDe(informe)
+  const fechaHoy = corta(ahoraAr().fecha)
+  const plantillaPara = (d: Destinatario): PlantillaEnvio | undefined =>
+    pm ? { ...pm, parametros: [(d.nombre || '').trim().split(/\s+/)[0] || 'equipo', fechaHoy] } : undefined
+
   let enviados = 0
   const detalles: string[] = []
   for (const d of destinos) {
-    const r = png ? await enviarWhatsappImagen(d.telefono, png, texto) : await enviarWhatsapp(d.telefono, texto)
+    const p = plantillaPara(d)
+    const r = png
+      ? await enviarWhatsappImagen(d.telefono, png, texto, p)
+      : p
+        ? await enviarWhatsappPlantilla(d.telefono, p)
+        : await enviarWhatsapp(d.telefono, texto)
     if (r.ok) enviados++
     detalles.push(`${d.nombre || d.telefono}: ${r.ok ? 'OK' : r.detalle}`)
     if (informe.id) {

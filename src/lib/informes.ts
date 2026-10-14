@@ -4,7 +4,8 @@
  */
 
 export type FuenteInforme = 'vista' | 'app' | 'texto'
-export type ModoInforme = 'manual' | 'diario'
+/** repo_completa: se manda solo, una vez por día, cuando la repo del día llega al 100%. */
+export type ModoInforme = 'manual' | 'diario' | 'repo_completa'
 /** Cómo se entrega: mensaje de texto o una imagen PNG con el cuadro del informe. */
 export type FormatoInforme = 'texto' | 'imagen'
 
@@ -14,7 +15,7 @@ export interface Destinatario {
 }
 
 /** Fuentes "de la app" (datos ya calculados por Supabase). */
-export type TipoApp = 'recepcion_indo' | 'armados' | 'pedidos_compra'
+export type TipoApp = 'recepcion_indo' | 'armados' | 'pedidos_compra' | 'eficiencia_mayorista'
 
 export interface ConfigVista {
   vista: string
@@ -74,6 +75,7 @@ export const TIPOS_APP: { id: TipoApp; label: string }[] = [
   { id: 'recepcion_indo', label: 'Recepción INDO (pendientes de controlar)' },
   { id: 'armados', label: 'Armados de pedidos (pendientes y en curso)' },
   { id: 'pedidos_compra', label: 'Pedidos de compra (últimos 7 días)' },
+  { id: 'eficiencia_mayorista', label: 'Eficiencia mayorista (repo del día y tiempo en piso)' },
 ]
 
 export const DIAS: { id: string; label: string }[] = [
@@ -94,6 +96,19 @@ export function fuenteLabel(f: FuenteInforme): string {
 export function formatoDe(i: Informe): FormatoInforme {
   const f = (i?.config as Record<string, unknown> | null | undefined)?.formato
   return f === 'imagen' ? 'imagen' : 'texto'
+}
+
+/**
+ * Plantilla aprobada en Meta (WhatsApp Manager) para mandar fuera de la ventana de 24 h.
+ * Vive en `config`. El cuerpo lleva {{1}} = nombre del destinatario y {{2}} = fecha;
+ * si el formato es imagen, la imagen va en el encabezado de la plantilla.
+ */
+export function plantillaMetaDe(i: Informe): { nombre: string; idioma: string } | null {
+  const c = (i?.config ?? {}) as Record<string, unknown>
+  const nombre = typeof c.plantillaMeta === 'string' ? c.plantillaMeta.trim() : ''
+  if (!nombre) return null
+  const idioma = typeof c.idiomaMeta === 'string' && c.idiomaMeta.trim() ? c.idiomaMeta.trim() : 'es_AR'
+  return { nombre, idioma }
 }
 
 export function tipoAppLabel(t: string | undefined): string {
@@ -133,6 +148,7 @@ export function resumenInforme(i: Informe): string {
 }
 
 export function cuandoLabel(i: Informe): string {
+  if (i.modo === 'repo_completa') return 'Al completar la repo'
   if (i.modo !== 'diario') return 'A mano'
   const dias = i.dias?.length ? i.dias.map((d) => DIAS.find((x) => x.id === d)?.label ?? d).join(' ') : 'Todos los días'
   return `${dias} · ${i.hora || '--:--'}`

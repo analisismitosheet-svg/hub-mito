@@ -14,7 +14,21 @@ import { FUENTE_GEIST_BASE64 } from './informeFuente.js'
 
 export type BloqueImagen =
   | { tipo: 'texto'; texto: string }
-  | { tipo: 'tabla'; columnas: string[]; filas: string[][] }
+  | {
+      tipo: 'tabla'
+      columnas: string[]
+      filas: string[][]
+      /** 'izq' | 'der' por columna (por defecto, todo a la izquierda) */
+      alinear?: Array<'izq' | 'der'>
+      /** ancho relativo de cada columna (flex); por defecto, iguales */
+      anchos?: number[]
+      /** color de texto por columna (ej. venta en verde, no mandados en rojo) */
+      colores?: Array<string | null>
+      /** la última fila es un total: va resaltada */
+      total?: boolean
+    }
+  | { tipo: 'seccion'; texto: string; color?: string }
+  | { tipo: 'kpis'; items: Array<{ titulo: string; valor: string; pie?: string; color: string }> }
 
 export interface ReporteImagen {
   titulo: string
@@ -26,7 +40,7 @@ export interface ReporteImagen {
 const ANCHO = 1000
 const PAD = 44
 const LINEA = 26 // alto de una línea de texto
-const FILA = 46 // alto de una fila de tabla
+const FILA = 43 // alto de una fila de tabla
 const CAR_LINEA = 92 // caracteres estimados por línea
 const MAX_ALTO = 4200
 const MAX_FILAS = 48
@@ -46,47 +60,55 @@ function recortarLineas(texto: string, max: number): string {
   return [...lineas.slice(0, Math.max(1, max - 1)), `… y ${lineas.length - max + 1} línea(s) más`].join('\n')
 }
 
-function celda(texto: string, header: boolean, maxChars: number) {
+function celda(texto: string, header: boolean, maxChars: number, opc: { der?: boolean; flex?: number; color?: string | null; negrita?: boolean } = {}) {
   return h(
     'div',
     {
       style: {
         display: 'flex',
-        flex: 1,
+        flex: opc.flex ?? 1,
+        justifyContent: opc.der ? 'flex-end' : 'flex-start',
         padding: '10px 12px',
         fontSize: '17px',
-        fontWeight: header ? 700 : 400,
-        color: header ? '#ffffff' : '#0f172a',
+        fontWeight: header || opc.negrita ? 700 : 400,
+        color: header ? '#ffffff' : opc.color || '#0f172a',
         overflow: 'hidden',
+        whiteSpace: 'nowrap',
       },
     },
     texto.length > maxChars ? `${texto.slice(0, maxChars - 1)}…` : texto,
   )
 }
 
-function bloqueTabla(b: { columnas: string[]; filas: string[][] }, key: number) {
+type BloqueTabla = Extract<BloqueImagen, { tipo: 'tabla' }>
+
+function bloqueTabla(b: BloqueTabla, key: number) {
   const cols = b.columnas
-  const maxChars = Math.max(8, Math.floor(CAR_LINEA / Math.max(1, cols.length)))
+  const sumaAnchos = (b.anchos ?? cols.map(() => 1)).reduce((s, n) => s + n, 0)
+  const maxCharsDe = (ci: number) =>
+    Math.max(6, Math.floor((CAR_LINEA * (b.anchos?.[ci] ?? 1)) / Math.max(1, sumaAnchos)))
+  const opc = (ci: number) => ({ der: b.alinear?.[ci] === 'der', flex: b.anchos?.[ci] ?? 1 })
   const val = (v: unknown) => (v === null || v === undefined ? '' : String(v).replace(/\s+/g, ' ').trim())
 
   const head = h(
     'div',
     { style: { display: 'flex', backgroundColor: '#0f172a' } },
-    ...cols.map((c) => celda(val(c), true, maxChars)),
+    ...cols.map((c, ci) => celda(val(c), true, maxCharsDe(ci), opc(ci))),
   )
-  const filas = b.filas.map((fila, ri) =>
-    h(
+  const filas = b.filas.map((fila, ri) => {
+    const esTotal = Boolean(b.total) && ri === b.filas.length - 1
+    return h(
       'div',
       {
         style: {
           display: 'flex',
-          backgroundColor: ri % 2 ? '#f8fafc' : '#ffffff',
-          borderTop: '1px solid #eef2f7',
+          backgroundColor: esTotal ? '#e2e8f0' : ri % 2 ? '#f8fafc' : '#ffffff',
+          borderTop: esTotal ? '2px solid #94a3b8' : '1px solid #eef2f7',
         },
       },
-      ...cols.map((_, ci) => celda(val(fila[ci]), false, maxChars)),
-    ),
-  )
+      ...cols.map((_, ci) => celda(val(fila[ci]), false, maxCharsDe(ci), { ...opc(ci), color: b.colores?.[ci], negrita: esTotal })),
+    )
+  })
   return h(
     'div',
     { key, style: { display: 'flex', flexDirection: 'column', marginTop: '18px', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' } },
@@ -114,6 +136,67 @@ function bloqueTexto(texto: string, key: number) {
   )
 }
 
+function bloqueSeccion(b: { texto: string; color?: string }, key: number) {
+  return h(
+    'div',
+    {
+      key,
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        marginTop: '28px',
+        fontSize: '22px',
+        fontWeight: 700,
+        color: '#0f172a',
+        borderLeft: `6px solid ${b.color ?? '#0ea5e9'}`,
+        paddingLeft: '12px',
+      },
+    },
+    b.texto,
+  )
+}
+
+function bloqueKpis(b: { items: Array<{ titulo: string; valor: string; pie?: string; color: string }> }, key: number) {
+  return h(
+    'div',
+    { key, style: { display: 'flex', gap: '12px', marginTop: '18px' } },
+    ...b.items.map((k, i) =>
+      h(
+        'div',
+        {
+          key: i,
+          style: {
+            display: 'flex',
+            flexDirection: 'column',
+            flex: 1,
+            padding: '12px 14px',
+            borderRadius: '14px',
+            border: `2px solid ${k.color}55`,
+            backgroundColor: `${k.color}12`,
+          },
+        },
+        h('div', { style: { display: 'flex', fontSize: '13px', fontWeight: 700, color: k.color, textTransform: 'uppercase' } }, k.titulo),
+        h('div', { style: { display: 'flex', fontSize: '26px', fontWeight: 700, color: '#0f172a', marginTop: '4px', whiteSpace: 'nowrap' } }, k.valor),
+        k.pie ? h('div', { style: { display: 'flex', fontSize: '14px', color: '#64748b', marginTop: '2px', whiteSpace: 'nowrap' } }, k.pie) : null,
+      ),
+    ),
+  )
+}
+
+/** Alto estimado de cada bloque (para dimensionar la imagen). */
+function altoBloque(b: BloqueImagen): number {
+  switch (b.tipo) {
+    case 'texto':
+      return 18 + contarLineas(b.texto) * LINEA
+    case 'tabla':
+      return 18 + (b.filas.length + 1) * FILA
+    case 'seccion':
+      return 28 + 34
+    case 'kpis':
+      return 18 + 112
+  }
+}
+
 /** Recorta defensivamente y devuelve los bloques ya acotados. */
 function acotar(bloques: BloqueImagen[]): BloqueImagen[] {
   let filas = 0
@@ -125,8 +208,10 @@ function acotar(bloques: BloqueImagen[]): BloqueImagen[] {
       const recorte = b.filas.slice(0, disp)
       filas += recorte.length
       const extra = b.filas.length - recorte.length
-      out.push({ tipo: 'tabla', columnas: b.columnas, filas: recorte })
+      out.push({ ...b, filas: recorte, total: extra > 0 ? false : b.total })
       if (extra > 0) out.push({ tipo: 'texto', texto: `… y ${extra} fila(s) más` })
+    } else if (b.tipo !== 'texto') {
+      out.push(b)
     } else {
       const disp = Math.max(1, MAX_LINEAS - lineas)
       const texto = recortarLineas(b.texto, disp)
@@ -142,10 +227,7 @@ export async function renderReporteImagen(r: ReporteImagen): Promise<Buffer> {
 
   let alto = PAD * 2 + 44 + 12
   if (r.subtitulo) alto += 28
-  for (const b of bloques) {
-    alto += 18
-    alto += b.tipo === 'texto' ? contarLineas(b.texto) * LINEA : (b.filas.length + 1) * FILA
-  }
+  for (const b of bloques) alto += altoBloque(b)
   if (r.pie) alto += 46
   alto = Math.max(320, Math.min(alto, MAX_ALTO))
 
@@ -154,7 +236,15 @@ export async function renderReporteImagen(r: ReporteImagen): Promise<Buffer> {
     r.subtitulo
       ? h('div', { key: 'sub', style: { display: 'flex', fontSize: '18px', color: '#64748b', marginTop: '6px' } }, r.subtitulo)
       : null,
-    ...bloques.map((b, i) => (b.tipo === 'texto' ? bloqueTexto(b.texto, i) : bloqueTabla(b, i))),
+    ...bloques.map((b, i) =>
+      b.tipo === 'texto'
+        ? bloqueTexto(b.texto, i)
+        : b.tipo === 'tabla'
+          ? bloqueTabla(b, i)
+          : b.tipo === 'seccion'
+            ? bloqueSeccion(b, i)
+            : bloqueKpis(b, i),
+    ),
     r.pie ? h('div', { key: 'pie', style: { display: 'flex', marginTop: '22px', fontSize: '15px', color: '#94a3b8' } }, r.pie) : null,
   ].filter(Boolean)
 
@@ -166,6 +256,7 @@ export async function renderReporteImagen(r: ReporteImagen): Promise<Buffer> {
         flexDirection: 'column',
         width: `${ANCHO}px`,
         height: `${alto}px`,
+        boxSizing: 'border-box',
         backgroundColor: '#ffffff',
         padding: `${PAD}px`,
         fontFamily: 'Geist',
