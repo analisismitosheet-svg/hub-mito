@@ -118,7 +118,7 @@ function agruparLocales(filas: Fila[]): PorLocal[] {
     r.uniCrono += f.uni_crono
     if (f.responsable) r.resp.add(nombreCorto(f.responsable))
   }
-  return [...m.values()].map(({ resp, ...r }) => ({ ...r, responsable: [...resp].join(', ') || '—' })).sort((a, b) => b.venta - a.venta)
+  return [...m.values()].map(({ resp, ...r }) => ({ ...r, responsable: [...resp].join(', ') || '—' })).sort((a, b) => a.local.localeCompare(b.local, 'es')) // por local, en orden alfabético
 }
 
 /**
