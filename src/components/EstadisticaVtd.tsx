@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { BarChart3, Loader2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { BarChart3, Download, Loader2, PackageX, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { descripcionesMaestro } from '@/lib/descripcionArticulos'
 
 /* ------------------------------------------------------------------ */
 /*  Estadística VTD (repos), dentro de Eficiencia mayorista: como la    */
@@ -64,6 +65,20 @@ interface PorLocal {
   noMandados: number
   segundos: number
   uniCrono: number
+}
+
+/** Una fila del detalle de lo no mandado (RPC vtd_no_mandados_det) */
+interface FilaDetalle {
+  local: string
+  fecha: string
+  pedido: number | null
+  articulo: string
+  descripcion: string | null
+  color: string | null
+  talle: string | null
+  cantidad: number
+  repuesto: number
+  no_mandado: number
 }
 
 const n0 = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 })
@@ -161,13 +176,30 @@ function Dif({ a, b }: { a: number; b: number }) {
   return <span className={p >= 0 ? 'text-emerald-500' : 'text-red-400'}>{p >= 0 ? '▲' : '▼'} {Math.abs(p)}%</span>
 }
 
-function Kpi({ titulo, color, valor, pie }: { titulo: string; color: string; valor: string; pie: React.ReactNode }) {
-  return (
-    <div className="min-w-0 rounded-2xl border bg-surface p-3" style={{ borderColor: `${color}40` }}>
+function Kpi({ titulo, color, valor, pie, onClick, ayuda }: {
+  titulo: string; color: string; valor: string; pie: React.ReactNode; onClick?: () => void; ayuda?: string
+}) {
+  const cuerpo = (
+    <>
       <p className="truncate text-[10px] font-bold uppercase tracking-wide" style={{ color }}>{titulo}</p>
       <p className="font-display text-2xl font-extrabold tabular-nums text-ink">{valor}</p>
       <p className="truncate text-[11px] text-sub">{pie}</p>
-    </div>
+    </>
+  )
+  if (!onClick) {
+    return <div className="min-w-0 rounded-2xl border bg-surface p-3" style={{ borderColor: `${color}40` }}>{cuerpo}</div>
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={ayuda}
+      className="group relative min-w-0 rounded-2xl border bg-surface p-3 text-left transition hover:bg-surface2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-500/60"
+      style={{ borderColor: `${color}40` }}
+    >
+      <span aria-hidden className="absolute right-2 top-1.5 text-lg leading-none transition group-hover:opacity-100" style={{ color, opacity: 0.45 }}>›</span>
+      {cuerpo}
+    </button>
   )
 }
 
@@ -185,6 +217,57 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
   const [filas, setFilas] = useState<Fila[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Detalle de lo no mandado: se abre al tocar el recuadro (RPC vtd_no_mandados_det)
+  const [det, setDet] = useState<FilaDetalle[] | null>(null)
+  const [detCargando, setDetCargando] = useState(false)
+  const [detError, setDetError] = useState<string | null>(null)
+  // Cada apertura lleva un número: si cerrás el detalle antes de que llegue la respuesta, se descarta
+  const detSeq = useRef(0)
+
+  const cerrarDetalle = useCallback(() => { detSeq.current++; setDet(null) }, [])
+
+  const abrirDetalle = useCallback(async () => {
+    const seq = ++detSeq.current
+    setDet([]); setDetCargando(true); setDetError(null)
+    if (!supabase) { setDetCargando(false); return }
+    const { data, error: e } = await supabase.rpc('vtd_no_mandados_det', { p_desde: desde, p_hasta: hasta })
+    if (seq !== detSeq.current) return
+    if (e) { setDetError(e.message); setDetCargando(false); return }
+    const detalle = ((data as FilaDetalle[] | null) ?? []).map((f) => ({
+      ...f,
+      cantidad: Number(f.cantidad) || 0,
+      repuesto: Number(f.repuesto) || 0,
+      no_mandado: Number(f.no_mandado) || 0,
+    }))
+    setDet(detalle)
+    setDetCargando(false)
+    // Las repos subidas no traen descripción: la buscamos en el maestro de artículos
+    const faltan = [...new Set(detalle.filter((f) => !f.descripcion).map((f) => f.articulo).filter(Boolean))]
+    if (faltan.length === 0) return
+    const maestro = await descripcionesMaestro(faltan)
+    if (seq !== detSeq.current || maestro.size === 0) return
+    setDet((prev) => (prev ?? []).map((f) => (f.descripcion ? f : { ...f, descripcion: maestro.get((f.articulo ?? '').trim().toUpperCase()) ?? null })))
+  }, [desde, hasta])
+
+  /** Baja el detalle abierto a Excel. */
+  const bajarDetalle = useCallback(async () => {
+    if (!det || det.length === 0) return
+    const XLSX = await import('xlsx')
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(det.map((f) => ({
+      Local: f.local,
+      Pedido: f.pedido ?? '',
+      Fecha: corta(f.fecha),
+      Articulo: f.articulo,
+      Descripcion: f.descripcion ?? '',
+      Color: f.color ?? '',
+      Talle: f.talle ?? '',
+      Cantidad: f.cantidad,
+      Repuesto: f.repuesto,
+      'No mandado': f.no_mandado,
+    }))), 'No mandados')
+    XLSX.writeFile(wb, `no_mandados_${desde}_a_${hasta}.xlsx`)
+  }, [det, desde, hasta])
 
   const cargar = useCallback(async () => {
     if (!supabase) return
@@ -232,6 +315,12 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
   const promPph = conHoras.length ? conHoras.reduce((s, r) => s + (prendasHs(r) ?? 0), 0) / conHoras.length : null
   const vsTxt = unDia ? 'vs repo anterior' : 'vs período anterior'
   const hpTot = horasPer(tot)
+  // Totales del detalle de lo no mandado que está abierto
+  const totDet = (det ?? []).reduce(
+    (s, f) => ({ cantidad: s.cantidad + f.cantidad, repuesto: s.repuesto + f.repuesto, noMandado: s.noMandado + f.no_mandado }),
+    { cantidad: 0, repuesto: 0, noMandado: 0 },
+  )
+  const localesDet = new Set((det ?? []).map((f) => f.local)).size
 
   return (
     <section className="mb-6">
@@ -290,7 +379,14 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
           <div className="mb-4 grid grid-cols-2 gap-2.5 md:grid-cols-5">
             <Kpi titulo="Cant venta" color="#22c55e" valor={n0.format(tot.venta)} pie={<><Dif a={tot.venta} b={totAnt.venta} /> {vsTxt}</>} />
             <Kpi titulo="Cant repo" color="#38bdf8" valor={n0.format(tot.repo)} pie={tot.venta ? `${Math.round((tot.repo / tot.venta) * 100)}% de la venta` : '—'} />
-            <Kpi titulo="No mandados" color="#f87171" valor={n0.format(tot.noMandados)} pie={tot.venta ? `${n2.format((tot.noMandados / tot.venta) * 100)}% de la venta` : '—'} />
+            <Kpi
+              titulo="No mandados"
+              color="#f87171"
+              valor={n0.format(tot.noMandados)}
+              pie={tot.venta ? `${n2.format((tot.noMandados / tot.venta) * 100)}% de la venta` : '—'}
+              onClick={() => void abrirDetalle()}
+              ayuda="Ver los artículos que no se encontraron"
+            />
             <Kpi titulo="HS total (Mi repo)" color="#a78bfa" valor={hm(tot.segundos)} pie={hpTot ? `${num2(prendasHs(tot))} prendas/HS` : 'nadie usó el cronómetro'} />
             <Kpi
               titulo={unDia ? 'Personas' : 'Repos'}
@@ -411,6 +507,105 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
             Horas: tiempo con el cronómetro de Mi repo (Iniciar → Finalizar, sin pausas). Si nadie lo usó, queda «—». Tocá una repo del período para ver ese día.
           </p>
         </>
+      )}
+
+      {/* Detalle de lo no mandado: una fila por artículo que no se encontró */}
+      {det !== null && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 backdrop-blur-sm sm:p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Artículos no mandados"
+          onClick={cerrarDetalle}
+        >
+          <div
+            className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-soft-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-2 border-b border-line px-5 py-3">
+              <div>
+                <h2 className="flex items-center gap-2 font-display font-semibold text-ink">
+                  <PackageX size={17} className="text-red-400" aria-hidden /> Artículos no mandados
+                </h2>
+                <p className="mt-0.5 text-xs text-sub">
+                  No se encontraron en el depósito · {unDia ? `repo del ${corta(desde)}` : `del ${corta(desde)} al ${corta(hasta)}`}
+                </p>
+              </div>
+              <button type="button" onClick={cerrarDetalle} aria-label="Cerrar" className="rounded-lg p-1.5 text-sub transition hover:bg-line hover:text-ink">
+                <X size={18} aria-hidden />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-5 py-3">
+              {detError && <p role="alert" className="mb-3 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{detError}</p>}
+              {detCargando && det.length === 0 ? (
+                <p className="flex items-center gap-2 py-10 text-sm text-sub"><Loader2 size={16} className="animate-spin" aria-hidden /> Cargando…</p>
+              ) : det.length === 0 ? (
+                <p className="py-8 text-center text-sm text-sub">No hay artículos no mandados en este período.</p>
+              ) : (
+                <div className="overflow-x-auto rounded-xl border border-line">
+                  <table className="w-full table-auto border-collapse text-[12.5px] leading-tight">
+                    <thead>
+                      <tr className="table-head text-left text-[10px] font-semibold uppercase tracking-wider">
+                        <th className="whitespace-nowrap px-3 py-2">Local</th>
+                        <th className="whitespace-nowrap px-3 py-2">Pedido</th>
+                        <th className="whitespace-nowrap px-3 py-2">Artículo</th>
+                        <th className="px-3 py-2">Descripción</th>
+                        <th className="px-3 py-2 text-center">Color</th>
+                        <th className="px-3 py-2 text-center">Talle</th>
+                        <th className="px-3 py-2 text-center">Pedido</th>
+                        <th className="px-3 py-2 text-center">Repuesto</th>
+                        <th className="px-3 py-2 text-center">No mand.</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-line/50">
+                      {det.map((f, i) => (
+                        <tr key={`${f.local}-${f.pedido ?? 'r'}-${f.articulo}-${f.color ?? ''}-${f.talle ?? ''}-${i}`}>
+                          <td className="whitespace-nowrap px-3 py-2 font-semibold text-ink">{f.local}</td>
+                          <td className="whitespace-nowrap px-3 py-2 text-sub">{f.pedido ? `N° ${n0.format(f.pedido)}` : '—'}</td>
+                          <td className="whitespace-nowrap px-3 py-2 font-medium text-ink">{f.articulo}</td>
+                          <td className="px-3 py-2 text-sub">{f.descripcion || '—'}</td>
+                          <td className="px-3 py-2 text-center text-sub">{f.color || '—'}</td>
+                          <td className="px-3 py-2 text-center text-sub">{f.talle || '—'}</td>
+                          <td className="px-3 py-2 text-center tabular-nums">{n0.format(f.cantidad)}</td>
+                          <td className="px-3 py-2 text-center tabular-nums text-sub">{n0.format(f.repuesto)}</td>
+                          <td className="px-3 py-2 text-center font-bold tabular-nums text-red-400">{n0.format(f.no_mandado)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t border-line text-[12px]" style={{ backgroundColor: 'rgba(255,255,255,.04)' }}>
+                        <td className="px-3 py-2 font-semibold text-ink" colSpan={6}>
+                          {n0.format(det.length)} artículo{det.length === 1 ? '' : 's'} en {n0.format(localesDet)} local{localesDet === 1 ? '' : 'es'}
+                        </td>
+                        <td className="px-3 py-2 text-center font-bold tabular-nums text-ink">{n0.format(totDet.cantidad)}</td>
+                        <td className="px-3 py-2 text-center font-bold tabular-nums text-ink">{n0.format(totDet.repuesto)}</td>
+                        <td className="px-3 py-2 text-center font-bold tabular-nums text-red-400">{n0.format(totDet.noMandado)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-5 py-3">
+              <p className="text-[11px] text-sub">Lo marcado como <b className="text-ink">faltante</b> en Mi repo. Se ordena por local y artículo.</p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => void bajarDetalle()}
+                  disabled={det.length === 0}
+                  className="btn-press inline-flex h-9 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-sm font-medium text-ink transition hover:bg-surface2 disabled:opacity-50"
+                >
+                  <Download size={15} aria-hidden /> Excel
+                </button>
+                <button type="button" onClick={cerrarDetalle} className="btn-press inline-flex h-9 items-center rounded-xl border border-line bg-surface px-3 text-sm font-medium text-ink transition hover:bg-surface2">
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </section>
   )

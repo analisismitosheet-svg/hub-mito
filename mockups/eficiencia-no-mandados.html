@@ -24,9 +24,9 @@
 </head>
 <body>
 <div class="doc">
-  <span class="inline-block rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-500" style="border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.15)">Maqueta · no está subida</span>
+  <span class="inline-block rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-lime-500" style="border-color:rgba(163,230,53,.4);background:rgba(163,230,53,.15)">Implementado</span>
   <h1 class="font-display text-2xl font-semibold text-ink mt-2 mb-1">Eficiencia mayorista — detalle de lo no mandado</h1>
-  <p class="text-sm text-sub">Cómo quedaría: el recuadro <b class="text-red-400">No mandados</b> se puede tocar y abre el detalle de los artículos que no se encontraron en el depósito. Datos reales del 14/10/2026.</p>
+  <p class="text-sm text-sub">Así quedó: el recuadro <b class="text-red-400">No mandados</b> se puede tocar y abre el detalle de los artículos que no se encontraron en el depósito. Datos reales del 14/10/2026.</p>
 
   <!-- ===================================================== -->
   <p class="cap">1 · El recuadro “No mandados” ahora se toca</p>
@@ -254,7 +254,7 @@
     <li>Se ordena por <b>local</b> y artículo, y abajo suma el total (acá: 7 artículos en 5 locales).</li>
     <li>Funciona con el período elegido arriba (Día / Semana / Mes / Fechas): en una semana o un mes muestra todo lo no mandado de ese rango.</li>
     <li>Opcional: el <b>“No mand.”</b> de cada fila de la tabla “Por local” podría abrir el mismo detalle pero solo de ese local. Decime si lo querés así.</li>
-    <li>Necesita una consulta nueva al servidor (<code>vtd_no_mandados_det</code>) que devuelve esas líneas; hoy la pantalla solo tiene los totales.</li>
+    <li>Se armó con una consulta nueva al servidor (<code>vtd_no_mandados_det</code>), que devuelve esas líneas y respeta el período elegido arriba.</li>
   </ul>
 </div>
 </body>
