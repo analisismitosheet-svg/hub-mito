@@ -94,6 +94,23 @@ const statsSumar = (s: ProvStats, p: EstadoPedido) => {
   s.unidades += p.unidades; s.recibidas += p.recibidas; s.canceladas += p.canceladas; s.pendientes += pendientes(p)
 }
 
+/**
+ * Nombre del proveedor para AGRUPAR. En Dragonfish la misma razón social aparece
+ * con variantes: "47 STREET" y "47 STREET - Midding S.R.L.", "REEF" y
+ * "REEF - NEW ARRECIFE". La marca es lo que va antes del " - "; el resto
+ * (razón social / importador) se descarta. Si no hay " - ", queda igual.
+ * Aliases: para casos que la regla no cubre (misma empresa con otro nombre).
+ */
+const ALIAS_PROVEEDOR: Record<string, string> = {
+  // 'VANS (GRIMOLDI S.A.)': 'GRIMOLDI SA (VANS)',
+}
+function proveedorGrupo(nombre: string): string {
+  const limpio = nombre.replace(/\s+/g, ' ').trim()
+  const alias = ALIAS_PROVEEDOR[limpio.toUpperCase()]
+  if (alias) return alias
+  return limpio.split(' - ')[0].trim() || limpio
+}
+
 function Barra({ valor }: { valor: number }) {
   return (
     <span className="block h-1.5 w-full overflow-hidden rounded-full bg-line/60">
@@ -120,6 +137,7 @@ export default function EstadoPedidos() {
   const [provSel, setProvSel] = useState<FiltroProv | null>(null)
   const [panelProv, setPanelProv] = useState(false)
   const [provAbierto, setProvAbierto] = useState<string | null>(null)
+  const [provPanelAbierto, setProvPanelAbierto] = useState<string | null>(null)
   const [estado, setEstado] = useState<Estado>('todos')
   const [busqueda, setBusqueda] = useState('')
   const [abierto, setAbierto] = useState<string | null>(null)
@@ -164,21 +182,28 @@ export default function EstadoPedidos() {
     [delPeriodo, provSel],
   )
 
-  // Proveedores unificados por descripción, con el detalle de cada código
+  // Proveedores unificados por nombre (misma marca con variantes de razón social)
   const gruposProv = useMemo(() => {
     const m = new Map<string, { nombre: string; total: ProvStats; codigos: Map<string, ProvStats> }>()
     for (const p of delPeriodo) {
-      const nombre = p.proveedor_nombre || p.proveedor || '—'
+      const nombre = proveedorGrupo(p.proveedor_nombre || p.proveedor || '—')
+      const clave = nombre.toUpperCase()
       const cod = p.proveedor ?? ''
-      const g = m.get(nombre) ?? { nombre, total: statsVacio(), codigos: new Map<string, ProvStats>() }
+      const g = m.get(clave) ?? { nombre, total: statsVacio(), codigos: new Map<string, ProvStats>() }
       statsSumar(g.total, p)
       const s = g.codigos.get(cod) ?? statsVacio()
       statsSumar(s, p)
       g.codigos.set(cod, s)
-      m.set(nombre, g)
+      m.set(clave, g)
     }
     return [...m.values()].sort((a, b) => b.total.pendientes - a.total.pendientes)
   }, [delPeriodo])
+
+  // Para el filtro: lista vertical ordenada alfabéticamente por razón social
+  const gruposProvAlfa = useMemo(
+    () => [...gruposProv].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')),
+    [gruposProv],
+  )
 
   /** Elige un proveedor y cierra el panel. */
   function elegirProv(label: string, codigos: string[]) {
@@ -296,32 +321,42 @@ export default function EstadoPedidos() {
           </button>
 
           {panelProv && (
-            <div className="absolute left-0 z-30 mt-2 max-h-[70vh] w-[min(92vw,760px)] overflow-auto rounded-2xl border border-line bg-paper p-2 shadow-2xl">
+            <div className="absolute left-0 z-30 mt-2 max-h-[70vh] w-[min(92vw,420px)] overflow-auto rounded-2xl border border-line bg-paper p-2 shadow-2xl">
               <button type="button" onClick={() => { setProvSel(null); setPanelProv(false) }}
                 className={`${opcion} ${!provSel ? 'bg-surface2 font-medium text-ink' : 'text-sub'}`}>
                 <span>Todos los proveedores</span>
               </button>
-              <div className="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {gruposProv.map((g) => {
+              <div className="mt-1 border-t border-line pt-1">
+                {gruposProvAlfa.map((g) => {
                   const multi = g.codigos.size > 1
-                  const cods = [...g.codigos.entries()].sort((a, b) => b[1].pedidos - a[1].pedidos)
+                  const abiertoPanel = provPanelAbierto === g.nombre
                   return (
-                    <div key={g.nombre} className="rounded-xl border border-line bg-surface p-1">
-                      <div className="mb-0.5 px-2 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-400">{g.nombre}</div>
-                      {multi && (
-                        <button type="button" onClick={() => elegirProv(g.nombre, [...g.codigos.keys()])} className={opcion}>
-                          <span className="text-ink">Todos los códigos</span>
-                          <span className="tabular-nums text-[12px] text-sub">{n0.format(g.total.pedidos)}</span>
+                    <Fragment key={g.nombre}>
+                      <div className="flex items-center rounded-lg hover:bg-surface2">
+                        <button type="button" onClick={() => elegirProv(g.nombre, [...g.codigos.keys()])}
+                          className="flex flex-1 items-center justify-between gap-2 px-2 py-1.5 text-left text-[13px] text-ink">
+                          <span className="truncate">{g.nombre}</span>
+                          <span className="shrink-0 tabular-nums text-[12px] text-sub">{n0.format(g.total.pedidos)}</span>
                         </button>
+                        {multi && (
+                          <button type="button" onClick={() => setProvPanelAbierto(abiertoPanel ? null : g.nombre)}
+                            aria-label={abiertoPanel ? 'Ocultar códigos' : 'Ver códigos'} className="shrink-0 px-2 py-1.5 text-sub hover:text-ink">
+                            {abiertoPanel ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                          </button>
+                        )}
+                      </div>
+                      {multi && abiertoPanel && (
+                        <div className="mb-1 ml-2 border-l border-line pl-1">
+                          {[...g.codigos.entries()].sort((a, b) => a[0].localeCompare(b[0], 'es')).map(([cod, s]) => (
+                            <button key={cod} type="button" onClick={() => elegirProv(cod, [cod])}
+                              className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1 text-left text-[12.5px] text-sub hover:bg-surface2 hover:text-ink">
+                              <span>{cod}</span>
+                              <span className="tabular-nums text-[12px] text-sub">{n0.format(s.pedidos)}</span>
+                            </button>
+                          ))}
+                        </div>
                       )}
-                      {cods.map(([cod, s]) => (
-                        <button key={cod} type="button" onClick={() => elegirProv(multi ? cod : g.nombre, [cod])}
-                          className={`${opcion} ${multi ? 'pl-4 text-sub' : 'text-ink'}`}>
-                          <span className={multi ? '' : 'font-medium'}>{multi ? cod : g.nombre}</span>
-                          <span className="tabular-nums text-[12px] text-sub">{n0.format(s.pedidos)}</span>
-                        </button>
-                      ))}
-                    </div>
+                    </Fragment>
                   )
                 })}
               </div>
@@ -355,7 +390,7 @@ export default function EstadoPedidos() {
           <section className="mb-3 rounded-2xl border border-line bg-surface p-3">
             <h2 className="mb-2 text-sm font-semibold text-ink">
               Por proveedor
-              <span className="ml-1.5 font-normal text-xs text-sub">unificado por descripción · tocá el nombre para filtrar, la flecha para ver los códigos</span>
+              <span className="ml-1.5 font-normal text-xs text-sub">unificado por proveedor · tocá el nombre para filtrar, la flecha para ver los códigos</span>
             </h2>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[680px] text-sm">
