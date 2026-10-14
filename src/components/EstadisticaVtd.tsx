@@ -396,7 +396,7 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
                           </span>
                         </div>
                       </td>
-                      <td className="whitespace-nowrap py-1.5 text-right tabular-nums">{hm(l.segundos)}</td>
+                      <td className="py-1.5 text-right leading-tight tabular-nums">{hm(l.segundos)}</td>
                       <td className="hidden py-1.5 text-right font-semibold tabular-nums sm:table-cell">{num2(prendasHs(l))}</td>
                     </tr>
                   )
