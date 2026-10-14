@@ -6,11 +6,13 @@
 -- Por motivo (VTD venta diaria / REP reposición), pedidos con fecha en el período
 -- (sin anulados): cuántos pedidos hay, cuántos están completos, unidades pedidas y
 -- unidades ya armadas/mandadas (de pedidos_venta_estado: armado o repo; los
--- cerrados cuentan completos). La pantalla muestra el % = unidades_ok / unidades.
+-- cerrados cuentan completos) y no_mandados (faltantes de lo terminado). La pantalla
+-- muestra el % = unidades_ok / (unidades - no_mandados): terminado con faltantes = 100 %.
 -- ============================================================================
 
-CREATE OR REPLACE FUNCTION public.avance_vtd_rep(p_desde date, p_hasta date)
-RETURNS TABLE(motivo text, pedidos integer, completos integer, unidades integer, unidades_ok integer)
+DROP FUNCTION IF EXISTS public.avance_vtd_rep(date, date);
+CREATE FUNCTION public.avance_vtd_rep(p_desde date, p_hasta date)
+RETURNS TABLE(motivo text, pedidos integer, completos integer, unidades integer, unidades_ok integer, no_mandados integer)
 LANGUAGE plpgsql STABLE SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
@@ -30,7 +32,9 @@ BEGIN
          count(*) FILTER (WHERE e.estado = 'hecho')::integer,
          sum(p.uni)::integer,
          sum(CASE WHEN e.origen = 'cerrado' THEN p.uni
-                  ELSE least(p.uni, coalesce(e.unidades_ok, 0)) END)::integer
+                  ELSE least(p.uni, coalesce(e.unidades_ok, 0)) END)::integer,
+         sum(CASE WHEN e.origen = 'cerrado' THEN 0
+                  ELSE least(p.uni - least(p.uni, coalesce(e.unidades_ok, 0)), coalesce(e.faltantes, 0)) END)::integer
     FROM p
     LEFT JOIN public.pedidos_venta_estado e ON e.codigo = p.codigo
    GROUP BY p.motivo;

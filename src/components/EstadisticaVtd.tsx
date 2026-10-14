@@ -52,6 +52,8 @@ interface AvanceMotivo {
   completos: number
   unidades: number
   unidades_ok: number
+  /** faltantes: no se mandaron y no cuentan para el total */
+  no_mandados: number
 }
 
 interface PorLocal {
@@ -171,7 +173,7 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
     if (!supabase) return
     let vivo = true
     void supabase.rpc('avance_vtd_rep', { p_desde: desde, p_hasta: hasta }).then(({ data }) => {
-      if (vivo) setAvance(((data as AvanceMotivo[] | null) ?? []).map((a) => ({ ...a, unidades: Number(a.unidades) || 0, unidades_ok: Number(a.unidades_ok) || 0 })))
+      if (vivo) setAvance(((data as AvanceMotivo[] | null) ?? []).map((a) => ({ ...a, unidades: Number(a.unidades) || 0, unidades_ok: Number(a.unidades_ok) || 0, no_mandados: Number(a.no_mandados) || 0 })))
     })
     return () => { vivo = false }
   }, [desde, hasta, filas])
@@ -222,7 +224,10 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
       {avance.length > 0 && (
         <div className="mb-4 grid gap-2 sm:grid-cols-2">
           {[...avance].sort((a, b) => a.motivo.localeCompare(b.motivo)).reverse().map((a) => {
-            const pct = a.unidades ? Math.min(100, (a.unidades_ok / a.unidades) * 100) : 0
+            // % = unidades hechas ÷ (pedidas − no mandadas): un día terminado con faltantes da 100 %
+            const total = Math.max(0, a.unidades - a.no_mandados)
+            const pct = total ? Math.min(100, (a.unidades_ok / total) * 100) : 0
+            const faltan = Math.max(0, total - a.unidades_ok)
             const color = a.motivo === 'VTD' ? '#14b8a6' : '#ec4899'
             return (
               <div key={a.motivo} className="rounded-2xl border bg-surface p-3" style={{ borderColor: `${color}40` }}>
@@ -236,8 +241,9 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
                   <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
                 </div>
                 <p className="mt-1 text-sm text-sub">
-                  <b className="tabular-nums text-ink">{n0.format(a.unidades_ok)}</b> de <b className="tabular-nums text-ink">{n0.format(a.unidades)}</b> unidades
-                  {a.unidades > a.unidades_ok ? <> · faltan <b className="tabular-nums" style={{ color }}>{n0.format(a.unidades - a.unidades_ok)}</b></> : ''}
+                  <b className="tabular-nums text-ink">{n0.format(a.unidades_ok)}</b> de <b className="tabular-nums text-ink">{n0.format(total)}</b> unidades
+                  {faltan > 0 ? <> · faltan <b className="tabular-nums" style={{ color }}>{n0.format(faltan)}</b></> : ''}
+                  {a.no_mandados > 0 ? <> · <span className="text-red-400">{n0.format(a.no_mandados)} no mandadas</span></> : ''}
                   <span className="ml-1 text-[11px]">({a.completos}/{a.pedidos} pedidos completos)</span>
                 </p>
               </div>
@@ -335,14 +341,16 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
                   <th className="py-1.5 text-right">Venta</th>
                   <th className="py-1.5 text-right">Repo</th>
                   <th className="py-1.5 text-right">No mand.</th>
-                  <th className="hidden py-1.5 pl-3 md:table-cell">Avance</th>
+                  <th className="py-1.5 pl-2 text-right sm:pl-3 md:text-left">Avance</th>
                   <th className="py-1.5 text-right">Horas</th>
                   <th className="hidden py-1.5 text-right sm:table-cell">Prend/HS</th>
                 </tr>
               </thead>
               <tbody>
                 {filasLocal.map((l) => {
-                  const pct = l.venta ? Math.min(100, (l.repo / l.venta) * 100) : 0
+                  // mismo criterio que la barra de arriba: sin contar los no mandados
+                  const base = Math.max(0, l.venta - l.noMandados)
+                  const pct = base ? Math.min(100, (l.repo / base) * 100) : 0
                   return (
                     <tr key={l.local} className="border-t border-line">
                       <td className="truncate py-1.5 font-semibold text-ink">{l.local}</td>
@@ -350,9 +358,12 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
                       <td className="py-1.5 text-right font-bold tabular-nums text-emerald-500">{n0.format(l.venta)}</td>
                       <td className="py-1.5 text-right tabular-nums">{n0.format(l.repo)}</td>
                       <td className="py-1.5 text-right font-semibold tabular-nums text-red-400">{l.noMandados ? n0.format(l.noMandados) : '—'}</td>
-                      <td className="hidden py-1.5 pl-3 md:table-cell">
-                        <div className="h-1.5 overflow-hidden rounded-full bg-line">
-                          <div className={`h-full rounded-full ${pct >= 99 ? 'bg-emerald-500' : 'bg-sky-500'}`} style={{ width: `${pct}%` }} />
+                      <td className="py-1.5 pl-2 sm:pl-3">
+                        <div className="flex items-center gap-2">
+                          <div className="hidden h-1.5 flex-1 overflow-hidden rounded-full bg-line md:block">
+                            <div className={`h-full rounded-full ${pct >= 99.5 ? 'bg-emerald-500' : 'bg-sky-500'}`} style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className={`w-10 shrink-0 text-right text-[11px] font-bold tabular-nums ${pct >= 99.5 ? 'text-emerald-500' : 'text-sub'}`}>{Math.floor(pct)}%</span>
                         </div>
                       </td>
                       <td className="py-1.5 text-right tabular-nums">{num2(horasPer(l))}</td>
