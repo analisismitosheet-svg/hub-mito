@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Roles y permisos · propuesta</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --paper:#050508;
+    --surface:rgba(255,255,255,.035);
+    --surface2:rgba(255,255,255,.07);
+    --surface-solid:#101016;
+    --line:rgba(255,255,255,.08);
+    --line2:rgba(255,255,255,.18);
+    --ink:#f8fafc;
+    --sub:#94a3b8;
+    --brand:#ef4444;
+    --brand600:#e11d2e;
+    --emerald:#22c55e;
+    --shadow:0 10px 30px -12px rgba(0,0,0,.6);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:
+      radial-gradient(900px 520px at 10% -12%, rgba(59,130,246,.15), transparent 60%),
+      radial-gradient(800px 500px at 96% -6%, rgba(168,85,247,.10), transparent 55%),
+      var(--paper);
+    color:var(--ink);font-family:'Plus Jakarta Sans',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    font-size:14px;line-height:1.45;min-height:100vh;
+    padding:22px clamp(12px,3vw,40px) 110px;
+  }
+  h1,h2,h3{margin:0;font-weight:800;letter-spacing:-.02em}
+  p{margin:0}
+  button,input{font-family:inherit;color:inherit}
+  button{cursor:pointer}
+
+  .badge-mock{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:rgba(245,158,11,.14);color:#fcd34d;border:1px solid rgba(245,158,11,.32);font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+  .back{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 11px;border-radius:10px;border:1px solid var(--line);background:var(--surface2);color:var(--sub);font-size:12px;font-weight:600}
+  .head{margin:14px 0 16px}
+  .head h1{font-size:clamp(20px,3vw,26px)}
+  .head p{color:var(--sub);margin-top:4px;font-size:13px}
+
+  .tabs{display:inline-flex;gap:4px;padding:4px;border:1px solid var(--line);background:var(--surface);border-radius:12px;flex-wrap:wrap;margin-bottom:16px}
+  .tab{border:0;background:transparent;border-radius:9px;padding:8px 14px;font-size:13px;font-weight:700;color:var(--sub);display:inline-flex;gap:7px;align-items:center}
+  .tab:hover{color:var(--ink)}
+  .tab.on{background:var(--surface2);color:var(--ink)}
+
+  .layout{display:grid;grid-template-columns:260px minmax(0,1fr);gap:16px;align-items:start}
+  @media (max-width:860px){ .layout{grid-template-columns:1fr} }
+
+  .panel{border:1px solid var(--line);background:var(--surface);border-radius:18px;box-shadow:var(--shadow)}
+  .side{padding:10px;position:sticky;top:16px}
+  @media (max-width:860px){ .side{position:static;display:flex;gap:6px;overflow-x:auto;padding:8px} }
+  .side-title{font-size:11px;font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:.08em;padding:6px 8px 8px}
+  @media (max-width:860px){ .side-title{display:none} }
+  .rol{width:100%;display:flex;align-items:center;gap:10px;border:1px solid transparent;background:transparent;border-radius:12px;padding:9px 10px;text-align:left;font-weight:600;flex-shrink:0}
+  @media (max-width:860px){ .rol{width:auto;white-space:nowrap} }
+  .rol:hover{background:var(--surface2)}
+  .rol.on{background:var(--surface2);border-color:var(--line2)}
+  .rol .n{margin-left:auto;font-size:11px;color:var(--sub);font-weight:600}
+  .rol .dot{width:9px;height:9px;border-radius:99px;flex-shrink:0}
+  .nuevo-rol{width:100%;margin-top:6px;border:1px dashed var(--line2);background:transparent;border-radius:12px;padding:9px 10px;color:var(--sub);font-weight:600;text-align:left}
+  @media (max-width:860px){ .nuevo-rol{width:auto;white-space:nowrap;margin:0} }
+
+  .main{padding:16px}
+  .main-head{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .main-head h2{font-size:20px}
+  .main-head .who{font-size:12.5px;color:var(--sub);margin-top:2px}
+  .btn{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 13px;border-radius:11px;border:1px solid var(--line);background:var(--surface2);font-size:12.5px;font-weight:700}
+  .btn:hover{border-color:var(--line2)}
+  .btn.brand{background:var(--brand600);border-color:transparent;color:#fff}
+
+  .search{position:relative;margin-bottom:10px}
+  .search input{width:100%;height:42px;border-radius:12px;border:1px solid var(--line);background:var(--surface2);padding:0 14px 0 38px;font-size:14px;outline:none}
+  .search input:focus{border-color:var(--line2);box-shadow:0 0 0 3px rgba(239,68,68,.15)}
+  .search svg{position:absolute;left:12px;top:12px;color:var(--sub)}
+  .filtros{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 11px;font-size:12px;font-weight:600;color:var(--sub)}
+  .chip.on{color:var(--ink);border-color:var(--line2);background:var(--surface2)}
+
+  .area{margin-bottom:16px}
+  .area-h{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--sub);margin:0 2px 8px}
+  .area-h .bar{width:4px;height:14px;border-radius:4px}
+  .area-h .cnt{margin-left:auto;font-weight:600;text-transform:none;letter-spacing:0}
+
+  .app{border:1px solid var(--line);background:var(--surface);border-radius:14px;padding:12px;margin-bottom:8px;transition:.15s}
+  .app:hover{border-color:var(--line2)}
+  .app.cambiado{border-color:rgba(245,158,11,.45)}
+  .app-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .tile{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;flex-shrink:0;
+    color:var(--c);background:linear-gradient(145deg,color-mix(in srgb,var(--c) 32%,transparent),color-mix(in srgb,var(--c) 12%,transparent));
+    border:1px solid color-mix(in srgb,var(--c) 40%,transparent)}
+  .app-info{flex:1;min-width:170px}
+  .app-info b{font-size:14.5px;display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+  .app-info span.desc{font-size:12px;color:var(--sub)}
+  .origen{font-size:10.5px;font-weight:700;border-radius:6px;padding:1px 6px;border:1px solid}
+  .origen.derol{color:#93c5fd;border-color:rgba(59,130,246,.35);background:rgba(59,130,246,.12)}
+  .origen.extra{color:#4ade80;border-color:rgba(34,197,94,.4);background:rgba(34,197,94,.12)}
+  .origen.quitado{color:#fca5a5;border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.12)}
+
+  .niveles{display:inline-flex;padding:3px;border-radius:11px;border:1px solid var(--line);background:rgba(0,0,0,.25);gap:2px;flex-wrap:wrap}
+  .niv{border:0;background:transparent;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;color:var(--sub);white-space:nowrap}
+  @media (max-width:560px){ .niveles{width:100%;display:grid;grid-auto-flow:column;grid-auto-columns:1fr} .niv{padding:7px 4px;font-size:11.5px} }
+  .niv:hover{color:var(--ink)}
+  .niv.on.n0{background:rgba(148,163,184,.18);color:var(--ink)}
+  .niv.on.n1{background:rgba(14,165,233,.22);color:#7dd3fc}
+  .niv.on.n2{background:rgba(245,158,11,.22);color:#fcd34d}
+  .niv.on.n3{background:rgba(34,197,94,.22);color:#86efac}
+  .niv.on.nc{background:rgba(168,85,247,.22);color:#d8b4fe}
+  .mas{border:0;background:transparent;color:var(--sub);font-size:12px;font-weight:600;padding:6px 4px;display:inline-flex;align-items:center;gap:4px}
+  .mas:hover{color:var(--ink)}
+  .mas svg{transition:transform .2s}
+  .app.abierta .mas svg{transform:rotate(90deg)}
+  .detalle{display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--line);gap:6px;flex-wrap:wrap;align-items:center}
+  .app.abierta .detalle{display:flex}
+  .detalle .lbl{font-size:11px;color:var(--sub);font-weight:700;margin-right:4px}
+  .acc{border:1px solid var(--line);background:var(--surface);border-radius:9px;padding:5px 10px;font-size:12px;font-weight:600;color:var(--sub);display:inline-flex;align-items:center;gap:6px}
+  .acc .ck{width:14px;height:14px;border-radius:4px;border:1.5px solid var(--line2);display:grid;place-items:center}
+  .acc.on{color:var(--ink);border-color:rgba(34,197,94,.45);background:rgba(34,197,94,.10)}
+  .acc.on .ck{background:var(--emerald);border-color:var(--emerald)}
+  .acc.on .ck::after{content:'';width:6px;height:3px;border:2px solid #052e16;border-top:0;border-right:0;transform:rotate(-45deg) translate(1px,-1px)}
+  .acc.extra{border-style:dashed}
+  .sep{width:1px;height:18px;background:var(--line);margin:0 4px}
+
+  .persona-sel{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px;border:1px solid var(--line);background:var(--surface2);border-radius:14px;margin-bottom:14px}
+  .avatar{width:40px;height:40px;border-radius:99px;display:grid;place-items:center;font-weight:800;background:#4f46e5;color:#fff;flex-shrink:0}
+  .roles-chip{display:flex;gap:5px;flex-wrap:wrap;margin-top:3px}
+  .roles-chip span{font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:rgba(59,130,246,.14);color:#93c5fd;border:1px solid rgba(59,130,246,.3)}
+  .lista-personas{display:flex;flex-direction:column;gap:2px}
+  .leyenda{display:flex;gap:12px;flex-wrap:wrap;font-size:11.5px;color:var(--sub);margin-bottom:12px;align-items:center}
+
+  .savebar{position:fixed;left:50%;bottom:18px;transform:translate(-50%,140%);transition:transform .25s cubic-bezier(.2,.8,.2,1);
+    display:flex;align-items:center;gap:12px;padding:10px 10px 10px 16px;border-radius:16px;border:1px solid var(--line2);
+    background:rgba(16,16,22,.92);backdrop-filter:blur(14px);box-shadow:0 20px 50px -10px rgba(0,0,0,.8);z-index:20;max-width:calc(100vw - 24px)}
+  .savebar.show{transform:translate(-50%,0)}
+  .savebar .t{font-size:13px;font-weight:600;white-space:nowrap}
+
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:30;padding:16px}
+  .modal-bg.show{display:flex}
+  .modal{width:100%;max-width:420px;border:1px solid var(--line2);background:var(--surface-solid);border-radius:18px;padding:18px}
+  .modal h3{font-size:17px;margin-bottom:4px}
+  .modal p{font-size:12.5px;color:var(--sub);margin-bottom:12px}
+  .opt{display:flex;align-items:center;gap:10px;width:100%;padding:10px;border-radius:12px;border:1px solid var(--line);background:var(--surface);margin-bottom:6px;text-align:left;font-weight:600}
+  .opt:hover{border-color:var(--line2)}
+  .opt small{display:block;color:var(--sub);font-weight:500;font-size:11.5px}
+  .opt .avatar{width:32px;height:32px;font-size:12px}
+
+  .nota{margin-top:26px;border:1px dashed var(--line2);border-radius:14px;padding:14px 16px;color:var(--sub);font-size:12.5px;max-width:900px}
+  .nota b{color:var(--ink)}
+  .nota li{margin:3px 0}
+  .ubi-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);margin-bottom:6px}
+  .ubi-row b{flex:1;min-width:150px}
+</style>
+</head>
+<body>
+
+<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+  <button class="back">← Volver</button>
+  <span class="badge-mock">Propuesta · maqueta</span>
+</div>
+
+<div class="head">
+  <h1>Roles y permisos</h1>
+  <p>Elegí un rol o una persona y tocá el nivel de acceso de cada app. Se guarda todo junto.</p>
+</div>
+
+<div class="tabs" id="tabs">
+  <button class="tab on" data-tab="rol">Por rol</button>
+  <button class="tab" data-tab="persona">Por persona</button>
+  <button class="tab" data-tab="ubi">Ubicación de menús</button>
+</div>
+
+<div id="vista"></div>
+
+<div class="savebar" id="savebar">
+  <span class="t" id="savetxt">0 cambios sin guardar</span>
+  <button class="btn" id="descartar">Descartar</button>
+  <button class="btn brand" id="guardar">Guardar</button>
+</div>
+
+<div class="modal-bg" id="modalCopiar">
+  <div class="modal">
+    <h3>Copiar permisos de…</h3>
+    <p>La persona queda con los mismos roles y extras que la que elijas. Después podés ajustar lo que quieras.</p>
+    <div id="opcionesCopiar"></div>
+    <button class="btn" style="width:100%;justify-content:center;margin-top:6px" onclick="cerrarModal()">Cancelar</button>
+  </div>
+</div>
+
+<div class="nota">
+  <b>Qué cambia respecto de hoy</b>
+  <ul style="margin:6px 0 0;padding-left:18px">
+    <li>Solo aparecen los permisos que hacen algo de verdad. Los ~1.560 de relleno quedan ocultos, no se borran.</li>
+    <li>Cada app tiene 4 niveles de un toque: <b>Sin acceso · Solo ver · Ver y cargar · Todo</b>. Con “Detalle” se ajusta acción por acción, y los permisos especiales (ej. Autorizar pausas) aparecen ahí mismo.</li>
+    <li>Buscador y filtro por área arriba de todo.</li>
+    <li>“Por persona” muestra qué viene del rol (azul), qué tiene de más (verde) y qué se le sacó (rojo), con “Copiar permisos de…”.</li>
+    <li>Ubicación de menús queda en su propia pestaña.</li>
+  </ul>
+</div>
+
+<script>
+const ICON = {
+  doc:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',
+  box:'<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/>',
+  users:'<circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M17 4a4 4 0 0 1 0 8M22 21a7 7 0 0 0-4-6.3"/>',
+  truck:'<path d="M3 6h11v10H3zM14 9h4l3 3v4h-7"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>',
+  map:'<path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/>',
+  chart:'<path d="m3 17 6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
+  pause:'<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>',
+  cart:'<circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M3 4h2l2.5 12h11L21 7H6"/>',
+  swap:'<path d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/>',
+  cash:'<circle cx="12" cy="12" r="9"/><path d="M15 9a3 3 0 0 0-3-1.5c-1.7 0-3 .9-3 2.2 0 3 6 1.6 6 4.6 0 1.3-1.3 2.2-3 2.2A3 3 0 0 1 9 15M12 6v12"/>',
+  cake:'<path d="M4 21h16v-8H4zM4 16c2 1 4 1 6 0s4-1 6 0 4 1 4 0M12 13V9M12 6V5"/>',
+  eye:'<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  db:'<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
+  home:'<path d="m3 11 9-8 9 8M5 9v12h14V9"/>',
+  lupa:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  scan:'<path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10"/>',
+}
+const svg = (k,s=20)=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[k]}</svg>`
+
+const AREAS = {
+  mayorista:{n:'Mayorista',c:'#d97706'},
+  deposito:{n:'Depósito',c:'#ea580c'},
+  compras:{n:'Compras',c:'#65a30d'},
+  rrhh:{n:'RR. HH.',c:'#7c3aed'},
+  tesoreria:{n:'Tesorería',c:'#059669'},
+  locales:{n:'Locales',c:'#16a34a'},
+  arquitectura:{n:'Arquitectura',c:'#0d9488'},
+  sistemas:{n:'Sistemas',c:'#0891b2'},
+}
+// acc: acciones que la app realmente controla · extras: permisos especiales
+const APPS = [
+  {id:'repos',a:'mayorista',t:'Repos Mayorista',d:'Pedidos de reposición del mayorista',i:'box',c:'#d97706',acc:['ver','crear','editar']},
+  {id:'mirepo',a:'mayorista',t:'Mi repo',d:'Lo que arma el piso',i:'box',c:'#eab308',acc:['ver']},
+  {id:'pausas',a:'mayorista',t:'Pausas por autorizar',d:'Autorizar pausas del piso',i:'pause',c:'#f43f5e',acc:['ver'],extras:['Autorizar pausas']},
+  {id:'clientes',a:'mayorista',t:'Clientes',d:'Clientes mayoristas',i:'users',c:'#3b82f6',acc:['ver','crear','editar','borrar']},
+  {id:'factu',a:'mayorista',t:'Facturación Fábrica',d:'También aparece en Polo 52',i:'doc',c:'#8b5cf6',acc:['ver','crear','editar','borrar']},
+  {id:'guias',a:'mayorista',t:'Guías',d:'Guías de despacho',i:'truck',c:'#06b6d4',acc:['ver','crear','editar','borrar']},
+  {id:'nc',a:'mayorista',t:'Notas de crédito',d:'Notas de crédito a clientes',i:'doc',c:'#ec4899',acc:['ver','crear','editar','borrar']},
+  {id:'mapeo',a:'mayorista',t:'Mapeo depósito',d:'Ubicaciones de pasillos y niveles',i:'map',c:'#22c55e',acc:['ver'],extras:['Escanear','Gestionar','Borrar ubicaciones']},
+  {id:'efic',a:'mayorista',t:'Eficiencia mayorista',d:'Estadísticas del piso',i:'chart',c:'#14b8a6',acc:['ver']},
+  {id:'drepo',a:'deposito',t:'Repos Depósito',d:'Reposiciones del depósito',i:'box',c:'#ea580c',acc:['ver','crear'],extras:['Marcar ítems']},
+  {id:'picking',a:'deposito',t:'Picking',d:'Ver, registrar y anular pickings',i:'scan',c:'#0d9488',acc:['ver']},
+  {id:'rma',a:'deposito',t:'RMA',d:'Devoluciones a proveedores',i:'swap',c:'#a855f7',acc:['ver']},
+  {id:'transf',a:'compras',t:'Reposiciones / Transferencias',d:'Transferencias entre locales',i:'swap',c:'#d97706',acc:['ver','crear'],extras:['Ver todos los locales']},
+  {id:'pedc',a:'compras',t:'Pedidos de compra',d:'Órdenes de compra',i:'cart',c:'#65a30d',acc:['ver']},
+  {id:'comp',a:'compras',t:'Comparativa de precios',d:'Precios contra la competencia',i:'chart',c:'#0891b2',acc:['ver']},
+  {id:'nov',a:'rrhh',t:'Novedades',d:'Carga y resumen de novedades',i:'doc',c:'#7c3aed',acc:['ver','crear','editar','borrar']},
+  {id:'emp',a:'rrhh',t:'Empleados',d:'Legajos y cumpleaños',i:'users',c:'#ec4899',acc:['ver','crear','editar','borrar']},
+  {id:'amigos',a:'tesoreria',t:'Cuentas Amigos',d:'También aparece en Locales',i:'cash',c:'#059669',acc:['ver','crear','editar','borrar']},
+  {id:'contador',a:'locales',t:'Contador de clientes',d:'Entradas por cámara',i:'eye',c:'#16a34a',acc:['ver'],extras:['Ver todos los locales','Gestionar cámaras']},
+  {id:'opin',a:'locales',t:'Opiniones',d:'Encuestas de clientes',i:'users',c:'#f59e0b',acc:['ver','borrar']},
+  {id:'obras',a:'arquitectura',t:'Gestión de Obras',d:'Presupuestos, pagos y obras',i:'home',c:'#0d9488',acc:['ver','crear','editar','borrar'],extras:['Aprobar / rechazar']},
+  {id:'sql',a:'sistemas',t:'Datos SQL',d:'Consultas al SQL Server',i:'db',c:'#0891b2',acc:['ver']},
+  {id:'informes',a:'sistemas',t:'Envío informes y reportes',d:'Informes por WhatsApp',i:'doc',c:'#6366f1',acc:['ver','crear','editar','borrar']},
+]
+const ACC_LBL = {ver:'Ver',crear:'Crear',editar:'Editar',borrar:'Borrar'}
+const ROLES = [
+  {id:'mayorista',n:'Mayorista',c:'#d97706',p:9},
+  {id:'deposito',n:'Depósito',c:'#ea580c',p:6},
+  {id:'polo52',n:'Polo52',c:'#4f46e5',p:3},
+  {id:'compras',n:'Compras',c:'#65a30d',p:2},
+  {id:'rrhh',n:'RR HH',c:'#7c3aed',p:2},
+  {id:'tesoreria',n:'Tesorería',c:'#059669',p:2},
+  {id:'locales',n:'Locales',c:'#16a34a',p:14},
+  {id:'supervisor',n:'Supervisor',c:'#0891b2',p:3},
+  {id:'empleado',n:'Empleado',c:'#94a3b8',p:11},
+]
+// estado inicial: rol -> app -> Set(acciones)
+const base = {
+  mayorista:{repos:['ver','crear','editar'],mirepo:['ver'],clientes:['ver','crear','editar'],factu:['ver','crear','editar','borrar'],guias:['ver','crear','editar','borrar'],nc:['ver','crear'],mapeo:['ver','Escanear'],efic:['ver']},
+  deposito:{drepo:['ver','crear','Marcar ítems'],picking:['ver'],rma:['ver'],mapeo:['ver','Escanear']},
+  polo52:{factu:['ver','crear','editar','borrar']},
+  compras:{transf:['ver','crear'],pedc:['ver'],comp:['ver']},
+  rrhh:{nov:['ver','crear','editar','borrar'],emp:['ver','crear','editar']},
+  tesoreria:{amigos:['ver','crear','editar','borrar']},
+  locales:{transf:['ver'],contador:['ver'],opin:['ver'],amigos:['ver']},
+  supervisor:{contador:['ver','Ver todos los locales'],opin:['ver','borrar'],transf:['ver','Ver todos los locales']},
+  empleado:{mirepo:['ver']},
+}
+const PERSONAS = [
+  {id:'p1',n:'Lucía Fernández',r:['mayorista'],ex:{pausas:{mas:['ver','Autorizar pausas']},mapeo:{mas:['Borrar ubicaciones']}}},
+  {id:'p2',n:'Martín Gómez',r:['deposito'],ex:{picking:{menos:['ver']}}},
+  {id:'p3',n:'Carla Ruiz',r:['locales','supervisor'],ex:{}},
+  {id:'p4',n:'Diego Pereyra',r:['compras'],ex:{informes:{mas:['ver']}}},
+  {id:'p5',n:'Sofía Torres',r:['rrhh'],ex:{}},
+]
+
+let estado = {}   // rol -> app -> Set
+for (const r of ROLES){ estado[r.id]={}; for (const a of APPS) estado[r.id][a.id]=new Set((base[r.id]||{})[a.id]||[]) }
+const original = JSON.stringify(serial())
+let tab='rol', rolSel='mayorista', personaSel='p1', filtroArea='', q='', abiertas=new Set()
+let personaEx = JSON.parse(JSON.stringify(Object.fromEntries(PERSONAS.map(p=>[p.id,p.ex]))))
+const personaOrig = JSON.stringify(personaEx)
+
+function serial(){ const o={}; for(const r in estado){o[r]={}; for(const a in estado[r]) o[r][a]=[...estado[r][a]].sort()} return o }
+
+function nivelDe(app, set){
+  const acc = app.acc
+  const has = k=>set.has(k)
+  const n = acc.filter(has).length
+  const extrasOn = (app.extras||[]).filter(has).length
+  if (n===0 && extrasOn===0) return 0
+  if (n===acc.length && extrasOn===(app.extras||[]).length) return 3
+  if (n===1 && has('ver') && extrasOn===0) return 1
+  if (has('ver') && has('crear') && !has('borrar') && extrasOn===0 && (acc.includes('editar')?has('editar'):true)) return 2
+  return 'c'
+}
+function aplicarNivel(app, set, n){
+  set.clear()
+  if (n>=1) set.add('ver')
+  if (n>=2){ if(app.acc.includes('crear'))set.add('crear'); if(app.acc.includes('editar'))set.add('editar') }
+  if (n===3){ app.acc.forEach(a=>set.add(a)); (app.extras||[]).forEach(e=>set.add(e)) }
+}
+function nivelesDisponibles(app){
+  // apps con una sola acción: Sin acceso / Ver (+ Todo si tiene extras)
+  if (app.acc.length===1) return app.extras?[0,1,3]:[0,1]
+  return [0,1,2,3]
+}
+const NIV_LBL = {0:'Sin acceso',1:'Solo ver',2:'Ver y cargar',3:'Todo',c:'A medida'}
+
+function efectivoPersona(p, appId){
+  const s = new Set()
+  for (const r of p.r) estado[r][appId].forEach(x=>s.add(x))
+  const ex = personaEx[p.id][appId]
+  const delRol = new Set(s)
+  if (ex?.menos) ex.menos.forEach(x=>s.delete(x))
+  if (ex?.mas) ex.mas.forEach(x=>s.add(x))
+  return {s, delRol}
+}
+
+function appsFiltradas(){
+  const qq = q.trim().toLowerCase()
+  return APPS.filter(a=>(!filtroArea||a.a===filtroArea) && (!qq || (a.t+' '+a.d+' '+AREAS[a.a].n).toLowerCase().includes(qq)))
+}
+
+function filtrosHtml(){
+  return `
+  <div class="search">${svg('lupa',18)}
+    <input id="q" placeholder="Buscar app… (ej: factu, picking, obras)" value="${q}" />
+  </div>
+  <div class="filtros">
+    <button class="chip ${!filtroArea?'on':''}" data-area="">Todas</button>
+    ${Object.entries(AREAS).map(([k,v])=>`<button class="chip ${filtroArea===k?'on':''}" data-area="${k}"><span style="display:inline-block;width:7px;height:7px;border-radius:9px;background:${v.c};margin-right:6px"></span>${v.n}</button>`).join('')}
+  </div>`
+}
+
+function appCard(app, set, opts={}){
+  const disp = nivelesDisponibles(app)
+  let niv = nivelDe(app,set)
+  if (niv===3 && !disp.includes(3)) niv = 1
+  const cambiado = opts.cambiado
+  return `<div class="app ${abiertas.has(app.id)?'abierta':''} ${cambiado?'cambiado':''}" data-app="${app.id}" style="--c:${app.c}">
+    <div class="app-row">
+      <div class="tile">${svg(app.i)}</div>
+      <div class="app-info"><b>${app.t} ${opts.badge||''}</b><span class="desc">${app.d}</span></div>
+      <div class="niveles">
+        ${disp.map(n=>`<button class="niv n${n} ${niv===n?'on':''}" data-niv="${n}">${NIV_LBL[n]}</button>`).join('')}
+        ${niv==='c'?`<button class="niv nc on">A medida</button>`:''}
+      </div>
+      <button class="mas" data-toggle><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 6 6 6-6 6"/></svg>Detalle</button>
+    </div>
+    <div class="detalle">
+      <span class="lbl">Acciones</span>
+      ${app.acc.map(k=>`<button class="acc ${set.has(k)?'on':''}" data-acc="${k}"><span class="ck"></span>${ACC_LBL[k]}</button>`).join('')}
+      ${app.extras?`<span class="sep"></span><span class="lbl">Especiales</span>${app.extras.map(k=>`<button class="acc extra ${set.has(k)?'on':''}" data-acc="${k}"><span class="ck"></span>${k}</button>`).join('')}`:''}
+    </div>
+  </div>`
+}
+
+function porArea(lista, render){
+  const g = {}
+  for (const a of lista) (g[a.a] ||= []).push(a)
+  if (!lista.length) return `<p style="color:var(--sub);padding:20px;text-align:center">No hay apps con “${q}”.</p>`
+  return Object.entries(g).map(([k,apps])=>`
+    <div class="area">
+      <div class="area-h"><span class="bar" style="background:${AREAS[k].c}"></span>${AREAS[k].n}<span class="cnt">${apps.length} app${apps.length>1?'s':''}</span></div>
+      ${apps.map(render).join('')}
+    </div>`).join('')
+}
+
+function vistaRol(){
+  const r = ROLES.find(x=>x.id===rolSel)
+  const conAcceso = APPS.filter(a=>estado[r.id][a.id].size).length
+  const orig = JSON.parse(original)[r.id]
+  return `<div class="layout">
+    <div class="panel side">
+      <div class="side-title">Roles</div>
+      ${ROLES.map(x=>`<button class="rol ${x.id===rolSel?'on':''}" data-rol="${x.id}"><span class="dot" style="background:${x.c}"></span>${x.n}<span class="n">${x.p} pers.</span></button>`).join('')}
+      <button class="nuevo-rol">+ Nuevo rol</button>
+    </div>
+    <div class="panel main">
+      <div class="main-head">
+        <div><h2>${r.n}</h2><div class="who">${r.p} personas tienen este rol · entra a ${conAcceso} apps</div></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn">Ver personas</button><button class="btn">Duplicar rol</button></div>
+      </div>
+      ${filtrosHtml()}
+      ${porArea(appsFiltradas(), a=>appCard(a, estado[r.id][a.id], {cambiado: JSON.stringify([...estado[r.id][a.id]].sort())!==JSON.stringify(orig[a.id])}))}
+    </div>
+  </div>`
+}
+
+function vistaPersona(){
+  const p = PERSONAS.find(x=>x.id===personaSel)
+  const ini = p.n.split(' ').map(s=>s[0]).join('')
+  return `<div class="layout">
+    <div class="panel side">
+      <div class="side-title">Personas</div>
+      <div class="search" style="margin:0 2px 8px"><input placeholder="Buscar persona…" style="height:36px;font-size:13px;padding-left:12px" /></div>
+      <div class="lista-personas">
+      ${PERSONAS.map(x=>`<button class="rol ${x.id===personaSel?'on':''}" data-persona="${x.id}"><span class="dot" style="background:${ROLES.find(r=>r.id===x.r[0]).c}"></span>${x.n}</button>`).join('')}
+      </div>
+    </div>
+    <div class="panel main">
+      <div class="persona-sel">
+        <div class="avatar">${ini}</div>
+        <div style="flex:1;min-width:160px"><b style="font-size:16px">${p.n}</b>
+          <div class="roles-chip">${p.r.map(r=>`<span>${ROLES.find(x=>x.id===r).n}</span>`).join('')}<span style="background:transparent;border-style:dashed;color:var(--sub)">+ rol</span></div>
+        </div>
+        <button class="btn" id="copiar">Copiar permisos de…</button>
+        <button class="btn" id="limpiar">Quitar extras</button>
+      </div>
+      <div class="leyenda">
+        <span class="origen derol">por rol</span> viene de su rol
+        <span class="origen extra">+ extra</span> se lo diste a esta persona
+        <span class="origen quitado">− quitado</span> se lo sacaste aunque el rol lo dé
+      </div>
+      ${filtrosHtml()}
+      ${porArea(appsFiltradas(), a=>{
+        const {s, delRol} = efectivoPersona(p,a.id)
+        const ex = personaEx[p.id][a.id]
+        let badge = ''
+        if (ex?.mas?.length) badge += `<span class="origen extra">+ ${ex.mas.map(x=>ACC_LBL[x]||x).join(', ')}</span>`
+        if (ex?.menos?.length) badge += `<span class="origen quitado">− ${ex.menos.map(x=>ACC_LBL[x]||x).join(', ')}</span>`
+        if (!badge && delRol.size) badge = `<span class="origen derol">por rol</span>`
+        return appCard(a, s, {badge, cambiado: !!(ex?.mas?.length||ex?.menos?.length)})
+      })}
+    </div>
+  </div>`
+}
+
+function vistaUbi(){
+  return `<div class="panel main" style="max-width:900px">
+    <p style="color:var(--sub);font-size:12.5px;margin-bottom:12px">En qué áreas aparece cada app. Casi nunca hace falta tocarlo: por defecto cada app vive en su área.</p>
+    ${filtrosHtml()}
+    ${appsFiltradas().map(a=>`<div class="ubi-row" style="--c:${a.c}"><div class="tile" style="width:32px;height:32px;border-radius:10px">${svg(a.i,16)}</div><b>${a.t}</b>
+      ${Object.entries(AREAS).map(([k,v])=>`<button class="chip ${k===a.a||(a.id==='factu'&&k==='mayorista')||(a.id==='amigos'&&k==='locales')?'on':''}" style="font-size:11px;padding:3px 9px">${v.n}</button>`).join('')}
+    </div>`).join('')}
+  </div>`
+}
+
+function contarCambios(){
+  const a = serial(), o = JSON.parse(original)
+  let n=0
+  for (const r in a) for (const ap in a[r]) if (JSON.stringify(a[r][ap])!==JSON.stringify(o[r][ap])) n++
+  const pe = JSON.parse(personaOrig)
+  for (const p in personaEx) for (const ap of new Set([...Object.keys(personaEx[p]),...Object.keys(pe[p])]))
+    if (JSON.stringify(personaEx[p][ap]||{})!==JSON.stringify(pe[p][ap]||{})) n++
+  return n
+}
+
+function render(){
+  const v = document.getElementById('vista')
+  const foco = document.activeElement?.id==='q'
+  v.innerHTML = tab==='rol'?vistaRol():tab==='persona'?vistaPersona():vistaUbi()
+  if (foco){ const i=document.getElementById('q'); i.focus(); i.setSelectionRange(q.length,q.length) }
+  const n = contarCambios()
+  document.getElementById('savetxt').textContent = `${n} cambio${n===1?'':'s'} sin guardar`
+  document.getElementById('savebar').classList.toggle('show', n>0)
+}
+
+function setPersona(p, appId, nuevo){
+  const delRol = new Set()
+  for (const r of p.r) estado[r][appId].forEach(x=>delRol.add(x))
+  const mas=[...nuevo].filter(x=>!delRol.has(x)), menos=[...delRol].filter(x=>!nuevo.has(x))
+  if (!mas.length && !menos.length) delete personaEx[p.id][appId]
+  else personaEx[p.id][appId] = {...(mas.length?{mas}:{}),...(menos.length?{menos}:{})}
+}
+
+document.addEventListener('click', e=>{
+  const t = e.target.closest('button'); if(!t) return
+  if (t.dataset.tab){ tab=t.dataset.tab; document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b===t)); render(); return }
+  if (t.dataset.rol){ rolSel=t.dataset.rol; render(); return }
+  if (t.dataset.persona){ personaSel=t.dataset.persona; render(); return }
+  if (t.dataset.area!==undefined){ filtroArea=t.dataset.area; render(); return }
+  const card = t.closest('.app')
+  if (card){
+    const app = APPS.find(a=>a.id===card.dataset.app)
+    if (t.hasAttribute('data-toggle')){ abiertas.has(app.id)?abiertas.delete(app.id):abiertas.add(app.id); render(); return }
+    let set, persona
+    if (tab==='rol') set = estado[rolSel][app.id]
+    else { persona = PERSONAS.find(x=>x.id===personaSel); set = efectivoPersona(persona, app.id).s }
+    if (t.dataset.niv!==undefined && t.dataset.niv!=='c'){ aplicarNivel(app,set,+t.dataset.niv) }
+    else if (t.dataset.acc){ const k=t.dataset.acc; set.has(k)?set.delete(k):set.add(k); if(k!=='ver'&&set.has(k))set.add('ver'); if(k==='ver'&&!set.has('ver'))set.clear() }
+    else return
+    if (persona) setPersona(persona, app.id, set)
+    render(); return
+  }
+  if (t.id==='copiar'){ abrirModal(); return }
+  if (t.id==='limpiar'){ personaEx[personaSel]={}; render(); return }
+  if (t.id==='descartar'){ location.reload(); return }
+  if (t.id==='guardar'){ t.textContent='Guardado ✓'; setTimeout(()=>location.reload(),700); return }
+})
+document.addEventListener('input', e=>{ if(e.target.id==='q'){ q=e.target.value; render() } })
+
+function abrirModal(){
+  const otras = PERSONAS.filter(p=>p.id!==personaSel)
+  document.getElementById('opcionesCopiar').innerHTML = otras.map(p=>`<button class="opt" data-copiar="${p.id}"><span class="avatar">${p.n.split(' ').map(s=>s[0]).join('')}</span><span>${p.n}<small>${p.r.map(r=>ROLES.find(x=>x.id===r).n).join(' + ')}${Object.keys(personaEx[p.id]).length?' · con extras':''}</small></span></button>`).join('')
+  document.getElementById('modalCopiar').classList.add('show')
+}
+function cerrarModal(){ document.getElementById('modalCopiar').classList.remove('show') }
+document.getElementById('modalCopiar').addEventListener('click', e=>{
+  const b = e.target.closest('[data-copiar]')
+  if (b){ const src=PERSONAS.find(p=>p.id===b.dataset.copiar), dst=PERSONAS.find(p=>p.id===personaSel)
+    dst.r=[...src.r]; personaEx[dst.id]=JSON.parse(JSON.stringify(personaEx[src.id])); cerrarModal(); render() }
+  else if (e.target.id==='modalCopiar') cerrarModal()
+})
+
+render()
+</script>
+</body>
+</html>

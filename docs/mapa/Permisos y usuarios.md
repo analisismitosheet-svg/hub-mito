@@ -3,6 +3,8 @@
 - Pantallas: `Usuarios.tsx`, `Roles.tsx`, `Locales.tsx`. Hook: `useAuth()` → `{ isAdmin, can('permiso'), perfil }`; `usePermisosArea('<area>')`.
 - Rutas protegidas con `PermissionRoute` (en `src/App.tsx`); apps del menú filtradas por el permiso del `AppDef` (`src/config/areas.ts`).
 - Permisos: por rol + overrides individuales por usuario (efecto `grant`/`revoke`).
+- **Roles.tsx** (desde 14/10/2026): pestañas *Por rol* / *Por persona* / *Ubicación de menús*. Cada app con niveles rápidos (Sin acceso · Solo ver · Ver y cargar · Todo) + Detalle; por persona muestra origen (por rol / + extra / − quitado), "Copiar permisos de…" y "Quitar extras". Se guarda todo junto con la barra de abajo.
+- **Catálogo**: `src/config/permisosCatalogo.ts` lista solo los permisos que el código usa, agrupados por app. **Al crear un permiso nuevo, sumarlo ahí** o no aparece en Roles. La tabla `permisos` tiene ~1.500 claves generadas (`area.app.read/approve/...`) que nadie mira: se ocultan, no se borran. Ojo: `permisos` tiene más de 1.000 filas, la consulta sin filtro corta en 1.000.
 
 ## Helpers SQL (`private.*`)
 | Función | Qué hace |
