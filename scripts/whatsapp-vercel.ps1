@@ -22,11 +22,21 @@ function Pedir($texto) {
   try { return ([Runtime.InteropServices.Marshal]::PtrToStringBSTR($p)).Trim() } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($p) }
 }
 
+# npm falla con ENOENT si no existe la carpeta global de npm del usuario
+New-Item -ItemType Directory -Force (Join-Path $env:APPDATA 'npm') | Out-Null
+
+# Vercel CLI por cmd: así los avisos que npm/vercel escriben en stderr no cortan el script (PowerShell 5)
+function Vercel($argumentos, $entrada) {
+  $cmd = "npx --yes vercel@64.0.2 --scope $scope $argumentos 2>&1"
+  if ($null -ne $entrada) { $salida = $entrada | cmd /c $cmd } else { $salida = cmd /c $cmd }
+  return @{ ok = ($LASTEXITCODE -eq 0); salida = ($salida -join "`n") }
+}
+
 function Cargar($nombre, $valor) {
   # Si ya existe se reemplaza (vercel no deja agregar dos veces la misma)
-  npx --no-install vercel --scope $scope env rm $nombre production --yes 2>$null | Out-Null
-  $valor | npx --no-install vercel --scope $scope env add $nombre production --sensitive | Out-Null
-  if ($LASTEXITCODE -ne 0) { throw "No se pudo cargar $nombre en Vercel" }
+  Vercel "env rm $nombre production --yes" $null | Out-Null
+  $r = Vercel "env add $nombre production --sensitive" $valor
+  if (-not $r.ok) { throw "No se pudo cargar $nombre en Vercel:`n$($r.salida)" }
   Write-Host "  OK  $nombre" -ForegroundColor Green
 }
 
@@ -80,7 +90,7 @@ Write-Host "`nCargando en Vercel..."
 Cargar 'WHATSAPP_TOKEN' $token
 Cargar 'WHATSAPP_PHONE_ID' $phoneId
 
-$existentes = (npx --no-install vercel --scope $scope env ls production 2>$null) -join "`n"
+$existentes = (Vercel 'env ls production' $null).salida
 if ($existentes -notmatch '\bCRON_SECRET\b') {
   $bytes = New-Object byte[] 32
   [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
@@ -89,8 +99,9 @@ if ($existentes -notmatch '\bCRON_SECRET\b') {
 $token = $null; $auth = $null
 
 Write-Host "`nPublicando el hub de nuevo para que tome las variables..."
-npx --no-install vercel --scope $scope redeploy hub-mito.vercel.app --target production
-if ($LASTEXITCODE -ne 0) {
+$r = Vercel 'redeploy hub-mito.vercel.app --target production' $null
+if (-not $r.ok) {
+  Write-Host $r.salida
   Write-Host "No se pudo re-publicar solo. Hacelo a mano: https://vercel.com/mito-srl/hub-mito/deployments -> ultimo -> ... -> Redeploy" -ForegroundColor Yellow
 } else {
   Write-Host "`nListo. En el hub: Sistemas -> Envío informes y reportes tiene que decir 'WhatsApp conectado'." -ForegroundColor Green
