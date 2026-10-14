@@ -1,16 +1,23 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Loader2, Search, RefreshCw, Download, ClipboardList, PackageCheck, PackageOpen, PackageX, Percent, ChevronDown, ChevronRight,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
+import { descripcionesMaestro } from '@/lib/descripcionArticulos'
 
 /* ------------------------------------------------------------------ */
 /*  Estado de pedidos (Compras): cómo viene el ingreso de los pedidos  */
-/*  de compra, en unidades. Pedido = copia de Dragonfish; ingresado =  */
+/*  de compra, en unidades. Pedido = copia de Dragonfish; ingresado =   */
 /*  lo marcado en el Picking; cancelado = vw_FACT_CANCELADOS.          */
 /*  (rpc estado_pedidos_compra, sql/estado_pedidos_compra.sql)         */
+/*                                                                     */
+/*  Proveedores: se agrupan por descripción (proveedor_nombre) y el    */
+/*  filtro permite elegir la razón social (todos sus códigos) o un     */
+/*  código suelto (proveedor). El detalle de un pedido se agrupa por   */
+/*  artículo (con su total y la descripción adicional del maestro) y   */
+/*  se despliega por color/talle.                                      */
 /* ------------------------------------------------------------------ */
 
 interface EstadoPedido {
@@ -41,6 +48,9 @@ interface Renglon {
 
 type Estado = 'todos' | 'sin' | 'parcial' | 'completo' | 'sobrante'
 type Periodo = '90' | '180' | '365' | 'todo'
+
+/** Proveedor elegido en el filtro: la etiqueta para mostrar y los códigos a filtrar. */
+type FiltroProv = { label: string; codigos: string[] }
 
 const n0 = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 })
 const fechaCorta = (f: string | null) => (f ? f.slice(0, 10).split('-').reverse().join('/') : '—')
@@ -75,6 +85,15 @@ const numeroComprobante = (p: EstadoPedido) => {
   return m ? m[1] : p.numero != null ? String(p.numero) : p.codigo
 }
 
+/** Estadísticas de un conjunto de pedidos (para el resumen por proveedor). */
+type ProvStats = { pedidos: number; abiertos: number; unidades: number; recibidas: number; canceladas: number; pendientes: number }
+const statsVacio = (): ProvStats => ({ pedidos: 0, abiertos: 0, unidades: 0, recibidas: 0, canceladas: 0, pendientes: 0 })
+const statsSumar = (s: ProvStats, p: EstadoPedido) => {
+  s.pedidos++
+  if (!cerrado(p)) s.abiertos++
+  s.unidades += p.unidades; s.recibidas += p.recibidas; s.canceladas += p.canceladas; s.pendientes += pendientes(p)
+}
+
 function Barra({ valor }: { valor: number }) {
   return (
     <span className="block h-1.5 w-full overflow-hidden rounded-full bg-line/60">
@@ -98,12 +117,17 @@ export default function EstadoPedidos() {
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [periodo, setPeriodo] = useState<Periodo>('365')
-  const [proveedor, setProveedor] = useState('')
+  const [provSel, setProvSel] = useState<FiltroProv | null>(null)
+  const [panelProv, setPanelProv] = useState(false)
+  const [provAbierto, setProvAbierto] = useState<string | null>(null)
   const [estado, setEstado] = useState<Estado>('todos')
   const [busqueda, setBusqueda] = useState('')
   const [abierto, setAbierto] = useState<string | null>(null)
   const [renglones, setRenglones] = useState<Renglon[]>([])
+  const [descripciones, setDescripciones] = useState<Map<string, string>>(new Map())
+  const [artAbierto, setArtAbierto] = useState<string | null>(null)
   const [cargandoRenglones, setCargandoRenglones] = useState(false)
+  const provRef = useRef<HTMLDivElement>(null)
 
   const cargar = useCallback(async () => {
     if (!supabase) return
@@ -118,18 +142,49 @@ export default function EstadoPedidos() {
   }, [])
   useEffect(() => { void cargar() }, [cargar])
 
-  // Período + proveedor (los KPI y el resumen por proveedor usan esto; el estado solo filtra la lista)
+  // Cerrar el desplegable de proveedores al hacer click afuera o con Escape
+  useEffect(() => {
+    if (!panelProv) return
+    const onDown = (e: MouseEvent) => { if (provRef.current && !provRef.current.contains(e.target as Node)) setPanelProv(false) }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPanelProv(false) }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey) }
+  }, [panelProv])
+
+  // Período (los KPI y el resumen por proveedor usan esto; el estado solo filtra la lista)
   const delPeriodo = useMemo(() => {
     const desde = periodo === 'todo' ? null : new Date(Date.now() - Number(periodo) * 86400000).toISOString().slice(0, 10)
     return datos.filter((p) => p.unidades > 0 && (!desde || (p.fecha ?? '') >= desde))
   }, [datos, periodo])
-  const base = useMemo(() => delPeriodo.filter((p) => !proveedor || p.proveedor === proveedor), [delPeriodo, proveedor])
 
-  const proveedores = useMemo(() => {
-    const m = new Map<string, string>()
-    for (const p of delPeriodo) m.set(p.proveedor ?? '', p.proveedor_nombre || p.proveedor || '—')
-    return [...m].sort((a, b) => a[1].localeCompare(b[1], 'es'))
+  // Filtro de proveedor: por razón social (todos sus códigos) o por un código suelto
+  const base = useMemo(
+    () => delPeriodo.filter((p) => !provSel || provSel.codigos.includes(p.proveedor ?? '')),
+    [delPeriodo, provSel],
+  )
+
+  // Proveedores unificados por descripción, con el detalle de cada código
+  const gruposProv = useMemo(() => {
+    const m = new Map<string, { nombre: string; total: ProvStats; codigos: Map<string, ProvStats> }>()
+    for (const p of delPeriodo) {
+      const nombre = p.proveedor_nombre || p.proveedor || '—'
+      const cod = p.proveedor ?? ''
+      const g = m.get(nombre) ?? { nombre, total: statsVacio(), codigos: new Map<string, ProvStats>() }
+      statsSumar(g.total, p)
+      const s = g.codigos.get(cod) ?? statsVacio()
+      statsSumar(s, p)
+      g.codigos.set(cod, s)
+      m.set(nombre, g)
+    }
+    return [...m.values()].sort((a, b) => b.total.pendientes - a.total.pendientes)
   }, [delPeriodo])
+
+  /** Elige un proveedor y cierra el panel. */
+  function elegirProv(label: string, codigos: string[]) {
+    setProvSel({ label, codigos })
+    setPanelProv(false)
+  }
 
   const tot = useMemo(() => base.reduce((a, p) => ({
     unidades: a.unidades + p.unidades, recibidas: a.recibidas + p.recibidas, canceladas: a.canceladas + p.canceladas, pendientes: a.pendientes + pendientes(p),
@@ -137,23 +192,10 @@ export default function EstadoPedidos() {
     sin: a.sin + (estadoDe(p) === 'sin' ? 1 : 0),
   }), { unidades: 0, recibidas: 0, canceladas: 0, pendientes: 0, abiertos: 0, completos: 0, sin: 0 }), [base])
 
-  const porProveedor = useMemo(() => {
-    const m = new Map<string, { codigo: string; nombre: string; pedidos: number; abiertos: number; unidades: number; recibidas: number; canceladas: number; pendientes: number }>()
-    for (const p of delPeriodo) {
-      const k = p.proveedor ?? ''
-      const g = m.get(k) ?? { codigo: k, nombre: p.proveedor_nombre || k || '—', pedidos: 0, abiertos: 0, unidades: 0, recibidas: 0, canceladas: 0, pendientes: 0 }
-      g.pedidos++
-      if (!cerrado(p)) g.abiertos++
-      g.unidades += p.unidades; g.recibidas += p.recibidas; g.canceladas += p.canceladas; g.pendientes += pendientes(p)
-      m.set(k, g)
-    }
-    return [...m.values()].sort((a, b) => b.pendientes - a.pendientes)
-  }, [delPeriodo])
-
   const q = busqueda.trim().toUpperCase()
   const lista = useMemo(() => base
     .filter((p) => (estado === 'todos' || estadoDe(p) === estado)
-      && (!q || [numeroComprobante(p), p.proveedor_nombre ?? '', p.observacion ?? '', String(p.numero ?? '')].some((v) => v.toUpperCase().includes(q))))
+      && (!q || [numeroComprobante(p), p.proveedor_nombre ?? '', p.proveedor ?? '', p.observacion ?? '', String(p.numero ?? '')].some((v) => v.toUpperCase().includes(q))))
     .sort((a, b) => String(b.fecha ?? '').localeCompare(String(a.fecha ?? '')) || (b.numero ?? 0) - (a.numero ?? 0)),
   [base, estado, q])
 
@@ -161,6 +203,8 @@ export default function EstadoPedidos() {
     if (abierto === codigo) { setAbierto(null); return }
     setAbierto(codigo)
     setRenglones([])
+    setDescripciones(new Map())
+    setArtAbierto(null)
     if (!supabase) return
     setCargandoRenglones(true)
     const [{ data }, { data: canc }] = await Promise.all([
@@ -177,12 +221,25 @@ export default function EstadoPedidos() {
     }
     setRenglones(rs)
     setCargandoRenglones(false)
+    // Descripción adicional (maestro) por artículo
+    void descripcionesMaestro([...new Set(rs.map((r) => r.articulo))]).then(setDescripciones).catch(() => setDescripciones(new Map()))
   }
+
+  // Detalle agrupado por artículo (con su total) para el desplegable color/talle
+  const artGrupos = useMemo(() => {
+    const m = new Map<string, { articulo: string; pedido: number; ingresado: number; cancelado: number; items: Renglon[] }>()
+    for (const r of renglones) {
+      const g = m.get(r.articulo) ?? { articulo: r.articulo, pedido: 0, ingresado: 0, cancelado: 0, items: [] }
+      g.pedido += r.cantidad; g.ingresado += r.recibido; g.cancelado += r.cancelado; g.items.push(r)
+      m.set(r.articulo, g)
+    }
+    return [...m.values()].sort((a, b) => Math.abs(b.pedido - b.ingresado - b.cancelado) - Math.abs(a.pedido - a.ingresado - a.cancelado))
+  }, [renglones])
 
   async function exportar() {
     const XLSX = await import('xlsx')
     const filas = lista.map((p) => ({
-      Pedido: numeroComprobante(p), Fecha: fechaCorta(p.fecha), Proveedor: p.proveedor_nombre ?? p.proveedor ?? '',
+      Pedido: numeroComprobante(p), Fecha: fechaCorta(p.fecha), Proveedor: p.proveedor_nombre ?? p.proveedor ?? '', Código: p.proveedor ?? '',
       Unidades: p.unidades, Ingresadas: p.recibidas, Canceladas: p.canceladas, Pendientes: pendientes(p),
       '% ingreso': pct(p.recibidas, p.unidades),
       Estado: ESTADOS[estadoDe(p)].label, 'Último ingreso': fechaCorta(p.ultimo_ingreso), Observación: p.observacion ?? '',
@@ -193,6 +250,7 @@ export default function EstadoPedidos() {
   }
 
   const chip = 'rounded-full border px-3 py-1.5 text-xs font-medium transition'
+  const opcion = 'flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] hover:bg-surface2'
 
   return (
     <Layout>
@@ -218,179 +276,343 @@ export default function EstadoPedidos() {
 
       {/* Filtros */}
       <div className="mb-3 flex flex-wrap items-center gap-2 rounded-2xl border border-line bg-surface p-3">
-        <select value={periodo} onChange={(e) => setPeriodo(e.target.value as Periodo)} aria-label="Período"
-          className="h-9 rounded-xl border border-line bg-surface2 px-2.5 text-sm text-ink">
-          <option value="90">Últimos 3 meses</option>
-          <option value="180">Últimos 6 meses</option>
+        <select value={periodo} onChange={(e) => setPeriodo(e.target.value as Periodo)}
+          className="h-9 rounded-xl border border-line bg-surface2 px-3 text-sm text-ink">
+          <option value="90">Últimos 90 días</option>
+          <option value="180">Últimos 180 días</option>
           <option value="365">Último año</option>
-          <option value="todo">Todos</option>
+          <option value="todo">Todo</option>
         </select>
-        <select value={proveedor} onChange={(e) => setProveedor(e.target.value)} aria-label="Proveedor"
-          className="h-9 max-w-[16rem] rounded-xl border border-line bg-surface2 px-2.5 text-sm text-ink">
-          <option value="">Todos los proveedores</option>
-          {proveedores.map(([c, nom]) => <option key={c} value={c}>{nom}</option>)}
-        </select>
-        <div className="relative min-w-[200px] flex-1">
-          <Search size={15} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sub" />
-          <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar N° de pedido, proveedor u observación"
-            className="h-9 w-full rounded-xl border border-line bg-surface2 pl-9 pr-3 text-sm text-ink outline-none placeholder:text-sub/70" />
+
+        {/* Proveedor: desplegable ancho (columnas), agrupado por descripción */}
+        <div ref={provRef} className="relative">
+          <button type="button" onClick={() => setPanelProv((v) => !v)} aria-haspopup="listbox" aria-expanded={panelProv}
+            className="btn-press inline-flex h-9 items-center gap-2 rounded-xl border border-line bg-surface px-3 text-sm font-medium text-ink hover:bg-surface2">
+            <span className={provSel ? 'text-ink' : 'text-sub'}>{provSel ? provSel.label : 'Todos los proveedores'}</span>
+            {provSel && provSel.codigos.length > 1 && (
+              <span className="rounded-full bg-lime-500/15 px-2 py-0.5 text-[11px] font-semibold text-lime-500">{provSel.codigos.length} códigos</span>
+            )}
+            <ChevronDown size={15} className={`text-sub transition ${panelProv ? 'rotate-180' : ''}`} aria-hidden />
+          </button>
+
+          {panelProv && (
+            <div className="absolute left-0 z-30 mt-2 max-h-[70vh] w-[min(92vw,760px)] overflow-auto rounded-2xl border border-line bg-paper p-2 shadow-2xl">
+              <button type="button" onClick={() => { setProvSel(null); setPanelProv(false) }}
+                className={`${opcion} ${!provSel ? 'bg-surface2 font-medium text-ink' : 'text-sub'}`}>
+                <span>Todos los proveedores</span>
+              </button>
+              <div className="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {gruposProv.map((g) => {
+                  const multi = g.codigos.size > 1
+                  const cods = [...g.codigos.entries()].sort((a, b) => b[1].pedidos - a[1].pedidos)
+                  return (
+                    <div key={g.nombre} className="rounded-xl border border-line bg-surface p-1">
+                      <div className="mb-0.5 px-2 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-400">{g.nombre}</div>
+                      {multi && (
+                        <button type="button" onClick={() => elegirProv(g.nombre, [...g.codigos.keys()])} className={opcion}>
+                          <span className="text-ink">Todos los códigos</span>
+                          <span className="tabular-nums text-[12px] text-sub">{n0.format(g.total.pedidos)}</span>
+                        </button>
+                      )}
+                      {cods.map(([cod, s]) => (
+                        <button key={cod} type="button" onClick={() => elegirProv(multi ? cod : g.nombre, [cod])}
+                          className={`${opcion} ${multi ? 'pl-4 text-sub' : 'text-ink'}`}>
+                          <span className={multi ? '' : 'font-medium'}>{multi ? cod : g.nombre}</span>
+                          <span className="tabular-nums text-[12px] text-sub">{n0.format(s.pedidos)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
         </div>
+
+        <label className="relative flex h-9 flex-1 items-center gap-2 rounded-xl border border-line bg-surface2 px-3 text-sub sm:min-w-[240px]">
+          <Search size={15} aria-hidden />
+          <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Buscar N° de pedido, proveedor o código…"
+            className="h-full flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-sub" />
+        </label>
       </div>
 
       {cargando ? (
-        <div className="flex items-center justify-center gap-2 py-16 text-sub"><Loader2 size={18} className="animate-spin" aria-hidden /> Cargando pedidos…</div>
+        <div className="flex items-center justify-center gap-2 py-10 text-sub"><Loader2 size={16} className="animate-spin" aria-hidden /> Cargando…</div>
       ) : (
-        <div className="space-y-4 pb-6">
-          {/* KPI */}
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <>
+          {/* KPIs */}
+          <div className="mb-3 grid grid-cols-2 gap-3 lg:grid-cols-5">
             <Kpi icono={<Percent size={14} className="text-emerald-500" />} label="Ingresado" valor={`${pct(tot.recibidas, tot.unidades)}%`}
               nota={`${n0.format(tot.recibidas)} de ${n0.format(tot.unidades)} unidades`} />
             <Kpi icono={<PackageOpen size={14} className="text-amber-500" />} label="Unidades pendientes" valor={n0.format(tot.pendientes)} nota="pedidas − ingresadas − canceladas" />
             <Kpi icono={<PackageX size={14} className="text-sky-500" />} label="Unidades canceladas" valor={n0.format(tot.canceladas)} />
-            <Kpi icono={<ClipboardList size={14} className="text-rose-500" />} label="Pedidos abiertos" valor={n0.format(tot.abiertos)} nota={`${n0.format(tot.sin)} sin ningún ingreso`} />
-            <Kpi icono={<PackageCheck size={14} className="text-violet-500" />} label="Pedidos completos" valor={n0.format(tot.completos)} nota={`de ${n0.format(base.length)} pedidos`} />
+            <Kpi icono={<ClipboardList size={14} className="text-rose-500" />} label="Pedidos abiertos" valor={n0.format(tot.abiertos)} nota={`${n0.format(tot.sin)} sin ingresar`} />
+            <Kpi icono={<PackageCheck size={14} className="text-emerald-500" />} label="Pedidos completos" valor={n0.format(tot.completos)} nota={`de ${n0.format(base.length)}`} />
           </div>
 
-          {/* Por proveedor */}
-          {!proveedor && (
-            <section className="rounded-2xl border border-line bg-surface p-3">
-              <h2 className="mb-2 text-sm font-semibold text-ink">Por proveedor <span className="font-normal text-sub">(más pendiente primero · tocá uno para filtrar)</span></h2>
-              <div className="max-h-72 overflow-y-auto">
-                <table className="w-full min-w-[40rem] text-sm">
-                  <thead className="sticky top-0 bg-surface text-left text-[11px] uppercase tracking-wide text-sub">
-                    <tr>
-                      <th className="py-1.5 pr-3">Proveedor</th>
-                      <th className="py-1.5 pr-3 text-right">Pedidos abiertos</th>
-                      <th className="py-1.5 pr-3 text-right">Unidades</th>
-                      <th className="py-1.5 pr-3 text-right">Pendientes</th>
-                      <th className="py-1.5 pr-3 text-right">Canceladas</th>
-                      <th className="w-40 py-1.5">Ingreso</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {porProveedor.map((g) => {
-                      const v = pct(g.recibidas, g.unidades)
-                      return (
-                        <tr key={g.codigo} onClick={() => setProveedor(g.codigo)} className="cursor-pointer border-t border-line hover:bg-surface2/60">
-                          <td className="py-1.5 pr-3 font-medium text-ink">{g.nombre}</td>
-                          <td className="py-1.5 pr-3 text-right tabular-nums">{n0.format(g.abiertos)} <span className="text-sub">/ {n0.format(g.pedidos)}</span></td>
-                          <td className="py-1.5 pr-3 text-right tabular-nums">{n0.format(g.unidades)}</td>
-                          <td className="py-1.5 pr-3 text-right font-semibold tabular-nums text-ink">{n0.format(g.pendientes)}</td>
-                          <td className="py-1.5 pr-3 text-right tabular-nums text-sub">{g.canceladas ? n0.format(g.canceladas) : '—'}</td>
-                          <td className="py-1.5"><div className="flex items-center gap-2"><Barra valor={v} /><span className="w-9 text-right text-xs tabular-nums text-sub">{v}%</span></div></td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          )}
-
-          {/* Pedidos */}
-          <section className="rounded-2xl border border-line bg-surface p-3">
-            <div className="mb-2 flex flex-wrap items-center gap-1.5">
-              <h2 className="mr-2 text-sm font-semibold text-ink">Pedidos <span className="font-normal text-sub">({n0.format(lista.length)})</span></h2>
-              {(['todos', 'sin', 'parcial', 'completo', 'sobrante'] as const).map((e) => (
-                <button key={e} onClick={() => setEstado(e)}
-                  className={`${chip} ${estado === e ? 'border-lime-500/50 bg-lime-500/15 text-lime-500' : 'border-line text-sub hover:text-ink'}`}>
-                  {e === 'todos' ? 'Todos' : ESTADOS[e].label}
-                </button>
-              ))}
-              {proveedor && <button onClick={() => setProveedor('')} className="ml-auto text-xs text-brand-400 hover:underline">Ver todos los proveedores</button>}
-            </div>
+          {/* Resumen por proveedor (una fila por razón social; la flecha abre los códigos) */}
+          <section className="mb-3 rounded-2xl border border-line bg-surface p-3">
+            <h2 className="mb-2 text-sm font-semibold text-ink">
+              Por proveedor
+              <span className="ml-1.5 font-normal text-xs text-sub">unificado por descripción · tocá el nombre para filtrar, la flecha para ver los códigos</span>
+            </h2>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[56rem] text-sm">
+              <table className="w-full min-w-[680px] text-sm">
                 <thead className="text-left text-[11px] uppercase tracking-wide text-sub">
                   <tr>
-                    <th className="py-1.5 pr-2" />
-                    <th className="py-1.5 pr-3">Pedido</th>
-                    <th className="py-1.5 pr-3">Fecha</th>
+                    <th className="w-6 py-1.5 pr-1" />
                     <th className="py-1.5 pr-3">Proveedor</th>
+                    <th className="py-1.5 pr-3 text-right">Pedidos abiertos</th>
                     <th className="py-1.5 pr-3 text-right">Unidades</th>
-                    <th className="py-1.5 pr-3 text-right">Canceladas</th>
                     <th className="py-1.5 pr-3 text-right">Pendientes</th>
-                    <th className="w-36 py-1.5 pr-3">Ingreso</th>
-                    <th className="py-1.5 pr-3">Último ingreso</th>
-                    <th className="py-1.5">Estado</th>
+                    <th className="py-1.5 pr-3 text-right">Canceladas</th>
+                    <th className="w-40 py-1.5">Ingreso</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {lista.map((p) => {
-                    const v = pct(p.recibidas, p.unidades)
-                    const est = estadoDe(p)
-                    const dias = diasDesde(p.fecha)
-                    const abiertoEste = abierto === p.codigo
+                  {gruposProv.map((g) => {
+                    const v = pct(g.total.recibidas, g.total.unidades)
+                    const multi = g.codigos.size > 1
+                    const abiertoEste = provAbierto === g.nombre
                     return (
-                      <Fragment key={p.codigo}>
-                        <tr onClick={() => void abrir(p.codigo)} className="cursor-pointer border-t border-line hover:bg-surface2/60">
-                          <td className="py-2 pr-2 text-sub">{abiertoEste ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</td>
-                          <td className="py-2 pr-3 font-medium text-ink">{numeroComprobante(p)}</td>
-                          <td className="py-2 pr-3 tabular-nums">{fechaCorta(p.fecha)}
-                            {dias != null && !cerrado(p) && <span className={`ml-1.5 text-xs ${dias > 60 ? 'text-rose-400' : 'text-sub'}`}>hace {dias} d</span>}
+                      <Fragment key={g.nombre}>
+                        <tr className="border-t border-line hover:bg-surface2/60">
+                          <td className="py-1.5 pr-1 text-sub">
+                            {multi && (
+                              <button type="button" onClick={() => setProvAbierto(abiertoEste ? null : g.nombre)}
+                                aria-label={abiertoEste ? 'Ocultar códigos' : 'Ver códigos'} className="inline-flex">
+                                {abiertoEste ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                              </button>
+                            )}
                           </td>
-                          <td className="py-2 pr-3">{p.proveedor_nombre ?? p.proveedor}</td>
-                          <td className="py-2 pr-3 text-right tabular-nums">{n0.format(p.unidades)}</td>
-                          <td className="py-2 pr-3 text-right tabular-nums text-sub">{p.canceladas ? n0.format(p.canceladas) : '—'}</td>
-                          <td className="py-2 pr-3 text-right font-semibold tabular-nums text-ink">{n0.format(pendientes(p))}</td>
-                          <td className="py-2 pr-3"><div className="flex items-center gap-2"><Barra valor={v} /><span className="w-9 text-right text-xs tabular-nums text-sub">{v}%</span></div></td>
-                          <td className="py-2 pr-3 tabular-nums text-sub">{fechaCorta(p.ultimo_ingreso)}</td>
-                          <td className="py-2"><span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${ESTADOS[est].clase}`}>{ESTADOS[est].label}</span>
-                            {p.demas > 0 && <span className="ml-1 text-[11px] text-sky-400">+{n0.format(p.demas)} de más</span>}
+                          <td className="py-1.5 pr-3">
+                            <button type="button" onClick={() => elegirProv(g.nombre, [...g.codigos.keys()])}
+                              className="font-medium text-ink hover:text-lime-500">{g.nombre}</button>
+                            {multi && <span className="ml-1.5 text-[11px] text-sub">{g.codigos.size} códigos</span>}
                           </td>
+                          <td className="py-1.5 pr-3 text-right tabular-nums">{n0.format(g.total.abiertos)} <span className="text-sub">/ {n0.format(g.total.pedidos)}</span></td>
+                          <td className="py-1.5 pr-3 text-right tabular-nums">{n0.format(g.total.unidades)}</td>
+                          <td className="py-1.5 pr-3 text-right font-semibold tabular-nums text-ink">{n0.format(g.total.pendientes)}</td>
+                          <td className="py-1.5 pr-3 text-right tabular-nums text-sub">{g.total.canceladas ? n0.format(g.total.canceladas) : '—'}</td>
+                          <td className="py-1.5"><div className="flex items-center gap-2"><Barra valor={v} /><span className="w-9 text-right text-xs tabular-nums text-sub">{v}%</span></div></td>
                         </tr>
-                        {abiertoEste && (
+                        {multi && abiertoEste && (
                           <tr className="bg-surface2/40">
                             <td />
-                            <td colSpan={9} className="py-2 pr-3">
-                              {p.observacion && <p className="mb-2 text-xs text-sub">Obs.: {p.observacion}</p>}
-                              {cargandoRenglones ? (
-                                <span className="inline-flex items-center gap-1.5 text-xs text-sub"><Loader2 size={13} className="animate-spin" /> Cargando artículos…</span>
-                              ) : (
-                                <table className="w-full max-w-3xl text-xs">
-                                  <thead className="text-left text-[10px] uppercase tracking-wide text-sub">
-                                    <tr><th className="py-1 pr-3">Artículo</th><th className="py-1 pr-3">Color</th><th className="py-1 pr-3">Talle</th>
-                                      <th className="py-1 pr-3 text-right">Pedido</th><th className="py-1 pr-3 text-right">Ingresado</th><th className="py-1 pr-3 text-right">Cancelado</th><th className="py-1 text-right">Falta / Sobra</th></tr>
-                                  </thead>
-                                  <tbody>
-                                    {[...renglones]
-                                      // Primero lo que no cierra (falta o sobra), de mayor a menor diferencia
-                                      .sort((a, b) => Math.abs(b.cantidad - b.recibido - b.cancelado) - Math.abs(a.cantidad - a.recibido - a.cancelado))
-                                      .map((r) => {
-                                      const dif = r.cantidad - r.recibido - r.cancelado
-                                      const falta = Math.max(0, dif)
-                                      const sobra = Math.max(0, -dif)
-                                      return (
-                                        <tr key={`${r.articulo}|${r.color}|${r.talle}`} className="border-t border-line/60">
-                                          <td className="py-1 pr-3 font-medium text-ink">{r.articulo}</td>
-                                          <td className="py-1 pr-3">{r.color}</td>
-                                          <td className="py-1 pr-3">{r.talle}</td>
-                                          <td className="py-1 pr-3 text-right tabular-nums">{n0.format(r.cantidad)}</td>
-                                          <td className="py-1 pr-3 text-right tabular-nums">{n0.format(r.recibido)}</td>
-                                          <td className="py-1 pr-3 text-right tabular-nums text-sub">{r.cancelado ? n0.format(r.cancelado) : '—'}</td>
-                                          <td className={`py-1 text-right font-semibold tabular-nums ${falta ? 'text-amber-400' : sobra ? 'text-sky-400' : 'text-emerald-400'}`}>
-                                            {falta ? n0.format(falta) : sobra ? `Sobra +${n0.format(sobra)}` : '✓'}
-                                          </td>
-                                        </tr>
-                                      )
-                                    })}
-                                  </tbody>
-                                </table>
-                              )}
+                            <td colSpan={6} className="py-1.5 pr-3">
+                              <table className="w-full max-w-2xl text-xs">
+                                <thead>
+                                  <tr className="text-[10px] uppercase tracking-wide text-sub">
+                                    <th className="py-1 pr-3 text-left">Código</th>
+                                    <th className="py-1 pr-3 text-right">Pedidos abiertos</th>
+                                    <th className="py-1 pr-3 text-right">Unidades</th>
+                                    <th className="py-1 pr-3 text-right">Pendientes</th>
+                                    <th className="py-1 pr-3 text-right">Canceladas</th>
+                                    <th className="py-1 text-right">Ingreso</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {[...g.codigos.entries()].sort((a, b) => b[1].pendientes - a[1].pendientes).map(([cod, s]) => {
+                                    const vc = pct(s.recibidas, s.unidades)
+                                    return (
+                                      <tr key={cod} className="border-t border-line/60">
+                                        <td className="py-1 pr-3">
+                                          <button type="button" onClick={() => elegirProv(cod, [cod])} className="text-ink hover:text-lime-500">{cod}</button>
+                                        </td>
+                                        <td className="py-1 pr-3 text-right tabular-nums">{n0.format(s.abiertos)} <span className="text-sub">/ {n0.format(s.pedidos)}</span></td>
+                                        <td className="py-1 pr-3 text-right tabular-nums">{n0.format(s.unidades)}</td>
+                                        <td className="py-1 pr-3 text-right tabular-nums">{n0.format(s.pendientes)}</td>
+                                        <td className="py-1 pr-3 text-right tabular-nums text-sub">{s.canceladas ? n0.format(s.canceladas) : '—'}</td>
+                                        <td className="py-1"><div className="flex items-center justify-end gap-2"><Barra valor={vc} /><span className="w-9 text-right text-xs tabular-nums text-sub">{vc}%</span></div></td>
+                                      </tr>
+                                    )
+                                  })}
+                                </tbody>
+                              </table>
                             </td>
                           </tr>
                         )}
                       </Fragment>
                     )
                   })}
-                  {!lista.length && (
-                    <tr><td colSpan={10} className="py-10 text-center text-sub">No hay pedidos con esos filtros.</td></tr>
-                  )}
                 </tbody>
               </table>
             </div>
           </section>
-        </div>
+
+          {/* Lista de pedidos */}
+          <section className="rounded-2xl border border-line bg-surface p-3">
+            <div className="mb-2 flex flex-wrap items-center gap-1.5">
+              <h2 className="mr-1 text-sm font-semibold text-ink">Pedidos <span className="font-normal text-sub">({n0.format(lista.length)})</span></h2>
+              {(['todos', 'sin', 'parcial', 'completo', 'sobrante'] as const).map((e) => (
+                <button key={e} onClick={() => setEstado(e)}
+                  className={`${chip} ${estado === e ? 'border-lime-500/50 bg-lime-500/15 text-lime-500' : 'border-line text-sub hover:text-ink'}`}>
+                  {e === 'todos' ? 'Todos' : ESTADOS[e].label}
+                </button>
+              ))}
+              {provSel && (
+                <span className="ml-auto flex items-center gap-2 text-xs text-sub">
+                  Proveedor: <b className="text-ink">{provSel.label}</b>
+                  <button type="button" onClick={() => setProvSel(null)} className="text-brand-400 hover:underline">Quitar</button>
+                </span>
+              )}
+            </div>
+
+            {lista.length === 0 ? (
+              <p className="py-8 text-center text-sm text-sub">No hay pedidos para estos filtros.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[56rem] text-sm">
+                  <thead className="text-left text-[11px] uppercase tracking-wide text-sub">
+                    <tr>
+                      <th className="py-1.5 pr-2" />
+                      <th className="py-1.5 pr-3">Pedido</th>
+                      <th className="py-1.5 pr-3">Fecha</th>
+                      <th className="py-1.5 pr-3">Proveedor</th>
+                      <th className="py-1.5 pr-3 text-right">Unidades</th>
+                      <th className="py-1.5 pr-3 text-right">Canceladas</th>
+                      <th className="py-1.5 pr-3 text-right">Pendientes</th>
+                      <th className="w-36 py-1.5 pr-3">Ingreso</th>
+                      <th className="py-1.5 pr-3">Último ingreso</th>
+                      <th className="py-1.5">Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lista.map((p) => {
+                      const v = pct(p.recibidas, p.unidades)
+                      const est = estadoDe(p)
+                      const dias = diasDesde(p.fecha)
+                      const abiertoEste = abierto === p.codigo
+                      return (
+                        <Fragment key={p.codigo}>
+                          <tr onClick={() => void abrir(p.codigo)} className="cursor-pointer border-t border-line hover:bg-surface2/60">
+                            <td className="py-2 pr-2 text-sub">{abiertoEste ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</td>
+                            <td className="py-2 pr-3 font-medium text-ink">{numeroComprobante(p)}</td>
+                            <td className="py-2 pr-3 tabular-nums">{fechaCorta(p.fecha)}
+                              {dias != null && !cerrado(p) && <span className={`ml-1.5 text-xs ${dias > 60 ? 'text-rose-400' : 'text-sub'}`}>hace {dias} d</span>}
+                            </td>
+                            <td className="py-2 pr-3">
+                              {p.proveedor_nombre ?? p.proveedor}
+                              {provSel && provSel.codigos.length > 1 && <span className="ml-1.5 text-[11px] text-sub">{p.proveedor}</span>}
+                            </td>
+                            <td className="py-2 pr-3 text-right tabular-nums">{n0.format(p.unidades)}</td>
+                            <td className="py-2 pr-3 text-right tabular-nums text-sub">{p.canceladas ? n0.format(p.canceladas) : '—'}</td>
+                            <td className="py-2 pr-3 text-right font-semibold tabular-nums text-ink">{n0.format(pendientes(p))}</td>
+                            <td className="py-2 pr-3"><div className="flex items-center gap-2"><Barra valor={v} /><span className="w-9 text-right text-xs tabular-nums text-sub">{v}%</span></div></td>
+                            <td className="py-2 pr-3 tabular-nums text-sub">{fechaCorta(p.ultimo_ingreso)}</td>
+                            <td className="py-2"><span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${ESTADOS[est].clase}`}>{ESTADOS[est].label}</span>
+                              {p.demas > 0 && <span className="ml-1 text-[11px] text-sky-400">+{n0.format(p.demas)} de más</span>}
+                            </td>
+                          </tr>
+                          {abiertoEste && (
+                            <tr className="bg-surface2/40">
+                              <td />
+                              <td colSpan={9} className="py-2 pr-3">
+                                {p.observacion && <p className="mb-2 text-xs text-sub">Obs.: {p.observacion}</p>}
+                                {cargandoRenglones ? (
+                                  <span className="inline-flex items-center gap-1.5 text-xs text-sub"><Loader2 size={13} className="animate-spin" /> Cargando artículos…</span>
+                                ) : (
+                                  <table className="w-full max-w-4xl text-xs">
+                                    <thead className="text-left text-[10px] uppercase tracking-wide text-sub">
+                                      <tr>
+                                        <th className="w-5 py-1" />
+                                        <th className="py-1 pr-3">Artículo</th>
+                                        <th className="py-1 pr-3">Descripción adicional</th>
+                                        <th className="py-1 pr-3 text-right">Pedido</th>
+                                        <th className="py-1 pr-3 text-right">Ingresado</th>
+                                        <th className="py-1 pr-3 text-right">Cancelado</th>
+                                        <th className="py-1 text-right">Falta / Sobra</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {artGrupos.map((g) => {
+                                        const dif = g.pedido - g.ingresado - g.cancelado
+                                        const falta = Math.max(0, dif)
+                                        const sobra = Math.max(0, -dif)
+                                        const multi = g.items.length > 1
+                                        const artAbiertoEste = artAbierto === g.articulo
+                                        return (
+                                          <Fragment key={g.articulo}>
+                                            <tr className="border-t border-line/60 hover:bg-surface2/50">
+                                              <td className="py-1 pr-1 text-sub">
+                                                {multi && (
+                                                  <button type="button" onClick={() => setArtAbierto(artAbiertoEste ? null : g.articulo)}
+                                                    aria-label={artAbiertoEste ? 'Ocultar color y talle' : 'Ver color y talle'} className="inline-flex">
+                                                    {artAbiertoEste ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                                  </button>
+                                                )}
+                                              </td>
+                                              <td className="py-1 pr-3 font-medium text-ink">
+                                                {g.articulo}
+                                                {multi && <span className="ml-1.5 text-[10px] font-normal text-sub">{g.items.length} color/talle</span>}
+                                              </td>
+                                              <td className="py-1 pr-3 text-sub">{descripciones.get(g.articulo.trim().toUpperCase()) ?? '—'}</td>
+                                              <td className="py-1 pr-3 text-right tabular-nums">{n0.format(g.pedido)}</td>
+                                              <td className="py-1 pr-3 text-right tabular-nums">{n0.format(g.ingresado)}</td>
+                                              <td className="py-1 pr-3 text-right tabular-nums text-sub">{g.cancelado ? n0.format(g.cancelado) : '—'}</td>
+                                              <td className={`py-1 text-right font-semibold tabular-nums ${falta ? 'text-amber-400' : sobra ? 'text-sky-400' : 'text-emerald-400'}`}>
+                                                {falta ? n0.format(falta) : sobra ? `Sobra +${n0.format(sobra)}` : '✓'}
+                                              </td>
+                                            </tr>
+                                            {multi && artAbiertoEste && (
+                                              <tr className="bg-surface2/30">
+                                                <td />
+                                                <td colSpan={6} className="py-1 pr-3">
+                                                  <table className="w-full max-w-2xl text-[11px]">
+                                                    <thead className="text-left text-[10px] uppercase tracking-wide text-sub">
+                                                      <tr>
+                                                        <th className="py-1 pr-3">Color</th>
+                                                        <th className="py-1 pr-3">Talle</th>
+                                                        <th className="py-1 pr-3 text-right">Pedido</th>
+                                                        <th className="py-1 pr-3 text-right">Ingresado</th>
+                                                        <th className="py-1 pr-3 text-right">Cancelado</th>
+                                                        <th className="py-1 text-right">Falta / Sobra</th>
+                                                      </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                      {[...g.items]
+                                                        .sort((a, b) => Math.abs(b.cantidad - b.recibido - b.cancelado) - Math.abs(a.cantidad - a.recibido - a.cancelado))
+                                                        .map((r) => {
+                                                          const d = r.cantidad - r.recibido - r.cancelado
+                                                          const f = Math.max(0, d)
+                                                          const s = Math.max(0, -d)
+                                                          return (
+                                                            <tr key={`${r.color}|${r.talle}`} className="border-t border-line/60">
+                                                              <td className="py-1 pr-3">{r.color || '—'}</td>
+                                                              <td className="py-1 pr-3">{r.talle || '—'}</td>
+                                                              <td className="py-1 pr-3 text-right tabular-nums">{n0.format(r.cantidad)}</td>
+                                                              <td className="py-1 pr-3 text-right tabular-nums">{n0.format(r.recibido)}</td>
+                                                              <td className="py-1 pr-3 text-right tabular-nums text-sub">{r.cancelado ? n0.format(r.cancelado) : '—'}</td>
+                                                              <td className={`py-1 text-right font-semibold tabular-nums ${f ? 'text-amber-400' : s ? 'text-sky-400' : 'text-emerald-400'}`}>
+                                                                {f ? n0.format(f) : s ? `Sobra +${n0.format(s)}` : '✓'}
+                                                              </td>
+                                                            </tr>
+                                                          )
+                                                        })}
+                                                    </tbody>
+                                                  </table>
+                                                </td>
+                                              </tr>
+                                            )}
+                                          </Fragment>
+                                        )
+                                      })}
+                                    </tbody>
+                                  </table>
+                                )}
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        </>
       )}
     </Layout>
   )
