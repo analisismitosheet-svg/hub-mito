@@ -5,7 +5,8 @@
 -- Aplicado en Supabase (migración eficiencia_con_armados). Idempotente.
 --
 -- 1) estadistica_vtd: además de las repos (mayorista_lotes), devuelve una "repo"
---    por día con los armados de pedidos VTD de ese día (fecha del pedido): cada
+--    por día con los pedidos VTD de ese día (fecha del pedido; con o sin armado: sin
+--    armado cuenta la venta del pedido y 0 mandado): cada
 --    pedido = un local (cliente). venta = unidades pedidas, repo = escaneadas,
 --    faltante, segundos = cronómetro del armado, responsable = quien lo aceptó.
 --    El venta_fecha sale de la observación "REPO DIARIA (dd/mm/aaaa)" si está.
@@ -64,13 +65,19 @@ BEGIN
       LEFT JOIN public.empleados e ON e.id = r.empleado_id
      WHERE r.empleado_id IS NOT NULL
   ),
-  -- Armados de pedidos VTD (la repo diaria desde el 09/10): el más nuevo por pedido
+  -- Pedidos VTD del período con su armado más nuevo (si no tiene, cuenta igual: venta sin mandar)
   ar AS (
-    SELECT DISTINCT ON (a.pedido_codigo) a.*, p.fecha AS pfecha, p.observacion
-      FROM public.mayorista_armados a
-      JOIN public.pedidos_venta p ON p.codigo = a.pedido_codigo
-     WHERE p.motivo = 'VTD' AND p.fecha BETWEEN p_desde AND p_hasta
-     ORDER BY a.pedido_codigo, a.creado_at DESC
+    SELECT a.id, coalesce(a.estado, 'pendiente') AS estado, coalesce(a.crono_segundos, 0) AS crono_segundos,
+           a.crono_estado, a.crono_desde, a.aceptado_nombre, a.aceptado_por,
+           p.cliente, p.fecha AS pfecha, p.observacion,
+           coalesce((SELECT sum(round(i.cantidad)) FROM public.pedidos_venta_items i WHERE i.codigo = p.codigo), 0)::integer AS venta_pedido
+      FROM public.pedidos_venta p
+      LEFT JOIN LATERAL (
+        SELECT * FROM public.mayorista_armados x WHERE x.pedido_codigo = p.codigo ORDER BY x.creado_at DESC LIMIT 1
+      ) a ON true
+     WHERE p.motivo = 'VTD' AND p.fecha BETWEEN p_desde AND p_hasta AND NOT coalesce(p.anulado, false)
+       -- sin armado solo desde que la repo diaria se hace como armado (09/10/2026)
+       AND (a.id IS NOT NULL OR p.fecha >= DATE '2026-10-09')
   ),
   ai AS (
     SELECT x.armado_id,
@@ -96,7 +103,7 @@ BEGIN
          'Armados VTD ' || to_char(ar.pfecha, 'DD/MM/YYYY'),
          CASE WHEN d.terminado THEN 'finalizado' ELSE 'en_proceso' END,
          upper(btrim(coalesce(ar.cliente, ''))),
-         coalesce(ai.venta, 0), coalesce(ai.repo, 0), coalesce(ai.faltante, 0),
+         coalesce(ai.venta, ar.venta_pedido), coalesce(ai.repo, 0), coalesce(ai.faltante, 0),
          (ar.crono_segundos + CASE WHEN ar.crono_estado = 'en_curso' AND ar.crono_desde IS NOT NULL
                                    THEN greatest(0, extract(epoch FROM now() - ar.crono_desde)) ELSE 0 END)::integer,
          CASE WHEN ar.crono_segundos > 0 OR ar.crono_estado = 'en_curso' THEN coalesce(ai.repo, 0) ELSE 0 END,

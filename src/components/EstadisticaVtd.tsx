@@ -228,15 +228,17 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
               <div key={a.motivo} className="rounded-2xl border bg-surface p-3" style={{ borderColor: `${color}40` }}>
                 <div className="flex items-baseline justify-between gap-2">
                   <p className="text-[11px] font-bold uppercase tracking-wide" style={{ color }}>
-                    {a.motivo === 'VTD' ? 'Venta diaria (VTD)' : 'Reposición (REP)'} · completado
+                    {a.motivo === 'VTD' ? 'Venta diaria (VTD)' : 'Reposición (REP)'} · unidades completadas
                   </p>
                   <p className="font-display text-2xl font-extrabold tabular-nums text-ink">{Math.floor(pct)}%</p>
                 </div>
                 <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-line">
                   <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
                 </div>
-                <p className="mt-1 text-[11px] text-sub">
-                  {n0.format(a.unidades_ok)} de {n0.format(a.unidades)} unidades · {a.completos}/{a.pedidos} pedidos completos
+                <p className="mt-1 text-sm text-sub">
+                  <b className="tabular-nums text-ink">{n0.format(a.unidades_ok)}</b> de <b className="tabular-nums text-ink">{n0.format(a.unidades)}</b> unidades
+                  {a.unidades > a.unidades_ok ? <> · faltan <b className="tabular-nums" style={{ color }}>{n0.format(a.unidades - a.unidades_ok)}</b></> : ''}
+                  <span className="ml-1 text-[11px]">({a.completos}/{a.pedidos} pedidos completos)</span>
                 </p>
               </div>
             )
