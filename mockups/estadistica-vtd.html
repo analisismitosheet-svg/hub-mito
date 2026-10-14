@@ -68,7 +68,7 @@
   <div class="nota">
     <ul>
       <li><b>Hoy</b> muestra solo la repo del día (con ◀ ▶ vas a otro día). <b>Por semana</b> muestra las repos de lunes a domingo, una fila por día como tu Excel, y el cuadro por local sumado.</li>
-      <li><b>Horas</b>: el tiempo trabajado en Mi repo (Iniciar → Finalizar, sin las pausas), sumado por persona. <b>HS x per</b> = esas horas; <b>Horas</b> = HS x per ÷ personas. Si nadie usó el cronómetro ese día, queda «—».</li>
+      <li><b>Horas</b>: el tiempo trabajado en Mi repo (Iniciar → Finalizar, sin las pausas), sumado por persona. <b>HS total</b> = esas horas; <b>Horas</b> = HS total ÷ personas. Si nadie usó el cronómetro ese día, queda «—».</li>
       <li><b>Personas</b>: responsables asignados en la repo. <b>Cant repo</b>: escaneado/tildado. <b>No mandados</b>: venta − repo.</li>
     </ul>
   </div>
@@ -118,7 +118,7 @@ function pintar(){
     document.getElementById('periodo').textContent=sem==='sem 5/10'?'Semana 5/10 – 11/10':'Semana 29/9 – 4/10';
     const hxp=r=>r[4], horas=r=>r[4]==null?null:r[4]/r[5], pph=r=>r[4]?r[3]/r[4]:null;
     const conH=rows.filter(r=>r[4]!=null), prom=(fn)=>conH.length?conH.reduce((s,r)=>s+fn(r),0)/conH.length:null;
-    document.getElementById('thD').innerHTML=`<tr><th>Día de reposición</th><th>Venta</th><th>Cant venta</th><th>Cant repo</th><th>Art no mandados</th><th>Locales</th><th><span class="prom">${n2(prom(horas))}</span>Horas</th><th>Personas</th><th>HS x per</th><th><span class="prom">${n2(prom(pph))}</span>Prendas/HS</th><th>Estado</th></tr>`;
+    document.getElementById('thD').innerHTML=`<tr><th>Día de reposición</th><th>Venta</th><th>Cant venta</th><th>Cant repo</th><th>Art no mandados</th><th>Locales</th><th><span class="prom">${n2(prom(horas))}</span>Horas</th><th>Personas</th><th>HS total</th><th><span class="prom">${n2(prom(pph))}</span>Prendas/HS</th><th>Estado</th></tr>`;
     document.getElementById('tbD').innerHTML=rows.map(r=>`<tr><td><b>${r[0]}</b></td><td class="sub">${r[1]}</td><td class="venta">${n0(r[2])}</td><td>${n0(r[3])}</td><td class="falt">${n0(r[2]-r[3])}</td><td>17</td><td>${n2(horas(r))}</td><td>${r[5]}</td><td>${n2(hxp(r))}</td><td><b>${n2(pph(r))}</b></td><td><span class="chip ${r[6]}">${r[6]==='fin'?'FINALIZADA':'EN PROCESO'}</span></td></tr>`).join('');
     const v=rows.reduce((s,r)=>s+r[2],0), rp=rows.reduce((s,r)=>s+r[3],0), o=DIAS[sem==='sem 5/10'?'sem 29/9':'sem 5/10'], vo=o.reduce((s,r)=>s+r[2],0), ro=o.reduce((s,r)=>s+r[3],0);
     const hs=conH.reduce((s,r)=>s+r[4],0);
@@ -126,7 +126,7 @@ function pintar(){
       kpi('Cant venta','#22c55e',n0(v),`${dif(v,vo)} vs semana ${sem==='sem 5/10'?'anterior':'siguiente'}`)+
       kpi('Cant repo','#38bdf8',n0(rp),`${dif(rp,ro)} vs la otra semana`)+
       kpi('No mandados','#f87171',n0(v-rp),`${(Math.round((v-rp)/v*1000)/10).toLocaleString('es-AR')}% de la venta`)+
-      kpi('HS x per','#a78bfa',n2(hs),`${n2(prom(pph))} prendas/HS promedio`)+
+      kpi('HS total','#a78bfa',n2(hs),`${n2(prom(pph))} prendas/HS promedio`)+
       kpi('Repos','#f59e0b',rows.length,'en la semana');
     // por local sumado (ejemplo con la repo del 2/10 x semana)
     const base=sem==='sem 5/10'?LOC['8/10']:LOC['2/10'];

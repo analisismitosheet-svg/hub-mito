@@ -9,8 +9,8 @@ import { supabase } from '@/lib/supabase'
 /*  Usa el período de la pantalla (FiltroPeriodo): en un día, esa repo; */
 /*  en más días, una fila por repo del período. Siempre el cuadro por   */
 /*  local.                                                              */
-/*  Horas = cronómetro de Mi repo (sin pausas). HS x per = esas horas;  */
-/*  Horas = HS x per ÷ personas; Prendas/HS = repo ÷ HS x per.          */
+/*  Horas = cronómetro de Mi repo (sin pausas). HS total = esas horas;  */
+/*  Horas = HS total ÷ personas; Prendas/HS = repo ÷ HS total.          */
 /*  Datos: RPC estadistica_vtd (sql/estadistica_vtd.sql).               */
 /* ------------------------------------------------------------------ */
 
@@ -291,7 +291,7 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
             <Kpi titulo="Cant venta" color="#22c55e" valor={n0.format(tot.venta)} pie={<><Dif a={tot.venta} b={totAnt.venta} /> {vsTxt}</>} />
             <Kpi titulo="Cant repo" color="#38bdf8" valor={n0.format(tot.repo)} pie={tot.venta ? `${Math.round((tot.repo / tot.venta) * 100)}% de la venta` : '—'} />
             <Kpi titulo="No mandados" color="#f87171" valor={n0.format(tot.noMandados)} pie={tot.venta ? `${n2.format((tot.noMandados / tot.venta) * 100)}% de la venta` : '—'} />
-            <Kpi titulo="HS x per (Mi repo)" color="#a78bfa" valor={hm(tot.segundos)} pie={hpTot ? `${num2(prendasHs(tot))} prendas/HS` : 'nadie usó el cronómetro'} />
+            <Kpi titulo="HS total (Mi repo)" color="#a78bfa" valor={hm(tot.segundos)} pie={hpTot ? `${num2(prendasHs(tot))} prendas/HS` : 'nadie usó el cronómetro'} />
             <Kpi
               titulo={unDia ? 'Personas' : 'Repos'}
               color="#f59e0b"
@@ -314,7 +314,7 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
                     <th className="hidden py-1.5 text-right lg:table-cell">Locales</th>
                     <th className="py-1.5 text-right"><span className="block text-[12px] font-extrabold normal-case text-amber-500">{num2(promHoras)}</span>Horas</th>
                     <th className="hidden py-1.5 text-right sm:table-cell">Pers.</th>
-                    <th className="hidden py-1.5 text-right md:table-cell">HS x per</th>
+                    <th className="hidden py-1.5 text-right md:table-cell">HS total</th>
                     <th className="py-1.5 text-right"><span className="block text-[12px] font-extrabold normal-case text-amber-500">{num2(promPph)}</span>Prend/HS</th>
                     <th className="hidden py-1.5 text-right sm:table-cell">Estado</th>
                   </tr>
