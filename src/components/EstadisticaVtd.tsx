@@ -121,6 +121,28 @@ function agruparLocales(filas: Fila[]): PorLocal[] {
   return [...m.values()].map(({ resp, ...r }) => ({ ...r, responsable: [...resp].join(', ') || '—' })).sort((a, b) => b.venta - a.venta)
 }
 
+/**
+ * % mandado (verde) y % no mandado (rojo) sobre el total pedido. Cuando ya no queda nada
+ * pendiente, los dos suman 100 (ej. 98 % + 2 %); lo que falta hacer queda en gris.
+ */
+function porcentajes(total: number, ok: number, no: number): { ok: number; no: number; terminado: boolean } {
+  if (total <= 0) return { ok: 0, no: 0, terminado: false }
+  const terminado = ok + no >= total
+  const pNo = Math.round((no / total) * 100)
+  const pOk = terminado ? 100 - pNo : Math.min(100 - pNo, Math.floor((ok / total) * 100))
+  return { ok: pOk, no: pNo, terminado }
+}
+
+/** Barra de dos colores: mandado (verde) + no mandado (rojo); el resto, pendiente */
+function BarraAvance({ ok, no, alto = 'h-2.5' }: { ok: number; no: number; alto?: string }) {
+  return (
+    <div className={`flex ${alto} w-full overflow-hidden rounded-full bg-line`}>
+      <div className="h-full bg-emerald-500 transition-all" style={{ width: `${ok}%` }} />
+      <div className="h-full bg-red-500 transition-all" style={{ width: `${no}%` }} />
+    </div>
+  )
+}
+
 const horasPer = (r: { segundos: number }) => (r.segundos > 0 ? r.segundos / 3600 : null)
 /** Prendas por hora: solo lo escaneado con el cronómetro en marcha, dividido esas horas */
 const prendasHs = (r: { segundos: number; uniCrono: number }) => (r.segundos > 0 ? r.uniCrono / (r.segundos / 3600) : null)
@@ -224,26 +246,26 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
       {avance.length > 0 && (
         <div className="mb-4 grid gap-2 sm:grid-cols-2">
           {[...avance].sort((a, b) => a.motivo.localeCompare(b.motivo)).reverse().map((a) => {
-            // % = unidades hechas ÷ (pedidas − no mandadas): un día terminado con faltantes da 100 %
-            const total = Math.max(0, a.unidades - a.no_mandados)
-            const pct = total ? Math.min(100, (a.unidades_ok / total) * 100) : 0
-            const faltan = Math.max(0, total - a.unidades_ok)
+            const pc = porcentajes(a.unidades, a.unidades_ok, a.no_mandados)
+            const faltan = Math.max(0, a.unidades - a.unidades_ok - a.no_mandados)
             const color = a.motivo === 'VTD' ? '#14b8a6' : '#ec4899'
             return (
               <div key={a.motivo} className="rounded-2xl border bg-surface p-3" style={{ borderColor: `${color}40` }}>
                 <div className="flex items-baseline justify-between gap-2">
                   <p className="text-[11px] font-bold uppercase tracking-wide" style={{ color }}>
-                    {a.motivo === 'VTD' ? 'Venta diaria (VTD)' : 'Reposición (REP)'} · unidades completadas
+                    {a.motivo === 'VTD' ? 'Venta diaria (VTD)' : 'Reposición (REP)'} · unidades
                   </p>
-                  <p className="font-display text-2xl font-extrabold tabular-nums text-ink">{Math.floor(pct)}%</p>
+                  <p className="font-display text-2xl font-extrabold tabular-nums">
+                    <span className="text-emerald-500">{pc.ok}%</span>
+                    {pc.no > 0 && <span className="ml-1.5 text-red-500">{pc.no}%</span>}
+                  </p>
                 </div>
-                <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-line">
-                  <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
-                </div>
+                <div className="mt-1.5"><BarraAvance ok={pc.ok} no={pc.no} /></div>
                 <p className="mt-1 text-sm text-sub">
-                  <b className="tabular-nums text-ink">{n0.format(a.unidades_ok)}</b> de <b className="tabular-nums text-ink">{n0.format(total)}</b> unidades
-                  {faltan > 0 ? <> · faltan <b className="tabular-nums" style={{ color }}>{n0.format(faltan)}</b></> : ''}
-                  {a.no_mandados > 0 ? <> · <span className="text-red-400">{n0.format(a.no_mandados)} no mandadas</span></> : ''}
+                  <span className="text-emerald-500"><b className="tabular-nums">{n0.format(a.unidades_ok)}</b> mandadas</span>
+                  {a.no_mandados > 0 && <> · <span className="text-red-400"><b className="tabular-nums">{n0.format(a.no_mandados)}</b> no mandadas</span></>}
+                  {' '}de <b className="tabular-nums text-ink">{n0.format(a.unidades)}</b>
+                  {faltan > 0 ? <> · faltan <b className="tabular-nums text-ink">{n0.format(faltan)}</b></> : ''}
                   <span className="ml-1 text-[11px]">({a.completos}/{a.pedidos} pedidos completos)</span>
                 </p>
               </div>
@@ -348,9 +370,8 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
               </thead>
               <tbody>
                 {filasLocal.map((l) => {
-                  // mismo criterio que la barra de arriba: sin contar los no mandados
-                  const base = Math.max(0, l.venta - l.noMandados)
-                  const pct = base ? Math.min(100, (l.repo / base) * 100) : 0
+                  // mismo criterio que la barra de arriba: mandado (verde) + no mandado (rojo)
+                  const pc = porcentajes(l.venta, l.repo, l.noMandados)
                   return (
                     <tr key={l.local} className="border-t border-line">
                       <td className="truncate py-1.5 font-semibold text-ink">{l.local}</td>
@@ -360,10 +381,11 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
                       <td className="py-1.5 text-right font-semibold tabular-nums text-red-400">{l.noMandados ? n0.format(l.noMandados) : '—'}</td>
                       <td className="py-1.5 pl-2 sm:pl-3">
                         <div className="flex items-center gap-2">
-                          <div className="hidden h-1.5 flex-1 overflow-hidden rounded-full bg-line md:block">
-                            <div className={`h-full rounded-full ${pct >= 99.5 ? 'bg-emerald-500' : 'bg-sky-500'}`} style={{ width: `${pct}%` }} />
-                          </div>
-                          <span className={`w-10 shrink-0 text-right text-[11px] font-bold tabular-nums ${pct >= 99.5 ? 'text-emerald-500' : 'text-sub'}`}>{Math.floor(pct)}%</span>
+                          <div className="hidden flex-1 md:block"><BarraAvance ok={pc.ok} no={pc.no} alto="h-1.5" /></div>
+                          <span className="shrink-0 text-right text-[11px] font-bold tabular-nums">
+                            <span className="text-emerald-500">{pc.ok}%</span>
+                            {pc.no > 0 && <span className="ml-1 text-red-500">{pc.no}%</span>}
+                          </span>
                         </div>
                       </td>
                       <td className="py-1.5 text-right tabular-nums">{num2(horasPer(l))}</td>
