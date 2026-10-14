@@ -3,6 +3,7 @@ import { Loader2, TrendingUp, User, Timer, Hourglass, Download, Activity } from 
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import EstadisticaVtd from '@/components/EstadisticaVtd'
+import FiltroPeriodo, { hoyIso, periodoDe, type Periodo } from '@/components/FiltroPeriodo'
 import PausasPiso, { type PausaFila } from '@/components/PausasPiso'
 import { nombreMotivoPausa } from '@/components/MotivoPausa'
 import { supabase } from '@/lib/supabase'
@@ -43,8 +44,6 @@ interface TiempoMuerto {
   maximo: number
 }
 
-const inputCls = 'w-full rounded-xl border border-line bg-surface2 px-3 py-1.5 text-[13px] text-ink outline-none transition duration-250 placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40'
-
 function fmtDuracion(seg: number): string {
   if (seg <= 0) return '—'
   const h = Math.floor(seg / 3600)
@@ -53,22 +52,6 @@ function fmtDuracion(seg: number): string {
   if (h > 0) return `${h}h ${m}m`
   if (m > 0) return `${m}m ${s}s`
   return `${s}s`
-}
-
-/** Días que se muestran por defecto cuando no hay fechas elegidas (tiempo real, tiempo muerto y pausas). */
-const DIAS_DEFECTO = 90
-
-/** Fecha local en AAAA-MM-DD (evita el corrimiento de día de toISOString/UTC). */
-function fechaLocal(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-function hoyLocal(): string {
-  return fechaLocal(new Date())
-}
-function haceDias(dias: number): string {
-  const d = new Date()
-  d.setDate(d.getDate() - dias)
-  return fechaLocal(d)
 }
 
 export default function EstadisticasRendimiento() {
@@ -81,8 +64,9 @@ export default function EstadisticasRendimiento() {
   // Fallas propias de cada fuente (antes se ocultaban y parecía "no hay datos")
   const [avisoTiempos, setAvisoTiempos] = useState<string | null>(null)
   const [avisoMuertos, setAvisoMuertos] = useState<string | null>(null)
-  const [desde, setDesde] = useState('')
-  const [hasta, setHasta] = useState('')
+  // Un solo filtro de fechas para toda la pantalla (repos, tiempo real, tiempo muerto y pausas)
+  const [periodo, setPeriodo] = useState<Periodo>(() => periodoDe('dia', hoyIso()))
+  const { desde, hasta } = periodo
   // Filas de pausas que expone PausasPiso, para incluirlas en el Excel de la pantalla
   const [pausas, setPausas] = useState<PausaFila[]>([])
 
@@ -91,8 +75,8 @@ export default function EstadisticasRendimiento() {
     const sb = supabase
     setCargando(true); setError(null); setAvisoTiempos(null); setAvisoMuertos(null)
     try {
-      const desdeQ = desdeF || haceDias(DIAS_DEFECTO)
-      const hastaQ = hastaF || hoyLocal()
+      const desdeQ = desdeF
+      const hastaQ = hastaF
 
       const [empData, tiemposData, muertosData] = await Promise.all([
         sb.from('empleados_basico').select('id,legajo,nombre').or(FILTRO_EMPLEADOS_ACTIVOS).order('nombre'),
@@ -155,7 +139,7 @@ export default function EstadisticasRendimiento() {
       Legajo: p.legajo ?? '', Empleado: p.nombre ?? '', Motivo: nombreMotivoPausa(p.motivo),
       Pausas: p.pausas, 'En pausa': p.abiertas, Tiempo: fmtDuracion(p.segundos),
     }))), 'Pausas')
-    XLSX.writeFile(wb, `eficiencia_mayorista_${hoyLocal()}.xlsx`)
+    XLSX.writeFile(wb, `eficiencia_mayorista_${desde}_a_${hasta}.xlsx`)
   }
 
   if (!puedeVer) {
@@ -188,30 +172,27 @@ export default function EstadisticasRendimiento() {
 
       {error && <p role="alert" className="mb-4 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
 
-      {/* Repos (motivo VTD): por día, por semana y por local. Tiene su propia navegación. */}
-      <EstadisticaVtd />
-
-      {/* Piso: las fechas de abajo aplican solo a esta parte (tiempo real, tiempo muerto y pausas) */}
-      <div className="mb-3 mt-4 border-t border-line pt-4">
-        <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-ink">
-          <Activity size={17} className="text-emerald-500" aria-hidden /> Piso
-        </h2>
-        <p className="text-xs text-sub/70">Tiempo real, tiempo muerto y pausas. Las fechas de abajo aplican solo a esta parte.</p>
-      </div>
-
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className={inputCls + ' w-auto text-xs'} title="Desde" />
-        <input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className={inputCls + ' w-auto text-xs'} title="Hasta" />
-        {(desde || hasta) && (
-          <button onClick={() => { setDesde(''); setHasta('') }} className="btn-press rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line">Limpiar fechas</button>
-        )}
-        <span className="text-[11px] text-sub/70">Por defecto, últimos {DIAS_DEFECTO} días</span>
+      {/* Filtro de fechas único: maneja todas las secciones de abajo */}
+      <div className="sticky top-2 z-20 mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-line bg-surface p-2 shadow-soft">
+        <FiltroPeriodo valor={periodo} onChange={setPeriodo} />
         {cargando && (
           <span role="status" className="inline-flex items-center gap-1.5 text-[11px] font-medium text-sub">
             <Loader2 size={12} className="animate-spin" aria-hidden /> Actualizando…
           </span>
         )}
       </div>
+
+      {/* Repos (motivo VTD): el día o el período elegido, por repo y por local */}
+      <EstadisticaVtd desde={desde} hasta={hasta} onVerDia={(f) => setPeriodo(periodoDe('dia', f))} />
+
+      {/* Piso: tiempo real, tiempo muerto y pausas, con el mismo período */}
+      <div className="mb-3 mt-4 border-t border-line pt-4">
+        <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-ink">
+          <Activity size={17} className="text-emerald-500" aria-hidden /> Piso
+        </h2>
+        <p className="text-xs text-sub/70">Tiempo real, tiempo muerto y pausas del mismo período.</p>
+      </div>
+
 
       {!cargando && avisoTiempos && (
         <p role="status" className="mb-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-500">
@@ -307,7 +288,7 @@ export default function EstadisticasRendimiento() {
       )}
 
       {/* Pausas con motivo (repo y armado), con las mismas fechas que el tiempo real y el tiempo muerto */}
-      <PausasPiso desde={desde || haceDias(DIAS_DEFECTO)} hasta={hasta || hoyLocal()} onDatos={setPausas} />
+      <PausasPiso desde={desde} hasta={hasta} onDatos={setPausas} />
 
       {cargando && filasPiso.length === 0 && (
         <div className="flex items-center justify-center gap-2 py-10 text-sub"><Loader2 size={18} className="animate-spin" aria-hidden /> Cargando...</div>

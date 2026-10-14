@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { BarChart3, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
+import { BarChart3, Loader2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
 /* ------------------------------------------------------------------ */
 /*  Estadística VTD (repos), dentro de Eficiencia mayorista: como la    */
 /*  planilla de reposición, armada                                       */
 /*  sola con la repo y lo que se hace en Mi repo.                       */
-/*  - Hoy: la repo del día (◀ ▶ para otros días) + cuadro por local.    */
-/*  - Por semana: una fila por repo de lunes a domingo + por local.     */
+/*  Usa el período de la pantalla (FiltroPeriodo): en un día, esa repo; */
+/*  en más días, una fila por repo del período. Siempre el cuadro por   */
+/*  local.                                                              */
 /*  Horas = cronómetro de Mi repo (sin pausas). HS x per = esas horas;  */
 /*  Horas = HS x per ÷ personas; Prendas/HS = repo ÷ HS x per.          */
 /*  Datos: RPC estadistica_vtd (sql/estadistica_vtd.sql).               */
@@ -61,7 +62,6 @@ const num2 = (v: number | null) => (v == null || !isFinite(v) ? '—' : n2.forma
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const deIso = (s: string) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d) }
 const sumarDias = (s: string, n: number) => { const d = deIso(s); d.setDate(d.getDate() + n); return iso(d) }
-const lunesDe = (s: string) => { const d = deIso(s); const dow = (d.getDay() + 6) % 7; d.setDate(d.getDate() - dow); return iso(d) }
 /** Fecha completa dd/mm/aaaa */
 const corta = (s: string | null) => { if (!s) return '—'; const [y, m, d] = s.split('-'); return `${d}/${m}/${y}` }
 const nombreCorto = (n: string | null) => {
@@ -130,95 +130,71 @@ function Kpi({ titulo, color, valor, pie }: { titulo: string; color: string; val
   )
 }
 
-export default function EstadisticaVtd() {
-  const hoy = iso(new Date())
-  const [modo, setModo] = useState<'dia' | 'semana'>('dia')
-  const [dia, setDia] = useState(hoy)
+export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
+  /** Período de la pantalla (FiltroPeriodo): el mismo para todas las secciones */
+  desde: string
+  hasta: string
+  /** Tocar una repo del período: la pantalla pasa a ese día */
+  onVerDia?: (fecha: string) => void
+}) {
+  const unDia = desde === hasta
+  const largo = Math.max(1, Math.round((new Date(hasta + 'T12:00').getTime() - new Date(desde + 'T12:00').getTime()) / 86400000) + 1)
+  // Para comparar: el período anterior del mismo largo (en un día, la última repo anterior: 14 días hacia atrás)
+  const desdeAnt = sumarDias(desde, unDia ? -14 : -largo)
   const [filas, setFilas] = useState<Fila[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
-
-  // Se piden las dos semanas que hacen falta para comparar (la del día elegido y la anterior)
-  const lunes = lunesDe(dia)
-  const desde = sumarDias(lunes, -7)
-  const hasta = sumarDias(lunes, 6)
 
   const cargar = useCallback(async () => {
     if (!supabase) return
     setCargando(true)
     setError(null)
-    const { data, error: e } = await supabase.rpc('estadistica_vtd', { p_desde: desde, p_hasta: hasta })
+    const { data, error: e } = await supabase.rpc('estadistica_vtd', { p_desde: desdeAnt, p_hasta: hasta })
     if (e) setError(e.message)
     else setFilas(((data as Fila[] | null) ?? []).map((f) => ({ ...f, venta: Number(f.venta) || 0, repo: Number(f.repo) || 0, faltante: Number(f.faltante) || 0, segundos: Number(f.segundos) || 0, uni_crono: Number(f.uni_crono) || 0 })))
     setCargando(false)
-  }, [desde, hasta])
+  }, [desdeAnt, hasta])
   useEffect(() => { void cargar() }, [cargar])
 
   const repos = useMemo(() => agruparRepos(filas), [filas])
-  // Día: la repo de esa fecha (si no hubo, la última anterior dentro de lo cargado)
-  const repoDia = useMemo(() => [...repos].reverse().find((r) => r.fecha <= dia) ?? null, [repos, dia])
-  const repoAnt = useMemo(() => (repoDia ? [...repos].reverse().find((r) => r.fecha < repoDia.fecha) ?? null : null), [repos, repoDia])
-  const semana = useMemo(() => repos.filter((r) => r.fecha >= lunes && r.fecha <= hasta), [repos, lunes, hasta])
-  const semanaAnt = useMemo(() => repos.filter((r) => r.fecha < lunes), [repos, lunes])
-
-  const filasLocal = useMemo(
-    () => agruparLocales(modo === 'dia' ? filas.filter((f) => f.lote_id === repoDia?.loteId) : filas.filter((f) => f.fecha >= lunes)),
-    [filas, modo, repoDia, lunes],
-  )
+  const periodo = useMemo(() => repos.filter((r) => r.fecha >= desde && r.fecha <= hasta), [repos, desde, hasta])
+  // Anterior: en un día, la última fecha con repo antes; si no, el período anterior del mismo largo
+  const anterior = useMemo(() => {
+    const previas = repos.filter((r) => r.fecha < desde)
+    if (!unDia) return previas
+    const ultima = previas[previas.length - 1]?.fecha
+    return ultima ? previas.filter((r) => r.fecha === ultima) : []
+  }, [repos, desde, unDia])
+  const filasPeriodo = useMemo(() => filas.filter((f) => f.fecha >= desde && f.fecha <= hasta), [filas, desde, hasta])
+  const filasLocal = useMemo(() => agruparLocales(filasPeriodo), [filasPeriodo])
+  const personas = useMemo(() => new Set(filasPeriodo.map((f) => f.responsable_id).filter(Boolean)).size, [filasPeriodo])
 
   const suma = (rs: Repo[]) => rs.reduce(
     (s, r) => ({ venta: s.venta + r.venta, repo: s.repo + r.repo, noMandados: s.noMandados + r.noMandados, segundos: s.segundos + r.segundos, uniCrono: s.uniCrono + r.uniCrono }),
     { venta: 0, repo: 0, noMandados: 0, segundos: 0, uniCrono: 0 },
   )
-  const tot = modo === 'dia' ? (repoDia ?? suma([])) : suma(semana)
-  const totAnt = modo === 'dia' ? (repoAnt ?? suma([])) : suma(semanaAnt)
-  const conHoras = semana.filter((r) => r.segundos > 0)
+  const tot = suma(periodo)
+  const totAnt = suma(anterior)
+  const conHoras = periodo.filter((r) => r.segundos > 0)
   const promHoras = conHoras.length ? conHoras.reduce((s, r) => s + r.segundos / 3600 / Math.max(1, r.personas), 0) / conHoras.length : null
   const promPph = conHoras.length ? conHoras.reduce((s, r) => s + (prendasHs(r) ?? 0), 0) / conHoras.length : null
-
-  const mover = (n: number) => setDia((d) => {
-    const nuevo = sumarDias(d, modo === 'dia' ? n : n * 7)
-    return nuevo > hoy ? hoy : nuevo
-  })
-  const etiqueta =
-    modo === 'dia'
-      ? repoDia
-        ? `${repoDia.fecha === hoy ? 'Hoy · ' : ''}Repo del ${corta(repoDia.fecha)}${repoDia.ventaFecha ? ` (venta ${corta(repoDia.ventaFecha)})` : ''}`
-        : `Sin repo al ${corta(dia)}`
-      : `Semana ${corta(lunes)} – ${corta(hasta)}`
-  const vsTxt = modo === 'dia' ? 'vs repo anterior' : 'vs semana anterior'
+  const vsTxt = unDia ? 'vs repo anterior' : 'vs período anterior'
   const hpTot = horasPer(tot)
 
   return (
     <section className="mb-6">
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="rounded-xl border p-2" style={{ color: '#0ea5e9', backgroundColor: '#0ea5e924', borderColor: '#0ea5e940' }}>
-            <BarChart3 size={18} aria-hidden />
-          </div>
-          <div className="min-w-0">
-            <h2 className="font-display text-lg font-semibold text-ink">Estadística VTD (repos)</h2>
-            <p className="truncate text-sm text-sub">Repos por día y por semana, con lo hecho en Mi repo</p>
-          </div>
+      <div className="mb-3 flex min-w-0 items-center gap-3">
+        <div className="rounded-xl border p-2" style={{ color: '#0ea5e9', backgroundColor: '#0ea5e924', borderColor: '#0ea5e940' }}>
+          <BarChart3 size={18} aria-hidden />
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex items-center gap-1 rounded-xl border border-line bg-surface px-1 py-1">
-            <button type="button" onClick={() => mover(-1)} className="rounded-lg p-1.5 text-ink hover:bg-line" aria-label="Anterior"><ChevronLeft size={16} /></button>
-            <span className="min-w-[9.5rem] max-w-[15rem] text-center leading-tight text-xs font-semibold text-ink">{etiqueta}</span>
-            <button type="button" onClick={() => mover(1)} disabled={dia >= hoy} className="rounded-lg p-1.5 text-ink hover:bg-line disabled:opacity-30" aria-label="Siguiente"><ChevronRight size={16} /></button>
-          </div>
-          <div className="inline-flex overflow-hidden rounded-xl border border-line">
-            {(['dia', 'semana'] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => { setModo(m); if (m === 'dia') setDia(hoy) }}
-                className={`px-4 py-2 text-sm font-bold ${modo === m ? 'bg-sky-500/15 text-sky-400' : 'text-sub hover:text-ink'}`}
-              >
-                {m === 'dia' ? 'Hoy' : 'Por semana'}
-              </button>
-            ))}
-          </div>
+        <div className="min-w-0">
+          <h2 className="font-display text-lg font-semibold text-ink">Estadística VTD (repos)</h2>
+          <p className="truncate text-sm text-sub">
+            {unDia
+              ? periodo[0]?.ventaFecha ? `Repo del ${corta(desde)} · venta ${corta(periodo[0].ventaFecha)}` : `Repo del ${corta(desde)}`
+              : `${periodo.length} repo${periodo.length === 1 ? '' : 's'} del ${corta(desde)} al ${corta(hasta)}`}
+            {' '}· con lo hecho en Mi repo
+          </p>
         </div>
       </div>
 
@@ -233,16 +209,16 @@ export default function EstadisticaVtd() {
             <Kpi titulo="No mandados" color="#f87171" valor={n0.format(tot.noMandados)} pie={tot.venta ? `${n2.format((tot.noMandados / tot.venta) * 100)}% de la venta` : '—'} />
             <Kpi titulo="HS x per (Mi repo)" color="#a78bfa" valor={num2(hpTot)} pie={hpTot ? `${num2(prendasHs(tot))} prendas/HS` : 'nadie usó el cronómetro'} />
             <Kpi
-              titulo={modo === 'dia' ? 'Personas' : 'Repos'}
+              titulo={unDia ? 'Personas' : 'Repos'}
               color="#f59e0b"
-              valor={String(modo === 'dia' ? (repoDia?.personas ?? 0) : semana.length)}
-              pie={modo === 'dia' ? 'responsables de la repo' : 'en la semana'}
+              valor={String(unDia ? personas : periodo.length)}
+              pie={unDia ? 'que trabajaron la repo' : `${personas} personas en el período`}
             />
           </div>
 
-          {modo === 'semana' && (
+          {!unDia && (
             <section className="mb-4 rounded-2xl border border-line bg-surface p-3">
-              <h2 className="mb-2 text-[11px] font-bold uppercase tracking-wide text-sub">Repos de la semana</h2>
+              <h2 className="mb-2 text-[11px] font-bold uppercase tracking-wide text-sub">Repos del período</h2>
               <table className="w-full table-fixed text-[12px] sm:text-[13px]">
                 <thead>
                   <tr className="text-[10px] uppercase tracking-wide text-sub">
@@ -260,13 +236,13 @@ export default function EstadisticaVtd() {
                   </tr>
                 </thead>
                 <tbody>
-                  {semana.map((r) => {
+                  {periodo.map((r) => {
                     const hp = horasPer(r)
                     return (
                       <tr
                         key={r.loteId}
-                        onClick={() => { setModo('dia'); setDia(r.fecha) }}
-                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setModo('dia'); setDia(r.fecha) } }}
+                        onClick={() => onVerDia?.(r.fecha)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onVerDia?.(r.fecha) } }}
                         tabIndex={0}
                         role="button"
                         aria-label={`Ver el repo del ${corta(r.fecha)}`}
@@ -291,8 +267,8 @@ export default function EstadisticaVtd() {
                       </tr>
                     )
                   })}
-                  {semana.length === 0 && (
-                    <tr><td colSpan={11} className="py-4 text-center text-sub">No hay repos en esta semana.</td></tr>
+                  {periodo.length === 0 && (
+                    <tr><td colSpan={11} className="py-4 text-center text-sub">No hay repos en este período.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -301,7 +277,7 @@ export default function EstadisticaVtd() {
 
           <section className="rounded-2xl border border-line bg-surface p-3">
             <h2 className="mb-2 text-[11px] font-bold uppercase tracking-wide text-sub">
-              Por local · {modo === 'dia' ? (repoDia ? `repo del ${corta(repoDia.fecha)}` : 'sin repo') : 'suma de la semana'}
+              Por local · {unDia ? (periodo.length ? `repo del ${corta(desde)}` : 'sin repo ese día') : 'suma del período'}
             </h2>
             <table className="w-full table-fixed text-[12px] sm:text-[13px]">
               <thead>
@@ -343,7 +319,7 @@ export default function EstadisticaVtd() {
             </table>
           </section>
           <p className="mt-3 text-[11px] text-sub">
-            Horas: tiempo con el cronómetro de Mi repo (Iniciar → Finalizar, sin pausas). Si nadie lo usó, queda «—». Tocá una repo de la semana para ver ese día.
+            Horas: tiempo con el cronómetro de Mi repo (Iniciar → Finalizar, sin pausas). Si nadie lo usó, queda «—». Tocá una repo del período para ver ese día.
           </p>
         </>
       )}
