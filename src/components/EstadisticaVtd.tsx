@@ -558,7 +558,7 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
                         <th className="px-3 py-2 text-center">No mand.</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-line/50">
+                    <tbody className="divide-y divide-line">
                       {det.map((f, i) => (
                         <tr key={`${f.local}-${f.pedido ?? 'r'}-${f.articulo}-${f.color ?? ''}-${f.talle ?? ''}-${i}`}>
                           <td className="whitespace-nowrap px-3 py-2 font-semibold text-ink">{f.local}</td>
