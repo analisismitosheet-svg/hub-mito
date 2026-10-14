@@ -112,18 +112,21 @@ function proveedorGrupo(nombre: string): string {
 }
 
 /** Resumen por proveedor (misma marca junta todas sus variantes y códigos). */
-type GrupoProv = { nombre: string; total: ProvStats; codigos: Map<string, ProvStats> }
+type GrupoProv = { nombre: string; total: ProvStats; codigos: Map<string, ProvStats>; nombres: Map<string, string> }
 function agruparProveedores(pedidos: EstadoPedido[]): GrupoProv[] {
   const m = new Map<string, GrupoProv>()
   for (const p of pedidos) {
-    const nombre = proveedorGrupo(p.proveedor_nombre || p.proveedor || '—')
+    const bruto = (p.proveedor_nombre || '').replace(/\s+/g, ' ').trim()
+    const nombre = proveedorGrupo(bruto || p.proveedor || '—')
     const clave = nombre.toUpperCase()
     const cod = p.proveedor ?? ''
-    const g = m.get(clave) ?? { nombre, total: statsVacio(), codigos: new Map<string, ProvStats>() }
+    const g = m.get(clave) ?? { nombre, total: statsVacio(), codigos: new Map<string, ProvStats>(), nombres: new Map<string, string>() }
     statsSumar(g.total, p)
     const s = g.codigos.get(cod) ?? statsVacio()
     statsSumar(s, p)
     g.codigos.set(cod, s)
+    // Descripción tal cual viene en Dragonfish, para mostrar qué hay detrás de cada código
+    if (bruto && !g.nombres.has(cod)) g.nombres.set(cod, bruto)
     m.set(clave, g)
   }
   return [...m.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
@@ -200,11 +203,9 @@ export default function EstadoPedidos() {
     [delPeriodo, provSel],
   )
 
-  // Resumen por proveedor: respeta el filtro y va en orden alfabético (razón social)
-  const gruposProv = useMemo(() => agruparProveedores(base), [base])
-
-  // Filtro: TODOS los proveedores del período, en lista vertical alfabética
-  const gruposProvAlfa = useMemo(() => agruparProveedores(delPeriodo), [delPeriodo])
+  // Resumen por proveedor: SIEMPRE todos los del período (el filtro no oculta los demás
+  // proveedores; sirve de panorama y para poder saltar de uno a otro). Alfabético.
+  const gruposProv = useMemo(() => agruparProveedores(delPeriodo), [delPeriodo])
 
   /** Elige un proveedor y cierra el panel. */
   function elegirProv(label: string, codigos: string[]) {
@@ -328,7 +329,7 @@ export default function EstadoPedidos() {
                 <span>Todos los proveedores</span>
               </button>
               <div className="mt-1 border-t border-line pt-1">
-                {gruposProvAlfa.map((g) => {
+                {gruposProv.map((g) => {
                   const multi = g.codigos.size > 1
                   const abiertoPanel = provPanelAbierto === g.nombre
                   return (
@@ -348,13 +349,19 @@ export default function EstadoPedidos() {
                       </div>
                       {multi && abiertoPanel && (
                         <div className="mb-1 ml-2 border-l border-line pl-1">
-                          {[...g.codigos.entries()].sort((a, b) => a[0].localeCompare(b[0], 'es')).map(([cod, s]) => (
-                            <button key={cod} type="button" onClick={() => elegirProv(cod, [cod])}
-                              className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1 text-left text-[12.5px] text-sub hover:bg-surface2 hover:text-ink">
-                              <span>{cod}</span>
-                              <span className="tabular-nums text-[12px] text-sub">{n0.format(s.pedidos)}</span>
-                            </button>
-                          ))}
+                          {[...g.codigos.entries()].sort((a, b) => a[0].localeCompare(b[0], 'es')).map(([cod, s]) => {
+                            const completo = g.nombres.get(cod) ?? ''
+                            return (
+                              <button key={cod} type="button" onClick={() => elegirProv(cod, [cod])}
+                                className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1 text-left text-[12.5px] text-sub hover:bg-surface2 hover:text-ink">
+                                <span className="min-w-0 truncate">
+                                  {cod}
+                                  {completo && completo.toUpperCase() !== g.nombre.toUpperCase() && <span className="ml-1.5 text-[11px] text-sub">{completo}</span>}
+                                </span>
+                                <span className="shrink-0 tabular-nums text-[12px] text-sub">{n0.format(s.pedidos)}</span>
+                              </button>
+                            )
+                          })}
                         </div>
                       )}
                     </Fragment>
@@ -391,14 +398,15 @@ export default function EstadoPedidos() {
           <section className="mb-3 rounded-2xl border border-line bg-surface p-3">
             <h2 className="mb-2 text-sm font-semibold text-ink">
               Por proveedor
-              <span className="ml-1.5 font-normal text-xs text-sub">unificado por proveedor · alfabético · tocá el nombre para filtrar, la flecha para ver los códigos</span>
+              <span className="ml-1.5 font-normal text-xs text-sub">unificado por proveedor · alfabético · esta tabla muestra siempre todos; el filtro resalta el elegido y filtra los KPI y la lista</span>
             </h2>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[680px] text-sm">
+              <table className="w-full min-w-[860px] text-sm">
                 <thead className="text-left text-[11px] uppercase tracking-wide text-sub">
                   <tr>
                     <th className="w-6 py-1.5 pr-1" />
                     <th className="py-1.5 pr-3">Proveedor</th>
+                    <th className="py-1.5 pr-3">Descripción</th>
                     <th className="py-1.5 pr-3 text-right">Pedidos abiertos</th>
                     <th className="py-1.5 pr-3 text-right">Unidades</th>
                     <th className="py-1.5 pr-3 text-right">Pendientes</th>
@@ -411,9 +419,13 @@ export default function EstadoPedidos() {
                     const v = pct(g.total.recibidas, g.total.unidades)
                     const multi = g.codigos.size > 1
                     const abiertoEste = provAbierto === g.nombre
+                    // Descripciones tal cual vienen en Dragonfish (un proveedor puede tener más de una)
+                    const descripciones = [...new Set(g.nombres.values())].sort((a, b) => a.localeCompare(b, 'es'))
+                    // El proveedor elegido en el filtro se resalta, pero el resto sigue visible
+                    const seleccionado = !!provSel && [...g.codigos.keys()].some((c) => provSel.codigos.includes(c))
                     return (
                       <Fragment key={g.nombre}>
-                        <tr className="border-t border-line hover:bg-surface2/60">
+                        <tr className={`border-t border-line hover:bg-surface2/60 ${seleccionado ? 'bg-surface2/70' : ''}`}>
                           <td className="py-1.5 pr-1 text-sub">
                             {multi && (
                               <button type="button" onClick={() => setProvAbierto(abiertoEste ? null : g.nombre)}
@@ -427,6 +439,7 @@ export default function EstadoPedidos() {
                               className="font-medium text-ink hover:text-lime-500">{g.nombre}</button>
                             {multi && <span className="ml-1.5 text-[11px] text-sub">{g.codigos.size} códigos</span>}
                           </td>
+                          <td className="py-1.5 pr-3 text-xs text-sub">{descripciones.length ? descripciones.join(' · ') : '—'}</td>
                           <td className="py-1.5 pr-3 text-right tabular-nums">{n0.format(g.total.abiertos)} <span className="text-sub">/ {n0.format(g.total.pedidos)}</span></td>
                           <td className="py-1.5 pr-3 text-right tabular-nums">{n0.format(g.total.unidades)}</td>
                           <td className="py-1.5 pr-3 text-right font-semibold tabular-nums text-ink">{n0.format(g.total.pendientes)}</td>
@@ -436,11 +449,12 @@ export default function EstadoPedidos() {
                         {multi && abiertoEste && (
                           <tr className="bg-surface2/40">
                             <td />
-                            <td colSpan={6} className="py-1.5 pr-3">
-                              <table className="w-full max-w-2xl text-xs">
+                            <td colSpan={7} className="py-1.5 pr-3">
+                              <table className="w-full max-w-3xl text-xs">
                                 <thead>
                                   <tr className="text-[10px] uppercase tracking-wide text-sub">
                                     <th className="py-1 pr-3 text-left">Código</th>
+                                    <th className="py-1 pr-3 text-left">Descripción</th>
                                     <th className="py-1 pr-3 text-right">Pedidos abiertos</th>
                                     <th className="py-1 pr-3 text-right">Unidades</th>
                                     <th className="py-1 pr-3 text-right">Pendientes</th>
@@ -451,11 +465,13 @@ export default function EstadoPedidos() {
                                 <tbody>
                                   {[...g.codigos.entries()].sort((a, b) => a[0].localeCompare(b[0], 'es')).map(([cod, s]) => {
                                     const vc = pct(s.recibidas, s.unidades)
+                                    const completo = g.nombres.get(cod) ?? ''
                                     return (
                                       <tr key={cod} className="border-t border-line/60">
                                         <td className="py-1 pr-3">
                                           <button type="button" onClick={() => elegirProv(cod, [cod])} className="text-ink hover:text-lime-500">{cod}</button>
                                         </td>
+                                        <td className="py-1 pr-3 text-sub">{completo || '—'}</td>
                                         <td className="py-1 pr-3 text-right tabular-nums">{n0.format(s.abiertos)} <span className="text-sub">/ {n0.format(s.pedidos)}</span></td>
                                         <td className="py-1 pr-3 text-right tabular-nums">{n0.format(s.unidades)}</td>
                                         <td className="py-1 pr-3 text-right tabular-nums">{n0.format(s.pendientes)}</td>
