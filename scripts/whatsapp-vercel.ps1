@@ -8,6 +8,7 @@
 #  - CRON_SECRET        se genera solo si no existe (lo usa el cron diario de Vercel para disparar los informes)
 
 $ErrorActionPreference = 'Stop'
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 Set-Location (Split-Path $PSScriptRoot -Parent)
 $scope = 'mito-srl'
 # Número emisor de MITO registrado en Meta (se compara con el que devuelve el Phone number ID)
@@ -31,13 +32,31 @@ Write-Host "`nWhatsApp para el Hub MITO (Vercel: $scope/hub-mito, Production)`n"
 
 $token = Pedir 'Pegá el token permanente de Meta (WHATSAPP_TOKEN)'
 if ($token.Length -lt 50) { throw 'Ese token es muy corto: tiene que ser el del usuario del sistema (empieza con EAA...).' }
-$phoneId = Pedir 'Pegá el Phone number ID (WHATSAPP_PHONE_ID)'
-if ($phoneId -notmatch '^\d{10,20}$') { throw 'El Phone number ID son solo números (unos 15 dígitos), no el teléfono.' }
+$auth = @{ Authorization = "Bearer $token" }
+$phoneId = (Read-Host 'Phone number ID (si no lo tenés, Enter y lo busco solo con el token)').Trim()
+
+# Si viene vacío o pegaron el teléfono (+54 9 351 ...), se busca el ID en las cuentas de WhatsApp del token
+if ($phoneId -notmatch '^\d{14,20}$') {
+  Write-Host "`nBuscando en Meta el ID del +54 9 351 240-0630..."
+  try {
+    $dbg = Invoke-RestMethod "https://graph.facebook.com/v23.0/debug_token?input_token=$token" -Headers $auth
+  } catch { throw "Meta rechazó el token: $($_.ErrorDetails.Message)" }
+  $wabas = @($dbg.data.granular_scopes | Where-Object { $_.scope -like 'whatsapp_business_*' } | ForEach-Object { $_.target_ids }) | Where-Object { $_ } | Select-Object -Unique
+  if (-not $wabas) { throw 'El token no tiene asignada ninguna cuenta de WhatsApp: en Usuarios del sistema > Asignar activos, dale la cuenta de WhatsApp de MITO y generá el token de nuevo.' }
+  $numeros = foreach ($w in $wabas) {
+    try { (Invoke-RestMethod "https://graph.facebook.com/v23.0/$w/phone_numbers?fields=id,display_phone_number,verified_name" -Headers $auth).data } catch {}
+  }
+  $numeros | ForEach-Object { Write-Host "  - $($_.display_phone_number)  ($($_.verified_name))  ID $($_.id)" }
+  $elegido = $numeros | Where-Object { ($_.display_phone_number -replace '\D', '') -eq $numeroMito } | Select-Object -First 1
+  if (-not $elegido) { throw 'El +54 9 351 240-0630 no está registrado en esa cuenta de WhatsApp: agregalo en WhatsApp > Configuración de la API > Agregar número de teléfono y verificalo con el código.' }
+  $phoneId = $elegido.id
+  Write-Host "  Encontrado: ID $phoneId" -ForegroundColor Green
+}
 
 # Probar contra Meta antes de guardar nada
 Write-Host "`nProbando con Meta..."
 try {
-  $r = Invoke-RestMethod "https://graph.facebook.com/v23.0/$phoneId`?fields=display_phone_number,verified_name,quality_rating" -Headers @{ Authorization = "Bearer $token" }
+  $r = Invoke-RestMethod "https://graph.facebook.com/v23.0/$phoneId`?fields=display_phone_number,verified_name,quality_rating" -Headers $auth
   Write-Host "  Número: $($r.display_phone_number)  ($($r.verified_name))  calidad $($r.quality_rating)" -ForegroundColor Green
   $digitos = ($r.display_phone_number -replace '\D', '')
   if ($digitos -ne $numeroMito) {
@@ -60,7 +79,7 @@ if ($existentes -notmatch '\bCRON_SECRET\b') {
   [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
   Cargar 'CRON_SECRET' (($bytes | ForEach-Object { $_.ToString('x2') }) -join '')
 }
-$token = $null
+$token = $null; $auth = $null
 
 Write-Host "`nPublicando el hub de nuevo para que tome las variables..."
 npx --no-install vercel --scope $scope redeploy hub-mito.vercel.app --target production
