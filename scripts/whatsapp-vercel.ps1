@@ -10,6 +10,8 @@
 $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path $PSScriptRoot -Parent)
 $scope = 'mito-srl'
+# Número emisor de MITO registrado en Meta (se compara con el que devuelve el Phone number ID)
+$numeroMito = '5493512400630'
 
 function Pedir($texto) {
   $s = Read-Host $texto -AsSecureString
@@ -37,7 +39,13 @@ Write-Host "`nProbando con Meta..."
 try {
   $r = Invoke-RestMethod "https://graph.facebook.com/v23.0/$phoneId`?fields=display_phone_number,verified_name,quality_rating" -Headers @{ Authorization = "Bearer $token" }
   Write-Host "  Número: $($r.display_phone_number)  ($($r.verified_name))  calidad $($r.quality_rating)" -ForegroundColor Green
+  $digitos = ($r.display_phone_number -replace '\D', '')
+  if ($digitos -ne $numeroMito) {
+    Write-Host "  Ojo: ese no es el número de MITO (+54 9 351 240-0630). Si es el número de prueba de Meta, sirve para probar pero no para mandar a cualquiera." -ForegroundColor Yellow
+    if ((Read-Host '  ¿Seguir igual? (s/n)') -ne 's') { throw 'Cancelado: buscá el Phone number ID del +54 9 351 240-0630 en WhatsApp > Configuración de la API.' }
+  }
 } catch {
+  if ($_.Exception.Message -like 'Cancelado*') { throw }
   $msg = $_.ErrorDetails.Message
   throw "Meta rechazó el token o el ID: $msg"
 }
