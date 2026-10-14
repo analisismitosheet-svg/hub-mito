@@ -45,6 +45,15 @@ interface Repo {
   personas: number
 }
 
+/** Avance de los pedidos de un motivo en el período (avance_vtd_rep) */
+interface AvanceMotivo {
+  motivo: string
+  pedidos: number
+  completos: number
+  unidades: number
+  unidades_ok: number
+}
+
 interface PorLocal {
   local: string
   responsable: string
@@ -156,6 +165,17 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
   }, [desdeAnt, hasta])
   useEffect(() => { void cargar() }, [cargar])
 
+  // Avance del total de pedidos VTD y REP del período (sql/avance_vtd_rep.sql)
+  const [avance, setAvance] = useState<AvanceMotivo[]>([])
+  useEffect(() => {
+    if (!supabase) return
+    let vivo = true
+    void supabase.rpc('avance_vtd_rep', { p_desde: desde, p_hasta: hasta }).then(({ data }) => {
+      if (vivo) setAvance(((data as AvanceMotivo[] | null) ?? []).map((a) => ({ ...a, unidades: Number(a.unidades) || 0, unidades_ok: Number(a.unidades_ok) || 0 })))
+    })
+    return () => { vivo = false }
+  }, [desde, hasta, filas])
+
   const repos = useMemo(() => agruparRepos(filas), [filas])
   const periodo = useMemo(() => repos.filter((r) => r.fecha >= desde && r.fecha <= hasta), [repos, desde, hasta])
   // Anterior: en un día, la última fecha con repo antes; si no, el período anterior del mismo largo
@@ -197,6 +217,32 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
           </p>
         </div>
       </div>
+
+      {/* Cómo va el total de VTD y REP del día (o del período) */}
+      {avance.length > 0 && (
+        <div className="mb-4 grid gap-2 sm:grid-cols-2">
+          {[...avance].sort((a, b) => a.motivo.localeCompare(b.motivo)).reverse().map((a) => {
+            const pct = a.unidades ? Math.min(100, (a.unidades_ok / a.unidades) * 100) : 0
+            const color = a.motivo === 'VTD' ? '#14b8a6' : '#ec4899'
+            return (
+              <div key={a.motivo} className="rounded-2xl border bg-surface p-3" style={{ borderColor: `${color}40` }}>
+                <div className="flex items-baseline justify-between gap-2">
+                  <p className="text-[11px] font-bold uppercase tracking-wide" style={{ color }}>
+                    {a.motivo === 'VTD' ? 'Venta diaria (VTD)' : 'Reposición (REP)'} · completado
+                  </p>
+                  <p className="font-display text-2xl font-extrabold tabular-nums text-ink">{Math.floor(pct)}%</p>
+                </div>
+                <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-line">
+                  <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
+                </div>
+                <p className="mt-1 text-[11px] text-sub">
+                  {n0.format(a.unidades_ok)} de {n0.format(a.unidades)} unidades · {a.completos}/{a.pedidos} pedidos completos
+                </p>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {error && <p className="mb-3 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
       {cargando && filas.length === 0 ? (
