@@ -69,6 +69,14 @@ interface PorLocal {
 const n0 = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 })
 const n2 = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const num2 = (v: number | null) => (v == null || !isFinite(v) ? '—' : n2.format(v))
+/** Segundos como horas y minutos: 8 min · 1 h 40 min */
+const hm = (seg: number) => {
+  if (!seg || seg <= 0) return '—'
+  const min = Math.round(seg / 60)
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  return h ? `${h} h ${String(m).padStart(2, '0')} min` : `${m} min`
+}
 
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const deIso = (s: string) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d) }
@@ -283,7 +291,7 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
             <Kpi titulo="Cant venta" color="#22c55e" valor={n0.format(tot.venta)} pie={<><Dif a={tot.venta} b={totAnt.venta} /> {vsTxt}</>} />
             <Kpi titulo="Cant repo" color="#38bdf8" valor={n0.format(tot.repo)} pie={tot.venta ? `${Math.round((tot.repo / tot.venta) * 100)}% de la venta` : '—'} />
             <Kpi titulo="No mandados" color="#f87171" valor={n0.format(tot.noMandados)} pie={tot.venta ? `${n2.format((tot.noMandados / tot.venta) * 100)}% de la venta` : '—'} />
-            <Kpi titulo="HS x per (Mi repo)" color="#a78bfa" valor={num2(hpTot)} pie={hpTot ? `${num2(prendasHs(tot))} prendas/HS` : 'nadie usó el cronómetro'} />
+            <Kpi titulo="HS x per (Mi repo)" color="#a78bfa" valor={hm(tot.segundos)} pie={hpTot ? `${num2(prendasHs(tot))} prendas/HS` : 'nadie usó el cronómetro'} />
             <Kpi
               titulo={unDia ? 'Personas' : 'Repos'}
               color="#f59e0b"
@@ -388,7 +396,7 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
                           </span>
                         </div>
                       </td>
-                      <td className="py-1.5 text-right tabular-nums">{num2(horasPer(l))}</td>
+                      <td className="whitespace-nowrap py-1.5 text-right tabular-nums">{hm(l.segundos)}</td>
                       <td className="hidden py-1.5 text-right font-semibold tabular-nums sm:table-cell">{num2(prendasHs(l))}</td>
                     </tr>
                   )
