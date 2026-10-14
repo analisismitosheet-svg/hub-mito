@@ -13,6 +13,8 @@ Set-Location (Split-Path $PSScriptRoot -Parent)
 $scope = 'mito-srl'
 # Número emisor de MITO registrado en Meta (se compara con el que devuelve el Phone number ID)
 $numeroMito = '5493512400630'
+$wabaMito = '3764563940363184'      # cuenta de WhatsApp Business donde está ese número
+$negocioMito = '1404173826108651'   # portfolio empresarial "Analisis"
 
 function Pedir($texto) {
   $s = Read-Host $texto -AsSecureString
@@ -41,11 +43,16 @@ if ($phoneId -notmatch '^\d{14,20}$') {
   try {
     $dbg = Invoke-RestMethod "https://graph.facebook.com/v23.0/debug_token?input_token=$token" -Headers $auth
   } catch { throw "Meta rechazó el token: $($_.ErrorDetails.Message)" }
-  $wabas = @($dbg.data.granular_scopes | Where-Object { $_.scope -like 'whatsapp_business_*' } | ForEach-Object { $_.target_ids }) | Where-Object { $_ } | Select-Object -Unique
+  # Con acceso total Meta a veces no lista las cuentas en el token: se prueba siempre también la de MITO
+  # (cuenta de WhatsApp "hub mito informes", portfolio Analisis) y las del portfolio.
+  $wabas = @($dbg.data.granular_scopes | Where-Object { $_.scope -like 'whatsapp_business_*' } | ForEach-Object { $_.target_ids }) + @($wabaMito)
+  try { $wabas += @((Invoke-RestMethod "https://graph.facebook.com/v23.0/$negocioMito/owned_whatsapp_business_accounts?fields=id" -Headers $auth).data.id) } catch {}
+  $wabas = $wabas | Where-Object { $_ } | Select-Object -Unique
   if (-not $wabas) { throw 'El token no tiene asignada ninguna cuenta de WhatsApp: en Usuarios del sistema > Asignar activos, dale la cuenta de WhatsApp de MITO y generá el token de nuevo.' }
   $numeros = foreach ($w in $wabas) {
-    try { (Invoke-RestMethod "https://graph.facebook.com/v23.0/$w/phone_numbers?fields=id,display_phone_number,verified_name" -Headers $auth).data } catch {}
+    try { (Invoke-RestMethod "https://graph.facebook.com/v23.0/$w/phone_numbers?fields=id,display_phone_number,verified_name" -Headers $auth).data } catch { $errMeta = $_.ErrorDetails.Message }
   }
+  if (-not $numeros -and $errMeta) { throw "Meta no deja ver los números con este token: $errMeta" }
   $numeros | ForEach-Object { Write-Host "  - $($_.display_phone_number)  ($($_.verified_name))  ID $($_.id)" }
   $elegido = $numeros | Where-Object { ($_.display_phone_number -replace '\D', '') -eq $numeroMito } | Select-Object -First 1
   if (-not $elegido) { throw 'El +54 9 351 240-0630 no está registrado en esa cuenta de WhatsApp: agregalo en WhatsApp > Configuración de la API > Agregar número de teléfono y verificalo con el código.' }
