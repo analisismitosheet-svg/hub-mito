@@ -100,6 +100,8 @@ export interface AppDef {
    * ya no dicen dónde aparece sino QUIÉN lo ve: el que pueda ver alguna.
    */
   enMenu?: boolean
+  /** oculta la tarjeta para todos (incluso admin); la ruta sigue andando */
+  oculto?: boolean
 }
 
 // accent: color de nivel 600 para contraste AA sobre superficies claras (Soft UI)
@@ -221,6 +223,7 @@ export const APPS: AppDef[] = [
     target: '/mayorista',
     color: '#d97706',
     permiso: 'mayorista.view',
+    oculto: true,
   },
   {
     id: 'mayorista-mi-repo',
@@ -705,7 +708,7 @@ export const APPS: AppDef[] = [
 ]
 
 export function appsDeArea(areaId: string): AppDef[] {
-  return APPS.filter((a) => !a.enMenu && (a.areaId === areaId || a.areaIds?.includes(areaId)))
+  return APPS.filter((a) => !a.enMenu && !a.oculto && (a.areaId === areaId || a.areaIds?.includes(areaId)))
 }
 
 /** Accesos directos del menú principal (Transporte, Control de Locales…). */
@@ -775,7 +778,7 @@ export function appsDeAreaConOverrides(areaId: string, mapa: Record<string, stri
   // Apps que no estaban en el estático pero se marcaron en esta área
   const idsBase = new Set(base.map((a) => a.id))
   for (const app of APPS) {
-    if (idsBase.has(app.id) || app.enMenu) continue
+    if (idsBase.has(app.id) || app.enMenu || app.oculto) continue
     if ((mapa[app.id] ?? []).includes(areaId)) out.push(app)
   }
   return out
