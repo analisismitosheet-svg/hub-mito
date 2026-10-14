@@ -32,6 +32,8 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
+        // El bundle principal pasó los 2 MB (límite por defecto): sin esto el build falla
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         // Avisos push (armado de pedidos): suenan con la app cerrada o el celular bloqueado
         importScripts: ['push-sw.js'],
         navigateFallback: '/index.html',
