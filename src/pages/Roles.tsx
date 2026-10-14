@@ -51,10 +51,11 @@ const CLAVES_CATALOGO = [
   ...new Set([...GRUPOS_PERMISOS.flatMap(clavesDeGrupo), ...AREAS.map((a) => claveArea(a.id))]),
 ]
 
+// Áreas en orden alfabético (secciones y filtros)
 const AREAS_PANTALLA = [
   ...AREAS.map((a) => ({ id: a.id, name: a.name, color: a.color })),
   AREA_CONFIGURACION,
-]
+].sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }))
 
 /** Estilo del nivel prendido (Sin acceso gris, Solo ver celeste, Ver y cargar ámbar, Todo verde, A medida violeta). */
 const NIVEL_ON: Record<string, string> = {
