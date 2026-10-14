@@ -111,6 +111,24 @@ function proveedorGrupo(nombre: string): string {
   return limpio.split(' - ')[0].trim() || limpio
 }
 
+/** Resumen por proveedor (misma marca junta todas sus variantes y códigos). */
+type GrupoProv = { nombre: string; total: ProvStats; codigos: Map<string, ProvStats> }
+function agruparProveedores(pedidos: EstadoPedido[]): GrupoProv[] {
+  const m = new Map<string, GrupoProv>()
+  for (const p of pedidos) {
+    const nombre = proveedorGrupo(p.proveedor_nombre || p.proveedor || '—')
+    const clave = nombre.toUpperCase()
+    const cod = p.proveedor ?? ''
+    const g = m.get(clave) ?? { nombre, total: statsVacio(), codigos: new Map<string, ProvStats>() }
+    statsSumar(g.total, p)
+    const s = g.codigos.get(cod) ?? statsVacio()
+    statsSumar(s, p)
+    g.codigos.set(cod, s)
+    m.set(clave, g)
+  }
+  return [...m.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+}
+
 function Barra({ valor }: { valor: number }) {
   return (
     <span className="block h-1.5 w-full overflow-hidden rounded-full bg-line/60">
@@ -182,28 +200,11 @@ export default function EstadoPedidos() {
     [delPeriodo, provSel],
   )
 
-  // Proveedores unificados por nombre (misma marca con variantes de razón social)
-  const gruposProv = useMemo(() => {
-    const m = new Map<string, { nombre: string; total: ProvStats; codigos: Map<string, ProvStats> }>()
-    for (const p of delPeriodo) {
-      const nombre = proveedorGrupo(p.proveedor_nombre || p.proveedor || '—')
-      const clave = nombre.toUpperCase()
-      const cod = p.proveedor ?? ''
-      const g = m.get(clave) ?? { nombre, total: statsVacio(), codigos: new Map<string, ProvStats>() }
-      statsSumar(g.total, p)
-      const s = g.codigos.get(cod) ?? statsVacio()
-      statsSumar(s, p)
-      g.codigos.set(cod, s)
-      m.set(clave, g)
-    }
-    return [...m.values()].sort((a, b) => b.total.pendientes - a.total.pendientes)
-  }, [delPeriodo])
+  // Resumen por proveedor: respeta el filtro y va en orden alfabético (razón social)
+  const gruposProv = useMemo(() => agruparProveedores(base), [base])
 
-  // Para el filtro: lista vertical ordenada alfabéticamente por razón social
-  const gruposProvAlfa = useMemo(
-    () => [...gruposProv].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')),
-    [gruposProv],
-  )
+  // Filtro: TODOS los proveedores del período, en lista vertical alfabética
+  const gruposProvAlfa = useMemo(() => agruparProveedores(delPeriodo), [delPeriodo])
 
   /** Elige un proveedor y cierra el panel. */
   function elegirProv(label: string, codigos: string[]) {
@@ -390,7 +391,7 @@ export default function EstadoPedidos() {
           <section className="mb-3 rounded-2xl border border-line bg-surface p-3">
             <h2 className="mb-2 text-sm font-semibold text-ink">
               Por proveedor
-              <span className="ml-1.5 font-normal text-xs text-sub">unificado por proveedor · tocá el nombre para filtrar, la flecha para ver los códigos</span>
+              <span className="ml-1.5 font-normal text-xs text-sub">unificado por proveedor · alfabético · tocá el nombre para filtrar, la flecha para ver los códigos</span>
             </h2>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[680px] text-sm">
@@ -448,7 +449,7 @@ export default function EstadoPedidos() {
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {[...g.codigos.entries()].sort((a, b) => b[1].pendientes - a[1].pendientes).map(([cod, s]) => {
+                                  {[...g.codigos.entries()].sort((a, b) => a[0].localeCompare(b[0], 'es')).map(([cod, s]) => {
                                     const vc = pct(s.recibidas, s.unidades)
                                     return (
                                       <tr key={cod} className="border-t border-line/60">
