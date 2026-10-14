@@ -8,102 +8,96 @@
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 <style>
   :root{
-    --paper:#050508;
-    --surface:rgba(255,255,255,.035);
-    --surface2:rgba(255,255,255,.07);
-    --surface-solid:#101016;
-    --line:rgba(255,255,255,.08);
-    --line2:rgba(255,255,255,.18);
-    --ink:#f8fafc;
-    --sub:#94a3b8;
-    --brand:#ef4444;
-    --brand600:#e11d2e;
-    --amber:#f59e0b;
-    --orange:#ea580c;
-    --sky:#0ea5e9;
-    --emerald:#22c55e;
-    --radius:16px;
+    --paper:#050508; --surface:rgba(255,255,255,.035); --surface2:rgba(255,255,255,.07);
+    --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.18);
+    --ink:#f8fafc; --sub:#94a3b8;
+    --orange:#ea580c; --amber:#f59e0b; --sky:#0ea5e9; --emerald:#22c55e; --rose:#f43f5e; --violet:#8b5cf6;
     --shadow:0 10px 30px -12px rgba(0,0,0,.6);
   }
   *{box-sizing:border-box}
-  html,body{margin:0;padding:0}
-  body{
-    background:
-      radial-gradient(900px 520px at 10% -12%, rgba(59,130,246,.15), transparent 60%),
-      radial-gradient(800px 500px at 96% -6%, rgba(168,85,247,.10), transparent 55%),
-      var(--paper);
-    color:var(--ink);font-family:'Plus Jakarta Sans',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-    font-size:14px;line-height:1.45;min-height:100vh;
-    padding:22px clamp(12px,3vw,40px) 70px;
-  }
-  h1,h2,h3,h4{margin:0;font-weight:800;letter-spacing:-.02em}
-  p{margin:0}
-  button{font-family:inherit;cursor:pointer;color:inherit}
+  body{margin:0;background:radial-gradient(900px 520px at 10% -12%,rgba(59,130,246,.15),transparent 60%),radial-gradient(800px 500px at 96% -6%,rgba(168,85,247,.10),transparent 55%),var(--paper);
+    color:var(--ink);font-family:'Plus Jakarta Sans',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:14px;line-height:1.45;min-height:100vh;
+    padding:22px clamp(12px,3vw,40px) 70px}
+  h1,h2,h3{margin:0;font-weight:800;letter-spacing:-.02em}
+  p{margin:0} button{font-family:inherit;cursor:pointer;color:inherit} svg{width:20px;height:20px}
   .mini{font-size:11px;color:rgba(148,163,184,.8)}
+  code{background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:11.5px}
 
   .top{display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between;margin-bottom:20px}
-  .badge-mock{
-    display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;
-    background:rgba(245,158,11,.14);color:#fcd34d;border:1px solid rgba(245,158,11,.32);
-    font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
-  }
-  .tabs{display:inline-flex;gap:4px;padding:4px;border:1px solid var(--line);background:var(--surface);border-radius:12px;flex-wrap:wrap}
-  .tab{border:0;background:transparent;border-radius:9px;padding:7px 14px;font-size:12.5px;font-weight:700;color:var(--sub)}
-  .tab:hover{color:var(--ink)}
-  .tab.on{background:var(--surface2);color:var(--ink)}
-  .tab .nuevo{display:inline-block;margin-left:6px;font-size:9px;font-weight:800;color:#4ade80;border:1px solid rgba(34,197,94,.4);background:rgba(34,197,94,.12);border-radius:6px;padding:0 5px;vertical-align:middle}
+  .badge-mock{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:rgba(245,158,11,.14);color:#fcd34d;border:1px solid rgba(245,158,11,.32);font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+  .tabs-removed{}
 
-  .back{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 11px;border-radius:10px;border:1px solid var(--line);background:var(--surface2);color:var(--sub);font-size:12px;font-weight:600;margin-bottom:6px}
-  .head{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start;justify-content:space-between;margin:10px 0 16px}
-  .head h1{font-size:clamp(20px,3vw,26px);display:flex;align-items:center;gap:10px}
-  .title-ic-orange{color:var(--orange)}
+  .back{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 11px;border-radius:10px;border:1px solid var(--line);background:var(--surface2);color:var(--sub);font-size:12px;font-weight:600;margin-bottom:10px}
+  .head{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;justify-content:space-between;margin:10px 0 16px}
+  .head h1{font-size:clamp(20px,3vw,26px)}
+  .acts{display:flex;gap:8px}
+  .btn{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:13px;font-weight:600;color:var(--ink)}
+  .btn svg{width:15px;height:15px} .btn.emerald{color:#4ade80}
 
-  .hub{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;max-width:900px}
+  /* ---------- hub (estilo AppCard) ---------- */
+  .hub{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;max-width:920px}
   @media (max-width:640px){ .hub{grid-template-columns:1fr} }
-  .hub-card{
-    position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:12px;text-align:left;
-    border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:20px;
-    box-shadow:var(--shadow);transition:.15s
-  }
+  .hub-card{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:14px;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:24px;padding:22px;box-shadow:var(--shadow);transition:.15s}
   .hub-card:hover{background:rgba(255,255,255,.06);border-color:var(--line2);transform:translateY(-1px)}
-  .hub-card.nuevo{border-color:rgba(34,197,94,.35)}
-  .flag{position:absolute;top:12px;right:12px;font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#4ade80;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.4);border-radius:999px;padding:2px 7px}
-  .hub-ic{width:40px;height:40px;border-radius:12px;display:grid;place-items:center}
-  .hub-ic svg{width:20px;height:20px}
-  .hub-ic.orange{background:rgba(234,88,12,.15);color:var(--orange)}
-  .hub-ic.amber{background:rgba(245,158,11,.15);color:var(--amber)}
-  .hub-ic.sky{background:rgba(14,165,233,.15);color:var(--sky)}
-  .hub-ic.emerald{background:rgba(34,197,94,.15);color:var(--emerald)}
+  .hub-card.nuevo{border-color:rgba(34,197,94,.32)}
+  .flag{position:absolute;top:14px;right:14px;font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#4ade80;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.4);border-radius:999px;padding:2px 7px}
+  .tile{width:44px;height:44px;border-radius:14px;display:grid;place-items:center}
+  .tile.orange{background:rgba(234,88,12,.15);color:var(--orange)}
+  .tile.amber{background:rgba(245,158,11,.15);color:var(--amber)}
+  .tile.sky{background:rgba(14,165,233,.15);color:var(--sky)}
+  .tile.emerald{background:rgba(34,197,94,.15);color:var(--emerald)}
   .hub-card .t{font-size:18px;font-weight:700}
   .hub-card .d{font-size:13px;color:var(--sub)}
+  .hub-card .link{margin-top:auto;display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700}
+  .hub-card .link svg{width:14px;height:14px;transition:.2s} .hub-card:hover .link svg{transform:translateX(4px)}
 
-  .placeholder{
-    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;
-    border:1px dashed var(--line2);background:var(--surface);border-radius:18px;padding:54px 24px;max-width:720px
-  }
-  .placeholder .ic{width:52px;height:52px;border-radius:14px;display:grid;place-items:center}
-  .placeholder .ic.sky{background:rgba(14,165,233,.15);color:var(--sky)}
-  .placeholder .ic.emerald{background:rgba(34,197,94,.15);color:var(--emerald)}
+  /* ---------- estado-pedidos style ---------- */
+  .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;border:1px solid var(--line);background:var(--surface);border-radius:18px;padding:12px;margin-bottom:12px}
+  .filters select,.filters input{height:36px;border-radius:12px;border:1px solid var(--line);background:var(--surface2);color:var(--ink);padding:0 10px;font-size:13px;font-family:inherit;outline:none}
+  .filters input{flex:1;min-width:200px}
+  .kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:14px}
+  @media (min-width:1000px){ .kpis{grid-template-columns:repeat(5,minmax(0,1fr))} }
+  .kpi{border:1px solid var(--line);background:var(--surface);border-radius:18px;padding:14px}
+  .kpi .lab{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--sub);margin-bottom:4px}
+  .kpi .lab svg{width:14px;height:14px}
+  .kpi .val{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums}
+  .kpi .nota{font-size:11px;color:var(--sub);margin-top:2px}
+
+  .panel{border:1px solid var(--line);background:var(--surface);border-radius:18px;padding:12px;margin-bottom:14px}
+  .panel h2{font-size:14px;margin-bottom:8px}
+  .panel h2 span{font-weight:400;color:var(--sub)}
+  .scroll{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:13px;min-width:60rem}
+  table.tbl-fit{min-width:auto}
+  thead th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--sub);font-weight:600;padding:7px 10px}
+  thead th.r,tbody td.r{text-align:right}
+  th[data-sort]{cursor:pointer;user-select:none}
+  th[data-sort]:hover{color:var(--ink)}
+  th[data-sort] .arw{font-size:9px;opacity:.45;margin-left:3px}
+  th[data-sort].asc .arw,th[data-sort].desc .arw{opacity:1;color:var(--sky)}
+  tbody td{padding:9px 10px;border-top:1px solid var(--line)}
+  tbody tr.click{cursor:pointer} tbody tr.click:hover{background:var(--surface2)}
+  .num{font-variant-numeric:tabular-nums} .sub{color:var(--sub)} .sem{font-weight:600}
+
+  .bar{display:block;width:100%;height:6px;overflow:hidden;border-radius:99px;background:rgba(255,255,255,.08)}
+  .bar i{display:block;height:100%;border-radius:99px;background:var(--emerald)}
+  .chip{display:inline-block;border-radius:99px;border:1px solid;padding:2px 9px;font-size:11px;font-weight:600}
+  .c-rose{border-color:rgba(244,63,94,.4);background:rgba(244,63,94,.1);color:#fb7185}
+  .c-amber{border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.1);color:#fbbf24}
+  .c-emerald{border-color:rgba(34,197,94,.4);background:rgba(34,197,94,.1);color:#4ade80}
+  .c-sky{border-color:rgba(14,165,233,.4);background:rgba(14,165,233,.1);color:#38bdf8}
+
+  .placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;border:1px dashed var(--line2);background:var(--surface);border-radius:18px;padding:54px 24px;max-width:720px}
   .placeholder h3{font-size:17px}
-  .placeholder code{background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:11.5px}
-
-  .screen{display:none}
-  .screen.on{display:block}
+  .screen{display:none} .screen.on{display:block}
   .foot{margin-top:34px;border-top:1px solid var(--line);padding-top:14px;color:rgba(148,163,184,.7);font-size:11.5px}
-  code{background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:11px}
+  .nota{border:1px solid rgba(245,158,11,.3);background:rgba(245,158,11,.07);color:#fcd34d;border-radius:14px;padding:11px 13px;font-size:12px;margin-bottom:14px;max-width:52rem}
 </style>
 </head>
 <body>
 
 <div class="top">
   <span class="badge-mock">● Propuesta · sin subir</span>
-  <div class="tabs">
-    <button class="tab on" data-s="hub">/deposito/rma</button>
-    <button class="tab" data-s="prov">Proveedores</button>
-    <button class="tab" data-s="guia">Guía</button>
-    <button class="tab" data-s="dev">Devoluciones <span class="nuevo">NUEVO</span></button>
-    <button class="tab" data-s="stock">Stock <span class="nuevo">NUEVO</span></button>
-  </div>
 </div>
 
 <!-- ================= HUB ================= -->
@@ -111,59 +105,54 @@
   <button class="back">← Volver</button>
   <header class="head">
     <div>
-      <h1>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="title-ic-orange"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-        RMA
-      </h1>
+      <h1>RMA</h1>
       <p class="mini" style="margin-top:2px">Módulo de RMA y proveedores (Excel PROVEEDORES PACHO).</p>
     </div>
   </header>
 
   <div class="hub">
-    <!-- existentes -->
     <button class="hub-card" data-go="prov">
-      <div class="hub-ic orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+      <div class="tile orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
       <span class="t">Proveedores</span>
-      <span class="d">ABM de proveedores de flexus/dragon (código, razón social, CUIT, localidad, tipo).</span>
+      <span class="d">ABM de proveedores (código, razón social, CUIT, localidad, tipo).</span>
+      <span class="link">Abrir <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span>
     </button>
+
     <button class="hub-card" data-go="guia">
-      <div class="hub-ic amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.62l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg></div>
+      <div class="tile amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.62l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg></div>
       <span class="t">Guía</span>
       <span class="d">Guía de despacho: fecha, N dragon/flexus, planilla, mail, gestión, despacho, NC.</span>
+      <span class="link">Abrir <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span>
     </button>
 
-    <!-- nuevos -->
     <button class="hub-card nuevo" data-go="dev">
       <span class="flag">Nuevo</span>
-      <div class="hub-ic sky"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 8v8"/><path d="M9 11l-3 3 3 3h6l3-3-3-3"/></svg></div>
+      <div class="tile sky"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 8v8"/><path d="M9 11l-3 3 3 3h6l3-3-3-3"/></svg></div>
       <span class="t">Devoluciones</span>
-      <span class="d">Comprobantes de devolución por base (por ahora MITO). Lee una vista del SQL Server.</span>
+      <span class="d">Devoluciones a proveedores: comprobantes, renglones e importes.</span>
+      <span class="link">Abrir <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span>
     </button>
+
     <button class="hub-card nuevo" data-go="stock">
       <span class="flag">Nuevo</span>
-      <div class="hub-ic emerald"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></div>
+      <div class="tile emerald"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></div>
       <span class="t">Stock</span>
-      <span class="d">Consulta de stock (por ahora sin datos: falta definir la vista).</span>
+      <span class="d">Stock de la sucursal FALLAS: artículo, descripción adicional, color, talle y cantidad.</span>
+      <span class="link">Abrir <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span>
     </button>
   </div>
 </section>
 
-<!-- ================= PROVEEDORES (igual que hoy) ================= -->
+<!-- ================= PROVEEDORES ================= -->
 <section class="screen" id="s-prov">
   <button class="back" data-go="hub">← Volver</button>
-  <header class="head"><div><h1 style="font-size:24px">Proveedores Pacho</h1><p class="mini" style="margin-top:2px">Proveedores (hoja del Excel PROVEEDORES PACHO).</p></div></header>
-  <div class="placeholder">
-    <span class="mini">Pantalla existente, sin cambios.</span>
-  </div>
+  <header class="head"><div><h1 style="font-size:24px">Proveedores Pacho</h1><p class="mini" style="margin-top:2px">Pantalla existente, sin cambios.</p></div></header>
 </section>
 
-<!-- ================= GUÍA (igual que hoy) ================= -->
+<!-- ================= GUÍA ================= -->
 <section class="screen" id="s-guia">
   <button class="back" data-go="hub">← Volver</button>
-  <header class="head"><div><h1 style="font-size:24px">Guía Pacho</h1><p class="mini" style="margin-top:2px">Guía de despacho (hoja del Excel PROVEEDORES PACHO).</p></div></header>
-  <div class="placeholder">
-    <span class="mini">Pantalla existente, sin cambios.</span>
-  </div>
+  <header class="head"><div><h1 style="font-size:24px">Guía Pacho</h1><p class="mini" style="margin-top:2px">Pantalla existente, sin cambios.</p></div></header>
 </section>
 
 <!-- ================= DEVOLUCIONES (nueva) ================= -->
@@ -171,18 +160,73 @@
   <button class="back" data-go="hub">← Volver</button>
   <header class="head">
     <div>
-      <h1 style="font-size:24px"><span class="hub-ic sky" style="width:34px;height:34px;display:inline-grid;vertical-align:middle;margin-right:8px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></span>Devoluciones</h1>
+      <h1>Devoluciones</h1>
       <p class="mini" style="margin-top:2px">Nueva pantalla · ruta <code>/deposito/rma/devoluciones</code> · permiso <code>deposito.view</code></p>
     </div>
+    <div class="acts">
+      <button class="btn emerald"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> Excel</button>
+      <button class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
+    </div>
   </header>
-  <div class="placeholder">
-    <div class="ic sky"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></div>
-    <h3>Devoluciones</h3>
-    <p class="mini" style="max-width:520px">
-      Acá va la lista de devoluciones. Falta definir <b>qué vista</b> y <b>qué columnas</b> mostrar
-      (mencionaste que va a ser <b>otra vista</b>, no la de comprobantes). Decime el nombre de la vista
-      y armo la tabla.
-    </p>
+
+  <p class="nota">⚠️ Datos de ejemplo. <b>Falta definir la vista</b> que alimenta esta pantalla (vas a decir que va a ser “otra vista”, no la de comprobantes MITO). RMA es un área aparte: acá no entra nada de MITO.</p>
+
+  <!-- filtros -->
+  <div class="filters">
+    <select aria-label="Período"><option>Últimos 3 meses</option><option>Últimos 6 meses</option><option>Último año</option><option>Todos</option></select>
+    <select aria-label="Proveedor"><option>Todos los proveedores</option><option>Proveedor A</option><option>Proveedor B</option></select>
+    <select aria-label="Motivo"><option>Todos los motivos</option><option>Dev. mercadería</option><option>Dev. por error</option></select>
+    <input placeholder="Buscar comprobante, proveedor u observación" />
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpis">
+    <div class="kpi"><div class="lab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg> Devoluciones</div><div class="val">37</div><div class="nota">en el período</div></div>
+    <div class="kpi"><div class="lab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/></svg> Unidades</div><div class="val">1.284</div><div class="nota">devueltas</div></div>
+    <div class="kpi"><div class="lab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Importe</div><div class="val">$ 4.812.300</div><div class="nota">total devuelto</div></div>
+    <div class="kpi"><div class="lab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v5h5"/></svg> Con nota de crédito</div><div class="val">28</div><div class="nota">de 37</div></div>
+    <div class="kpi"><div class="lab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> Pendientes</div><div class="val">9</div><div class="nota">sin gestión cerrada</div></div>
+  </div>
+
+  <!-- tabla principal -->
+  <div class="panel">
+    <h2>Devoluciones <span>(37)</span></h2>
+    <div class="scroll">
+      <table>
+        <thead><tr>
+          <th></th><th>Comprobante</th><th>Fecha</th><th>Proveedor</th><th>Motivo</th>
+          <th class="r">Unidades</th><th class="r">Importe</th><th class="r">% NC</th><th>Estado</th>
+        </tr></thead>
+        <tbody>
+          <tr class="click">
+            <td class="sub">▾</td><td class="sem">X 0001-00000012</td><td class="num">12/04/2026</td><td>Proveedor A</td><td class="sub">Dev. mercadería</td>
+            <td class="r num">420</td><td class="r num sem">$ 1.840.000</td><td class="r"><span class="bar" style="width:60px;display:inline-block"><i style="width:100%"></i></span> 100%</td>
+            <td><span class="chip c-emerald">Cerrada</span></td>
+          </tr>
+          <tr>
+            <td colspan="9" style="background:var(--surface2);padding:10px">
+              <table style="min-width:auto">
+                <thead><tr><th>Artículo</th><th>Color</th><th>Talle</th><th class="r">Cantidad</th><th class="r">Importe</th></tr></thead>
+                <tbody>
+                  <tr><td class="sem">ZH000200</td><td class="sub">Negro</td><td class="sub">40</td><td class="r num">120</td><td class="r num">$ 520.000</td></tr>
+                  <tr><td class="sem">ZH000210</td><td class="sub">Blanco</td><td class="sub">42</td><td class="r num">300</td><td class="r num">$ 1.320.000</td></tr>
+                </tbody>
+              </table>
+            </td>
+          </tr>
+          <tr class="click">
+            <td class="sub">▸</td><td class="sem">X 0001-00000013</td><td class="num">28/03/2026</td><td>Proveedor B</td><td class="sub">Dev. por error</td>
+            <td class="r num">180</td><td class="r num sem">$ 760.000</td><td class="r"><span class="bar" style="width:60px;display:inline-block"><i style="width:0%;background:var(--amber)"></i></span> 0%</td>
+            <td><span class="chip c-amber">En gestión</span></td>
+          </tr>
+          <tr class="click">
+            <td class="sub">▸</td><td class="sem">X 0001-00000014</td><td class="num">05/02/2026</td><td>Proveedor A</td><td class="sub">Dev. mercadería</td>
+            <td class="r num">684</td><td class="r num sem">$ 2.212.300</td><td class="r"><span class="bar" style="width:60px;display:inline-block"><i style="width:100%"></i></span> 100%</td>
+            <td><span class="chip c-emerald">Cerrada</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </section>
 
@@ -191,23 +235,56 @@
   <button class="back" data-go="hub">← Volver</button>
   <header class="head">
     <div>
-      <h1 style="font-size:24px"><span class="hub-ic emerald" style="width:34px;height:34px;display:inline-grid;vertical-align:middle;margin-right:8px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></span>Stock</h1>
-      <p class="mini" style="margin-top:2px">Nueva pantalla · ruta <code>/deposito/rma/stock</code> · permiso <code>deposito.view</code></p>
+      <h1>Stock</h1>
+      <p class="mini" style="margin-top:2px">Sucursal <b>FALLAS</b> · <code>vw_STOCK_SUCURSALES_REAL</code> (<code>bd_origen = FALLAS</code>) + descripción adicional de <code>vw_DIM_ARTICULO</code> · permiso <code>deposito.view</code></p>
+    </div>
+    <div class="acts">
+      <button class="btn emerald"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> Excel</button>
+      <button class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
     </div>
   </header>
-  <div class="placeholder">
-    <div class="ic emerald"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></div>
-    <h3>Stock</h3>
-    <p class="mini" style="max-width:520px">
-      Acá va la consulta de stock. Falta definir la <b>vista</b> y las <b>columnas</b>. Por ahora queda
-      vacía.
-    </p>
+
+  <!-- filtros -->
+  <div class="filters">
+    <input placeholder="Buscar artículo, descripción adicional, color o talle" />
+  </div>
+
+  <!-- KPI -->
+  <div class="kpis" style="grid-template-columns:minmax(0,18rem)">
+    <div class="kpi"><div class="lab">Unidades en stock</div><div class="val">376</div><div class="nota">suma de cantidades</div></div>
+  </div>
+
+  <!-- tabla -->
+  <div class="panel">
+    <h2>Stock FALLAS <span>(341)</span></h2>
+    <div class="scroll">
+      <table class="tbl-fit">
+        <thead><tr>
+          <th data-sort="text">Artículo <span class="arw">↕</span></th><th>Descripción adicional</th><th>Color</th><th>Talle</th><th class="r" data-sort="num">Stock <span class="arw">↕</span></th>
+        </tr></thead>
+        <tbody>
+          <tr><td class="sem num">SR090800</td><td>0018 LIMPIADOR CLIN SHOTER</td><td class="num">00</td><td class="num">U</td><td class="r num sem">6</td></tr>
+          <tr><td class="sem num">CF251401</td><td>ARON SLIPPERS CAPTAIN FIN</td><td class="num">02</td><td class="num">434</td><td class="r num sem">5</td></tr>
+          <tr><td class="sem num">KA009010</td><td>5826 - ROLLERS STARK RISE WHITE REGULABLE</td><td class="num">01</td><td class="num">M</td><td class="r num sem">4</td></tr>
+          <tr><td class="sem num">OL241403</td><td>OMN1SA02 SICILIA SANDALIA ONEILL</td><td class="num">02</td><td class="num">41</td><td class="r num sem">3</td></tr>
+          <tr><td class="sem num">CA021428</td><td>HDD-S100-1A RELOJ CASIO 94-HDD1001</td><td class="num">00</td><td class="num">U</td><td class="r num sem">3</td></tr>
+          <tr><td class="sem num">EU252104</td><td>ADAM SUPER BAGGY DENIM</td><td class="num">06</td><td class="num">32</td><td class="r num sem">3</td></tr>
+          <tr><td class="sem num">CF251406</td><td>STONE SLIPPERS CAPTAIN FIN</td><td class="num">02</td><td class="num">39</td><td class="r num sem">2</td></tr>
+          <tr><td class="sem num">EU252101</td><td>PRIMITIVE SUPER BAGGY CARPENTER - BROWN</td><td class="num">02</td><td class="num">34</td><td class="r num sem">2</td></tr>
+          <tr><td class="sem num">DS166200</td><td>TW22A-BD DICKIES TRI-COLOR LOGO HOODIE WITH DWR BROWN DUCK</td><td class="num">03</td><td class="num">L</td><td class="r num sem">2</td></tr>
+          <tr><td class="sem num">VM168102</td><td>05067&nbsp; - VOL SW SK8 JAM</td><td class="num">06</td><td class="num">S</td><td class="r num sem">2</td></tr>
+          <tr><td class="sem num">VS081155</td><td>VN0A3TKN6BT1 VANS SK8-HI PLATF BLK/WHT</td><td class="num">02</td><td class="num">6.5</td><td class="r num sem">2</td></tr>
+          <tr><td class="sem num">VS061100</td><td>VN000DCGBKA M BMX PROOF WAFFLECUP BLACK/BLACK</td><td class="num">02</td><td class="num">12</td><td class="r num sem">2</td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </section>
 
 <p class="foot">
-  Propuesta para <code>src/pages/Rma.tsx</code> (2 tarjetas nuevas) + rutas <code>/deposito/rma/devoluciones</code>
-  y <code>/deposito/rma/stock</code> en <code>App.tsx</code> + 2 páginas nuevas. Nada de esto está subido todavía.
+  Propuesta: 2 tarjetas nuevas en <code>src/pages/Rma.tsx</code> + rutas <code>/deposito/rma/devoluciones</code> y
+  <code>/deposito/rma/stock</code> en <code>App.tsx</code> + 2 páginas nuevas (estilo <code>EstadoPedidos.tsx</code>).
+  Nada de esto está subido todavía. RMA no toca nada de MITO.
 </p>
 
 <script>
@@ -216,8 +293,32 @@
     document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on', t.dataset.s===id));
     window.scrollTo({top:0,behavior:'smooth'});
   }
-  document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>show(t.dataset.s));
   document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));
+  // filas expandibles
+  document.querySelectorAll('tr.click').forEach(r=>r.onclick=()=>{
+    const n=r.nextElementSibling; if(n&&n.cells.length===1) n.style.display = n.style.display==='none'?'':'none';
+  });
+  // ordenar tabla (columnas con data-sort)
+  document.querySelectorAll('table.tbl-fit thead th[data-sort]').forEach(th=>{
+    th.onclick=()=>{
+      const table=th.closest('table'), tbody=table.querySelector('tbody');
+      const idx=[...th.parentNode.children].indexOf(th);
+      const num=th.dataset.sort==='num';
+      const dir=th.dataset.dir==='asc'?'desc':'asc';
+      th.parentNode.querySelectorAll('th[data-sort]').forEach(o=>{
+        if(o!==th){ o.dataset.dir=''; o.classList.remove('asc','desc'); const a=o.querySelector('.arw'); if(a) a.textContent='↕'; }
+      });
+      th.dataset.dir=dir; th.classList.toggle('asc',dir==='asc'); th.classList.toggle('desc',dir==='desc');
+      const arw=th.querySelector('.arw'); if(arw) arw.textContent = dir==='asc'?'▲':'▼';
+      const rows=[...tbody.querySelectorAll('tr')];
+      rows.sort((a,b)=>{
+        const A=a.children[idx].textContent.trim(), B=b.children[idx].textContent.trim();
+        const cmp = num ? (Number(A)-Number(B)) : A.localeCompare(B,'es');
+        return dir==='asc'?cmp:-cmp;
+      });
+      rows.forEach(r=>tbody.appendChild(r));
+    };
+  });
 </script>
 </body>
 </html>
