@@ -203,14 +203,19 @@ export default function EstadoPedidos() {
     [delPeriodo, provSel],
   )
 
-  // Resumen por proveedor: SIEMPRE todos los del período (el filtro no oculta los demás
-  // proveedores; sirve de panorama y para poder saltar de uno a otro). Alfabético.
-  const gruposProv = useMemo(() => agruparProveedores(delPeriodo), [delPeriodo])
+  // Resumen por proveedor: alfabético. Si hay proveedor/código elegido, se muestra SOLO su
+  // grupo (con TODOS sus códigos: elegir 47MIDI no esconde 47VARA, MIDI, VARA).
+  const gruposProv = useMemo(() => {
+    const todos = agruparProveedores(delPeriodo)
+    if (!provSel) return todos
+    return todos.filter((g) => [...g.codigos.keys()].some((c) => provSel.codigos.includes(c)))
+  }, [delPeriodo, provSel])
 
-  /** Elige un proveedor y cierra el panel. */
-  function elegirProv(label: string, codigos: string[]) {
+  /** Elige un proveedor (o un código) y cierra el panel; abre el detalle del grupo. */
+  function elegirProv(label: string, codigos: string[], grupo?: string) {
     setProvSel({ label, codigos })
     setPanelProv(false)
+    if (grupo) setProvAbierto(grupo)
   }
 
   const tot = useMemo(() => base.reduce((a, p) => ({
@@ -324,7 +329,7 @@ export default function EstadoPedidos() {
 
           {panelProv && (
             <div className="absolute left-0 z-30 mt-2 max-h-[70vh] w-[min(92vw,420px)] overflow-auto rounded-2xl border border-line bg-paper p-2 shadow-2xl">
-              <button type="button" onClick={() => { setProvSel(null); setPanelProv(false) }}
+              <button type="button" onClick={() => { setProvSel(null); setProvAbierto(null); setPanelProv(false) }}
                 className={`${opcion} ${!provSel ? 'bg-surface2 font-medium text-ink' : 'text-sub'}`}>
                 <span>Todos los proveedores</span>
               </button>
@@ -335,7 +340,7 @@ export default function EstadoPedidos() {
                   return (
                     <Fragment key={g.nombre}>
                       <div className="flex items-center rounded-lg hover:bg-surface2">
-                        <button type="button" onClick={() => elegirProv(g.nombre, [...g.codigos.keys()])}
+                        <button type="button" onClick={() => elegirProv(g.nombre, [...g.codigos.keys()], g.nombre)}
                           className="flex flex-1 items-center justify-between gap-2 px-2 py-1.5 text-left text-[13px] text-ink">
                           <span className="truncate">{g.nombre}</span>
                           <span className="shrink-0 tabular-nums text-[12px] text-sub">{n0.format(g.total.pedidos)}</span>
@@ -352,7 +357,7 @@ export default function EstadoPedidos() {
                           {[...g.codigos.entries()].sort((a, b) => a[0].localeCompare(b[0], 'es')).map(([cod, s]) => {
                             const completo = g.nombres.get(cod) ?? ''
                             return (
-                              <button key={cod} type="button" onClick={() => elegirProv(cod, [cod])}
+                              <button key={cod} type="button" onClick={() => elegirProv(cod, [cod], g.nombre)}
                                 className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1 text-left text-[12.5px] text-sub hover:bg-surface2 hover:text-ink">
                                 <span className="min-w-0 truncate">
                                   {cod}
@@ -398,7 +403,7 @@ export default function EstadoPedidos() {
           <section className="mb-3 rounded-2xl border border-line bg-surface p-3">
             <h2 className="mb-2 text-sm font-semibold text-ink">
               Por proveedor
-              <span className="ml-1.5 font-normal text-xs text-sub">unificado por proveedor · alfabético · esta tabla muestra siempre todos; el filtro resalta el elegido y filtra los KPI y la lista</span>
+              <span className="ml-1.5 font-normal text-xs text-sub">unificado por proveedor · alfabético · al filtrar muestra el proveedor elegido con todos sus códigos; los KPI y la lista se filtran por lo elegido</span>
             </h2>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[860px] text-sm">
@@ -435,7 +440,7 @@ export default function EstadoPedidos() {
                             )}
                           </td>
                           <td className="py-1.5 pr-3">
-                            <button type="button" onClick={() => elegirProv(g.nombre, [...g.codigos.keys()])}
+                            <button type="button" onClick={() => elegirProv(g.nombre, [...g.codigos.keys()], g.nombre)}
                               className="font-medium text-ink hover:text-lime-500">{g.nombre}</button>
                             {multi && <span className="ml-1.5 text-[11px] text-sub">{g.codigos.size} códigos</span>}
                           </td>
@@ -466,10 +471,12 @@ export default function EstadoPedidos() {
                                   {[...g.codigos.entries()].sort((a, b) => a[0].localeCompare(b[0], 'es')).map(([cod, s]) => {
                                     const vc = pct(s.recibidas, s.unidades)
                                     const completo = g.nombres.get(cod) ?? ''
+                                    // Código elegido en el filtro: se resalta; los hermanos siguen visibles
+                                    const esEl = !!provSel && provSel.codigos.length === 1 && provSel.codigos[0] === cod
                                     return (
-                                      <tr key={cod} className="border-t border-line/60">
+                                      <tr key={cod} className={`border-t border-line/60 ${esEl ? 'bg-surface2/70' : ''}`}>
                                         <td className="py-1 pr-3">
-                                          <button type="button" onClick={() => elegirProv(cod, [cod])} className="text-ink hover:text-lime-500">{cod}</button>
+                                          <button type="button" onClick={() => elegirProv(cod, [cod], g.nombre)} className={`hover:text-lime-500 ${esEl ? 'font-semibold text-lime-500' : 'text-ink'}`}>{cod}</button>
                                         </td>
                                         <td className="py-1 pr-3 text-sub">{completo || '—'}</td>
                                         <td className="py-1 pr-3 text-right tabular-nums">{n0.format(s.abiertos)} <span className="text-sub">/ {n0.format(s.pedidos)}</span></td>
@@ -506,7 +513,7 @@ export default function EstadoPedidos() {
               {provSel && (
                 <span className="ml-auto flex items-center gap-2 text-xs text-sub">
                   Proveedor: <b className="text-ink">{provSel.label}</b>
-                  <button type="button" onClick={() => setProvSel(null)} className="text-brand-400 hover:underline">Quitar</button>
+                  <button type="button" onClick={() => { setProvSel(null); setProvAbierto(null) }} className="text-brand-400 hover:underline">Quitar</button>
                 </span>
               )}
             </div>
