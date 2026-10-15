@@ -15,12 +15,21 @@
  *
  * 3) GET ?vista=chofer  (JWT de la app Transporte; CORS para su dominio)
  *    ¿El vehículo del chofer mandó ubicación hace poco? La app Transporte no deja escanear si no.
+ *    POST ?vista=push  (JWT de la app Transporte): guarda la suscripción a notificaciones del celular.
+ *
+ * 4) GET ?vista=alertas  (pg_cron cada 2 min, sql/tracking_transporte.sql)
+ *    Al chofer cuyo vehículo dejó de mandar ubicación le suena una notificación, repetida cada
+ *    2 min mientras siga así. Solo en jornada (lunes a sábado 6-21 h y si ya escaneó algo hoy).
+ *    Sin secreto a propósito: cada chofer recibe a lo sumo un aviso cada ~2 min (ultimo_aviso),
+ *    así que llamarlo de más no manda nada de más.
  *
  * Variables de entorno en Vercel (sin prefijo VITE_):
  *   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY            - hub
  *   TRANSPORTE_URL, TRANSPORTE_ANON_KEY                 - ya estaban (bultos-recibidos)
  *   TRANSPORTE_SERVICE_ROLE_KEY                         - lectura de sesiones/bultos de Transporte
+ *   VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY (VAPID_SUBJECT) - las mismas de api/push.ts
  */
+import webpush from 'web-push'
 import { autorizado, tokenDe } from '../src/lib/apiAuth.js'
 
 type Req = {
@@ -39,6 +48,8 @@ type Res = {
 
 /** Pasado este tiempo sin ubicación, la app Transporte bloquea el escaneo del chofer. */
 const MIN_SIN_UBICACION = 10
+/** Pasado este tiempo sin ubicación, al chofer le suena el aviso (y se repite cada 2 min). */
+const MIN_AVISO = 3
 
 const ORIGENES_TRANSPORTE = [
   'https://project-r4hl5.vercel.app',
@@ -263,17 +274,23 @@ async function vistaHub(req: Req, res: Res) {
   })
 }
 
-// ---------- 3) Chequeo del chofer (app Transporte) ----------
+// ---------- 3) Chofer (app Transporte) ----------
 
-async function vistaChofer(req: Req, res: Res) {
+/** Usuario de Transporte del JWT (null si no es válido). */
+async function usuarioTransporte(req: Req): Promise<string | null> {
   const token = tokenDe(cabecera(req, 'authorization'))
   const trUrl = env('TRANSPORTE_URL')?.replace(/\/$/, '')
   const trAnon = env('TRANSPORTE_ANON_KEY')
-  if (!token || !trUrl || !trAnon) return res.status(401).json({ error: 'No autorizado' })
+  if (!token || !trUrl || !trAnon) return null
   const u = await fetch(`${trUrl}/auth/v1/user`, { headers: { apikey: trAnon, Authorization: `Bearer ${token}` } })
-  if (!u.ok) return res.status(401).json({ error: 'Sesión de Transporte inválida' })
+  if (!u.ok) return null
   const { id } = (await u.json()) as { id?: string }
-  if (!id || !/^[0-9a-f-]{36}$/i.test(id)) return res.status(401).json({ error: 'No autorizado' })
+  return id && /^[0-9a-f-]{36}$/i.test(id) ? id : null
+}
+
+async function vistaChofer(req: Req, res: Res) {
+  const id = await usuarioTransporte(req)
+  if (!id) return res.status(401).json({ error: 'Sesión de Transporte inválida' })
 
   const h = hub()
   const veh = await getJson<{ id: string; nombre: string }[]>(
@@ -292,20 +309,103 @@ async function vistaChofer(req: Req, res: Res) {
     minutos,
     habilitado: minutos !== null && minutos <= MIN_SIN_UBICACION,
     limite_min: MIN_SIN_UBICACION,
+    vapid: env('VAPID_PUBLIC_KEY') ?? null,
   })
+}
+
+/** Guarda la suscripción a notificaciones del celular del chofer. */
+async function vistaPush(req: Req, res: Res) {
+  const id = await usuarioTransporte(req)
+  if (!id) return res.status(401).json({ error: 'Sesión de Transporte inválida' })
+  const body = (typeof req.body === 'string' ? safeJson(req.body) : req.body) as { endpoint?: string; keys?: { p256dh?: string; auth?: string } } | null
+  const endpoint = body?.endpoint ?? ''
+  const p256dh = body?.keys?.p256dh ?? ''
+  const auth = body?.keys?.auth ?? ''
+  if (!/^https:\/\//.test(endpoint) || endpoint.length > 1000 || !p256dh || !auth || p256dh.length > 200 || auth.length > 100) {
+    return res.status(400).json({ error: 'Suscripción inválida' })
+  }
+  const h = hub()
+  const r = await fetch(`${h.url}/rest/v1/tracking_push?on_conflict=endpoint`, {
+    method: 'POST',
+    headers: { ...h.headers, Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify({ endpoint, usuario_transporte_id: id, p256dh, auth }),
+  })
+  if (!r.ok) return res.status(500).json({ error: `No se pudo guardar (${r.status})` })
+  return res.status(200).json({ ok: true })
+}
+
+// ---------- 4) Avisos que suenan cuando se corta la ubicación ----------
+
+async function vistaAlertas(res: Res) {
+  // Jornada: lunes a sábado de 6 a 21 h de Córdoba (UTC-3)
+  const ar = new Date(Date.now() - 3 * 3600_000)
+  const dia = ar.getUTCDay()
+  const hora = ar.getUTCHours()
+  if (dia === 0 || hora < 6 || hora >= 21) return res.status(200).json({ ok: true, avisos: 0, motivo: 'fuera de horario' })
+
+  const pub = env('VAPID_PUBLIC_KEY')
+  const priv = env('VAPID_PRIVATE_KEY')
+  if (!pub || !priv) return res.status(500).json({ error: 'Faltan VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY' })
+  webpush.setVapidDetails(env('VAPID_SUBJECT') || 'https://hub-mito.vercel.app', pub, priv)
+
+  const h = hub()
+  const t = transporte()
+  const ahora = Date.now()
+  const vehs = await getJson<{ id: string; nombre: string; usuario_transporte_id: string; ultimo_aviso: string | null }[]>(
+    `${h.url}/rest/v1/tracking_vehiculos?select=id,nombre,usuario_transporte_id,ultimo_aviso&activo=eq.true&usuario_transporte_id=not.is.null`, h.headers)
+  const inicioHoy = new Date(Date.UTC(ar.getUTCFullYear(), ar.getUTCMonth(), ar.getUTCDate()) + 3 * 3600_000).toISOString()
+
+  let avisos = 0
+  for (const v of vehs) {
+    if (v.ultimo_aviso && ahora - new Date(v.ultimo_aviso).getTime() < 110_000) continue
+    const ult = await getJson<{ recibido_at: string }[]>(
+      `${h.url}/rest/v1/tracking_ubicaciones?select=recibido_at&vehiculo_id=eq.${v.id}&order=recibido_at.desc&limit=1`, h.headers)
+    const min = ult[0] ? (ahora - new Date(ult[0].recibido_at).getTime()) / 60_000 : null
+    if (min !== null && min < MIN_AVISO) continue
+    // Solo si ya arrancó la jornada (escaneó algo hoy): no molestar en días que no trabaja
+    const hoy = await getJson<unknown[]>(
+      `${t.url}/rest/v1/bultos_historial?select=id&usuario_registro_id=eq.${v.usuario_transporte_id}&registrado_en=gte.${inicioHoy}&limit=1`, t.headers)
+    if (!hoy.length) continue
+    const subs = await getJson<{ endpoint: string; p256dh: string; auth: string }[]>(
+      `${h.url}/rest/v1/tracking_push?select=endpoint,p256dh,auth&usuario_transporte_id=eq.${v.usuario_transporte_id}`, h.headers)
+    if (!subs.length) continue
+    const payload = JSON.stringify({
+      title: '📍 Activá la ubicación',
+      body: min === null
+        ? `No llega la ubicación de ${v.nombre}. Abrí Traccar Client y prendé el servicio.`
+        : `Hace ${Math.floor(min)} min que no llega la ubicación de ${v.nombre}. Abrí Traccar Client y prendé el servicio.`,
+      tag: 'ubicacion-transporte',
+    })
+    await Promise.all(subs.map(async (sub) => {
+      try {
+        await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload, { TTL: 120, urgency: 'high' })
+        avisos++
+      } catch (e) {
+        const code = (e as { statusCode?: number }).statusCode
+        // Suscripción vencida (desinstaló la app, borró datos): se descarta
+        if (code === 404 || code === 410) {
+          await fetch(`${h.url}/rest/v1/tracking_push?endpoint=eq.${encodeURIComponent(sub.endpoint)}`, { method: 'DELETE', headers: h.headers })
+        }
+      }
+    }))
+    await fetch(`${h.url}/rest/v1/tracking_vehiculos?id=eq.${v.id}`, {
+      method: 'PATCH', headers: { ...h.headers, Prefer: 'return=minimal' }, body: JSON.stringify({ ultimo_aviso: new Date().toISOString() }),
+    })
+  }
+  return res.status(200).json({ ok: true, avisos })
 }
 
 export default async function handler(req: Req, res: Res) {
   res.setHeader('Cache-Control', 'no-store')
   const vista = q(req, 'vista')
 
-  if (vista === 'chofer') {
+  if (vista === 'chofer' || vista === 'push') {
     const origen = cabecera(req, 'origin')
     if (ORIGENES_TRANSPORTE.includes(origen)) {
       res.setHeader('Access-Control-Allow-Origin', origen)
       res.setHeader('Vary', 'Origin')
       res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type')
-      res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
     }
     if (req.method === 'OPTIONS') return res.status(204).end()
   }
@@ -313,6 +413,8 @@ export default async function handler(req: Req, res: Res) {
   try {
     if (vista === 'hub' && req.method === 'GET') return await vistaHub(req, res)
     if (vista === 'chofer' && req.method === 'GET') return await vistaChofer(req, res)
+    if (vista === 'push' && req.method === 'POST') return await vistaPush(req, res)
+    if (vista === 'alertas') return await vistaAlertas(res)
     if (req.method === 'POST' || req.method === 'GET') return await ingesta(req, res)
     return res.status(405).json({ error: 'Método no permitido' })
   } catch (e) {

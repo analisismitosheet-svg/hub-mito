@@ -10,6 +10,9 @@
 ## Bloqueo en la app Transporte
 `D:\PWA\transporte-pwa\src\components\GuardiaUbicacion.tsx` envuelve `/lista/:sesionCodigo`. Para rol `TRANSPORTISTA` pregunta a `api/tracking?vista=chofer` (JWT de Transporte, CORS para su dominio) cada 60 s: si su vehículo no mandó ubicación en **10 min**, no deja escanear (tapa la pantalla y frena la pistola sin perder lo escaneado). Chofer sin vehículo vinculado o sin conexión con el hub → no bloquea.
 
+## Avisos que suenan (ubicación cortada)
+pg_cron `tracking-avisos-ubicacion` cada 2 min llama a `api/tracking?vista=alertas`: a cada vehículo vinculado a un chofer que lleva **3 min** sin ubicación, en jornada (lunes a sábado 6-21 h y solo si el chofer ya escaneó algo hoy), le manda una notificación push que suena y vibra, repetida cada 2 min (`tracking_vehiculos.ultimo_aviso`). Suscripciones en `tracking_push` (las registra `AvisosUbicacion.tsx` de la app Transporte con `?vista=push`; el service worker la muestra con `public/push-sw.js`, importado por Workbox). Usa las mismas claves VAPID que `api/push.ts`. En 🚚 Vehículos se ve si el chofer tiene «🔔 avisos activados».
+
 ## Estados en la lista
 En ruta (≥5 km/h, ubicación < 5 min) · Detenido · Sin señal (> 15 min) · Sin GPS (chofer sin vehículo).
 

@@ -146,6 +146,7 @@ export default function TrackingTransporte() {
   const [vehiculos, setVehiculos] = useState<Vehiculo[]>([])
   const [ubics, setUbics] = useState<Ubic[]>([])
   const [recorridos, setRecorridos] = useState<Recorrido[]>([])
+  const [conAvisos, setConAvisos] = useState<Set<string>>(new Set())
   const [controles, setControles] = useState<Control[]>([])
   const [basesUbic, setBasesUbic] = useState<BaseUbic[]>([])
   const [tr, setTr] = useState<DatosTransporte | null>(null)
@@ -166,6 +167,8 @@ export default function TrackingTransporte() {
     ])
     setVehiculos((v.data ?? []) as Vehiculo[])
     setRecorridos((p.data ?? []) as Recorrido[])
+    const { data: av } = await supabase.from('tracking_push').select('usuario_transporte_id')
+    setConAvisos(new Set((av ?? []).map((x) => (x as { usuario_transporte_id: string }).usuario_transporte_id)))
     setBasesUbic((b.data ?? []) as BaseUbic[])
     setControles((ps.data ?? []) as Control[])
     const filas: Ubic[] = []
@@ -473,7 +476,7 @@ export default function TrackingTransporte() {
         <Kpi label="Locales obligatorios" valor={`${kpis.pcOk}/${kpis.pcTotal}`} sub={kpis.pcMal ? `${kpis.pcMal} sin pasar ⚠` : 'pasados'} color="#f59e0b" />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
+      <div className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
         <section className="rounded-2xl border border-line bg-surface p-3">
           <h2 className="mb-2 font-semibold text-ink">Vehículos</h2>
           {!moviles.length && !cargando && <p className="text-sm text-sub">Todavía no hay vehículos ni choferes.</p>}
@@ -533,7 +536,7 @@ export default function TrackingTransporte() {
           )}
           {/* La clase del div del mapa no puede cambiar: React le pisaría las clases que agrega Leaflet */}
           <div className={modo ? '[&_.leaflet-container]:cursor-crosshair' : ''}>
-            <div ref={divMapa} className="h-[460px] w-full overflow-hidden rounded-xl border border-line" style={{ zIndex: 0 }} />
+            <div ref={divMapa} className="h-[75vh] min-h-[520px] w-full overflow-hidden rounded-xl border border-line" style={{ zIndex: 0 }} />
           </div>
           <p className="mt-2 text-xs text-sub">
             Todos los vehículos juntos (el elegido, más grueso) · línea = recorrido del día · 🏪 = locales · círculo = local obligatorio del vehículo elegido (verde pasó, amarillo pendiente, rojo no pasó).
@@ -584,6 +587,7 @@ export default function TrackingTransporte() {
           <Gestion
             vehiculos={vehiculos}
             recorridos={recorridos}
+            conAvisos={conAvisos}
             choferes={tr?.choferes ?? []}
             bases={tr?.bases ?? []}
             basesUbic={basesUbic}
@@ -613,6 +617,7 @@ function Kpi({ label, valor, sub, color }: { label: string; valor: number | stri
 function Gestion(props: {
   vehiculos: Vehiculo[]
   recorridos: Recorrido[]
+  conAvisos: Set<string>
   choferes: { id: string; nombre: string }[]
   bases: { base_id: string; nombre: string }[]
   basesUbic: BaseUbic[]
@@ -621,9 +626,9 @@ function Gestion(props: {
   centrar: (lat: number, lng: number) => void
   recargar: () => void
 }) {
-  const { vehiculos, recorridos, choferes, bases, basesUbic, setModo, vehSel, centrar, recargar } = props
+  const { vehiculos, recorridos, conAvisos, choferes, bases, basesUbic, setModo, vehSel, centrar, recargar } = props
   const [tab, setTab] = useState<'recorridos' | 'vehiculos' | 'locales'>('recorridos')
-  const [veh, setVeh] = useState({ nombre: '', chofer: '' })
+  const [veh, setVeh] = useState({ nombre: '', chofer: '', disp: '' })
   const [verDisp, setVerDisp] = useState<string | null>(null)
   const [busca, setBusca] = useState('')
   const [dir, setDir] = useState<{ base_id: string; texto: string; lugares: Lugar[] | null; buscando: boolean } | null>(null)
@@ -654,15 +659,17 @@ function Gestion(props: {
   // ----- vehículos -----
   async function crearVehiculo() {
     if (!veh.nombre.trim()) return
+    const disp = veh.disp.trim().toLowerCase() || nuevoDispositivo(veh.nombre)
+    if (!DISPOSITIVO_OK.test(disp)) return alert('Identificador: solo minúsculas, números y guiones, de 8 a 60 caracteres (ej. mercedes-4417).')
     const chofer = choferes.find((c) => c.id === veh.chofer)
     const usado = new Set(vehiculos.map((v) => v.color))
     const { data, error } = await supabase.from('tracking_vehiculos').insert({
-      nombre: veh.nombre.trim(), dispositivo: nuevoDispositivo(veh.nombre),
+      nombre: veh.nombre.trim(), dispositivo: disp,
       usuario_transporte_id: chofer?.id ?? null, usuario_transporte_nombre: chofer?.nombre ?? null,
       color: COLORES.find((c) => !usado.has(c)) ?? COLORES[vehiculos.length % COLORES.length],
     }).select('id').single()
-    if (error) return alert(error.message.includes('usuario_transporte_id') ? 'Ese chofer ya tiene un vehículo.' : error.message)
-    setVeh({ nombre: '', chofer: '' })
+    if (error) return alert(error.message.includes('usuario_transporte_id') ? 'Ese chofer ya tiene un vehículo.' : error.message.includes('dispositivo') ? 'Ese identificador ya lo usa otro vehículo.' : error.message)
+    setVeh({ nombre: '', chofer: '', disp: '' })
     setVerDisp(data?.id ?? null)
     recargar()
   }
@@ -786,6 +793,8 @@ function Gestion(props: {
         <div>
           <div className="mb-3 space-y-2 rounded-xl border border-line p-3">
             <input className={inp} placeholder="Nombre del vehículo (ej. Master blanca)" value={veh.nombre} onChange={(e) => setVeh({ ...veh, nombre: e.target.value })} />
+            <input className={inp} placeholder="Identificador para Traccar (opcional, ej. mercedes-4417)" value={veh.disp}
+              onChange={(e) => setVeh({ ...veh, disp: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })} />
             <select className={inp} value={veh.chofer} onChange={(e) => setVeh({ ...veh, chofer: e.target.value, nombre: veh.nombre || choferes.find((c) => c.id === e.target.value)?.nombre || '' })}>
               <option value="">Usuario de Transporte (chofer)…</option>
               {choferes.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
@@ -802,7 +811,12 @@ function Gestion(props: {
                     <input type="color" value={v.color} onChange={(e) => void cambiarVehiculo(v, { color: e.target.value })} className="h-6 w-6 cursor-pointer rounded border-0 bg-transparent p-0" aria-label="Color" />
                     <div className="min-w-0">
                       <div className={`truncate font-semibold ${v.activo ? 'text-ink' : 'text-sub line-through'}`}>{v.nombre}</div>
-                      <div className="text-xs text-sub">Chofer: {v.usuario_transporte_nombre ?? 'sin asignar'}</div>
+                      <div className="text-xs text-sub">
+                        Chofer: {v.usuario_transporte_nombre ?? 'sin asignar'} · <code>{v.dispositivo}</code>
+                        {v.usuario_transporte_id && (conAvisos.has(v.usuario_transporte_id)
+                          ? <span className="text-green-600 dark:text-green-400"> · 🔔 avisos activados</span>
+                          : <span className="text-amber-600 dark:text-amber-400"> · 🔕 sin avisos</span>)}
+                      </div>
                     </div>
                   </div>
                   <div className="flex shrink-0 gap-2 text-xs">

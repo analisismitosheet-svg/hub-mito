@@ -111,3 +111,29 @@ LANGUAGE sql STABLE SECURITY INVOKER SET search_path = public AS $$
 $$;
 REVOKE ALL ON FUNCTION public.tracking_controles_dia(date) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.tracking_controles_dia(date) TO authenticated;
+
+-- ---- Avisos que suenan en el celular del chofer cuando se corta la ubicación ----
+CREATE TABLE IF NOT EXISTS public.tracking_push (
+  endpoint text PRIMARY KEY,
+  usuario_transporte_id uuid NOT NULL,
+  p256dh text NOT NULL,
+  auth text NOT NULL,
+  creado_at timestamptz NOT NULL DEFAULT now(),
+  ultimo_envio timestamptz
+);
+CREATE INDEX IF NOT EXISTS tracking_push_usuario ON public.tracking_push (usuario_transporte_id);
+ALTER TABLE public.tracking_push ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tracking_push_ver ON public.tracking_push;
+CREATE POLICY tracking_push_ver ON public.tracking_push FOR SELECT TO authenticated
+  USING (private.tengo_permiso('tracking.view') OR private.tengo_permiso('tracking.gestionar'));
+REVOKE ALL ON public.tracking_push FROM anon;
+
+ALTER TABLE public.tracking_vehiculos ADD COLUMN IF NOT EXISTS ultimo_aviso timestamptz;
+
+-- Cada 2 minutos (lunes a sábado, 6 a 21 h de Córdoba = 9 a 0 UTC); el horario fino lo decide api/tracking.ts
+SELECT cron.unschedule('tracking-avisos-ubicacion') WHERE EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'tracking-avisos-ubicacion');
+SELECT cron.schedule(
+  'tracking-avisos-ubicacion',
+  '*/2 9-23,0 * * 1-6',
+  $$select net.http_get('https://hub-mito.vercel.app/api/tracking?vista=alertas', timeout_milliseconds := 30000)$$
+);
