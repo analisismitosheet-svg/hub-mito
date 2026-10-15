@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, Loader2, MapPin, RefreshCw, Truck, X } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, Loader2, MapPin, RefreshCw, Truck, X } from 'lucide-react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import Layout from '@/components/Layout'
@@ -60,6 +60,32 @@ interface Movil {
 }
 
 type Estado = { label: string; color: string }
+
+interface EventoDia {
+  at: string
+  titulo: string
+  det: string
+  color: string
+  tipo: 'carga' | 'entrega' | 'paso' | 'nopaso' | 'ubic'
+  n?: number
+  lugar?: string
+}
+
+/** Una línea por hora: cuántos cargó, cuántos entregó y dónde, locales obligatorios. */
+function resumenHora(items: EventoDia[]): { partes: string[]; color: string } {
+  const suma = (t: EventoDia['tipo']) => items.filter((e) => e.tipo === t).reduce((a, e) => a + (e.n ?? 0), 0)
+  const lugares = (t: EventoDia['tipo']) => [...new Set(items.filter((e) => e.tipo === t).map((e) => e.lugar ?? '?'))]
+  const partes: string[] = []
+  const cargo = suma('carga')
+  const entrego = suma('entrega')
+  if (cargo) partes.push(`📦 Cargó ${cargo}`)
+  if (entrego) partes.push(`✅ Entregó ${entrego} en ${lugares('entrega').join(', ')}`)
+  if (lugares('paso').length) partes.push(`🏪 Pasó por ${lugares('paso').join(', ')}`)
+  if (lugares('nopaso').length) partes.push(`⚠ No pasó por ${lugares('nopaso').join(', ')}`)
+  if (items.some((e) => e.tipo === 'ubic')) partes.push('📍 Última ubicación')
+  const color = lugares('nopaso').length ? '#ef4444' : entrego ? '#22c55e' : cargo ? '#38bdf8' : items[items.length - 1].color
+  return { partes, color }
+}
 
 // La pantalla solo se abre logueado: Supabase siempre está configurado acá
 const supabase = sb!
@@ -277,29 +303,43 @@ export default function TrackingTransporte() {
   const dia = useMemo(() => {
     if (!actual) return []
     const r = resumen.get(actual.key)
-    const items: { at: string; titulo: string; det: string; color: string }[] = []
+    const items: EventoDia[] = []
     for (const g of agrupar(r?.cargas ?? [], () => 'carga')) {
       const dest = [...new Set(g.evs.map((e) => e.destino ?? '?'))]
-      items.push({ at: g.desde, titulo: `Cargó ${g.evs.length} bulto${g.evs.length === 1 ? '' : 's'}`, det: dest.join(', '), color: '#38bdf8' })
+      items.push({ at: g.desde, titulo: `Cargó ${g.evs.length} bulto${g.evs.length === 1 ? '' : 's'}`, det: dest.join(', '), color: '#38bdf8', tipo: 'carga', n: g.evs.length })
     }
     for (const g of agrupar(r?.entregas ?? [], (e) => e.destino ?? '?')) {
-      items.push({ at: g.desde, titulo: `Entregó ${g.evs.length} bulto${g.evs.length === 1 ? '' : 's'} en ${g.clave}`, det: 'recibidos por el local', color: '#22c55e' })
+      items.push({ at: g.desde, titulo: `Entregó ${g.evs.length} bulto${g.evs.length === 1 ? '' : 's'} en ${g.clave}`, det: 'recibidos por el local', color: '#22c55e', tipo: 'entrega', n: g.evs.length, lugar: g.clave })
     }
     for (const c of controlesDe(actual.vehiculo?.id)) {
-      if (c.paso_at) items.push({ at: c.paso_at, titulo: `🏪 Pasó por ${c.base_id}`, det: 'local obligatorio ✓', color: '#fbbf24' })
+      if (c.paso_at) items.push({ at: c.paso_at, titulo: `🏪 Pasó por ${c.base_id}`, det: 'local obligatorio ✓', color: '#fbbf24', tipo: 'paso', lugar: c.base_id })
       else if (vencido(c)) {
         const at = c.hora_limite ? `${fecha}T${c.hora_limite.slice(0, 5)}:00-03:00` : `${fecha}T23:59:00-03:00`
-        items.push({ at, titulo: `⚠ No pasó por ${c.base_id}`, det: c.hora_limite ? `local obligatorio · hora límite ${c.hora_limite.slice(0, 5)}` : 'local obligatorio', color: '#ef4444' })
+        items.push({ at, titulo: `⚠ No pasó por ${c.base_id}`, det: c.hora_limite ? `local obligatorio · hora límite ${c.hora_limite.slice(0, 5)}` : 'local obligatorio', color: '#ef4444', tipo: 'nopaso', lugar: c.base_id })
       }
     }
     const us = actual.vehiculo ? ubicsDe.get(actual.vehiculo.id) : undefined
     const ult = us?.[us.length - 1]
     if (ult) {
       const vel = ult.velocidad_kmh !== null ? `${Math.round(ult.velocidad_kmh)} km/h` : ''
-      items.push({ at: ult.at, titulo: 'Última ubicación', det: [vel, ult.bateria !== null ? `batería ${Math.round(ult.bateria)}%` : '', esHoy ? hace(ult.at) : ''].filter(Boolean).join(' · '), color: estadoDe(ult, esHoy).color })
+      items.push({ at: ult.at, titulo: 'Última ubicación', det: [vel, ult.bateria !== null ? `batería ${Math.round(ult.bateria)}%` : '', esHoy ? hace(ult.at) : ''].filter(Boolean).join(' · '), color: estadoDe(ult, esHoy).color, tipo: 'ubic' })
     }
     return items.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())
   }, [actual, resumen, controlesDe, vencido, ubicsDe, fecha, esHoy])
+
+  // Resumen por hora (se despliega para ver el detalle)
+  const porHora = useMemo(() => {
+    const grupos: { hora: number; items: EventoDia[] }[] = []
+    for (const e of dia) {
+      const h = new Date(e.at).getHours()
+      const g = grupos[grupos.length - 1]
+      if (g && g.hora === h) g.items.push(e)
+      else grupos.push({ hora: h, items: [e] })
+    }
+    return grupos
+  }, [dia])
+  const [horaAbierta, setHoraAbierta] = useState<Set<number>>(new Set())
+  useEffect(() => { setHoraAbierta(new Set()) }, [sel, fecha])
 
   // ----- mapa -----
   const divMapa = useRef<HTMLDivElement>(null)
@@ -506,14 +546,37 @@ export default function TrackingTransporte() {
           <h2 className="mb-3 font-semibold text-ink">{actual ? `El día de ${actual.nombre}` : 'El día'} · {fmtFecha(fecha)}</h2>
           {!dia.length && <p className="text-sm text-sub">Sin movimientos este día.</p>}
           <ol className="relative ml-2 border-l-2 border-line pl-4">
-            {dia.map((e, i) => (
-              <li key={i} className="relative mb-3">
-                <span className="absolute -left-[23px] top-1 h-3 w-3 rounded-full border-2 border-surface" style={{ background: e.color }} />
-                <div className="text-[11px] text-sub">{hora(e.at)}</div>
-                <div className="text-sm font-semibold text-ink">{e.titulo}</div>
-                {e.det && <div className="text-xs text-sub">{e.det}</div>}
-              </li>
-            ))}
+            {porHora.map((g) => {
+              const abierta = horaAbierta.has(g.hora)
+              const r = resumenHora(g.items)
+              return (
+                <li key={g.hora} className="relative mb-2">
+                  <span className="absolute -left-[23px] top-2.5 h-3 w-3 rounded-full border-2 border-surface" style={{ background: r.color }} />
+                  <button
+                    onClick={() => setHoraAbierta((s) => { const n = new Set(s); if (n.has(g.hora)) n.delete(g.hora); else n.add(g.hora); return n })}
+                    className="flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-surface2"
+                    aria-expanded={abierta}
+                  >
+                    <span className="w-12 shrink-0 pt-0.5 text-xs font-bold text-sub">{String(g.hora).padStart(2, '0')}:00</span>
+                    <span className="min-w-0 flex-1 text-sm text-ink">
+                      {r.partes.map((p, i) => <span key={i} className="mr-2 inline-block">{p}</span>)}
+                    </span>
+                    <ChevronDown size={16} className={`mt-0.5 shrink-0 text-sub transition ${abierta ? 'rotate-180' : ''}`} />
+                  </button>
+                  {abierta && (
+                    <ul className="mb-2 ml-14 mt-1 space-y-2 border-l border-line pl-3">
+                      {g.items.map((e, i) => (
+                        <li key={i}>
+                          <div className="text-[11px] text-sub">{hora(e.at)}</div>
+                          <div className="text-sm font-semibold text-ink">{e.titulo}</div>
+                          {e.det && <div className="text-xs text-sub">{e.det}</div>}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              )
+            })}
           </ol>
         </section>
 
