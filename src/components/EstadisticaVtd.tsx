@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BarChart3, Download, Loader2, PackageX, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { descripcionesMaestro } from '@/lib/descripcionArticulos'
+import { cargarStockSku, stockSkuDe, type StockSku } from '@/lib/stockSku'
 
 /* ------------------------------------------------------------------ */
 /*  Estadística VTD (repos), dentro de Eficiencia mayorista: como la    */
@@ -79,6 +80,46 @@ interface FilaDetalle {
   cantidad: number
   repuesto: number
   no_mandado: number
+}
+
+/**
+ * Filas del Excel: una por artículo + color + talle (ordenado por esos tres),
+ * con las cantidades sumadas y el stock real de ese SKU. Las filas que venían de
+ * varios locales/pedidos quedan en una sola.
+ */
+function agruparParaExcel(filas: FilaDetalle[], stock: StockSku | null) {
+  const grupos = new Map<string, { articulo: string; descripcion: string; color: string; talle: string; cantidad: number; noMandado: number; stock: number | null }>()
+  for (const f of filas) {
+    const clave = `${f.articulo}|${f.color ?? ''}|${f.talle ?? ''}`
+    const g = grupos.get(clave)
+    if (g) {
+      g.cantidad += f.cantidad
+      g.noMandado += f.no_mandado
+      if (!g.descripcion && f.descripcion) g.descripcion = f.descripcion
+    } else {
+      grupos.set(clave, {
+        articulo: f.articulo,
+        descripcion: f.descripcion ?? '',
+        color: f.color ?? '',
+        talle: f.talle ?? '',
+        cantidad: f.cantidad,
+        noMandado: f.no_mandado,
+        stock: stockSkuDe(stock, f.articulo, f.color, f.talle),
+      })
+    }
+  }
+  const orden = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
+  return [...grupos.values()]
+    .sort((a, b) => orden(a.articulo, b.articulo) || orden(a.color, b.color) || orden(a.talle, b.talle))
+    .map((g) => ({
+      Articulo: g.articulo,
+      Descripcion: g.descripcion,
+      Color: g.color,
+      Talle: g.talle,
+      Cantidad: g.cantidad,
+      'Stock real': g.stock ?? '—',
+      'No mandado': g.noMandado,
+    }))
 }
 
 const n0 = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 })
@@ -221,6 +262,8 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
   const [det, setDet] = useState<FilaDetalle[] | null>(null)
   const [detCargando, setDetCargando] = useState(false)
   const [detError, setDetError] = useState<string | null>(null)
+  // Stock real por SKU (Puente SQL): reemplaza a lo repuesto en el detalle y en el Excel
+  const [stock, setStock] = useState<StockSku | null>(null)
   // Cada apertura lleva un número: si cerrás el detalle antes de que llegue la respuesta, se descarta
   const detSeq = useRef(0)
 
@@ -229,6 +272,10 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
   const abrirDetalle = useCallback(async () => {
     const seq = ++detSeq.current
     setDet([]); setDetCargando(true); setDetError(null)
+    // El stock real (Puente SQL) se trae en paralelo y queda cacheado: si falla, se muestra «—»
+    cargarStockSku()
+      .then((s) => { if (seq === detSeq.current) setStock(s) })
+      .catch(() => {})
     if (!supabase) { setDetCargando(false); return }
     const { data, error: e } = await supabase.rpc('vtd_no_mandados_det', { p_desde: desde, p_hasta: hasta })
     if (seq !== detSeq.current) return
@@ -249,25 +296,14 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
     setDet((prev) => (prev ?? []).map((f) => (f.descripcion ? f : { ...f, descripcion: maestro.get((f.articulo ?? '').trim().toUpperCase()) ?? null })))
   }, [desde, hasta])
 
-  /** Baja el detalle abierto a Excel. */
+  /** Baja el detalle a Excel: agrupado por artículo + color + talle, con las cantidades sumadas y el stock real. */
   const bajarDetalle = useCallback(async () => {
     if (!det || det.length === 0) return
     const XLSX = await import('xlsx')
     const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(det.map((f) => ({
-      Local: f.local,
-      Pedido: f.pedido ?? '',
-      Fecha: corta(f.fecha),
-      Articulo: f.articulo,
-      Descripcion: f.descripcion ?? '',
-      Color: f.color ?? '',
-      Talle: f.talle ?? '',
-      Cantidad: f.cantidad,
-      Repuesto: f.repuesto,
-      'No mandado': f.no_mandado,
-    }))), 'No mandados')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(agruparParaExcel(det, stock)), 'No mandados')
     XLSX.writeFile(wb, `no_mandados_${desde}_a_${hasta}.xlsx`)
-  }, [det, desde, hasta])
+  }, [det, stock, desde, hasta])
 
   const cargar = useCallback(async () => {
     if (!supabase) return
@@ -315,10 +351,10 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
   const promPph = conHoras.length ? conHoras.reduce((s, r) => s + (prendasHs(r) ?? 0), 0) / conHoras.length : null
   const vsTxt = unDia ? 'vs repo anterior' : 'vs período anterior'
   const hpTot = horasPer(tot)
-  // Totales del detalle de lo no mandado que está abierto
+  // Totales del detalle de lo no mandado que está abierto (el stock no se suma)
   const totDet = (det ?? []).reduce(
-    (s, f) => ({ cantidad: s.cantidad + f.cantidad, repuesto: s.repuesto + f.repuesto, noMandado: s.noMandado + f.no_mandado }),
-    { cantidad: 0, repuesto: 0, noMandado: 0 },
+    (s, f) => ({ cantidad: s.cantidad + f.cantidad, noMandado: s.noMandado + f.no_mandado }),
+    { cantidad: 0, noMandado: 0 },
   )
   const localesDet = new Set((det ?? []).map((f) => f.local)).size
 
@@ -554,24 +590,29 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
                         <th className="px-3 py-2 text-center">Color</th>
                         <th className="px-3 py-2 text-center">Talle</th>
                         <th className="px-3 py-2 text-center">Pedido</th>
-                        <th className="px-3 py-2 text-center">Repuesto</th>
+                        <th className="px-3 py-2 text-center">Stock</th>
                         <th className="px-3 py-2 text-center">No mand.</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-line">
-                      {det.map((f, i) => (
-                        <tr key={`${f.local}-${f.pedido ?? 'r'}-${f.articulo}-${f.color ?? ''}-${f.talle ?? ''}-${i}`}>
-                          <td className="whitespace-nowrap px-3 py-2 font-semibold text-ink">{f.local}</td>
-                          <td className="whitespace-nowrap px-3 py-2 text-sub">{f.pedido ? `N° ${n0.format(f.pedido)}` : '—'}</td>
-                          <td className="whitespace-nowrap px-3 py-2 font-medium text-ink">{f.articulo}</td>
-                          <td className="px-3 py-2 text-sub">{f.descripcion || '—'}</td>
-                          <td className="px-3 py-2 text-center text-sub">{f.color || '—'}</td>
-                          <td className="px-3 py-2 text-center text-sub">{f.talle || '—'}</td>
-                          <td className="px-3 py-2 text-center tabular-nums">{n0.format(f.cantidad)}</td>
-                          <td className="px-3 py-2 text-center tabular-nums text-sub">{n0.format(f.repuesto)}</td>
-                          <td className="px-3 py-2 text-center font-bold tabular-nums text-red-400">{n0.format(f.no_mandado)}</td>
-                        </tr>
-                      ))}
+                      {det.map((f, i) => {
+                        const st = stockSkuDe(stock, f.articulo, f.color, f.talle)
+                        return (
+                          <tr key={`${f.local}-${f.pedido ?? 'r'}-${f.articulo}-${f.color ?? ''}-${f.talle ?? ''}-${i}`}>
+                            <td className="whitespace-nowrap px-3 py-2 font-semibold text-ink">{f.local}</td>
+                            <td className="whitespace-nowrap px-3 py-2 text-sub">{f.pedido ? `N° ${n0.format(f.pedido)}` : '—'}</td>
+                            <td className="whitespace-nowrap px-3 py-2 font-medium text-ink">{f.articulo}</td>
+                            <td className="px-3 py-2 text-sub">{f.descripcion || '—'}</td>
+                            <td className="px-3 py-2 text-center text-sub">{f.color || '—'}</td>
+                            <td className="px-3 py-2 text-center text-sub">{f.talle || '—'}</td>
+                            <td className="px-3 py-2 text-center tabular-nums">{n0.format(f.cantidad)}</td>
+                            <td className={`px-3 py-2 text-center tabular-nums ${st === null ? 'text-sub' : st > 0 ? 'font-semibold text-emerald-500' : 'font-semibold text-red-400'}`} title="Stock real de MITO de ese color y talle">
+                              {st === null ? '—' : n0.format(st)}
+                            </td>
+                            <td className="px-3 py-2 text-center font-bold tabular-nums text-red-400">{n0.format(f.no_mandado)}</td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                     <tfoot>
                       <tr className="border-t border-line text-[12px]" style={{ backgroundColor: 'rgba(255,255,255,.04)' }}>
@@ -579,7 +620,7 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
                           {n0.format(det.length)} artículo{det.length === 1 ? '' : 's'} en {n0.format(localesDet)} local{localesDet === 1 ? '' : 'es'}
                         </td>
                         <td className="px-3 py-2 text-center font-bold tabular-nums text-ink">{n0.format(totDet.cantidad)}</td>
-                        <td className="px-3 py-2 text-center font-bold tabular-nums text-ink">{n0.format(totDet.repuesto)}</td>
+                        <td className="px-3 py-2 text-center font-bold text-sub" title="El stock no se suma">—</td>
                         <td className="px-3 py-2 text-center font-bold tabular-nums text-red-400">{n0.format(totDet.noMandado)}</td>
                       </tr>
                     </tfoot>
@@ -589,7 +630,7 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-5 py-3">
-              <p className="text-[11px] text-sub">Lo marcado como <b className="text-ink">faltante</b> en Mi repo. Se ordena por local y artículo.</p>
+              <p className="min-w-0 text-[11px] text-sub">Lo marcado como <b className="text-ink">faltante</b> en Mi repo. El <b className="text-ink">Stock</b> es el real de MITO de ese color y talle. El Excel sale agrupado por artículo + color + talle.</p>
               <div className="flex gap-2">
                 <button
                   type="button"

@@ -137,7 +137,7 @@
                   <th class="px-3 py-2 text-center">Color</th>
                   <th class="px-3 py-2 text-center">Talle</th>
                   <th class="px-3 py-2 text-center">Pedido</th>
-                  <th class="px-3 py-2 text-center">Repuesto</th>
+                  <th class="px-3 py-2 text-center">Stock</th>
                   <th class="px-3 py-2 text-center">No mand.</th>
                 </tr>
               </thead>
@@ -150,7 +150,7 @@
                   <td class="px-3 py-2 text-center text-sub">00</td>
                   <td class="px-3 py-2 text-center text-sub">37</td>
                   <td class="px-3 py-2 text-center tabular-nums">1</td>
-                  <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
+                  <td class="px-3 py-2 text-center font-semibold tabular-nums text-emerald-500">1</td>
                   <td class="px-3 py-2 text-center font-bold tabular-nums text-red-400">1</td>
                 </tr>
                 <tr>
@@ -161,7 +161,7 @@
                   <td class="px-3 py-2 text-center text-sub">01</td>
                   <td class="px-3 py-2 text-center text-sub">378</td>
                   <td class="px-3 py-2 text-center tabular-nums">1</td>
-                  <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
+                  <td class="px-3 py-2 text-center font-semibold tabular-nums text-emerald-500">1</td>
                   <td class="px-3 py-2 text-center font-bold tabular-nums text-red-400">1</td>
                 </tr>
                 <tr>
@@ -172,7 +172,7 @@
                   <td class="px-3 py-2 text-center text-sub">10</td>
                   <td class="px-3 py-2 text-center text-sub">14</td>
                   <td class="px-3 py-2 text-center tabular-nums">1</td>
-                  <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
+                  <td class="px-3 py-2 text-center font-semibold tabular-nums text-emerald-500">1</td>
                   <td class="px-3 py-2 text-center font-bold tabular-nums text-red-400">1</td>
                 </tr>
                 <tr>
@@ -183,7 +183,7 @@
                   <td class="px-3 py-2 text-center text-sub">00</td>
                   <td class="px-3 py-2 text-center text-sub">U</td>
                   <td class="px-3 py-2 text-center tabular-nums">1</td>
-                  <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
+                  <td class="px-3 py-2 text-center font-semibold tabular-nums text-emerald-500">1</td>
                   <td class="px-3 py-2 text-center font-bold tabular-nums text-red-400">1</td>
                 </tr>
                 <tr>
@@ -194,7 +194,7 @@
                   <td class="px-3 py-2 text-center text-sub">01</td>
                   <td class="px-3 py-2 text-center text-sub">434</td>
                   <td class="px-3 py-2 text-center tabular-nums">1</td>
-                  <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
+                  <td class="px-3 py-2 text-center font-semibold tabular-nums text-emerald-500">13</td>
                   <td class="px-3 py-2 text-center font-bold tabular-nums text-red-400">1</td>
                 </tr>
                 <tr>
@@ -205,7 +205,7 @@
                   <td class="px-3 py-2 text-center text-sub">06</td>
                   <td class="px-3 py-2 text-center text-sub">U</td>
                   <td class="px-3 py-2 text-center tabular-nums">1</td>
-                  <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
+                  <td class="px-3 py-2 text-center font-semibold tabular-nums text-emerald-500">2</td>
                   <td class="px-3 py-2 text-center font-bold tabular-nums text-red-400">1</td>
                 </tr>
                 <tr>
@@ -216,7 +216,7 @@
                   <td class="px-3 py-2 text-center text-sub">02</td>
                   <td class="px-3 py-2 text-center text-sub">XXL</td>
                   <td class="px-3 py-2 text-center tabular-nums">1</td>
-                  <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
+                  <td class="px-3 py-2 text-center font-semibold tabular-nums text-emerald-500">1</td>
                   <td class="px-3 py-2 text-center font-bold tabular-nums text-red-400">1</td>
                 </tr>
               </tbody>
@@ -224,7 +224,7 @@
                 <tr class="border-t border-line bg-line/10 text-[12px]">
                   <td class="px-3 py-2 font-semibold text-ink" colspan="6">7 artículos en 5 locales</td>
                   <td class="px-3 py-2 text-center font-bold tabular-nums text-ink">7</td>
-                  <td class="px-3 py-2 text-center font-bold tabular-nums text-ink">0</td>
+                  <td class="px-3 py-2 text-center font-bold text-sub">—</td>
                   <td class="px-3 py-2 text-center font-bold tabular-nums text-red-400">7</td>
                 </tr>
               </tfoot>
@@ -250,9 +250,11 @@
   <p class="cap">3 · Qué hace</p>
   <ul class="note">
     <li>El recuadro <b>No mandados</b> del bloque “Estadística VTD (repos)” se puede tocar (es el mismo número del encabezado).</li>
-    <li>Abre una ventana con <b>una fila por artículo</b> que quedó sin mandar: local, N° de pedido, artículo, descripción, color, talle, lo pedido, lo repuesto y lo no mandado.</li>
+    <li>Abre una ventana con <b>una fila por artículo</b> que quedó sin mandar: local, N° de pedido, artículo, descripción, color, talle, lo pedido, el <b>stock real</b> y lo no mandado.</li>
     <li>Se ordena por <b>local</b> y artículo, y abajo suma el total (acá: 7 artículos en 5 locales).</li>
+    <li>La columna <b>Stock</b> es el <b>stock real de MITO</b> de ese color y talle (misma vista que la columna *Stock* de Pedidos de venta, por el Puente SQL): verde si hay, rojo si es 0, «—» si no hay dato. Reemplazó a lo repuesto.</li>
     <li>Funciona con el período elegido arriba (Día / Semana / Mes / Fechas): en una semana o un mes muestra todo lo no mandado de ese rango.</li>
+    <li>El <b>Excel</b> baja el detalle agrupado por <b>artículo + color + talle</b>, sumando cantidades y con la misma columna de stock (maqueta aparte: <code>eficiencia-no-mandados-excel.html</code>).</li>
     <li>Opcional: el <b>“No mand.”</b> de cada fila de la tabla “Por local” podría abrir el mismo detalle pero solo de ese local. Decime si lo querés así.</li>
     <li>Se armó con una consulta nueva al servidor (<code>vtd_no_mandados_det</code>), que devuelve esas líneas y respeta el período elegido arriba.</li>
   </ul>
