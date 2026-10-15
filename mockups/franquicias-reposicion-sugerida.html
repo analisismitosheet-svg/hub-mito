@@ -34,7 +34,6 @@
   <h1 class="font-display text-2xl font-semibold text-ink mt-2 mb-1">Mayorista — Franquicias › Reposición sugerida</h1>
   <p class="text-sm text-sub">Comparamos <b class="text-ink">la venta que tuvo la franquicia</b> contra el <b class="text-emerald-400">stock real de MITO</b> y sale cuánto conviene reponer. Datos reales de <b>CF Ushuaia</b> (<code>DRAGONFISH_CFU</code>) del <b>16/09/2026 al 15/10/2026</b>.</p>
 
-  <!-- =========================================================== -->
   <p class="cap">1 · Dónde vive</p>
   <p class="note">Dentro de <b>Mayorista</b> aparece una tarjeta nueva, <b>Franquicias</b>. Adentro, la primera pantalla es <b>Reposición sugerida</b> (hoy solo CF Ushuaia; después se suman las demás).</p>
   <div class="frame mt-3">
@@ -49,9 +48,8 @@
     </div>
   </div>
 
-  <!-- =========================================================== -->
   <p class="cap">2 · La pantalla</p>
-  <p class="note">Arriba el título y el período (mismo filtro que usa Eficiencia mayorista). Después 5 números, y la tabla: <b>una fila por SKU (artículo + color + talle)</b> con lo que vendió, el stock real de MITO y lo que conviene reponer. Abajo, el total y el botón para bajarlo a Excel. Las primeras 32 filas (de 259).</p>
+  <p class="note">Franquicia: <b>CF Ushuaia</b> (<code>CAPTAIN FIN USHUAIA</code> en <code>vw_STOCK_SUCURSALES_REAL</code>). Se incluye <b>Stock cliente</b> (lo que tiene CF Ushuaia hoy).</p>
 
   <div class="frame mt-3">
     <div class="mb-3 mt-1 flex min-w-0 items-center gap-3">
@@ -69,11 +67,11 @@
     </div>
 
     <div class="mb-3 grid grid-cols-2 gap-2.5 md:grid-cols-5">
-      <div class="kpi"><p class="lab" style="color:#38bdf8">SKU vendidos</p><p class="val text-ink">259</p><p class="text-[11px] text-sub">artículo + color + talle</p></div>
-      <div class="kpi"><p class="lab" style="color:#22c55e">Unidades vendidas</p><p class="val text-ink">291</p><p class="text-[11px] text-sub">en el período</p></div>
-      <div class="kpi" style="border-color:#818cf840"><p class="lab" style="color:#818cf8">A reponer</p><p class="val text-ink">130</p><p class="text-[11px] text-sub">unidades sugeridas</p></div>
-      <div class="kpi" style="border-color:#f8717140"><p class="lab" style="color:#f87171">No alcanza el stock</p><p class="val text-ink">161</p><p class="text-[11px] text-sub">unidades sin stock en MITO</p></div>
-      <div class="kpi" style="border-color:#f59e0b40"><p class="lab" style="color:#f59e0b">SKU en 0</p><p class="val text-ink">149</p><p class="text-[11px] text-sub">de 259 sin stock</p></div>
+      <div class="kpi"><p class="lab" style="color:#38bdf8">SKU vendidos</p><p class="val text-ink">261</p><p class="text-[11px] text-sub">artículo + color + talle</p></div>
+      <div class="kpi"><p class="lab" style="color:#22c55e">Unidades vendidas</p><p class="val text-ink">293</p><p class="text-[11px] text-sub">en el período</p></div>
+      <div class="kpi" style="border-color:#818cf840"><p class="lab" style="color:#818cf8">A reponer</p><p class="val text-ink">131</p><p class="text-[11px] text-sub">unidades sugeridas</p></div>
+      <div class="kpi" style="border-color:#f8717140"><p class="lab" style="color:#f87171">No alcanza el stock</p><p class="val text-ink">162</p><p class="text-[11px] text-sub">unidades sin stock en MITO</p></div>
+      <div class="kpi" style="border-color:#f59e0b40"><p class="lab" style="color:#f59e0b">SKU en 0</p><p class="val text-ink">150</p><p class="text-[11px] text-sub">de 261 sin stock</p></div>
     </div>
 
     <div class="overflow-hidden rounded-xl border border-line">
@@ -82,7 +80,7 @@
           <thead>
             <tr>
               <th class="w-10">#</th><th>Artículo</th><th>Descripción</th><th class="text-center">Color</th><th class="text-center">Talle</th>
-              <th class="text-center">Vendido</th><th class="text-center">Stock MITO</th><th class="text-center">A reponer</th><th class="text-center">Estado</th>
+              <th class="text-center">Vendido</th><th class="text-center">Stock MITO</th><th class="text-center">Stock cliente</th><th class="text-center">A reponer</th><th class="text-center">Estado</th>
             </tr>
           </thead>
           <tbody>
@@ -93,7 +91,8 @@
             <td class="px-3 py-2 text-center text-sub">00</td>
             <td class="px-3 py-2 text-center text-sub">U</td>
             <td class="px-3 py-2 text-center tabular-nums text-ink">4</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">220</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sub">219</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
             <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">4</td>
             <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
           </tr>
@@ -105,6 +104,7 @@
             <td class="px-3 py-2 text-center text-sub">U</td>
             <td class="px-3 py-2 text-center tabular-nums text-ink">4</td>
             <td class="px-3 py-2 text-center tabular-nums text-sub">37</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sky-400">1</td>
             <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">4</td>
             <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
           </tr>
@@ -115,7 +115,8 @@
             <td class="px-3 py-2 text-center text-sub">06</td>
             <td class="px-3 py-2 text-center text-sub">U</td>
             <td class="px-3 py-2 text-center tabular-nums text-ink">4</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">190</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sub">187</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sky-400">2</td>
             <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">4</td>
             <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
           </tr>
@@ -127,6 +128,7 @@
             <td class="px-3 py-2 text-center text-sub">U</td>
             <td class="px-3 py-2 text-center tabular-nums text-ink">3</td>
             <td class="px-3 py-2 text-center tabular-nums text-sub">24</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sky-400">10</td>
             <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">3</td>
             <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
           </tr>
@@ -138,6 +140,7 @@
             <td class="px-3 py-2 text-center text-sub">U</td>
             <td class="px-3 py-2 text-center tabular-nums text-ink">3</td>
             <td class="px-3 py-2 text-center tabular-nums font-semibold text-red-400">0</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
             <td class="px-3 py-2 text-center font-bold tabular-nums text-sub">—</td>
             <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-red-400"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#f87171"></i>Sin stock</span></td>
           </tr>
@@ -149,28 +152,31 @@
             <td class="px-3 py-2 text-center text-sub">U</td>
             <td class="px-3 py-2 text-center tabular-nums text-ink">3</td>
             <td class="px-3 py-2 text-center tabular-nums font-semibold text-red-400">0</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sky-400">1</td>
             <td class="px-3 py-2 text-center font-bold tabular-nums text-sub">—</td>
             <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-red-400"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#f87171"></i>Sin stock</span></td>
           </tr>
           <tr>
             <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">7</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">CF060401</td>
-            <td class="px-3 py-2 text-sub">LATER WALLET CAPTAIN FIN</td>
-            <td class="px-3 py-2 text-center text-sub">03</td>
-            <td class="px-3 py-2 text-center text-sub">U</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">105</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">2</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">8</td>
             <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">ZH051003</td>
             <td class="px-3 py-2 text-sub">RIÑONERA ZIMITH YARMIN</td>
             <td class="px-3 py-2 text-center text-sub">02</td>
             <td class="px-3 py-2 text-center text-sub">U</td>
             <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
             <td class="px-3 py-2 text-center tabular-nums text-sub">90</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sky-400">1</td>
+            <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">2</td>
+            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
+          </tr>
+          <tr>
+            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">8</td>
+            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">CF060401</td>
+            <td class="px-3 py-2 text-sub">LATER WALLET CAPTAIN FIN</td>
+            <td class="px-3 py-2 text-center text-sub">03</td>
+            <td class="px-3 py-2 text-center text-sub">U</td>
+            <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sub">105</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sky-400">2</td>
             <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">2</td>
             <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
           </tr>
@@ -182,6 +188,7 @@
             <td class="px-3 py-2 text-center text-sub">L</td>
             <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
             <td class="px-3 py-2 text-center tabular-nums text-sub">194</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sky-400">1</td>
             <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">2</td>
             <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
           </tr>
@@ -193,6 +200,7 @@
             <td class="px-3 py-2 text-center text-sub">U</td>
             <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
             <td class="px-3 py-2 text-center tabular-nums text-sub">9</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
             <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">2</td>
             <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
           </tr>
@@ -204,6 +212,7 @@
             <td class="px-3 py-2 text-center text-sub">34</td>
             <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
             <td class="px-3 py-2 text-center tabular-nums text-sub">22</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
             <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">2</td>
             <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
           </tr>
@@ -215,6 +224,7 @@
             <td class="px-3 py-2 text-center text-sub">U</td>
             <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
             <td class="px-3 py-2 text-center tabular-nums text-sub">1.384</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sky-400">4</td>
             <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">2</td>
             <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
           </tr>
@@ -225,7 +235,8 @@
             <td class="px-3 py-2 text-center text-sub">01</td>
             <td class="px-3 py-2 text-center text-sub">U</td>
             <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">503</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sub">499</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sky-400">3</td>
             <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">2</td>
             <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
           </tr>
@@ -237,6 +248,7 @@
             <td class="px-3 py-2 text-center text-sub">U</td>
             <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
             <td class="px-3 py-2 text-center tabular-nums text-sub">161</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
             <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">2</td>
             <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
           </tr>
@@ -248,39 +260,43 @@
             <td class="px-3 py-2 text-center text-sub">434</td>
             <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
             <td class="px-3 py-2 text-center tabular-nums text-sub">13</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
             <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">2</td>
             <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
           </tr>
           <tr>
             <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">16</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">CF050403</td>
-            <td class="px-3 py-2 text-sub">STEPHEN WALLET CAPTAIN FIN</td>
-            <td class="px-3 py-2 text-center text-sub">02</td>
-            <td class="px-3 py-2 text-center text-sub">U</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
-            <td class="px-3 py-2 text-center tabular-nums font-semibold text-red-400">0</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-sub">—</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-red-400"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#f87171"></i>Sin stock</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">17</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">CF147305</td>
-            <td class="px-3 py-2 text-sub">CAMISA LEÑADORA CAPTAIN FIN NOBHIUS FLANNEL</td>
-            <td class="px-3 py-2 text-center text-sub">03</td>
-            <td class="px-3 py-2 text-center text-sub">L</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
-            <td class="px-3 py-2 text-center tabular-nums font-semibold text-red-400">0</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-sub">—</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-red-400"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#f87171"></i>Sin stock</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">18</td>
             <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">CF102501</td>
             <td class="px-3 py-2 text-sub">JOGGING CAPTAIN FIN NEW LOSTU</td>
             <td class="px-3 py-2 text-center text-sub">04</td>
             <td class="px-3 py-2 text-center text-sub">34</td>
             <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
             <td class="px-3 py-2 text-center tabular-nums font-semibold text-red-400">0</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
+            <td class="px-3 py-2 text-center font-bold tabular-nums text-sub">—</td>
+            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-red-400"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#f87171"></i>Sin stock</span></td>
+          </tr>
+          <tr>
+            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">17</td>
+            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">CF050403</td>
+            <td class="px-3 py-2 text-sub">STEPHEN WALLET CAPTAIN FIN</td>
+            <td class="px-3 py-2 text-center text-sub">02</td>
+            <td class="px-3 py-2 text-center text-sub">U</td>
+            <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
+            <td class="px-3 py-2 text-center tabular-nums font-semibold text-red-400">0</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
+            <td class="px-3 py-2 text-center font-bold tabular-nums text-sub">—</td>
+            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-red-400"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#f87171"></i>Sin stock</span></td>
+          </tr>
+          <tr>
+            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">18</td>
+            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">CF147305</td>
+            <td class="px-3 py-2 text-sub">CAMISA LEÑADORA CAPTAIN FIN NOBHIUS FLANNEL</td>
+            <td class="px-3 py-2 text-center text-sub">03</td>
+            <td class="px-3 py-2 text-center text-sub">L</td>
+            <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
+            <td class="px-3 py-2 text-center tabular-nums font-semibold text-red-400">0</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
             <td class="px-3 py-2 text-center font-bold tabular-nums text-sub">—</td>
             <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-red-400"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#f87171"></i>Sin stock</span></td>
           </tr>
@@ -292,6 +308,7 @@
             <td class="px-3 py-2 text-center text-sub">M</td>
             <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
             <td class="px-3 py-2 text-center tabular-nums font-semibold text-red-400">0</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
             <td class="px-3 py-2 text-center font-bold tabular-nums text-sub">—</td>
             <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-red-400"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#f87171"></i>Sin stock</span></td>
           </tr>
@@ -303,6 +320,7 @@
             <td class="px-3 py-2 text-center text-sub">XXL</td>
             <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
             <td class="px-3 py-2 text-center tabular-nums font-semibold text-red-400">0</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sky-400">2</td>
             <td class="px-3 py-2 text-center font-bold tabular-nums text-sub">—</td>
             <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-red-400"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#f87171"></i>Sin stock</span></td>
           </tr>
@@ -314,6 +332,7 @@
             <td class="px-3 py-2 text-center text-sub">U</td>
             <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
             <td class="px-3 py-2 text-center tabular-nums font-semibold text-red-400">0</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sky-400">3</td>
             <td class="px-3 py-2 text-center font-bold tabular-nums text-sub">—</td>
             <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-red-400"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#f87171"></i>Sin stock</span></td>
           </tr>
@@ -325,6 +344,7 @@
             <td class="px-3 py-2 text-center text-sub">U</td>
             <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
             <td class="px-3 py-2 text-center tabular-nums font-semibold text-red-400">0</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
             <td class="px-3 py-2 text-center font-bold tabular-nums text-sub">—</td>
             <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-red-400"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#f87171"></i>Sin stock</span></td>
           </tr>
@@ -336,6 +356,7 @@
             <td class="px-3 py-2 text-center text-sub">XL</td>
             <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
             <td class="px-3 py-2 text-center tabular-nums font-semibold text-red-400">0</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
             <td class="px-3 py-2 text-center font-bold tabular-nums text-sub">—</td>
             <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-red-400"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#f87171"></i>Sin stock</span></td>
           </tr>
@@ -347,6 +368,7 @@
             <td class="px-3 py-2 text-center text-sub">L</td>
             <td class="px-3 py-2 text-center tabular-nums text-ink">1</td>
             <td class="px-3 py-2 text-center tabular-nums text-sub">1</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sky-400">1</td>
             <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">1</td>
             <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
           </tr>
@@ -358,6 +380,7 @@
             <td class="px-3 py-2 text-center text-sub">L</td>
             <td class="px-3 py-2 text-center tabular-nums text-ink">1</td>
             <td class="px-3 py-2 text-center tabular-nums text-sub">1</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sky-400">1</td>
             <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">1</td>
             <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
           </tr>
@@ -369,6 +392,7 @@
             <td class="px-3 py-2 text-center text-sub">XXL</td>
             <td class="px-3 py-2 text-center tabular-nums text-ink">1</td>
             <td class="px-3 py-2 text-center tabular-nums text-sub">23</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sky-400">1</td>
             <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">1</td>
             <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
           </tr>
@@ -380,6 +404,7 @@
             <td class="px-3 py-2 text-center text-sub">M</td>
             <td class="px-3 py-2 text-center tabular-nums text-ink">1</td>
             <td class="px-3 py-2 text-center tabular-nums text-sub">136</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sky-400">1</td>
             <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">1</td>
             <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
           </tr>
@@ -390,7 +415,8 @@
             <td class="px-3 py-2 text-center text-sub">02</td>
             <td class="px-3 py-2 text-center text-sub">L</td>
             <td class="px-3 py-2 text-center tabular-nums text-ink">1</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">58</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sub">57</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
             <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">1</td>
             <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
           </tr>
@@ -402,88 +428,82 @@
             <td class="px-3 py-2 text-center text-sub">XL</td>
             <td class="px-3 py-2 text-center tabular-nums text-ink">1</td>
             <td class="px-3 py-2 text-center tabular-nums text-sub">80</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sky-400">1</td>
             <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">1</td>
             <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
           </tr>
           <tr>
             <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">30</td>
+            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">ZH060215</td>
+            <td class="px-3 py-2 text-sub">MEDIAS MEDIA CAÑA ZIMITH ASHER TRIPACK</td>
+            <td class="px-3 py-2 text-center text-sub">10</td>
+            <td class="px-3 py-2 text-center text-sub">U</td>
+            <td class="px-3 py-2 text-center tabular-nums text-ink">1</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sub">653</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sky-400">5</td>
+            <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">1</td>
+            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
+          </tr>
+          <tr>
+            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">31</td>
             <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">ZH252111</td>
             <td class="px-3 py-2 text-sub">PANTALON ZIMITH RUPARK CARGO</td>
             <td class="px-3 py-2 text-center text-sub">10</td>
             <td class="px-3 py-2 text-center text-sub">34</td>
             <td class="px-3 py-2 text-center tabular-nums text-ink">1</td>
             <td class="px-3 py-2 text-center tabular-nums text-sub">3</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
             <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">1</td>
             <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
           </tr>
           <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">31</td>
+            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">32</td>
             <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">ZH255754</td>
             <td class="px-3 py-2 text-sub">MANIAC T-SHIRT ZIMITH</td>
             <td class="px-3 py-2 text-center text-sub">06</td>
             <td class="px-3 py-2 text-center text-sub">L</td>
             <td class="px-3 py-2 text-center tabular-nums text-ink">1</td>
             <td class="px-3 py-2 text-center tabular-nums text-sub">19</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">1</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">32</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">ZH261406</td>
-            <td class="px-3 py-2 text-sub">ADINETE SLIDES ZIMITH</td>
-            <td class="px-3 py-2 text-center text-sub">02</td>
-            <td class="px-3 py-2 text-center text-sub">378</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">1</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">38</td>
+            <td class="px-3 py-2 text-center tabular-nums text-sky-400">1</td>
             <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">1</td>
             <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
           </tr>
           </tbody>
           <tfoot>
             <tr class="text-[12px]">
-              <td class="px-3 py-2 font-semibold text-ink" colspan="6">259 SKU · 291 unidades vendidas</td>
+              <td class="px-3 py-2 font-semibold text-ink" colspan="6">261 SKU · 293 unidades vendidas</td>
               <td class="px-3 py-2 text-center font-bold text-sub">—</td>
-              <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">130</td>
-              <td class="px-3 py-2 text-center text-[11px] font-semibold text-red-400">faltan 161</td>
+              <td class="px-3 py-2 text-center font-bold text-sub">—</td>
+              <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">131</td>
+              <td class="px-3 py-2 text-center text-[11px] font-semibold text-red-400">faltan 162</td>
             </tr>
           </tfoot>
         </table>
       </div>
     </div>
     <div class="mt-2 flex items-center justify-between gap-2">
-      <p class="text-[11px] text-sub">y <b class="text-ink">227</b> SKU más. Estado: <span class="text-emerald-500">Alcanza</span> · <span class="text-amber-400">Parcial</span> (el stock no cubre todo lo vendido) · <span class="text-red-400">Sin stock</span> en MITO.</p>
-      <button class="tabbtn">⬇ Excel</button>
-      <button class="tabbtn" id="btnWsp" title="Enviar por WhatsApp los artículos sugeridos">Enviar por WhatsApp</button>
+      <p class="text-[11px] text-sub">y <b class="text-ink">229</b> SKU más. Estado: <span class="text-emerald-500">Alcanza</span> · <span class="text-amber-400">Parcial</span> · <span class="text-red-400">Sin stock</span> en MITO.</p>
+      <div class="flex gap-2">
+        <button class="tabbtn">⬇ Excel</button>
+        <button class="tabbtn" id="btnWsp" title="Enviar por WhatsApp los artículos sugeridos">Enviar por WhatsApp</button>
+      </div>
     </div>
   </div>
 
-  <!-- =========================================================== -->
   <p class="cap">3 · De dónde salen los datos</p>
   <ul class="note">
-    <li><b>La venta</b> = <code>VISTAS_CONSOLIDADAS.dbo.venta_franquicias</code> (ventas de CF Ushuaia: artículo <code>FART</code> + color <code>CCOLOR</code> + talle <code>TALLE</code> + cantidad <code>FCANT</code>; netea notas de crédito con <code>SIGNOMOV</code>).</li>
-    <li><b>El stock real de MITO</b> = <code>VISTAS_CONSOLIDADAS.dbo.vw_STOCK_SKU_MITO</code> (el mismo que usa la columna <i>Stock</i> de Pedidos de venta). Se lee al abrir la pantalla: es el stock <b>de ahora</b>.</li>
-    <li>Las dos se cruzan por <b>artículo + color + talle</b>. Los vouchers (<code>VO1</code>) quedan afuera.</li>
+    <li><b>Venta</b>: <code>VISTAS_CONSOLIDAS.dbo.venta_franquicias</code> (CF Ushuaia). Se netean NC con <code>SIGNOMOV</code>; se excluyen vouchers (<code>VO1</code>).</li>
+    <li><b>Stock MITO</b>: <code>VISTAS_CONSOLIDAS.dbo.vw_STOCK_SKU_MITO</code>.</li>
+    <li><b>Stock cliente</b>: <code>VISTAS_CONSOLIDAS.dbo.vw_STOCK_SUCURSALES_REAL</code> donde <code>BD_ORIGEN='CAPTAIN FIN USHUAIA'</code>.</li>
+    <li>Cruce por <b>artículo + color + talle</b>.</li>
   </ul>
 
-  <!-- =========================================================== -->
   <p class="cap">4 · Cómo se calcula</p>
   <ul class="note">
-    <li><b>A reponer</b> = <code>min(vendido, stock MITO)</code>: lo que vendió, pero nunca más de lo que hay en MITO.</li>
-    <li>Si el stock alcanza → se sugiere todo lo vendido (<span class="text-emerald-500">Alcanza</span>). Si no → se sugiere lo que hay y el resto queda como <b>faltante</b> (<span class="text-red-400">Sin stock</span> / <span class="text-amber-400">Parcial</span>).</li>
-    <li>Ejemplo de esta corrida: se vendieron <b>291</b> u. → se pueden reponer <b>130</b> y <b>161</b> no tienen stock en MITO.</li>
+    <li><b>A reponer</b> = <code>min(vendido, stock MITO)</code>.</li>
+    <li><b>Estado</b>: Alcanza (cubre todo), Parcial (cubre parte), Sin stock (MITO sin stock).</li>
   </ul>
 
-  <!-- =========================================================== -->
-  <p class="cap">5 · Lo que decidís</p>
-  <ul class="note">
-    <li><b>Período</b>: ¿lo dejamos en un período fijo (30 días) o lo elegís vos como en Eficiencia mayorista?</li>
-    <li><b>Reponer lo vendido</b> es 1 a 1 con la venta del período. ¿Va así, o querés un objetivo (ej. cubrir X días, o un mínimo)?</li>
-    <li>Cuando no hay stock en MITO: ¿lo dejamos como <b>faltante</b> informativo, o querés un aviso / que entre a un pedido de compra?</li>
-    <li>¿Sumamos las <b>ventas de las demás franquicias</b> (hoy solo CF Ushuaia) o arrancamos con esta sola?</li>
-    <li>¿Un botón <b>“Armar repo”</b> que mande el sugerido a los armados de pedidos, o solo la vista + Excel por ahora?</li>
-  </ul>
-
-  <!-- WhatsApp helper (maqueta) -->
   <script>
     (function(){
       const btn = document.getElementById('btnWsp');
@@ -492,27 +512,28 @@
         const rows = Array.from(document.querySelectorAll('tbody tr'));
         const sugeridos = rows.filter(tr => {
           const tds = tr.querySelectorAll('td');
-          if (tds.length < 8) return false;
+          if (tds.length < 10) return false;
           const last = tds[tds.length - 1];
-          const txt = last.textContent.toLowerCase();
-          if (txt.includes('sin stock')) return false;
-          const sug = tds[7].textContent.replace(/[^\d]/g, '');
+          if (last.textContent.toLowerCase().includes('sin stock')) return false;
+          const sug = tds[8].textContent.replace(/[^d]/g, '');
           return sug !== '';
         }).slice(0, 40);
-        let msg = 'REPOSICIÓN SUGERIDA - CF USHUAIA\\nArtículos a reponer (top sugeridos con stock):\\n\\n';
+        let msg = 'REPOSICIÓN SUGERIDA - CF USHUAIA\nArtículos a reponer (top sugeridos con stock):\n\n';
         sugeridos.forEach((tr, i) => {
           const tds = tr.querySelectorAll('td');
-          if (tds.length < 8) return;
+          if (tds.length < 10) return;
           const art = tds[1].textContent.trim();
           const des = tds[2].textContent.trim();
           const col = tds[3].textContent.trim() || 'U';
           const tal = tds[4].textContent.trim() || '-';
           const vend = tds[5].textContent.trim();
-          const sug = tds[7].textContent.trim();
-          msg += (i+1)+'. '+art+' '+col+'/'+tal+' | Vend:'+vend+' | Sugerido:'+sug+' | '+des+'\\n';
+          const stM = tds[6].textContent.trim();
+          const stC = tds[7].textContent.trim();
+          const sug = tds[8].textContent.trim();
+          msg += (i+1)+'. '+art+' '+col+'/'+tal+' | Vend:'+vend+' | Stock MITO:'+stM+' | Stock CFU:'+stC+' | Sugerido:'+sug+' | '+des+'\n';
         });
-        if (sugeridos.length===0) msg += '(Sin sugeridos con stock)\\n';
-        msg += '\\nTotal sugerido (vista): 130';
+        if (sugeridos.length===0) msg += '(Sin sugeridos con stock)\n';
+        msg += '\nTotal sugerido (vista): 131';
         const url = 'https://wa.me/?text=' + encodeURIComponent(msg);
         window.open(url, '_blank');
       });
