@@ -393,7 +393,10 @@ export default function TrackingTransporte() {
     mapa.current = m
     // Si el contenedor todavía no tenía su ancho final, Leaflet deja franjas grises
     const t = setTimeout(() => m.invalidateSize(), 300)
-    return () => { clearTimeout(t); m.remove(); mapa.current = null }
+    // y cada vez que cambia el tamaño del cuadro (es cuadrado: depende del ancho de la pantalla)
+    const ro = new ResizeObserver(() => m.invalidateSize())
+    ro.observe(divMapa.current)
+    return () => { clearTimeout(t); ro.disconnect(); m.remove(); mapa.current = null }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -447,23 +450,24 @@ export default function TrackingTransporte() {
         .addTo(g)
     }
 
-    // recorridos: todos los vehículos juntos, cada uno con su nombre; el elegido, más grueso
+    // Todos los vehículos juntos: solo dónde está cada uno (sin pintar el recorrido), con su nombre
     let bounds: L.LatLngBounds | null = null
     let conGps = 0
     for (const mv of moviles) {
       if (!mv.vehiculo) continue
-      const us = (ubicsDe.get(mv.vehiculo.id) ?? []).filter((u) => (u.precision_m ?? 0) <= 100)
+      const us = ubicsDe.get(mv.vehiculo.id) ?? []
       if (!us.length) continue
       conGps++
       const esSel = mv.key === sel
-      const linea = L.polyline(us.map((u) => [u.lat, u.lng] as L.LatLngTuple), { color: mv.color, weight: esSel ? 6 : 4, opacity: 0.85 }).addTo(g)
-      const ult = us[us.length - 1]
-      const est = estadoDe(ult, esHoy)
+      // la última con buena precisión; si no hay, la última que llegó
+      const ult = [...us].reverse().find((u) => (u.precision_m ?? 0) <= 100) ?? us[us.length - 1]
+      const est = estadoDe(us[us.length - 1], esHoy)
       L.circleMarker([ult.lat, ult.lng], { radius: esSel ? 11 : 9, color: '#fff', weight: 2, fillColor: mv.color, fillOpacity: 1 })
         .bindTooltip(`🚚 ${mv.nombre} · ${est.label} · ${esHoy ? hace(ult.at) : hora(ult.at)}`, { permanent: true, direction: 'top', offset: [0, -10] })
         .on('click', () => setSel(mv.key))
         .addTo(g)
-      bounds = bounds ? bounds.extend(linea.getBounds()) : linea.getBounds()
+      const punto = L.latLng(ult.lat, ult.lng)
+      bounds = bounds ? bounds.extend(punto) : L.latLngBounds(punto, punto)
     }
     // encuadrar a todos solo al cambiar de día o cuando aparece otro vehículo (no en cada refresco)
     // (con el candado puesto el mapa se queda en la zona fija)
@@ -580,8 +584,8 @@ export default function TrackingTransporte() {
             </div>
           )}
           {/* La clase del div del mapa no puede cambiar: React le pisaría las clases que agrega Leaflet */}
-          <div className={`relative ${modo ? '[&_.leaflet-container]:cursor-crosshair' : ''}`}>
-            <div ref={divMapa} className="h-[75vh] min-h-[520px] w-full overflow-hidden rounded-xl border border-line" style={{ zIndex: 0 }} />
+          <div className={`relative mx-auto w-full max-w-[80vh] ${modo ? '[&_.leaflet-container]:cursor-crosshair' : ''}`}>
+            <div ref={divMapa} className="aspect-square w-full overflow-hidden rounded-xl border border-line" style={{ zIndex: 0 }} />
             <button
               onClick={alternarCandado}
               className={`absolute right-3 top-3 z-[500] inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold shadow-soft ${vistaFija ? 'bg-amber-500 text-white' : 'bg-white text-slate-800'}`}
@@ -601,7 +605,7 @@ export default function TrackingTransporte() {
             )}
           </div>
           <p className="mt-2 text-xs text-sub">
-            Todos los vehículos juntos (el elegido, más grueso) · línea = recorrido del día · 🏪 = locales · círculo = local obligatorio del vehículo elegido (verde pasó, amarillo pendiente, rojo no pasó).
+            Todos los vehículos juntos: el punto es dónde está cada uno ahora (el elegido, más grande) · 🏪 = locales · círculo = local obligatorio del vehículo elegido (verde pasó, amarillo pendiente, rojo no pasó).
           </p>
         </section>
       </div>
