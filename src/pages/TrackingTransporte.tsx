@@ -584,7 +584,7 @@ export default function TrackingTransporte() {
             </div>
           )}
           {/* La clase del div del mapa no puede cambiar: React le pisaría las clases que agrega Leaflet */}
-          <div className={`relative mx-auto w-full max-w-[80vh] ${modo ? '[&_.leaflet-container]:cursor-crosshair' : ''}`}>
+          <div className={`relative isolate mx-auto w-full max-w-[80vh] ${modo ? '[&_.leaflet-container]:cursor-crosshair' : ''}`}>
             <div ref={divMapa} className="aspect-square w-full overflow-hidden rounded-xl border border-line" style={{ zIndex: 0 }} />
             <button
               onClick={alternarCandado}
@@ -703,23 +703,55 @@ function Gestion(props: {
   const vehElegido = activos.find((v) => v.id === vehRec) ?? activos.find((v) => v.id === vehSel) ?? activos[0] ?? null
 
   // ----- recorridos (locales obligatorios por vehículo) -----
-  async function guardarRecorrido(base_id: string, cambios: { dias?: number[] | null; hora_limite?: string | null } | null) {
+  // Se ven en modo lectura; para cambiarlos hay que tocar «Editar» y después «Guardar»
+  // (así no se modifica nada sin querer). El borrador es la lista del vehículo elegido.
+  const [borrador, setBorrador] = useState<Recorrido[] | null>(null)
+  const [guardando, setGuardando] = useState(false)
+  const editando = borrador !== null
+  const delVehiculo = vehElegido ? recorridos.filter((r) => r.vehiculo_id === vehElegido.id) : []
+  const lista = borrador ?? delVehiculo
+
+  function editar() {
+    setBorrador(delVehiculo.map((r) => ({ ...r, dias: r.dias ? [...r.dias] : null })))
+  }
+
+  function cambiarBorrador(base_id: string, cambio: Partial<Recorrido> | null) {
     if (!vehElegido) return
-    const q = supabase.from('tracking_recorridos')
-    const { error } = cambios === null
-      ? await q.delete().eq('vehiculo_id', vehElegido.id).eq('base_id', base_id)
-      : recorridos.some((r) => r.vehiculo_id === vehElegido.id && r.base_id === base_id)
-        ? await q.update(cambios).eq('vehiculo_id', vehElegido.id).eq('base_id', base_id)
-        : await q.insert({ vehiculo_id: vehElegido.id, base_id, dias: null, hora_limite: null, ...cambios })
-    if (error) return alert(error.message)
-    recargar()
+    setBorrador((bs) => {
+      const actual = bs ?? []
+      if (cambio === null) return actual.filter((r) => r.base_id !== base_id)
+      const existe = actual.some((r) => r.base_id === base_id)
+      return existe
+        ? actual.map((r) => (r.base_id === base_id ? { ...r, ...cambio } : r))
+        : [...actual, { vehiculo_id: vehElegido.id, base_id, dias: null, hora_limite: null, ...cambio }]
+    })
   }
 
   function cambiarDia(r: Recorrido, d: number) {
     const actuales = r.dias ?? [1, 2, 3, 4, 5, 6, 7]
     const nuevos = actuales.includes(d) ? actuales.filter((x) => x !== d) : [...actuales, d].sort()
     if (!nuevos.length) return alert('Tiene que quedar al menos un día. Para sacarlo del recorrido destildá el local.')
-    void guardarRecorrido(r.base_id, { dias: nuevos.length === 7 ? null : nuevos })
+    cambiarBorrador(r.base_id, { dias: nuevos.length === 7 ? null : nuevos })
+  }
+
+  async function guardarRecorridos() {
+    if (!vehElegido || !borrador) return
+    setGuardando(true)
+    const quedan = new Set(borrador.map((r) => r.base_id))
+    const sacar = delVehiculo.filter((r) => !quedan.has(r.base_id)).map((r) => r.base_id)
+    const q = supabase.from('tracking_recorridos')
+    const r1 = sacar.length ? await q.delete().eq('vehiculo_id', vehElegido.id).in('base_id', sacar) : { error: null }
+    const r2 = borrador.length
+      ? await supabase.from('tracking_recorridos').upsert(
+          borrador.map((r) => ({ vehiculo_id: vehElegido.id, base_id: r.base_id, dias: r.dias, hora_limite: r.hora_limite || null })),
+          { onConflict: 'vehiculo_id,base_id' },
+        )
+      : { error: null }
+    setGuardando(false)
+    const error = r1.error ?? r2.error
+    if (error) return alert(error.message)
+    setBorrador(null)
+    recargar()
   }
 
   // ----- vehículos -----
@@ -796,7 +828,7 @@ function Gestion(props: {
 
       {tab === 'recorridos' && (
         <div>
-          <p className="mb-2 text-xs text-sub">Elegí el vehículo (chofer) y tildá los locales por donde tiene que pasar sí o sí. Cuenta como «pasó» cuando el GPS entra en el radio del local.</p>
+          <p className="mb-2 text-xs text-sub">Locales por donde cada vehículo (chofer) tiene que pasar sí o sí. Cuenta como «pasó» cuando el GPS entra en el radio del local.</p>
           {!activos.length ? (
             <p className="text-xs text-sub">Primero cargá los vehículos en la pestaña 🚚 Vehículos.</p>
           ) : (
@@ -806,8 +838,8 @@ function Gestion(props: {
                   const on = v.id === vehElegido?.id
                   const n = recorridos.filter((r) => r.vehiculo_id === v.id).length
                   return (
-                    <button key={v.id} onClick={() => setVehRec(v.id)}
-                      className={`rounded-lg border px-2 py-1 text-left text-xs transition ${on ? 'border-transparent text-white' : 'border-line text-sub hover:text-ink'}`}
+                    <button key={v.id} disabled={editando && !on} onClick={() => setVehRec(v.id)}
+                      className={`rounded-lg border px-2 py-1 text-left text-xs transition disabled:opacity-40 ${on ? 'border-transparent text-white' : 'border-line text-sub hover:text-ink'}`}
                       style={on ? { background: v.color } : undefined}>
                       <div className="font-semibold">{v.nombre}</div>
                       <div className={on ? 'text-white/80' : ''}>{v.usuario_transporte_nombre ?? 'sin chofer'} · {n} local{n === 1 ? '' : 'es'}</div>
@@ -816,39 +848,71 @@ function Gestion(props: {
                 })}
               </div>
               {!basesUbic.length && <p className="text-xs text-sub">Todavía no hay locales ubicados: cargalos en 📍 Ubicar locales.</p>}
+              {vehElegido && basesUbic.length > 0 && (
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="text-xs text-sub">
+                    {editando ? 'Editando: tildá los locales y tocá Guardar.' : `${delVehiculo.length} local${delVehiculo.length === 1 ? '' : 'es'} obligatorio${delVehiculo.length === 1 ? '' : 's'}`}
+                  </span>
+                  {editando ? (
+                    <div className="flex gap-1.5">
+                      <button onClick={() => setBorrador(null)} disabled={guardando} className="h-8 rounded-lg px-3 text-xs font-semibold text-sub hover:text-ink">Cancelar</button>
+                      <button onClick={() => void guardarRecorridos()} disabled={guardando}
+                        className="btn-press inline-flex h-8 items-center gap-1 rounded-lg bg-green-600 px-3 text-xs font-semibold text-white disabled:opacity-60">
+                        {guardando ? <Loader2 size={13} className="animate-spin" /> : null} Guardar
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={editar} className="h-8 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white">✏️ Editar</button>
+                  )}
+                </div>
+              )}
               <ul className="max-h-[420px] divide-y divide-line overflow-y-auto text-sm">
-                {basesUbic.map((b) => {
-                  const r = vehElegido ? recorridos.find((x) => x.vehiculo_id === vehElegido.id && x.base_id === b.base_id) : undefined
+                {basesUbic.filter((b) => editando || lista.some((x) => x.base_id === b.base_id)).map((b) => {
+                  const r = lista.find((x) => x.base_id === b.base_id)
                   return (
                     <li key={b.base_id} className="py-2">
-                      <label className="flex cursor-pointer items-center gap-2">
-                        <input type="checkbox" checked={!!r} onChange={(e) => void guardarRecorrido(b.base_id, e.target.checked ? {} : null)} />
-                        <span className="font-semibold text-ink">{b.base_id}</span>
-                        <span className="truncate text-xs text-sub">{b.nombre}</span>
-                      </label>
+                      {editando ? (
+                        <label className="flex cursor-pointer items-center gap-2">
+                          <input type="checkbox" checked={!!r} onChange={(e) => cambiarBorrador(b.base_id, e.target.checked ? {} : null)} />
+                          <span className="font-semibold text-ink">{b.base_id}</span>
+                          <span className="truncate text-xs text-sub">{b.nombre}</span>
+                        </label>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-ink">🏪 {b.base_id}</span>
+                          <span className="truncate text-xs text-sub">{b.nombre}</span>
+                        </div>
+                      )}
                       {r && (
                         <div className="ml-6 mt-1.5 flex flex-wrap items-center gap-2">
                           <div className="flex gap-0.5">
                             {DIAS.map((d, i) => {
                               const on = !r.dias || r.dias.includes(i + 1)
                               return (
-                                <button key={i} onClick={() => cambiarDia(r, i + 1)}
-                                  className={`h-6 w-6 rounded text-[11px] font-bold ${on ? 'bg-blue-600 text-white' : 'bg-surface2 text-sub'}`}
+                                <button key={i} onClick={() => cambiarDia(r, i + 1)} disabled={!editando}
+                                  className={`h-6 w-6 rounded text-[11px] font-bold ${on ? 'bg-blue-600 text-white' : 'bg-surface2 text-sub'} ${editando ? '' : 'cursor-default'}`}
                                   aria-label={`Día ${d}`}>{d}</button>
                               )
                             })}
                           </div>
-                          <label className="flex items-center gap-1 text-xs text-sub">
-                            hasta
-                            <input type="time" defaultValue={r.hora_limite?.slice(0, 5) ?? ''} key={r.hora_limite ?? ''}
-                              onBlur={(e) => { const v = e.target.value || null; if (v !== (r.hora_limite?.slice(0, 5) ?? null)) void guardarRecorrido(b.base_id, { hora_limite: v }) }}
-                              className="h-7 rounded border border-line bg-surface px-1 text-xs text-ink" />
-                          </label>
+                          {editando ? (
+                            <label className="flex items-center gap-1 text-xs text-sub">
+                              hasta
+                              <input type="time" value={r.hora_limite?.slice(0, 5) ?? ''}
+                                onChange={(e) => cambiarBorrador(b.base_id, { hora_limite: e.target.value || null })}
+                                className="h-7 rounded border border-line bg-surface px-1 text-xs text-ink" />
+                            </label>
+                          ) : (
+                            <span className="text-xs text-sub">{r.hora_limite ? `hasta las ${r.hora_limite.slice(0, 5)}` : 'sin hora límite'}</span>
+                          )}
                         </div>
                       )}
                     </li>
                   )
                 })}
+                {!editando && vehElegido && basesUbic.length > 0 && !delVehiculo.length && (
+                  <li className="py-2 text-xs text-sub">Sin locales obligatorios. Tocá «Editar» para asignarle.</li>
+                )}
               </ul>
             </>
           )}
