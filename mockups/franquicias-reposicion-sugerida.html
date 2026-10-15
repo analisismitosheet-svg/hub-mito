@@ -130,9 +130,10 @@
       let list = FILAS;
       if (sel) list = FILAS.filter(f => f.material === sel);
       const sugeridos = list.slice(0, 40);
-      let msg = 'REPOSICIÓN SUGERIDA - CF USHUAIA\nArtículos para reponer (solo con stock en MITO)'+(sel? ' - Material: '+sel : '')+':\n\n';
+      const rango = '16/09/2026 al 15/10/2026';
+      let msg = 'REPOSICIÓN SUGERIDA - CF USHUAIA ('+rango+')\nArtículos para reponer (solo con stock en MITO)'+(sel? ' - Material: '+sel : '')+':\n\n';
       sugeridos.forEach((f,i)=>{
-        msg += (i+1)+'. '+f.art+' '+(f.color||'U')+'/'+(f.talle||'-')+' | Vend:'+f.vendido+' | Stock MITO:'+f.stock+' | Stock CFU:'+(f.stockCli||0)+' | Sug.reposición:'+f.sugerido+' | Estado:'+(f.stock<=0?'Urgente':(f.stock<f.vendido?'Normal':'Normal'))+' | Mat:'+f.material+' | '+(f.descrip||'')+'\n';
+        msg += (i+1)+'. '+f.art+' '+(f.color||'U')+'/'+(f.talle||'-')+' | Vend:'+f.vendido+' | Stock MITO:'+f.stock+' | Stock CFU:'+(f.stockCli||0)+' | Sug.reposición:'+f.sugerido+' | Estado:'+(f.stock<=0?'Urgente':'Normal')+' | Mat:'+f.material+' | '+(f.descrip||'')+'\n';
       });
       if (sugeridos.length===0) msg += '(Sin sugeridos con stock en MITO)\n';
       msg += '\nTotal sugerencia reposición: '+sugeridos.reduce((s,f)=>s+f.sugerido,0);
