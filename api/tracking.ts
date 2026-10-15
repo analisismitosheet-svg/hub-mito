@@ -6,7 +6,7 @@
  *      URL del servidor en la app: https://hub-mito.vercel.app/api/tracking
  *      - protocolo OsmAnd (Traccar Client clásico): ?id=<disp>&lat=&lon=&timestamp=&speed(nudos)&bearing&accuracy&batt
  *      - JSON (Traccar Client 9+): { device_id, location: { timestamp, coords: {...}, battery: { level } } }
- *    El identificador del dispositivo (largo y al azar) tiene que estar en tracking_vehiculos:
+ *    El identificador del dispositivo (ej. master-9588, nombre + 4 números) tiene que estar en tracking_vehiculos:
  *    es lo único que autoriza a escribir, y solo puede escribir ubicaciones de su vehículo.
  *
  * 2) GET ?vista=hub&fecha=AAAA-MM-DD  (JWT del hub con tracking.view)
@@ -157,8 +157,9 @@ function safeJson(s: string): unknown {
 async function ingesta(req: Req, res: Res) {
   const puntos = puntosDe(req)
   if (!puntos.length) return res.status(400).json({ error: 'Sin ubicación' })
-  const disp = puntos[0].dispositivo.trim()
-  if (disp.length < 12 || disp.length > 120 || puntos.some((p) => p.dispositivo.trim() !== disp)) {
+  // Corto y fácil de tipear (ej. master-9588): se compara sin mayúsculas ni espacios
+  const disp = puntos[0].dispositivo.trim().toLowerCase()
+  if (!/^[a-z0-9-]{8,60}$/.test(disp) || puntos.some((p) => p.dispositivo.trim().toLowerCase() !== disp)) {
     return res.status(400).json({ error: 'Dispositivo inválido' })
   }
   const h = hub()

@@ -82,11 +82,14 @@ function hace(iso: string | null): string {
   const h = Math.floor(min / 60)
   return h < 24 ? `hace ${h} h ${min % 60} min` : `el ${new Date(iso).toLocaleDateString('es-AR')}`
 }
-const nuevoDispositivo = () => {
-  const a = new Uint8Array(9)
-  crypto.getRandomValues(a)
-  return 'mito-' + Array.from(a, (b) => b.toString(36).padStart(2, '0')).join('').slice(0, 14)
+/** Identificador para Traccar: corto y fácil de tipear (ej. master-9588). Es lo que autoriza a mandar ubicaciones. */
+const nuevoDispositivo = (nombre: string) => {
+  const base = nombre.normalize('NFD').replace(/[^a-zA-Z0-9]/g, ' ').trim().split(/\s+/)[0]?.toLowerCase().slice(0, 12) || 'movil'
+  const n = new Uint16Array(1)
+  crypto.getRandomValues(n)
+  return `${base.length >= 3 ? base : 'movil'}-${1000 + (n[0] % 9000)}`
 }
+const DISPOSITIVO_OK = /^[a-z0-9-]{8,60}$/
 
 function estadoDe(ultima: Ubic | undefined, esHoy: boolean): Estado {
   if (!ultima) return { label: 'Sin GPS', color: '#94a3b8' }
@@ -589,7 +592,7 @@ function Gestion(props: {
     const chofer = choferes.find((c) => c.id === veh.chofer)
     const usado = new Set(vehiculos.map((v) => v.color))
     const { data, error } = await supabase.from('tracking_vehiculos').insert({
-      nombre: veh.nombre.trim(), dispositivo: nuevoDispositivo(),
+      nombre: veh.nombre.trim(), dispositivo: nuevoDispositivo(veh.nombre),
       usuario_transporte_id: chofer?.id ?? null, usuario_transporte_nombre: chofer?.nombre ?? null,
       color: COLORES.find((c) => !usado.has(c)) ?? COLORES[vehiculos.length % COLORES.length],
     }).select('id').single()
@@ -747,7 +750,15 @@ function Gestion(props: {
                     <b>En el celular del chofer:</b>
                     <ol className="ml-4 list-decimal space-y-1 text-sub">
                       <li>Instalar <b className="text-ink">Traccar Client</b> (Play Store / App Store).</li>
-                      <li>Identificador del dispositivo: <code className="select-all rounded bg-surface px-1 text-ink">{v.dispositivo}</code></li>
+                      <li>
+                        Identificador del dispositivo: <code className="select-all rounded bg-surface px-1 text-ink">{v.dispositivo}</code>{' '}
+                        <button onClick={() => {
+                          const nuevo = prompt('Identificador (minúsculas, números y guiones; mínimo 8). Después hay que cambiarlo también en Traccar.', v.dispositivo)?.trim().toLowerCase()
+                          if (!nuevo || nuevo === v.dispositivo) return
+                          if (!DISPOSITIVO_OK.test(nuevo)) return alert('Usá solo minúsculas, números y guiones, de 8 a 60 caracteres (ej. master-9588).')
+                          void cambiarVehiculo(v, { dispositivo: nuevo })
+                        }} className="font-semibold text-blue-600">Cambiar</button>
+                      </li>
                       <li>URL del servidor: <code className="select-all rounded bg-surface px-1 text-ink">{URL_INGESTA}</code></li>
                       <li>Frecuencia: 30 s · Precisión: alta. Prender «Estado del servicio».</li>
                       <li>Permiso de ubicación: <b className="text-ink">Permitir todo el tiempo</b>.</li>

@@ -11,12 +11,12 @@ INSERT INTO public.permisos (clave, modulo, accion, label, orden) VALUES
 ON CONFLICT (clave) DO NOTHING;
 
 -- ---- Vehículos ----
--- dispositivo = "Identificador del dispositivo" que se carga en Traccar Client (largo y al azar:
--- es lo único que autoriza a mandar ubicaciones, no se muestra fuera del hub).
+-- dispositivo = "Identificador del dispositivo" que se carga en Traccar Client (corto y fácil de tipear,
+-- ej. master-9588: es lo único que autoriza a mandar ubicaciones, no se muestra fuera del hub).
 CREATE TABLE IF NOT EXISTS public.tracking_vehiculos (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   nombre text NOT NULL,
-  dispositivo text NOT NULL UNIQUE CHECK (length(dispositivo) >= 12),
+  dispositivo text NOT NULL UNIQUE CONSTRAINT tracking_vehiculos_dispositivo_check CHECK (dispositivo ~ '^[a-z0-9-]{8,60}$'),
   usuario_transporte_id uuid UNIQUE,          -- usuario TRANSPORTISTA de la app Transporte
   usuario_transporte_nombre text,
   color text NOT NULL DEFAULT '#38bdf8',
