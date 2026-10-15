@@ -114,10 +114,8 @@
         const opt={margin:0.5,filename:'reposicion-sugerida-cf-ushuaia.pdf',html2canvas:{scale:1.6,backgroundColor:'#050508'},jsPDF:{unit:'cm',format:'a4',orientation:'landscape'}};
         html2pdf().set(opt).from(clone).toPdf().output('blob').then(blob=>{
           const url=URL.createObjectURL(blob);
-          const a=document.createElement('a');
-          a.href=url;a.download='reposicion-sugerida-cf-ushuaia.pdf';
-          a.click();
-          setTimeout(()=>URL.revokeObjectURL(url),10000);
+          window.open(url, '_blank');
+          setTimeout(()=>URL.revokeObjectURL(url),120000);
         });
       }catch(e){}
       setTimeout(()=>{window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');},800);
