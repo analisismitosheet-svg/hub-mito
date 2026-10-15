@@ -360,26 +360,28 @@ export default function TrackingTransporte() {
         .addTo(g)
     }
 
-    // recorridos
+    // recorridos: todos los vehículos juntos, cada uno con su nombre; el elegido, más grueso
     let bounds: L.LatLngBounds | null = null
+    let conGps = 0
     for (const mv of moviles) {
       if (!mv.vehiculo) continue
       const us = (ubicsDe.get(mv.vehiculo.id) ?? []).filter((u) => (u.precision_m ?? 0) <= 100)
       if (!us.length) continue
+      conGps++
       const esSel = mv.key === sel
-      const linea = L.polyline(us.map((u) => [u.lat, u.lng] as L.LatLngTuple), { color: mv.color, weight: esSel ? 5 : 3, opacity: esSel ? 0.9 : 0.3 }).addTo(g)
+      const linea = L.polyline(us.map((u) => [u.lat, u.lng] as L.LatLngTuple), { color: mv.color, weight: esSel ? 6 : 4, opacity: 0.85 }).addTo(g)
       const ult = us[us.length - 1]
       const est = estadoDe(ult, esHoy)
-      L.circleMarker([ult.lat, ult.lng], { radius: esSel ? 11 : 8, color: '#fff', weight: 2, fillColor: mv.color, fillOpacity: 1 })
-        .bindTooltip(`🚚 ${mv.nombre}<br>${est.label} · ${esHoy ? hace(ult.at) : hora(ult.at)}`)
+      L.circleMarker([ult.lat, ult.lng], { radius: esSel ? 11 : 9, color: '#fff', weight: 2, fillColor: mv.color, fillOpacity: 1 })
+        .bindTooltip(`🚚 ${mv.nombre} · ${est.label} · ${esHoy ? hace(ult.at) : hora(ult.at)}`, { permanent: true, direction: 'top', offset: [0, -10] })
         .on('click', () => setSel(mv.key))
         .addTo(g)
-      if (esSel) bounds = linea.getBounds()
+      bounds = bounds ? bounds.extend(linea.getBounds()) : linea.getBounds()
     }
-    // encuadrar solo al cambiar de vehículo o de día (no en cada refresco)
-    const clave = `${sel}|${fecha}|${bounds ? 1 : 0}`
+    // encuadrar a todos solo al cambiar de día o cuando aparece otro vehículo (no en cada refresco)
+    const clave = `${fecha}|${conGps}`
     if (bounds && encuadrado.current !== clave) {
-      m.fitBounds(bounds.pad(0.3))
+      m.fitBounds(bounds.pad(0.3), { maxZoom: 15 })
       encuadrado.current = clave
     }
   }, [controlesDe, basesUbic, moviles, ubicsDe, sel, actual, resumen, tr, esHoy, fecha, vencido, modo])
@@ -494,7 +496,7 @@ export default function TrackingTransporte() {
             <div ref={divMapa} className="h-[460px] w-full overflow-hidden rounded-xl border border-line" style={{ zIndex: 0 }} />
           </div>
           <p className="mt-2 text-xs text-sub">
-            Línea = recorrido del día · 🏪 = locales · círculo = local obligatorio del vehículo elegido (verde pasó, amarillo pendiente, rojo no pasó).
+            Todos los vehículos juntos (el elegido, más grueso) · línea = recorrido del día · 🏪 = locales · círculo = local obligatorio del vehículo elegido (verde pasó, amarillo pendiente, rojo no pasó).
           </p>
         </section>
       </div>
