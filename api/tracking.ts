@@ -163,6 +163,9 @@ function rechazo(req: Req, res: Res, codigo: number, error: string) {
 
 async function ingesta(req: Req, res: Res) {
   const puntos = puntosDe(req)
+  // Traccar Client manda al conectarse su token de notificaciones (sin ubicación): se acepta y se ignora
+  const plano = { ...(typeof req.body === 'object' && req.body ? req.body : {}), ...(req.query ?? {}) } as Record<string, unknown>
+  if (!puntos.length && plano.id && plano.notificationToken) return res.status(200).json({ ok: true })
   if (!puntos.length) return rechazo(req, res, 400, 'Sin ubicación')
   // Corto y fácil de tipear (ej. master-9588): se compara sin mayúsculas ni espacios
   const disp = puntos[0].dispositivo.trim().toLowerCase()
