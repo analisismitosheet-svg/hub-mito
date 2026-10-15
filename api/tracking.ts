@@ -63,7 +63,7 @@ function cabecera(req: Req, nombre: string): string {
 }
 
 /** Variable de entorno sin espacios ni BOM (PowerShell lo agrega al cargarla por la CLI de Vercel). */
-const env = (k: string) => process.env[k]?.replace(/^﻿/, '').trim() || undefined
+const env = (k: string) => process.env[k]?.replace(/^\uFEFF/, '').trim() || undefined
 
 function hub() {
   const url = env('SUPABASE_URL')?.replace(/\/$/, '')
