@@ -88,11 +88,40 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
   <script>
     const FILAS = [{"art":"CF060202","descrip":"MEDIAS CAPTAIN FIN BROOME","color":"00","talle":"U","vendido":4,"stock":217,"stockCli":0,"sugerido":4,"material":"ACCESORIOS"},{"art":"CF060203","descrip":"MEDIAS CAPTAIN FIN LOUISE","color":"00","talle":"U","vendido":4,"stock":37,"stockCli":0,"sugerido":4,"material":"ACCESORIOS"},{"art":"ZH060213","descrip":"MEDIAS ZIMITH MEDIA CAÑA TREE TRIPACK","color":"06","talle":"U","vendido":4,"stock":187,"stockCli":2,"sugerido":2,"material":"ACCESORIOS"}];
     const n0f=(n)=>new Intl.NumberFormat('es-AR').format(n);
     const estadoF=(f)=>{if(f.stock<=0)return{txt:'Urgente',cls:'text-red-500',dot:'#ef4444'};if(f.stock<f.vendido)return{txt:'Normal',cls:'text-amber-400',dot:'#fbbf24'};return{txt:'Normal',cls:'text-emerald-500',dot:'#34d399'}};
-    function render(){const sel=document.getElementById('selMat').value;let list=FILAS;if(sel)list=FILAS.filter(f=>f.material===sel);const tbody=document.getElementById('tbody');tbody.innerHTML=list.slice(0,40).map((f,i)=>{const e=estadoF(f);const stCli=f.stockCli>0?n0f(f.stockCli):(f.stockCli===0?'0':'—');return '<tr>'+...+'</tr>';}).join('');...}
+    function render(){const sel=document.getElementById('selMat').value;let list=FILAS;if(sel)list=FILAS.filter(f=>f.material===sel);const tbody=document.getElementById('tbody');tbody.innerHTML=list.slice(0,40).map((f,i)=>{const e=estadoF(f);const stCli=f.stockCli>0?n0f(f.stockCli):(f.stockCli===0?'0':'—');return '<tr><td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">'+(i+1)+'</td><td class="whitespace-nowrap px-3 py-2 font-medium text-ink">'+f.art+'</td><td class="px-3 py-2 text-sub">'+(f.descrip||'—')+'</td><td class="px-3 py-2 text-sub">'+(f.material||'—')+'</td><td class="px-3 py-2 text-center text-sub">'+(f.color||'U')+'</td><td class="px-3 py-2 text-center text-sub">'+(f.talle||'—')+'</td><td class="px-3 py-2 text-center tabular-nums text-ink">'+n0f(f.vendido)+'</td><td class="px-3 py-2 text-center tabular-nums '+(f.stock<=0?'font-semibold text-red-400':'text-sub')+'">'+n0f(f.stock)+'</td><td class="px-3 py-2 text-center tabular-nums '+(f.stockCli===0?'text-sub':'text-sky-400')+'">'+stCli+'</td><td class="px-3 py-2 text-center font-bold tabular-nums '+(f.sugerido>0?'text-emerald-500':'text-sub')+'">'+(f.sugerido>0?n0f(f.sugerido):'—')+'</td><td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold '+e.cls+'"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:'+e.dot+'"></i>'+e.txt+'</span></td></tr>';}).join('');document.getElementById('count').textContent=n0f(list.length);document.getElementById('totalSug').textContent=n0f(list.reduce((s,f)=>s+f.sugerido,0));}
+    document.getElementById('selMat').addEventListener('change',render);render();
+    document.getElementById('btnWsp').addEventListener('click',function(){
+      const sel=document.getElementById('selMat').value;
+      let list=FILAS;if(sel)list=FILAS.filter(f=>f.material===sel);
+      const sugeridos=list.slice(0,40);
+      const rango='16/09/2026 al 15/10/2026';
+      let msg='REPOSICIÓN SUGERIDA - CF USHUAIA ('+rango+')\nArtículos para reponer (solo con stock en MITO)'+(sel?' - Material: '+sel:'')+':\n\n';
+      sugeridos.forEach((f,i)=>{
+        msg+=(i+1)+'. '+f.art+' '+(f.color||'U')+'/'+(f.talle||'-')+' | Vend:'+f.vendido+' | Stock MITO:'+f.stock+' | Stock CFU:'+(f.stockCli||0)+' | Sug.reposición:'+f.sugerido+' | Estado:'+(f.stock<=0?'Urgente':'Normal')+' | Mat:'+f.material+' | '+(f.descrip||'')+'\n';
+      });
+      if(sugeridos.length===0)msg+='(Sin sugeridos con stock en MITO)\n';
+      msg+='\nTotal sugerencia reposición: '+sugeridos.reduce((s,f)=>s+f.sugerido,0);
+      try{
+        const clone=document.querySelector('.frame').cloneNode(true);
+        clone.querySelector('#selMat').style.display='none';
+        clone.querySelector('#btnWsp').style.display='none';
+        clone.querySelectorAll('button').forEach(b=>b.style.display='none');
+        const opt={margin:0.5,filename:'reposicion-sugerida-cf-ushuaia.pdf',html2canvas:{scale:1.6,backgroundColor:'#050508'},jsPDF:{unit:'cm',format:'a4',orientation:'landscape'}};
+        html2pdf().set(opt).from(clone).toPdf().output('blob').then(blob=>{
+          const url=URL.createObjectURL(blob);
+          const a=document.createElement('a');
+          a.href=url;a.download='reposicion-sugerida-cf-ushuaia.pdf';
+          a.click();
+          setTimeout(()=>URL.revokeObjectURL(url),10000);
+        });
+      }catch(e){}
+      setTimeout(()=>{window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');},800);
+    });
   </script>
 </div>
 </body>
