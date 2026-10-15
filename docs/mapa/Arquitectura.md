@@ -1,7 +1,7 @@
 # Arquitectura
 
 - **Frontend**: React 18 + Vite + Tailwind + TypeScript, PWA. Repo `D:\pwa mito`, rama `main`.
-- **Deploy**: Vercel, auto-deploy al pushear a `main` → https://hub-mito.vercel.app. La PWA puede quedar con la versión vieja en caché: el usuario tiene que recargar (Ctrl+F5) o cerrar y abrir.
+- **Deploy**: Vercel, auto-deploy al pushear a `main` → https://hub-mito.vercel.app. La PWA se **actualiza sola** (`src/lib/actualizarApp.ts`, `registerType: 'prompt'`): busca versión nueva cada 5 min y al volver a la app, y la aplica al cambiar de pantalla (o al volver estando en el menú), nunca en medio de una pantalla; después muestra «✓ App actualizada». Transporte (nunca en `/lista`, escaneo) y Control de Locales (`/api/version`, nunca en `/auditoria`) hacen lo mismo.
 - **Base**: Supabase, proyecto `qwlugajzxrrwckrqlrjp`. RLS en todas las tablas; lo que escribe con lógica pasa por funciones `SECURITY DEFINER`. Ver [[Permisos y usuarios]].
 - **Funciones de Vercel** (`api/`, **tope 12 en plan Hobby, hoy 10**; si se pasa, el deploy falla con `exceeded_serverless_functions_per_deployment` → antes de sumar una, fusionar): `api/sql/[ruta].ts` (un solo endpoint que rutea vista / `status` / `catalogo`; la lógica vive en `src/lib/sqlVista.ts`, `sqlStatus.ts`, `sqlCatalogo.ts`), `api/pedidos-sync.ts?tipo=compra|venta` (sync de pedidos de compra/venta), `api/replicas.ts`, `api/enviar-transferencia.ts` (mails por Microsoft Graph), `api/push.ts` (avisos push web-push, ver [[Armado de pedidos]]), `api/informe.ts` (informes por WhatsApp), `api/precios-sync.ts` ([[Comparativa de precios]]).
 - **Puente SQL**: Node en la PC `DESKTOP-OA4GU6I`, publicado por Tailscale Funnel. Ver [[Puente SQL y syncs]].

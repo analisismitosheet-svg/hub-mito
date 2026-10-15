@@ -12,7 +12,10 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt': la versión nueva queda lista y src/lib/actualizarApp.ts la aplica sola en un
+      // momento seguro (al cambiar de pantalla). Con 'autoUpdate' la pantalla seguía vieja hasta recargar.
+      registerType: 'prompt',
+      injectRegister: false,
       includeAssets: ['favicon.svg', 'icons/apple-touch-icon.png'],
       manifest: {
         name: 'Hub Mito',
@@ -31,6 +34,7 @@ export default defineConfig({
         ],
       },
       workbox: {
+        clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
         // El bundle principal pasó los 2 MB (límite por defecto): sin esto el build falla
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
