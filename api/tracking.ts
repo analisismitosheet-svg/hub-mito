@@ -62,16 +62,19 @@ function cabecera(req: Req, nombre: string): string {
   return (Array.isArray(v) ? v[0] : v) ?? ''
 }
 
+/** Variable de entorno sin espacios ni BOM (PowerShell lo agrega al cargarla por la CLI de Vercel). */
+const env = (k: string) => process.env[k]?.replace(/^﻿/, '').trim() || undefined
+
 function hub() {
-  const url = process.env.SUPABASE_URL?.replace(/\/$/, '')
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const url = env('SUPABASE_URL')?.replace(/\/$/, '')
+  const key = env('SUPABASE_SERVICE_ROLE_KEY')
   if (!url || !key) throw new Error('Falta SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY')
   return { url, headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' } }
 }
 
 function transporte() {
-  const url = process.env.TRANSPORTE_URL?.replace(/\/$/, '')
-  const key = process.env.TRANSPORTE_SERVICE_ROLE_KEY
+  const url = env('TRANSPORTE_URL')?.replace(/\/$/, '')
+  const key = env('TRANSPORTE_SERVICE_ROLE_KEY')
   if (!url || !key) throw new Error('Falta TRANSPORTE_URL / TRANSPORTE_SERVICE_ROLE_KEY')
   return { url, headers: { apikey: key, Authorization: `Bearer ${key}` } }
 }
@@ -252,8 +255,8 @@ async function vistaHub(req: Req, res: Res) {
 
 async function vistaChofer(req: Req, res: Res) {
   const token = tokenDe(cabecera(req, 'authorization'))
-  const trUrl = process.env.TRANSPORTE_URL?.replace(/\/$/, '')
-  const trAnon = process.env.TRANSPORTE_ANON_KEY
+  const trUrl = env('TRANSPORTE_URL')?.replace(/\/$/, '')
+  const trAnon = env('TRANSPORTE_ANON_KEY')
   if (!token || !trUrl || !trAnon) return res.status(401).json({ error: 'No autorizado' })
   const u = await fetch(`${trUrl}/auth/v1/user`, { headers: { apikey: trAnon, Authorization: `Bearer ${token}` } })
   if (!u.ok) return res.status(401).json({ error: 'Sesión de Transporte inválida' })
