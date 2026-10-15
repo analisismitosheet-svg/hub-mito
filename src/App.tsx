@@ -70,6 +70,7 @@ import Replicas from '@/pages/Replicas'
 // Pantallas nuevas: se cargan bajo demanda para no agrandar el bundle principal
 // (el service worker no precachea archivos de más de 2 MB y la build falla).
 const ComparativaPrecios = lazy(() => import('@/pages/ComparativaPrecios'))
+const TrackingTransporte = lazy(() => import('@/pages/TrackingTransporte'))
 
 export default function App() {
   return (
@@ -395,6 +396,16 @@ export default function App() {
             element={
               <PermissionRoute permiso="opiniones.view">
                 <Opiniones />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/administradores/tracking"
+            element={
+              <PermissionRoute permiso="tracking.view">
+                <Suspense fallback={null}>
+                  <TrackingTransporte />
+                </Suspense>
               </PermissionRoute>
             }
           />

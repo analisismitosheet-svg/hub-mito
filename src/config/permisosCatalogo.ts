@@ -28,6 +28,7 @@ import {
   UserCog,
   ShieldCheck,
   Settings,
+  Navigation,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -251,6 +252,12 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
     id: 'informes', areaId: 'sistemas', titulo: 'Envío informes y reportes', descripcion: 'Informes por WhatsApp',
     icon: FileText, color: '#22c55e',
     acciones: { ver: 'sistemas.informes.view', crear: 'sistemas.informes.create', editar: 'sistemas.informes.edit', borrar: 'sistemas.informes.delete' },
+  },
+
+  // ===== Administradores =====
+  {
+    id: 'tracking', areaId: 'administradores', titulo: 'Tracking de transporte', descripcion: 'Ubicación de los vehículos, cargas y entregas',
+    icon: Navigation, color: '#2563eb', acciones: { ver: 'tracking.view', editar: 'tracking.gestionar' }, etiquetas: { editar: 'Vehículos y puntos de control' },
   },
 
   // ===== Configuración =====

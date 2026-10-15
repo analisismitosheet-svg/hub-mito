@@ -47,6 +47,8 @@ import {
   CircleCheck,
   CircleX,
   Home,
+  ShieldCheck,
+  Navigation,
   type LucideIcon,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -122,6 +124,7 @@ export const AREAS: AreaDef[] = [
   { id: 'recepcion', name: 'Recepción', icon: Bell, accent: 'text-rose-600', color: '#e11d48' },
   { id: 'mantenimiento', name: 'Mantenimiento', icon: Wrench, accent: 'text-slate-400', color: '#64748b' },
   { id: 'produccion', name: 'Producción', icon: Factory, accent: 'text-yellow-600', color: '#ca8a04' },
+  { id: 'administradores', name: 'Administradores', icon: ShieldCheck, accent: 'text-red-600', color: '#dc2626' },
 ]
 
 const URL_TRANSPORTE =
@@ -212,6 +215,17 @@ export const APPS: AppDef[] = [
     comingSoon: !URL_TRANSPORTE,
     color: '#0891b2',
     enMenu: true,
+  },
+  {
+    id: 'tracking-transporte',
+    areaId: 'administradores',
+    title: 'Tracking de transporte',
+    description: 'Dónde está cada vehículo, qué lleva, qué entregó y por qué puntos de control pasó.',
+    icon: Navigation,
+    kind: 'internal',
+    target: '/administradores/tracking',
+    color: '#2563eb',
+    permiso: 'tracking.view',
   },
   {
     id: 'mayorista-repo',

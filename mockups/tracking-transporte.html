@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tracking transporte</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root{--paper:#050508;--surface:rgba(255,255,255,.04);--line:rgba(255,255,255,.09);--ink:#f8fafc;--sub:#94a3b8;
+    --verde:#22c55e;--ambar:#f59e0b;--rojo:#f87171;--celeste:#38bdf8;--violeta:#a78bfa;--rosa:#f472b6;--teal:#2dd4bf}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Segoe UI',system-ui,sans-serif;font-size:14px;padding:18px 16px 50px}
+  .wrap{max-width:1300px;margin:0 auto}
+  .badge{display:inline-block;padding:3px 10px;border-radius:999px;background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.35);font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+  h1{font-size:22px;margin:8px 0 2px}
+  .sub{color:var(--sub)}
+  .grid{display:grid;grid-template-columns:340px minmax(0,1fr);gap:14px;margin-top:14px}
+  @media(max-width:900px){.grid{grid-template-columns:1fr}}
+  .card{border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:12px}
+  #mapa{height:440px;border-radius:14px;border:1px solid var(--line)}
+  .veh{border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:8px;cursor:pointer;background:rgba(255,255,255,.02)}
+  .veh.sel{border-color:var(--celeste);background:rgba(56,189,248,.08)}
+  .veh h3{margin:0;font-size:15px;display:flex;align-items:center;gap:8px}
+  .punto{width:10px;height:10px;border-radius:50%;display:inline-block}
+  .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+  .chip{font-size:11px;border-radius:6px;padding:2px 7px;background:rgba(255,255,255,.07);color:var(--sub)}
+  .linea{position:relative;margin-left:8px;border-left:2px solid var(--line);padding-left:14px}
+  .ev{position:relative;margin:0 0 12px}
+  .ev:before{content:'';position:absolute;left:-21px;top:4px;width:12px;height:12px;border-radius:50%;background:var(--c,#64748b);border:2px solid var(--paper)}
+  .ev .h{font-size:11px;color:var(--sub)}
+  .ev b{font-size:13px}
+  .barra{display:flex;height:6px;border-radius:4px;overflow:hidden;background:rgba(255,255,255,.08);margin-top:4px}
+  .k{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:12px}
+  @media(max-width:700px){.k{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .kp{border:1px solid var(--line);border-radius:12px;padding:8px 10px}
+  .kp .l{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em}
+  .kp .v{font-size:22px;font-weight:800}
+  .cel{width:300px;border:1px solid var(--line);border-radius:28px;padding:14px;background:#0b0b12;margin:0 auto}
+  .toggle{display:flex;align-items:center;justify-content:space-between;border:1px solid rgba(34,197,94,.4);background:rgba(34,197,94,.1);border-radius:14px;padding:10px 12px;margin:10px 0}
+  .sw{width:44px;height:24px;border-radius:12px;background:var(--verde);position:relative}
+  .sw:after{content:'';position:absolute;right:3px;top:3px;width:18px;height:18px;border-radius:50%;background:#fff}
+  .nota{margin-top:16px;font-size:13px;color:#cbd5e1;line-height:1.55}
+  .nota li{margin:4px 0}
+  .dos{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:14px;margin-top:14px}
+  @media(max-width:900px){.dos{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span class="badge">Maqueta · no está subida</span>
+  <h1>🚚 Tracking de transporte</h1>
+  <p class="sub"><b style="color:#fbbf24">Hub → Administradores</b> (área nueva) → Tracking de transporte · datos de la app Transporte · ubicación del celular del chofer + escaneos de la app Transporte · datos de escaneo reales de hoy, recorrido de ejemplo</p>
+
+  <div class="k">
+    <div class="kp" style="border-color:#22c55e55"><div class="l" style="color:var(--verde)">En ruta</div><div class="v">2</div><div class="sub" style="font-size:11px">con ubicación en los últimos 5 min</div></div>
+    <div class="kp" style="border-color:#38bdf855"><div class="l" style="color:var(--celeste)">Bultos a bordo</div><div class="v">35</div><div class="sub" style="font-size:11px">cargados y sin recibir</div></div>
+    <div class="kp" style="border-color:#a78bfa55"><div class="l" style="color:var(--violeta)">Entregados hoy</div><div class="v">22</div><div class="sub" style="font-size:11px">recibidos en el local</div></div>
+    <div class="kp" style="border-color:#f8717155"><div class="l" style="color:var(--rojo)">Sin señal</div><div class="v">1</div><div class="sub" style="font-size:11px">MASTER CHICA · hace 2 h</div></div>
+    <div class="kp" style="border-color:#fbbf2455"><div class="l" style="color:#fbbf24">Puntos de control</div><div class="v">3/5</div><div class="sub" style="font-size:11px">pasados hoy · 1 salteado ⚠</div></div>
+  </div>
+
+  <div class="grid">
+    <div class="card" id="lista"></div>
+    <div class="card"><div id="mapa"></div>
+      <p class="sub" style="font-size:12px;margin:8px 2px 0">Línea = recorrido de hoy · 🚩 = punto de control obligatorio (círculo = radio que cuenta como «pasó») · 🏪 = locales con bultos para ese vehículo (verde = ya entregados) · tocá un vehículo para ver su día.</p>
+    </div>
+  </div>
+
+  <div class="dos">
+    <div class="card"><h3 style="margin:0 0 10px" id="tit-dia"></h3><div class="linea" id="dia"></div></div>
+    <div>
+      <div class="cel">
+        <p class="sub" style="font-size:11px;margin:0">App Transporte · celular del chofer (rol TRANSPORTISTA)</p>
+        <b style="font-size:16px">MASTER TRANSPORTE</b>
+        <div style="border:1px solid rgba(248,113,113,.45);background:rgba(248,113,113,.1);border-radius:14px;padding:14px;margin:10px 0;text-align:center">
+          <div style="font-size:30px">📍</div>
+          <b>Activá la ubicación para escanear</b>
+          <p class="sub" style="font-size:11px;margin:6px 0 10px;line-height:1.45">Con el rol transporte no se puede escanear bultos sin la ubicación del celular prendida.</p>
+          <div style="background:#ef4444;color:#fff;border-radius:10px;padding:8px;font-weight:700">Activar ubicación</div>
+        </div>
+        <p class="sub" style="font-size:11px;line-height:1.5;margin:0">Si la niega o la apaga, el botón de escanear queda bloqueado con este aviso. Con la ubicación prendida la app la manda sola cada ~30 s (no hay botón para apagarla). Si queda bloqueada en el navegador, el aviso explica cómo habilitarla en la configuración del celular.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <h3 style="margin:0">🚩 Puntos de control obligatorios</h3>
+      <span class="chip" style="background:rgba(251,191,36,.15);color:#fbbf24;font-weight:700">+ Agregar: tocá el mapa</span>
+    </div>
+    <p class="sub" style="font-size:12px;margin:4px 0 10px">Lugares por donde el vehículo tiene que pasar sí o sí. Cuenta como «pasó» si el GPS entra en el radio. Si termina la jornada (o pasa la hora límite) sin pasar, queda en rojo.</p>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <tr class="sub" style="font-size:11px;text-align:left"><th style="padding:4px">Punto</th><th>Radio</th><th>Vehículos</th><th>Hora límite</th><th>Hoy</th></tr>
+      <tr style="border-top:1px solid var(--line)"><td style="padding:6px 4px">🚩 Balanza / control salida depósito</td><td>150 m</td><td>Todos</td><td>—</td><td><span style="color:#22c55e">✓ 3/3</span></td></tr>
+      <tr style="border-top:1px solid var(--line)"><td style="padding:6px 4px">🚩 Peaje Ruta 9</td><td>300 m</td><td>MERCEDES</td><td>11:00</td><td><span style="color:#22c55e">✓ 09:58</span></td></tr>
+      <tr style="border-top:1px solid var(--line)"><td style="padding:6px 4px">🚩 Banco Av. Colón</td><td>100 m</td><td>MASTER TRANSPORTE</td><td>13:00</td><td><span style="color:#f87171">⚠ no pasó (pasó la hora)</span></td></tr>
+      <tr style="border-top:1px solid var(--line)"><td style="padding:6px 4px">🚩 Proveedor Barrio Talleres</td><td>200 m</td><td>MASTER TRANSPORTE</td><td>16:00</td><td><span class="sub">pendiente</span></td></tr>
+    </table>
+  </div>
+
+  <div class="nota">
+    <b>Cómo funcionaría:</b>
+    <ul>
+      <li><b>Ubicación obligatoria:</b> para el rol TRANSPORTISTA la app Transporte no deja escanear bultos si la ubicación del celular no está activa. Con la ubicación prendida manda la posición cada ~30 s (o cada 100 m) mientras la app está abierta, sin botón para apagarla. Se guarda en la base del hub.</li>
+      <li><b>Escaneos:</b> cada sesión que abre el transportista es una carga (hora, base, bultos y destinos); cada recepción en un local marca la entrega con su hora. Con eso se ve qué lleva a bordo y qué ya entregó, aunque no haya GPS.</li>
+      <li><b>Estados:</b> en ruta (ubicación en los últimos 5 min) · detenido (no se movió en 10 min) · sin señal (más de 15 min sin ubicación).</li>
+      <li><b>Puntos de control:</b> los carga un admin tocando el mapa (nombre, radio, a qué vehículos aplica y hora límite opcional). Se marca solo cuando el GPS pasa por ahí; si no pasa, queda en rojo en la tarjeta del vehículo y en su día.</li>
+      <li><b>Dónde queda:</b> área nueva <b>Administradores</b> en el menú del hub; las ubicaciones y los puntos se guardan en la base del hub, y los escaneos se leen en vivo de la base de Transporte (no se toca nada de la app Transporte salvo exigir la ubicación al rol transporte para escanear).</li>
+      <li><b>Locales en el mapa:</b> hay que cargar una vez la ubicación de cada base (se marca en el mapa en una pantalla de configuración).</li>
+      <li><b>Límite del celular:</b> si el chofer cierra la app o el sistema la suspende, deja de mandar; el hub lo muestra como «sin señal» con la última posición.</li>
+    </ul>
+  </div>
+</div>
+<script>
+// Locales (ubicaciones de ejemplo en Córdoba)
+const LOC={DEP:[-31.3986,-64.2228,'Depósito MITO'],WALTD:[-31.3610,-64.2470,'Walmart'],CFR4:[-31.4420,-64.1260,'CF Ruta 9'],NCEND2:[-31.4115,-64.1925,'Nuevo Centro'],DINOD:[-31.4300,-64.1700,'Dinosaurio R20'],LIBED:[-31.4210,-64.1590,'Libertad'],R9D:[-31.4480,-64.1420,'Ruta 9'],'9DEJU2':[-31.4155,-64.1840,'9 de Julio'],ESPID:[-31.3840,-64.1650,'Espinosa']};
+const V=[
+ {id:'m',nombre:'MASTER TRANSPORTE',color:'#38bdf8',pc:'1/3 · 1 ⚠',estado:'En ruta',ec:'#22c55e',hace:'hace 20 s',vel:'32 km/h',bordo:20,ent:14,dest:['NCEND2','DINOD','LIBED','9DEJU2','R9D'],hechos:['NCEND2','9DEJU2'],
+  ruta:[LOC.DEP,[-31.405,-64.205],LOC.NCEND2,LOC['9DEJU2'],[-31.422,-64.176],[-31.427,-64.172]],
+  dia:[['11:04','Cargó 6 bultos en el depósito','DINOD, NCEND2, MITO, LIBED, 9DEJU2','#38bdf8'],['11:07','Cargó 14 bultos más','LIBED, 9DEJU2, DINOD, CENTRALD, R9D, NCEND2, CFRA, WALTD…','#38bdf8'],['11:15','🚩 Pasó por Balanza depósito','punto de control ✓','#fbbf24'],['11:40','Entregó 3 bultos en NCEND2','recibidos por el local · 33 min después de cargar','#22c55e'],['11:58','Entregó 2 bultos en 9DEJU2','recibidos por el local','#22c55e'],['12:10','En camino a DINOD','32 km/h · última ubicación hace 20 s','#f59e0b'],['13:00','⚠ No pasó por Banco Av. Colón','punto de control obligatorio · hora límite 13:00','#f87171']]},
+ {id:'z',nombre:'MERCEDES TRANSPORTE',color:'#f472b6',pc:'2/2 ✓',estado:'Detenido',ec:'#f59e0b',hace:'hace 1 min',vel:'0 km/h · 12 min quieto',bordo:5,ent:16,dest:['WALTD','CFR4'],hechos:['WALTD'],
+  ruta:[LOC.DEP,[-31.38,-64.235],LOC.WALTD,[-31.40,-64.20],[-31.43,-64.14],[-31.441,-64.128]],
+  dia:[['08:41','Cargó 16 bultos en el depósito','WALTD','#38bdf8'],['08:53','Cargó 5 bultos','CFR4','#38bdf8'],['09:30','Entregó 16 bultos en WALTD','recibidos por el local','#22c55e'],['09:58','🚩 Pasó por Peaje Ruta 9','punto de control ✓','#fbbf24'],['10:05','Detenido cerca de CF Ruta 9','12 min sin moverse · 5 bultos para CFR4','#f59e0b']]},
+ {id:'c',nombre:'MASTER CHICA',color:'#a78bfa',pc:'0/1',estado:'Sin señal',ec:'#f87171',hace:'hace 2 h',vel:'—',bordo:2,ent:0,dest:['POLO52','MITO'],hechos:[],
+  ruta:[LOC.DEP,[-31.39,-64.21],[-31.385,-64.19]],
+  dia:[['14:17 (ayer)','Cargó 2 bultos','POLO52, MITO','#38bdf8'],['16:05','Última ubicación','el celular dejó de mandar (app cerrada o sin datos)','#f87171']]},
+];
+const PC=[{n:'Balanza depósito',p:[-31.4005,-64.2195],r:150,ok:true},{n:'Peaje Ruta 9',p:[-31.437,-64.135],r:300,ok:true},{n:'Banco Av. Colón',p:[-31.405,-64.215],r:100,ok:false,mal:true},{n:'Proveedor Talleres',p:[-31.395,-64.170],r:200,ok:false}];
+const mapa=L.map('mapa').setView([-31.41,-64.19],12);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© OpenStreetMap'}).addTo(mapa);
+const capas={};
+for(const c of PC){const col=c.ok?'#22c55e':c.mal?'#f87171':'#fbbf24';L.circle(c.p,{radius:c.r,color:col,weight:2,fillOpacity:.12}).addTo(mapa);L.marker(c.p,{icon:L.divIcon({html:'<div style="font-size:18px">🚩</div>',className:''})}).bindTooltip(`Punto de control: ${c.n}<br>${c.ok?'✓ pasó':c.mal?'⚠ no pasó':'pendiente'}`).addTo(mapa)}
+for(const v of V){
+ const g=L.layerGroup().addTo(mapa);
+ L.polyline(v.ruta,{color:v.color,weight:4,opacity:.8}).addTo(g);
+ const fin=v.ruta[v.ruta.length-1];
+ L.circleMarker(fin,{radius:10,color:'#fff',weight:2,fillColor:v.color,fillOpacity:1}).bindTooltip(`🚚 ${v.nombre}<br>${v.estado} · ${v.hace}`,{permanent:false}).addTo(g);
+ for(const d of v.dest){const l=LOC[d];if(!l)continue;L.marker([l[0],l[1]],{icon:L.divIcon({html:`<div style="font-size:18px;filter:${v.hechos.includes(d)?'none':'grayscale(1)'}">🏪</div>`,className:''})}).bindTooltip(`${d} · ${l[2]}${v.hechos.includes(d)?' · entregado':''}`).addTo(g)}
+ capas[v.id]=g;
+}
+let sel='m';
+function pintar(){
+ document.getElementById('lista').innerHTML='<h3 style="margin:0 0 8px">Vehículos</h3>'+V.map(v=>`<div class="veh ${v.id===sel?'sel':''}" onclick="elegir('${v.id}')">
+  <h3><span class="punto" style="background:${v.color}"></span>${v.nombre}</h3>
+  <div style="margin-top:4px;font-size:12px"><b style="color:${v.ec}">● ${v.estado}</b> <span class="sub">· ${v.hace} · ${v.vel}</span></div>
+  <div class="barra"><div style="width:${v.ent/(v.ent+v.bordo)*100}%;background:#22c55e"></div><div style="width:${v.bordo/(v.ent+v.bordo)*100}%;background:#38bdf8"></div></div>
+  <div class="sub" style="font-size:11px;margin-top:3px">${v.ent} entregados · ${v.bordo} a bordo · 🚩 ${v.pc}</div>
+  <div class="chips">${v.dest.map(d=>`<span class="chip" style="${v.hechos.includes(d)?'color:#22c55e':''}">${v.hechos.includes(d)?'✓ ':''}${d}</span>`).join('')}</div></div>`).join('');
+ const v=V.find(x=>x.id===sel);
+ document.getElementById('tit-dia').textContent='El día de '+v.nombre;
+ document.getElementById('dia').innerHTML=v.dia.map(e=>`<div class="ev" style="--c:${e[3]}"><div class="h">${e[0]}</div><b>${e[1]}</b><div class="sub" style="font-size:12px">${e[2]}</div></div>`).join('');
+ for(const x of V){capas[x.id].eachLayer(l=>l.setStyle&&l.setStyle({opacity:x.id===sel?.9:.25}))}
+ mapa.fitBounds(L.polyline(v.ruta).getBounds().pad(.4));
+}
+function elegir(id){sel=id;pintar()}
+pintar();
+</script>
+</body>
+</html>

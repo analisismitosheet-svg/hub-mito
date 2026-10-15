@@ -26,6 +26,7 @@
 - `sistemas.informes.view` / `.create` / `.edit` / `.delete` → [[Informes por WhatsApp]].
 - `transferencias.view` → [[Transferencias]].
 - `contador.view` → contador de clientes ([[Otros módulos]]).
+- `tracking.view` / `tracking.gestionar` → [[Tracking de transporte]] (área Administradores, `area_administradores.view`).
 - `compras_precios.view` → [[Comparativa de precios]] (asignado a administrador y compras).
 
 ## Pruebas de RLS
