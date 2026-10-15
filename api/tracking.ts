@@ -154,20 +154,27 @@ function safeJson(s: string): unknown {
   try { return JSON.parse(s) } catch { return null }
 }
 
+/** Deja en los logs de Vercel qué mandó el celular cuando se rechaza (para configurar Traccar). */
+function rechazo(req: Req, res: Res, codigo: number, error: string) {
+  const cuerpo = typeof req.body === 'string' ? req.body : JSON.stringify(req.body ?? null)
+  console.warn(`[tracking] ${codigo} ${error} · ${req.method} ct=${cabecera(req, 'content-type')} q=${JSON.stringify(req.query ?? {}).slice(0, 200)} body=${(cuerpo ?? '').slice(0, 300)}`)
+  return res.status(codigo).json({ error })
+}
+
 async function ingesta(req: Req, res: Res) {
   const puntos = puntosDe(req)
-  if (!puntos.length) return res.status(400).json({ error: 'Sin ubicación' })
+  if (!puntos.length) return rechazo(req, res, 400, 'Sin ubicación')
   // Corto y fácil de tipear (ej. master-9588): se compara sin mayúsculas ni espacios
   const disp = puntos[0].dispositivo.trim().toLowerCase()
   if (!/^[a-z0-9-]{8,60}$/.test(disp) || puntos.some((p) => p.dispositivo.trim().toLowerCase() !== disp)) {
-    return res.status(400).json({ error: 'Dispositivo inválido' })
+    return rechazo(req, res, 400, 'Dispositivo inválido')
   }
   const h = hub()
   const veh = await getJson<{ id: string }[]>(
     `${h.url}/rest/v1/tracking_vehiculos?select=id&activo=eq.true&dispositivo=eq.${encodeURIComponent(disp)}`,
     h.headers,
   )
-  if (!veh.length) return res.status(404).json({ error: 'Dispositivo no registrado' })
+  if (!veh.length) return rechazo(req, res, 404, 'Dispositivo no registrado')
 
   const ahora = Date.now()
   const filas = puntos
@@ -188,6 +195,7 @@ async function ingesta(req: Req, res: Res) {
     })
     if (!r.ok) return res.status(500).json({ error: `No se pudo guardar (${r.status})` })
   }
+  console.log(`[tracking] ok ${disp} · ${filas.length} punto(s)`)
   return res.status(200).json({ ok: true, guardados: filas.length })
 }
 
