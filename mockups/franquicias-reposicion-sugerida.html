@@ -26,6 +26,7 @@
   .kpi { min-width:0; border:1px solid #1f2530; background:#0e1116; border-radius:16px; padding:12px; }
   .kpi p.lab { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; }
   .kpi p.val { font-weight:800; font-size:24px; line-height:1.15; font-variant-numeric:tabular-nums; }
+  select { background:#0e1116; border:1px solid #2a3340; color:#e2e8f0; border-radius:999px; padding:6px 10px; font-size:12.5px; }
 </style>
 </head>
 <body>
@@ -34,25 +35,9 @@
   <h1 class="font-display text-2xl font-semibold text-ink mt-2 mb-1">Mayorista — Franquicias › Reposición sugerida</h1>
   <p class="text-sm text-sub">Comparamos <b class="text-ink">la venta que tuvo la franquicia</b> contra el <b class="text-emerald-400">stock real de MITO</b> y sale cuánto conviene reponer. Datos reales de <b>CF Ushuaia</b> (<code>DRAGONFISH_CFU</code>) del <b>16/09/2026 al 15/10/2026</b>.</p>
 
-  <p class="cap">1 · Dónde vive</p>
-  <p class="note">Dentro de <b>Mayorista</b> aparece una tarjeta nueva, <b>Franquicias</b>. Adentro, la primera pantalla es <b>Reposición sugerida</b> (hoy solo CF Ushuaia; después se suman las demás).</p>
-  <div class="frame mt-3">
-    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      <div class="kpi opacity-45"><p class="lab text-sub">Repos Mayorista</p><p class="text-xs text-sub mt-1">Repos por local</p></div>
-      <div class="kpi opacity-45"><p class="lab text-sub">Pedidos de venta</p><p class="text-xs text-sub mt-1">Pedidos mayoristas</p></div>
-      <div class="kpi opacity-45"><p class="lab text-sub">F12 Consulta artículos</p><p class="text-xs text-sub mt-1">Stock, ubicación y precio</p></div>
-      <div class="kpi" style="border-color:rgba(217,119,6,.5);background:rgba(217,119,6,.10)">
-        <p class="lab" style="color:#fbbf24">Franquicias · nueva</p>
-        <p class="text-xs text-sub mt-1">Venta vs stock real de MITO → reposición sugerida</p>
-      </div>
-    </div>
-  </div>
-
   <p class="cap">2 · La pantalla</p>
-  <p class="note">Franquicia: <b>CF Ushuaia</b> (<code>CAPTAIN FIN USHUAIA</code> en <code>vw_STOCK_SUCURSALES_REAL</code>). Se incluye <b>Stock cliente</b> (lo que tiene CF Ushuaia hoy).</p>
-
   <div class="frame mt-3">
-    <div class="mb-3 mt-1 flex min-w-0 items-center gap-3">
+    <div class="mb-3 mt-1 flex min-w-0 flex-wrap items-center gap-3">
       <div class="rounded-xl border p-2" style="color:#d97706;background-color:#d9770624;border-color:#d9770640">
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1-5h16l1 5"/><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/><path d="M3 9h18"/><path d="M9 13h6"/></svg>
       </div>
@@ -60,18 +45,17 @@
         <h2 class="font-display text-lg font-semibold text-ink">Reposición sugerida</h2>
         <p class="truncate text-sm text-sub">CF Ushuaia · venta del 16/09/2026 al 15/10/2026 · contra el stock real de MITO</p>
       </div>
-      <div class="ml-auto flex shrink-0 items-center gap-2">
+      <div class="ml-auto flex shrink-0 flex-wrap items-center gap-2">
+        <label class="flex items-center gap-2 text-xs text-sub">
+          Material
+          <select id="selMat">
+            <option value="">Todos</option>
+            <option value="ACCESORIOS">ACCESORIOS</option><option value="BUZOS">BUZOS</option><option value="CALZADO">CALZADO</option><option value="CAMISAS/ROMPEVIENTOS">CAMISAS/ROMPEVIENTOS</option><option value="CAMPERAS">CAMPERAS</option><option value="PANTALONES">PANTALONES</option><option value="REMERAS">REMERAS</option>
+          </select>
+        </label>
         <span class="tabbtn on">CF USHUAIA</span>
         <span class="tabbtn">Últimos 30 días ▾</span>
       </div>
-    </div>
-
-    <div class="mb-3 grid grid-cols-2 gap-2.5 md:grid-cols-5">
-      <div class="kpi"><p class="lab" style="color:#38bdf8">SKU vendidos</p><p class="val text-ink">261</p><p class="text-[11px] text-sub">artículo + color + talle</p></div>
-      <div class="kpi"><p class="lab" style="color:#22c55e">Unidades vendidas</p><p class="val text-ink">293</p><p class="text-[11px] text-sub">en el período</p></div>
-      <div class="kpi" style="border-color:#818cf840"><p class="lab" style="color:#818cf8">A reponer</p><p class="val text-ink">131</p><p class="text-[11px] text-sub">unidades sugeridas</p></div>
-      <div class="kpi" style="border-color:#f8717140"><p class="lab" style="color:#f87171">No alcanza el stock</p><p class="val text-ink">162</p><p class="text-[11px] text-sub">unidades sin stock en MITO</p></div>
-      <div class="kpi" style="border-color:#f59e0b40"><p class="lab" style="color:#f59e0b">SKU en 0</p><p class="val text-ink">150</p><p class="text-[11px] text-sub">de 261 sin stock</p></div>
     </div>
 
     <div class="overflow-hidden rounded-xl border border-line">
@@ -79,410 +63,26 @@
         <table class="t">
           <thead>
             <tr>
-              <th class="w-10">#</th><th>Artículo</th><th>Descripción</th><th class="text-center">Color</th><th class="text-center">Talle</th>
-              <th class="text-center">Vendido</th><th class="text-center">Stock MITO</th><th class="text-center">Stock cliente</th><th class="text-center">A reponer</th><th class="text-center">Estado</th>
+              <th class="w-10">#</th><th>Artículo</th><th>Descripción</th><th>Material</th><th class="text-center">Color</th><th class="text-center">Talle</th>
+              <th class="text-center">Vendido</th><th class="text-center">Stock MITO</th><th class="text-center">Stock cliente</th><th class="text-center">Sugerencia reposición</th><th class="text-center">Estado</th>
             </tr>
           </thead>
-          <tbody>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">1</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">CF060202</td>
-            <td class="px-3 py-2 text-sub">MEDIAS CAPTAIN FIN BROOME</td>
-            <td class="px-3 py-2 text-center text-sub">00</td>
-            <td class="px-3 py-2 text-center text-sub">U</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">4</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">219</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">4</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">2</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">CF060203</td>
-            <td class="px-3 py-2 text-sub">MEDIAS CAPTAIN FIN LOUISE</td>
-            <td class="px-3 py-2 text-center text-sub">00</td>
-            <td class="px-3 py-2 text-center text-sub">U</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">4</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">37</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sky-400">1</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">4</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">3</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">ZH060213</td>
-            <td class="px-3 py-2 text-sub">MEDIAS ZIMITH MEDIA CAÑA TREE TRIPACK</td>
-            <td class="px-3 py-2 text-center text-sub">06</td>
-            <td class="px-3 py-2 text-center text-sub">U</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">4</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">187</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sky-400">2</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">4</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">4</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">ZH020014</td>
-            <td class="px-3 py-2 text-sub">GORRO ZIMITH BROCH</td>
-            <td class="px-3 py-2 text-center text-sub">02</td>
-            <td class="px-3 py-2 text-center text-sub">U</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">3</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">24</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sky-400">10</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">3</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">5</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">ZH060404</td>
-            <td class="px-3 py-2 text-sub">SQUIZ WALLET ZIMITH</td>
-            <td class="px-3 py-2 text-center text-sub">02</td>
-            <td class="px-3 py-2 text-center text-sub">U</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">3</td>
-            <td class="px-3 py-2 text-center tabular-nums font-semibold text-red-400">0</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-sub">—</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-red-400"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#f87171"></i>Sin stock</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">6</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">CF060401</td>
-            <td class="px-3 py-2 text-sub">LATER WALLET CAPTAIN FIN</td>
-            <td class="px-3 py-2 text-center text-sub">02</td>
-            <td class="px-3 py-2 text-center text-sub">U</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">3</td>
-            <td class="px-3 py-2 text-center tabular-nums font-semibold text-red-400">0</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sky-400">1</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-sub">—</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-red-400"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#f87171"></i>Sin stock</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">7</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">ZH051003</td>
-            <td class="px-3 py-2 text-sub">RIÑONERA ZIMITH YARMIN</td>
-            <td class="px-3 py-2 text-center text-sub">02</td>
-            <td class="px-3 py-2 text-center text-sub">U</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">90</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sky-400">1</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">2</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">8</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">CF060401</td>
-            <td class="px-3 py-2 text-sub">LATER WALLET CAPTAIN FIN</td>
-            <td class="px-3 py-2 text-center text-sub">03</td>
-            <td class="px-3 py-2 text-center text-sub">U</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">105</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sky-400">2</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">2</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">9</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">CF050302</td>
-            <td class="px-3 py-2 text-sub">BOXER CAPTAIN FIN TIRSO</td>
-            <td class="px-3 py-2 text-center text-sub">01</td>
-            <td class="px-3 py-2 text-center text-sub">L</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">194</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sky-400">1</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">2</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">10</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">CF051004</td>
-            <td class="px-3 py-2 text-sub">RIÑONERA CAPTAIN FIN PAIGE</td>
-            <td class="px-3 py-2 text-center text-sub">00</td>
-            <td class="px-3 py-2 text-center text-sub">U</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">9</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">2</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">11</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">CF162104</td>
-            <td class="px-3 py-2 text-sub">JEAN CAPTAIN FIN CASSIAN BAGGY</td>
-            <td class="px-3 py-2 text-center text-sub">02</td>
-            <td class="px-3 py-2 text-center text-sub">34</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">22</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">2</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">12</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">ZH060203</td>
-            <td class="px-3 py-2 text-sub">MEDIAS MEDIA CAÑA ZIMITH SHOWER BIPACK</td>
-            <td class="px-3 py-2 text-center text-sub">00</td>
-            <td class="px-3 py-2 text-center text-sub">U</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">1.384</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sky-400">4</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">2</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">13</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">ZH060216</td>
-            <td class="px-3 py-2 text-sub">MEDIAS MEDIA CAÑA ZIMITH CINDER TRIPACK</td>
-            <td class="px-3 py-2 text-center text-sub">01</td>
-            <td class="px-3 py-2 text-center text-sub">U</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">499</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sky-400">3</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">2</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">14</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">ZH060018</td>
-            <td class="px-3 py-2 text-sub">GORRA ZIMITH MANCHESTER</td>
-            <td class="px-3 py-2 text-center text-sub">02</td>
-            <td class="px-3 py-2 text-center text-sub">U</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">161</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">2</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">15</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">ZH251404</td>
-            <td class="px-3 py-2 text-sub">CHANCLAS ZIMITH BALANCE SLIDES</td>
-            <td class="px-3 py-2 text-center text-sub">01</td>
-            <td class="px-3 py-2 text-center text-sub">434</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">13</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">2</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">16</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">CF102501</td>
-            <td class="px-3 py-2 text-sub">JOGGING CAPTAIN FIN NEW LOSTU</td>
-            <td class="px-3 py-2 text-center text-sub">04</td>
-            <td class="px-3 py-2 text-center text-sub">34</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
-            <td class="px-3 py-2 text-center tabular-nums font-semibold text-red-400">0</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-sub">—</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-red-400"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#f87171"></i>Sin stock</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">17</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">CF050403</td>
-            <td class="px-3 py-2 text-sub">STEPHEN WALLET CAPTAIN FIN</td>
-            <td class="px-3 py-2 text-center text-sub">02</td>
-            <td class="px-3 py-2 text-center text-sub">U</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
-            <td class="px-3 py-2 text-center tabular-nums font-semibold text-red-400">0</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-sub">—</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-red-400"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#f87171"></i>Sin stock</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">18</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">CF147305</td>
-            <td class="px-3 py-2 text-sub">CAMISA LEÑADORA CAPTAIN FIN NOBHIUS FLANNEL</td>
-            <td class="px-3 py-2 text-center text-sub">03</td>
-            <td class="px-3 py-2 text-center text-sub">L</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
-            <td class="px-3 py-2 text-center tabular-nums font-semibold text-red-400">0</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-sub">—</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-red-400"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#f87171"></i>Sin stock</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">19</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">CF050304</td>
-            <td class="px-3 py-2 text-sub">BOXER CAPTAIN FIN COOP BI-PACK</td>
-            <td class="px-3 py-2 text-center text-sub">00</td>
-            <td class="px-3 py-2 text-center text-sub">M</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
-            <td class="px-3 py-2 text-center tabular-nums font-semibold text-red-400">0</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-sub">—</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-red-400"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#f87171"></i>Sin stock</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">20</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">CF050304</td>
-            <td class="px-3 py-2 text-sub">BOXER CAPTAIN FIN COOP BI-PACK</td>
-            <td class="px-3 py-2 text-center text-sub">00</td>
-            <td class="px-3 py-2 text-center text-sub">XXL</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
-            <td class="px-3 py-2 text-center tabular-nums font-semibold text-red-400">0</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sky-400">2</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-sub">—</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-red-400"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#f87171"></i>Sin stock</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">21</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">ZH060204</td>
-            <td class="px-3 py-2 text-sub">MEDIAS MEDIA CAÑA ZIMITH LABILER BIPACK</td>
-            <td class="px-3 py-2 text-center text-sub">00</td>
-            <td class="px-3 py-2 text-center text-sub">U</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
-            <td class="px-3 py-2 text-center tabular-nums font-semibold text-red-400">0</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sky-400">3</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-sub">—</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-red-400"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#f87171"></i>Sin stock</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">22</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">ZH060402</td>
-            <td class="px-3 py-2 text-sub">TRIANGLE WALLET ZIMITH</td>
-            <td class="px-3 py-2 text-center text-sub">02</td>
-            <td class="px-3 py-2 text-center text-sub">U</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
-            <td class="px-3 py-2 text-center tabular-nums font-semibold text-red-400">0</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-sub">—</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-red-400"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#f87171"></i>Sin stock</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">23</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">ZH165106</td>
-            <td class="px-3 py-2 text-sub">REMERA ZIMITH FADED</td>
-            <td class="px-3 py-2 text-center text-sub">02</td>
-            <td class="px-3 py-2 text-center text-sub">XL</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">2</td>
-            <td class="px-3 py-2 text-center tabular-nums font-semibold text-red-400">0</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-sub">—</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-red-400"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#f87171"></i>Sin stock</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">24</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">ZH165912</td>
-            <td class="px-3 py-2 text-sub">CHARLES BOXY T-SHIRT ZIMITH</td>
-            <td class="px-3 py-2 text-center text-sub">10</td>
-            <td class="px-3 py-2 text-center text-sub">L</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">1</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">1</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sky-400">1</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">1</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">25</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">ZH169201</td>
-            <td class="px-3 py-2 text-sub">CAMPERA ZIMITH CHILLING</td>
-            <td class="px-3 py-2 text-center text-sub">10</td>
-            <td class="px-3 py-2 text-center text-sub">L</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">1</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">1</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sky-400">1</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">1</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">26</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">ZH237201</td>
-            <td class="px-3 py-2 text-sub">CAMISA ZIMITH NATHAN</td>
-            <td class="px-3 py-2 text-center text-sub">01</td>
-            <td class="px-3 py-2 text-center text-sub">XXL</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">1</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">23</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sky-400">1</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">1</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">27</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">ZH237201</td>
-            <td class="px-3 py-2 text-sub">CAMISA ZIMITH NATHAN</td>
-            <td class="px-3 py-2 text-center text-sub">02</td>
-            <td class="px-3 py-2 text-center text-sub">M</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">1</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">136</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sky-400">1</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">1</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">28</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">ZH245140</td>
-            <td class="px-3 py-2 text-sub">REMERA ZIMITH CLASSIC</td>
-            <td class="px-3 py-2 text-center text-sub">02</td>
-            <td class="px-3 py-2 text-center text-sub">L</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">1</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">57</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">1</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">29</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">ZH245141</td>
-            <td class="px-3 py-2 text-sub">REMERA ZIMITH ONE POCKET</td>
-            <td class="px-3 py-2 text-center text-sub">02</td>
-            <td class="px-3 py-2 text-center text-sub">XL</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">1</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">80</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sky-400">1</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">1</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">30</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">ZH060215</td>
-            <td class="px-3 py-2 text-sub">MEDIAS MEDIA CAÑA ZIMITH ASHER TRIPACK</td>
-            <td class="px-3 py-2 text-center text-sub">10</td>
-            <td class="px-3 py-2 text-center text-sub">U</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">1</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">653</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sky-400">5</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">1</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">31</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">ZH252111</td>
-            <td class="px-3 py-2 text-sub">PANTALON ZIMITH RUPARK CARGO</td>
-            <td class="px-3 py-2 text-center text-sub">10</td>
-            <td class="px-3 py-2 text-center text-sub">34</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">1</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">3</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">0</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">1</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
-          </tr>
-          <tr>
-            <td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">32</td>
-            <td class="whitespace-nowrap px-3 py-2 font-medium text-ink">ZH255754</td>
-            <td class="px-3 py-2 text-sub">MANIAC T-SHIRT ZIMITH</td>
-            <td class="px-3 py-2 text-center text-sub">06</td>
-            <td class="px-3 py-2 text-center text-sub">L</td>
-            <td class="px-3 py-2 text-center tabular-nums text-ink">1</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sub">19</td>
-            <td class="px-3 py-2 text-center tabular-nums text-sky-400">1</td>
-            <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">1</td>
-            <td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-emerald-500"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:#34d399"></i>Alcanza</span></td>
-          </tr>
+          <tbody id="tbody">
           </tbody>
           <tfoot>
             <tr class="text-[12px]">
-              <td class="px-3 py-2 font-semibold text-ink" colspan="6">261 SKU · 293 unidades vendidas</td>
+              <td class="px-3 py-2 font-semibold text-ink" colspan="7"><span id="count">0</span> SKU a reponer (con stock en MITO)</td>
               <td class="px-3 py-2 text-center font-bold text-sub">—</td>
               <td class="px-3 py-2 text-center font-bold text-sub">—</td>
-              <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">131</td>
-              <td class="px-3 py-2 text-center text-[11px] font-semibold text-red-400">faltan 162</td>
+              <td class="px-3 py-2 text-center font-bold tabular-nums text-emerald-500" id="totalSug">0</td>
+              <td></td>
             </tr>
           </tfoot>
         </table>
       </div>
     </div>
     <div class="mt-2 flex items-center justify-between gap-2">
-      <p class="text-[11px] text-sub">y <b class="text-ink">229</b> SKU más. Estado: <span class="text-emerald-500">Alcanza</span> · <span class="text-amber-400">Parcial</span> · <span class="text-red-400">Sin stock</span> en MITO.</p>
+      <p class="text-[11px] text-sub">Solo se muestran los SKU con <b class="text-ink">stock en MITO &gt; 0</b> y sugerido &gt; 0. Ordenados: <b>Urgente</b> (sin stock en MITO) primero, luego <b>Normal</b>.</p>
       <div class="flex gap-2">
         <button class="tabbtn">⬇ Excel</button>
         <button class="tabbtn" id="btnWsp" title="Enviar por WhatsApp los artículos sugeridos">Enviar por WhatsApp</button>
@@ -490,54 +90,54 @@
     </div>
   </div>
 
-  <p class="cap">3 · De dónde salen los datos</p>
-  <ul class="note">
-    <li><b>Venta</b>: <code>VISTAS_CONSOLIDAS.dbo.venta_franquicias</code> (CF Ushuaia). Se netean NC con <code>SIGNOMOV</code>; se excluyen vouchers (<code>VO1</code>).</li>
-    <li><b>Stock MITO</b>: <code>VISTAS_CONSOLIDAS.dbo.vw_STOCK_SKU_MITO</code>.</li>
-    <li><b>Stock cliente</b>: <code>VISTAS_CONSOLIDAS.dbo.vw_STOCK_SUCURSALES_REAL</code> donde <code>BD_ORIGEN='CAPTAIN FIN USHUAIA'</code>.</li>
-    <li>Cruce por <b>artículo + color + talle</b>.</li>
-  </ul>
-
-  <p class="cap">4 · Cómo se calcula</p>
-  <ul class="note">
-    <li><b>A reponer</b> = <code>min(vendido, stock MITO)</code>.</li>
-    <li><b>Estado</b>: Alcanza (cubre todo), Parcial (cubre parte), Sin stock (MITO sin stock).</li>
-  </ul>
-
   <script>
-    (function(){
-      const btn = document.getElementById('btnWsp');
-      if (!btn) return;
-      btn.addEventListener('click', function(){
-        const rows = Array.from(document.querySelectorAll('tbody tr'));
-        const sugeridos = rows.filter(tr => {
-          const tds = tr.querySelectorAll('td');
-          if (tds.length < 10) return false;
-          const last = tds[tds.length - 1];
-          if (last.textContent.toLowerCase().includes('sin stock')) return false;
-          const sug = tds[8].textContent.replace(/[^d]/g, '');
-          return sug !== '';
-        }).slice(0, 40);
-        let msg = 'REPOSICIÓN SUGERIDA - CF USHUAIA\nArtículos a reponer (top sugeridos con stock):\n\n';
-        sugeridos.forEach((tr, i) => {
-          const tds = tr.querySelectorAll('td');
-          if (tds.length < 10) return;
-          const art = tds[1].textContent.trim();
-          const des = tds[2].textContent.trim();
-          const col = tds[3].textContent.trim() || 'U';
-          const tal = tds[4].textContent.trim() || '-';
-          const vend = tds[5].textContent.trim();
-          const stM = tds[6].textContent.trim();
-          const stC = tds[7].textContent.trim();
-          const sug = tds[8].textContent.trim();
-          msg += (i+1)+'. '+art+' '+col+'/'+tal+' | Vend:'+vend+' | Stock MITO:'+stM+' | Stock CFU:'+stC+' | Sugerido:'+sug+' | '+des+'\n';
-        });
-        if (sugeridos.length===0) msg += '(Sin sugeridos con stock)\n';
-        msg += '\nTotal sugerido (vista): 131';
-        const url = 'https://wa.me/?text=' + encodeURIComponent(msg);
-        window.open(url, '_blank');
+    const FILAS = [{"art":"CF060202","descrip":"MEDIAS CAPTAIN FIN BROOME","color":"00","talle":"U","vendido":4,"stock":219,"stockCli":0,"sugerido":4,"faltante":0,"material":"ACCESORIOS"},{"art":"CF060203","descrip":"MEDIAS CAPTAIN FIN LOUISE","color":"00","talle":"U","vendido":4,"stock":37,"stockCli":1,"sugerido":4,"faltante":0,"material":"ACCESORIOS"},{"art":"ZH060213","descrip":"MEDIAS ZIMITH MEDIA CAÑA TREE TRIPACK","color":"06","talle":"U","vendido":4,"stock":187,"stockCli":2,"sugerido":4,"faltante":0,"material":"ACCESORIOS"},{"art":"ZH020014","descrip":"GORRO ZIMITH BROCH","color":"02","talle":"U","vendido":3,"stock":24,"stockCli":10,"sugerido":3,"faltante":0,"material":"ACCESORIOS"},{"art":"ZH051003","descrip":"RIÑONERA ZIMITH YARMIN","color":"02","talle":"U","vendido":2,"stock":90,"stockCli":1,"sugerido":2,"faltante":0,"material":"ACCESORIOS"},{"art":"CF060401","descrip":"LATER WALLET CAPTAIN FIN","color":"03","talle":"U","vendido":2,"stock":105,"stockCli":2,"sugerido":2,"faltante":0,"material":"ACCESORIOS"},{"art":"CF050302","descrip":"BOXER CAPTAIN FIN TIRSO","color":"01","talle":"L","vendido":2,"stock":194,"stockCli":1,"sugerido":2,"faltante":0,"material":"ACCESORIOS"},{"art":"CF051004","descrip":"RIÑONERA CAPTAIN FIN PAIGE","color":"00","talle":"U","vendido":2,"stock":9,"stockCli":0,"sugerido":2,"faltante":0,"material":"ACCESORIOS"},{"art":"CF162104","descrip":"JEAN CAPTAIN FIN CASSIAN BAGGY","color":"02","talle":"34","vendido":2,"stock":22,"stockCli":0,"sugerido":2,"faltante":0,"material":"PANTALONES"},{"art":"ZH060203","descrip":"MEDIAS MEDIA CAÑA ZIMITH SHOWER BIPACK","color":"00","talle":"U","vendido":2,"stock":1384,"stockCli":4,"sugerido":2,"faltante":0,"material":"ACCESORIOS"},{"art":"ZH060216","descrip":"MEDIAS MEDIA CAÑA ZIMITH CINDER TRIPACK","color":"01","talle":"U","vendido":2,"stock":499,"stockCli":3,"sugerido":2,"faltante":0,"material":"ACCESORIOS"},{"art":"ZH060018","descrip":"GORRA ZIMITH MANCHESTER","color":"02","talle":"U","vendido":2,"stock":161,"stockCli":0,"sugerido":2,"faltante":0,"material":"ACCESORIOS"},{"art":"ZH251404","descrip":"CHANCLAS ZIMITH BALANCE SLIDES","color":"01","talle":"434","vendido":2,"stock":13,"stockCli":0,"sugerido":2,"faltante":0,"material":"CALZADO"},{"art":"ZH165912","descrip":"CHARLES BOXY T-SHIRT ZIMITH","color":"10","talle":"L","vendido":1,"stock":1,"stockCli":1,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"ZH169201","descrip":"CAMPERA ZIMITH CHILLING","color":"10","talle":"L","vendido":1,"stock":1,"stockCli":1,"sugerido":1,"faltante":0,"material":"CAMPERAS"},{"art":"ZH237201","descrip":"CAMISA ZIMITH NATHAN","color":"01","talle":"XXL","vendido":1,"stock":23,"stockCli":1,"sugerido":1,"faltante":0,"material":"CAMISAS/ROMPEVIENTOS"},{"art":"ZH237201","descrip":"CAMISA ZIMITH NATHAN","color":"02","talle":"M","vendido":1,"stock":136,"stockCli":1,"sugerido":1,"faltante":0,"material":"CAMISAS/ROMPEVIENTOS"},{"art":"ZH245140","descrip":"REMERA ZIMITH CLASSIC","color":"02","talle":"L","vendido":1,"stock":57,"stockCli":0,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"ZH245141","descrip":"REMERA ZIMITH ONE POCKET","color":"02","talle":"XL","vendido":1,"stock":80,"stockCli":1,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"ZH060215","descrip":"MEDIAS MEDIA CAÑA ZIMITH ASHER TRIPACK","color":"10","talle":"U","vendido":1,"stock":653,"stockCli":5,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"ZH252111","descrip":"PANTALON ZIMITH RUPARK CARGO","color":"10","talle":"34","vendido":1,"stock":3,"stockCli":0,"sugerido":1,"faltante":0,"material":"PANTALONES"},{"art":"ZH255754","descrip":"MANIAC T-SHIRT ZIMITH","color":"06","talle":"L","vendido":1,"stock":19,"stockCli":1,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"ZH261406","descrip":"ADINETE SLIDES ZIMITH","color":"02","talle":"378","vendido":1,"stock":38,"stockCli":0,"sugerido":1,"faltante":0,"material":"CALZADO"},{"art":"ZH261406","descrip":"ADINETE SLIDES ZIMITH","color":"02","talle":"390","vendido":1,"stock":51,"stockCli":0,"sugerido":1,"faltante":0,"material":"CALZADO"},{"art":"ZH261406","descrip":"ADINETE SLIDES ZIMITH","color":"02","talle":"434","vendido":1,"stock":38,"stockCli":1,"sugerido":1,"faltante":0,"material":"CALZADO"},{"art":"ZH261407","descrip":"BAND SLIDES ZIMITH","color":"03","talle":"390","vendido":1,"stock":62,"stockCli":0,"sugerido":1,"faltante":0,"material":"CALZADO"},{"art":"ZH261407","descrip":"BAND SLIDES ZIMITH","color":"03","talle":"412","vendido":1,"stock":45,"stockCli":1,"sugerido":1,"faltante":0,"material":"CALZADO"},{"art":"ZH265102","descrip":"HOLIDAY T-SHIRT ZIMITH","color":"04","talle":"L","vendido":1,"stock":1,"stockCli":0,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"ZH265129","descrip":"CONTEM T-SHIRT ZIMITH","color":"02","talle":"M","vendido":1,"stock":41,"stockCli":0,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"ZH265129","descrip":"CONTEM T-SHIRT ZIMITH","color":"02","talle":"S","vendido":1,"stock":15,"stockCli":0,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"ZH265129","descrip":"CONTEM T-SHIRT ZIMITH","color":"02","talle":"XXL","vendido":1,"stock":7,"stockCli":0,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"ZH265131","descrip":"CANE T-SHIRT ZIMITH","color":"10","talle":"XL","vendido":1,"stock":12,"stockCli":0,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"ZH265701","descrip":"ARDILES OVERSIZE T-SHIRT ZIMITH","color":"02","talle":"L","vendido":1,"stock":8,"stockCli":0,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"ZH265701","descrip":"ARDILES OVERSIZE T-SHIRT ZIMITH","color":"02","talle":"S","vendido":1,"stock":21,"stockCli":0,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"ZH265708","descrip":"SHAPES OVERSIZE T-SHIRT ZIMITH","color":"01","talle":"S","vendido":1,"stock":19,"stockCli":0,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"ZH265708","descrip":"SHAPES OVERSIZE T-SHIRT ZIMITH","color":"01","talle":"XL","vendido":1,"stock":31,"stockCli":0,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"ZH265708","descrip":"SHAPES OVERSIZE T-SHIRT ZIMITH","color":"01","talle":"XXL","vendido":1,"stock":17,"stockCli":0,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"ZH266201","descrip":"SKYLE PB SLEEVELESS HOODIE ZIMITH","color":"02","talle":"S","vendido":1,"stock":11,"stockCli":0,"sugerido":1,"faltante":0,"material":"BUZOS"},{"art":"ZN165707","descrip":"REMERA ZIMITH OFFLINE OVERSIZE KID","color":"02","talle":"10","vendido":1,"stock":17,"stockCli":0,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"ZN265101","descrip":"BRANDY KID T-SHIRT ZIMITH","color":"02","talle":"14","vendido":1,"stock":50,"stockCli":0,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"ZN265101","descrip":"BRANDY KID T-SHIRT ZIMITH","color":"02","talle":"16","vendido":1,"stock":35,"stockCli":0,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"ZN265705","descrip":"RAW OVERSIZE KID T-SHIRT ZIMITH","color":"F2","talle":"16","vendido":1,"stock":17,"stockCli":0,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"ZH060018","descrip":"GORRA ZIMITH MANCHESTER","color":"03","talle":"U","vendido":1,"stock":94,"stockCli":0,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"ZH060023","descrip":"GORRA ZIMITH YORK","color":"07","talle":"U","vendido":1,"stock":210,"stockCli":0,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"ZH060024","descrip":"GORRA ZIMITH OXFORD","color":"02","talle":"U","vendido":1,"stock":97,"stockCli":1,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"ZH060025","descrip":"GORRA ZIMITH CAMBRIDGE","color":"05","talle":"U","vendido":1,"stock":147,"stockCli":1,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"ZH060025","descrip":"GORRA ZIMITH CAMBRIDGE","color":"06","talle":"U","vendido":1,"stock":158,"stockCli":1,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"ZH060026","descrip":"GORRA ZIMITH LIVERPOOL","color":"10","talle":"U","vendido":1,"stock":224,"stockCli":0,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"ZH060026","descrip":"GORRA ZIMITH LIVERPOOL","color":"14","talle":"U","vendido":1,"stock":252,"stockCli":0,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"ZH060402","descrip":"TRIANGLE WALLET ZIMITH","color":"10","talle":"U","vendido":1,"stock":19,"stockCli":2,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"ZH060404","descrip":"SQUIZ WALLET ZIMITH","color":"03","talle":"U","vendido":1,"stock":53,"stockCli":3,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"ZH060405","descrip":"RITEND CARD HOLDER ZIMITH","color":"02","talle":"U","vendido":1,"stock":75,"stockCli":0,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"ZH061008","descrip":"ALLIUM CROSSBODY BAG ZIMITH","color":"02","talle":"U","vendido":1,"stock":104,"stockCli":0,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"ZH152506","descrip":"JOGGING ZIMITH TRAIN","color":"04","talle":"32","vendido":1,"stock":46,"stockCli":1,"sugerido":1,"faltante":0,"material":"PANTALONES"},{"art":"ZH159501","descrip":"CAMPERA  ZIMITH QUARTER JACKET","color":"03","talle":"L","vendido":1,"stock":3,"stockCli":3,"sugerido":1,"faltante":0,"material":"CAMPERAS"},{"art":"ZH162102","descrip":"JEAN ZIMITH TINER BAGGY","color":"04","talle":"32","vendido":1,"stock":20,"stockCli":1,"sugerido":1,"faltante":0,"material":"PANTALONES"},{"art":"ZH162108","descrip":"JEAN ZIMITH CURLY STRAIGHT","color":"02","talle":"34","vendido":1,"stock":34,"stockCli":1,"sugerido":1,"faltante":0,"material":"PANTALONES"},{"art":"ZH162206","descrip":"PANTALON ZIMITH MARKO GABARDINA","color":"02","talle":"34","vendido":1,"stock":3,"stockCli":1,"sugerido":1,"faltante":0,"material":"PANTALONES"},{"art":"ZH165102","descrip":"REMERA ZIMITH AWAKEN","color":"02","talle":"XL","vendido":1,"stock":13,"stockCli":1,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"CF162205","descrip":"PANTALON CAPTAIN FIN COLLEGE","color":"10","talle":"34","vendido":1,"stock":1,"stockCli":1,"sugerido":1,"faltante":0,"material":"PANTALONES"},{"art":"CF165101","descrip":"REMERA UV CAPTAIN FIN SOLSTICIE LYCRA","color":"02","talle":"M","vendido":1,"stock":72,"stockCli":1,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"CF165101","descrip":"REMERA UV CAPTAIN FIN SOLSTICIE LYCRA","color":"02","talle":"XXL","vendido":1,"stock":40,"stockCli":0,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"CF165101","descrip":"REMERA UV CAPTAIN FIN SOLSTICIE LYCRA","color":"10","talle":"L","vendido":1,"stock":8,"stockCli":0,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"CF165101","descrip":"REMERA UV CAPTAIN FIN SOLSTICIE LYCRA","color":"10","talle":"M","vendido":1,"stock":11,"stockCli":0,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"CF165705","descrip":"JOKER T-SHIRT CAPTAIN FIN","color":"02","talle":"M","vendido":1,"stock":5,"stockCli":0,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"CF165811","descrip":"SKI CREAM T-SHIRT CAPTAIN FIN","color":"01","talle":"L","vendido":1,"stock":29,"stockCli":0,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"CF165908","descrip":"WILD NATURE CAPTAIN FIN","color":"06","talle":"M","vendido":1,"stock":10,"stockCli":0,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"CF166801","descrip":"TEBI CREW MC CAPTAIN FIN","color":"02","talle":"M","vendido":1,"stock":2,"stockCli":0,"sugerido":1,"faltante":0,"material":"BUZOS"},{"art":"CF169506","descrip":"CAMPERA DE NIEVE CAPTAIN FIN  BIRKIN","color":"02","talle":"XL","vendido":1,"stock":1,"stockCli":2,"sugerido":1,"faltante":0,"material":"CAMPERAS"},{"art":"CF249501","descrip":"CAMPERA ROMPEVIENTO CAPTAIN FIN KENYA WINDBRAKER","color":"07","talle":"M","vendido":1,"stock":11,"stockCli":1,"sugerido":1,"faltante":0,"material":"CAMPERAS"},{"art":"CF252201","descrip":"PANTALON CAPTAIN FIN RIBEST CARGO","color":"02","talle":"34","vendido":1,"stock":10,"stockCli":1,"sugerido":1,"faltante":0,"material":"PANTALONES"},{"art":"CF252504","descrip":"JOGGING DEPORTIVO CAPTAIN FIN DALLAS ACTIVE","color":"02","talle":"M","vendido":1,"stock":27,"stockCli":1,"sugerido":1,"faltante":0,"material":"PANTALONES"},{"art":"CF255601","descrip":"MUSCULOSA DEPORTIVA CAPTAIN FIN BRADY ACTIVE","color":"02","talle":"XL","vendido":1,"stock":14,"stockCli":1,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"CF255718","descrip":"REMERA CAPTAIN FIN CONNECT OVERSIZE","color":"01","talle":"L","vendido":1,"stock":34,"stockCli":1,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"CF255727","descrip":"REMERA CAPTAIN FIN TACKLE SHOP FULL OVERSIZE","color":"02","talle":"S","vendido":1,"stock":25,"stockCli":0,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"CF265118","descrip":"SURFING VIBES T-SHIRT CAPTAIN FIN","color":"01","talle":"M","vendido":1,"stock":37,"stockCli":0,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"CF265815","descrip":"RIDE YOUR WAVE TSHIRT CAPTAIN FIN","color":"01","talle":"3XL","vendido":1,"stock":24,"stockCli":0,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"CF265815","descrip":"RIDE YOUR WAVE TSHIRT CAPTAIN FIN","color":"01","talle":"S","vendido":1,"stock":28,"stockCli":0,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"CF265817","descrip":"GONE FISHING T-SHIRT CAPTAIN FIN","color":"06","talle":"L","vendido":1,"stock":3,"stockCli":0,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"CJ252101","descrip":"YACARD STRAIGHT JEAN JR CAPTAIN FIN","color":"04","talle":"16","vendido":1,"stock":3,"stockCli":1,"sugerido":1,"faltante":0,"material":"PANTALONES"},{"art":"CJ265102","descrip":"ELIO JR T-SHIRT CAPTAIN FIN","color":"01","talle":"14","vendido":1,"stock":12,"stockCli":0,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"CJ265102","descrip":"ELIO JR T-SHIRT CAPTAIN FIN","color":"01","talle":"16","vendido":1,"stock":42,"stockCli":0,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"CJ265702","descrip":"HELM FIN JR T-SHIRT CAPTAIN FIN","color":"04","talle":"16","vendido":1,"stock":19,"stockCli":0,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"CJ265901","descrip":"ZANE BAXY CAPTAIN FIN","color":"01","talle":"10","vendido":1,"stock":7,"stockCli":0,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"CJ265901","descrip":"ZANE BAXY CAPTAIN FIN","color":"01","talle":"12","vendido":1,"stock":5,"stockCli":0,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"CF051210","descrip":"MOCHILA CAPTAIN FIN KOI","color":"00","talle":"U","vendido":1,"stock":88,"stockCli":1,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"CF051212","descrip":"MOCHILA CAPTAIN FIN LUKE","color":"00","talle":"U","vendido":1,"stock":57,"stockCli":0,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"CF060031","descrip":"GORRA CAPTAIN FIN SURF PARADISE","color":"06","talle":"U","vendido":1,"stock":165,"stockCli":1,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"CF060034","descrip":"GORRA CAPTAIN FIN COAST","color":"02","talle":"U","vendido":1,"stock":426,"stockCli":1,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"CF060034","descrip":"GORRA CAPTAIN FIN COAST","color":"10","talle":"U","vendido":1,"stock":256,"stockCli":1,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"CF060040","descrip":"GORRA CAPTAIN FIN WILD AIR","color":"02","talle":"U","vendido":1,"stock":246,"stockCli":0,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"CF050305","descrip":"BOXER CAPTAIN FIN MURPH","color":"02","talle":"L","vendido":1,"stock":146,"stockCli":11,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"CF050305","descrip":"BOXER CAPTAIN FIN MURPH","color":"02","talle":"M","vendido":1,"stock":340,"stockCli":9,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"CF050305","descrip":"BOXER CAPTAIN FIN MURPH","color":"02","talle":"XL","vendido":1,"stock":127,"stockCli":8,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"CF050302","descrip":"BOXER CAPTAIN FIN TIRSO","color":"02","talle":"M","vendido":1,"stock":251,"stockCli":10,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"CF050302","descrip":"BOXER CAPTAIN FIN TIRSO","color":"02","talle":"XL","vendido":1,"stock":249,"stockCli":9,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"CF006102","descrip":"ZAPATILLAS CAPTAIN FIN BERLIN BROWN","color":"00","talle":"36","vendido":1,"stock":2,"stockCli":0,"sugerido":1,"faltante":0,"material":"CALZADO"},{"art":"CF050003","descrip":"GORRO CAPTAIN FIN MOPET","color":"03","talle":"U","vendido":1,"stock":2,"stockCli":2,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"CF050017","descrip":"GORRA CAPTAIN FIN ASTOR","color":"03","talle":"U","vendido":1,"stock":116,"stockCli":1,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"CF147305","descrip":"CAMISA LEÑADORA CAPTAIN FIN NOBHIUS FLANNEL","color":"03","talle":"M","vendido":1,"stock":20,"stockCli":1,"sugerido":1,"faltante":0,"material":"CAMISAS/ROMPEVIENTOS"},{"art":"CF061001","descrip":"RILEY FANNYPACK CAPTAIN FIN","color":"02","talle":"U","vendido":1,"stock":280,"stockCli":1,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"CF061001","descrip":"RILEY FANNYPACK CAPTAIN FIN","color":"06","talle":"U","vendido":1,"stock":278,"stockCli":1,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"CF061004","descrip":"EDEN FANNYPACK CAPTAIN FIN","color":"12","talle":"U","vendido":1,"stock":157,"stockCli":1,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"ZH051004","descrip":"RIÑONERA ZIMITH MOODY","color":"02","talle":"U","vendido":1,"stock":119,"stockCli":1,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"ZH051216","descrip":"MOCHILA ZIMITH ROCHER","color":"02","talle":"U","vendido":1,"stock":92,"stockCli":0,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"ZH060017","descrip":"GORRA ZIMITH ENGLAND","color":"10","talle":"U","vendido":1,"stock":156,"stockCli":1,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"CF135101","descrip":"REMERA CAPTAIN FIN ORIGINAL ANCHOR COLORS","color":"14","talle":"XXL","vendido":1,"stock":1,"stockCli":1,"sugerido":1,"faltante":0,"material":"REMERAS"},{"art":"ZH020018","descrip":"GORRO ZIMITH JOYES","color":"02","talle":"U","vendido":1,"stock":5,"stockCli":13,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"ZH050302","descrip":"CALZONCILLO SLIP TRI-PACK ZIMITH DYER","color":"02","talle":"L","vendido":1,"stock":348,"stockCli":1,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"ZH050306","descrip":"BOXER ZIMITH KOLF BI-PACK","color":"00","talle":"M","vendido":1,"stock":340,"stockCli":0,"sugerido":1,"faltante":0,"material":"ACCESORIOS"},{"art":"ZH051002","descrip":"RIÑONERA ZIMITH MOXI","color":"02","talle":"U","vendido":1,"stock":112,"stockCli":3,"sugerido":1,"faltante":0,"material":"ACCESORIOS"}];
+    const n0f = (n) => new Intl.NumberFormat('es-AR').format(n);
+    const estadoF = (f) => {
+      if (f.stock <= 0) return { txt: 'Urgente', cls: 'text-red-500', dot: '#ef4444' };
+      if (f.stock < f.vendido) return { txt: 'Normal', cls: 'text-amber-400', dot: '#fbbf24' };
+      return { txt: 'Normal', cls: 'text-emerald-500', dot: '#34d399' };
+    };
+    function render() {
+      const sel = document.getElementById('selMat').value;
+      let list = FILAS;
+      if (sel) list = FILAS.filter(f => f.material === sel);
+      const tbody = document.getElementById('tbody');
+      tbody.innerHTML = list.slice(0, 40).map((f,i)=>{
+        const e = estadoF(f);
+        const stCli = f.stockCli > 0 ? n0f(f.stockCli) : (f.stockCli === 0 ? '0' : '—');
+        return '<tr data-art="'+f.art+'">'+
+          '<td class="whitespace-nowrap px-3 py-2 text-[11px] text-sub tabular-nums">'+(i+1)+'</td>'+
+          '<td class="whitespace-nowrap px-3 py-2 font-medium text-ink">'+f.art+'</td>'+
+          '<td class="px-3 py-2 text-sub">'+(f.descrip||'—')+'</td>'+
+          '<td class="px-3 py-2 text-sub">'+(f.material||'—')+'</td>'+
+          '<td class="px-3 py-2 text-center text-sub">'+(f.color||'U')+'</td>'+
+          '<td class="px-3 py-2 text-center text-sub">'+(f.talle||'—')+'</td>'+
+          '<td class="px-3 py-2 text-center tabular-nums text-ink">'+n0f(f.vendido)+'</td>'+
+          '<td class="px-3 py-2 text-center tabular-nums '+(f.stock<=0?'font-semibold text-red-400':'text-sub')+'">'+n0f(f.stock)+'</td>'+
+          '<td class="px-3 py-2 text-center tabular-nums '+(f.stockCli===0?'text-sub':'text-sky-400')+'">'+stCli+'</td>'+
+          '<td class="px-3 py-2 text-center font-bold tabular-nums '+(f.sugerido>0?'text-emerald-500':'text-sub')+'">'+(f.sugerido>0?n0f(f.sugerido):'—')+'</td>'+
+          '<td class="px-3 py-2 text-center"><span class="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold '+e.cls+'"><i style="display:inline-block;width:7px;height:7px;border-radius:999px;background:'+e.dot+'"></i>'+e.txt+'</span></td>'+
+          '</tr>';
+      }).join('');
+      document.getElementById('count').textContent = n0f(list.length);
+      document.getElementById('totalSug').textContent = n0f(list.reduce((s,f)=>s+f.sugerido,0));
+    }
+    document.getElementById('selMat').addEventListener('change', render);
+    render();
+    document.getElementById('btnWsp').addEventListener('click', function(){
+      const sel = document.getElementById('selMat').value;
+      let list = FILAS;
+      if (sel) list = FILAS.filter(f => f.material === sel);
+      const sugeridos = list.slice(0, 40);
+      let msg = 'REPOSICIÓN SUGERIDA - CF USHUAIA\nArtículos para reponer (solo con stock en MITO)'+(sel? ' - Material: '+sel : '')+':\n\n';
+      sugeridos.forEach((f,i)=>{
+        msg += (i+1)+'. '+f.art+' '+(f.color||'U')+'/'+(f.talle||'-')+' | Vend:'+f.vendido+' | Stock MITO:'+f.stock+' | Stock CFU:'+(f.stockCli||0)+' | Sug.reposición:'+f.sugerido+' | Estado:'+(f.stock<=0?'Urgente':(f.stock<f.vendido?'Normal':'Normal'))+' | Mat:'+f.material+' | '+(f.descrip||'')+'\n';
       });
-    })();
+      if (sugeridos.length===0) msg += '(Sin sugeridos con stock en MITO)\n';
+      msg += '\nTotal sugerencia reposición: '+sugeridos.reduce((s,f)=>s+f.sugerido,0);
+      window.open('https://wa.me/?text='+encodeURIComponent(msg), '_blank');
+    });
   </script>
 </div>
 </body>
