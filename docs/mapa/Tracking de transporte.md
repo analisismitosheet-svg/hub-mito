@@ -13,6 +13,8 @@
 ## Avisos que suenan (ubicación cortada)
 pg_cron `tracking-avisos-ubicacion` cada 2 min llama a `api/tracking?vista=alertas`: a cada vehículo vinculado a un chofer que lleva **3 min** sin ubicación, en jornada (lunes a sábado 6-21 h y solo si el chofer ya escaneó algo hoy), le manda una notificación push que suena y vibra, repetida cada 2 min (`tracking_vehiculos.ultimo_aviso`). Suscripciones en `tracking_push` (las registra `AvisosUbicacion.tsx` de la app Transporte con `?vista=push`; el service worker la muestra con `public/push-sw.js`, importado por Workbox). Usa las mismas claves VAPID que `api/push.ts`. En 🚚 Vehículos se ve si el chofer tiene «🔔 avisos activados».
 
+**Candado del mapa**: «Fijar zona» guarda la zona visible (localStorage `tracking-vista-fija`, por navegador); el mapa abre ahí y no se auto-encuadra. «Volver a la zona» la recentra; tocar el candado la suelta.
+
 ## Estados en la lista
 En ruta (≥5 km/h, ubicación < 5 min) · Detenido · Sin señal (> 15 min) · Sin GPS (chofer sin vehículo).
 

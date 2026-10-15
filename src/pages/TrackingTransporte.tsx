@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDown, ChevronLeft, ChevronRight, Loader2, MapPin, RefreshCw, Truck, X } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, Lock, Unlock, Loader2, MapPin, RefreshCw, Truck, X } from 'lucide-react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import Layout from '@/components/Layout'
@@ -71,19 +71,31 @@ interface EventoDia {
   lugar?: string
 }
 
-/** Una línea por hora: cuántos cargó, cuántos entregó y dónde, locales obligatorios. */
+/**
+ * Una línea por hora, en el orden en que pasaron las cosas (siempre por hora, no por tipo):
+ * los eventos seguidos del mismo tipo se juntan (ej. 11:06 Cargó 42 · 11:23 Entregó 66 en LIBED · 11:28 Cargó 18).
+ */
 function resumenHora(items: EventoDia[]): { partes: string[]; color: string } {
-  const suma = (t: EventoDia['tipo']) => items.filter((e) => e.tipo === t).reduce((a, e) => a + (e.n ?? 0), 0)
-  const lugares = (t: EventoDia['tipo']) => [...new Set(items.filter((e) => e.tipo === t).map((e) => e.lugar ?? '?'))]
-  const partes: string[] = []
-  const cargo = suma('carga')
-  const entrego = suma('entrega')
-  if (cargo) partes.push(`📦 Cargó ${cargo}`)
-  if (entrego) partes.push(`✅ Entregó ${entrego} en ${lugares('entrega').join(', ')}`)
-  if (lugares('paso').length) partes.push(`🏪 Pasó por ${lugares('paso').join(', ')}`)
-  if (lugares('nopaso').length) partes.push(`⚠ No pasó por ${lugares('nopaso').join(', ')}`)
-  if (items.some((e) => e.tipo === 'ubic')) partes.push('📍 Última ubicación')
-  const color = lugares('nopaso').length ? '#ef4444' : entrego ? '#22c55e' : cargo ? '#38bdf8' : items[items.length - 1].color
+  const tramos: { tipo: EventoDia['tipo']; at: string; n: number; lugares: string[] }[] = []
+  for (const e of items) {
+    const t = tramos[tramos.length - 1]
+    if (t && t.tipo === e.tipo && e.tipo !== 'ubic') {
+      t.n += e.n ?? 0
+      if (e.lugar && !t.lugares.includes(e.lugar)) t.lugares.push(e.lugar)
+    } else {
+      tramos.push({ tipo: e.tipo, at: e.at, n: e.n ?? 0, lugares: e.lugar ? [e.lugar] : [] })
+    }
+  }
+  const texto: Record<EventoDia['tipo'], (t: (typeof tramos)[number]) => string> = {
+    carga: (t) => `📦 Cargó ${t.n}`,
+    entrega: (t) => `✅ Entregó ${t.n} en ${t.lugares.join(', ')}`,
+    paso: (t) => `🏪 Pasó por ${t.lugares.join(', ')}`,
+    nopaso: (t) => `⚠ No pasó por ${t.lugares.join(', ')}`,
+    ubic: () => '📍 Última ubicación',
+  }
+  const partes = tramos.map((t) => `${tramos.length > 1 ? `${hora(t.at)} ` : ''}${texto[t.tipo](t)}`)
+  const hay = (tipo: EventoDia['tipo']) => items.some((e) => e.tipo === tipo)
+  const color = hay('nopaso') ? '#ef4444' : hay('entrega') ? '#22c55e' : hay('carga') ? '#38bdf8' : items[items.length - 1].color
   return { partes, color }
 }
 
@@ -94,6 +106,18 @@ const COLORES = ['#2563eb', '#db2777', '#16a34a', '#ea580c', '#7c3aed', '#0891b2
 const CENTRO: L.LatLngTuple = [-31.4167, -64.1833]
 const URL_INGESTA = 'https://hub-mito.vercel.app/api/tracking'
 const DIAS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'] // 1 = lunes … 7 = domingo
+
+/** Vista fija del mapa (candado): la zona que el usuario quiere ver siempre. Se guarda en este navegador. */
+interface VistaFija { lat: number; lng: number; zoom: number }
+const CLAVE_VISTA = 'tracking-vista-fija'
+function leerVistaFija(): VistaFija | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(CLAVE_VISTA) ?? 'null') as VistaFija | null
+    return v && Number.isFinite(v.lat) && Number.isFinite(v.lng) && Number.isFinite(v.zoom) ? v : null
+  } catch {
+    return null
+  }
+}
 // Buscador de direcciones de OpenStreetMap (gratis, máx. 1 búsqueda por segundo); prioriza Córdoba
 const NOMINATIM = 'https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=ar&limit=5&accept-language=es&viewbox=-64.40,-31.25,-63.95,-31.55'
 
@@ -359,7 +383,8 @@ export default function TrackingTransporte() {
 
   useEffect(() => {
     if (!divMapa.current || mapa.current) return
-    const m = L.map(divMapa.current, { zoomControl: true }).setView(CENTRO, 12)
+    const fija = leerVistaFija()
+    const m = L.map(divMapa.current, { zoomControl: true }).setView(fija ? [fija.lat, fija.lng] : CENTRO, fija?.zoom ?? 12)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(m)
     capa.current = L.layerGroup().addTo(m)
     m.on('click', (e: L.LeafletMouseEvent) => {
@@ -373,6 +398,25 @@ export default function TrackingTransporte() {
   }, [])
 
   const encuadrado = useRef<string>('')
+  const [vistaFija, setVistaFija] = useState<VistaFija | null>(leerVistaFija)
+  const vistaFijaRef = useRef(vistaFija)
+  vistaFijaRef.current = vistaFija
+
+  function alternarCandado() {
+    const m = mapa.current
+    if (!m) return
+    if (vistaFija) {
+      try { localStorage.removeItem(CLAVE_VISTA) } catch { /* sin storage */ }
+      setVistaFija(null)
+      encuadrado.current = '' // vuelve a encuadrar a todos
+      setTick((x) => x + 1)
+      return
+    }
+    const c = m.getCenter()
+    const v = { lat: c.lat, lng: c.lng, zoom: m.getZoom() }
+    try { localStorage.setItem(CLAVE_VISTA, JSON.stringify(v)) } catch { /* sin storage: vale mientras la pantalla esté abierta */ }
+    setVistaFija(v)
+  }
   useEffect(() => {
     const m = mapa.current
     const g = capa.current
@@ -422,12 +466,13 @@ export default function TrackingTransporte() {
       bounds = bounds ? bounds.extend(linea.getBounds()) : linea.getBounds()
     }
     // encuadrar a todos solo al cambiar de día o cuando aparece otro vehículo (no en cada refresco)
+    // (con el candado puesto el mapa se queda en la zona fija)
     const clave = `${fecha}|${conGps}`
-    if (bounds && encuadrado.current !== clave) {
+    if (bounds && encuadrado.current !== clave && !vistaFijaRef.current) {
       m.fitBounds(bounds.pad(0.3), { maxZoom: 15 })
       encuadrado.current = clave
     }
-  }, [controlesDe, basesUbic, moviles, ubicsDe, sel, actual, resumen, tr, esHoy, fecha, vencido, modo])
+  }, [controlesDe, basesUbic, moviles, ubicsDe, sel, actual, resumen, tr, esHoy, fecha, vencido, modo, vistaFija])
 
   // ----- gestión -----
   async function guardarBase(base_id: string, lat: number, lng: number) {
@@ -535,8 +580,25 @@ export default function TrackingTransporte() {
             </div>
           )}
           {/* La clase del div del mapa no puede cambiar: React le pisaría las clases que agrega Leaflet */}
-          <div className={modo ? '[&_.leaflet-container]:cursor-crosshair' : ''}>
+          <div className={`relative ${modo ? '[&_.leaflet-container]:cursor-crosshair' : ''}`}>
             <div ref={divMapa} className="h-[75vh] min-h-[520px] w-full overflow-hidden rounded-xl border border-line" style={{ zIndex: 0 }} />
+            <button
+              onClick={alternarCandado}
+              className={`absolute right-3 top-3 z-[500] inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold shadow-soft ${vistaFija ? 'bg-amber-500 text-white' : 'bg-white text-slate-800'}`}
+              title={vistaFija ? 'Soltar: el mapa vuelve a encuadrar a todos los vehículos' : 'Fijar esta zona: el mapa siempre abre acá'}
+            >
+              {vistaFija ? <Lock size={14} /> : <Unlock size={14} />}
+              {vistaFija ? 'Zona fija' : 'Fijar zona'}
+            </button>
+            {vistaFija && (
+              <button
+                onClick={() => mapa.current?.setView([vistaFija.lat, vistaFija.lng], vistaFija.zoom)}
+                className="absolute right-3 top-14 z-[500] rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 shadow-soft"
+                title="Volver a la zona fija"
+              >
+                ↺ Volver a la zona
+              </button>
+            )}
           </div>
           <p className="mt-2 text-xs text-sub">
             Todos los vehículos juntos (el elegido, más grueso) · línea = recorrido del día · 🏪 = locales · círculo = local obligatorio del vehículo elegido (verde pasó, amarillo pendiente, rojo no pasó).
