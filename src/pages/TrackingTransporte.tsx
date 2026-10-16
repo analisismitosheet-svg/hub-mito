@@ -240,6 +240,13 @@ export default function TrackingTransporte() {
     return () => clearInterval(t)
   }, [esHoy, cargarHub, cargarTransporte])
 
+  // Color del vehículo en el mapa (se cambia tocando el punto de color de su tarjeta)
+  async function cambiarColor(v: Vehiculo, color: string) {
+    const { error } = await supabase.from('tracking_vehiculos').update({ color }).eq('id', v.id)
+    if (error) return alert(error.message)
+    void cargarHub()
+  }
+
   // ----- armado de la lista -----
   const moviles = useMemo<Movil[]>(() => {
     const out: Movil[] = vehiculos.filter((v) => v.activo).map((v) => ({
@@ -541,10 +548,19 @@ export default function TrackingTransporte() {
               const psOk = ps.filter((c) => c.paso_at).length
               const psMal = ps.filter((c) => !c.paso_at && vencido(c)).length
               return (
-                <button key={mv.key} onClick={() => setSel(mv.key)}
-                  className={`w-full rounded-xl border p-2.5 text-left transition ${sel === mv.key ? 'border-sky-500 bg-sky-500/10' : 'border-line hover:bg-surface2'}`}>
+                <div key={mv.key} role="button" tabIndex={0} onClick={() => setSel(mv.key)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSel(mv.key) } }}
+                  className={`w-full cursor-pointer rounded-xl border p-2.5 text-left transition ${sel === mv.key ? 'border-sky-500 bg-sky-500/10' : 'border-line hover:bg-surface2'}`}>
                   <div className="flex items-center gap-2 font-semibold text-ink">
-                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: mv.color }} />
+                    {gestiona && mv.vehiculo ? (
+                      <label className="relative h-4 w-4 shrink-0 cursor-pointer rounded-full ring-2 ring-white/40" style={{ background: mv.color }}
+                        title="Cambiar el color en el mapa" onClick={(e) => e.stopPropagation()}>
+                        <input type="color" value={mv.color} onChange={(e) => void cambiarColor(mv.vehiculo!, e.target.value)}
+                          className="absolute inset-0 h-full w-full cursor-pointer opacity-0" aria-label={`Color de ${mv.nombre}`} />
+                      </label>
+                    ) : (
+                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: mv.color }} />
+                    )}
                     <span className="truncate">{mv.nombre}</span>
                   </div>
                   <div className="mt-1 text-xs">
@@ -570,7 +586,7 @@ export default function TrackingTransporte() {
                       ))}
                     </div>
                   )}
-                </button>
+                </div>
               )
             })}
           </div>
