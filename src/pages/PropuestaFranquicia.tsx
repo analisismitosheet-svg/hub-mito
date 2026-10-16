@@ -147,7 +147,7 @@ export default function PropuestaFranquicia() {
                 const v = si[i.id]
                 const c = cant[i.id] ?? 0
                 return (
-                  <li key={i.id} className={`rounded-2xl border-[1.5px] bg-white p-3 transition ${v === true ? 'border-emerald-500 bg-emerald-50' : v === false ? 'border-neutral-200 opacity-50' : 'border-neutral-200'}`}>
+                  <li key={i.id} className={`rounded-2xl border-[1.5px] p-3 transition ${v === true ? 'border-emerald-500 bg-emerald-50' : v === false ? 'border-neutral-200 bg-white opacity-50' : 'border-neutral-200 bg-white'}`}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="text-sm font-bold">{i.art}</p>
