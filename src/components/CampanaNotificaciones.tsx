@@ -360,10 +360,10 @@ export default function CampanaNotificaciones() {
       }
       // 5b) Franquicias que confirmaron su propuesta y nadie la miró todavía (si no tiene permiso, RLS no devuelve nada)
       if (esMayorista || isAdmin) {
-        const { data } = await sb.from('franquicias_propuestas').select('id,numero,franquicia_nombre,unidades_confirmadas,confirmada_at').eq('estado', 'confirmada').is('revisada_at', null)
+        const { data } = await sb.from('franquicias_propuestas').select('id,numero,franquicia_nombre,unidades_confirmadas,confirmada_at,dragon_pedido').in('estado', ['confirmada', 'en_dragon']).is('revisada_at', null)
         if (activo && data) {
-          for (const p of data as { id: string; numero: string; franquicia_nombre: string; unidades_confirmadas: number | null; confirmada_at: string }[]) {
-            notis.push({ id: `fq-${p.id}`, tipo: 'franquicias', titulo: `${p.franquicia_nombre} confirmó su pedido`, detalle: `${p.numero} · ${p.unidades_confirmadas ?? 0} u.`, ruta: '/mayorista/franquicias', fecha: p.confirmada_at, destinoId: p.id })
+          for (const p of data as { id: string; numero: string; franquicia_nombre: string; unidades_confirmadas: number | null; confirmada_at: string; dragon_pedido: string | null }[]) {
+            notis.push({ id: `fq-${p.id}`, tipo: 'franquicias', titulo: `${p.franquicia_nombre} confirmó su pedido`, detalle: `${p.numero} · ${p.unidades_confirmadas ?? 0} u.${p.dragon_pedido ? ` · pedido Dragon ${p.dragon_pedido}` : ''}`, ruta: '/mayorista/franquicias', fecha: p.confirmada_at, destinoId: p.id })
           }
         }
       }

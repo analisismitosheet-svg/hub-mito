@@ -43,6 +43,10 @@ interface Propuesta {
   abierta_at: string | null
   confirmada_at: string | null
   revisada_at: string | null
+  dragon_pedido: string | null
+  dragon_error: string | null
+  dragon_enviando_at: string | null
+  dragon_intentos: number
   creado_at: string
 }
 interface ItemGuardado { id: number; art: string; descrip: string | null; color: string | null; talle: string | null; sugerido: number; precio: number | null; elegido: boolean | null; cantidad: number | null }
@@ -53,7 +57,10 @@ const fmtFecha = (iso: string | null) => (iso ? new Intl.DateTimeFormat('es-AR',
 const linkDe = (token: string) => `${window.location.origin}/p/${token}`
 
 function chipEstado(p: Propuesta) {
-  if (p.estado === 'confirmada' || p.estado === 'en_dragon') return { txt: p.estado === 'en_dragon' ? 'En Dragon' : 'Confirmada', cls: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400' }
+  if (p.estado === 'en_dragon') return { txt: `En Dragon · pedido ${p.dragon_pedido ?? ''}`.trim(), cls: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400' }
+  if (p.estado === 'confirmada' && p.dragon_error) return { txt: 'Confirmada · error al cargar en Dragon', cls: 'border-red-500/40 bg-red-500/10 text-red-400' }
+  if (p.estado === 'confirmada' && p.dragon_enviando_at) return { txt: 'Confirmada · cargando en Dragon…', cls: 'border-violet-500/40 bg-violet-500/10 text-violet-400' }
+  if (p.estado === 'confirmada') return { txt: 'Confirmada · por cargar en Dragon', cls: 'border-teal-500/40 bg-teal-500/10 text-teal-400' }
   if (p.estado === 'enviada' && new Date(p.vence_at) < new Date()) return { txt: 'Vencida', cls: 'border-line bg-surface2 text-sub' }
   if (p.estado === 'enviada') return { txt: p.abierta_at ? 'Abierta · esperando' : 'Enviada · esperando', cls: 'border-sky-500/40 bg-sky-500/10 text-sky-400' }
   if (p.estado === 'anulada') return { txt: 'Anulada', cls: 'border-line bg-surface2 text-sub' }
@@ -175,6 +182,15 @@ export default function FranquiciaPropuestas({ franquicia, nombre, desde, hasta,
     }
   }
 
+  /** Libera una propuesta trabada o con error para que el puente la vuelva a cargar en Dragon */
+  async function reintentarDragon(p: Propuesta) {
+    if (!supabase) return
+    if (p.dragon_enviando_at && !p.dragon_error && !window.confirm(`${p.numero} quedó a mitad de camino. Revisá en Dragon que NO esté cargado (Obs: "Propuesta ${p.numero}") antes de reintentar. ¿Reintentar?`)) return
+    await supabase.from('franquicias_propuestas').update({ dragon_error: null, dragon_enviando_at: null, dragon_intentos: 0 }).eq('id', p.id)
+    setAviso({ ok: true, txt: `${p.numero}: se vuelve a cargar en Dragon en el próximo minuto.` })
+    void cargar()
+  }
+
   function excelPedido(p: Propuesta) {
     const filas = detalle.filter((d) => (d.cantidad ?? 0) > 0)
     const header = ['Artículo', 'Descripción', 'Color', 'Talle', 'Propuesto', 'Pidió', 'Precio', 'Subtotal']
@@ -291,6 +307,12 @@ export default function FranquiciaPropuestas({ franquicia, nombre, desde, hasta,
                           </span>
                         </div>
                         {p.comentario && <p className="mb-2 text-xs text-sub">Comentario del cliente: <b className="text-ink">{p.comentario}</b></p>}
+                        {p.estado === 'confirmada' && (p.dragon_error || (p.dragon_enviando_at && Date.now() - new Date(p.dragon_enviando_at).getTime() > 5 * 60_000)) && (
+                          <p className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-2 py-1.5 text-xs text-red-300">
+                            {p.dragon_error ? `Dragon: ${p.dragon_error}` : 'Quedó cargando en Dragon y no terminó.'}
+                            <button type="button" onClick={(ev) => { ev.stopPropagation(); void reintentarDragon(p) }} className="rounded-full border border-red-400/40 px-2 py-0.5 font-semibold text-red-200">Reintentar</button>
+                          </p>
+                        )}
                         {detalle.length === 0 ? (
                           <p className="flex items-center gap-2 text-xs text-sub"><Loader2 size={12} className="animate-spin" aria-hidden /> Cargando…</p>
                         ) : (

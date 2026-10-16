@@ -82,3 +82,14 @@ Register-ScheduledTask -TaskName 'MITO - Vigilante puente' -Force `
   -Trigger $cada5 `
   -Settings $ajustesVig | Out-Null
 Write-Output 'OK  MITO - Vigilante puente (cada 5 minutos)'
+
+# Franquicias: cada 1 minuto carga en Dragon (DRAGONFISH_MITO) los pedidos que confirmaron desde el link.
+$cada1 = New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval (New-TimeSpan -Minutes 1)
+$ajustesFranq = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+  -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 5) -MultipleInstances IgnoreNew
+Register-ScheduledTask -TaskName 'MITO - Pedidos franquicias' -Force `
+  -Description 'Cada 1 min: carga en Dragon (DRAGONFISH_MITO) los pedidos que confirmaron las franquicias. Log: puente-sql\data\sync-franquicias-dragon.log' `
+  -Action (Accion 'sync-franquicias-dragon.ps1') `
+  -Trigger $cada1 `
+  -Settings $ajustesFranq | Out-Null
+Write-Output 'OK  MITO - Pedidos franquicias (cada 1 minuto)'
