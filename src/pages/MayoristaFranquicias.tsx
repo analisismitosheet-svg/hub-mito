@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
+// Va dentro del bundle: un fetch a /src/... solo anda en desarrollo (publicado devuelve index.html)
+import datos from '@/data/franquicias-repo.json'
 // @ts-ignore
 declare const html2pdf: any
 
@@ -34,15 +36,11 @@ export default function MayoristaFranquicias() {
   const [hasta, setHasta] = useState('2026-10-15')
 
   useEffect(() => {
-    fetch('/src/data/franquicias-repo.json')
-      .then((r) => r.json())
-      .then((d) => {
-        setFilas(d.filas || [])
-        setMateriales(d.materiales || [])
-        if (d.desde) setDesde(d.desde)
-        if (d.hasta) setHasta(d.hasta)
-      })
-      .catch(() => {})
+    const d = datos as { filas?: Fila[]; materiales?: string[]; desde?: string; hasta?: string }
+    setFilas(d.filas || [])
+    setMateriales(d.materiales || [])
+    if (d.desde) setDesde(d.desde)
+    if (d.hasta) setHasta(d.hasta)
   }, [])
 
   const filtrar = () => {
