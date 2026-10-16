@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, ChevronLeft, ChevronRight, Lock, Unlock, Loader2, MapPin, RefreshCw, Truck, X } from 'lucide-react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import Layout from '@/components/Layout'
@@ -194,7 +195,13 @@ export default function TrackingTransporte() {
   const { can, isAdmin } = useAuth()
   const gestiona = isAdmin || can('tracking.gestionar')
 
-  const [fecha, setFecha] = useState(hoyIso())
+  const navigate = useNavigate()
+  // ?fecha=AAAA-MM-DD: viene de Km recorridos (tocar un día)
+  const [params] = useSearchParams()
+  const [fecha, setFecha] = useState(() => {
+    const f = params.get('fecha')
+    return f && /^\d{4}-\d{2}-\d{2}$/.test(f) && f <= hoyIso() ? f : hoyIso()
+  })
   const esHoy = fecha === hoyIso()
   const [vehiculos, setVehiculos] = useState<Vehiculo[]>([])
   const [ubics, setUbics] = useState<Ubic[]>([])
@@ -559,7 +566,8 @@ export default function TrackingTransporte() {
         <Kpi label="Bultos a bordo" valor={kpis.aBordo} sub="cargados y sin recibir" color="#38bdf8" />
         <Kpi label="Entregados" valor={kpis.entregados} sub="recibidos en el local" color="#8b5cf6" />
         <Kpi label="Sin señal" valor={kpis.sinSenal} sub="más de 15 min sin ubicación" color="#ef4444" />
-        <Kpi label="Km recorridos" valor={fmtKm(kpis.km)} sub={`entre todos ${esHoy ? 'hoy' : `el ${fmtFecha(fecha)}`}`} color="#0d9488" />
+        <Kpi label="Km recorridos" valor={fmtKm(kpis.km)} sub={`entre todos ${esHoy ? 'hoy' : `el ${fmtFecha(fecha)}`} · ver estadísticas ›`} color="#0d9488"
+          onClick={() => navigate('/administradores/tracking/km')} />
         <Kpi label="Locales obligatorios" valor={`${kpis.pcOk}/${kpis.pcTotal}`} sub={kpis.pcMal ? `${kpis.pcMal} sin pasar ⚠` : 'pasados'} color="#f59e0b" />
       </div>
 
@@ -715,14 +723,22 @@ export default function TrackingTransporte() {
   )
 }
 
-function Kpi({ label, valor, sub, color }: { label: string; valor: number | string; sub: string; color: string }) {
-  return (
-    <div className="rounded-xl border bg-surface p-2.5" style={{ borderColor: `${color}55` }}>
+function Kpi({ label, valor, sub, color, onClick }: { label: string; valor: number | string; sub: string; color: string; onClick?: () => void }) {
+  const contenido = (
+    <>
       <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color }}>{label}</div>
       <div className="text-2xl font-bold text-ink">{valor}</div>
       <div className="text-[11px] text-sub">{sub}</div>
-    </div>
+    </>
   )
+  if (onClick) {
+    return (
+      <button onClick={onClick} className="btn-press rounded-xl border bg-surface p-2.5 text-left transition hover:bg-surface2" style={{ borderColor: `${color}55` }}>
+        {contenido}
+      </button>
+    )
+  }
+  return <div className="rounded-xl border bg-surface p-2.5" style={{ borderColor: `${color}55` }}>{contenido}</div>
 }
 
 /* ------------------------- Gestión (tracking.gestionar) ------------------------- */

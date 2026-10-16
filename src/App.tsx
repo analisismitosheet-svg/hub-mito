@@ -71,6 +71,7 @@ import Replicas from '@/pages/Replicas'
 // (el service worker no precachea archivos de más de 2 MB y la build falla).
 const ComparativaPrecios = lazy(() => import('@/pages/ComparativaPrecios'))
 const TrackingTransporte = lazy(() => import('@/pages/TrackingTransporte'))
+const TrackingKm = lazy(() => import('@/pages/TrackingKm'))
 
 export default function App() {
   return (
@@ -396,6 +397,16 @@ export default function App() {
             element={
               <PermissionRoute permiso="opiniones.view">
                 <Opiniones />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/administradores/tracking/km"
+            element={
+              <PermissionRoute permiso="tracking.view">
+                <Suspense fallback={null}>
+                  <TrackingKm />
+                </Suspense>
               </PermissionRoute>
             }
           />

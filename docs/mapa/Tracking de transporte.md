@@ -17,6 +17,8 @@ pg_cron `tracking-avisos-ubicacion` cada 2 min llama a `api/tracking?vista=alert
 
 **Km recorridos**: `kmDelDia` en `TrackingTransporte.tsx` suma la distancia entre ubicaciones de Traccar del día (solo precisión ≤ 50 m, sin saltos > 150 km/h, tramos < 20 m se acumulan). Línea recta entre puntos: en curvas da un poco menos.
 
+**Estadísticas de km** (`/administradores/tracking/km`, `TrackingKm.tsx`; se entra tocando «Km recorridos»): RPC `tracking_km(desde, hasta)` (`sql/tracking_km.sql`, misma cuenta que `kmDelDia`) da km y tiempo andando (puntos a ≥ 5 km/h según Traccar) por vehículo y día. Filtro Día/Semana/Mes/Fechas, comparación con el período anterior, columnas por vehículo con el número adentro (por semana si el rango pasa 62 días), tablas por vehículo y por día (tocar un día abre el tracking con `?fecha=`), Excel.
+
 ## Estados en la lista
 En ruta (≥5 km/h, ubicación < 5 min) · Detenido · Sin señal (> 15 min) · Sin GPS (chofer sin vehículo).
 
