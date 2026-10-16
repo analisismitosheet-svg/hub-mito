@@ -63,10 +63,12 @@ function chipEstado(p: Propuesta) {
 const fmtDia = (iso: string) => new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit' }).format(new Date(iso))
 
 /** Mensaje con el link: se manda desde el WhatsApp de quien toca el botón (cualquier número). */
-function mensajeDe(p: { numero: string; token: string; vence_at: string }, franquicia: string, contacto?: string | null) {
+function mensajeDe(p: { numero: string; token: string; vence_at: string; desde: string | null; hasta: string | null }, franquicia: string, contacto?: string | null) {
   const hola = contacto?.trim() ? `Hola ${contacto.trim().split(/\s+/)[0]}` : 'Hola'
-  return `${hola}, te armamos la propuesta de reposición ${p.numero} para ${franquicia}.\nElegí qué querés y confirmá el pedido acá: ${linkDe(p.token)}\n(vale hasta el ${fmtDia(p.vence_at)})`
+  return `${hola}, te armamos la propuesta de reposición ${p.numero} para ${franquicia}${p.desde && p.hasta ? `, según tu venta del ${diaIso(p.desde)} al ${diaIso(p.hasta)}` : ''}.\nElegí qué querés y confirmá el pedido acá: ${linkDe(p.token)}\n(vale hasta el ${fmtDia(p.vence_at)})`
 }
+/** '2026-09-16' -> '16/09' */
+const diaIso = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
 const urlWhatsapp = (texto: string, telefono?: string | null) => `https://wa.me/${telefono ? normalizarTelefono(telefono) : ''}?text=${encodeURIComponent(texto)}`
 
 export default function FranquiciaPropuestas({ franquicia, nombre, desde, hasta, items, listo }: {
@@ -130,7 +132,7 @@ export default function FranquiciaPropuestas({ franquicia, nombre, desde, hasta,
       const { data: prop, error } = await supabase
         .from('franquicias_propuestas')
         .insert({ franquicia, franquicia_nombre: nombre, desde, hasta, unidades_propuestas: unidades, total_propuesto: total })
-        .select('id,numero,token,vence_at')
+        .select('id,numero,token,vence_at,desde,hasta')
         .single()
       if (error || !prop) throw new Error(error?.message ?? 'No se pudo guardar la propuesta')
       const { error: eItems } = await supabase.from('franquicias_propuesta_items').insert(

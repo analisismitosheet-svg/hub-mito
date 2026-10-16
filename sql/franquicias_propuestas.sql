@@ -118,7 +118,7 @@ begin
     'items', coalesce((
       select jsonb_agg(jsonb_build_object(
         'id', i.id, 'art', i.art, 'descrip', i.descrip, 'color', i.color, 'talle', i.talle,
-        'sugerido', i.sugerido, 'maximo', i.stock_mito, 'precio', i.precio,
+        'sugerido', i.sugerido, 'vendido', i.vendido, 'maximo', i.stock_mito, 'precio', i.precio,
         'elegido', i.elegido, 'cantidad', i.cantidad) order by i.orden, i.id)
       from public.franquicias_propuesta_items i where i.propuesta_id = p.id), '[]'::jsonb)
   );

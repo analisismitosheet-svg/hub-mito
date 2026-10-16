@@ -17,6 +17,7 @@ interface ItemPub {
   color: string | null
   talle: string | null
   sugerido: number
+  vendido: number
   maximo: number
   precio: number | null
   elegido: boolean | null
@@ -25,6 +26,8 @@ interface ItemPub {
 interface PropuestaPub {
   numero: string
   franquicia: string
+  desde: string | null
+  hasta: string | null
   vence_at: string
   vencida: boolean
   confirmada: boolean
@@ -34,6 +37,7 @@ interface PropuestaPub {
 }
 
 const fmtPesos = (n: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n)
+const diaIso = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
 const fmtFecha = (iso: string) => new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date(iso))
 
 export default function PropuestaFranquicia() {
@@ -134,7 +138,10 @@ export default function PropuestaFranquicia() {
             )}
             {!cerrado && (
               <>
-                <p className="mb-2 text-xs text-neutral-600">Marcá lo que querés que te enviemos. Podés cambiar las cantidades (hasta lo que hay en stock).</p>
+                <p className="mb-2 text-xs text-neutral-600">
+                  {prop.desde && prop.hasta && <>Según tu venta del <b>{diaIso(prop.desde)} al {diaIso(prop.hasta)}</b>. </>}
+                  Marcá lo que querés que te enviemos. Podés cambiar las cantidades (hasta lo que hay en stock).
+                </p>
                 <div className="mb-3 flex gap-2">
                   <button type="button" onClick={() => todos(true)} className="flex-1 rounded-xl border border-neutral-300 bg-white py-2 text-xs font-bold text-neutral-700">✓ Quiero todo</button>
                   <button type="button" onClick={() => todos(false)} className="flex-1 rounded-xl border border-neutral-300 bg-white py-2 text-xs font-bold text-neutral-700">✕ Nada</button>
@@ -153,8 +160,10 @@ export default function PropuestaFranquicia() {
                         <p className="text-sm font-bold">{i.art}</p>
                         <p className="truncate text-xs text-neutral-500">{i.descrip || '—'}</p>
                         <p className="mt-0.5 text-[11px] text-neutral-600">
-                          Color {i.color || 'U'} · Talle {i.talle || '—'} · te proponemos {i.sugerido}
-                          {i.precio ? ` · ${fmtPesos(i.precio)} c/u` : ''}
+                          Color {i.color || 'U'} · Talle {i.talle || '—'}{i.precio ? ` · ${fmtPesos(i.precio)} c/u` : ''}
+                        </p>
+                        <p className="mt-0.5 text-[12px] font-semibold text-neutral-800">
+                          Venta cliente {i.vendido} · te proponemos {i.sugerido}
                         </p>
                       </div>
                       {v === true && i.precio ? <p className="shrink-0 text-sm font-bold tabular-nums">{fmtPesos(c * i.precio)}</p> : null}
