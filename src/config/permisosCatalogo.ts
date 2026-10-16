@@ -80,7 +80,6 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
     especiales: [
       { clave: 'mayorista.import', label: 'Importar repos' },
       { clave: 'mayorista.mark', label: 'Marcar preparado / faltante' },
-      { clave: 'mayorista.faltantes.ver', label: 'Avisos de faltantes de stock' },
     ],
   },
   {
