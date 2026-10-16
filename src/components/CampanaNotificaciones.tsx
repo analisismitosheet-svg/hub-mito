@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Bell, UserCheck, ClipboardList, Truck, CalendarX, FileText, ArrowRightLeft, PackageCheck, X, Pause, AlertTriangle,
+  ChevronRight,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
@@ -45,6 +46,44 @@ interface PausaPendiente {
   cliente: string | null
 }
 
+/**
+ * Cada tipo de notificación cae en un grupo "Área · Sección" de la campana.
+ * Un color por grupo, sin repetir tonos en el panel.
+ */
+const GRUPOS: Record<string, { area: string; seccion: string; color: string; icono: typeof Bell }> = {
+  usuarios: { area: 'Configuración', seccion: 'Usuarios por autorizar', color: 'bg-amber-500/15 text-amber-400', icono: UserCheck },
+  facturacion: { area: 'Mayorista', seccion: 'Facturación', color: 'bg-emerald-500/15 text-emerald-400', icono: Truck },
+  guias: { area: 'Mayorista', seccion: 'Guías', color: 'bg-sky-500/15 text-sky-400', icono: ClipboardList },
+  nota_credito: { area: 'Mayorista', seccion: 'Notas de crédito', color: 'bg-orange-500/15 text-orange-400', icono: FileText },
+  pausas: { area: 'Mayorista', seccion: 'Pausas por autorizar', color: 'bg-pink-500/15 text-pink-400', icono: Pause },
+  pedidos: { area: 'Mayorista', seccion: 'Pedidos', color: 'bg-red-500/15 text-red-400', icono: PackageCheck },
+  transferencias: { area: 'Locales', seccion: 'Reposiciones / Transferencias', color: 'bg-violet-500/15 text-violet-400', icono: ArrowRightLeft },
+}
+const GRUPO_DE_TIPO: Record<Notificacion['tipo'], keyof typeof GRUPOS> = {
+  usuarios: 'usuarios',
+  guias: 'guias',
+  facturacion: 'facturacion',
+  facturacion_sin_fact: 'facturacion',
+  nota_credito: 'nota_credito',
+  transferencias: 'transferencias',
+  armados: 'pedidos',
+  pausas: 'pausas',
+  faltantes: 'pedidos',
+}
+
+/** Ícono de cada aviso dentro del grupo (ej. en Pedidos: armado vs faltante). */
+const ICONO_TIPO: Record<Notificacion['tipo'], typeof Bell> = {
+  usuarios: UserCheck,
+  guias: ClipboardList,
+  facturacion: Truck,
+  facturacion_sin_fact: CalendarX,
+  nota_credito: FileText,
+  transferencias: ArrowRightLeft,
+  armados: PackageCheck,
+  pausas: Pause,
+  faltantes: AlertTriangle,
+}
+
 function fmtFecha(iso: string): string {
   try {
     return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(iso))
@@ -76,6 +115,8 @@ export default function CampanaNotificaciones() {
   const [abierto, setAbierto] = useState(false)
   const [items, setItems] = useState<Notificacion[]>([])
   const [cargando, setCargando] = useState(true)
+  // Grupos desplegados en la campana (Área · Sección)
+  const [desplegados, setDesplegados] = useState<Set<string>>(new Set())
 
   const esMayorista = String(perfil?.rol) === 'mayorista' || (perfil?.roles ?? []).includes('mayorista')
   const esLocal = (perfil?.roles ?? []).includes('locales') || String(perfil?.rol) === 'locales'
@@ -385,27 +426,23 @@ export default function CampanaNotificaciones() {
   )
   const total = lista.length
 
-  const iconos = {
-    usuarios: <UserCheck size={15} aria-hidden />,
-    guias: <ClipboardList size={15} aria-hidden />,
-    facturacion: <Truck size={15} aria-hidden />,
-    facturacion_sin_fact: <CalendarX size={15} aria-hidden />,
-    nota_credito: <FileText size={15} aria-hidden />,
-    transferencias: <ArrowRightLeft size={15} aria-hidden />,
-    armados: <PackageCheck size={15} aria-hidden />,
-    pausas: <Pause size={15} aria-hidden />,
-    faltantes: <AlertTriangle size={15} aria-hidden />,
-  }
-  const colores = {
-    usuarios: 'bg-amber-500/15 text-amber-400',
-    guias: 'bg-sky-500/15 text-sky-400',
-    facturacion: 'bg-emerald-500/15 text-emerald-400',
-    facturacion_sin_fact: 'bg-red-500/15 text-red-400',
-    nota_credito: 'bg-orange-500/15 text-orange-400',
-    transferencias: 'bg-violet-500/15 text-violet-400',
-    armados: 'bg-brand-600/15 text-brand-400',
-    pausas: 'bg-amber-500/15 text-amber-400',
-    faltantes: 'bg-red-500/15 text-red-400',
+
+  // Agrupado por Área · Sección (orden alfabético), cada grupo con su detalle desplegable
+  const grupos = Array.from(
+    lista.reduce((m, n) => {
+      const g = GRUPO_DE_TIPO[n.tipo]
+      const arr = m.get(g) ?? []
+      arr.push(n)
+      m.set(g, arr)
+      return m
+    }, new Map<string, Notificacion[]>()),
+  ).sort(([a], [b]) => {
+    const ga = GRUPOS[a], gb = GRUPOS[b]
+    return `${ga.area} ${ga.seccion}`.localeCompare(`${gb.area} ${gb.seccion}`, 'es', { sensitivity: 'base' })
+  })
+
+  function alternar(g: string) {
+    setDesplegados((s) => { const n = new Set(s); if (n.has(g)) n.delete(g); else n.add(g); return n })
   }
 
   return (
@@ -433,30 +470,62 @@ export default function CampanaNotificaciones() {
               <h3 className="flex items-center gap-2 text-sm font-semibold text-ink"><Bell size={15} aria-hidden /> Notificaciones</h3>
               <button onClick={() => setAbierto(false)} className="rounded-lg p-1 text-sub hover:bg-line hover:text-ink" aria-label="Cerrar"><X size={15} aria-hidden /></button>
             </div>
-            <div className="max-h-96 overflow-y-auto">
+            <div className="max-h-[70vh] overflow-y-auto">
               {cargando || (verArmados && !avisoArmados) || (puedeAutorizarPausas && !avisoPausas) || (puedeVerFaltantes && !avisoArmados) ? (
                 <p className="px-4 py-8 text-center text-sm text-sub">Cargando...</p>
               ) : lista.length === 0 ? (
                 <p className="px-4 py-8 text-center text-sm text-sub">Sin notificaciones.</p>
               ) : (
                 <ul className="divide-y divide-line/50">
-                  {lista.map((n) => (
-                    <li key={n.id}>
-                      <button
-                        onClick={() => { setAbierto(false); navigate(n.ruta) }}
-                        className="flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-line/30"
-                      >
-                        <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${colores[n.tipo]}`}>
-                          {iconos[n.tipo]}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium text-ink">{n.titulo}</span>
-                          <span className="block truncate text-xs text-sub">{n.detalle}</span>
-                        </span>
-                        <span className="shrink-0 text-[10px] text-sub/70">{fmtFecha(n.fecha)}</span>
-                      </button>
-                    </li>
-                  ))}
+                  {grupos.map(([g, notis]) => {
+                    const G = GRUPOS[g]
+                    const Icono = G.icono
+                    const abiertoG = desplegados.has(g)
+                    return (
+                      <li key={g}>
+                        <button
+                          onClick={() => alternar(g)}
+                          aria-expanded={abiertoG}
+                          className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-line/30"
+                        >
+                          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${G.color}`}>
+                            <Icono size={15} aria-hidden />
+                          </span>
+                          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
+                            <span className="text-sub">{G.area} · </span>{G.seccion}
+                          </span>
+                          <span className="shrink-0 rounded-full bg-red-500/15 px-2 py-0.5 text-xs font-bold tabular-nums text-red-400">
+                            {notis.length}
+                          </span>
+                          <ChevronRight size={15} aria-hidden className={`shrink-0 text-sub transition-transform duration-200 ${abiertoG ? 'rotate-90' : ''}`} />
+                        </button>
+                        {abiertoG && (
+                          <ul className="border-t border-line/50 bg-surface2/40">
+                            {notis.map((n) => {
+                              const IconoN = ICONO_TIPO[n.tipo]
+                              return (
+                              <li key={n.id}>
+                                <button
+                                  onClick={() => { setAbierto(false); navigate(n.ruta) }}
+                                  className="flex w-full items-start gap-2.5 py-2.5 pl-9 pr-4 text-left transition hover:bg-line/30"
+                                >
+                                  <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${G.color}`}>
+                                    <IconoN size={12} aria-hidden />
+                                  </span>
+                                  <span className="min-w-0 flex-1">
+                                    <span className="block truncate text-[13px] font-medium text-ink">{n.titulo}</span>
+                                    <span className="block truncate text-xs text-sub">{n.detalle}</span>
+                                  </span>
+                                  <span className="shrink-0 text-[10px] text-sub/70">{fmtFecha(n.fecha)}</span>
+                                </button>
+                              </li>
+                              )
+                            })}
+                          </ul>
+                        )}
+                      </li>
+                    )
+                  })}
                 </ul>
               )}
             </div>
