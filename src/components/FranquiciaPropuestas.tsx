@@ -60,20 +60,14 @@ function chipEstado(p: Propuesta) {
   return { txt: 'Sin enviar', cls: 'border-amber-500/40 bg-amber-500/10 text-amber-400' }
 }
 
-async function apiInforme(body: Record<string, unknown>) {
-  if (!supabase) throw new Error('Supabase no está configurado.')
-  const { data } = await supabase.auth.getSession()
-  const token = data.session?.access_token
-  if (!token) throw new Error('Sin sesión activa.')
-  const res = await fetch('/api/informe', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify(body),
-  })
-  const j = (await res.json().catch(() => null)) as { ok?: boolean; enviados?: number; detalle?: string; error?: string } | null
-  if (!res.ok || !j) throw new Error(j?.error ?? `Error ${res.status}`)
-  return j
+const fmtDia = (iso: string) => new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit' }).format(new Date(iso))
+
+/** Mensaje con el link: se manda desde el WhatsApp de quien toca el botón (cualquier número). */
+function mensajeDe(p: { numero: string; token: string; vence_at: string }, franquicia: string, contacto?: string | null) {
+  const hola = contacto?.trim() ? `Hola ${contacto.trim().split(/\s+/)[0]}` : 'Hola'
+  return `${hola}, te armamos la propuesta de reposición ${p.numero} para ${franquicia}.\nElegí qué querés y confirmá el pedido acá: ${linkDe(p.token)}\n(vale hasta el ${fmtDia(p.vence_at)})`
 }
+const urlWhatsapp = (texto: string, telefono?: string | null) => `https://wa.me/${telefono ? normalizarTelefono(telefono) : ''}?text=${encodeURIComponent(texto)}`
 
 export default function FranquiciaPropuestas({ franquicia, nombre, desde, hasta, items, listo }: {
   franquicia: string
@@ -94,6 +88,8 @@ export default function FranquiciaPropuestas({ franquicia, nombre, desde, hasta,
   const [detalle, setDetalle] = useState<ItemGuardado[]>([])
   const [enviando, setEnviando] = useState(false)
   const [aviso, setAviso] = useState<{ ok: boolean; txt: string } | null>(null)
+  // A quién va: '' = elegir el chat en WhatsApp; si no, el id de un contacto guardado
+  const [para, setPara] = useState('')
 
   const cargar = useCallback(async () => {
     if (!supabase) return
@@ -119,19 +115,22 @@ export default function FranquiciaPropuestas({ franquicia, nombre, desde, hasta,
     void cargar()
   }
 
+  const contactoPara = contactos.find((c) => c.id === para) ?? null
+
   async function enviarPropuesta() {
     if (!supabase || !items.length) return
-    if (!contactos.length) { setVerContactos(true); setAviso({ ok: false, txt: `Cargá al menos un contacto de WhatsApp de ${nombre}.` }); return }
     const unidades = items.reduce((s, f) => s + f.sugerido, 0)
     const total = items.reduce((s, f) => s + (f.precio ?? 0) * f.sugerido, 0)
-    if (!window.confirm(`Se le manda a ${nombre} (${contactos.length} contacto/s) la propuesta con ${items.length} artículos · ${fmt(unidades)} u.${total ? ` · ${fmtPesos(total)}` : ''}. ¿Enviar?`)) return
+    if (!window.confirm(`Se arma la propuesta para ${nombre} con ${items.length} artículos · ${fmt(unidades)} u.${total ? ` · ${fmtPesos(total)}` : ''} y se abre WhatsApp con el link. ¿Seguir?`)) return
+    // La pestaña se abre ya (con el clic); si se abre después de guardar, el navegador la bloquea
+    const ventana = window.open('', '_blank')
     setEnviando(true)
     setAviso(null)
     try {
       const { data: prop, error } = await supabase
         .from('franquicias_propuestas')
         .insert({ franquicia, franquicia_nombre: nombre, desde, hasta, unidades_propuestas: unidades, total_propuesto: total })
-        .select('id,numero')
+        .select('id,numero,token,vence_at')
         .single()
       if (error || !prop) throw new Error(error?.message ?? 'No se pudo guardar la propuesta')
       const { error: eItems } = await supabase.from('franquicias_propuesta_items').insert(
@@ -142,11 +141,13 @@ export default function FranquiciaPropuestas({ franquicia, nombre, desde, hasta,
         })),
       )
       if (eItems) throw new Error(eItems.message)
-      const r = await apiInforme({ propuesta: prop.id })
-      setAviso(r.ok
-        ? { ok: true, txt: `Propuesta ${prop.numero} enviada a ${r.enviados} contacto/s.` }
-        : { ok: false, txt: `La propuesta ${prop.numero} quedó guardada pero no salió el WhatsApp: ${r.detalle}` })
+      await supabase.from('franquicias_propuestas').update({ estado: 'enviada', enviada_at: new Date().toISOString() }).eq('id', prop.id)
+      const url = urlWhatsapp(mensajeDe(prop, nombre, contactoPara?.nombre), contactoPara?.telefono)
+      if (ventana) ventana.location.href = url
+      else window.location.href = url
+      setAviso({ ok: true, txt: `Propuesta ${prop.numero} lista: mandá el mensaje en WhatsApp. Si se cerró, usá "Compartir de nuevo" o "Copiar link" en el historial.` })
     } catch (e) {
+      ventana?.close()
       setAviso({ ok: false, txt: (e as Error).message })
     } finally {
       setEnviando(false)
@@ -154,15 +155,8 @@ export default function FranquiciaPropuestas({ franquicia, nombre, desde, hasta,
     }
   }
 
-  async function reenviar(p: Propuesta) {
-    setAviso(null)
-    try {
-      const r = await apiInforme({ propuesta: p.id })
-      setAviso({ ok: Boolean(r.ok), txt: r.ok ? `${p.numero} reenviada a ${r.enviados} contacto/s.` : `No salió: ${r.detalle}` })
-    } catch (e) {
-      setAviso({ ok: false, txt: (e as Error).message })
-    }
-    void cargar()
+  function compartir(p: Propuesta) {
+    window.open(urlWhatsapp(mensajeDe(p, nombre, contactoPara?.nombre), contactoPara?.telefono), '_blank')
   }
 
   async function abrir(p: Propuesta) {
@@ -199,11 +193,20 @@ export default function FranquiciaPropuestas({ franquicia, nombre, desde, hasta,
       <div className="flex flex-wrap items-center gap-2">
         <div className="min-w-0 flex-1">
           <h2 className="font-display text-base font-semibold text-ink">Propuesta para que elija {nombre}</h2>
-          <p className="text-xs text-sub">Le llega un link por WhatsApp desde el número del hub: marca sí / no y cantidades, y confirma. Vence a los 7 días.</p>
+          <p className="text-xs text-sub">Se abre tu WhatsApp con un link para mandárselo desde cualquier número: marca sí / no y cantidades, y confirma. Vence a los 7 días.</p>
         </div>
         <button type="button" onClick={() => setVerContactos((v) => !v)} className="inline-flex items-center gap-1.5 rounded-full border border-line2 bg-surface px-3 py-1.5 text-xs font-semibold text-ink">
           <Users size={13} aria-hidden /> Contactos ({contactos.length})
         </button>
+        {contactos.length > 0 && (
+          <label className="flex items-center gap-1.5 text-xs text-sub">
+            Para
+            <select value={para} onChange={(e) => setPara(e.target.value)} className="rounded-full border border-line2 bg-surface px-2 py-1 text-xs text-ink">
+              <option value="">Elegir en WhatsApp</option>
+              {contactos.map((c) => <option key={c.id} value={c.id}>{c.nombre || `+${c.telefono}`}</option>)}
+            </select>
+          </label>
+        )}
         <button
           type="button"
           onClick={() => void enviarPropuesta()}
@@ -212,7 +215,7 @@ export default function FranquiciaPropuestas({ franquicia, nombre, desde, hasta,
           className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
         >
           {enviando ? <Loader2 size={13} className="animate-spin" aria-hidden /> : <Send size={13} aria-hidden />}
-          Enviar propuesta por WhatsApp ({items.length} art. · {fmt(unidades)} u.)
+          Armar link y mandar por WhatsApp ({items.length} art. · {fmt(unidades)} u.)
         </button>
       </div>
 
@@ -222,7 +225,7 @@ export default function FranquiciaPropuestas({ franquicia, nombre, desde, hasta,
 
       {verContactos && (
         <div className="mt-3 rounded-xl border border-line bg-surface p-3">
-          <p className="mb-2 text-xs font-semibold text-ink">WhatsApp de {nombre}</p>
+          <p className="mb-2 text-xs font-semibold text-ink">WhatsApp de {nombre} <span className="font-normal text-sub">(opcional: para abrir directo su chat)</span></p>
           {contactos.length === 0 && <p className="mb-2 text-xs text-sub">Todavía no hay contactos.</p>}
           <ul className="mb-2 flex flex-col gap-1">
             {contactos.map((c) => (
@@ -275,11 +278,10 @@ export default function FranquiciaPropuestas({ franquicia, nombre, desde, hasta,
                         <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-sub">
                           <span>Ventas del {p.desde?.split('-').reverse().join('/')} al {p.hasta?.split('-').reverse().join('/')}</span>
                           {p.confirmada_at && <span>· confirmó {fmtFecha(p.confirmada_at)}</span>}
-                          {p.envio_detalle && <span title={p.envio_detalle} className="truncate">· WhatsApp: {p.envio_detalle}</span>}
                           <span className="ml-auto flex flex-wrap gap-1.5">
                             <button type="button" onClick={(ev) => { ev.stopPropagation(); void navigator.clipboard?.writeText(linkDe(p.token)); setAviso({ ok: true, txt: `Link de ${p.numero} copiado.` }) }} className="inline-flex items-center gap-1 rounded-full border border-line2 bg-surface px-2.5 py-1 font-semibold text-ink"><Copy size={12} aria-hidden /> Copiar link</button>
                             {(p.estado === 'enviada' || p.estado === 'borrador') && (
-                              <button type="button" onClick={(ev) => { ev.stopPropagation(); void reenviar(p) }} className="inline-flex items-center gap-1 rounded-full border border-line2 bg-surface px-2.5 py-1 font-semibold text-ink"><Send size={12} aria-hidden /> Reenviar</button>
+                              <button type="button" onClick={(ev) => { ev.stopPropagation(); compartir(p) }} className="inline-flex items-center gap-1 rounded-full border border-line2 bg-surface px-2.5 py-1 font-semibold text-ink"><Send size={12} aria-hidden /> Compartir de nuevo</button>
                             )}
                             {confirmada && (
                               <button type="button" onClick={(ev) => { ev.stopPropagation(); excelPedido(p) }} className="inline-flex items-center gap-1 rounded-full border border-line2 bg-surface px-2.5 py-1 font-semibold text-ink">⬇ Excel del pedido</button>
