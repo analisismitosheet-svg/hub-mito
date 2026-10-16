@@ -3,12 +3,14 @@ import { Loader2 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
-import { leerVista, type FilaSql } from '@/lib/sqlApi'
+import { leerVista, leerVistaFiltrada, type FilaSql } from '@/lib/sqlApi'
+import { VISTA_ARTICULOS } from '@/lib/articulosConsulta'
 import { cargarStockSku, claveSku, stockSkuDe, type StockSku } from '@/lib/stockSku'
 // @ts-ignore
 declare const html2pdf: any
 
 type Fila = {
+  precio: number | null
   art: string
   descrip: string
   color: string
@@ -21,6 +23,7 @@ type Fila = {
 }
 
 const fmt = (n: number) => new Intl.NumberFormat('es-AR').format(n)
+const fmtPesos = (n: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n)
 
 const estadoF = (f: Fila) => {
   if (f.stock <= 0) return { txt: 'Urgente', cls: 'text-red-500', dot: '#ef4444' }
@@ -60,6 +63,9 @@ export default function MayoristaFranquicias() {
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selMats, setSelMats] = useState<Set<string>>(new Set())
+  // Precio (columna PRECIO de vw_ARTICULOS_MITO) por SKU y por artículo
+  const [precios, setPrecios] = useState<{ sku: Map<string, number>; art: Map<string, number> }>({ sku: new Map(), art: new Map() })
+  const [cargandoPrecios, setCargandoPrecios] = useState(false)
   const [desde, setDesde] = useState(haceDias(30))
   const [hasta, setHasta] = useState(isoLocal(new Date()))
 
@@ -134,7 +140,7 @@ export default function MayoristaFranquicias() {
       let f = porSku.get(k)
       if (!f) {
         const a = articulos.get(v.art)
-        f = { art: v.art, descrip: a?.descripcion || v.txt, color: v.color, talle: v.talle, vendido: 0, stock: 0, stockCli: 0, sugerido: 0, material: a?.material || '' }
+        f = { art: v.art, descrip: a?.descripcion || v.txt, color: v.color, talle: v.talle, vendido: 0, stock: 0, stockCli: 0, sugerido: 0, material: a?.material || '', precio: null }
         porSku.set(k, f)
       }
       f.vendido += v.cant
@@ -144,9 +150,49 @@ export default function MayoristaFranquicias() {
       f.stockCli = stockCli.get(k) ?? 0
       // Reponer lo vendido menos lo que el cliente todavía tiene, sin pasarse del stock de MITO
       f.sugerido = Math.max(0, Math.min(f.vendido - f.stockCli, f.stock))
+      f.precio = precios.sku.get(k) ?? precios.art.get(f.art) ?? null
     }
     return [...porSku.values()]
-  }, [ventas, desde, hasta, articulos, stockMito, stockCli])
+  }, [ventas, desde, hasta, articulos, stockMito, stockCli, precios])
+
+  // vw_ARTICULOS_MITO pesa ~6,8 MB: no se trae entera, se pide el precio de cada
+  // artículo que se va a reponer (filtro por ID_ARTICULO, de a 6 a la vez).
+  const artsAReponer = useMemo(
+    () => [...new Set(filas.filter((f) => f.stock > 0 && f.sugerido > 0).map((f) => f.art))].sort().join(','),
+    [filas],
+  )
+  useEffect(() => {
+    const faltan = artsAReponer.split(',').filter((a) => a && !precios.art.has(a))
+    if (!faltan.length) return
+    let activo = true
+    setCargandoPrecios(true)
+    ;(async () => {
+      const sku = new Map(precios.sku), art = new Map(precios.art)
+      const cola = [...faltan]
+      async function trabajador() {
+        for (let a = cola.shift(); a; a = cola.shift()) {
+          try {
+            const filasA = await leerVistaFiltrada(VISTA_ARTICULOS, { donde: ['ID_ARTICULO'], valor: a, coincide: 'igual' })
+            let max = 0
+            for (const r of filasA) {
+              const p = num(r.PRECIO)
+              if (p > 0) sku.set(claveSku(r.ID_ARTICULO, r.COLOR_CODIGO, r.TALLE_CODIGO), p)
+              max = Math.max(max, p)
+            }
+            art.set(a, max)
+          } catch {
+            art.set(a, 0)
+          }
+        }
+      }
+      await Promise.all(Array.from({ length: 6 }, trabajador))
+      if (!activo) return
+      setPrecios({ sku, art })
+      setCargandoPrecios(false)
+    })()
+    return () => { activo = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [artsAReponer])
 
   const materiales = useMemo(() => [...new Set(filas.map((f) => f.material).filter(Boolean))].sort(), [filas])
   const selMat = [...selMats].join(', ')
@@ -164,6 +210,8 @@ export default function MayoristaFranquicias() {
 
   const visibles = filtrar().slice(0, 40)
   const totalSug = filtrar().reduce((s, f) => s + f.sugerido, 0)
+  const subtotal = (f: Fila) => (f.precio ? f.precio * f.sugerido : 0)
+  const totalPesos = filtrar().reduce((s, f) => s + subtotal(f), 0)
   const count = filtrar().length
 
   function alternarMat(m: string) {
@@ -175,10 +223,10 @@ export default function MayoristaFranquicias() {
     const rango = `${fmtDia(desde)} al ${fmtDia(hasta)}`
     let msg = `REPOSICIÓN SUGERIDA - ${franq.nombre.toUpperCase()} (${rango})\nArtículos para reponer (solo con stock en MITO)${selMat ? ' - Material: ' + selMat : ''}:\n\n`
     list.forEach((f, i) => {
-      msg += `${i + 1}. ${f.art} ${(f.color || 'U')}/${f.talle || '-'} | Stock ${franq.id}:${f.stockCli || 0} | Vend:${f.vendido} | Stock MITO:${f.stock} | Sug.reposición:${f.sugerido} | Estado:${f.stock <= 0 ? 'Urgente' : 'Normal'} | Mat:${f.material} | ${f.descrip || ''}\n`
+      msg += `${i + 1}. ${f.art} ${(f.color || 'U')}/${f.talle || '-'} | Stock ${franq.id}:${f.stockCli || 0} | Vend:${f.vendido} | Stock MITO:${f.stock} | Sug.reposición:${f.sugerido} | Precio:${f.precio ? fmtPesos(f.precio) : '-'} | Subtotal:${fmtPesos(subtotal(f))} | Estado:${f.stock <= 0 ? 'Urgente' : 'Normal'} | Mat:${f.material} | ${f.descrip || ''}\n`
     })
     if (list.length === 0) msg += '(Sin sugeridos con stock en MITO)\n'
-    msg += `\nTotal sugerencia reposición: ${list.reduce((s, f) => s + f.sugerido, 0)}`
+    msg += `\nTotal sugerencia reposición: ${list.reduce((s, f) => s + f.sugerido, 0)} u. · Total: ${fmtPesos(list.reduce((s, f) => s + subtotal(f), 0))}`
     try {
       const frame = document.querySelector('#frame') as HTMLElement | null
       if (frame) {
@@ -202,8 +250,9 @@ export default function MayoristaFranquicias() {
 
   const exportExcel = () => {
     const list = filtrar()
-    const header = ['Artículo', 'Descripción', 'Material', 'Color', 'Talle', 'Stock cliente', 'Vendido', 'Stock MITO', 'Sugerencia reposición', 'Estado']
-    const rows = list.map((f) => [f.art, f.descrip || '', f.material || '', f.color || 'U', f.talle || '', String(f.stockCli), String(f.vendido), String(f.stock), String(f.sugerido), f.stock <= 0 ? 'Urgente' : 'Normal'])
+    const header = ['Artículo', 'Descripción', 'Material', 'Color', 'Talle', 'Stock cliente', 'Vendido', 'Stock MITO', 'Sugerencia reposición', 'Precio', 'Subtotal', 'Estado']
+    const rows = list.map((f) => [f.art, f.descrip || '', f.material || '', f.color || 'U', f.talle || '', String(f.stockCli), String(f.vendido), String(f.stock), String(f.sugerido), f.precio ? String(f.precio) : '', String(subtotal(f)), f.stock <= 0 ? 'Urgente' : 'Normal'])
+    rows.push(['', 'TOTAL', '', '', '', '', '', '', String(list.reduce((s, f) => s + f.sugerido, 0)), '', String(list.reduce((s, f) => s + subtotal(f), 0)), ''])
     const csv = [header.join(','), ...rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','))].join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
@@ -290,13 +339,15 @@ export default function MayoristaFranquicias() {
                     <th className={`text-center ${th}`}>Vendido</th>
                     <th className={`text-center ${th}`}>Stock MITO</th>
                     <th className={`text-center ${th}`}>Sugerencia reposición</th>
+                    <th className={`text-right ${th}`}>Precio</th>
+                    <th className={`text-right ${th}`}>Subtotal</th>
                     <th className={`text-center ${th}`}>Estado</th>
                   </tr>
                 </thead>
                 <tbody>
                   {cargando && (
                     <tr>
-                      <td colSpan={11} className="px-3 py-10 text-center text-sub">
+                      <td colSpan={13} className="px-3 py-10 text-center text-sub">
                         <Loader2 size={16} className="mr-2 inline animate-spin" aria-hidden />
                         Trayendo ventas y stock…
                       </td>
@@ -304,7 +355,7 @@ export default function MayoristaFranquicias() {
                   )}
                   {!cargando && !error && visibles.length === 0 && (
                     <tr>
-                      <td colSpan={11} className="px-3 py-10 text-center text-sub">No hay nada para reponer en ese rango.</td>
+                      <td colSpan={13} className="px-3 py-10 text-center text-sub">No hay nada para reponer en ese rango.</td>
                     </tr>
                   )}
                   {visibles.map((f, i) => {
@@ -321,6 +372,8 @@ export default function MayoristaFranquicias() {
                         <td className="px-3 py-2 text-center tabular-nums text-ink">{fmt(f.vendido)}</td>
                         <td className={`px-3 py-2 text-center tabular-nums ${f.stock <= 0 ? 'font-semibold text-red-400' : 'text-sub'}`}>{fmt(f.stock)}</td>
                         <td className={`px-3 py-2 text-center font-bold tabular-nums ${f.sugerido > 0 ? 'text-emerald-500' : 'text-sub'}`}>{f.sugerido > 0 ? fmt(f.sugerido) : '—'}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-sub">{f.precio ? fmtPesos(f.precio) : cargandoPrecios ? '…' : '—'}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-right font-semibold tabular-nums text-ink">{f.precio ? fmtPesos(subtotal(f)) : cargandoPrecios ? '…' : '—'}</td>
                         <td className="px-3 py-2 text-center">
                           <span className={`inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold ${e.cls}`}>
                             <i style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 999, background: e.dot }} />
@@ -335,6 +388,8 @@ export default function MayoristaFranquicias() {
                   <tr className="text-[12px]">
                     <td colSpan={9} className="px-3 py-2 font-semibold text-ink">{fmt(count)} SKU a reponer (con stock en MITO)</td>
                     <td className="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">{fmt(totalSug)}</td>
+                    <td className="px-3 py-2 text-right text-[11px] font-semibold uppercase text-sub">Total</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right text-sm font-bold tabular-nums text-emerald-500">{cargandoPrecios ? '…' : fmtPesos(totalPesos)}</td>
                     <td />
                   </tr>
                 </tfoot>
