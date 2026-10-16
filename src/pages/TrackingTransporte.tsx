@@ -141,6 +141,35 @@ const nuevoDispositivo = (nombre: string) => {
 }
 const DISPOSITIVO_OK = /^[a-z0-9-]{8,60}$/
 
+/** Metros entre dos puntos (haversine). */
+function metros(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const r = (x: number) => (x * Math.PI) / 180
+  const h = Math.sin(r(b.lat - a.lat) / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(r(b.lng - a.lng) / 2) ** 2
+  return 2 * 6371000 * Math.asin(Math.sqrt(h))
+}
+
+/**
+ * Km recorridos en el día sumando la distancia entre ubicaciones de Traccar, sin ruido:
+ * solo puntos precisos (≤ 50 m), sin saltos imposibles (> 150 km/h) y sin el temblequeo
+ * del GPS cuando está quieto (tramos < 20 m se acumulan hasta superar esa distancia).
+ * Mide en línea recta entre puntos (cada ~30 s): en curvas da apenas un poco menos.
+ */
+function kmDelDia(us: Ubic[]): number {
+  let total = 0
+  let ancla: Ubic | null = null
+  for (const u of us) {
+    if ((u.precision_m ?? 0) > 50) continue
+    if (!ancla) { ancla = u; continue }
+    const d = metros(ancla, u)
+    if (d < 20) continue
+    const seg = (new Date(u.at).getTime() - new Date(ancla.at).getTime()) / 1000
+    if (seg > 0 && (d / seg) * 3.6 <= 150) total += d
+    ancla = u
+  }
+  return total / 1000
+}
+const fmtKm = (km: number) => `${km.toLocaleString('es-AR', { maximumFractionDigits: km < 10 ? 1 : 0 })} km`
+
 function estadoDe(ultima: Ubic | undefined, esHoy: boolean): Estado {
   if (!ultima) return { label: 'Sin GPS', color: '#94a3b8' }
   if (!esHoy) return { label: 'Recorrido del día', color: '#38bdf8' }
@@ -313,9 +342,10 @@ export default function TrackingTransporte() {
   }, [fecha, esHoy])
 
   const kpis = useMemo(() => {
-    let enRuta = 0, sinSenal = 0, aBordo = 0, entregados = 0, pcOk = 0, pcTotal = 0, pcMal = 0
+    let enRuta = 0, sinSenal = 0, aBordo = 0, entregados = 0, pcOk = 0, pcTotal = 0, pcMal = 0, km = 0
     for (const mv of moviles) {
       const us = mv.vehiculo ? ubicsDe.get(mv.vehiculo.id) : undefined
+      km += us ? kmDelDia(us) : 0
       const e = estadoDe(us?.[us.length - 1], esHoy).label
       if (e === 'En ruta' || e === 'Detenido') enRuta++
       if (e === 'Sin señal') sinSenal++
@@ -328,7 +358,7 @@ export default function TrackingTransporte() {
       if (c.paso_at) pcOk++
       else if (vencido(c)) pcMal++
     }
-    return { enRuta, sinSenal, aBordo, entregados, pcOk, pcTotal, pcMal }
+    return { enRuta, sinSenal, aBordo, entregados, pcOk, pcTotal, pcMal, km }
   }, [moviles, ubicsDe, resumen, controles, vencido, esHoy])
 
   const actual = moviles.find((m) => m.key === sel) ?? null
@@ -524,11 +554,12 @@ export default function TrackingTransporte() {
         </div>
       )}
 
-      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
+      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         <Kpi label={esHoy ? 'Con señal' : 'Con GPS'} valor={kpis.enRuta} sub={esHoy ? 'ubicación en los últimos 15 min' : `el ${fmtFecha(fecha)}`} color="#22c55e" />
         <Kpi label="Bultos a bordo" valor={kpis.aBordo} sub="cargados y sin recibir" color="#38bdf8" />
         <Kpi label="Entregados" valor={kpis.entregados} sub="recibidos en el local" color="#8b5cf6" />
         <Kpi label="Sin señal" valor={kpis.sinSenal} sub="más de 15 min sin ubicación" color="#ef4444" />
+        <Kpi label="Km recorridos" valor={fmtKm(kpis.km)} sub={`entre todos ${esHoy ? 'hoy' : `el ${fmtFecha(fecha)}`}`} color="#0d9488" />
         <Kpi label="Locales obligatorios" valor={`${kpis.pcOk}/${kpis.pcTotal}`} sub={kpis.pcMal ? `${kpis.pcMal} sin pasar ⚠` : 'pasados'} color="#f59e0b" />
       </div>
 
@@ -574,7 +605,7 @@ export default function TrackingTransporte() {
                     </div>
                   )}
                   <div className="mt-1 text-[11px] text-sub">
-                    {ent} entregados · {r?.aBordo ?? 0} a bordo
+                    {us && us.length > 1 && <>🛣️ {fmtKm(kmDelDia(us))} · </>}{ent} entregados · {r?.aBordo ?? 0} a bordo
                     {ps.length > 0 && <> · 🏪 {psOk}/{ps.length} obligatorios{psMal ? <b className="text-red-500"> · {psMal} ⚠</b> : ''}</>}
                   </div>
                   {r && r.destinos.size > 0 && (

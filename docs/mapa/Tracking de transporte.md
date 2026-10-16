@@ -15,6 +15,8 @@ pg_cron `tracking-avisos-ubicacion` cada 2 min llama a `api/tracking?vista=alert
 
 **Candado del mapa**: «Fijar zona» guarda la zona visible (localStorage `tracking-vista-fija`, por navegador); el mapa abre ahí y no se auto-encuadra. «Volver a la zona» la recentra; tocar el candado la suelta.
 
+**Km recorridos**: `kmDelDia` en `TrackingTransporte.tsx` suma la distancia entre ubicaciones de Traccar del día (solo precisión ≤ 50 m, sin saltos > 150 km/h, tramos < 20 m se acumulan). Línea recta entre puntos: en curvas da un poco menos.
+
 ## Estados en la lista
 En ruta (≥5 km/h, ubicación < 5 min) · Detenido · Sin señal (> 15 min) · Sin GPS (chofer sin vehículo).
 
