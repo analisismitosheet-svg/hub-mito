@@ -69,12 +69,13 @@ DECLARE t text;
 BEGIN
   FOREACH t IN ARRAY ARRAY['tracking_vehiculos','tracking_ubicaciones','tracking_recorridos','tracking_bases'] LOOP
     EXECUTE format('DROP POLICY IF EXISTS %1$s_ver ON public.%1$s', t);
-    EXECUTE format('CREATE POLICY %1$s_ver ON public.%1$s FOR SELECT TO authenticated USING (private.tengo_permiso(''tracking.view'') OR private.tengo_permiso(''tracking.gestionar''))', t);
+    -- (SELECT ...): se evalúa una vez por consulta y no por fila (miles de ubicaciones por día)
+    EXECUTE format('CREATE POLICY %1$s_ver ON public.%1$s FOR SELECT TO authenticated USING ((SELECT private.tengo_permiso(''tracking.view'')) OR (SELECT private.tengo_permiso(''tracking.gestionar'')))', t);
   END LOOP;
   -- Las ubicaciones solo las escribe api/tracking.ts (service role)
   FOREACH t IN ARRAY ARRAY['tracking_vehiculos','tracking_recorridos','tracking_bases'] LOOP
     EXECUTE format('DROP POLICY IF EXISTS %1$s_gestion ON public.%1$s', t);
-    EXECUTE format('CREATE POLICY %1$s_gestion ON public.%1$s FOR ALL TO authenticated USING (private.tengo_permiso(''tracking.gestionar'')) WITH CHECK (private.tengo_permiso(''tracking.gestionar''))', t);
+    EXECUTE format('CREATE POLICY %1$s_gestion ON public.%1$s FOR ALL TO authenticated USING ((SELECT private.tengo_permiso(''tracking.gestionar''))) WITH CHECK ((SELECT private.tengo_permiso(''tracking.gestionar'')))', t);
   END LOOP;
 END $$;
 
@@ -125,7 +126,7 @@ CREATE INDEX IF NOT EXISTS tracking_push_usuario ON public.tracking_push (usuari
 ALTER TABLE public.tracking_push ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tracking_push_ver ON public.tracking_push;
 CREATE POLICY tracking_push_ver ON public.tracking_push FOR SELECT TO authenticated
-  USING (private.tengo_permiso('tracking.view') OR private.tengo_permiso('tracking.gestionar'));
+  USING ((SELECT private.tengo_permiso('tracking.view')) OR (SELECT private.tengo_permiso('tracking.gestionar')));
 REVOKE ALL ON public.tracking_push FROM anon;
 
 ALTER TABLE public.tracking_vehiculos ADD COLUMN IF NOT EXISTS ultimo_aviso timestamptz;

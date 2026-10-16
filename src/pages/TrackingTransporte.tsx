@@ -38,6 +38,7 @@ interface Ubic {
   precision_m: number | null
   velocidad_kmh: number | null
   bateria: number | null
+  recibido_at: string
 }
 interface BaseUbic { base_id: string; nombre: string | null; direccion: string | null; lat: number; lng: number; radio_m: number }
 interface Lugar { display_name: string; lat: string; lon: string }
@@ -99,6 +100,13 @@ function resumenHora(items: EventoDia[]): { partes: string[]; color: string } {
   const color = hay('nopaso') ? '#ef4444' : hay('entrega') ? '#22c55e' : hay('carga') ? '#38bdf8' : items[items.length - 1].color
   return { partes, color }
 }
+
+/** Lo último cargado por día: al volver a entrar se muestra al instante mientras se actualiza. */
+interface CacheDia {
+  hub?: { vehiculos: Vehiculo[]; recorridos: Recorrido[]; bases: BaseUbic[]; controles: Control[]; conAvisos: string[]; ubics: Ubic[] }
+  tr?: DatosTransporte
+}
+const cacheTracking = new Map<string, CacheDia>()
 
 // La pantalla solo se abre logueado: Supabase siempre está configurado acá
 const supabase = sb!
@@ -216,35 +224,74 @@ export default function TrackingTransporte() {
   const [, setTick] = useState(0)
 
   // ----- carga -----
-  const cargarHub = useCallback(async () => {
+  // Fecha de los datos que hay en pantalla (para saber si el refresco puede ser incremental)
+  const fechaCargada = useRef<string | null>(null)
+  const ubicsRef = useRef<Ubic[]>([])
+
+  /** Pone en pantalla lo último que se cargó de ese día (al volver a entrar se ve al instante). */
+  const mostrarCache = useCallback((f: string) => {
+    const c = cacheTracking.get(f)
+    if (!c) return false
+    if (c.hub) {
+      setVehiculos(c.hub.vehiculos); setRecorridos(c.hub.recorridos); setBasesUbic(c.hub.bases)
+      setControles(c.hub.controles); setConAvisos(new Set(c.hub.conAvisos)); setUbics(c.hub.ubics)
+      ubicsRef.current = c.hub.ubics
+      fechaCargada.current = f
+    }
+    if (c.tr) setTr(c.tr)
+    return !!c.hub
+  }, [])
+
+  /**
+   * Datos del hub. Con `incremental` (refresco cada 30 s) solo baja las ubicaciones nuevas,
+   * no las miles del día.
+   */
+  const cargarHub = useCallback(async (incremental = false) => {
     const desde = inicioDia(fecha)
     const hasta = new Date(desde.getTime() + 86400000)
-    const [v, p, b, ps] = await Promise.all([
+    const [v, p, b, ps, av] = await Promise.all([
       supabase.from('tracking_vehiculos').select('*').order('nombre'),
       supabase.from('tracking_recorridos').select('vehiculo_id,base_id,dias,hora_limite'),
       supabase.from('tracking_bases').select('*').order('base_id'),
       supabase.rpc('tracking_controles_dia', { p_fecha: fecha }),
+      supabase.from('tracking_push').select('usuario_transporte_id'),
     ])
-    setVehiculos((v.data ?? []) as Vehiculo[])
-    setRecorridos((p.data ?? []) as Recorrido[])
-    const { data: av } = await supabase.from('tracking_push').select('usuario_transporte_id')
-    setConAvisos(new Set((av ?? []).map((x) => (x as { usuario_transporte_id: string }).usuario_transporte_id)))
-    setBasesUbic((b.data ?? []) as BaseUbic[])
-    setControles((ps.data ?? []) as Control[])
-    const filas: Ubic[] = []
-    for (let i = 0; ; i += 1000) {
-      const { data, error } = await supabase
+    const vehs = (v.data ?? []) as Vehiculo[]
+    const recs = (p.data ?? []) as Recorrido[]
+    const bases = (b.data ?? []) as BaseUbic[]
+    const ctrls = (ps.data ?? []) as Control[]
+    const avisos = (av.data ?? []).map((x) => (x as { usuario_transporte_id: string }).usuario_transporte_id)
+    setVehiculos(vehs)
+    setRecorridos(recs)
+    setConAvisos(new Set(avisos))
+    setBasesUbic(bases)
+    setControles(ctrls)
+
+    const previas = incremental && fechaCargada.current === fecha ? ubicsRef.current : []
+    // por la hora en que llegaron (Traccar sin señal guarda y después manda posiciones viejas juntas)
+    const ultima = previas.reduce<string | null>((m, u) => (!m || u.recibido_at > m ? u.recibido_at : m), null)
+    // La primera tanda trae el total; las demás (de a 1000) se piden todas juntas
+    const consulta = (i: number, contar: boolean) => {
+      let q = supabase
         .from('tracking_ubicaciones')
-        .select('vehiculo_id,at,lat,lng,precision_m,velocidad_kmh,bateria')
+        .select('vehiculo_id,at,lat,lng,precision_m,velocidad_kmh,bateria,recibido_at', contar ? { count: 'exact' } : undefined)
         .gte('at', desde.toISOString())
         .lt('at', hasta.toISOString())
-        .order('at')
-        .range(i, i + 999)
-      if (error || !data?.length) break
-      filas.push(...(data as Ubic[]))
-      if (data.length < 1000) break
+      if (ultima) q = q.gt('recibido_at', ultima)
+      return q.order(ultima ? 'recibido_at' : 'at').order('id').range(i, i + 999) // orden estable para que las tandas no se pisen
     }
+    const primera = await consulta(0, true)
+    const nuevas: Ubic[] = [...((primera.data ?? []) as Ubic[])]
+    const total = primera.count ?? nuevas.length
+    if (total > 1000) {
+      const resto = await Promise.all(Array.from({ length: Math.ceil(total / 1000) - 1 }, (_, k) => consulta((k + 1) * 1000, false)))
+      for (const r of resto) nuevas.push(...((r.data ?? []) as Ubic[]))
+    }
+    const filas = previas.length && nuevas.length ? [...previas, ...nuevas].sort((a, b) => a.at.localeCompare(b.at)) : previas.length ? previas : nuevas
+    ubicsRef.current = filas
+    fechaCargada.current = fecha
     setUbics(filas)
+    cacheTracking.set(fecha, { ...cacheTracking.get(fecha), hub: { vehiculos: vehs, recorridos: recs, bases, controles: ctrls, conAvisos: avisos, ubics: filas } })
   }, [fecha])
 
   const cargarTransporte = useCallback(async () => {
@@ -257,30 +304,34 @@ export default function TrackingTransporte() {
       if (!r.ok) throw new Error(body.error ?? `Error ${r.status}`)
       setTr(body as DatosTransporte)
       setErrTr(null)
+      cacheTracking.set(fecha, { ...cacheTracking.get(fecha), tr: body as DatosTransporte })
     } catch (e) {
       setErrTr(e instanceof Error ? e.message : String(e))
     }
   }, [fecha])
 
   const cargar = useCallback(async () => {
+    // Si ya se había visto este día, se muestra al instante y se actualiza por detrás
+    const habia = mostrarCache(fecha)
     setCargando(true)
-    await Promise.all([cargarHub(), cargarTransporte()])
+    await Promise.all([cargarHub(habia), cargarTransporte()])
     setCargando(false)
-  }, [cargarHub, cargarTransporte])
+  }, [fecha, mostrarCache, cargarHub, cargarTransporte])
 
   useEffect(() => { void cargar() }, [cargar])
-  // Hoy: se refresca solo cada 30 s (el celular manda cada ~30 s)
+  // Hoy: ubicaciones nuevas cada 30 s (el celular manda cada ~30 s); escaneos de Transporte cada 1 min
   useEffect(() => {
     if (!esHoy) return
-    const t = setInterval(() => { void cargarHub(); void cargarTransporte(); setTick((x) => x + 1) }, 30000)
-    return () => clearInterval(t)
+    const t1 = setInterval(() => { void cargarHub(true); setTick((x) => x + 1) }, 30000)
+    const t2 = setInterval(() => { void cargarTransporte() }, 60000)
+    return () => { clearInterval(t1); clearInterval(t2) }
   }, [esHoy, cargarHub, cargarTransporte])
 
   // Color del vehículo en el mapa (se cambia tocando el punto de color de su tarjeta)
   async function cambiarColor(v: Vehiculo, color: string) {
     const { error } = await supabase.from('tracking_vehiculos').update({ color }).eq('id', v.id)
     if (error) return alert(error.message)
-    void cargarHub()
+    void cargarHub(true)
   }
 
   // ----- armado de la lista -----
@@ -557,7 +608,7 @@ export default function TrackingTransporte() {
     const { error } = await supabase.from('tracking_bases').upsert({ base_id, nombre, lat, lng }, { onConflict: 'base_id' })
     if (error) return alert(error.message)
     setModo(null)
-    void cargarHub()
+    void cargarHub(true)
   }
   guardarBaseRef.current = guardarBase
 
@@ -751,7 +802,7 @@ export default function TrackingTransporte() {
             setModo={setModo}
             vehSel={actual?.vehiculo?.id ?? null}
             centrar={(lat, lng) => mapa.current?.setView([lat, lng], 17)}
-            recargar={() => void cargarHub()}
+            recargar={() => void cargarHub(true)}
           />
         )}
       </div>

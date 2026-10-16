@@ -254,14 +254,13 @@ async function vistaHub(req: Req, res: Res) {
 
   // Entregas: cuando el local recibió esos bultos (puede ser después del día de la carga)
   const bultoIds = [...new Set(cargas.map((c) => c.bulto_id))]
-  const entregas: Hist[] = []
-  for (let i = 0; i < bultoIds.length; i += 120) {
-    const lote = bultoIds.slice(i, i + 120)
-    entregas.push(...(await getJson<Hist[]>(
-      `${t.url}/rest/v1/bultos_historial?${sel}&bulto_id=in.(${lote.join(',')})&estado=eq.RECIBIDO` +
-        `&registrado_en=gte.${desde.toISOString()}&order=registrado_en&limit=5000`,
-      t.headers)))
-  }
+  // Todas las tandas juntas (antes una después de la otra: ~1 s cada 120 bultos)
+  const lotes: string[][] = []
+  for (let i = 0; i < bultoIds.length; i += 120) lotes.push(bultoIds.slice(i, i + 120))
+  const entregas = (await Promise.all(lotes.map((lote) => getJson<Hist[]>(
+    `${t.url}/rest/v1/bultos_historial?${sel}&bulto_id=in.(${lote.join(',')})&estado=eq.RECIBIDO` +
+      `&registrado_en=gte.${desde.toISOString()}&order=registrado_en&limit=5000`,
+    t.headers)))).flat().sort((a, b) => a.registrado_en.localeCompare(b.registrado_en))
 
   const ev = (h: Hist) => ({ bulto: h.codigo, origen: h.origen_base_id, destino: h.destino_base_id, at: h.registrado_en, bulto_id: h.bulto_id })
   return res.status(200).json({
