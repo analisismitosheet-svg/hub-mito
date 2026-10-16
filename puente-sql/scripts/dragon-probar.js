@@ -8,6 +8,8 @@
 //   DRAGON_API_AUTH       clave privada de ese Cliente REST API
 //   DRAGON_USUARIO        usuario de Dragonfish
 //   DRAGON_PASSWORD       contraseña de ese usuario
+//   DRAGON_API_TOKEN      (alternativa) token JWT ya generado, como el que usa la otra integración;
+//                         si está, se prueba primero directo en Authorization y si no, en /Autenticar
 //
 // Cómo arma el token Zoo Logic (campus.zoologic.com.ar, "Servicio REST API"):
 //   JWT HS256 firmado con la clave privada, payload { usuario, password, exp }
@@ -28,7 +30,8 @@ const ID = (process.env.DRAGON_API_IDCLIENTE || '').trim().toUpperCase()
 const CLAVE = (process.env.DRAGON_API_AUTH || '').trim()
 const USUARIO = (process.env.DRAGON_USUARIO || '').trim().toUpperCase()
 const PASS = (process.env.DRAGON_PASSWORD || '').trim()
-const faltan = ['DRAGON_API_IDCLIENTE', 'DRAGON_API_AUTH', 'DRAGON_USUARIO', 'DRAGON_PASSWORD'].filter((k) => !process.env[k])
+const TOKEN = (process.env.DRAGON_API_TOKEN || '').trim()
+const faltan = (TOKEN ? ['DRAGON_API_IDCLIENTE'] : ['DRAGON_API_IDCLIENTE', 'DRAGON_API_AUTH', 'DRAGON_USUARIO', 'DRAGON_PASSWORD']).filter((k) => !process.env[k])
 if (faltan.length) { console.error('Faltan en puente-sql/.env:', faltan.join(', ')); process.exit(1) }
 
 const b64url = (b) => Buffer.from(b).toString('base64').replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_')
@@ -37,9 +40,24 @@ const hmacPass = crypto.createHmac('sha256', CLAVE.toUpperCase()).update(PASS.to
 const cabecera = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
 const cuerpo = b64url(JSON.stringify({ usuario: USUARIO, password: hmacPass, exp: Math.floor(Date.now() / 1000) + 3600 }))
 const firma = b64url(crypto.createHmac('sha256', CLAVE).update(`${cabecera}.${cuerpo}`).digest())
-const jwt = `${cabecera}.${cuerpo}.${firma}`
+const jwt = TOKEN || `${cabecera}.${cuerpo}.${firma}`
+
+async function leerCliente(auth, etiqueta) {
+  const c = await fetch(`${URL_API}/Cliente/01140/`, { headers: { IdCliente: ID, Authorization: auth, BaseDeDatos: 'MITO' } })
+  const cj = await c.text()
+  console.log(`GET Cliente/01140 (${etiqueta}) ->`, c.status, c.statusText, c.headers.get('InformacionAdicional') || '')
+  if (c.ok) console.log(cj.slice(0, 400))
+  return c.ok
+}
 
 ;(async () => {
+  if (TOKEN) {
+    if (TOKEN.split('.').length === 3) {
+      try { console.log('Token: vence', new Date(JSON.parse(Buffer.from(TOKEN.split('.')[1], 'base64url').toString()).exp * 1000).toISOString()) } catch { /* sin exp */ }
+    }
+    if (await leerCliente(TOKEN, 'token directo')) return
+    if (!USUARIO) { console.log(`El token no sirve para el cliente de API ${ID} (¿hay dos DRAGON_API_IDCLIENTE en el .env?)`); process.exit(2) }
+  }
   console.log(`Autenticando ${ID} con el usuario ${USUARIO} (HMAC en ${enc})…`)
   const r = await fetch(`${URL_API}/Autenticar`, {
     method: 'POST',
