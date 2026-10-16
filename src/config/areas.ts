@@ -384,6 +384,17 @@ export const APPS: AppDef[] = [
     permiso: 'mayorista.mapeo.view',
   },
   {
+    id: 'mayorista-franquicias',
+    areaId: 'mayorista',
+    title: 'Franquicias',
+    description: 'Reposición sugerida por franquicia (venta vs stock MITO y stock cliente).',
+    icon: Building2,
+    kind: 'internal',
+    target: '/mayorista/franquicias',
+    color: '#d97706',
+    permiso: 'mayorista.repos_piso',
+  },
+  {
     id: 'mayorista-estadisticas',
     areaId: 'mayorista',
     areaIds: ['rrhh'],

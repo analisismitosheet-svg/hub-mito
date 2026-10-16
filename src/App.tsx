@@ -66,6 +66,7 @@ import DatosSql from '@/pages/DatosSql'
 import SqlConexion from '@/pages/SqlConexion'
 import ComingSoon from '@/pages/ComingSoon'
 import Replicas from '@/pages/Replicas'
+import MayoristaFranquicias from '@/pages/MayoristaFranquicias'
 
 // Pantallas nuevas: se cargan bajo demanda para no agrandar el bundle principal
 // (el service worker no precachea archivos de más de 2 MB y la build falla).
@@ -309,6 +310,14 @@ export default function App() {
             element={
               <PermissionRoute permiso="mayorista.estadisticas.view">
                 <EstadisticasRendimiento />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/mayorista/franquicias"
+            element={
+              <PermissionRoute permiso="mayorista.repos_piso">
+                <MayoristaFranquicias />
               </PermissionRoute>
             }
           />
