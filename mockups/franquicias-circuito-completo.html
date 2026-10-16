@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Circuito franquicias · propuesta</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{--paper:#050508;--surface:rgba(255,255,255,.035);--surface2:rgba(255,255,255,.07);--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.18);--ink:#f8fafc;--sub:#94a3b8;--brand:#e11d2e;--em:#22c55e;--wa:#25d366;--amber:#f59e0b;--sky:#0ea5e9;--violet:#a855f7}
+  *{box-sizing:border-box} html,body{margin:0}
+  body{background:radial-gradient(900px 520px at 10% -12%, rgba(59,130,246,.15), transparent 60%),radial-gradient(800px 500px at 96% -6%, rgba(168,85,247,.10), transparent 55%),var(--paper);color:var(--ink);font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:14px;line-height:1.45;padding:22px clamp(12px,3vw,40px) 70px}
+  h1,h2,h3{margin:0;letter-spacing:-.02em} button{font-family:inherit;color:inherit;cursor:pointer}
+  .badge-mock{display:inline-flex;padding:4px 10px;border-radius:999px;background:rgba(245,158,11,.14);color:#fcd34d;border:1px solid rgba(245,158,11,.32);font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+  .sub{color:var(--sub);font-size:12.5px}
+
+  /* Línea de tiempo */
+  .linea{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:18px 0 26px}
+  @media (max-width:900px){.linea{grid-template-columns:1fr 1fr}}
+  .p{position:relative;border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:12px}
+  .p .n{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:99px;font-size:12px;font-weight:900;color:#fff;margin-bottom:6px}
+  .p b{display:block;font-size:13.5px} .p span{font-size:11.5px;color:var(--sub)}
+  .p .q{display:inline-block;margin-top:6px;font-size:10.5px;font-weight:800;border-radius:6px;padding:1px 6px;border:1px solid}
+
+  .etapa{display:grid;grid-template-columns:330px minmax(0,1fr);gap:24px;align-items:start;border-top:1px solid var(--line);padding:24px 0}
+  @media (max-width:900px){.etapa{grid-template-columns:1fr}}
+  .etapa .txt h2{font-size:18px;display:flex;align-items:center;gap:10px}
+  .etapa .txt h2 i{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:99px;font-style:normal;font-size:13px;color:#fff}
+  .etapa .txt p{color:var(--sub);font-size:13px;margin:8px 0 0}
+  .etapa .txt ul{color:var(--sub);font-size:12.5px;padding-left:18px;margin:8px 0 0} .etapa .txt li{margin:3px 0} .etapa .txt li b{color:var(--ink)}
+
+  .panel{border:1px solid var(--line);background:var(--surface);border-radius:18px;padding:14px;box-shadow:0 10px 30px -12px rgba(0,0,0,.6)}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--sub);text-align:left;padding:7px 6px;border-bottom:1px solid var(--line)}
+  td{padding:6px;border-bottom:1px solid var(--line)}
+  .r{text-align:right} .c{text-align:center}
+  .btn{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 13px;border-radius:999px;border:1px solid var(--line2);background:var(--surface);font-size:12.5px;font-weight:700}
+  .btn.wa{background:var(--wa);border-color:transparent;color:#05250f}
+  .btn.brand{background:var(--brand);border-color:transparent;color:#fff}
+  .chip{display:inline-flex;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:800;border:1px solid}
+  .chip.env{color:#7dd3fc;border-color:rgba(14,165,233,.4);background:rgba(14,165,233,.12)}
+  .chip.conf{color:#86efac;border-color:rgba(34,197,94,.4);background:rgba(34,197,94,.12)}
+  .chip.cam{color:#fcd34d;border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.12)}
+  .chip.dra{color:#d8b4fe;border-color:rgba(168,85,247,.45);background:rgba(168,85,247,.14)}
+
+  /* WhatsApp */
+  .wa{background:#0b141a;border-radius:18px;padding:14px;border:1px solid var(--line);max-width:420px}
+  .wa-h{display:flex;align-items:center;gap:10px;margin-bottom:12px;font-weight:700}
+  .wa-h i{width:34px;height:34px;border-radius:99px;background:#d97706;display:grid;place-items:center;font-style:normal;font-weight:900}
+  .burb{background:#005c4b;border-radius:10px 2px 10px 10px;padding:9px 11px;font-size:13px;margin-left:auto;max-width:94%}
+  .prev{background:#025144;border-radius:8px;overflow:hidden;margin-bottom:6px}
+  .prev .img{height:70px;background:linear-gradient(135deg,#111,#2a0b0e);display:flex;align-items:center;padding:0 12px;font-weight:900;color:#ef4444;font-size:22px;letter-spacing:-.04em}
+  .prev .t{padding:7px 9px;font-size:12px} .prev .t b{display:block;font-size:12.5px} .prev .t span{opacity:.7;font-size:11px}
+  .link{color:#53bdeb;text-decoration:underline;word-break:break-all}
+
+  /* Teléfono cliente */
+  .tel{width:100%;max-width:370px;border:10px solid #1c1c22;border-radius:36px;background:#f6f6f7;color:#111;overflow:hidden;box-shadow:0 30px 60px -20px rgba(0,0,0,.8)}
+  .tel .top{background:#111;color:#fff;padding:14px}
+  .tel .top .logo{font-weight:900;color:#ef4444;font-size:19px;letter-spacing:-.04em}
+  .tel .top h3{font-size:16px;margin-top:4px} .tel .top p{font-size:11.5px;opacity:.75;margin:2px 0 0}
+  .tel .cuerpo{padding:10px;max-height:470px;overflow:auto}
+  .it{background:#fff;border:1.5px solid #e5e5e5;border-radius:12px;padding:9px;margin-bottom:7px}
+  .it.si{border-color:#22c55e;background:#f0fdf4} .it.no{opacity:.45}
+  .it b{font-size:12.5px} .it .d{font-size:11px;color:#666}
+  .it .pr{font-size:11px;color:#333;margin-top:2px}
+  .it .r2{display:flex;align-items:center;justify-content:space-between;margin-top:7px;gap:6px}
+  .sn{display:inline-flex;border:1px solid #ddd;border-radius:9px;overflow:hidden}
+  .sn button{border:0;background:#fff;padding:5px 11px;font-size:11.5px;font-weight:800;color:#555}
+  .sn button.on.s{background:#22c55e;color:#fff} .sn button.on.n{background:#ef4444;color:#fff}
+  .cant{display:inline-flex;align-items:center;border:1px solid #ddd;border-radius:9px;overflow:hidden;background:#fff}
+  .cant button{width:28px;height:28px;border:0;background:#f1f1f1;font-weight:900;color:#111}
+  .cant span{width:30px;text-align:center;font-weight:900;font-size:13px}
+  .sub2{font-size:12px;font-weight:800;color:#111}
+  .tel .bar{background:#fff;border-top:1px solid #e5e5e5;padding:10px;display:flex;align-items:center;gap:8px}
+  .tel .bar div{flex:1;font-size:11.5px;color:#555} .tel .bar b{color:#111;font-size:15px}
+  .tel .bar button{border:0;background:#e11d2e;color:#fff;border-radius:11px;padding:10px 12px;font-weight:800;font-size:12.5px}
+  .ok{display:none;text-align:center;padding:36px 16px}
+  .ok .c{width:60px;height:60px;border-radius:99px;background:#22c55e;color:#fff;display:grid;place-items:center;font-size:30px;margin:0 auto 10px}
+
+  /* Dragon */
+  .dragon{border-radius:10px;overflow:hidden;border:1px solid #9aa4b2;background:#f3f4f6;color:#111;max-width:640px;font-family:Segoe UI,system-ui,sans-serif}
+  .dragon .tb{background:#fff;border-bottom:1px solid #ccc;padding:6px 10px;font-size:12.5px;display:flex;gap:8px;align-items:center}
+  .dragon .tb i{width:14px;height:14px;border-radius:99px;background:#0ea5e9;display:inline-block}
+  .dragon .f{display:grid;grid-template-columns:150px 1fr;gap:4px 10px;padding:10px 14px;font-size:12px}
+  .dragon .f span{color:#333} .dragon .f div{background:#fff;border:1px solid #c9ced6;padding:2px 6px}
+  .dragon table{font-size:11.5px;background:#fff} .dragon th{color:#333;border-bottom:1px solid #999;font-size:10.5px} .dragon td{border-bottom:1px solid #e5e5e5}
+
+  /* Diagrama técnico */
+  .diag{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .nodo{border:1px solid var(--line2);background:var(--surface2);border-radius:12px;padding:8px 11px;font-size:12px;font-weight:700}
+  .nodo small{display:block;font-weight:500;color:var(--sub);font-size:10.5px}
+  .fl{color:var(--sub);font-size:12px}
+</style>
+</head>
+<body>
+<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+  <h1 style="font-size:clamp(20px,3vw,26px)">Franquicias · circuito completo</h1>
+  <span class="badge-mock">Propuesta · maqueta</span>
+</div>
+<p class="sub" style="margin-top:4px">De la reposición sugerida al pedido de venta en Dragon (DRAGONFISH_MITO), sin cargar nada a mano.</p>
+
+<div class="linea">
+  <div class="p"><span class="n" style="background:#d97706">1</span><b>Armás la propuesta</b><span>Reposición sugerida → “Enviar propuesta”</span><br><span class="q chip env">Hub · vos</span></div>
+  <div class="p"><span class="n" style="background:#25d366">2</span><b>Le llega el link</b><span>WhatsApp solo con el link, sin la lista</span><br><span class="q chip conf">WhatsApp</span></div>
+  <div class="p"><span class="n" style="background:#0ea5e9">3</span><b>Elige y confirma</b><span>Sí / No, cantidades, precio y total</span><br><span class="q chip env">Celular · cliente</span></div>
+  <div class="p"><span class="n" style="background:#a855f7">4</span><b>Entra a Dragon</b><span>Pedido de venta en DRAGONFISH_MITO</span><br><span class="q chip dra">API REST Dragon</span></div>
+  <div class="p"><span class="n" style="background:#e11d2e">5</span><b>Te avisa y queda todo</b><span>Campana + N° de pedido + historial</span><br><span class="q chip cam">Hub · vos</span></div>
+</div>
+
+<!-- 1 -->
+<div class="etapa">
+  <div class="txt">
+    <h2><i style="background:#d97706">1</i>Armás la propuesta</h2>
+    <p>En Reposición sugerida elegís fechas y materiales como hoy. El botón de WhatsApp pasa a ser <b style="color:var(--ink)">“Enviar propuesta”</b>.</p>
+    <ul>
+      <li>Se guarda en el hub con número: <b>P-CFU-0001</b>.</li>
+      <li>Lleva cantidades y <b>precio</b> de vw_ARTICULOS_MITO.</li>
+      <li>Se genera un <b>link único</b> que vence en 7 días.</li>
+    </ul>
+  </div>
+  <div class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+      <div><b>Reposición sugerida · CF Ushuaia</b><div class="sub">venta del 16/09 al 16/10 · 61 SKU · 73 u.</div></div>
+      <button class="btn wa">Enviar propuesta por WhatsApp</button>
+    </div>
+    <table>
+      <thead><tr><th>Artículo</th><th class="c">Sugerido</th><th class="r">Precio</th><th class="r">Subtotal</th></tr></thead>
+      <tbody>
+        <tr><td><b>ZH060213</b> Tree Long Sock</td><td class="c">4</td><td class="r">$ 8.000</td><td class="r">$ 32.000</td></tr>
+        <tr><td><b>CF060202</b> Broome Socks</td><td class="c">4</td><td class="r">$ 10.000</td><td class="r">$ 40.000</td></tr>
+        <tr><td><b>CF060203</b> Louise Socks</td><td class="c">3</td><td class="r">$ 7.500</td><td class="r">$ 22.500</td></tr>
+        <tr><td colspan="4" class="sub">… 58 más</td></tr>
+        <tr><td><b>Total</b></td><td class="c"><b>73</b></td><td></td><td class="r"><b style="color:#86efac">$ 1.498.800</b></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 2 -->
+<div class="etapa">
+  <div class="txt">
+    <h2><i style="background:#25d366">2</i>Le llega el link por WhatsApp</h2>
+    <p>Solo el link, con un mensaje corto. <b style="color:var(--ink)">No va la lista entera</b> en el chat.</p>
+    <ul>
+      <li>Se abre WhatsApp con el mensaje listo; lo mandás vos.</li>
+      <li>El cliente <b>no necesita usuario</b>: el link abre solo su propuesta.</li>
+    </ul>
+  </div>
+  <div class="wa">
+    <div class="wa-h"><i>CF</i>CF Ushuaia</div>
+    <div class="burb">
+      <div class="prev"><div class="img">MITO</div><div class="t"><b>Propuesta de reposición P-CFU-0001</b><span>hub-mito.vercel.app</span></div></div>
+      Hola! Te armamos la reposición de esta semana 👇<br>Marcá lo que querés y confirmá:<br>
+      <span class="link">https://hub-mito.vercel.app/p/x7Kq2mVb9T</span><br>
+      <span style="opacity:.7;font-size:11px">Vence el 23/10</span>
+    </div>
+  </div>
+</div>
+
+<!-- 3 -->
+<div class="etapa">
+  <div class="txt">
+    <h2><i style="background:#0ea5e9">3</i>El cliente elige y confirma</h2>
+    <p>Probalo: marcá sí/no, cambiá cantidades y confirmá.</p>
+    <ul>
+      <li>Ve <b>precio, subtotal por artículo y total</b> que se actualizan solos.</li>
+      <li>No puede pedir más que el stock de MITO.</li>
+      <li>Una vez confirmado, el link ya no deja cambiar nada.</li>
+    </ul>
+  </div>
+  <div class="tel">
+    <div class="top"><div class="logo">MITO</div><h3>Propuesta de reposición</h3><p>CF Ushuaia · P-CFU-0001 · vence 23/10</p></div>
+    <div class="cuerpo" id="cuerpo"><div id="items"></div></div>
+    <div class="ok" id="ok"><div class="c">✓</div><h3 style="font-size:17px">¡Pedido enviado!</h3><p style="font-size:12.5px;color:#555">Quedó cargado como pedido de venta <b>N° 0001-00010231</b>.</p></div>
+    <div class="bar" id="bar"><div>Total<br><b id="tot">$ 0</b> · <span id="uni">0</span> u.</div><button id="confirmar">Confirmar pedido</button></div>
+  </div>
+</div>
+
+<!-- 4 -->
+<div class="etapa">
+  <div class="txt">
+    <h2><i style="background:#a855f7">4</i>Entra a Dragon como pedido de venta</h2>
+    <p>Apenas confirma, el hub manda el pedido a la <b style="color:var(--ink)">API REST de Dragon</b> (puesto M1T0O1, base MITO) y queda en <b style="color:var(--ink)">M1T0O1\ZOOLOGIC · DRAGONFISH_MITO</b>.</p>
+    <ul>
+      <li>Solo <b>altas</b> de pedidos; nunca modifica ni borra.</li>
+      <li>Cliente, lista de precios y vendedor fijos por franquicia.</li>
+      <li>En “Obs.” va el N° de propuesta para rastrearlo.</li>
+      <li>Si Dragon no responde, la orden queda “pendiente de cargar” y se reintenta con un botón.</li>
+    </ul>
+  </div>
+  <div>
+    <div class="dragon">
+      <div class="tb"><i></i><b>Pedido de venta</b> · Dragonfish Color y Talle · DRAGONFISH_MITO</div>
+      <div class="f">
+        <span>Número</span><div>0001-00010231</div>
+        <span>Fecha</span><div>16/10/2026</div>
+        <span>Cliente</span><div>CFU · CF USHUAIA</div>
+        <span>Lista de precios</span><div>LISTA2</div>
+        <span>Observaciones</span><div>Hub MITO · propuesta P-CFU-0001 confirmada por el cliente</div>
+      </div>
+      <table><thead><tr><th>Artículo</th><th>Color</th><th>Talle</th><th class="c">Cant.</th><th class="r">Precio</th><th class="r">Monto</th></tr></thead><tbody id="dragon"></tbody></table>
+      <div style="text-align:right;padding:8px 12px;font-weight:800;font-size:13px">Total: <span id="dtot"></span></div>
+    </div>
+    <div class="panel" style="margin-top:14px">
+      <div class="sub" style="margin-bottom:8px">Cómo viaja por dentro</div>
+      <div class="diag">
+        <div class="nodo">Celular del cliente<small>link único</small></div><span class="fl">→</span>
+        <div class="nodo">Hub (Vercel)<small>guarda la orden</small></div><span class="fl">→</span>
+        <div class="nodo">Puente SQL<small>esta PC · con token</small></div><span class="fl">→</span>
+        <div class="nodo">API Dragon :8015<small>POST /Pedido/</small></div><span class="fl">→</span>
+        <div class="nodo">DRAGONFISH_MITO<small>M1T0O1\ZOOLOGIC</small></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 5 -->
+<div class="etapa">
+  <div class="txt">
+    <h2><i style="background:#e11d2e">5</i>Te avisa y queda el historial</h2>
+    <p>Te llega a la campana y en Franquicias ves cada propuesta con su estado y el número de pedido de Dragon.</p>
+  </div>
+  <div class="panel">
+    <div style="display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:12px;padding:9px 11px;background:var(--surface2);margin-bottom:12px">
+      <span style="width:30px;height:30px;border-radius:9px;background:rgba(168,85,247,.15);color:#d8b4fe;display:grid;place-items:center;font-weight:900">✓</span>
+      <div style="flex:1"><b>Mayorista · Órdenes de franquicias</b><div class="sub">CF Ushuaia confirmó P-CFU-0001 · cargado en Dragon N° 0001-00010231</div></div>
+    </div>
+    <table>
+      <thead><tr><th>Propuesta</th><th>Fecha</th><th class="c">Propuesto</th><th class="c">Pidió</th><th class="r">Total</th><th>Estado</th><th>Pedido Dragon</th></tr></thead>
+      <tbody>
+        <tr><td>P-CFU-0002</td><td>17/10</td><td class="c">18</td><td class="c">—</td><td class="r">—</td><td><span class="chip env">Esperando al cliente</span></td><td>—</td></tr>
+        <tr><td>P-CFU-0001</td><td>16/10</td><td class="c">73</td><td class="c" id="hUni">0</td><td class="r" id="hTot">$ 0</td><td><span class="chip dra">En Dragon</span></td><td>0001-00010231</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const ITEMS=[
+  ['ZH060213','TREE LONG SOCK ZIMITH','06','U',4,8000],['CF060202','BROOME SOCKS CAPTAIN FIN','00','U',4,10000],
+  ['CF060203','LOUISE SOCKS CAPTAIN FIN','00','U',3,7500],['CF051004','PAIGE FANNYPACK CAPTAIN FIN','00','U',2,21500],
+  ['CF162104','CASSIAN BAGGY JEAN CAPTAIN FIN','02','34',2,39000],
+].map(([art,desc,color,talle,sug,precio])=>({art,desc,color,talle,sug,precio,cant:sug,si:true}))
+const $=id=>document.getElementById(id)
+const pesos=n=>new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',maximumFractionDigits:0}).format(n)
+function render(){
+  $('items').innerHTML=ITEMS.map((it,i)=>`<div class="it ${it.si?'si':'no'}">
+    <b>${it.art}</b><div class="d">${it.desc} · ${it.color} / ${it.talle}</div>
+    <div class="pr">${pesos(it.precio)} c/u · te proponemos ${it.sug}</div>
+    <div class="r2"><span class="sn"><button class="s ${it.si?'on':''}" data-si="${i}">Sí</button><button class="n ${!it.si?'on':''}" data-no="${i}">No</button></span>
+    ${it.si?`<span class="cant"><button data-m="${i}">−</button><span>${it.cant}</span><button data-p="${i}">+</button></span><span class="sub2">${pesos(it.cant*it.precio)}</span>`:''}</div></div>`).join('')
+  const sel=ITEMS.filter(i=>i.si&&i.cant>0), uni=sel.reduce((s,i)=>s+i.cant,0), tot=sel.reduce((s,i)=>s+i.cant*i.precio,0)
+  $('tot').textContent=pesos(tot); $('uni').textContent=uni
+  $('dragon').innerHTML=sel.map(it=>`<tr><td>${it.art}</td><td>${it.color}</td><td>${it.talle}</td><td class="c">${it.cant}</td><td class="r">${pesos(it.precio)}</td><td class="r">${pesos(it.cant*it.precio)}</td></tr>`).join('')
+  $('dtot').textContent=pesos(tot); $('hUni').textContent=uni; $('hTot').textContent=pesos(tot)
+}
+document.addEventListener('click',e=>{const t=e.target.dataset
+  if(t.si){ITEMS[+t.si].si=true;render()} if(t.no){ITEMS[+t.no].si=false;render()}
+  if(t.m){const it=ITEMS[+t.m];it.cant=Math.max(0,it.cant-1);render()}
+  if(t.p){const it=ITEMS[+t.p];it.cant++;render()}})
+$('confirmar').onclick=()=>{$('cuerpo').style.display='none';$('bar').style.display='none';$('ok').style.display='block'}
+render()
+</script>
+</body>
+</html>
