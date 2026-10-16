@@ -518,12 +518,15 @@ export interface PlantillaEnvio {
   nombre: string
   idioma: string
   parametros: string[]
+  /** valor variable del botón con link (la parte {{1}} de la URL), si la plantilla lo tiene */
+  botonUrl?: string
 }
 
 function componentesPlantilla(p: PlantillaEnvio, imagenId?: string) {
   const comps: Array<Record<string, unknown>> = []
   if (imagenId) comps.push({ type: 'header', parameters: [{ type: 'image', image: { id: imagenId } }] })
   if (p.parametros.length) comps.push({ type: 'body', parameters: p.parametros.map((t) => ({ type: 'text', text: t.slice(0, 900) || '-' })) })
+  if (p.botonUrl) comps.push({ type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: p.botonUrl }] })
   return comps
 }
 
@@ -694,4 +697,61 @@ export async function enviarInforme(informe: Informe & { id?: string }, origen: 
     }).catch(() => undefined)
   }
   return { ok, texto, enviados, detalle }
+}
+
+// ---------------------------------------------------------------------------
+// Franquicias: propuesta de reposición con link para que el cliente elija
+// ---------------------------------------------------------------------------
+
+/** Plantilla aprobada en Meta: cuerpo {{1}} nombre, {{2}} N° de propuesta, {{3}} franquicia; botón con link /p/{{1}}. */
+const PLANTILLA_PROPUESTA = { nombre: 'propuesta_franquicia', idioma: 'es_AR' }
+const URL_HUB = (process.env.HUB_URL || 'https://hub-mito.vercel.app').replace(/\/$/, '')
+
+/**
+ * Manda por WhatsApp el link de la propuesta a los contactos de la franquicia y la marca como enviada.
+ * Usa la plantilla (llega siempre); si todavía no está aprobada, manda el link como texto (sólo llega
+ * a quien le escribió al número del hub en las últimas 24 h).
+ */
+export async function enviarPropuestaFranquicia(id: string): Promise<{ ok: boolean; enviados: number; detalle: string; link: string }> {
+  const props = await jsonDe<{ id: string; numero: string; franquicia: string; franquicia_nombre: string; token: string; estado: string; vence_at: string }>(
+    `franquicias_propuestas?select=id,numero,franquicia,franquicia_nombre,token,estado,vence_at&id=eq.${encodeURIComponent(id)}`,
+  )
+  const p = props[0]
+  if (!p) throw new Error('No existe la propuesta')
+  if (p.estado !== 'borrador' && p.estado !== 'enviada') throw new Error('La propuesta ya fue confirmada por el cliente')
+  const link = `${URL_HUB}/p/${p.token}`
+  const contactos = await jsonDe<{ nombre: string | null; telefono: string }>(
+    `franquicias_contactos?select=nombre,telefono&franquicia=eq.${encodeURIComponent(p.franquicia)}`,
+  )
+  const destinos = contactos.filter((c) => normalizarTelefono(c.telefono))
+  if (!destinos.length) throw new Error(`${p.franquicia_nombre} no tiene contactos de WhatsApp cargados`)
+
+  const vence = corta(new Date(new Date(p.vence_at).getTime() - 3 * 3600_000).toISOString())
+  let enviados = 0
+  const detalles: string[] = []
+  for (const c of destinos) {
+    const nombre = (c.nombre || '').trim().split(/\s+/)[0] || 'equipo'
+    let r = await enviarWhatsappPlantilla(c.telefono, { ...PLANTILLA_PROPUESTA, parametros: [nombre, p.numero, p.franquicia_nombre], botonUrl: p.token })
+    if (!r.ok && /132001|does not exist/i.test(r.detalle)) {
+      r = await enviarWhatsapp(
+        c.telefono,
+        `Hola ${nombre}, te armamos la propuesta de reposición ${p.numero} para ${p.franquicia_nombre}.
+Elegí qué querés y confirmá el pedido acá:
+${link}
+(vence el ${vence})`,
+      )
+    }
+    if (r.ok) enviados++
+    detalles.push(`${c.nombre || c.telefono}: ${r.ok ? 'OK' : r.detalle}`)
+  }
+  const ok = enviados > 0
+  await rest(`franquicias_propuestas?id=eq.${p.id}`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      ...(ok ? { estado: 'enviada', enviada_at: new Date().toISOString() } : {}),
+      envio_detalle: detalles.join(' · ').slice(0, 500),
+    }),
+  }).catch(() => undefined)
+  return { ok, enviados, detalle: detalles.join(' · '), link }
 }

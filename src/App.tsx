@@ -67,6 +67,7 @@ import SqlConexion from '@/pages/SqlConexion'
 import ComingSoon from '@/pages/ComingSoon'
 import Replicas from '@/pages/Replicas'
 import MayoristaFranquicias from '@/pages/MayoristaFranquicias'
+import PropuestaFranquicia from '@/pages/PropuestaFranquicia'
 
 // Pantallas nuevas: se cargan bajo demanda para no agrandar el bundle principal
 // (el service worker no precachea archivos de más de 2 MB y la build falla).
@@ -87,6 +88,8 @@ export default function App() {
           <Route path="/opinar/:local" element={<Opinar />} />
           {/* Enlace público único por (local + sector) resuelto por token */}
           <Route path="/opinar/qr/:token" element={<Opinar />} />
+          {/* Propuesta de reposición para una franquicia: link público por token (sin usuario) */}
+          <Route path="/p/:token" element={<PropuestaFranquicia />} />
           {/* Pantalla para autenticados no aprobados (pendiente/rechazado/desactivado) */}
           <Route path="/acceso" element={<Acceso />} />
 

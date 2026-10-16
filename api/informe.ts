@@ -4,6 +4,7 @@
  *   POST /api/informe   { id }                        -> envía el informe guardado
  *   POST /api/informe   { informe, preview: true }     -> devuelve el texto sin enviar
  *   POST /api/informe   { estado: true }               -> ¿WhatsApp conectado? (número y nombre en Meta)
+ *   POST /api/informe   { propuesta: id }              -> manda el link de una propuesta de franquicias
  *   GET  /api/informe   (Bearer $CRON_SECRET ó JWT)    -> dispara los diarios vencidos
  *   GET  /api/informe?evento=repo                      -> si la repo del día llegó al 100%, manda los
  *        informes "al completar la repo" que no salieron hoy (lo llama pg_cron cada 5 min; sin datos sensibles)
@@ -15,7 +16,7 @@
  * Variables de entorno en Vercel (sin prefijo VITE_): CRON_SECRET, SUPABASE_URL,
  * SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, WHATSAPP_TOKEN, WHATSAPP_PHONE_ID.
  */
-import { armarCuerpo, enviarInforme, estadoWhatsapp, generarImagenInforme, repoCompleta, tienePermiso, usuarioDe } from '../src/lib/informesServidor.js'
+import { armarCuerpo, enviarInforme, enviarPropuestaFranquicia, estadoWhatsapp, generarImagenInforme, repoCompleta, tienePermiso, usuarioDe } from '../src/lib/informesServidor.js'
 import { formatoDe, type Informe } from '../src/lib/informes.js'
 import { mismoSecreto } from '../src/lib/apiAuth.js'
 
@@ -190,6 +191,16 @@ async function manual(req: Req, res: Res) {
   if (datos.estado === true) {
     if (!(await tienePermiso(token, ['sistemas.informes.view']))) return res.status(403).json({ error: 'No tenés permiso para esta acción' })
     return res.status(200).json(await estadoWhatsapp())
+  }
+
+  // --- Franquicias: mandar el link de la propuesta a los contactos ---
+  if (typeof datos.propuesta === 'string') {
+    if (!(await tienePermiso(token, ['mayorista.repos_piso']))) return res.status(403).json({ error: 'No tenés permiso para esta acción' })
+    try {
+      return res.status(200).json(await enviarPropuestaFranquicia(datos.propuesta))
+    } catch (e) {
+      return res.status(200).json({ ok: false, enviados: 0, detalle: (e as Error).message })
+    }
   }
 
   const permitido = await tienePermiso(token, preview ? ['sistemas.informes.view'] : ['sistemas.informes.edit'])

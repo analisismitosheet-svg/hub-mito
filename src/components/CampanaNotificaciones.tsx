@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Bell, UserCheck, ClipboardList, Truck, CalendarX, FileText, ArrowRightLeft, PackageCheck, X, Pause,
-  ChevronRight,
+  ChevronRight, Building2,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
@@ -22,6 +22,7 @@ interface Notificacion {
     | 'transferencias'
     | 'armados'
     | 'pausas'
+    | 'franquicias'
   titulo: string
   detalle: string
   ruta: string
@@ -56,6 +57,7 @@ const GRUPOS: Record<string, { area: string; seccion: string; color: string; ico
   nota_credito: { area: 'Mayorista', seccion: 'Notas de crédito', color: 'bg-orange-500/15 text-orange-400', icono: FileText },
   pausas: { area: 'Mayorista', seccion: 'Pausas por autorizar', color: 'bg-pink-500/15 text-pink-400', icono: Pause },
   pedidos: { area: 'Mayorista', seccion: 'Pedidos', color: 'bg-red-500/15 text-red-400', icono: PackageCheck },
+  franquicias: { area: 'Mayorista', seccion: 'Pedidos de franquicias', color: 'bg-teal-500/15 text-teal-400', icono: Building2 },
   transferencias: { area: 'Locales', seccion: 'Reposiciones / Transferencias', color: 'bg-violet-500/15 text-violet-400', icono: ArrowRightLeft },
 }
 const GRUPO_DE_TIPO: Record<Notificacion['tipo'], keyof typeof GRUPOS> = {
@@ -67,6 +69,7 @@ const GRUPO_DE_TIPO: Record<Notificacion['tipo'], keyof typeof GRUPOS> = {
   transferencias: 'transferencias',
   armados: 'pedidos',
   pausas: 'pausas',
+  franquicias: 'franquicias',
 }
 
 /** Ícono de cada aviso dentro del grupo (ej. en Facturación: sin fecha vs sin enviar). */
@@ -79,6 +82,7 @@ const ICONO_TIPO: Record<Notificacion['tipo'], typeof Bell> = {
   transferencias: ArrowRightLeft,
   armados: PackageCheck,
   pausas: Pause,
+  franquicias: Building2,
 }
 
 function fmtFecha(iso: string): string {
@@ -351,6 +355,15 @@ export default function CampanaNotificaciones() {
         if (activo && data) {
           for (const n of data as { id: string; nro_pedido: string | null; razon_social: string | null; fecha: string | null; created_at: string }[]) {
             notis.push({ id: `nc-${n.id}`, tipo: 'nota_credito', titulo: 'Nota de crédito pendiente', detalle: `N° ${n.nro_pedido || '-'} · ${n.razon_social || ''}`, ruta: `/mayorista/notas-credito?abrir=${n.id}`, fecha: n.fecha || n.created_at, destinoId: n.id })
+          }
+        }
+      }
+      // 5b) Franquicias que confirmaron su propuesta y nadie la miró todavía (si no tiene permiso, RLS no devuelve nada)
+      if (esMayorista || isAdmin) {
+        const { data } = await sb.from('franquicias_propuestas').select('id,numero,franquicia_nombre,unidades_confirmadas,confirmada_at').eq('estado', 'confirmada').is('revisada_at', null)
+        if (activo && data) {
+          for (const p of data as { id: string; numero: string; franquicia_nombre: string; unidades_confirmadas: number | null; confirmada_at: string }[]) {
+            notis.push({ id: `fq-${p.id}`, tipo: 'franquicias', titulo: `${p.franquicia_nombre} confirmó su pedido`, detalle: `${p.numero} · ${p.unidades_confirmadas ?? 0} u.`, ruta: '/mayorista/franquicias', fecha: p.confirmada_at, destinoId: p.id })
           }
         }
       }

@@ -2,12 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
+import FranquiciaPropuestas from '@/components/FranquiciaPropuestas'
 import { supabase } from '@/lib/supabase'
 import { leerVista, leerVistaFiltrada, type FilaSql } from '@/lib/sqlApi'
 import { VISTA_ARTICULOS } from '@/lib/articulosConsulta'
 import { cargarStockSku, claveSku, stockSkuDe, type StockSku } from '@/lib/stockSku'
-// @ts-ignore
-declare const html2pdf: any
 
 type Fila = {
   precio: number | null
@@ -227,25 +226,7 @@ export default function MayoristaFranquicias() {
     })
     if (list.length === 0) msg += '(Sin sugeridos con stock en MITO)\n'
     msg += `\nTotal sugerencia reposición: ${list.reduce((s, f) => s + f.sugerido, 0)} u. · Total: ${fmtPesos(list.reduce((s, f) => s + subtotal(f), 0))}`
-    try {
-      const frame = document.querySelector('#frame') as HTMLElement | null
-      if (frame) {
-        const clone = frame.cloneNode(true) as HTMLElement
-        const sel = clone.querySelector('#selMat') as HTMLElement | null
-        if (sel) sel.style.display = 'none'
-        clone.querySelectorAll('button').forEach((b) => ((b as HTMLElement).style.display = 'none'))
-        const opt = { margin: 0.5, filename: `reposicion-sugerida-${franq.id.toLowerCase()}.pdf`, html2canvas: { scale: 1.6, backgroundColor: '#050508' }, jsPDF: { unit: 'cm', format: 'a4', orientation: 'landscape' } as any }
-        const hpdf = (window as any).html2pdf || html2pdf
-        hpdf().set(opt).from(clone).toPdf().output('blob').then((blob: Blob) => {
-          const url = URL.createObjectURL(blob)
-          window.open(url, '_blank')
-          setTimeout(() => URL.revokeObjectURL(url), 120000)
-        })
-      }
-    } catch (e) {}
-    setTimeout(() => {
-      window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank')
-    }, 800)
+    window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank')
   }
 
   const exportExcel = () => {
@@ -402,10 +383,22 @@ export default function MayoristaFranquicias() {
             </p>
             <div className="flex gap-2">
               <button onClick={exportExcel} className="inline-flex items-center gap-2 rounded-full border border-line2 bg-surface px-3 py-1 text-xs font-semibold text-ink">⬇ Excel</button>
-              <button onClick={enviarWhatsApp} className="inline-flex items-center gap-2 rounded-full border border-line2 bg-surface px-3 py-1 text-xs font-semibold text-ink">Enviar por WhatsApp</button>
+              <button onClick={enviarWhatsApp} className="inline-flex items-center gap-2 rounded-full border border-line2 bg-surface px-3 py-1 text-xs font-semibold text-ink" title="Abre tu WhatsApp con la lista en texto">Compartir desde mi WhatsApp</button>
             </div>
           </div>
         </div>
+
+        <FranquiciaPropuestas
+          franquicia={franq.id}
+          nombre={franq.nombre}
+          desde={desde}
+          hasta={hasta}
+          listo={!cargando && !cargandoPrecios && !error}
+          items={filtrar().map((f) => ({
+            art: f.art, descrip: f.descrip, material: f.material, color: f.color, talle: f.talle,
+            stockCli: f.stockCli, vendido: f.vendido, stock: f.stock, sugerido: f.sugerido, precio: f.precio,
+          }))}
+        />
       </div>
     </Layout>
   )
