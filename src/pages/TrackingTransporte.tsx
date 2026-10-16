@@ -309,12 +309,17 @@ export default function TrackingTransporte() {
     return m
   }, [ubics])
 
-  /** ¿El GPS del vehículo pasó por el local (dentro de su radio) en el día? Solo locales ubicados en el mapa. */
-  const pasoPorLocal = useCallback((vehId: string, baseId: string) => {
+  /** Última vez del día que el GPS del vehículo estuvo en el local (dentro de su radio); null si no pasó o el local no está ubicado. */
+  const ultimaVisitaLocal = useCallback((vehId: string, baseId: string): string | null => {
     const b = basesUbic.find((x) => x.base_id === baseId)
-    if (!b) return false
-    return (ubicsDe.get(vehId) ?? []).some((u) => metros(u, b) <= b.radio_m + Math.min(u.precision_m ?? 0, 100))
+    if (!b) return null
+    const us = ubicsDe.get(vehId) ?? []
+    for (let i = us.length - 1; i >= 0; i--) {
+      if (metros(us[i], b) <= b.radio_m + Math.min(us[i].precision_m ?? 0, 100)) return us[i].at
+    }
+    return null
   }, [basesUbic, ubicsDe])
+  const pasoPorLocal = useCallback((vehId: string, baseId: string) => ultimaVisitaLocal(vehId, baseId) !== null, [ultimaVisitaLocal])
 
   // bulto -> chofer que lo cargó (última carga del día)
   const choferDeBulto = useMemo(() => {
@@ -324,25 +329,42 @@ export default function TrackingTransporte() {
   }, [tr])
 
   const resumen = useMemo(() => {
-    const r = new Map<string, { cargas: Ev[]; entregas: Ev[]; aBordo: number; destinos: Map<string, { total: number; ok: number }> }>()
+    const r = new Map<string, { cargas: Ev[]; entregas: Ev[]; aBordo: number; destinos: Map<string, { total: number; ok: number; proxima: number }> }>()
     for (const mv of moviles) {
       const cargas = (tr?.cargas ?? []).filter((c) => c.chofer_id === mv.choferId)
       const ids = new Set(cargas.map((c) => c.bulto_id))
       const entregas = (tr?.entregas ?? []).filter((e) => ids.has(e.bulto_id) && choferDeBulto.get(e.bulto_id) === mv.choferId)
       const entregadosIds = new Set(entregas.map((e) => e.bulto_id))
-      const destinos = new Map<string, { total: number; ok: number }>()
+      // Momento en que estuvo en cada local (GPS; si no, la última recepción de ese local): lo que cargó
+      // para ese local DESPUÉS de pasar va para la próxima vuelta y no cuenta como faltante de esa visita.
+      const corte = new Map<string, string | null>()
+      const corteDe = (d: string) => {
+        if (!corte.has(d)) {
+          const gps = mv.vehiculo ? ultimaVisitaLocal(mv.vehiculo.id, d) : null
+          const recep = entregas.filter((e) => e.destino === d).reduce<string | null>((m, e) => (!m || e.at > m ? e.at : m), null)
+          corte.set(d, gps ?? recep)
+        }
+        return corte.get(d) ?? null
+      }
+      const destinos = new Map<string, { total: number; ok: number; proxima: number }>()
       for (const id of ids) {
         const c = cargas.find((x) => x.bulto_id === id)!
         const d = c.destino ?? '?'
-        const x = destinos.get(d) ?? { total: 0, ok: 0 }
-        x.total++
-        if (entregadosIds.has(id)) x.ok++
+        const x = destinos.get(d) ?? { total: 0, ok: 0, proxima: 0 }
+        if (entregadosIds.has(id)) {
+          x.total++
+          x.ok++
+        } else {
+          const t = corteDe(d)
+          if (t && new Date(c.at).getTime() > new Date(t).getTime()) x.proxima++
+          else x.total++
+        }
         destinos.set(d, x)
       }
       r.set(mv.key, { cargas, entregas, aBordo: ids.size - entregadosIds.size, destinos })
     }
     return r
-  }, [moviles, tr, choferDeBulto])
+  }, [moviles, tr, choferDeBulto, ultimaVisitaLocal])
 
   const controlesDe = useCallback((vehId: string | undefined) => (vehId ? controles.filter((c) => c.vehiculo_id === vehId) : []), [controles])
 
@@ -627,13 +649,13 @@ export default function TrackingTransporte() {
                     <div className="mt-1.5 flex flex-wrap gap-1">
                       {[...r.destinos].map(([d, x]) => {
                         const paso = !!mv.vehiculo && pasoPorLocal(mv.vehiculo.id, d)
-                        const todo = x.ok === x.total
+                        const todo = x.total > 0 && x.ok === x.total
                         const parte = x.ok > 0 && !todo
                         return (
                           <span key={d}
-                            title={`${d}: ${x.ok} de ${x.total} bultos recibidos por el local${paso ? ' · el GPS pasó por el local' : ''}`}
+                            title={`${d}: ${x.ok} de ${x.total} bultos recibidos por el local${paso ? ' · el GPS pasó por el local' : ''}${x.proxima ? ` · ${x.proxima} cargado${x.proxima === 1 ? '' : 's'} después de pasar: para la próxima vuelta` : ''}`}
                             className={`rounded px-1.5 py-0.5 text-[11px] ${todo ? 'bg-green-500/15 text-green-600 dark:text-green-400' : parte ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400' : 'bg-surface2 text-sub'}`}>
-                            {paso ? '📍' : ''}{todo ? '✓ ' : ''}{d}{x.total > 1 ? ` ${x.ok}/${x.total}` : ''}
+                            {paso ? '📍' : ''}{todo ? '✓ ' : ''}{d}{x.total > 1 ? ` ${x.ok}/${x.total}` : ''}{x.proxima ? <span className="ml-1 text-sky-500">+{x.proxima} próx.</span> : ''}
                           </span>
                         )
                       })}
