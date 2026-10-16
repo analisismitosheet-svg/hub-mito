@@ -78,6 +78,8 @@ export default function MayoristaFranquicias() {
         // Ventas netas: facturas y tickets suman, notas de crédito restan; remitos y demás no cuentan
         const vs: Venta[] = []
         for (const f of filasV) {
+          // La vista dice de qué base sale cada fila (BASE_DATOS): solo las de esta franquicia
+          if (f.BASE_DATOS != null && txt(f.BASE_DATOS).toUpperCase() !== franq.base) continue
           const tipo = txt(f.DESCFW).toUpperCase()
           const signo = /^(TICKET)?NOTADECREDITO/.test(tipo) ? -1 : /^(TICKET)?FACTURA/.test(tipo) ? 1 : 0
           if (!signo) continue
@@ -121,7 +123,7 @@ export default function MayoristaFranquicias() {
       }
     })()
     return () => { activo = false }
-  }, [franq.origenStock])
+  }, [franq.origenStock, franq.base])
 
   // Una fila por SKU con lo vendido en el rango elegido
   const filas = useMemo<Fila[]>(() => {
@@ -173,7 +175,7 @@ export default function MayoristaFranquicias() {
     const rango = `${fmtDia(desde)} al ${fmtDia(hasta)}`
     let msg = `REPOSICIÓN SUGERIDA - ${franq.nombre.toUpperCase()} (${rango})\nArtículos para reponer (solo con stock en MITO)${selMat ? ' - Material: ' + selMat : ''}:\n\n`
     list.forEach((f, i) => {
-      msg += `${i + 1}. ${f.art} ${(f.color || 'U')}/${f.talle || '-'} | Base:${franq.base} | Stock ${franq.id}:${f.stockCli || 0} | Vend:${f.vendido} | Stock MITO:${f.stock} | Sug.reposición:${f.sugerido} | Estado:${f.stock <= 0 ? 'Urgente' : 'Normal'} | Mat:${f.material} | ${f.descrip || ''}\n`
+      msg += `${i + 1}. ${f.art} ${(f.color || 'U')}/${f.talle || '-'} | Stock ${franq.id}:${f.stockCli || 0} | Vend:${f.vendido} | Stock MITO:${f.stock} | Sug.reposición:${f.sugerido} | Estado:${f.stock <= 0 ? 'Urgente' : 'Normal'} | Mat:${f.material} | ${f.descrip || ''}\n`
     })
     if (list.length === 0) msg += '(Sin sugeridos con stock en MITO)\n'
     msg += `\nTotal sugerencia reposición: ${list.reduce((s, f) => s + f.sugerido, 0)}`
@@ -200,8 +202,8 @@ export default function MayoristaFranquicias() {
 
   const exportExcel = () => {
     const list = filtrar()
-    const header = ['Artículo', 'Descripción', 'Material', 'Color', 'Talle', 'Base', 'Stock cliente', 'Vendido', 'Stock MITO', 'Sugerencia reposición', 'Estado']
-    const rows = list.map((f) => [f.art, f.descrip || '', f.material || '', f.color || 'U', f.talle || '', franq.base, String(f.stockCli), String(f.vendido), String(f.stock), String(f.sugerido), f.stock <= 0 ? 'Urgente' : 'Normal'])
+    const header = ['Artículo', 'Descripción', 'Material', 'Color', 'Talle', 'Stock cliente', 'Vendido', 'Stock MITO', 'Sugerencia reposición', 'Estado']
+    const rows = list.map((f) => [f.art, f.descrip || '', f.material || '', f.color || 'U', f.talle || '', String(f.stockCli), String(f.vendido), String(f.stock), String(f.sugerido), f.stock <= 0 ? 'Urgente' : 'Normal'])
     const csv = [header.join(','), ...rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','))].join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
@@ -229,7 +231,7 @@ export default function MayoristaFranquicias() {
             <div className="min-w-0">
               <h2 className="font-display text-lg font-semibold text-ink">Reposición sugerida</h2>
               <p className="truncate text-sm text-sub">
-                {franq.nombre} ({franq.base}) · venta del {fmtDia(desde)} al {fmtDia(hasta)} · contra el stock real de MITO
+                {franq.nombre} · venta del {fmtDia(desde)} al {fmtDia(hasta)} · contra el stock real de MITO
               </p>
             </div>
             <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
@@ -284,7 +286,6 @@ export default function MayoristaFranquicias() {
                     <th className={`text-left ${th}`}>Material</th>
                     <th className={`text-center ${th}`}>Color</th>
                     <th className={`text-center ${th}`}>Talle</th>
-                    <th className={`text-left ${th}`}>Base</th>
                     <th className={`text-center ${th}`}>Stock cliente</th>
                     <th className={`text-center ${th}`}>Vendido</th>
                     <th className={`text-center ${th}`}>Stock MITO</th>
@@ -295,7 +296,7 @@ export default function MayoristaFranquicias() {
                 <tbody>
                   {cargando && (
                     <tr>
-                      <td colSpan={12} className="px-3 py-10 text-center text-sub">
+                      <td colSpan={11} className="px-3 py-10 text-center text-sub">
                         <Loader2 size={16} className="mr-2 inline animate-spin" aria-hidden />
                         Trayendo ventas y stock…
                       </td>
@@ -303,7 +304,7 @@ export default function MayoristaFranquicias() {
                   )}
                   {!cargando && !error && visibles.length === 0 && (
                     <tr>
-                      <td colSpan={12} className="px-3 py-10 text-center text-sub">No hay nada para reponer en ese rango.</td>
+                      <td colSpan={11} className="px-3 py-10 text-center text-sub">No hay nada para reponer en ese rango.</td>
                     </tr>
                   )}
                   {visibles.map((f, i) => {
@@ -316,7 +317,6 @@ export default function MayoristaFranquicias() {
                         <td className="px-3 py-2 text-sub">{f.material || '—'}</td>
                         <td className="px-3 py-2 text-center text-sub">{f.color || 'U'}</td>
                         <td className="px-3 py-2 text-center text-sub">{f.talle || '—'}</td>
-                        <td className="whitespace-nowrap px-3 py-2 text-[11px] text-sub">{franq.base}</td>
                         <td className={`px-3 py-2 text-center tabular-nums ${f.stockCli === 0 ? 'text-sub' : 'text-sky-400'}`}>{fmt(f.stockCli)}</td>
                         <td className="px-3 py-2 text-center tabular-nums text-ink">{fmt(f.vendido)}</td>
                         <td className={`px-3 py-2 text-center tabular-nums ${f.stock <= 0 ? 'font-semibold text-red-400' : 'text-sub'}`}>{fmt(f.stock)}</td>
@@ -333,7 +333,7 @@ export default function MayoristaFranquicias() {
                 </tbody>
                 <tfoot className="bg-surface">
                   <tr className="text-[12px]">
-                    <td colSpan={10} className="px-3 py-2 font-semibold text-ink">{fmt(count)} SKU a reponer (con stock en MITO)</td>
+                    <td colSpan={9} className="px-3 py-2 font-semibold text-ink">{fmt(count)} SKU a reponer (con stock en MITO)</td>
                     <td className="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">{fmt(totalSug)}</td>
                     <td />
                   </tr>
