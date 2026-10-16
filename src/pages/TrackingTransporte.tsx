@@ -309,6 +309,13 @@ export default function TrackingTransporte() {
     return m
   }, [ubics])
 
+  /** ¿El GPS del vehículo pasó por el local (dentro de su radio) en el día? Solo locales ubicados en el mapa. */
+  const pasoPorLocal = useCallback((vehId: string, baseId: string) => {
+    const b = basesUbic.find((x) => x.base_id === baseId)
+    if (!b) return false
+    return (ubicsDe.get(vehId) ?? []).some((u) => metros(u, b) <= b.radio_m + Math.min(u.precision_m ?? 0, 100))
+  }, [basesUbic, ubicsDe])
+
   // bulto -> chofer que lo cargó (última carga del día)
   const choferDeBulto = useMemo(() => {
     const m = new Map<string, string>()
@@ -618,11 +625,18 @@ export default function TrackingTransporte() {
                   </div>
                   {r && r.destinos.size > 0 && (
                     <div className="mt-1.5 flex flex-wrap gap-1">
-                      {[...r.destinos].map(([d, x]) => (
-                        <span key={d} className={`rounded px-1.5 py-0.5 text-[11px] ${x.ok === x.total ? 'bg-green-500/15 text-green-600 dark:text-green-400' : 'bg-surface2 text-sub'}`}>
-                          {x.ok === x.total ? '✓ ' : ''}{d}{x.total > 1 ? ` ${x.ok}/${x.total}` : ''}
-                        </span>
-                      ))}
+                      {[...r.destinos].map(([d, x]) => {
+                        const paso = !!mv.vehiculo && pasoPorLocal(mv.vehiculo.id, d)
+                        const todo = x.ok === x.total
+                        const parte = x.ok > 0 && !todo
+                        return (
+                          <span key={d}
+                            title={`${d}: ${x.ok} de ${x.total} bultos recibidos por el local${paso ? ' · el GPS pasó por el local' : ''}`}
+                            className={`rounded px-1.5 py-0.5 text-[11px] ${todo ? 'bg-green-500/15 text-green-600 dark:text-green-400' : parte ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400' : 'bg-surface2 text-sub'}`}>
+                            {paso ? '📍' : ''}{todo ? '✓ ' : ''}{d}{x.total > 1 ? ` ${x.ok}/${x.total}` : ''}
+                          </span>
+                        )
+                      })}
                     </div>
                   )}
                 </div>
