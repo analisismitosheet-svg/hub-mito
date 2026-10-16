@@ -122,6 +122,14 @@ export default function MayoristaFranquicias() {
             </div>
             <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
               <label className="flex items-center gap-2 text-xs text-sub">
+                Desde
+                <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className="rounded-full border border-line2 bg-surface px-2 py-1 text-xs text-ink" />
+              </label>
+              <label className="flex items-center gap-2 text-xs text-sub">
+                Hasta
+                <input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className="rounded-full border border-line2 bg-surface px-2 py-1 text-xs text-ink" />
+              </label>
+              <label className="flex items-center gap-2 text-xs text-sub">
                 Material
                 <select id="selMat" value={selMat} onChange={(e) => setSelMat(e.target.value)} className="rounded-full border border-line2 bg-surface px-2 py-1 text-xs text-ink">
                   <option value="">Todos</option>
