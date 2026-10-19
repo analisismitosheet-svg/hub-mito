@@ -719,6 +719,9 @@
   function repoVisibles(){
     const q=repoFiltros.q.trim().toUpperCase();
     return REPO.filas.filter(function(f){
+      // Igual que la pantalla real: sólo SKUs con stock en MITO y sugerido > 0.
+      // Si no hay stock en MITO, la fila no aparece.
+      if(!(f.stock > 0 && f.sugerido > 0)) return false;
       if(repoFiltros.material && f.material!==repoFiltros.material) return false;
       const est=f.sugerido>=6?'Urgente':'Normal';
       if(repoFiltros.estado && est!==repoFiltros.estado) return false;
@@ -754,7 +757,8 @@
     document.getElementById('rBarSku').textContent=n0f(sku);
     document.getElementById('rBarUni').textContent=n0f(uni);
     document.getElementById('rBarVal').textContent=moneyf(valor);
-    document.getElementById('rConteo').textContent=n0f(sku)+' de '+n0f(REPO.filas.length)+' SKUs';
+    const totalRepo=REPO.filas.filter(f=>f.stock>0 && f.sugerido>0).length;
+    document.getElementById('rConteo').textContent=n0f(sku)+' de '+n0f(totalRepo)+' SKUs a reponer';
   }
   document.getElementById('rBuscar').addEventListener('input',function(e){ repoFiltros.q=e.target.value; renderRepo(); });
   document.getElementById('rMaterial').addEventListener('change',function(e){ repoFiltros.material=e.target.value; renderRepo(); });
