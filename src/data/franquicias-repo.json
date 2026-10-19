@@ -19,9 +19,9 @@
       "color": "06",
       "talle": "U",
       "vendido": 5,
-      "stock": 187,
-      "stockCli": 1,
-      "sugerido": 4,
+      "stock": 182,
+      "stockCli": 0,
+      "sugerido": 5,
       "material": "ACCESORIOS"
     },
     {
@@ -30,7 +30,7 @@
       "color": "00",
       "talle": "U",
       "vendido": 4,
-      "stock": 217,
+      "stock": 214,
       "stockCli": 0,
       "sugerido": 4,
       "material": "ACCESORIOS"
@@ -41,7 +41,7 @@
       "color": "00",
       "talle": "U",
       "vendido": 4,
-      "stock": 34,
+      "stock": 32,
       "stockCli": 1,
       "sugerido": 3,
       "material": "ACCESORIOS"
@@ -96,7 +96,7 @@
       "color": "00",
       "talle": "U",
       "vendido": 2,
-      "stock": 1384,
+      "stock": 1382,
       "stockCli": 4,
       "sugerido": 0,
       "material": "ACCESORIOS"
@@ -118,7 +118,7 @@
       "color": "02",
       "talle": "U",
       "vendido": 2,
-      "stock": 90,
+      "stock": 88,
       "stockCli": 1,
       "sugerido": 1,
       "material": "ACCESORIOS"
@@ -129,7 +129,7 @@
       "color": "02",
       "talle": "U",
       "vendido": 2,
-      "stock": 160,
+      "stock": 158,
       "stockCli": 0,
       "sugerido": 2,
       "material": "ACCESORIOS"
@@ -162,7 +162,7 @@
       "color": "01",
       "talle": "U",
       "vendido": 2,
-      "stock": 495,
+      "stock": 479,
       "stockCli": 3,
       "sugerido": 0,
       "material": "ACCESORIOS"
@@ -184,7 +184,7 @@
       "color": "01",
       "talle": "L",
       "vendido": 2,
-      "stock": 194,
+      "stock": 187,
       "stockCli": 1,
       "sugerido": 1,
       "material": "ACCESORIOS"
@@ -349,7 +349,7 @@
       "color": "02",
       "talle": "M",
       "vendido": 1,
-      "stock": 5,
+      "stock": 4,
       "stockCli": 0,
       "sugerido": 1,
       "material": "REMERAS"
@@ -669,7 +669,7 @@
       "talle": "36",
       "vendido": 1,
       "stock": 0,
-      "stockCli": 2,
+      "stockCli": 1,
       "sugerido": 0,
       "material": "PANTALONES"
     },
@@ -679,7 +679,7 @@
       "color": "02",
       "talle": "34",
       "vendido": 1,
-      "stock": 10,
+      "stock": 8,
       "stockCli": 1,
       "sugerido": 0,
       "material": "PANTALONES"
@@ -822,7 +822,7 @@
       "color": "01",
       "talle": "S",
       "vendido": 1,
-      "stock": 25,
+      "stock": 21,
       "stockCli": 0,
       "sugerido": 1,
       "material": "REMERAS"
@@ -833,7 +833,7 @@
       "color": "06",
       "talle": "L",
       "vendido": 1,
-      "stock": 3,
+      "stock": 2,
       "stockCli": 0,
       "sugerido": 1,
       "material": "REMERAS"
@@ -1031,9 +1031,9 @@
       "color": "01",
       "talle": "16",
       "vendido": 1,
-      "stock": 42,
-      "stockCli": 0,
-      "sugerido": 1,
+      "stock": 40,
+      "stockCli": 1,
+      "sugerido": 0,
       "material": "REMERAS"
     },
     {
@@ -1229,7 +1229,7 @@
       "color": "06",
       "talle": "U",
       "vendido": 1,
-      "stock": 278,
+      "stock": 277,
       "stockCli": 1,
       "sugerido": 0,
       "material": "ACCESORIOS"
@@ -1285,7 +1285,7 @@
       "talle": "XXL",
       "vendido": 1,
       "stock": 0,
-      "stockCli": 2,
+      "stockCli": 1,
       "sugerido": 0,
       "material": "BUZOS"
     },
@@ -1296,7 +1296,7 @@
       "talle": "XL",
       "vendido": 1,
       "stock": 0,
-      "stockCli": 2,
+      "stockCli": 1,
       "sugerido": 0,
       "material": "CAMPERAS"
     },
@@ -1416,7 +1416,7 @@
       "color": "00",
       "talle": "M",
       "vendido": 1,
-      "stock": 340,
+      "stock": 338,
       "stockCli": 0,
       "sugerido": 1,
       "material": "ACCESORIOS"
@@ -1493,9 +1493,9 @@
       "color": "02",
       "talle": "U",
       "vendido": 1,
-      "stock": 426,
-      "stockCli": 1,
-      "sugerido": 0,
+      "stock": 425,
+      "stockCli": 0,
+      "sugerido": 1,
       "material": "ACCESORIOS"
     },
     {
@@ -1559,7 +1559,7 @@
       "color": "02",
       "talle": "M",
       "vendido": 1,
-      "stock": 250,
+      "stock": 238,
       "stockCli": 10,
       "sugerido": 0,
       "material": "ACCESORIOS"
@@ -1570,7 +1570,7 @@
       "color": "02",
       "talle": "XL",
       "vendido": 1,
-      "stock": 246,
+      "stock": 232,
       "stockCli": 9,
       "sugerido": 0,
       "material": "ACCESORIOS"
@@ -1592,7 +1592,7 @@
       "color": "02",
       "talle": "L",
       "vendido": 1,
-      "stock": 145,
+      "stock": 144,
       "stockCli": 11,
       "sugerido": 0,
       "material": "ACCESORIOS"
@@ -1702,9 +1702,9 @@
       "color": "00",
       "talle": "36",
       "vendido": 1,
-      "stock": 1,
+      "stock": 0,
       "stockCli": 0,
-      "sugerido": 1,
+      "sugerido": 0,
       "material": "CALZADO"
     },
     {
@@ -1912,7 +1912,7 @@
       "talle": "L",
       "vendido": 1,
       "stock": 0,
-      "stockCli": 1,
+      "stockCli": 0,
       "sugerido": 0,
       "material": "REMERAS"
     },
@@ -2032,7 +2032,7 @@
       "color": "02",
       "talle": "M",
       "vendido": 1,
-      "stock": 136,
+      "stock": 134,
       "stockCli": 1,
       "sugerido": 0,
       "material": "CAMISAS/ROMPEVIENTOS"
@@ -2055,7 +2055,7 @@
       "talle": "XL",
       "vendido": 1,
       "stock": 80,
-      "stockCli": 1,
+      "stockCli": 2,
       "sugerido": 0,
       "material": "REMERAS"
     },
@@ -2120,7 +2120,7 @@
       "color": "02",
       "talle": "378",
       "vendido": 1,
-      "stock": 38,
+      "stock": 36,
       "stockCli": 0,
       "sugerido": 1,
       "material": "CALZADO"
@@ -2131,7 +2131,7 @@
       "color": "02",
       "talle": "390",
       "vendido": 1,
-      "stock": 51,
+      "stock": 49,
       "stockCli": 0,
       "sugerido": 1,
       "material": "CALZADO"
@@ -2285,7 +2285,7 @@
       "color": "02",
       "talle": "L",
       "vendido": 1,
-      "stock": 8,
+      "stock": 7,
       "stockCli": 0,
       "sugerido": 1,
       "material": "REMERAS"
@@ -2340,7 +2340,7 @@
       "color": "01",
       "talle": "XXL",
       "vendido": 1,
-      "stock": 17,
+      "stock": 16,
       "stockCli": 0,
       "sugerido": 1,
       "material": "REMERAS"
@@ -2560,7 +2560,7 @@
       "color": "02",
       "talle": "U",
       "vendido": 1,
-      "stock": 97,
+      "stock": 96,
       "stockCli": 1,
       "sugerido": 0,
       "material": "ACCESORIOS"
@@ -2615,7 +2615,7 @@
       "color": "02",
       "talle": "U",
       "vendido": 1,
-      "stock": 119,
+      "stock": 118,
       "stockCli": 1,
       "sugerido": 0,
       "material": "ACCESORIOS"
@@ -2637,7 +2637,7 @@
       "color": "10",
       "talle": "U",
       "vendido": 1,
-      "stock": 156,
+      "stock": 155,
       "stockCli": 1,
       "sugerido": 0,
       "material": "ACCESORIOS"
@@ -2659,8 +2659,8 @@
       "color": "10",
       "talle": "U",
       "vendido": 1,
-      "stock": 652,
-      "stockCli": 5,
+      "stock": 648,
+      "stockCli": 4,
       "sugerido": 0,
       "material": "ACCESORIOS"
     },
@@ -2671,7 +2671,7 @@
       "talle": "U",
       "vendido": 1,
       "stock": 53,
-      "stockCli": 3,
+      "stockCli": 2,
       "sugerido": 0,
       "material": "ACCESORIOS"
     },
@@ -2692,7 +2692,7 @@
       "color": "02",
       "talle": "U",
       "vendido": 1,
-      "stock": 104,
+      "stock": 103,
       "stockCli": 0,
       "sugerido": 1,
       "material": "ACCESORIOS"
