@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Loader2, Search, ChevronRight, CheckCheck, Check, Minus, Plus, ArrowLeft, PackageCheck, RotateCcw, Boxes, ClipboardList, FileSpreadsheet,
+  Loader2, Search, ChevronRight, CheckCheck, Check, Minus, Plus, ArrowLeft, PackageCheck, RotateCcw, Boxes, ClipboardList, FileSpreadsheet, Pencil, Save, X,
 } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
+import { useAuth } from '@/context/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { cruzar, leerIngresos, type RenglonPedido } from '@/lib/ingresosPicking'
 
@@ -62,6 +63,9 @@ interface Entrega {
   anulado: boolean
   unidades: number
   items: { articulo: string; color: string; talle: string; cantidad: number }[]
+  /** Si un admin lo corrigió después de registrarlo (sql/picking_editar.sql) */
+  editado_at?: string | null
+  editado_por?: string | null
 }
 
 type Filtro = 'todos' | 'pendientes' | 'completos'
@@ -229,6 +233,7 @@ function Tilde({ completo, etiqueta, onClick }: { completo: boolean; etiqueta: s
 }
 
 export default function Picking() {
+  const { isAdmin } = useAuth()
   const [pedidos, setPedidos] = useState<PedidoPicking[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -265,6 +270,8 @@ export default function Picking() {
   const [entregas, setEntregas] = useState<Entrega[]>([])
   const [entregaAbierta, setEntregaAbierta] = useState<string | null>(null)
   const [registrando, setRegistrando] = useState(false)
+  // Corregir un picking ya registrado (solo admin): cantidades por artículo|color|talle
+  const [edicion, setEdicion] = useState<{ id: string; cant: Record<string, number> } | null>(null)
 
   // Importar el Excel de ingresos del picking (Dragonfish): marca lo que ya ingresó
   const archivoIngresos = useRef<HTMLInputElement>(null)
@@ -429,6 +436,7 @@ ${avisoNo}` : ''}
     setBusqueda('')
     setBorrador({})
     setEntregaAbierta(null)
+    setEdicion(null)
     void cargarPedidoSel(sel).then(async ({ its, ents }) => {
       if (!vivo) return
       setItems(its)
@@ -633,6 +641,53 @@ ${avisoNo}` : ''}
     setEntregas(ents)
     setRegistrando(false)
     setAviso({ ok: true, texto: `Picking #${e.nro} anulado.` })
+    void cargarPedidos()
+  }
+
+  /** Abre la corrección de un picking registrado con las cantidades que tiene hoy */
+  function abrirEdicion(e: Entrega) {
+    const cant: Record<string, number> = {}
+    for (const it of e.items) cant[claveItem(it)] = Number(it.cantidad)
+    setEdicion({ id: e.id, cant })
+    setAviso(null)
+  }
+
+  /**
+   * Guarda la corrección: manda la lista completa del picking y la base recalcula
+   * la diferencia sobre lo recibido de la OC (sql/picking_editar.sql).
+   */
+  async function guardarEdicion(e: Entrega) {
+    if (!supabase || !sel || !edicion) return
+    const lista = e.items
+      .map((it) => ({ articulo: it.articulo, color: it.color, talle: it.talle, cantidad: edicion.cant[claveItem(it)] ?? 0 }))
+      .filter((x) => x.cantidad > 0)
+    const antes = e.unidades
+    const ahora = lista.reduce((a, x) => a + x.cantidad, 0)
+    if (!lista.length) {
+      setAviso({ ok: false, texto: `Dejaste el picking #${e.nro} en 0 unidades: si no entró nada, anulalo.` })
+      return
+    }
+    if (ahora === antes && lista.length === e.items.length) {
+      setAviso({ ok: false, texto: 'No cambiaste ninguna cantidad.' })
+      return
+    }
+    const dif = ahora - antes
+    if (!window.confirm(`¿Guardar el picking #${e.nro} con ${n0.format(ahora)} unidades (antes ${n0.format(antes)}, ${dif > 0 ? '+' : ''}${n0.format(dif)})?
+
+Se recalcula lo recibido de esta OC.`)) return
+    setRegistrando(true)
+    const { error: er } = await supabase.rpc('editar_picking', { p_entrega: e.id, p_items: lista })
+    if (er) {
+      setRegistrando(false)
+      setAviso({ ok: false, texto: `No se pudo guardar: ${er.message}` })
+      return
+    }
+    const { its, ents } = await cargarPedidoSel(sel)
+    setItems(its)
+    setEntregas(ents)
+    setEdicion(null)
+    setRegistrando(false)
+    setAviso({ ok: true, texto: `Picking #${e.nro} corregido: ${n0.format(ahora)} unidades (${dif > 0 ? '+' : ''}${n0.format(dif)}).` })
     void cargarPedidos()
   }
 
@@ -1050,7 +1105,7 @@ ${avisoNo}` : ''}
                     {entregas.map((e) => (
                       <button
                         key={e.id}
-                        onClick={() => setEntregaAbierta(entregaAbierta === e.id ? null : e.id)}
+                        onClick={() => { setEntregaAbierta(entregaAbierta === e.id ? null : e.id); setEdicion(null) }}
                         aria-expanded={entregaAbierta === e.id}
                         className={`rounded-xl border px-3 py-1.5 text-left text-xs transition ${
                           e.anulado ? 'border-line text-sub/60 line-through' : entregaAbierta === e.id ? 'border-amber-500/50 bg-amber-500/10 text-ink' : 'border-line bg-surface2 text-sub hover:text-ink'
@@ -1061,6 +1116,7 @@ ${avisoNo}` : ''}
                         {e.creado_por ? ` · ${e.creado_por}` : ''} · <strong className="tabular-nums text-ink">{n0.format(e.unidades)} u.</strong>
                         {e.origen === 'excel' && ' · Excel'}
                         {e.origen === 'inicial' && ' · inicial'}
+                        {e.editado_at && ' · editado'}
                         {e.anulado && ' · anulado'}
                       </button>
                     ))}
@@ -1071,35 +1127,115 @@ ${avisoNo}` : ''}
                   {(() => {
                     const e = entregas.find((x) => x.id === entregaAbierta)
                     if (!e) return null
+                    const editando = edicion?.id === e.id
+                    const totalEdicion = e.items.reduce((a, it) => a + (edicion?.cant[claveItem(it)] ?? Number(it.cantidad)), 0)
                     return (
                       <div className="mt-2 overflow-hidden rounded-xl border border-line">
                         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-surface2 px-3 py-2 text-xs text-sub">
                           <span>
-                            Picking #{e.nro} · {e.items.length} renglones · {n0.format(e.unidades)} unidades
+                            Picking #{e.nro} · {e.items.length} renglones ·{' '}
+                            {editando ? (
+                              <strong className="tabular-nums text-ink">{n0.format(totalEdicion)} unidades</strong>
+                            ) : (
+                              <>{n0.format(e.unidades)} unidades</>
+                            )}
+                            {editando && totalEdicion !== e.unidades && (
+                              <strong className={totalEdicion > e.unidades ? 'text-lime-400' : 'text-brand-400'}>
+                                {' '}({totalEdicion > e.unidades ? '+' : ''}{n0.format(totalEdicion - e.unidades)} vs. {n0.format(e.unidades)})
+                              </strong>
+                            )}
                             {e.anulado && <strong className="text-brand-400"> · ANULADO</strong>}
+                            {!!e.editado_at && !editando && (
+                              <span title={`Lo corrigió ${e.editado_por ?? 'un administrador'}`}>
+                                {' '}· editado {new Date(e.editado_at).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}
+                                {e.editado_por ? ` por ${e.editado_por}` : ''}
+                              </span>
+                            )}
                           </span>
-                          {!e.anulado && (
-                            <button
-                              onClick={() => void anular(e)}
-                              disabled={registrando}
-                              className="btn-press inline-flex h-7 items-center gap-1 rounded-lg border border-brand-600/40 px-2 text-xs font-medium text-brand-400 hover:bg-brand-600/15 disabled:opacity-50"
-                            >
-                              <RotateCcw size={12} aria-hidden /> Anular este picking
-                            </button>
+                          {editando ? (
+                            <span className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => void guardarEdicion(e)}
+                                disabled={registrando}
+                                className="btn-press inline-flex h-7 items-center gap-1 rounded-lg border border-emerald-500/50 bg-emerald-500/10 px-2 text-xs font-medium text-emerald-500 hover:bg-emerald-500/20 disabled:opacity-50"
+                              >
+                                <Save size={12} aria-hidden /> Guardar cambios
+                              </button>
+                              <button
+                                onClick={() => setEdicion(null)}
+                                disabled={registrando}
+                                className="btn-press inline-flex h-7 items-center gap-1 rounded-lg border border-line px-2 text-xs font-medium text-sub hover:text-ink disabled:opacity-50"
+                              >
+                                <X size={12} aria-hidden /> Cancelar
+                              </button>
+                            </span>
+                          ) : (
+                            !e.anulado && (
+                              <span className="flex items-center gap-1.5">
+                                {isAdmin && (
+                                  <button
+                                    onClick={() => abrirEdicion(e)}
+                                    disabled={registrando}
+                                    title="Corregir las cantidades de este picking (solo admin)"
+                                    className="btn-press inline-flex h-7 items-center gap-1 rounded-lg border border-amber-500/50 px-2 text-xs font-medium text-amber-500 hover:bg-amber-500/15 disabled:opacity-50"
+                                  >
+                                    <Pencil size={12} aria-hidden /> Editar
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => void anular(e)}
+                                  disabled={registrando}
+                                  className="btn-press inline-flex h-7 items-center gap-1 rounded-lg border border-brand-600/40 px-2 text-xs font-medium text-brand-400 hover:bg-brand-600/15 disabled:opacity-50"
+                                >
+                                  <RotateCcw size={12} aria-hidden /> Anular este picking
+                                </button>
+                              </span>
+                            )
                           )}
                         </div>
+                        {editando && (
+                          <p className="border-b border-line bg-amber-500/5 px-3 py-1.5 text-[11px] text-sub">
+                            Cambiá lo que llegó de verdad en este picking. En 0 saca el renglón; se recalcula lo recibido de la OC.
+                          </p>
+                        )}
                         <div className="max-h-56 overflow-y-auto">
                           <table className="w-full text-xs">
                             <tbody className="divide-y divide-line/50">
-                              {e.items.map((it) => (
-                                <tr key={`${it.articulo}|${it.color}|${it.talle}`}>
-                                  <td className="px-3 py-1 font-semibold text-ink">{it.articulo}</td>
-                                  <td className="max-w-[16rem] truncate px-3 py-1 text-sub">{descDe(it.articulo) || '—'}</td>
-                                  <td className="px-3 py-1 text-sub">{it.color}</td>
-                                  <td className="px-3 py-1 text-sub">{it.talle}</td>
-                                  <td className="px-3 py-1 text-right font-semibold tabular-nums text-ink">{n0.format(Number(it.cantidad))}</td>
-                                </tr>
-                              ))}
+                              {e.items.map((it) => {
+                                const k = claveItem(it)
+                                const nuevo = edicion?.cant[k] ?? Number(it.cantidad)
+                                return (
+                                  <tr key={k} className={editando && nuevo !== Number(it.cantidad) ? 'bg-amber-500/10' : undefined}>
+                                    <td className="px-3 py-1 font-semibold text-ink">{it.articulo}</td>
+                                    <td className="max-w-[16rem] truncate px-3 py-1 text-sub">{descDe(it.articulo) || '—'}</td>
+                                    <td className="px-3 py-1 text-sub">{it.color}</td>
+                                    <td className="px-3 py-1 text-sub">{it.talle}</td>
+                                    {editando ? (
+                                      <td className="px-3 py-1 text-right">
+                                        <span className="inline-flex items-center gap-1.5">
+                                          <span className="tabular-nums text-sub">{n0.format(Number(it.cantidad))} →</span>
+                                          <input
+                                            type="number"
+                                            inputMode="decimal"
+                                            min={0}
+                                            value={nuevo}
+                                            onChange={(ev) =>
+                                              setEdicion((prev) =>
+                                                prev ? { ...prev, cant: { ...prev.cant, [k]: Math.max(0, Number(ev.target.value) || 0) } } : prev,
+                                              )
+                                            }
+                                            onFocus={(ev) => ev.target.select()}
+                                            aria-label={`Unidades de ${it.articulo} ${it.color} ${it.talle} en el picking #${e.nro}`}
+                                            className="h-7 w-16 rounded-lg border border-line bg-surface px-1 text-center text-xs font-semibold tabular-nums text-ink outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40"
+                                          />
+                                        </span>
+                                      </td>
+                                    ) : (
+                                      <td className="px-3 py-1 text-right font-semibold tabular-nums text-ink">{n0.format(Number(it.cantidad))}</td>
+                                    )}
+                                  </tr>
+                                )
+                              })}
                             </tbody>
                           </table>
                         </div>
