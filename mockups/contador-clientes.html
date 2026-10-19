@@ -83,10 +83,10 @@
   </div>
 
   <div class="kpis">
-    <div class="kp"><div class="l"><span style="color:var(--verde)">↳</span> Entradas</div><div class="v">4.832</div></div>
-    <div class="kp"><div class="l"><span style="color:var(--violeta)">👣</span> Promedio / día</div><div class="v">690</div></div>
-    <div class="kp"><div class="l"><span style="color:var(--celeste)">🚶</span> Transeúntes</div><div class="v">512</div><div class="n">378 únicos</div></div>
-    <div class="kp"><div class="l"><span style="color:var(--rosa)">%</span> Conversión</div><div class="v">34,2%</div><div class="n">1.653 tickets · $28.410.900</div></div>
+    <div class="kp"><div class="l"><span style="color:var(--verde)">↳</span> Entradas</div><div class="v">7.246</div></div>
+    <div class="kp"><div class="l"><span style="color:var(--violeta)">👣</span> Promedio / día</div><div class="v">1.449</div></div>
+    <div class="kp"><div class="l"><span style="color:var(--celeste)">🚶</span> Transeúntes</div><div class="v">23.687</div><div class="n">4.840 únicos</div></div>
+    <div class="kp"><div class="l"><span style="color:var(--rosa)">%</span> Conversión</div><div class="v">16,9%</div><div class="n">831 tickets / 4.903 entradas · 5 días con cámara · $91.868.235</div></div>
   </div>
 
   <div class="dos">
@@ -120,25 +120,40 @@
   <div class="card" style="margin-top:16px">
     <h3>Por local</h3>
     <table>
-      <thead><tr><th>Local</th><th class="r">Entradas</th><th class="r">Tickets</th><th class="r">Total</th><th class="r">Conversión</th></tr></thead>
+      <thead><tr><th>Local</th><th class="r">Días</th><th class="r">Entradas</th><th class="r">Tickets</th><th class="r">Total</th><th class="r">Conversión</th></tr></thead>
       <tbody>
-        <tr><td class="loc"><button>CFD</button></td><td class="r">1.184</td><td class="r">412</td><td class="r">$6.890.400</td><td class="r">34,8%</td></tr>
-        <tr><td class="loc"><button>LIBED</button></td><td class="r">967</td><td class="r">301</td><td class="r">$4.512.750</td><td class="r">31,1%</td></tr>
-        <tr><td class="loc"><button>9DEJU</button></td><td class="r">874</td><td class="r">296</td><td class="r">$5.104.200</td><td class="r">33,9%</td></tr>
-        <tr><td class="loc"><button>DINOD</button></td><td class="r">756</td><td class="r">287</td><td class="r">$7.231.900</td><td class="r">38,0%</td></tr>
-        <tr><td class="loc"><button>ESPID</button></td><td class="r">621</td><td class="r">198</td><td class="r">$3.248.300</td><td class="r">31,9%</td></tr>
-        <tr><td class="loc"><button>NCEND2</button></td><td class="r">430</td><td class="r">159</td><td class="r">$1.423.350</td><td class="r">37,0%</td></tr>
+        <tr><td class="loc"><button>9DEJULIO</button></td><td class="r">5/7</td><td class="r">1.769</td><td class="r">213</td><td class="r">$22.662.155</td><td class="r">12,0%</td></tr>
+        <tr><td class="loc"><button>MUNOZ</button></td><td class="r">5/7</td><td class="r">1.623</td><td class="r">218</td><td class="r">$24.657.562</td><td class="r">13,4%</td></tr>
+        <tr><td class="loc"><button>NVOCED</button></td><td class="r">5/7</td><td class="r">1.288</td><td class="r">327</td><td class="r">$37.527.312</td><td class="r">25,4%</td></tr>
+        <tr><td class="loc"><button>ESPINOD</button></td><td class="r">5/7</td><td class="r">1.006</td><td class="r">—</td><td class="r">—</td><td class="r">—</td></tr>
+        <tr><td class="loc"><button>RUTA9D2</button></td><td class="r">5/7</td><td class="r">917</td><td class="r">—</td><td class="r">—</td><td class="r">—</td></tr>
+        <tr><td class="loc"><button>RIVERAD</button></td><td class="r">5/7</td><td class="r">420</td><td class="r">—</td><td class="r">—</td><td class="r">—</td></tr>
+        <tr><td class="loc"><button>VCPD</button></td><td class="r">5/7</td><td class="r">223</td><td class="r">73</td><td class="r">$7.021.206</td><td class="r">32,7%</td></tr>
       </tbody>
     </table>
+    <p style="margin:8px 2px 0;font-size:11px;color:var(--sub)">
+      La conversión (por local y general) cuenta solo los días en que la cámara midió ese local —si la PC contadora estuvo
+      apagada ese día, no entra—, y suma entradas únicamente de los locales con cruce de ventas.
+    </p>
   </div>
 
   <div class="nota">
-    <b>Cómo quedó el cambio (sin subir todavía):</b>
+    <b>Tasa de conversión: se arregló el cálculo (sin subir todavía)</b>
+    <p style="margin:8px 0 6px">
+      Antes se dividía <b>la venta de TODOS los días</b> del rango por las entradas de los días que la cámara midió.
+      Los días sin conteo hay venta pero no entradas, y eso inflaba el porcentaje. Ahora la conversión (y los tickets/total
+      que la acompañan) cuentan <b>solo los días medidos</b>, por local, y el KPI general suma solo las entradas de los
+      locales que tienen cruce con ventas.
+    </p>
+    <p style="margin:0 0 4px"><b>Rango 13/10 → 19/10 (5 días medidos de 7):</b></p>
     <ul>
-      <li><b>Se quitó el KPI «Salidas»</b> de arriba: ahora son 4 cuadritos en una fila (Entradas · Promedio / día · Transeúntes · Conversión).</li>
-      <li><b>Se quitó la barra azul «Salidas»</b> del gráfico «Por día»: solo quedan las barras verdes de Entradas y la línea rosa de Conversión.</li>
-      <li><b>Se quitó la columna «Salidas»</b> de la tabla «Por local»: Local · Entradas · Tickets · Total · Conversión.</li>
-      <li>Los datos igualmente se siguen guardando (el contador de la PC los sigue subiendo); solo deja de mostrarse en esta pantalla.</li>
+      <li><b>9DEJULIO</b>: 12,0% (antes 14,6% — sumaba los 45 tickets del sábado, día sin cámara).</li>
+      <li><b>MUNOZ</b>: 13,4% (antes 16,6%).</li>
+      <li><b>NVOCED</b>: 25,4% (antes 53,2% — el sábado vendió 261 tickets y no hubo conteo).</li>
+      <li><b>VCPD</b>: 32,7% (antes 68,6%).</li>
+      <li><b>General</b>: 16,9% (antes 18,9%, que además dividía por las entradas de locales sin cruce de ventas).</li>
+      <li>Se agregó la columna <b>«Días»</b> (días con cámara en el rango) y una nota al pie que explica el criterio.</li>
+      <li>Los locales con cámara pero sin cruce de ventas (ESPINOD, RUTA9D2, RIVERAD) muestran «—», no un 0%.</li>
     </ul>
   </div>
 </div>

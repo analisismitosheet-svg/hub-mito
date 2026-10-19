@@ -25,7 +25,9 @@ function sb() {
  *
  * Conversión: si en config_app hay una vista SQL en 'contador_vista_ventas'
  * (columnas local, fecha, tickets y total — agregada por local y día), se cruzan
- * tickets / entradas.
+ * tickets / entradas. Solo entran los tickets de los días en que la cámara MIDIÓ
+ * entradas de ese local (`porLocalDia`): en los días sin conteo hay venta pero no
+ * entradas, y sumarlos distorsiona el porcentaje.
  */
 
 interface Resumen {
@@ -33,6 +35,8 @@ interface Resumen {
   porHora: { hora: number; entradas: number; salidas: number; promedio: number }[]
   porDia: { fecha: string; entradas: number; salidas: number }[]
   porLocal: { local: string; entradas: number; salidas: number; transeuntes: number; empleados: number; nuevos: number; reingresos: number }[]
+  /** Días con entradas > 0 por local: los únicos que sirven para la conversión. */
+  porLocalDia: { local: string; fecha: string; entradas: number }[]
   ocupacion: { local: string; entradas: number; salidas: number; adentro: number }[]
 }
 
@@ -120,6 +124,9 @@ export default function ContadorClientes() {
   const preset = (PRESETS.some((p) => p.id === params.get('preset')) ? params.get('preset') : '7d') as Preset
   const fLocal = verTodo ? params.get('local') ?? '' : miLocal
   const rango = useMemo(() => rangoDe(preset), [preset])
+  const diasRango = useMemo(
+    () => Math.round((new Date(rango.hasta + 'T00:00:00').getTime() - new Date(rango.desde + 'T00:00:00').getTime()) / 86400000) + 1,
+    [rango.desde, rango.hasta])
 
   const [datos, setDatos] = useState<Resumen | null>(null)
   const [ventas, setVentas] = useState<Venta[] | null>(null)
@@ -160,16 +167,41 @@ export default function ContadorClientes() {
     })()
   }, [])
 
-  // Tickets del rango, por local (y total)
+  // Días que cada local realmente midió (alguna entrada > 0). El tablero manda
+  // `porLocalDia`; si todavía no viniera, no se filtra (así no rompe durante el deploy).
+  const diasMedidos = useMemo(() => {
+    const m = new Map<string, Set<string>>()
+    for (const d of datos?.porLocalDia ?? []) {
+      if (d.entradas <= 0) continue
+      let s = m.get(d.local)
+      if (!s) m.set(d.local, (s = new Set()))
+      s.add(d.fecha)
+    }
+    return m
+  }, [datos])
+  const mideElDia = useCallback(
+    (local: string, fecha: string) => { const s = diasMedidos.get(local); return !s || s.size === 0 ? true : s.has(fecha) },
+    [diasMedidos])
+  const enRango = useCallback(
+    (v: Venta) => v.fecha >= rango.desde && v.fecha <= rango.hasta && (!fLocal || v.local === fLocal),
+    [rango.desde, rango.hasta, fLocal])
+
+  // Tickets del rango SOLO de los días con cámara: la conversión compara lo mismo de
+  // los dos lados (días sin conteo tienen venta pero no entradas → distorsionan el %).
   const tickets = useMemo(() => {
     if (!ventas) return null
     const porLocal = new Map<string, number>()
-    for (const v of ventas) {
-      if (v.fecha < rango.desde || v.fecha > rango.hasta || (fLocal && v.local !== fLocal)) continue
-      porLocal.set(v.local, (porLocal.get(v.local) ?? 0) + v.tickets)
-    }
+    for (const v of ventas) if (enRango(v) && mideElDia(v.local, v.fecha)) porLocal.set(v.local, (porLocal.get(v.local) ?? 0) + v.tickets)
     return porLocal
-  }, [ventas, rango, fLocal])
+  }, [ventas, enRango, mideElDia])
+
+  // Locales con ventas en el rango (aunque no caigan en días medidos): sirve para
+  // mostrar '—' donde no hay cruce, en vez de un 0% que parecería un dato real.
+  const conVentas = useMemo(() => {
+    const s = new Set<string>()
+    for (const v of ventas ?? []) if (enRango(v)) s.add(v.local)
+    return s
+  }, [ventas, enRango])
 
   // Total facturado del rango, por local (y general). Solo si la vista trae 'total'.
   const hayTotal = !!ventas?.some((v) => v.total != null)
@@ -177,27 +209,38 @@ export default function ContadorClientes() {
     const porLocal = new Map<string, number>()
     let general = 0
     for (const v of ventas ?? []) {
-      if (v.fecha < rango.desde || v.fecha > rango.hasta || (fLocal && v.local !== fLocal)) continue
+      if (!enRango(v) || !mideElDia(v.local, v.fecha)) continue
       const t = v.total ?? 0
       porLocal.set(v.local, (porLocal.get(v.local) ?? 0) + t)
       general += t
     }
     return { porLocal, general }
-  }, [ventas, rango, fLocal])
+  }, [ventas, enRango, mideElDia])
 
   const conversion = (entradas: number, tk: number | undefined) => (entradas > 0 && tk != null ? (tk / entradas) * 100 : null)
   const totalTickets = tickets ? [...tickets.values()].reduce((a, b) => a + b, 0) : null
-  const convTotal = datos && totalTickets != null ? conversion(datos.totales.entradas, totalTickets) : null
+  const diasConCamara = useMemo(() => new Set((datos?.porLocalDia ?? []).filter((d) => d.entradas > 0).map((d) => d.fecha)).size, [datos])
+  // El KPI general es un cociente: solo se suman las entradas de los locales que TAMBIÉN
+  // tienen ventas (los otros no tienen numerador y ensuciarían el denominador).
+  const entradasComparables = useMemo(() => {
+    if (!datos) return null
+    if (!ventas) return datos.totales.entradas
+    return datos.porLocal.reduce((a, l) => a + (conVentas.has(l.local) ? l.entradas : 0), 0)
+  }, [datos, ventas, conVentas])
+  const convTotal = totalTickets != null && entradasComparables ? conversion(entradasComparables, totalTickets) : null
 
   const serieDia = useMemo(() => {
     if (!datos) return []
     const tkDia = new Map<string, number>()
-    for (const v of ventas ?? []) if (!fLocal || v.local === fLocal) tkDia.set(v.fecha, (tkDia.get(v.fecha) ?? 0) + v.tickets)
+    for (const v of ventas ?? []) {
+      if ((fLocal && v.local !== fLocal) || !mideElDia(v.local, v.fecha)) continue
+      tkDia.set(v.fecha, (tkDia.get(v.fecha) ?? 0) + v.tickets)
+    }
     return datos.porDia.map((d) => ({
       ...d, name: d.fecha.slice(5).split('-').reverse().join('/'),
       conversion: ventas ? conversion(d.entradas, tkDia.get(d.fecha) ?? 0) : null,
     }))
-  }, [datos, ventas, fLocal])
+  }, [datos, ventas, fLocal, mideElDia])
 
   const offline = dispositivos.filter((d) => d.activo && (!d.ultimo_latido || Date.now() - new Date(d.ultimo_latido).getTime() > OFFLINE_MIN * 60000))
 
@@ -264,7 +307,9 @@ export default function ContadorClientes() {
                   nota={datos.totales.transeuntes ? `${nf(datos.totales.nuevos)} únicos` : `${nf(datos.totales.empleados)} entradas de personal (no suman)`} />
                 <Kpi icono={<Percent size={16} className="text-pink-500" />} label="Conversión"
                   valor={convTotal != null ? `${convTotal.toFixed(1)}%` : '—'}
-                  nota={ventas ? `${nf(totalTickets ?? 0)} tickets${hayTotal ? ` · ${nfMoneda(totales.general)}` : ''}` : 'configurá la vista de ventas en Cámaras'} />
+                  nota={ventas
+                    ? `${nf(totalTickets ?? 0)} tickets / ${nf(entradasComparables ?? 0)} entradas${diasConCamara ? ` · ${diasConCamara} ${diasConCamara === 1 ? 'día' : 'días'} con cámara` : ''}${hayTotal ? ` · ${nfMoneda(totales.general)}` : ''}`
+                    : 'configurá la vista de ventas en Cámaras'} />
               </div>
 
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -302,36 +347,46 @@ export default function ContadorClientes() {
                 {datos.porLocal.length === 0 ? (
                   <p className="text-sm text-sub">Todavía no hay conteos en este rango.</p>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="text-left text-[11px] uppercase tracking-wider text-sub/70">
-                        <tr>
-                          <th className="py-1.5 pr-3">Local</th>
-                          <th className="py-1.5 pr-3 text-right">Entradas</th>
-                          {ventas && <th className="py-1.5 pr-3 text-right">Tickets</th>}
-                          {ventas && hayTotal && <th className="py-1.5 pr-3 text-right">Total</th>}
-                          {ventas && <th className="py-1.5 text-right">Conversión</th>}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {datos.porLocal.map((l) => {
-                          const tk = tickets?.get(l.local)
-                          const conv = conversion(l.entradas, tk ?? 0)
-                          return (
-                            <tr key={l.local} className="border-t border-line">
-                              <td className="py-1.5 pr-3 font-medium text-ink">
-                                <button onClick={() => setParam('local', fLocal === l.local ? '' : l.local)} className="hover:underline">{l.local}</button>
-                              </td>
-                              <td className="py-1.5 pr-3 text-right tabular-nums">{nf(l.entradas)}</td>
-                              {ventas && <td className="py-1.5 pr-3 text-right tabular-nums">{nf(tk ?? 0)}</td>}
-                              {ventas && hayTotal && <td className="py-1.5 pr-3 text-right tabular-nums">{nfMoneda(totales.porLocal.get(l.local) ?? 0)}</td>}
-                              {ventas && <td className="py-1.5 text-right tabular-nums">{conv != null ? `${conv.toFixed(1)}%` : '—'}</td>}
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="text-left text-[11px] uppercase tracking-wider text-sub/70">
+                          <tr>
+                            <th className="py-1.5 pr-3">Local</th>
+                            <th className="py-1.5 pr-3 text-right" title={`Días con entradas medidas, sobre los ${diasRango} del rango (si la PC contadora estuvo apagada, ese día no entra)`}>Días</th>
+                            <th className="py-1.5 pr-3 text-right">Entradas</th>
+                            {ventas && <th className="py-1.5 pr-3 text-right">Tickets</th>}
+                            {ventas && hayTotal && <th className="py-1.5 pr-3 text-right">Total</th>}
+                            {ventas && <th className="py-1.5 text-right">Conversión</th>}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {datos.porLocal.map((l) => {
+                            const tk = tickets?.get(l.local)
+                            const conv = conVentas.has(l.local) ? conversion(l.entradas, tk ?? 0) : null
+                            return (
+                              <tr key={l.local} className="border-t border-line">
+                                <td className="py-1.5 pr-3 font-medium text-ink">
+                                  <button onClick={() => setParam('local', fLocal === l.local ? '' : l.local)} className="hover:underline">{l.local}</button>
+                                </td>
+                                <td className="py-1.5 pr-3 text-right tabular-nums text-sub">{diasMedidos.get(l.local)?.size ?? 0}/{diasRango}</td>
+                                <td className="py-1.5 pr-3 text-right tabular-nums">{nf(l.entradas)}</td>
+                                {ventas && <td className="py-1.5 pr-3 text-right tabular-nums">{nf(tk ?? 0)}</td>}
+                                {ventas && hayTotal && <td className="py-1.5 pr-3 text-right tabular-nums">{nfMoneda(totales.porLocal.get(l.local) ?? 0)}</td>}
+                                {ventas && <td className="py-1.5 text-right tabular-nums">{conv != null ? `${conv.toFixed(1)}%` : '—'}</td>}
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    {ventas && (
+                      <p className="mt-2 text-[11px] text-sub/70">
+                        La conversión (por local y general) cuenta solo los días en que la cámara midió ese local —si la PC contadora
+                        estuvo apagada ese día, no entra— y suma entradas únicamente de los locales con cruce de ventas.
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             </div>

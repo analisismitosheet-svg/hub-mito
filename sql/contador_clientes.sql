@@ -128,6 +128,13 @@ BEGIN
                   SELECT to_char(ts::date, 'YYYY-MM-DD') AS fecha,
                          sum(entradas)::int AS entradas, sum(salidas)::int AS salidas
                   FROM v GROUP BY 1) x),
+    -- Días en que cada local realmente MIDIÓ (al menos una entrada). La conversión
+    -- contra las ventas solo puede contar los tickets de esos días: en los demás hay
+    -- venta pero no conteo de cámara, y mezclarlos infla/desinfla el porcentaje.
+    -- Solo se mandan los días con entradas > 0 (los de 0 no aportan al cociente).
+    'porLocalDia', (SELECT coalesce(jsonb_agg(x ORDER BY x.local, x.fecha), '[]') FROM (
+                  SELECT local, to_char(ts::date, 'YYYY-MM-DD') AS fecha, sum(entradas)::int AS entradas
+                  FROM v GROUP BY 1, 2 HAVING sum(entradas) > 0) x),
     'porLocal', (SELECT coalesce(jsonb_agg(x ORDER BY x.entradas DESC), '[]') FROM (
                   SELECT local, sum(entradas)::int AS entradas, sum(salidas)::int AS salidas,
                          sum(transeuntes)::int AS transeuntes, sum(empleados)::int AS empleados,
