@@ -27,11 +27,20 @@
   /* la columna de talle activa se resalta al scrollear */
   table.t td.tcol{background:rgba(217,119,6,.05)}
   table.t thead th.hover{background:#3a2a0c;color:#fbbf24;border-bottom-color:#d97706}
-  table.t td{border-bottom:1px solid rgba(255,255,255,.06);padding:5px 5px}
+  table.t td{border-bottom:1px solid rgba(255,255,255,.06);padding:4px 5px}
   table.t tbody tr:hover td{background:rgba(255,255,255,.035)}
+  table.t tbody tr:hover td.tcol{background:rgba(217,119,6,.08)}
   table.t tbody tr.grp td{background:#080b0f;border-bottom:1px solid #1f2530}
   table.t tfoot td{position:sticky;bottom:0;z-index:3;background:#0e1116;font-weight:700;border-top:2px solid #2a3340;padding:8px 6px}
+  /* fila de subtotal por color: la suma de stock de MITO por talle */
+  table.t tbody tr.sub td{background:#0b0f14;border-bottom:1px solid #1f2530;font-size:11.5px}
 
+  /* celda de talle: arriba el stock de MITO, abajo el input para pedir */
+  .celda{display:flex;flex-direction:column;align-items:center;gap:2px}
+  .stockTag{font-size:10px;line-height:1;font-weight:700;font-variant-numeric:tabular-nums;color:#94a3b8;background:rgba(148,163,184,.1);border:1px solid rgba(148,163,184,.2);border-radius:999px;padding:2px 6px;min-width:24px;text-align:center}
+  .stockTag.cero{color:#475569;background:transparent;border-color:rgba(71,85,105,.35)}
+  .stockTag.bajo{color:#fbbf24;background:rgba(251,191,36,.12);border-color:rgba(251,191,36,.3)}
+  .stockTag.ok{color:#34d399;background:rgba(52,211,153,.12);border-color:rgba(52,211,153,.3)}
   .qty{width:42px;text-align:center;background:#0e1116;border:1px solid #2a3340;color:#f1f5f9;border-radius:8px;padding:4px 3px;font-size:12.5px;font-variant-numeric:tabular-nums}
   .qty:focus{border-color:#d97706;outline:none}
   .qty.on{border-color:#34d399;color:#34d399;font-weight:700}
@@ -79,8 +88,10 @@
   <p class="cap">Cambios de esta versión</p>
   <div class="note">
     <ol>
-      <li><b>Dos solapas</b>: <b>Zapatillas y calzado cerrado</b> (talle simple: 35, 36, 37…) y <b>Chanclas y slippers</b> (talle doble: 25/26, 35/36…). Cada solapa muestra <u>solo</u> las columnas de talles que usa, así no queda una tabla llena de huecos.</li>
-      <li><b>Encabezado de talles fijo</b>: la fila de talles queda pegada arriba mientras scrolleás, y la columna <b>que estás mirando se resalta</b> en ámbar, así siempre sabés qué talle estás cargando.</li>
+      <li><b>Stock de MITO visible por talle</b>: cada casillero muestra <b>arriba el stock real de MITO</b> para ese talle (verde = hay, ámbar = queda poco, gris = sin stock) y <b>abajo el input</b> donde el cliente escribe los pares. Ya no hay que adivinar cuánto hay: se ve en la celda.</li>
+      <li><b>Subtotal de stock por talle</b> al pie de la tabla: la suma del stock disponible de los modelos visibles, talle por talle.</li>
+      <li><b>Dos solapas</b>: <b>Zapatillas y calzado cerrado</b> (talle simple: 35, 36, 37…) y <b>Chanclas y slippers</b> (talle doble: 25/26, 35/36…). Cada solapa muestra <u>solo</u> las columnas de talles que usa.</li>
+      <li><b>Encabezado de talles fijo</b>: la fila de talles queda pegada arriba mientras scrolleás, y la columna <b>que estás mirando se resalta</b> en ámbar.</li>
       <li><b>Foto</b> al lado del código, clic para ampliar. Si no hay foto, recuadro “sin foto”.</li>
       <li><b>Cantidades topeadas al stock de MITO</b>. Totales de pares y $ en vivo abajo.</li>
       <li><b>Cliente obligatorio</b>: al guardar/enviar pide el <b>ID Cliente</b>.</li>
@@ -245,7 +256,12 @@
         const v=pedido[key]||0;
         const st=g.t[t]||0;
         if(v){paresFila+=v;subFila+=v*g.precio}
-        return '<td class="text-center tcol" data-t="'+esc(t)+'"><input class="qty'+(v?' on':'')+'" type="number" min="0" max="'+st+'" data-k="'+key+'" value="'+(v||'')+'" placeholder="0" '+(st<=0?'disabled':'')+' title="Stock: '+st+'" /></td>';
+        const cls=st<=0?'cero':(st<=2?'bajo':'ok');
+        const celda='<div class="celda">'+
+          '<span class="stockTag '+cls+'" title="Stock MITO en talle '+esc(t)+': '+st+'">'+st+'</span>'+
+          '<input class="qty'+(v?' on':'')+'" type="number" min="0" max="'+st+'" data-k="'+key+'" value="'+(v||'')+'" placeholder="0" '+(st<=0?'disabled':'')+' title="Stock MITO: '+st+'" />'+
+        '</div>';
+        return '<td class="text-center tcol" data-t="'+esc(t)+'">'+celda+'</td>';
       }).join('');
       var foto;
       if(g.foto){
@@ -272,6 +288,19 @@
     document.getElementById('tfoot').innerHTML='<td colspan="'+(4+T.length)+'" class="left text-ink">'+n0f(list.length)+' modelos · '+n0f(stockTot)+' pares disponibles</td>'+
       '<td class="text-center tabular-nums text-emerald-400" id="footPed">0</td>'+
       '<td></td><td class="text-center tabular-nums text-amber-400" id="footTot">$ 0</td>';
+    // el pie (tfoot) va al final: mejor poner los SUBTOTALES de stock por color arriba del pie.
+    // Se arma como filas al final del tbody para que quede pegado al ultimo modelo.
+    const subStock = {};
+    T.forEach(function(t){ subStock[t]=list.reduce(function(a,g){return a+(g.t[t]||0)},0) });
+    document.getElementById('tbody').insertAdjacentHTML('beforeend',
+      '<tr class="sub">'+
+        '<td></td>'+
+        '<td class="left font-semibold text-ink" colspan="3">Subtotal stock MITO (modelos visibles)</td>'+
+        T.map(function(t){ var v=subStock[t]||0; return '<td class="text-center tabular-nums '+(v?'text-ink font-semibold':'text-sub')+'">'+(v||'—')+'</td>' }).join('')+
+        '<td class="text-center tabular-nums text-sub">—</td>'+
+        '<td class="text-center tabular-nums text-ink font-semibold">'+n0f(stockTot)+'</td>'+
+        '<td></td>'+
+      '</tr>');
 
     document.getElementById('tbody').querySelectorAll('img.thumb').forEach(function(img){
       img.onclick=function(){ abrirFoto(img.dataset.src, img.dataset.cap); };
