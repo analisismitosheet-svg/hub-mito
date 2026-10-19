@@ -3,13 +3,16 @@
 -- Tickets de venta por local y día: para cruzar con el contador de cámaras
 -- (ContadorClientes.tsx / TasaConversion.tsx).
 --
--- Bases: DRAGONFISH_MUNOZ, DRAGONFISH_VCPD y DRAGONFISH_NVOCED2, cada una
--- sobre su propia COMPROBANTEV (cabecera; 1 fila = 1 comprobante, NO se une
--- COMPROBANTEVDET porque infla las filas: 1 fila por artículo).
+-- Bases: DRAGONFISH_MUNOZ, DRAGONFISH_VCPD, DRAGONFISH_NVOCED2 y
+-- DRAGONFISH_9DEJUL2, cada una sobre su propia COMPROBANTEV (cabecera; 1 fila =
+-- 1 comprobante, NO se une COMPROBANTEVDET porque infla las filas: 1 fila por
+-- artículo).
 -- Mapa de locales (deben coincidir con cámaras / tabla `locales`):
---   DRAGONFISH_MUNOZ  -> MUNOZ
---   DRAGONFISH_VCPD   -> VCPD
---   DRAGONFISH_NVOCED2-> NVOCED   (las cámaras usan NVOCED, NO NVOCED2)
+--   DRAGONFISH_MUNOZ   -> MUNOZ
+--   DRAGONFISH_VCPD    -> VCPD
+--   DRAGONFISH_NVOCED2 -> NVOCED    (las cámaras usan NVOCED, NO NVOCED2)
+--   DRAGONFISH_9DEJUL2 -> 9DEJULIO  (la vieja DRAGONFISH_9DEJULIO terminó el
+--                                    2025-08-28: cae fuera de la ventana de 180 días)
 --
 -- Criterio (elegido 2026-10-13):
 --   * Se toman los comprobantes DESCFW LIKE 'TICKET%' no anulados.
@@ -58,6 +61,14 @@ FROM OPENQUERY([MITO], '
 
     SELECT ''NVOCED'' AS LOCAL, CAST(C.FFCH AS date) AS FECHA, C.DESCFW, C.FTOTAL
     FROM DRAGONFISH_NVOCED2.ZooLogic.COMPROBANTEV AS C
+    WHERE C.ANULADO = 0
+      AND C.DESCFW LIKE ''TICKET%''
+      AND C.FFCH >= DATEADD(day, -180, CONVERT(date, GETDATE()))
+
+    UNION ALL
+
+    SELECT ''9DEJULIO'' AS LOCAL, CAST(C.FFCH AS date) AS FECHA, C.DESCFW, C.FTOTAL
+    FROM DRAGONFISH_9DEJUL2.ZooLogic.COMPROBANTEV AS C
     WHERE C.ANULADO = 0
       AND C.DESCFW LIKE ''TICKET%''
       AND C.FFCH >= DATEADD(day, -180, CONVERT(date, GETDATE()))
