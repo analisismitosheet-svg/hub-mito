@@ -14,6 +14,8 @@
   "confianza": 0.4,
   "imgsz": 640,
   "fps_proceso": 8,
+  "fps_auto_total": 80,
+  "fps_auto_max": 15,
   "envio_segundos": 15,
 
   "camaras": [

@@ -114,10 +114,13 @@ Para migrar un local ya calibrado en ContadorIA:
 |---|---|
 | `dispositivo` | `"auto"` usa la GPU NVIDIA si hay (recomendado) y si no, el procesador. `"cpu"` fuerza el procesador. |
 | `modelo` | `yolo11n.pt` liviano (PC sin GPU), `yolo11s.pt` más preciso (con GPU), o `modelos/mito-personas.pt` entrenado. |
+| `imgsz` | Tamaño de la imagen que ve la IA. 960 = más preciso (por defecto con `yolo11s`, la gente chica/lejana se ve mejor); 640 = más rápido y liviano, pero pierde gente lejana. Cada cámara puede bajar a 640 con `"deteccion": "rapida"`. |
 | `substream` | `0` = calidad principal (recomendado con GPU). `1` = calidad baja: en muchos DVR es 352×288 y la gente lejos no se detecta. |
 | `punto` | `"pie"` cuenta por los pies (línea en el piso). `"centro"` cuenta por el centro del cuerpo (cámaras cenitales). |
 | `confianza` | 0.3 a 0.6. Bajarlo si no detecta gente. Subirlo si cuenta cosas que no son personas. |
-| `fps_proceso` | Cuadros por segundo analizados. 6 a 10 alcanza. Bajarlo si la PC va al 100 %. |
+| `fps_proceso` | FPS iniciales hasta que el sistema mide la placa. 6 a 10 alcanza. Bajarlo si la PC va al 100 %. |
+| `fps_auto_total` | Presupuesto total de FPS para las cámaras en Auto. Se reparte solo entre las activas: con 7 cámaras toca ~11 c/u y con 17 ~4,7 c/u. Con `yolo11s` una RTX 5060 Ti sostiene 80; bajarlo si la GPU queda al 100 %. |
+| `fps_auto_max` | Tope por cámara aunque haya pocas activas (15 = no pedir más de lo que suele mandar el DVR). |
 | `margen` (por cámara) | Zona muerta alrededor de la línea (0.02 = 2 % del alto) para no contar a quien queda parado encima. |
 | `invertir` | Da vuelta entradas y salidas. |
 

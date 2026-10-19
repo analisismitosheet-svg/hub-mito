@@ -250,31 +250,71 @@ def poligono_opcional(puntos) -> Poligono | None:
 
 # ------------------------------------------------------------------- GPU ----
 
-def elegir_dispositivo(pedido: str = "auto") -> str | int:
-    """'auto' -> GPU NVIDIA si hay (CUDA), si no CPU. También acepta 'cpu' o 'cuda'/'0' para forzar."""
-    try:
-        import torch
-        hay_gpu = torch.cuda.is_available()
-    except Exception:  # noqa: BLE001
-        hay_gpu = False
-    if str(pedido).lower() == "cpu":
-        return "cpu"
-    if hay_gpu:
-        return siguiente_gpu()
-    if str(pedido).lower() not in ("auto", ""):
-        log.warning("se pidió GPU pero no hay CUDA disponible: uso CPU")
-    return "cpu"
-
-
+_gpus_ok: list[int] | None = None
+_gpus_lock = threading.Lock()
 _gpu_turno = itertools.count()
 _gpu_lock = threading.Lock()
 
 
+def gpus_utilizables() -> list[int]:
+    """Índices de las GPU NVIDIA que esta build de PyTorch REALMENTE puede usar.
+    Una placa nueva (ej. RTX 50xx = sm_120) figura como disponible aunque el torch sea
+    viejo (cu126 solo trae kernels hasta sm_90): el primer kernel mata el proceso sin
+    traceback. Por eso se prueba uno mínimo y se descarta la placa si falla."""
+    global _gpus_ok
+    with _gpus_lock:
+        if _gpus_ok is not None:
+            return _gpus_ok
+        try:
+            import torch
+            disponibles = torch.cuda.device_count() if torch.cuda.is_available() else 0
+        except Exception:  # noqa: BLE001
+            disponibles = 0
+        ok = []
+        for indice in range(disponibles):
+            try:
+                torch.zeros(8, device=f"cuda:{indice}").add_(1)
+                torch.cuda.synchronize(indice)
+                ok.append(indice)
+            except Exception as e:  # noqa: BLE001
+                try:
+                    nombre = torch.cuda.get_device_name(indice)
+                    cap = torch.cuda.get_device_capability(indice)
+                    detalle = f"{nombre} (sm_{cap[0]}{cap[1]})"
+                except Exception:  # noqa: BLE001
+                    detalle = f"GPU {indice}"
+                log.error("%s no compatible con torch %s: %s — no se usa", detalle, torch.__version__, e)
+        if disponibles and not ok:
+            log.error("PyTorch no tiene kernels para esta placa: instalá la build CUDA que corresponda "
+                      "(RTX 50xx necesita cu130 o superior). Mientras tanto se usa CPU.")
+        _gpus_ok = ok
+        return ok
+
+
+def elegir_dispositivo(pedido: str = "auto") -> str | int:
+    """'auto' -> GPU NVIDIA si hay (CUDA) y la build la soporta, si no CPU.
+    También acepta 'cpu' para forzar."""
+    if str(pedido).lower() == "cpu":
+        return "cpu"
+    placas = gpus_utilizables()
+    if placas:
+        return siguiente_gpu()
+    if str(pedido).lower() not in ("auto", ""):
+        log.warning("se pidió GPU pero no hay CUDA utilizable: uso CPU")
+    return "cpu"
+
+
 def siguiente_gpu() -> int:
     """Con varias placas NVIDIA en la PC, reparte las cámaras entre ellas (una y una)."""
-    import torch
+    placas = gpus_utilizables() or [0]
     with _gpu_lock:
-        return next(_gpu_turno) % max(1, torch.cuda.device_count())
+        return placas[next(_gpu_turno) % len(placas)]
+
+
+def dispositivo_torch() -> str:
+    """Primera placa utilizable como 'cuda:N' (o 'cpu'). Para redes de torch (reid)."""
+    placas = gpus_utilizables()
+    return f"cuda:{placas[0]}" if placas else "cpu"
 
 
 def gpu_nombre(indice: int = 0) -> str:
@@ -336,7 +376,7 @@ class RedApariencia:
                 import torch
                 import torch.nn as nn
                 import torchvision.models as tvm
-                dispositivo = "cuda" if torch.cuda.is_available() else "cpu"
+                dispositivo = dispositivo_torch()
                 red = tvm.resnet18(weights=tvm.ResNet18_Weights.DEFAULT)
                 red = nn.Sequential(*list(red.children())[:-1]).to(dispositivo).eval()
                 cls._red = (red, dispositivo, torch)
@@ -621,7 +661,8 @@ class Camara(threading.Thread):
     def cargar_modelo(self):
         from ultralytics import YOLO  # import pesado: recién acá
         self.dispositivo = elegir_dispositivo(self.cfg.get("dispositivo", "auto"))
-        log.info("[%s] detección en %s", self.nombre, "GPU (" + gpu_nombre(self.dispositivo) + ")" if self.dispositivo != "cpu" else "CPU")
+        destino = "GPU (" + gpu_nombre(self.dispositivo) + ")" if self.dispositivo != "cpu" else "CPU"
+        log.info("[%s] detección en %s a %d px", self.nombre, destino, self.tamano_deteccion())
         # Un modelo por cámara: el tracker guarda estado dentro del modelo
         return YOLO(str(BASE / self.cfg.get("modelo", "yolo11n.pt")))
 
@@ -951,31 +992,51 @@ def _tramo(f: tuple) -> dict:
             **dict(zip(CAMPOS, f[2:]))}
 
 
+def camaras_que_procesan(sistema: Sistema) -> list[Camara]:
+    """Cámaras que están gastando placa AHORA: calibradas, no desactivadas en el hub y con
+    alguien mirando o detectando. No se usa `c.fps > 0` porque recién arrancado (o luego de un
+    reinicio) ese promedio todavía vale 0 y las cámaras quedaban afuera del reparto: el
+    presupuesto se repartía entre las que el hub iba a desactivar y todo arrancaba en 4,7 FPS."""
+    return [c for c in sistema.camaras if (c.modo and not c.pausada) or c.mirando]
+
+
 def regular_fps(sistema: Sistema) -> None:
-    """FPS dinámicos: la placa de video es una sola para todas las cámaras. Cada 10 s mira cuánto
-    rinden las cámaras en "Auto" y les sube o baja el tope: si sobra placa (porque se apagó o
-    desactivó alguna) suben; si una cámara con FPS fijos no llega a los suyos, las de Auto ceden."""
+    """FPS en "Auto": hay un presupuesto TOTAL para la placa (fps_auto_total) y se reparte
+    entre las cámaras que procesan. Si se activan más cámaras, a cada una le toca menos; si se
+    apagan o se desactivan en el hub, sube. Las cámaras con FPS fijo tienen prioridad y lo
+    que consumen se descuenta del total. `fps_auto_max` es el tope por cámara."""
     cfg = sistema.cfg
     piso = float(cfg.get("fps_auto_min", 1))
-    techo = float(cfg.get("fps_auto_max", 8))
+    techo = float(cfg.get("fps_auto_max", 15))
+    total = float(cfg.get("fps_auto_total", 80))
     Camara.fps_auto = min(techo, max(piso, float(cfg.get("fps_proceso", 2))))
+    # Primer reparto apenas arranca, para no quedarse en `fps_proceso` hasta el primer ciclo.
+    # Las cámaras que el hub tenga que desactivar todavía figuran acá: el próximo ciclo (cuando
+    # ya sabe que están pausadas) corrige y sube.
+    arrancando = True
     while True:
-        time.sleep(10)
-        activas = [c for c in sistema.camaras if c.fps > 0 and ((c.modo and not c.pausada) or c.mirando)]
+        time.sleep(3 if arrancando else 10)
+        activas = camaras_que_procesan(sistema)
         autos = [c for c in activas if not c.cam.get("fps")]
         if not autos:
+            arrancando = False
             continue
         fijas = [c for c in activas if c.cam.get("fps")]
-        prom = sum(c.fps for c in autos) / len(autos)
+        # lo que ya se llevan las cámaras con FPS fijo no está disponible para las de Auto
+        fijas_fps = sum(min(float(c.cam["fps"]), techo, c.fps_fuente or techo) for c in fijas)
+        reparto = (total - fijas_fps) / len(autos)
         # una fija "no llega" solo si le falta placa: si el DVR manda menos cuadros, ese es su techo
         faltan = [c.nombre for c in fijas
                   if c.fps < 0.85 * min(float(c.cam["fps"]), techo, c.fps_fuente or techo)]
-        nuevo = prom * 0.85 if faltan else prom * 1.25  # ceder a las fijas o probar si sobra placa
-        nuevo = round(min(techo, max(piso, nuevo)), 1)
+        if faltan:  # la placa no alcanza ni para las fijas: las de Auto ceden
+            reparto *= 0.85
+        nuevo = round(min(techo, max(piso, reparto)), 1)
         if abs(nuevo - Camara.fps_auto) >= 0.2:
-            log.info("FPS Auto %.1f -> %.1f (%d en Auto rinden %.1f c/u%s)", Camara.fps_auto, nuevo, len(autos), prom,
-                     f"; no llegan: {', '.join(faltan)}" if faltan else "")
+            log.info("FPS Auto %.1f -> %.1f (%d procesando%s; presupuesto %.0f FPS%s)",
+                     Camara.fps_auto, nuevo, len(activas), ", primer reparto" if arrancando else "",
+                     total, f"; no llegan: {', '.join(faltan)}" if faltan else "")
         Camara.fps_auto = nuevo
+        arrancando = False
 
 
 def enviar(sistema: Sistema) -> None:
