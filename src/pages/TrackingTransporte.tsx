@@ -188,6 +188,12 @@ function estadoDe(ultima: Ubic | undefined, esHoy: boolean): Estado {
   return { label: 'Detenido', color: '#f59e0b' }
 }
 
+/** Bultos únicos: el historial puede tener el mismo bulto más de una vez (escaneo repetido) y cuenta una sola vez. */
+function sinRepetidos(evs: Ev[]): Ev[] {
+  const vistos = new Set<string>()
+  return evs.filter((e) => (vistos.has(e.bulto_id) ? false : (vistos.add(e.bulto_id), true)))
+}
+
 /** Agrupa eventos seguidos (menos de 15 min entre uno y otro) del mismo tipo/lugar. */
 function agrupar(evs: Ev[], clave: (e: Ev) => string) {
   const grupos: { clave: string; desde: string; evs: Ev[] }[] = []
@@ -382,9 +388,9 @@ export default function TrackingTransporte() {
   const resumen = useMemo(() => {
     const r = new Map<string, { cargas: Ev[]; entregas: Ev[]; aBordo: number; destinos: Map<string, { total: number; ok: number; proxima: number }> }>()
     for (const mv of moviles) {
-      const cargas = (tr?.cargas ?? []).filter((c) => c.chofer_id === mv.choferId)
+      const cargas = sinRepetidos((tr?.cargas ?? []).filter((c) => c.chofer_id === mv.choferId))
       const ids = new Set(cargas.map((c) => c.bulto_id))
-      const entregas = (tr?.entregas ?? []).filter((e) => ids.has(e.bulto_id) && choferDeBulto.get(e.bulto_id) === mv.choferId)
+      const entregas = sinRepetidos((tr?.entregas ?? []).filter((e) => ids.has(e.bulto_id) && choferDeBulto.get(e.bulto_id) === mv.choferId))
       const entregadosIds = new Set(entregas.map((e) => e.bulto_id))
       // Momento en que estuvo en cada local (GPS; si no, la última recepción de ese local): lo que cargó
       // para ese local DESPUÉS de pasar va para la próxima vuelta y no cuenta como faltante de esa visita.
