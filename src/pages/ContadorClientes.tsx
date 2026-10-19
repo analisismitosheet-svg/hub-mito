@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  Loader2, RefreshCw, Footprints, LogIn, LogOut, Percent, Cctv, Plus, Copy, Check, Power, Trash2,
+  Loader2, RefreshCw, Footprints, LogIn, Percent, Cctv, Plus, Copy, Check, Power, Trash2,
 } from 'lucide-react'
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend, ComposedChart, Line,
@@ -257,9 +257,8 @@ export default function ContadorClientes() {
             <div className="flex items-center justify-center gap-2 py-10 text-sub"><Loader2 size={18} className="animate-spin" aria-hidden /> Cargando datos...</div>
           ) : (
             <div className={'flex flex-col gap-4 transition-opacity ' + (cargando ? 'opacity-60' : '')}>
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 <Kpi icono={<LogIn size={16} className="text-emerald-500" />} label="Entradas" valor={nf(datos.totales.entradas)} />
-                <Kpi icono={<LogOut size={16} className="text-sky-500" />} label="Salidas" valor={nf(datos.totales.salidas)} />
                 <Kpi icono={<Footprints size={16} className="text-violet-500" />} label="Promedio / día" valor={nf(datos.totales.entradas / Math.max(datos.totales.dias, 1))} />
                 <Kpi icono={<Footprints size={16} className="text-sky-500" />} label="Transeúntes" valor={nf(datos.totales.transeuntes)}
                   nota={datos.totales.transeuntes ? `${nf(datos.totales.nuevos)} únicos` : `${nf(datos.totales.empleados)} entradas de personal (no suman)`} />
@@ -292,7 +291,6 @@ export default function ContadorClientes() {
                       <Tooltip {...TOOLTIP} formatter={(v, n) => (n === 'Conversión' ? `${Number(v).toFixed(1)}%` : nf(Number(v)))} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
                       <Bar yAxisId="c" dataKey="entradas" name="Entradas" fill="#34d399" radius={[4, 4, 0, 0]} />
-                      <Bar yAxisId="c" dataKey="salidas" name="Salidas" fill="#60a5fa" radius={[4, 4, 0, 0]} />
                       {ventas && <Line yAxisId="p" dataKey="conversion" name="Conversión" stroke="#f472b6" strokeWidth={2} dot={false} />}
                     </ComposedChart>
                   </ResponsiveContainer>
@@ -310,7 +308,6 @@ export default function ContadorClientes() {
                         <tr>
                           <th className="py-1.5 pr-3">Local</th>
                           <th className="py-1.5 pr-3 text-right">Entradas</th>
-                          <th className="py-1.5 pr-3 text-right">Salidas</th>
                           {ventas && <th className="py-1.5 pr-3 text-right">Tickets</th>}
                           {ventas && hayTotal && <th className="py-1.5 pr-3 text-right">Total</th>}
                           {ventas && <th className="py-1.5 text-right">Conversión</th>}
@@ -326,7 +323,6 @@ export default function ContadorClientes() {
                                 <button onClick={() => setParam('local', fLocal === l.local ? '' : l.local)} className="hover:underline">{l.local}</button>
                               </td>
                               <td className="py-1.5 pr-3 text-right tabular-nums">{nf(l.entradas)}</td>
-                              <td className="py-1.5 pr-3 text-right tabular-nums">{nf(l.salidas)}</td>
                               {ventas && <td className="py-1.5 pr-3 text-right tabular-nums">{nf(tk ?? 0)}</td>}
                               {ventas && hayTotal && <td className="py-1.5 pr-3 text-right tabular-nums">{nfMoneda(totales.porLocal.get(l.local) ?? 0)}</td>}
                               {ventas && <td className="py-1.5 text-right tabular-nums">{conv != null ? `${conv.toFixed(1)}%` : '—'}</td>}

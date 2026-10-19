@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Contador de clientes · sin Salidas</title>
+<style>
+  :root{--paper:#050508;--surface:rgba(255,255,255,.04);--surface2:rgba(255,255,255,.06);--line:rgba(255,255,255,.09);--ink:#f8fafc;--sub:#94a3b8;
+    --verde:#34d399;--violeta:#a78bfa;--celeste:#38bdf8;--rosa:#f472b6;--marca:#2563eb}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Segoe UI',system-ui,sans-serif;font-size:14px;padding:18px 16px 50px}
+  .wrap{max-width:1180px;margin:0 auto}
+  .badge{display:inline-block;padding:3px 10px;border-radius:999px;background:rgba(37,99,235,.18);color:#93c5fd;border:1px solid rgba(37,99,235,.45);font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+  header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0 12px}
+  h1{font-size:22px;margin:0;display:flex;align-items:center;gap:8px}
+  .tabs{margin-left:auto;display:flex;gap:6px;align-items:center}
+  .tab{height:32px;padding:0 12px;border-radius:8px;font-size:12px;font-weight:500;display:inline-flex;align-items:center;border:1px solid var(--line);background:var(--surface2);color:var(--sub);cursor:pointer}
+  .tab.on{background:var(--marca);border-color:transparent;color:#fff}
+  .barra-filtros{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:12px;margin-bottom:16px}
+  .presets{display:flex;gap:4px}
+  .preset{height:30px;padding:0 10px;border-radius:8px;font-size:12px;font-weight:500;border:1px solid var(--line);background:var(--surface2);color:var(--sub);cursor:pointer}
+  .preset.on{background:var(--marca);border-color:transparent;color:#fff}
+  .field span{display:block;font-size:11px;color:var(--sub);margin-bottom:2px;font-weight:500}
+  .field select{height:30px;border-radius:8px;border:1px solid var(--line);background:var(--surface2);color:var(--ink);font-size:12px;padding:0 8px}
+  .rango{margin-left:auto;align-self:center;font-size:11px;color:rgba(148,163,184,.7)}
+  .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
+  @media(max-width:760px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .kp{border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:12px}
+  .kp .l{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:rgba(148,163,184,.7);display:flex;align-items:center;gap:6px;font-weight:500}
+  .kp .v{font-size:24px;font-weight:800;margin-top:2px}
+  .kp .n{font-size:11px;color:rgba(148,163,184,.7)}
+  .dos{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:900px){.dos{grid-template-columns:1fr}}
+  .card{border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:16px}
+  .card h3{margin:0 0 12px;font-size:14px;font-weight:600}
+  .card h3 span{font-weight:400;color:rgba(148,163,184,.7);font-size:13px}
+  .plot{position:relative;height:230px;border-left:1px solid rgba(148,163,184,.25);border-bottom:1px solid rgba(148,163,184,.25);margin:6px 4px 0 34px}
+  .grid-lines{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;pointer-events:none}
+  .grid-lines i{display:block;border-top:1px dashed rgba(148,163,184,.18)}
+  .grid-lab{position:absolute;left:-32px;font-size:10px;color:var(--sub);transform:translateY(-50%)}
+  .barras{position:absolute;inset:0;display:flex;align-items:flex-end;gap:2px;padding:0 3px}
+  .barras .b{flex:1;background:var(--verde);border-radius:4px 4px 0 0;min-width:3px}
+  .ejes{display:flex;justify-content:space-between;font-size:10px;color:var(--sub);margin:4px 4px 0 34px}
+  .linea-conv{position:absolute;inset:0;pointer-events:none}
+  .leyenda{display:flex;gap:14px;justify-content:center;margin-top:10px;font-size:11px;color:var(--sub)}
+  .leyenda i{display:inline-block;width:12px;height:12px;border-radius:3px;background:var(--verde);margin-right:5px;vertical-align:-2px}
+  .leyenda .ln{display:inline-block;width:14px;height:0;border-top:2px solid var(--rosa);margin-right:5px;vertical-align:3px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:rgba(148,163,184,.7);text-align:left;padding:6px 12px 6px 0;font-weight:600}
+  th.r,td.r{text-align:right}
+  td{padding:7px 12px 7px 0;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
+  td.loc{font-weight:500}
+  td.loc button{background:none;border:0;color:var(--ink);font:inherit;cursor:pointer;padding:0;text-decoration:underline}
+  .nota{margin-top:18px;font-size:13px;color:#cbd5e1;line-height:1.55;border:1px solid rgba(37,99,235,.35);background:rgba(37,99,235,.08);border-radius:14px;padding:12px 14px}
+  .nota b{color:#93c5fd}
+  .nota ul{margin:6px 0 0;padding-left:18px}
+  .nota li{margin:3px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span class="badge">Maqueta · cambio sin subir</span>
+
+  <header>
+    <h1>👣 Contador de clientes</h1>
+    <div class="tabs">
+      <button class="tab on">Tablero</button>
+      <button class="tab">Cámaras</button>
+      <button class="tab">⟳ Actualizar</button>
+    </div>
+  </header>
+
+  <div class="barra-filtros">
+    <div class="presets">
+      <button class="preset">Hoy</button>
+      <button class="preset">Ayer</button>
+      <button class="preset on">7 días</button>
+      <button class="preset">30 días</button>
+      <button class="preset">Este mes</button>
+    </div>
+    <label class="field"><span>Local</span><select><option>Todos</option></select></label>
+    <span class="rango">13/10/2026 → 19/10/2026</span>
+  </div>
+
+  <div class="kpis">
+    <div class="kp"><div class="l"><span style="color:var(--verde)">↳</span> Entradas</div><div class="v">4.832</div></div>
+    <div class="kp"><div class="l"><span style="color:var(--violeta)">👣</span> Promedio / día</div><div class="v">690</div></div>
+    <div class="kp"><div class="l"><span style="color:var(--celeste)">🚶</span> Transeúntes</div><div class="v">512</div><div class="n">378 únicos</div></div>
+    <div class="kp"><div class="l"><span style="color:var(--rosa)">%</span> Conversión</div><div class="v">34,2%</div><div class="n">1.653 tickets · $28.410.900</div></div>
+  </div>
+
+  <div class="dos">
+    <div class="card">
+      <h3>Entradas por hora del día <span>(promedio diario)</span></h3>
+      <div class="plot" id="p-hora">
+        <div class="grid-lines"><i></i><i></i><i></i><i></i><i></i></div>
+        <span class="grid-lab" style="top:0">80</span><span class="grid-lab" style="top:25%">60</span>
+        <span class="grid-lab" style="top:50%">40</span><span class="grid-lab" style="top:75%">20</span><span class="grid-lab" style="top:100%">0</span>
+        <div class="barras" id="b-hora"></div>
+      </div>
+      <div class="ejes" id="e-hora"></div>
+    </div>
+
+    <div class="card">
+      <h3>Por día</h3>
+      <div class="plot" id="p-dia">
+        <div class="grid-lines"><i></i><i></i><i></i><i></i><i></i></div>
+        <span class="grid-lab" style="top:0">900</span><span class="grid-lab" style="top:25%">675</span>
+        <span class="grid-lab" style="top:50%">450</span><span class="grid-lab" style="top:75%">225</span><span class="grid-lab" style="top:100%">0</span>
+        <div class="barras" id="b-dia"></div>
+        <svg class="linea-conv" viewBox="0 0 100 100" preserveAspectRatio="none">
+          <polyline id="ln-conv" fill="none" stroke="#f472b6" stroke-width="2" vector-effect="non-scaling-stroke" points="" />
+        </svg>
+      </div>
+      <div class="ejes" id="e-dia"></div>
+      <div class="leyenda"><span><i></i>Entradas</span><span><span class="ln"></span>Conversión</span></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3>Por local</h3>
+    <table>
+      <thead><tr><th>Local</th><th class="r">Entradas</th><th class="r">Tickets</th><th class="r">Total</th><th class="r">Conversión</th></tr></thead>
+      <tbody>
+        <tr><td class="loc"><button>CFD</button></td><td class="r">1.184</td><td class="r">412</td><td class="r">$6.890.400</td><td class="r">34,8%</td></tr>
+        <tr><td class="loc"><button>LIBED</button></td><td class="r">967</td><td class="r">301</td><td class="r">$4.512.750</td><td class="r">31,1%</td></tr>
+        <tr><td class="loc"><button>9DEJU</button></td><td class="r">874</td><td class="r">296</td><td class="r">$5.104.200</td><td class="r">33,9%</td></tr>
+        <tr><td class="loc"><button>DINOD</button></td><td class="r">756</td><td class="r">287</td><td class="r">$7.231.900</td><td class="r">38,0%</td></tr>
+        <tr><td class="loc"><button>ESPID</button></td><td class="r">621</td><td class="r">198</td><td class="r">$3.248.300</td><td class="r">31,9%</td></tr>
+        <tr><td class="loc"><button>NCEND2</button></td><td class="r">430</td><td class="r">159</td><td class="r">$1.423.350</td><td class="r">37,0%</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="nota">
+    <b>Cómo quedó el cambio (sin subir todavía):</b>
+    <ul>
+      <li><b>Se quitó el KPI «Salidas»</b> de arriba: ahora son 4 cuadritos en una fila (Entradas · Promedio / día · Transeúntes · Conversión).</li>
+      <li><b>Se quitó la barra azul «Salidas»</b> del gráfico «Por día»: solo quedan las barras verdes de Entradas y la línea rosa de Conversión.</li>
+      <li><b>Se quitó la columna «Salidas»</b> de la tabla «Por local»: Local · Entradas · Tickets · Total · Conversión.</li>
+      <li>Los datos igualmente se siguen guardando (el contador de la PC los sigue subiendo); solo deja de mostrarse en esta pantalla.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+  // Entradas promedio por hora (6 a 22 h)
+  const H=[[6,14],[7,26],[8,38],[9,47],[10,58],[11,71],[12,64],[13,52],[14,49],[15,57],[16,68],[17,74],[18,66],[19,54],[20,41],[21,28],[22,17]];
+  const maxH=80;
+  document.getElementById('b-hora').innerHTML=H.map(([,v])=>`<div class="b" style="height:${v/maxH*100}%" title="${v}"></div>`).join('');
+  document.getElementById('e-hora').innerHTML=H.map(([h])=>`<span>${h}h</span>`).join('');
+
+  // Por día: entradas y conversión (7 días)
+  const D=[['13/10',612,31.4],['14/10',705,33.2],['15/10',688,35.1],['16/10',742,36.8],['17/10',810,38.4],['18/10',690,32.9],['19/10',585,30.6]];
+  const maxD=900;
+  document.getElementById('b-dia').innerHTML=D.map(([,v])=>`<div class="b" style="height:${v/maxD*100}%" title="${v}"></div>`).join('');
+  document.getElementById('e-dia').innerHTML=D.map(([f])=>`<span>${f}</span>`).join('');
+  // Línea de conversión: eje derecho 0-50 %, coordenadas 0-100 con preserveAspectRatio=none
+  const pts=D.map(([,,c],i)=>`${(i/(D.length-1))*100},${100-(c/50)*100}`).join(' ');
+  document.getElementById('ln-conv').setAttribute('points',pts);
+</script>
+</body>
+</html>
