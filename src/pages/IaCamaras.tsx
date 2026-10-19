@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Loader2, RefreshCw, ScanEye, LogIn, LogOut, Footprints, UserCheck, BadgeCheck, ChevronRight } from 'lucide-react'
+import { Loader2, RefreshCw, ScanEye, LogIn, Footprints, UserCheck, BadgeCheck, ChevronRight } from 'lucide-react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, Tooltip } from 'recharts'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -169,8 +169,7 @@ function TarjetaLocal({ l }: { l: LocalHoy }) {
           <div className="text-[11px] uppercase tracking-wider text-sub/70">Entradas hoy</div>
           <div className="font-display text-4xl font-bold leading-none text-ink">{nf(l.entradas)}</div>
         </div>
-        <div className="grid flex-1 grid-cols-2 gap-2 text-center">
-          <Mini icono={<LogOut size={12} />} label="Salidas" valor={nf(l.salidas)} />
+        <div className="grid flex-1 gap-2 text-center">
           <Mini icono={<BadgeCheck size={12} />} label="Personal" valor={nf(l.empleados)} />
         </div>
       </div>
