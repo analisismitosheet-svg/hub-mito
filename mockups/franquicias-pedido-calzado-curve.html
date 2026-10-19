@@ -91,13 +91,15 @@
   <h1 class="font-display text-2xl font-semibold text-ink mt-2 mb-1">Franquicias › Pedido de calzado</h1>
   <p class="text-sm text-sub">Primero el <b class="text-amber-400">cliente</b> (impacta en Dragonfish), después filtros de <b>temporada / material / grupo / familia</b>, y se arma la <b>nota de pedido de venta</b>.</p>
 
-  <p class="cap">Cómo funciona</p>
+  <p class="cap">Cómo funciona (mismo circuito que Reposición sugerida)</p>
   <div class="note">
     <ol>
-      <li><b class="text-ink">1 · Cliente obligatorio</b>: apenas entrás hay que <b>seleccionar el cliente</b> (ID Cliente de MITO). Hasta que no lo elegís, la tabla y los filtros quedan bloqueados. Ese ID Cliente es el que después <b>impacta en Dragonfish</b> al grabar la nota de pedido. <span class="tag">1.990 clientes reales</span></li>
-      <li><b class="text-ink">2 · Filtros multi-selección</b> de <b>Temporada</b> (Verano / Continuo / Invierno / Atemporal), <b>Material</b>, <b>Grupo</b> y <b>Familia</b>. Podés tildar varios en cada uno; se combinan entre sí y filtran la tabla al instante.</li>
-      <li><b class="text-ink">3 · Curva de talles</b>: dos solapas (zapatillas talle simple / chanclas y slippers talle doble). Cada celda muestra <b>arriba el stock de MITO</b> del talle (verde/ámbar/gris) y abajo el input para cargar los pares.</li>
-      <li><b class="text-ink">4 · Nota de pedido</b>: con lo cargado se genera la nota de pedido de venta del cliente elegido. Excel / PDF / WhatsApp comparativo.</li>
+      <li><b class="text-ink">1 · Cliente obligatorio</b>: apenas entrás hay que <b>seleccionar el cliente</b> (ID Cliente de MITO). Hasta que no lo elegís, la tabla y los filtros quedan bloqueados. Ese ID Cliente es el que va en la cabecera del <b>pedido de venta</b> que se carga en Dragon. <span class="tag">1.990 clientes reales</span></li>
+      <li><b class="text-ink">2 · Filtros multi-selección</b> de <b>Temporada</b> (Verano / Continuo / Invierno / Atemporal), <b>Material</b>, <b>Grupo</b> y <b>Familia</b> (de <code>DWH.dbo.vw_DIM_ARTICULO</code>). Podés tildar varios en cada uno; se combinan y filtran la tabla al instante.</li>
+      <li><b class="text-ink">3 · Curva de talles</b>: dos solapas (zapatillas talle simple / chanclas y slippers talle doble). Cada celda muestra <b>arriba el stock de MITO</b> del talle y abajo el input para cargar los pares.</li>
+      <li><b class="text-ink">4 · Armar link y mandar por WhatsApp</b>: se guarda la propuesta con el cliente elegido y sale el link <code>/p/:token</code>.</li>
+      <li><b class="text-ink">5 · El cliente confirma</b> desde el link (marca sí/no y cantidades, topeadas al stock de MITO).</li>
+      <li><b class="text-ink">6 · Alta en Dragon automática</b>: el puente toma las confirmadas y las carga como <b>Pedido de Venta</b> en <code>DRAGONFISH_MITO</code> por la API REST (<code>POST /Pedido/</code>). Después podés seguir el estado desde la pantalla.</li>
     </ol>
   </div>
 
@@ -170,10 +172,61 @@
         <button class="tabbtn" id="btnLimpiar">Limpiar cantidades</button>
         <button class="tabbtn" id="btnExcel">⬇ Excel</button>
         <button class="tabbtn" id="btnPdf">PDF</button>
-        <button class="tabbtn primary" id="btnGuardarEnviar">Guardar nota de pedido y enviar</button>
+        <button class="tabbtn primary" id="btnGuardarEnviar">Armar link y mandar por WhatsApp</button>
       </div>
     </div>
-    <p class="mt-2 text-[11px] text-sub">La fila de <b class="text-ink">talles queda fija</b> arriba al scrollear. <b class="text-ink">No se puede pedir más que el stock de MITO.</b></p>
+    <p class="mt-2 text-[11px] text-sub">La fila de <b class="text-ink">talles queda fija</b> arriba al scrollear. <b class="text-ink">No se puede pedir más que el stock de MITO.</b> El pedido queda <b class="text-ink">pendiente</b> hasta que el cliente lo confirma desde el link.</p>
+  </div>
+
+  <!-- PASO 3: historial / estado hasta Dragon -->
+  <p class="cap">Paso 3 · Estado de las propuestas (hasta el alta en Dragon)</p>
+  <div class="frame">
+    <div class="flex flex-wrap items-center gap-2 mb-2">
+      <span class="step">3</span>
+      <p class="font-display text-base font-semibold text-ink">Propuestas de pedido de calzado</p>
+      <p class="ml-auto text-[12px] text-sub">El puente carga en Dragon la confirmada, en el minuto siguiente</p>
+    </div>
+    <div class="overflow-x-auto rounded-xl border border-line">
+      <table class="cli" style="border-collapse:separate;border-spacing:0">
+        <thead>
+          <tr>
+            <th style="width:120px">N°</th>
+            <th>Cliente destino</th>
+            <th style="width:120px">Enviada</th>
+            <th style="width:120px" class="text-right">Pares</th>
+            <th style="width:120px" class="text-right">Pidió</th>
+            <th style="width:230px">Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="font-semibold text-ink">P-CFU-0003</td>
+            <td class="text-ink">#01140 — Argentina S.R.L. <span class="text-sub">· Ushuaia</span></td>
+            <td class="text-sub">19/10 09:12</td>
+            <td class="text-right tabular-nums text-sub">412 u.</td>
+            <td class="text-right tabular-nums text-ink font-semibold">386 u.</td>
+            <td><span class="badge sur" style="color:#d8b4fe;border-color:rgba(168,85,247,.45);background:rgba(168,85,247,.14)">En Dragon · pedido 41.207</span></td>
+          </tr>
+          <tr>
+            <td class="font-semibold text-ink">P-CFU-0002</td>
+            <td class="text-ink">#00790 — AMILCAR SERGIO HEREDIA FERNAND <span class="text-sub">· Ushuaia</span></td>
+            <td class="text-sub">18/10 17:40</td>
+            <td class="text-right tabular-nums text-sub">210 u.</td>
+            <td class="text-right tabular-nums text-ink font-semibold">210 u.</td>
+            <td><span class="badge" style="color:#5eead4;border-color:rgba(45,212,191,.4);background:rgba(45,212,191,.12)">Confirmada · cargando en Dragon…</span></td>
+          </tr>
+          <tr>
+            <td class="font-semibold text-ink">P-CFU-0001</td>
+            <td class="text-ink">#01140 — Argentina S.R.L. <span class="text-sub">· Ushuaia</span></td>
+            <td class="text-sub">18/10 11:05</td>
+            <td class="text-right tabular-nums text-sub">180 u.</td>
+            <td class="text-right tabular-nums text-sub">—</td>
+            <td><span class="badge" style="color:#7dd3fc;border-color:rgba(14,165,233,.4);background:rgba(14,165,233,.12)">Enviada · esperando que confirme</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="mt-2 text-[11px] text-sub">Igual que en Reposición sugerida: si Dragon rechaza queda el error y se puede <b class="text-ink">reintentar</b>. Una vez en Dragon, el pedido vive en <b class="text-ink">Pedidos de Venta</b>.</p>
   </div>
 </div>
 
@@ -519,22 +572,25 @@
   }
 
   // ---------- acciones ----------
+  // Mismo circuito que la reposición: se arma la propuesta con el CLIENTE elegido,
+  // se manda el link por WhatsApp, el cliente confirma desde /p/:token y RECIÉN AHÍ
+  // el puente la carga como pedido de venta en Dragon (API REST /Pedido/).
   document.getElementById('btnGuardarEnviar').onclick=function(){
     if(!clienteSel){ openCli(); return; }
     const l=lineas(); if(!l.length){ alert('Cargá cantidades primero'); return; }
     const pares=l.reduce((s,x)=>s+x.cant,0), total=l.reduce((s,x)=>s+x.cant*x.precio,0);
-    var msg='NOTA DE PEDIDO DE VENTA — CALZADO\nCliente: #'+clienteSel.id+' — '+clienteSel.nombre+'\n';
-    (filtros.temporada.length?msg+='Temporada: '+filtros.temporada.join(', ')+'\n':'');
-    msg+='\n';
-    var art=null,col=null;
-    l.forEach(function(x){
-      if(x.art!==art){art=x.art;col=null;msg+='▪ '+x.art+' — '+(x.descrip||'')+'\n'}
-      if(x.color!==col){col=x.color;msg+='   Color '+x.color+':\n'}
-      msg+='     Talle '+x.talle+' x'+x.cant+'\n';
-    });
-    msg+='\nTotal: '+pares+' pares · '+moneyf(total);
+    if(!window.confirm('Se arma la propuesta para '+clienteSel.nombre+' ('+l.length+' líneas · '+pares+' pares · '+moneyf(total)+') y se abre WhatsApp con el link para que confirme. ¿Seguir?')) return;
+    // mensaje que se manda por WhatsApp con el link /p/:token
+    var msg='Hola, te armamos el pedido de calzado para '+clienteSel.nombre+' ('+pares+' pares · '+moneyf(total)+').
+'+
+      'Elegí y confirmá acá: https://hub.mito/p/P-CFU-0001
+(vale hasta el 26/10)';
     window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
-    alert('Nota de pedido a grabar en Dragonfish\nCliente: #'+clienteSel.id+' — '+clienteSel.nombre+'\n'+pares+' pares · '+moneyf(total));
+    alert('Propuesta P-CFU-0001 creada (pendiente).
+Cliente destino: #'+clienteSel.id+' — '+clienteSel.nombre+
+      '
+
+El cliente la confirma desde el link. Cuando confirma, el puente la carga como PEDIDO DE VENTA en Dragon.');
   };
 
   document.getElementById('btnExcel').onclick=function(){
