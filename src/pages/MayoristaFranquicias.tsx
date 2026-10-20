@@ -25,8 +25,11 @@ type Fila = {
 const fmt = (n: number) => new Intl.NumberFormat('es-AR').format(n)
 const fmtPesos = (n: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n)
 
+/** Urgente: el cliente no tiene nada, vendió y en MITO hay más de 1 para reponer. */
+const esUrgente = (f: Fila) => f.stockCli <= 0 && f.vendido >= 1 && f.stock > 1
+
 const estadoF = (f: Fila) => {
-  if (f.stock <= 0) return { txt: 'Urgente', cls: 'text-red-500', dot: '#ef4444' }
+  if (esUrgente(f)) return { txt: 'Urgente', cls: 'text-red-500', dot: '#ef4444' }
   if (f.stock < f.vendido) return { txt: 'Normal', cls: 'text-amber-400', dot: '#fbbf24' }
   return { txt: 'Normal', cls: 'text-emerald-500', dot: '#34d399' }
 }
@@ -223,7 +226,7 @@ export default function MayoristaFranquicias() {
     const rango = `${fmtDia(desde)} al ${fmtDia(hasta)}`
     let msg = `REPOSICIÓN SUGERIDA - ${franq.nombre.toUpperCase()} (${rango})\nArtículos para reponer (solo con stock en MITO)${selMat ? ' - Material: ' + selMat : ''}:\n\n`
     list.forEach((f, i) => {
-      msg += `${i + 1}. ${f.art} ${(f.color || 'U')}/${f.talle || '-'} | Stock ${franq.id}:${f.stockCli || 0} | Vend:${f.vendido} | Stock MITO:${f.stock} | Sug.reposición:${f.sugerido} | Precio:${f.precio ? fmtPesos(f.precio) : '-'} | Subtotal:${fmtPesos(subtotal(f))} | Estado:${f.stock <= 0 ? 'Urgente' : 'Normal'} | Mat:${f.material} | ${f.descrip || ''}\n`
+      msg += `${i + 1}. ${f.art} ${(f.color || 'U')}/${f.talle || '-'} | Stock ${franq.id}:${f.stockCli || 0} | Vend:${f.vendido} | Stock MITO:${f.stock} | Sug.reposición:${f.sugerido} | Precio:${f.precio ? fmtPesos(f.precio) : '-'} | Subtotal:${fmtPesos(subtotal(f))} | Estado:${esUrgente(f) ? 'Urgente' : 'Normal'} | Mat:${f.material} | ${f.descrip || ''}\n`
     })
     if (list.length === 0) msg += '(Sin sugeridos con stock en MITO)\n'
     msg += `\nTotal sugerencia reposición: ${list.reduce((s, f) => s + f.sugerido, 0)} u. · Total: ${fmtPesos(list.reduce((s, f) => s + subtotal(f), 0))}`
@@ -233,7 +236,7 @@ export default function MayoristaFranquicias() {
   const exportExcel = () => {
     const list = filtrar()
     const header = ['Artículo', 'Descripción', 'Material', 'Color', 'Talle', 'Stock cliente', 'Vendido', 'Stock MITO', 'Sugerencia reposición', 'Precio', 'Subtotal', 'Estado']
-    const rows = list.map((f) => [f.art, f.descrip || '', f.material || '', f.color || 'U', f.talle || '', String(f.stockCli), String(f.vendido), String(f.stock), String(f.sugerido), f.precio ? String(f.precio) : '', String(subtotal(f)), f.stock <= 0 ? 'Urgente' : 'Normal'])
+    const rows = list.map((f) => [f.art, f.descrip || '', f.material || '', f.color || 'U', f.talle || '', String(f.stockCli), String(f.vendido), String(f.stock), String(f.sugerido), f.precio ? String(f.precio) : '', String(subtotal(f)), esUrgente(f) ? 'Urgente' : 'Normal'])
     rows.push(['', 'TOTAL', '', '', '', '', '', '', String(list.reduce((s, f) => s + f.sugerido, 0)), '', String(list.reduce((s, f) => s + subtotal(f), 0)), ''])
     const csv = [header.join(','), ...rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','))].join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
