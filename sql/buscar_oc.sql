@@ -37,7 +37,7 @@ BEGIN
 
   RETURN QUERY
   WITH pal AS (
-    SELECT w, ord FROM unnest(v_pal) WITH ORDINALITY AS t(w, ord)
+    SELECT t.w, t.ord FROM unnest(v_pal) WITH ORDINALITY AS t(w, ord)
   ),
   -- Ítems de OC que coinciden con alguna palabra (código o descripción del maestro)
   it AS (
@@ -67,7 +67,7 @@ BEGIN
   )
   SELECT pp.codigo,
          sum(pp.pts)::integer,
-         coalesce((SELECT jsonb_agg(x ORDER BY x->>'articulo')
+         coalesce((SELECT jsonb_agg(s.x ORDER BY s.x->>'articulo')
                      FROM (SELECT DISTINCT jsonb_build_object('articulo', it.articulo, 'descripcion', it.descripcion) AS x
                              FROM it WHERE it.codigo = pp.codigo LIMIT 6) s), '[]'::jsonb)
     FROM pp

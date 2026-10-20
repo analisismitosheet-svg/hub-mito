@@ -131,7 +131,11 @@ AS $$
     FROM public.pedidos_compra_items i
     WHERE length(trim(coalesce(p_articulo, ''))) >= 3
       AND upper(trim(i.articulo)) NOT IN ('F')  -- F = flete (servicio, no mercadería)
-      AND upper(trim(i.articulo)) LIKE upper(replace(replace(trim(p_articulo), '%', ''), '_', '')) || '%'
+      AND (upper(trim(i.articulo)) LIKE upper(replace(replace(trim(p_articulo), '%', ''), '_', '')) || '%'
+           -- o por descripción (maestro de artículos): "boxer", "remera lisa"…
+           OR upper(trim(i.articulo)) IN (
+             SELECT upper(trim(a.id_art)) FROM public.articulos a
+              WHERE a.descripcion ILIKE '%' || replace(replace(trim(p_articulo), '%', ''), '_', '') || '%'))
     GROUP BY 1, 2, 3, 4
   )
   SELECT p.codigo, p.numero, p.descripcion, p.fecha, p.proveedor, p.proveedor_nombre,

@@ -105,9 +105,9 @@ BEGIN
   END IF;
 
   INSERT INTO public.pedidos_venta AS p
-    (codigo, numero, descripcion, fecha, fecha_alta, cliente, cliente_nombre, vendedor, observacion,
+    (codigo, motivo, motivo_nombre, numero, descripcion, fecha, fecha_alta, cliente, cliente_nombre, vendedor, observacion,
      subtotal, impuestos, total, anulado, usuario, base, sync_gen, actualizado_at)
-  SELECT trim(f->>'codigo'), (f->>'numero')::integer, nullif(trim(f->>'descripcion'), ''),
+  SELECT trim(f->>'codigo'), nullif(trim(f->>'motivo'), ''), nullif(trim(f->>'motivo_nombre'), ''), (f->>'numero')::integer, nullif(trim(f->>'descripcion'), ''),
          (f->>'fecha')::date, (f->>'fecha_alta')::timestamptz,
          nullif(trim(f->>'cliente'), ''), nullif(trim(f->>'cliente_nombre'), ''),
          nullif(trim(f->>'vendedor'), ''), nullif(trim(f->>'observacion'), ''),
@@ -117,7 +117,7 @@ BEGIN
   FROM jsonb_array_elements(p_pedidos) f
   WHERE coalesce(trim(f->>'codigo'), '') <> ''
   ON CONFLICT (codigo) DO UPDATE
-    SET numero = excluded.numero, descripcion = excluded.descripcion, fecha = excluded.fecha,
+    SET motivo = excluded.motivo, motivo_nombre = excluded.motivo_nombre, numero = excluded.numero, descripcion = excluded.descripcion, fecha = excluded.fecha,
         fecha_alta = excluded.fecha_alta, cliente = excluded.cliente, cliente_nombre = excluded.cliente_nombre,
         vendedor = excluded.vendedor, observacion = excluded.observacion, subtotal = excluded.subtotal,
         impuestos = excluded.impuestos, total = excluded.total, anulado = excluded.anulado,

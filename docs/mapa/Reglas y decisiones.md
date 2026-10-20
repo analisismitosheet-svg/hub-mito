@@ -9,6 +9,7 @@
 - La descripción de artículos es `ARTICULO_ADICIONAL` ([[Artículos y F12]]).
 - Picking: cada picking se registra aparte, no se edita el total ([[Picking]]).
 - RPC grandes: SECURITY DEFINER + permisos una vez; arrays en vez de SETOF si pasan de 1000 filas ([[Arquitectura]]).
+- **Si se parchea una función directo en la base, el archivo de `sql/` queda igual en el mismo commit.** Nunca dejar la base adelante del repo: el archivo es lo que se reaplica, y si va atrasado pisa mejoras (pasó el 20/10/2026 con `estadistica_vtd`, que al reaplicarse perdió la excepción de `service_role` y cortó el informe de Eficiencia mayorista con 42501). Para chequear una función: `select pg_get_functiondef('public.nombre(tipos)'::regprocedure);`.
 - Íconos sin colores repetidos ([[UI y estilo]]).
 - Vercel Hobby: **máx. 12 funciones** (hoy 9) y cron **1 vez por día**; nada de catch-all `[...x].ts` en `/api` ni `{...req}` ([[Arquitectura]]).
 - Vistas para Datos SQL: respuesta < 4,5 MB ([[Arquitectura]]).
