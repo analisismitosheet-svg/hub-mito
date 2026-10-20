@@ -1,5 +1,5 @@
 -- Franquicias: propuesta de reposición que el cliente elige por un link (aplicado 2026-10-16)
---   1. En Reposición sugerida se arma la propuesta (P-CFU-0001) con sus artículos.
+--   1. En Reposición sugerida se arma la propuesta (P-001) con sus artículos.
 --   2. El hub le manda el link por WhatsApp a los contactos de la franquicia.
 --   3. El cliente, sin usuario, marca sí/no y cantidades y confirma (RPCs públicas por token).
 --   4. (pendiente) alta del pedido en Dragon por la API REST.
@@ -59,16 +59,18 @@ create table if not exists public.franquicias_propuesta_items (
 );
 create index if not exists franquicias_propuesta_items_prop on public.franquicias_propuesta_items (propuesta_id);
 
--- Número correlativo por franquicia: P-CFU-0001, P-CFU-0002…
+-- Número correlativo GLOBAL (sin la franquicia): P-001, P-002…
+-- Se numera sobre todas las propuestas para que no se repita entre franquicias
+-- (la columna `numero` es unique).
 create or replace function private.numero_propuesta_franquicia()
 returns trigger language plpgsql security definer set search_path = public as $$
 declare n integer;
 begin
   if new.numero is null then
-    perform pg_advisory_xact_lock(hashtext('franq-prop-' || new.franquicia));
+    perform pg_advisory_xact_lock(hashtext('franq-prop'));
     select coalesce(max(substring(numero from '(\d+)$')::integer), 0) + 1 into n
-      from public.franquicias_propuestas where franquicia = new.franquicia;
-    new.numero := 'P-' || upper(new.franquicia) || '-' || lpad(n::text, 4, '0');
+      from public.franquicias_propuestas;
+    new.numero := 'P-' || lpad(n::text, 3, '0');
   end if;
   return new;
 end $$;

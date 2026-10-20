@@ -111,7 +111,7 @@
       <div class="hoja">
         <div class="cab">
           <div><div class="logo">MITO</div><div style="font-size:10.5px;color:#666">Mayorista · Franquicias</div></div>
-          <div class="tit"><h3>ORDEN DE PEDIDO</h3><div class="nro">N° OP-CFU-0001</div><div style="font-size:10.5px;color:#666">16/10/2026</div></div>
+          <div class="tit"><h3>ORDEN DE PEDIDO</h3><div class="nro">N° OP-001</div><div style="font-size:10.5px;color:#666">16/10/2026</div></div>
         </div>
         <div class="datos">
           <div><span>Franquicia:</span> <b>CF Ushuaia</b></div>
@@ -135,7 +135,7 @@
       <p class="sub" style="margin-bottom:10px">En el celular se comparte el PDF directo a WhatsApp con este mensaje. En la PC se descarga el PDF y se abre WhatsApp con el texto.</p>
       <div class="wa-chat">
         <div class="wa-head"><i>CF</i>CF Ushuaia</div>
-        <div class="burb"><div class="adj"><b>PDF</b><div><div style="font-weight:700">Orden OP-CFU-0001.pdf</div><div style="font-size:11px;opacity:.7">1 página</div></div></div><span id="waTxt"></span></div>
+        <div class="burb"><div class="adj"><b>PDF</b><div><div style="font-weight:700">Orden OP-001.pdf</div><div style="font-size:11px;opacity:.7">1 página</div></div></div><span id="waTxt"></span></div>
       </div>
       <div class="acciones">
         <button class="btn">⬇ Descargar PDF</button>
@@ -148,7 +148,7 @@
 <div class="nota">
   <b>Cómo funcionaría</b>
   <ul style="margin:6px 0 0;padding-left:18px">
-    <li><b>Número correlativo por franquicia</b> (OP-CFU-0001, 0002…). Cada orden queda guardada en el hub: fecha, quién la armó, ítems y cantidades.</li>
+    <li><b>Número correlativo</b> (OP-001, 0002…). Cada orden queda guardada en el hub: fecha, quién la armó, ítems y cantidades.</li>
     <li>Un <b>historial de órdenes</b> en Franquicias para volver a verla, reimprimirla o reenviarla.</li>
     <li>La hoja va <b>sin precios</b> (es para preparar y controlar). Si querés, se le agregan precios mayoristas y total en $.</li>
     <li>Hoy el botón de WhatsApp no adjunta el PDF: intenta usar una librería que no está cargada en el hub, así que solo manda el texto. Con esto queda arreglado.</li>
@@ -183,7 +183,7 @@ function render(){
   $('hojaArt').textContent = `${sel.length} artículos`
   $('hojaUni').textContent = uni
   $('hojaObs').textContent = $('obs').value || '—'
-  $('waTxt').textContent = `*ORDEN DE PEDIDO N° OP-CFU-0001*\nCF Ushuaia · 16/10/2026\n\n${sel.length} artículos · *${uni} unidades*\n(detalle en el PDF adjunto)\n\nObs.: ${$('obs').value || '—'}`
+  $('waTxt').textContent = `*ORDEN DE PEDIDO N° OP-001*\nCF Ushuaia · 16/10/2026\n\n${sel.length} artículos · *${uni} unidades*\n(detalle en el PDF adjunto)\n\nObs.: ${$('obs').value || '—'}`
 }
 document.addEventListener('click',e=>{
   const t=e.target

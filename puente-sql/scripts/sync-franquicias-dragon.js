@@ -6,7 +6,7 @@
  *   node scripts/sync-franquicias-dragon.js
  *
  * - Cliente y lista por franquicia: FRANQUICIAS (abajo). Lista MAYOR = LISTA2 en Dragon.
- * - Observaciones: "01140 (CF Ushuaia - Argentina S.R.L.) - Propuesta P-CFU-0001" + comentario del cliente.
+ * - Observaciones: "01140 (CF Ushuaia - Argentina S.R.L.) - Propuesta P-001" + comentario del cliente.
  * - Precio: no se manda; Dragon pone el del artículo en la lista.
  * - Si Dragon rechaza, queda el error en el hub y se reintenta (hasta 5 veces). Si el proceso se corta
  *   a mitad de camino queda "enviando" y no se reintenta solo (ver sql/franquicias_dragon.sql).
