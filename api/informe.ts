@@ -119,15 +119,20 @@ async function cron(req: Req, res: Res) {
     return res.status(500).json({ error: 'Falta la configuración de Supabase' })
   }
 
-  // Autorización: el secreto del cron, o un usuario con permiso (respaldo desde la app).
-  const token = secretoDe(req)
-  const secreto = process.env.CRON_SECRET
-  let autorizado = Boolean(secreto) && mismoSecreto(token, secreto ?? '')
-  if (!autorizado && token) {
-    const uid = await usuarioDe(token)
-    autorizado = Boolean(uid) && (await tienePermiso(token, ['sistemas.informes.view']))
+  // ?evento=diarios: pg_cron cada 5 min (sql/informes_diarios_cron.sql), para que salgan a su hora
+  // (el cron de Vercel Hobby es uno por día). Sin autenticación, igual que ?evento=repo: no recibe
+  // nada ni devuelve datos, y solo manda los diarios ya vencidos, una vez por día (reclamo atómico).
+  if (req.query?.evento !== 'diarios') {
+    // Autorización: el secreto del cron, o un usuario con permiso (respaldo desde la app).
+    const token = secretoDe(req)
+    const secreto = process.env.CRON_SECRET
+    let autorizado = Boolean(secreto) && mismoSecreto(token, secreto ?? '')
+    if (!autorizado && token) {
+      const uid = await usuarioDe(token)
+      autorizado = Boolean(uid) && (await tienePermiso(token, ['sistemas.informes.view']))
+    }
+    if (!autorizado) return res.status(401).json({ error: 'No autorizado' })
   }
-  if (!autorizado) return res.status(401).json({ error: 'No autorizado' })
 
   const rI = await rest('informes?select=*&activo=eq.true&modo=eq.diario')
   if (!rI.ok) return res.status(502).json({ error: `No se pudieron leer los informes (${rI.status})` })

@@ -15,7 +15,7 @@ export interface Destinatario {
 }
 
 /** Fuentes "de la app" (datos ya calculados por Supabase). */
-export type TipoApp = 'recepcion_indo' | 'armados' | 'pedidos_compra' | 'eficiencia_mayorista'
+export type TipoApp = 'recepcion_indo' | 'armados' | 'pedidos_compra' | 'eficiencia_mayorista' | 'km_transporte'
 
 export interface ConfigVista {
   vista: string
@@ -76,6 +76,7 @@ export const TIPOS_APP: { id: TipoApp; label: string }[] = [
   { id: 'armados', label: 'Armados de pedidos (pendientes y en curso)' },
   { id: 'pedidos_compra', label: 'Pedidos de compra (últimos 7 días)' },
   { id: 'eficiencia_mayorista', label: 'Eficiencia mayorista (repo del día y tiempo en piso)' },
+  { id: 'km_transporte', label: 'Km recorridos del transporte (del día, por vehículo)' },
 ]
 
 export const DIAS: { id: string; label: string }[] = [

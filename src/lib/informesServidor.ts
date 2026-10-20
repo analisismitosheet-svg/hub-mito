@@ -15,6 +15,7 @@
 import { postAlPuente } from './puenteRetry.js'
 import { renderReporteImagen, type BloqueImagen, type ReporteImagen } from './informesImagen.js'
 import { bloquesEficiencia, corta, porcentajes, type AvanceVtd, type FilaPiso, type FilaVtd } from './informeEficiencia.js'
+import { bloquesKm, type FilaKmInforme, type VehiculoInforme } from './informeKmTransporte.js'
 import {
   formatoDe,
   normalizarTelefono,
@@ -289,6 +290,8 @@ async function cuerpoApp(cfg: ConfigApp): Promise<string> {
       const tot = d.vtd.reduce((s, f) => ({ venta: s.venta + Number(f.venta), repo: s.repo + Number(f.repo) }), { venta: 0, repo: 0 })
       return `*Eficiencia mayorista*\n${subtitulo}\nVenta ${nAR(tot.venta)} · repo ${nAR(tot.repo)}`
     }
+    case 'km_transporte':
+      return bloquesKm(await datosKm(ahoraAr().fecha)).texto
     default:
       throw new Error('Tipo de informe desconocido')
   }
@@ -332,6 +335,22 @@ async function datosEficiencia(fecha: string): Promise<{ fecha: string; vtd: Fil
   const porId = new Map(emps.map((e) => [e.id, e]))
   const piso: FilaPiso[] = tiempos.map((t) => ({ ...t, legajo: porId.get(t.empleado_id ?? '')?.legajo ?? null, nombre: porId.get(t.empleado_id ?? '')?.nombre ?? null }))
   return { fecha, vtd, piso, avance }
+}
+
+// ---------------------------------------------------------------------------
+// Km recorridos del transporte (Administradores > Tracking > Km recorridos)
+// ---------------------------------------------------------------------------
+
+/** Km del día y del último día anterior en que anduvieron (para comparar; los domingos no hay). */
+async function datosKm(fecha: string): Promise<{ fecha: string; hoy: FilaKmInforme[]; ayer: FilaKmInforme[]; ayerFecha: string | null; vehiculos: VehiculoInforme[] }> {
+  const dia = (n: number) => { const d = new Date(`${fecha}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10) }
+  const [hoy, previos, vehiculos] = await Promise.all([
+    rpc<FilaKmInforme>('tracking_km', { p_desde: fecha, p_hasta: fecha }),
+    rpc<FilaKmInforme>('tracking_km', { p_desde: dia(-7), p_hasta: dia(-1) }),
+    jsonDe<VehiculoInforme>('tracking_vehiculos?select=id,nombre,usuario_transporte_nombre,activo&order=nombre'),
+  ])
+  const ayerFecha = [...new Set(previos.filter((f) => Number(f.km) >= 1).map((f) => f.dia))].sort().pop() ?? null
+  return { fecha, hoy, ayer: previos.filter((f) => f.dia === ayerFecha), ayerFecha, vehiculos }
 }
 
 // ---------------------------------------------------------------------------
@@ -405,6 +424,13 @@ async function construirReporteImagen(informe: Informe): Promise<{ reporte: Repo
     }
     case 'app': {
       const cfg = informe.config as unknown as ConfigApp
+      if (cfg.tipo === 'km_transporte') {
+        const r = bloquesKm(await datosKm(d.fecha))
+        return {
+          reporte: { titulo: limpiarParaImagen(enc || 'Km recorridos del transporte'), subtitulo: r.subtitulo, pie, bloques: r.bloques },
+          caption: limpiarParaImagen(enc || informe.nombre || 'Km recorridos del transporte').slice(0, 900),
+        }
+      }
       if (cfg.tipo === 'eficiencia_mayorista') {
         const r = bloquesEficiencia(await datosEficiencia(d.fecha))
         return {
