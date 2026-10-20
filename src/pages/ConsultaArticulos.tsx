@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
+import FotoArticulo from '@/components/FotoArticulo'
 import {
   colorEtiqueta,
   consultarArticulos,
@@ -314,10 +315,10 @@ export default function ConsultaArticulos() {
         ) : (
           <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-soft">
             <div className="max-h-[70vh] overflow-auto">
-              <table className="w-full min-w-[1000px] text-left text-sm">
+              <table className="w-full min-w-[1040px] text-left text-sm">
                 <thead className="sticky top-0 z-10">
                   <tr>
-                    {['ID artículo', 'Color', 'Talle', 'Nombre completo', 'Material', 'Grupo', 'Stock en MITO', 'Pedido', 'Ubicación', 'Precio'].map(
+                    {['Foto', 'ID artículo', 'Color', 'Talle', 'Nombre completo', 'Material', 'Grupo', 'Stock en MITO', 'Pedido', 'Ubicación', 'Precio'].map(
                       (c) => (
                         <th
                           key={c}
@@ -338,6 +339,9 @@ export default function ConsultaArticulos() {
                       key={`${f.idArticulo}|${f.colorCodigo}|${f.color}|${f.talle}|${i}`}
                       className={`${bandaOscura[i] ? 'banda-oscura' : ''} ${i > 0 && bandaOscura[i] !== bandaOscura[i - 1] ? 'banda-inicio' : ''}`}
                     >
+                      <td className="border-b border-line/50 px-3 py-1.5 align-top">
+                        <FotoArticulo codigo={f.idArticulo} nombre={f.nombre} size={44} />
+                      </td>
                       <td className="border-b border-line/50 px-3 py-2 align-top">
                         <span className="block font-mono text-[13px] font-semibold text-ink">{f.idArticulo || '—'}</span>
                       </td>

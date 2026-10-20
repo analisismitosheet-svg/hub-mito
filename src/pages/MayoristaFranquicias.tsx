@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
+import FotoArticulo from '@/components/FotoArticulo'
 import FranquiciaPropuestas from '@/components/FranquiciaPropuestas'
 import { supabase } from '@/lib/supabase'
 import { leerVista, leerVistaFiltrada, type FilaSql } from '@/lib/sqlApi'
@@ -311,6 +312,7 @@ export default function MayoristaFranquicias() {
                 <thead className="sticky top-0 z-10 bg-surface">
                   <tr>
                     <th className={`w-10 text-left ${th}`}>#</th>
+                    <th className={`text-left ${th}`}>Foto</th>
                     <th className={`text-left ${th}`}>Artículo</th>
                     <th className={`text-left ${th}`}>Descripción</th>
                     <th className={`text-left ${th}`}>Material</th>
@@ -328,7 +330,7 @@ export default function MayoristaFranquicias() {
                 <tbody>
                   {cargando && (
                     <tr>
-                      <td colSpan={13} className="px-3 py-10 text-center text-sub">
+                      <td colSpan={14} className="px-3 py-10 text-center text-sub">
                         <Loader2 size={16} className="mr-2 inline animate-spin" aria-hidden />
                         Trayendo ventas y stock…
                       </td>
@@ -336,7 +338,7 @@ export default function MayoristaFranquicias() {
                   )}
                   {!cargando && !error && visibles.length === 0 && (
                     <tr>
-                      <td colSpan={13} className="px-3 py-10 text-center text-sub">No hay nada para reponer en ese rango.</td>
+                      <td colSpan={14} className="px-3 py-10 text-center text-sub">No hay nada para reponer en ese rango.</td>
                     </tr>
                   )}
                   {visibles.map((f, i) => {
@@ -344,6 +346,7 @@ export default function MayoristaFranquicias() {
                     return (
                       <tr key={`${f.art}|${f.color}|${f.talle}`} className="hover:bg-white/5">
                         <td className="whitespace-nowrap px-3 py-2 text-[11px] tabular-nums text-sub">{i + 1}</td>
+                        <td className="px-3 py-1.5"><FotoArticulo codigo={f.art} nombre={f.descrip} size={40} /></td>
                         <td className="whitespace-nowrap px-3 py-2 font-medium text-ink">{f.art}</td>
                         <td className="px-3 py-2 text-sub">{f.descrip || '—'}</td>
                         <td className="px-3 py-2 text-sub">{f.material || '—'}</td>
@@ -367,7 +370,7 @@ export default function MayoristaFranquicias() {
                 </tbody>
                 <tfoot className="bg-surface">
                   <tr className="text-[12px]">
-                    <td colSpan={9} className="px-3 py-2 font-semibold text-ink">{fmt(count)} SKU a reponer (con stock en MITO)</td>
+                    <td colSpan={10} className="px-3 py-2 font-semibold text-ink">{fmt(count)} SKU a reponer (con stock en MITO)</td>
                     <td className="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">{fmt(totalSug)}</td>
                     <td className="px-3 py-2 text-right text-[11px] font-semibold uppercase text-sub">Total</td>
                     <td className="whitespace-nowrap px-3 py-2 text-right text-sm font-bold tabular-nums text-emerald-500">{cargandoPrecios ? '…' : fmtPesos(totalPesos)}</td>
