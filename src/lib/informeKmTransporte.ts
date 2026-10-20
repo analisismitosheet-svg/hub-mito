@@ -16,6 +16,7 @@ const horaAr = (iso: string) =>
   new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(iso))
 const corta = (s: string) => { const [y, m, d] = s.split('-'); return `${d}/${m}/${y}` }
 const DIAS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb']
+const sumarDia = (s: string) => { const d = new Date(`${s}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10) }
 /** «lun 13/10» */
 const diaCorto = (s: string) => { const [y, m, d] = s.split('-').map(Number); return `${DIAS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]} ${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}` }
 function variacion(act: number, ant: number): string {
@@ -24,7 +25,10 @@ function variacion(act: number, ant: number): string {
   return `${p >= 0 ? '+' : '-'}${nf(Math.abs(p))}%` // sin ▲▼: la fuente de la imagen no los tiene
 }
 
-export function bloquesKm(datos: { fecha: string; hoy: FilaKmInforme[]; ayer: FilaKmInforme[]; ayerFecha?: string | null; vehiculos: VehiculoInforme[] }): {
+export function bloquesKm(datos: {
+  fecha: string; hoy: FilaKmInforme[]; ayer: FilaKmInforme[]; ayerFecha?: string | null; vehiculos: VehiculoInforme[]
+  semana?: { desde: string; filas: FilaKmInforme[]; anterior: FilaKmInforme[] }
+}): {
   subtitulo: string
   bloques: BloqueImagen[]
   texto: string
@@ -80,11 +84,49 @@ export function bloquesKm(datos: { fecha: string; hoy: FilaKmInforme[]; ayer: Fi
     })
   }
 
+  // Semana: del lunes hasta ese día, contra los mismos días de la semana anterior
+  const sem = datos.semana
+  let textoSemana = ''
+  if (sem && sem.filas.some((f) => num(f.km) > 0)) {
+    const kmSem = sem.filas.reduce((s, f) => s + num(f.km), 0)
+    const kmSemAnt = sem.anterior.reduce((s, f) => s + num(f.km), 0)
+    const movSem = sem.filas.reduce((s, f) => s + num(f.minutos_mov), 0)
+    // Vehículos que anduvieron en la semana (columnas) y un renglón por día, del lunes a ese día
+    const vehs = datos.vehiculos.filter((v) => sem.filas.some((f) => f.vehiculo_id === v.id && num(f.km) > 0))
+    const dias: string[] = []
+    for (let d = sem.desde; d <= datos.fecha; d = sumarDia(d)) dias.push(d)
+    const kmDe = (veh: string, d: string) => num(sem.filas.find((f) => f.vehiculo_id === veh && f.dia === d)?.km)
+    const corto = (n: string) => n.replace(/\s+TRANSPORTE$/i, '')
+    const titulo = sem.desde === datos.fecha ? `Semana (lunes ${diaCorto(sem.desde).slice(4)})` : `Semana del ${diaCorto(sem.desde)} al ${diaCorto(datos.fecha)}`
+    bloques.push({ tipo: 'seccion', texto: titulo, color: '#2563eb' })
+    bloques.push({
+      tipo: 'tabla',
+      columnas: ['Día', ...vehs.map((v) => corto(v.nombre)), 'Total'],
+      anchos: [1.6, ...vehs.map(() => 1.4), 1.3],
+      alinear: ['izq', ...vehs.map(() => 'der' as const), 'der'],
+      colores: [null, ...vehs.map(() => null), '#2563eb'],
+      total: true,
+      filas: [
+        ...dias.map((d) => {
+          const kms = vehs.map((v) => kmDe(v.id, d))
+          const tot = kms.reduce((s, k) => s + k, 0)
+          return [diaCorto(d), ...kms.map((k) => (k > 0 ? fmtKm(k) : '—')), tot > 0 ? fmtKm(tot) : '—']
+        }),
+        ['Semana', ...vehs.map((v) => fmtKm(dias.reduce((s, d) => s + kmDe(v.id, d), 0))), fmtKm(kmSem)],
+      ],
+    })
+    bloques.push({
+      tipo: 'texto',
+      texto: `Andando en la semana: ${hm(movSem)}${kmSemAnt > 0 ? ` · ${variacion(kmSem, kmSemAnt)} vs los mismos días de la semana anterior (${fmtKm(kmSemAnt)})` : ''}`,
+    })
+    textoSemana = `\n_${titulo}:_ ${fmtKm(kmSem)}${kmSemAnt > 0 ? ` (${variacion(kmSem, kmSemAnt)} vs semana anterior)` : ''}`
+  }
+
   const texto = [
     `*Km recorridos del transporte — ${corta(datos.fecha)}*`,
     kmHoy > 0 ? `Total: ${fmtKm(kmHoy)}${datos.ayerFecha ? ` (${variacion(kmHoy, kmAyer)} vs ${diaCorto(datos.ayerFecha)})` : ''} · andando ${hm(mov)}` : 'Sin recorridos con GPS.',
     ...filas.filter((x) => x.km > 0).map((x) => `• ${x.v.nombre}: ${fmtKm(x.km)} · ${hm(x.mov)}`),
-  ].join('\n')
+  ].join('\n') + textoSemana
 
   return { subtitulo, bloques, texto }
 }

@@ -342,15 +342,23 @@ async function datosEficiencia(fecha: string): Promise<{ fecha: string; vtd: Fil
 // ---------------------------------------------------------------------------
 
 /** Km del día y del último día anterior en que anduvieron (para comparar; los domingos no hay). */
-async function datosKm(fecha: string): Promise<{ fecha: string; hoy: FilaKmInforme[]; ayer: FilaKmInforme[]; ayerFecha: string | null; vehiculos: VehiculoInforme[] }> {
-  const dia = (n: number) => { const d = new Date(`${fecha}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10) }
-  const [hoy, previos, vehiculos] = await Promise.all([
+async function datosKm(fecha: string): Promise<{
+  fecha: string; hoy: FilaKmInforme[]; ayer: FilaKmInforme[]; ayerFecha: string | null; vehiculos: VehiculoInforme[]
+  semana: { desde: string; filas: FilaKmInforme[]; anterior: FilaKmInforme[] }
+}> {
+  const dia = (n: number, base = fecha) => { const d = new Date(`${base}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10) }
+  // Semana: del lunes hasta ese día, contra los mismos días de la semana anterior
+  const dow = new Date(`${fecha}T12:00:00Z`).getUTCDay()
+  const lunes = dia(-((dow + 6) % 7))
+  const [hoy, previos, vehiculos, semana, semanaAnt] = await Promise.all([
     rpc<FilaKmInforme>('tracking_km', { p_desde: fecha, p_hasta: fecha }),
     rpc<FilaKmInforme>('tracking_km', { p_desde: dia(-7), p_hasta: dia(-1) }),
     jsonDe<VehiculoInforme>('tracking_vehiculos?select=id,nombre,usuario_transporte_nombre,activo&order=nombre'),
+    rpc<FilaKmInforme>('tracking_km', { p_desde: lunes, p_hasta: fecha }),
+    rpc<FilaKmInforme>('tracking_km', { p_desde: dia(-7, lunes), p_hasta: dia(-7) }),
   ])
   const ayerFecha = [...new Set(previos.filter((f) => Number(f.km) >= 1).map((f) => f.dia))].sort().pop() ?? null
-  return { fecha, hoy, ayer: previos.filter((f) => f.dia === ayerFecha), ayerFecha, vehiculos }
+  return { fecha, hoy, ayer: previos.filter((f) => f.dia === ayerFecha), ayerFecha, vehiculos, semana: { desde: lunes, filas: semana, anterior: semanaAnt } }
 }
 
 // ---------------------------------------------------------------------------
