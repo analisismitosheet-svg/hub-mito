@@ -22,6 +22,9 @@ export interface FilaVtd {
   uni_crono: number
   responsable: string | null
   responsable_id: string | null
+  /** Reloj de la fila: primer escaneo (aceptado) y último (hecho) */
+  inicio: string | null
+  fin: string | null
 }
 
 /** Fila de vw_tiempos_piso con el legajo y el nombre del empleado. */
@@ -70,6 +73,18 @@ const nombreCorto = (n: string | null) => {
 /** "MALDONADO RODRIGO ALEJANDRO" -> "Maldonado Rodrigo Alejandro" */
 const nombreTitulo = (n: string | null) => (n ? n.trim().split(/\s+/).map(tit).join(' ') : '—')
 const prendasHs = (seg: number, uni: number) => (seg > 0 ? n2.format(uni / (seg / 3600)) : '—')
+/** Reloj de la repo: del primer escaneo al último, sin sumar a las personas que trabajan en paralelo. */
+const relojSeg = (filas: FilaVtd[]) => {
+  let ini: number | null = null
+  let fin: number | null = null
+  for (const f of filas) {
+    const i = f.inicio ? new Date(f.inicio).getTime() : null
+    const x = f.fin ? new Date(f.fin).getTime() : null
+    if (i != null && (ini == null || i < ini)) ini = i
+    if (x != null && (fin == null || x > fin)) fin = x
+  }
+  return ini != null && fin != null && fin > ini ? Math.round((fin - ini) / 1000) : 0
+}
 /** Lo no mandado: si la repo terminó, todo lo que no salió; si no, lo marcado como faltante. */
 const noMandadosDe = (f: FilaVtd) => (f.lote_estado === 'finalizado' ? Math.max(0, num(f.venta) - num(f.repo)) : num(f.faltante))
 
@@ -90,6 +105,8 @@ export function bloquesEficiencia(datos: { fecha: string; vtd: FilaVtd[]; piso: 
 } {
   const filas = datos.vtd.filter((f) => f.fecha === datos.fecha)
   const ventaFecha = filas.find((f) => f.venta_fecha)?.venta_fecha ?? null
+  // HS total = reloj de la repo (del primer al último escaneo), no la suma de los cronómetros
+  const reloj = relojSeg(filas)
 
   // Totales del día (KPIs de la pantalla)
   const tot = filas.reduce(
@@ -115,7 +132,7 @@ export function bloquesEficiencia(datos: { fecha: string; vtd: FilaVtd[]; piso: 
         { titulo: 'Cant venta', valor: n0.format(tot.venta), pie: `avance ${pctTxt(av)}`, color: '#16a34a' },
         { titulo: 'Cant repo', valor: n0.format(tot.repo), pie: tot.venta ? `${Math.round((tot.repo / tot.venta) * 100)}% de la venta` : '—', color: '#0284c7' },
         { titulo: 'No mandados', valor: n0.format(tot.no), pie: tot.venta ? `${n2.format((tot.no / tot.venta) * 100)}% de la venta` : '—', color: '#dc2626' },
-        { titulo: 'HS total', valor: hm(tot.seg), pie: tot.seg ? `${prendasHs(tot.seg, tot.uni)} prendas/HS` : 'sin cronómetro', color: '#7c3aed' },
+        { titulo: 'HS total', valor: hm(reloj), pie: reloj ? `${prendasHs(reloj, tot.uni)} prendas/HS` : 'sin cronómetro', color: '#7c3aed' },
         { titulo: 'Personas', valor: String(personas), pie: 'trabajaron la repo', color: '#d97706' },
       ],
     })
@@ -152,7 +169,7 @@ export function bloquesEficiencia(datos: { fecha: string; vtd: FilaVtd[]; piso: 
           hm(r.seg),
           prendasHs(r.seg, r.uni),
         ]),
-        ['TOTAL', `${locales.length} locales`, n0.format(tot.venta), n0.format(tot.repo), tot.no ? n0.format(tot.no) : '—', pctTxt(av), hm(tot.seg), prendasHs(tot.seg, tot.uni)],
+        ['TOTAL', `${locales.length} locales`, n0.format(tot.venta), n0.format(tot.repo), tot.no ? n0.format(tot.no) : '—', pctTxt(av), hm(reloj), prendasHs(reloj, tot.uni)],
       ],
     })
   }

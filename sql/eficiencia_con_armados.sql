@@ -10,6 +10,12 @@
 --    pedido = un local (cliente). venta = unidades pedidas, repo = escaneadas,
 --    faltante, segundos = cronómetro del armado, responsable = quien lo aceptó.
 --    El venta_fecha sale de la observación "REPO DIARIA (dd/mm/aaaa)" si está.
+--    inicio/fin = reloj de esa fila (aceptado_at -> hecho_at del armado; en las
+--    repos subidas, de la primera a la última sesión del local). Con eso la pantalla
+--    arma el "HS total" de la repo: del primer escaneo al último, contando una sola
+--    vez a las personas que trabajan en paralelo (no se suman los cronómetros).
+--    Si una sesión o un armado quedó abierto y cruzó la medianoche, inicio/fin van
+--    en NULL: no estira el reloj de ese día.
 -- 2) vw_tiempos_piso (Tiempo real en piso): suma los armados terminados por
 --    empleado y día (cronómetro del armado, unidades escaneadas, faltantes).
 -- ============================================================================
@@ -30,7 +36,8 @@ DROP FUNCTION IF EXISTS public.estadistica_vtd(date, date);
 CREATE FUNCTION public.estadistica_vtd(p_desde date, p_hasta date)
 RETURNS TABLE(lote_id uuid, fecha date, venta_fecha date, lote_nombre text, lote_estado text,
               local text, venta integer, repo integer, faltante integer, segundos integer,
-              uni_crono integer, responsable text, responsable_id uuid)
+              uni_crono integer, responsable text, responsable_id uuid,
+              inicio timestamptz, fin timestamptz)
 LANGUAGE plpgsql STABLE SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
@@ -54,7 +61,9 @@ BEGIN
     SELECT s.lote_id, upper(btrim(s.local)) AS local,
            sum(s.segundos + CASE WHEN s.estado = 'en_curso' AND s.tramo_desde IS NOT NULL
                                  THEN greatest(0, extract(epoch FROM now() - s.tramo_desde)) ELSE 0 END)::integer AS seg,
-           sum(s.unidades)::integer AS uni
+           sum(s.unidades)::integer AS uni,
+           min(s.iniciada_at) AS ini,
+           max(greatest(coalesce(s.finalizada_at, now()), s.iniciada_at)) AS fin
       FROM public.repo_sesiones s JOIN l ON l.id = s.lote_id
      GROUP BY 1, 2
   ),
@@ -69,6 +78,12 @@ BEGIN
   ar AS (
     SELECT a.id, coalesce(a.estado, 'pendiente') AS estado, coalesce(a.crono_segundos, 0) AS crono_segundos,
            a.crono_estado, a.crono_desde, a.aceptado_nombre, a.aceptado_por,
+           a.aceptado_at, a.hecho_at,
+           -- Armado que quedó abierto de un día para el otro (se pausó y se retomó al otro
+           -- día): no estira el reloj del día, así que no cuenta para inicio/fin.
+           (a.aceptado_at IS NOT NULL AND a.hecho_at IS NOT NULL AND
+            (a.hecho_at AT TIME ZONE 'America/Argentina/Buenos_Aires')::date
+              <> (a.aceptado_at AT TIME ZONE 'America/Argentina/Buenos_Aires')::date) AS quedo_abierto,
            p.cliente, p.fecha AS pfecha, p.observacion,
            coalesce((SELECT sum(round(i.cantidad)) FROM public.pedidos_venta_items i WHERE i.codigo = p.codigo), 0)::integer AS venta_pedido
       FROM public.pedidos_venta p
@@ -91,7 +106,12 @@ BEGIN
     SELECT ar.pfecha, bool_and(ar.estado = 'hecho') AS terminado FROM ar GROUP BY 1
   )
   SELECT l.id, l.fecha, l.venta_fecha, l.nombre, l.estado,
-         it.local, it.venta, it.repo, it.faltante, coalesce(se.seg, 0), coalesce(se.uni, 0), re.nombre, re.empleado_id
+         it.local, it.venta, it.repo, it.faltante, coalesce(se.seg, 0), coalesce(se.uni, 0), re.nombre, re.empleado_id,
+         -- Sesión que quedó abierta y cruzó la medianoche: no estira el reloj del día
+         CASE WHEN se.ini IS NULL OR (se.fin AT TIME ZONE 'America/Argentina/Buenos_Aires')::date
+                                       <> (se.ini AT TIME ZONE 'America/Argentina/Buenos_Aires')::date THEN NULL ELSE se.ini END,
+         CASE WHEN se.ini IS NULL OR (se.fin AT TIME ZONE 'America/Argentina/Buenos_Aires')::date
+                                       <> (se.ini AT TIME ZONE 'America/Argentina/Buenos_Aires')::date THEN NULL ELSE se.fin END
     FROM it
     JOIN l ON l.id = it.lote_id
     LEFT JOIN se ON se.lote_id = it.lote_id AND se.local = it.local
@@ -108,7 +128,9 @@ BEGIN
                                    THEN greatest(0, extract(epoch FROM now() - ar.crono_desde)) ELSE 0 END)::integer,
          CASE WHEN ar.crono_segundos > 0 OR ar.crono_estado = 'en_curso' THEN coalesce(ai.repo, 0) ELSE 0 END,
          ar.aceptado_nombre::text,
-         ar.aceptado_por
+         ar.aceptado_por,
+         CASE WHEN ar.id IS NULL OR ar.quedo_abierto THEN NULL ELSE ar.aceptado_at END,
+         CASE WHEN ar.id IS NULL OR ar.quedo_abierto THEN NULL ELSE coalesce(ar.hecho_at, now()) END
     FROM ar
     JOIN dias d ON d.pfecha = ar.pfecha
     LEFT JOIN ai ON ai.armado_id = ar.id

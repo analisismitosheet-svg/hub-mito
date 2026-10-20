@@ -11,8 +11,10 @@ import { cargarStockSku, stockSkuDe, type StockSku } from '@/lib/stockSku'
 /*  Usa el período de la pantalla (FiltroPeriodo): en un día, esa repo; */
 /*  en más días, una fila por repo del período. Siempre el cuadro por   */
 /*  local.                                                              */
-/*  Horas = cronómetro de Mi repo (sin pausas). HS total = esas horas;  */
-/*  Horas = HS total ÷ personas; Prendas/HS = repo ÷ HS total.          */
+/*  HS total = reloj de la repo: del primer escaneo al último, contando una   */
+/*  sola vez a las personas que trabajan en paralelo (no se suman los         */
+/*  cronómetros de cada uno). Horas (por persona) = cronómetro ÷ personas;    */
+/*  Prendas/HS = repo ÷ HS total.                                             */
 /*  Datos: RPC estadistica_vtd (sql/estadistica_vtd.sql).               */
 /* ------------------------------------------------------------------ */
 
@@ -30,6 +32,9 @@ interface Fila {
   uni_crono: number
   responsable: string | null
   responsable_id: string | null
+  /** Reloj de la fila: primer escaneo (aceptado) y último (hecho) */
+  inicio: string | null
+  fin: string | null
 }
 
 interface Repo {
@@ -42,7 +47,10 @@ interface Repo {
   venta: number
   repo: number
   noMandados: number
+  /** Cronómetro sumado (por persona) */
   segundos: number
+  /** Reloj de la repo: del primer al último escaneo */
+  reloj: number
   uniCrono: number
   personas: number
 }
@@ -149,13 +157,14 @@ const nombreCorto = (n: string | null) => {
 const noMandadosDe = (f: Fila) => (f.lote_estado === 'finalizado' ? Math.max(0, f.venta - f.repo) : f.faltante)
 
 function agruparRepos(filas: Fila[]): Repo[] {
-  const m = new Map<string, Repo & { resp: Set<string> }>()
+  const m = new Map<string, Repo & { resp: Set<string>; ini: number | null; fin: number | null }>()
   for (const f of filas) {
     let r = m.get(f.lote_id)
     if (!r) {
       r = {
         loteId: f.lote_id, fecha: f.fecha, ventaFecha: f.venta_fecha, nombre: f.lote_nombre ?? '',
-        finalizada: f.lote_estado === 'finalizado', locales: 0, venta: 0, repo: 0, noMandados: 0, segundos: 0, uniCrono: 0, personas: 0, resp: new Set(),
+        finalizada: f.lote_estado === 'finalizado', locales: 0, venta: 0, repo: 0, noMandados: 0, segundos: 0, reloj: 0, uniCrono: 0, personas: 0,
+        resp: new Set(), ini: null, fin: null,
       }
       m.set(f.lote_id, r)
     }
@@ -166,8 +175,15 @@ function agruparRepos(filas: Fila[]): Repo[] {
     r.segundos += f.segundos
     r.uniCrono += f.uni_crono
     if (f.responsable_id) r.resp.add(f.responsable_id)
+    // Reloj de la repo: el primer escaneo y el último, sin sumar a cada persona
+    const i = f.inicio ? new Date(f.inicio).getTime() : null
+    const x = f.fin ? new Date(f.fin).getTime() : null
+    if (i != null && (r.ini == null || i < r.ini)) r.ini = i
+    if (x != null && (r.fin == null || x > r.fin)) r.fin = x
   }
-  return [...m.values()].map(({ resp, ...r }) => ({ ...r, personas: resp.size })).sort((a, b) => a.fecha.localeCompare(b.fecha))
+  return [...m.values()]
+    .map(({ resp, ini, fin, ...r }) => ({ ...r, personas: resp.size, reloj: ini != null && fin != null && fin > ini ? Math.round((fin - ini) / 1000) : 0 }))
+    .sort((a, b) => a.fecha.localeCompare(b.fecha))
 }
 
 function agruparLocales(filas: Fila[]): PorLocal[] {
@@ -210,6 +226,10 @@ function BarraAvance({ ok, no, alto = 'h-2.5' }: { ok: number; no: number; alto?
 const horasPer = (r: { segundos: number }) => (r.segundos > 0 ? r.segundos / 3600 : null)
 /** Prendas por hora: solo lo escaneado con el cronómetro en marcha, dividido esas horas */
 const prendasHs = (r: { segundos: number; uniCrono: number }) => (r.segundos > 0 ? r.uniCrono / (r.segundos / 3600) : null)
+/** Horas del reloj de la repo (del primer al último escaneo) */
+const horasReloj = (r: { reloj: number }) => (r.reloj > 0 ? r.reloj / 3600 : null)
+/** Prendas por hora con el reloj de la repo: no se suman las personas que trabajan en paralelo */
+const prendasHsReloj = (r: { reloj: number; uniCrono: number }) => (r.reloj > 0 ? r.uniCrono / (r.reloj / 3600) : null)
 
 function Dif({ a, b }: { a: number; b: number }) {
   if (!b) return null
@@ -341,16 +361,16 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
   const personas = useMemo(() => new Set(filasPeriodo.map((f) => f.responsable_id).filter(Boolean)).size, [filasPeriodo])
 
   const suma = (rs: Repo[]) => rs.reduce(
-    (s, r) => ({ venta: s.venta + r.venta, repo: s.repo + r.repo, noMandados: s.noMandados + r.noMandados, segundos: s.segundos + r.segundos, uniCrono: s.uniCrono + r.uniCrono }),
-    { venta: 0, repo: 0, noMandados: 0, segundos: 0, uniCrono: 0 },
+    (s, r) => ({ venta: s.venta + r.venta, repo: s.repo + r.repo, noMandados: s.noMandados + r.noMandados, segundos: s.segundos + r.segundos, reloj: s.reloj + r.reloj, uniCrono: s.uniCrono + r.uniCrono }),
+    { venta: 0, repo: 0, noMandados: 0, segundos: 0, reloj: 0, uniCrono: 0 },
   )
   const tot = suma(periodo)
   const totAnt = suma(anterior)
   const conHoras = periodo.filter((r) => r.segundos > 0)
+  const conReloj = periodo.filter((r) => r.reloj > 0)
   const promHoras = conHoras.length ? conHoras.reduce((s, r) => s + r.segundos / 3600 / Math.max(1, r.personas), 0) / conHoras.length : null
-  const promPph = conHoras.length ? conHoras.reduce((s, r) => s + (prendasHs(r) ?? 0), 0) / conHoras.length : null
+  const promPph = conReloj.length ? conReloj.reduce((s, r) => s + (prendasHsReloj(r) ?? 0), 0) / conReloj.length : null
   const vsTxt = unDia ? 'vs repo anterior' : 'vs período anterior'
-  const hpTot = horasPer(tot)
   // Totales del detalle de lo no mandado que está abierto (el stock no se suma)
   const totDet = (det ?? []).reduce(
     (s, f) => ({ cantidad: s.cantidad + f.cantidad, noMandado: s.noMandado + f.no_mandado }),
@@ -423,7 +443,7 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
               onClick={() => void abrirDetalle()}
               ayuda="Ver los artículos que no se encontraron"
             />
-            <Kpi titulo="HS total (Mi repo)" color="#a78bfa" valor={hm(tot.segundos)} pie={hpTot ? `${num2(prendasHs(tot))} prendas/HS` : 'nadie usó el cronómetro'} />
+            <Kpi titulo="HS total (Mi repo)" color="#a78bfa" valor={hm(tot.reloj)} pie={tot.reloj > 0 ? `${num2(prendasHsReloj(tot))} prendas/HS` : 'sin horario de Mi repo'} />
             <Kpi
               titulo={unDia ? 'Personas' : 'Repos'}
               color="#f59e0b"
@@ -444,10 +464,10 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
                     <th className="py-1.5 text-right">Cant repo</th>
                     <th className="py-1.5 text-right">No mand.</th>
                     <th className="hidden py-1.5 text-right lg:table-cell">Locales</th>
-                    <th className="py-1.5 text-right"><span className="block text-[12px] font-extrabold normal-case text-amber-500">{num2(promHoras)}</span>Horas</th>
+                    <th className="py-1.5 text-right"><span className="block text-[12px] font-extrabold normal-case text-amber-500">{num2(promHoras)}</span><span title="Promedio por persona: cronómetro ÷ personas">Horas</span></th>
                     <th className="hidden py-1.5 text-right sm:table-cell">Pers.</th>
-                    <th className="hidden py-1.5 text-right md:table-cell">HS total</th>
-                    <th className="py-1.5 text-right"><span className="block text-[12px] font-extrabold normal-case text-amber-500">{num2(promPph)}</span>Prend/HS</th>
+                    <th className="hidden py-1.5 text-right md:table-cell" title="Reloj de la repo: del primer escaneo al último (el trabajo en paralelo cuenta una sola vez)">HS total</th>
+                    <th className="py-1.5 text-right" title="Prendas escaneadas con el cronómetro ÷ HS total"><span className="block text-[12px] font-extrabold normal-case text-amber-500">{num2(promPph)}</span>Prend/HS</th>
                     <th className="hidden py-1.5 text-right sm:table-cell">Estado</th>
                   </tr>
                 </thead>
@@ -473,8 +493,8 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
                         <td className="hidden py-1.5 text-right tabular-nums lg:table-cell">{r.locales}</td>
                         <td className="py-1.5 text-right tabular-nums">{hp ? num2(hp / Math.max(1, r.personas)) : '—'}</td>
                         <td className="hidden py-1.5 text-right tabular-nums sm:table-cell">{r.personas}</td>
-                        <td className="hidden py-1.5 text-right tabular-nums md:table-cell">{num2(hp)}</td>
-                        <td className="py-1.5 text-right font-bold tabular-nums">{num2(prendasHs(r))}</td>
+                        <td className="hidden py-1.5 text-right tabular-nums md:table-cell">{num2(horasReloj(r))}</td>
+                        <td className="py-1.5 text-right font-bold tabular-nums">{num2(prendasHsReloj(r))}</td>
                         <td className="hidden py-1.5 text-right sm:table-cell">
                           <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${r.finalizada ? 'bg-emerald-500/15 text-emerald-500' : 'bg-amber-500/15 text-amber-500'}`}>
                             {r.finalizada ? 'FINALIZADA' : 'EN PROCESO'}
@@ -540,7 +560,9 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
             </table>
           </section>
           <p className="mt-3 text-[11px] text-sub">
-            Horas: tiempo con el cronómetro de Mi repo (Iniciar → Finalizar, sin pausas). Si nadie lo usó, queda «—». Tocá una repo del período para ver ese día.
+            HS total: el reloj de la repo, del primer escaneo al último, contando una sola vez a las personas que trabajaron en paralelo
+            (no se suman los cronómetros). Horas: promedio por persona (cronómetro ÷ personas). En el cuadro por local, las horas son las de
+            ese local (cronómetro del armado). Si nadie usó el cronómetro, queda «—». Tocá una repo del período para ver ese día.
           </p>
         </>
       )}
