@@ -1,14 +1,18 @@
 /**
  * Fotos de artículos (captainfin + zimith).
  *
- * El mapa código -> URL vive en `public/fotos-articulos.json` (lo genera
+ * El mapa código -> fotos vive en `public/fotos-articulos.json` (lo genera
  * `gen-fotos-articulos.mjs` recorriendo las dos tiendas) para no engordar el
  * bundle: se pide una sola vez y queda cacheado por el navegador.
+ *
+ * Cada artículo tiene varias fotos (varios colores / ángulos). La primera es
+ * la que se usa como miniatura y el zoom muestra la galería completa.
  */
 import { useSyncExternalStore } from 'react'
 
-export type MapaFotos = Record<string, string>
+export type MapaFotos = Record<string, string[]>
 
+const HOST = 'https://bunny-cdn.ventasxmayor.com/'
 const VACIO: MapaFotos = {}
 let mapa: MapaFotos | null = null
 let promesa: Promise<MapaFotos> | null = null
@@ -35,11 +39,13 @@ export function cargarFotos(): Promise<MapaFotos> {
   return promesa
 }
 
-/** URL de la foto de un artículo (null si todavía no cargó o no tiene). */
-export function fotoArticulo(art: string | null | undefined, fotos: MapaFotos): string | null {
+/** URLs completas de las fotos de un artículo (vacío si todavía no cargó o no tiene). */
+export function fotosArticulo(art: string | null | undefined, fotos: MapaFotos): string[] {
   const codigo = String(art ?? '').trim().toUpperCase()
-  if (!codigo) return null
-  return fotos[codigo] ?? null
+  if (!codigo) return []
+  const lista = fotos[codigo]
+  if (!lista || !lista.length) return []
+  return lista.map((u) => (u.startsWith('http') ? u : HOST + u))
 }
 
 const suscribir = (cb: () => void) => {
