@@ -51,6 +51,8 @@ interface Empleado {
   obra_social: string | null
   fin_plan: string | null
   entrega_remeras: string | null
+  /** false = no sale en el informe de Eficiencia mayorista (sql/empleados_cuenta_informes.sql) */
+  cuenta_informes: boolean | null
 }
 
 const ESTADO_LEGAJO_OPCIONES = ['NOMINA ACTIVA', 'PLANES ACTIVOS', 'BAJAS MITO', 'BAJAS PLANES']
@@ -74,7 +76,7 @@ function estiloEstadoLegajo(s: string | null): string {
 }
 
 const CAMPOS =
-  'id,legajo,nombre,activo,lugar,area_sector,horas,convenio,categoria,puesto,comision,reingreso,fecha_ingreso,antiguedad_2025,dias_vacaciones_2025,cuil,dni,fecha_nacimiento,sexo,telefono,domicilio,email,codigo_os,prepaga,tipo_contrato,contacto_emergencia,parentesco,telefono_emergencia,estado_legajo,fecha_egreso,motivo_baja,plan,obra_social,fin_plan,entrega_remeras'
+  'id,legajo,nombre,activo,lugar,area_sector,horas,convenio,categoria,puesto,comision,reingreso,fecha_ingreso,antiguedad_2025,dias_vacaciones_2025,cuil,dni,fecha_nacimiento,sexo,telefono,domicilio,email,codigo_os,prepaga,tipo_contrato,contacto_emergencia,parentesco,telefono_emergencia,estado_legajo,fecha_egreso,motivo_baja,plan,obra_social,fin_plan,entrega_remeras,cuenta_informes'
 
 const inputCls = 'w-full rounded-xl border border-line bg-surface2 px-3 py-1.5 text-[13px] text-ink outline-none transition duration-250 placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40'
 const selectCls = inputCls + ' appearance-none'
@@ -651,6 +653,8 @@ function EmpleadoModal({ registro, estadoActual, opciones, onClose, onSaved }: {
   })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Informe de Eficiencia mayorista: por defecto cuentan todos
+  const [cuentaInformes, setCuentaInformes] = useState(registro?.cuenta_informes !== false)
 
   const set = (k: string, v: string) => setF((prev) => ({ ...prev, [k]: v }))
 
@@ -673,6 +677,7 @@ function EmpleadoModal({ registro, estadoActual, opciones, onClose, onSaved }: {
       else payload[clave] = v || null
     }
     payload.nombre = f.nombre.trim()
+    payload.cuenta_informes = cuentaInformes
 
     // Entre los legajos activos el número no se puede repetir
     const legajoTrim = (f.legajo ?? '').trim()
@@ -754,6 +759,18 @@ function EmpleadoModal({ registro, estadoActual, opciones, onClose, onSaved }: {
                   {ESTADO_LEGAJO_OPCIONES.map((o) => <option key={o} value={o}>{o}</option>)}
                 </select>
               </Campo>
+              <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-line bg-surface px-3 py-2 text-[13px] text-ink">
+                <input
+                  type="checkbox"
+                  checked={cuentaInformes}
+                  onChange={(e) => setCuentaInformes(e.target.checked)}
+                  className="h-4 w-4 accent-emerald-500"
+                />
+                <span>
+                  Cuenta en los informes
+                  <span className="block text-[11px] text-sub">Sin tilde no sale en el informe de Eficiencia mayorista</span>
+                </span>
+              </label>
               <p className="flex-1 text-xs leading-relaxed text-sub/80">
                 {esBaja
                   ? 'Al pasarlo a una baja se piden los datos de la hoja de bajas (egreso y motivo). El resto de la ficha se conserva, solo deja de mostrarse.'

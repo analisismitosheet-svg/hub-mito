@@ -333,8 +333,20 @@ async function datosEficiencia(fecha: string): Promise<{ fecha: string; vtd: Fil
     ? await jsonDe<{ id: string; legajo: string | null; nombre: string | null }>(`empleados?select=id,legajo,nombre&id=in.(${ids.join(',')})`)
     : []
   const porId = new Map(emps.map((e) => [e.id, e]))
-  const piso: FilaPiso[] = tiempos.map((t) => ({ ...t, legajo: porId.get(t.empleado_id ?? '')?.legajo ?? null, nombre: porId.get(t.empleado_id ?? '')?.nombre ?? null }))
-  return { fecha, vtd, piso, avance }
+
+  // Empleados marcados con "Cuenta en los informes" en NO (sql/empleados_cuenta_informes.sql):
+  // no salen en piso, no figuran como responsables y no suman en el KPI Personas.
+  const fuera = new Set(
+    (await jsonDe<{ id: string }>('empleados?select=id&cuenta_informes=is.false')).map((e) => e.id),
+  )
+
+  const piso: FilaPiso[] = tiempos
+    .filter((t) => !t.empleado_id || !fuera.has(t.empleado_id))
+    .map((t) => ({ ...t, legajo: porId.get(t.empleado_id ?? '')?.legajo ?? null, nombre: porId.get(t.empleado_id ?? '')?.nombre ?? null }))
+  const vtdSinFuera = fuera.size
+    ? vtd.map((f) => (f.responsable_id && fuera.has(f.responsable_id) ? { ...f, responsable: null, responsable_id: null } : f))
+    : vtd
+  return { fecha, vtd: vtdSinFuera, piso, avance }
 }
 
 // ---------------------------------------------------------------------------
