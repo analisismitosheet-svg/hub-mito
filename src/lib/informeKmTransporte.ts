@@ -7,6 +7,10 @@ import type { BloqueImagen } from './informesImagen.js'
 
 export interface FilaKmInforme { vehiculo_id: string; dia: string; km: number | string; minutos_mov: number | string; primera: string; ultima: string }
 export interface VehiculoInforme { id: string; nombre: string; usuario_transporte_nombre: string | null; activo: boolean }
+/** Locales distintos por los que pasó un vehículo ese día (RPC tracking_locales_dia). */
+export interface FilaLocalesInforme { vehiculo_id: string; dia: string; locales: number | string; nombres: string | null }
+/** Parada de al menos 10 min lejos de todo local o depósito (RPC tracking_paradas_fuera). */
+export interface FilaParadaInforme { vehiculo_id: string; dia: string; desde: string; hasta: string; minutos: number | string; lat: number; lng: number }
 
 const num = (v: unknown) => Number(v) || 0
 const nf = (n: number, dec = 0) => new Intl.NumberFormat('es-AR', { minimumFractionDigits: dec, maximumFractionDigits: dec }).format(n)
@@ -27,6 +31,10 @@ function variacion(act: number, ant: number): string {
 
 export function bloquesKm(datos: {
   fecha: string; hoy: FilaKmInforme[]; ayer: FilaKmInforme[]; ayerFecha?: string | null; vehiculos: VehiculoInforme[]
+  /** Locales tocados ese día por vehículo; el depósito y la fábrica no cuentan (tracking_bases.es_local) */
+  locales?: FilaLocalesInforme[]
+  /** Paradas largas fuera de todo local o depósito */
+  paradas?: FilaParadaInforme[]
   semana?: { desde: string; filas: FilaKmInforme[]; anterior: FilaKmInforme[] }
 }): {
   subtitulo: string
@@ -42,10 +50,17 @@ export function bloquesKm(datos: {
     .map((v) => {
       const h = datos.hoy.find((f) => f.vehiculo_id === v.id)
       const a = datos.ayer.find((f) => f.vehiculo_id === v.id)
-      return { v, km: num(h?.km), kmAyer: num(a?.km), mov: num(h?.minutos_mov), primera: h?.primera ?? null, ultima: h?.ultima ?? null }
+      const l = datos.locales?.find((f) => f.vehiculo_id === v.id)
+      return {
+        v, km: num(h?.km), kmAyer: num(a?.km), mov: num(h?.minutos_mov), primera: h?.primera ?? null, ultima: h?.ultima ?? null,
+        locales: num(l?.locales), nombres: l?.nombres ?? null,
+      }
     })
     .filter((x) => x.km > 0 || x.v.activo)
     .sort((a, b) => b.km - a.km)
+
+  // Locales tocados en el día: suma por vehículo (si dos pasan por el mismo, cuenta en los dos)
+  const totalLocales = filas.reduce((s, x) => s + x.locales, 0)
 
   const bloques: BloqueImagen[] = []
   if (kmHoy <= 0) {
@@ -57,17 +72,19 @@ export function bloquesKm(datos: {
       items: [
         { titulo: 'Km totales', valor: fmtKm(kmHoy), pie: datos.ayerFecha ? `${variacion(kmHoy, kmAyer)} vs ${diaCorto(datos.ayerFecha)} (${fmtKm(kmAyer)})` : 'sin día anterior para comparar', color: '#0d9488' },
         { titulo: 'Tiempo andando', valor: hm(mov), pie: mov ? `${nf(kmHoy / (mov / 60))} km/h de promedio` : 'en movimiento', color: '#7c3aed' },
-        { titulo: 'Vehículos', valor: String(filas.filter((x) => x.km > 0).length), pie: 'con recorrido', color: '#2563eb' },
+        totalLocales > 0
+          ? { titulo: 'Locales', valor: String(totalLocales), pie: `${filas.filter((x) => x.km > 0).length} vehículos con recorrido`, color: '#2563eb' }
+          : { titulo: 'Vehículos', valor: String(filas.filter((x) => x.km > 0).length), pie: 'con recorrido', color: '#2563eb' },
         { titulo: 'El que más anduvo', valor: top ? fmtKm(top.km) : '—', pie: top?.v.nombre ?? '', color: '#ea580c' },
       ],
     })
     bloques.push({ tipo: 'seccion', texto: 'Por vehículo', color: '#0d9488' })
     bloques.push({
       tipo: 'tabla',
-      columnas: ['Vehículo', 'Km', 'Andando', 'Primera', 'Última', datos.ayerFecha ? `vs ${diaCorto(datos.ayerFecha).slice(4)}` : 'vs anterior'],
-      anchos: [3, 1.1, 1.5, 1, 1, 1.1],
-      alinear: ['izq', 'der', 'der', 'der', 'der', 'der'],
-      colores: [null, '#0d9488', null, '#475569', '#475569', null],
+      columnas: ['Vehículo', 'Km', 'Andando', 'Locales', 'Primera', 'Última', datos.ayerFecha ? `vs ${diaCorto(datos.ayerFecha).slice(4)}` : 'vs anterior'],
+      anchos: [2.8, 1.1, 1.5, 1, 1, 1, 1.1],
+      alinear: ['izq', 'der', 'der', 'der', 'der', 'der', 'der'],
+      colores: [null, '#0d9488', null, '#2563eb', '#475569', '#475569', null],
       total: true,
       filas: [
         ...filas.map((x) => [
@@ -75,12 +92,31 @@ export function bloquesKm(datos: {
           x.v.usuario_transporte_nombre && x.v.usuario_transporte_nombre !== x.v.nombre ? `${x.v.nombre} (${x.v.usuario_transporte_nombre})` : x.v.nombre,
           x.km > 0 ? fmtKm(x.km) : '—',
           x.mov ? hm(x.mov) : '—',
+          x.locales ? String(x.locales) : '—',
           x.primera ? horaAr(x.primera) : '—',
           x.ultima ? horaAr(x.ultima) : '—',
           variacion(x.km, x.kmAyer),
         ]),
-        ['Total', fmtKm(kmHoy), hm(mov), '', '', variacion(kmHoy, kmAyer)],
+        ['Total', fmtKm(kmHoy), hm(mov), totalLocales ? String(totalLocales) : '—', '', '', variacion(kmHoy, kmAyer)],
       ],
+    })
+  }
+
+  // Paradas lejos de todo local o depósito: solo si hubo alguna
+  const paradas = (datos.paradas ?? []).filter((p) => num(p.minutos) > 0)
+  if (paradas.length) {
+    const nombreDe = (id: string) => datos.vehiculos.find((v) => v.id === id)?.nombre ?? '—'
+    bloques.push({ tipo: 'seccion', texto: 'Paradas fuera de locales y depósito', color: '#ea580c' })
+    bloques.push({
+      tipo: 'tabla',
+      columnas: ['Vehículo', 'Desde', 'Hasta', 'Cuánto'],
+      anchos: [3, 1.2, 1.2, 1.4],
+      alinear: ['izq', 'der', 'der', 'der'],
+      colores: [null, '#475569', '#475569', '#ea580c'],
+      filas: paradas
+        .slice()
+        .sort((a, b) => a.desde.localeCompare(b.desde))
+        .map((p) => [nombreDe(p.vehiculo_id), horaAr(p.desde), horaAr(p.hasta), hm(num(p.minutos))]),
     })
   }
 
@@ -125,7 +161,17 @@ export function bloquesKm(datos: {
   const texto = [
     `*Km recorridos del transporte — ${corta(datos.fecha)}*`,
     kmHoy > 0 ? `Total: ${fmtKm(kmHoy)}${datos.ayerFecha ? ` (${variacion(kmHoy, kmAyer)} vs ${diaCorto(datos.ayerFecha)})` : ''} · andando ${hm(mov)}` : 'Sin recorridos con GPS.',
-    ...filas.filter((x) => x.km > 0).map((x) => `• ${x.v.nombre}: ${fmtKm(x.km)} · ${hm(x.mov)}`),
+    ...filas.filter((x) => x.km > 0).map((x) => {
+      const loc = x.locales ? ` · ${x.locales} ${x.locales === 1 ? 'local' : 'locales'}${x.nombres ? `: ${x.nombres}` : ''}` : ''
+      return `• ${x.v.nombre}: ${fmtKm(x.km)} · ${hm(x.mov)}${loc}`
+    }),
+    ...(paradas.length
+      ? ['', `_Paradas fuera de locales y depósito (desde 10 min):_`,
+         ...paradas
+           .slice()
+           .sort((a, b) => a.desde.localeCompare(b.desde))
+           .map((p) => `• ${datos.vehiculos.find((v) => v.id === p.vehiculo_id)?.nombre ?? '—'}: ${horaAr(p.desde)} a ${horaAr(p.hasta)} (${hm(num(p.minutos))}) https://maps.google.com/?q=${p.lat},${p.lng}`)]
+      : []),
   ].join('\n') + textoSemana
 
   return { subtitulo, bloques, texto }
