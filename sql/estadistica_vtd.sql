@@ -9,6 +9,10 @@
 -- pausas; si está en curso suma el tramo actual) y responsable asignado.
 -- uni_crono = prendas escaneadas con el cronómetro en marcha (para Prendas/HS).
 -- La pantalla arma con esto el día, la semana y el cuadro por local.
+--
+-- OJO: la función que está viva en Supabase va más adelante que este archivo
+-- (suma inicio/fin del reloj y los armados VTD). Antes de reaplicarlo, mirá la
+-- base con: select pg_get_functiondef('public.estadistica_vtd(date,date)'::regprocedure);
 -- ============================================================================
 
 DROP FUNCTION IF EXISTS public.estadistica_vtd(date, date);
@@ -20,7 +24,9 @@ LANGUAGE plpgsql STABLE SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
 BEGIN
-  IF NOT (private.es_admin() OR private.tengo_permiso('mayorista.estadisticas.view')) THEN
+  -- auth.role() = 'service_role': api/informe.ts arma el informe con la service role key
+  -- (sin usuario, auth.uid() es NULL). Si se saca, el envío corta con 42501.
+  IF NOT (auth.role() = 'service_role' OR private.es_admin() OR private.tengo_permiso('mayorista.estadisticas.view')) THEN
     RAISE EXCEPTION 'Sin permiso para ver la estadística' USING ERRCODE = '42501';
   END IF;
   RETURN QUERY

@@ -17,7 +17,9 @@ LANGUAGE plpgsql STABLE SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
 BEGIN
-  IF NOT (private.es_admin() OR private.tengo_permiso('mayorista.estadisticas.view')) THEN
+  -- auth.role() = 'service_role': api/informe.ts arma el informe con la service role key
+  -- (sin usuario, auth.uid() es NULL). Si se saca, el envío corta con 42501.
+  IF NOT (auth.role() = 'service_role' OR private.es_admin() OR private.tengo_permiso('mayorista.estadisticas.view')) THEN
     RAISE EXCEPTION 'Sin permiso para ver la estadística' USING ERRCODE = '42501';
   END IF;
   RETURN QUERY
