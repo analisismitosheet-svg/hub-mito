@@ -9,6 +9,7 @@ import {
   PackageSearch,
   Map as MapIcon,
   TrendingUp,
+  Building2,
   Cake,
   Warehouse,
   PackageCheck,
@@ -136,6 +137,10 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
   {
     id: 'mayorista-estadisticas', areaId: 'mayorista', titulo: 'Eficiencia mayorista', descripcion: 'Estadísticas y rendimientos del piso',
     icon: TrendingUp, color: '#14b8a6', acciones: { ver: 'mayorista.estadisticas.view' },
+  },
+  {
+    id: 'mayorista-franquicias', areaId: 'mayorista', titulo: 'Franquicias', descripcion: 'Reposición sugerida y propuestas a las franquicias',
+    icon: Building2, color: '#0891b2', acciones: { ver: 'mayorista.franquicias.view' },
   },
 
   // ===== Depósito =====

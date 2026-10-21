@@ -392,7 +392,7 @@ export const APPS: AppDef[] = [
     kind: 'internal',
     target: '/mayorista/franquicias',
     color: '#d97706',
-    permiso: 'mayorista.repos_piso',
+    permiso: 'mayorista.franquicias.view',
   },
   {
     id: 'mayorista-estadisticas',

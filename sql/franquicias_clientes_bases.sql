@@ -49,7 +49,7 @@ begin
   foreach t in array array['franquicias_bases', 'franquicias_clientes'] loop
     execute format('drop policy if exists %I on public.%I', t || '_hub', t);
     execute format(
-      'create policy %I on public.%I for all to authenticated using (private.tengo_permiso(''mayorista.repos_piso'')) with check (private.tengo_permiso(''mayorista.repos_piso''))',
+      'create policy %I on public.%I for all to authenticated using (private.tengo_permiso(''mayorista.franquicias.view'')) with check (private.tengo_permiso(''mayorista.franquicias.view''))',
       t || '_hub', t);
   end loop;
 end $$;

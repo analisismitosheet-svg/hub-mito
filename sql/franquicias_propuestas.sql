@@ -78,7 +78,7 @@ drop trigger if exists franquicias_propuestas_numero on public.franquicias_propu
 create trigger franquicias_propuestas_numero before insert on public.franquicias_propuestas
   for each row execute function private.numero_propuesta_franquicia();
 
--- RLS: los del hub con acceso a Franquicias (permiso mayorista.repos_piso) o admin
+-- RLS: los del hub con acceso a Franquicias (permiso mayorista.franquicias.view) o admin
 alter table public.franquicias_contactos enable row level security;
 alter table public.franquicias_propuestas enable row level security;
 alter table public.franquicias_propuesta_items enable row level security;
@@ -89,7 +89,7 @@ begin
   foreach t in array array['franquicias_contactos', 'franquicias_propuestas', 'franquicias_propuesta_items'] loop
     execute format('drop policy if exists %I on public.%I', t || '_hub', t);
     execute format(
-      'create policy %I on public.%I for all to authenticated using (private.tengo_permiso(''mayorista.repos_piso'')) with check (private.tengo_permiso(''mayorista.repos_piso''))',
+      'create policy %I on public.%I for all to authenticated using (private.tengo_permiso(''mayorista.franquicias.view'')) with check (private.tengo_permiso(''mayorista.franquicias.view''))',
       t || '_hub', t);
   end loop;
 end $$;

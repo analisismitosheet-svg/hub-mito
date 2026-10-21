@@ -319,7 +319,7 @@ export default function App() {
           <Route
             path="/mayorista/franquicias"
             element={
-              <PermissionRoute permiso="mayorista.repos_piso">
+              <PermissionRoute permiso="mayorista.franquicias.view">
                 <MayoristaFranquicias />
               </PermissionRoute>
             }
