@@ -67,6 +67,8 @@ import SqlConexion from '@/pages/SqlConexion'
 import ComingSoon from '@/pages/ComingSoon'
 import Replicas from '@/pages/Replicas'
 import MayoristaFranquicias from '@/pages/MayoristaFranquicias'
+import MayoristaFranquiciasCalzado from '@/pages/MayoristaFranquiciasCalzado'
+import MayoristaFranquiciasClientes from '@/pages/MayoristaFranquiciasClientes'
 import PropuestaFranquicia from '@/pages/PropuestaFranquicia'
 
 // Pantallas nuevas: se cargan bajo demanda para no agrandar el bundle principal
@@ -321,6 +323,22 @@ export default function App() {
             element={
               <PermissionRoute permiso="mayorista.franquicias.view">
                 <MayoristaFranquicias />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/mayorista/franquicias/calzado"
+            element={
+              <PermissionRoute permiso="mayorista.franquicias.view">
+                <MayoristaFranquiciasCalzado />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/mayorista/franquicias/clientes"
+            element={
+              <PermissionRoute permiso="mayorista.franquicias.view">
+                <MayoristaFranquiciasClientes />
               </PermissionRoute>
             }
           />

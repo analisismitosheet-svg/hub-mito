@@ -30,6 +30,9 @@ interface Propuesta {
   numero: string
   estado: 'borrador' | 'enviada' | 'confirmada' | 'en_dragon' | 'anulada'
   token: string
+  cliente_id: string | null
+  cliente_nombre: string | null
+  tipo: 'reposicion' | 'calzado' | null
   desde: string | null
   hasta: string | null
   vence_at: string
@@ -70,23 +73,34 @@ function chipEstado(p: Propuesta) {
 const fmtDia = (iso: string) => new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit' }).format(new Date(iso))
 
 /** Mensaje con el link: se manda desde el WhatsApp de quien toca el botón (cualquier número). */
-function mensajeDe(p: { numero: string; token: string; vence_at: string; desde: string | null; hasta: string | null }, franquicia: string, contacto?: string | null) {
+function mensajeDe(
+  p: { numero: string; token: string; vence_at: string; desde: string | null; hasta: string | null },
+  franquicia: string,
+  contacto?: string | null,
+  tipo: 'reposicion' | 'calzado' = 'reposicion',
+) {
   const hola = contacto?.trim() ? `Hola ${contacto.trim().split(/\s+/)[0]}` : 'Hola'
-  return `${hola}, te armamos la propuesta de reposición ${p.numero} para ${franquicia}${p.desde && p.hasta ? `, según tu venta del ${diaIso(p.desde)} al ${diaIso(p.hasta)}` : ''}.\nElegí qué querés y confirmá el pedido acá: ${linkDe(p.token)}\n(vale hasta el ${fmtDia(p.vence_at)})`
+  const que = tipo === 'calzado' ? 'el pedido de calzado' : 'la propuesta de reposición'
+  const venta = tipo === 'reposicion' && p.desde && p.hasta ? `, según tu venta del ${diaIso(p.desde)} al ${diaIso(p.hasta)}` : ''
+  return `${hola}, te armamos ${que} ${p.numero} para ${franquicia}${venta}.\nElegí qué querés y confirmá el pedido acá: ${linkDe(p.token)}\n(vale hasta el ${fmtDia(p.vence_at)})`
 }
 /** '2026-09-16' -> '16/09' */
 const diaIso = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
 const urlWhatsapp = (texto: string, telefono?: string | null) => `https://wa.me/${telefono ? normalizarTelefono(telefono) : ''}?text=${encodeURIComponent(texto)}`
 
-export default function FranquiciaPropuestas({ franquicia, nombre, desde, hasta, items, listo }: {
+export default function FranquiciaPropuestas({ franquicia, nombre, desde, hasta, items, listo, cliente, tipo = 'reposicion' }: {
   franquicia: string
   nombre: string
-  desde: string
-  hasta: string
+  desde: string | null
+  hasta: string | null
   /** lo que se va a proponer (lo filtrado en la pantalla) */
   items: ItemPropuesta[]
   /** false mientras cargan precios o datos */
   listo: boolean
+  /** cliente destino del pedido (el que se carga en Dragon) */
+  cliente?: { id: string; nombre: string } | null
+  /** reposición (por ventas) o pedido de calzado (por curva de talles) */
+  tipo?: 'reposicion' | 'calzado'
 }) {
   const [contactos, setContactos] = useState<Contacto[]>([])
   const [verContactos, setVerContactos] = useState(false)
@@ -130,7 +144,8 @@ export default function FranquiciaPropuestas({ franquicia, nombre, desde, hasta,
     if (!supabase || !items.length) return
     const unidades = items.reduce((s, f) => s + f.sugerido, 0)
     const total = items.reduce((s, f) => s + (f.precio ?? 0) * f.sugerido, 0)
-    if (!window.confirm(`Se arma la propuesta para ${nombre} con ${items.length} artículos · ${fmt(unidades)} u.${total ? ` · ${fmtPesos(total)}` : ''} y se abre WhatsApp con el link. ¿Seguir?`)) return
+    const que = tipo === 'calzado' ? 'el pedido de calzado' : 'la propuesta'
+    if (!window.confirm(`Se arma ${que} para ${nombre} con ${items.length} artículos · ${fmt(unidades)} u.${total ? ` · ${fmtPesos(total)}` : ''} y se abre WhatsApp con el link. ¿Seguir?`)) return
     // La pestaña se abre ya (con el clic); si se abre después de guardar, el navegador la bloquea
     const ventana = window.open('', '_blank')
     setEnviando(true)
@@ -138,7 +153,7 @@ export default function FranquiciaPropuestas({ franquicia, nombre, desde, hasta,
     try {
       const { data: prop, error } = await supabase
         .from('franquicias_propuestas')
-        .insert({ franquicia, franquicia_nombre: nombre, desde, hasta, unidades_propuestas: unidades, total_propuesto: total })
+        .insert({ franquicia, franquicia_nombre: nombre, cliente_id: cliente?.id ?? null, cliente_nombre: cliente?.nombre ?? null, tipo, desde, hasta, unidades_propuestas: unidades, total_propuesto: total })
         .select('id,numero,token,vence_at,desde,hasta')
         .single()
       if (error || !prop) throw new Error(error?.message ?? 'No se pudo guardar la propuesta')
@@ -151,7 +166,7 @@ export default function FranquiciaPropuestas({ franquicia, nombre, desde, hasta,
       )
       if (eItems) throw new Error(eItems.message)
       await supabase.from('franquicias_propuestas').update({ estado: 'enviada', enviada_at: new Date().toISOString() }).eq('id', prop.id)
-      const url = urlWhatsapp(mensajeDe(prop, nombre, contactoPara?.nombre), contactoPara?.telefono)
+      const url = urlWhatsapp(mensajeDe(prop, nombre, contactoPara?.nombre, tipo), contactoPara?.telefono)
       if (ventana) ventana.location.href = url
       else window.location.href = url
       setAviso({ ok: true, txt: `Propuesta ${prop.numero} lista: mandá el mensaje en WhatsApp. Si se cerró, usá "Compartir de nuevo" o "Copiar link" en el historial.` })
@@ -165,7 +180,7 @@ export default function FranquiciaPropuestas({ franquicia, nombre, desde, hasta,
   }
 
   function compartir(p: Propuesta) {
-    window.open(urlWhatsapp(mensajeDe(p, nombre, contactoPara?.nombre), contactoPara?.telefono), '_blank')
+    window.open(urlWhatsapp(mensajeDe(p, nombre, contactoPara?.nombre, tipo), contactoPara?.telefono), '_blank')
   }
 
   async function abrir(p: Propuesta) {
@@ -210,7 +225,9 @@ export default function FranquiciaPropuestas({ franquicia, nombre, desde, hasta,
     <section className="mt-4 rounded-2xl border border-line bg-paper p-3">
       <div className="flex flex-wrap items-center gap-2">
         <div className="min-w-0 flex-1">
-          <h2 className="font-display text-base font-semibold text-ink">Propuesta para que elija {nombre}</h2>
+          <h2 className="font-display text-base font-semibold text-ink">
+            {tipo === 'calzado' ? 'Pedido de calzado para que elija' : 'Propuesta para que elija'} {nombre}
+          </h2>
           <p className="text-xs text-sub">Se abre tu WhatsApp con un link para mandárselo desde cualquier número: marca sí / no y cantidades, y confirma. Vence a los 7 días.</p>
         </div>
         <button type="button" onClick={() => setVerContactos((v) => !v)} className="inline-flex items-center gap-1.5 rounded-full border border-line2 bg-surface px-3 py-1.5 text-xs font-semibold text-ink">
@@ -294,7 +311,8 @@ export default function FranquiciaPropuestas({ franquicia, nombre, desde, hasta,
                     <tr key={`${p.id}-det`} className="border-t border-line bg-surface/50">
                       <td colSpan={6} className="px-3 py-3">
                         <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-sub">
-                          <span>Ventas del {p.desde?.split('-').reverse().join('/')} al {p.hasta?.split('-').reverse().join('/')}</span>
+                          {p.desde && p.hasta && <span>Ventas del {p.desde.split('-').reverse().join('/')} al {p.hasta.split('-').reverse().join('/')}</span>}
+                          {p.cliente_nombre && <span>· {p.cliente_nombre}</span>}
                           {p.confirmada_at && <span>· confirmó {fmtFecha(p.confirmada_at)}</span>}
                           <span className="ml-auto flex flex-wrap gap-1.5">
                             <button type="button" onClick={(ev) => { ev.stopPropagation(); void navigator.clipboard?.writeText(linkDe(p.token)); setAviso({ ok: true, txt: `Link de ${p.numero} copiado.` }) }} className="inline-flex items-center gap-1 rounded-full border border-line2 bg-surface px-2.5 py-1 font-semibold text-ink"><Copy size={12} aria-hidden /> Copiar link</button>

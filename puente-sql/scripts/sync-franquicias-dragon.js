@@ -70,14 +70,19 @@ async function main() {
   const propuestas = (await rpc('franquicias_tomar_para_dragon', { p_token: token })) ?? []
   for (const p of propuestas) {
     const f = FRANQUICIAS[String(p.franquicia).toUpperCase()]
+    // El cliente destino lo elige el hub (cualquier cliente de la base); si la
+    // propuesta es vieja y no lo trae, se usa el de la franquicia.
+    const cliente = String(p.cliente_id ?? '').trim() || f?.cliente
+    const descripcion = String(p.cliente_nombre ?? '').trim() || f?.descripcion || ''
     let pedido = null
     let error = null
     try {
-      if (!f) throw new Error(`La franquicia ${p.franquicia} no tiene cliente de Dragon configurado`)
+      if (!cliente) throw new Error(`La franquicia ${p.franquicia} no tiene cliente de Dragon configurado`)
       if (!p.items?.length) throw new Error('La propuesta no tiene artículos pedidos')
-      const obs = `${f.cliente} (${f.descripcion}) - Propuesta ${p.numero}${p.comentario ? ` - ${p.comentario}` : ''}`
+      const que = p.tipo === 'calzado' ? 'Pedido de calzado' : 'Propuesta'
+      const obs = `${cliente} (${descripcion}) - ${que} ${p.numero}${p.comentario ? ` - ${p.comentario}` : ''}`
       const fecha = new Date(new Date(p.confirmada_at).getTime() - 3 * 3600_000).toISOString().slice(0, 10)
-      const r = await crearPedido({ cliente: f.cliente, lista: f.lista, obs, items: p.items, fecha })
+      const r = await crearPedido({ cliente, lista: 'LISTA2', obs, items: p.items, fecha })
       if (r.ok) pedido = String(r.numero ?? r.codigo)
       else error = r.detalle
     } catch (e) {

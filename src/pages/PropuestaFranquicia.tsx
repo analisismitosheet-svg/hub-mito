@@ -26,6 +26,8 @@ interface ItemPub {
 interface PropuestaPub {
   numero: string
   franquicia: string
+  cliente: string | null
+  tipo: 'reposicion' | 'calzado' | null
   desde: string | null
   hasta: string | null
   vence_at: string
@@ -104,10 +106,10 @@ export default function PropuestaFranquicia() {
       <header className="bg-neutral-950 px-4 pb-4 pt-5 text-white">
         <div className="mx-auto max-w-xl">
           <p className="font-display text-xl font-black tracking-tight text-red-500">MITO</p>
-          <h1 className="mt-1 text-lg font-bold">Propuesta de reposición</h1>
+          <h1 className="mt-1 text-lg font-bold">{prop?.tipo === 'calzado' ? 'Pedido de calzado' : 'Propuesta de reposición'}</h1>
           {prop && (
             <p className="text-xs text-white/70">
-              {prop.franquicia} · N° {prop.numero}
+              {prop.cliente || prop.franquicia} · N° {prop.numero}
               {!prop.confirmada && !prop.vencida && ` · válida hasta el ${fmtFecha(prop.vence_at)}`}
             </p>
           )}

@@ -60,7 +60,7 @@ end $$;
 create or replace function public.franquicias_asignar_base(p_cliente text, p_base text)
 returns void language plpgsql security invoker set search_path = public as $$
 begin
-  if not private.tengo_permiso('mayorista.repos_piso') then
+  if not (private.tengo_permiso('mayorista.franquicias.view') or private.tengo_permiso('mayorista.repos_piso')) then
     raise exception 'sin permiso';
   end if;
   if p_base is null or p_base = '' then
