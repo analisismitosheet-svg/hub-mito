@@ -19,6 +19,11 @@ pg_cron `tracking-avisos-ubicacion` cada 2 min llama a `api/tracking?vista=alert
 
 **Estadísticas de km** (`/administradores/tracking/km`, `TrackingKm.tsx`; se entra tocando «Km recorridos»): RPC `tracking_km(desde, hasta)` (`sql/tracking_km.sql`, misma cuenta que `kmDelDia`) da km y tiempo andando (puntos a ≥ 5 km/h según Traccar) por vehículo y día. Filtro Día/Semana/Mes/Fechas, comparación con el período anterior, columnas por vehículo con el número adentro (por semana si el rango pasa 62 días), tablas por vehículo y por día (tocar un día abre el tracking con `?fecha=`), Excel.
 
+**Locales y paradas del informe** (20/10/2026, para [[Informes por WhatsApp]]):
+- `tracking_locales_dia(desde, hasta)` (`sql/tracking_locales_dia.sql`): locales distintos que tocó cada vehículo por día, con el mismo criterio de radio que `tracking_controles_dia`. **El depósito y la fábrica no son locales**: `tracking_bases.es_local = false` en FABRICA, POLO 52 y TX-POLO (columna nueva, por defecto true; hoy se cambia por SQL, no hay pantalla).
+- `tracking_paradas_fuera(desde, hasta, minutos=10)` (`sql/tracking_paradas_fuera.sql`): dónde se quedó quieto (80 m) lejos de toda base, con hora y duración. **La parada se mide hasta el punto que la rompe**: con el vehículo quieto Traccar deja de mandar (huecos de hasta ~45 min) y medirla entre el primer y el último punto quieto daba 0. Al radio de cada base se le dan 100 m de más. La dirección la resuelve el servidor con el reverse de OpenStreetMap (`direccionDe` en `src/lib/informesServidor.ts`); si no contesta, van las coordenadas.
+- Las dos dejan entrar al service role (`auth.role() = 'service_role'`), porque el informe lo arma `api/informe.ts`.
+
 ## Estados en la lista
 En ruta (≥5 km/h, ubicación < 5 min) · Detenido · Sin señal (> 15 min) · Sin GPS (chofer sin vehículo).
 

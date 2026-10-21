@@ -353,6 +353,40 @@ async function datosEficiencia(fecha: string): Promise<{ fecha: string; vtd: Fil
 // Km recorridos del transporte (Administradores > Tracking > Km recorridos)
 // ---------------------------------------------------------------------------
 
+/**
+ * Dirección de un punto (OpenStreetMap, el mismo buscador con el que se ubican
+ * los locales). Son una o dos paradas por día: de a una y con pausa, como pide
+ * Nominatim. Si no contesta, el informe muestra las coordenadas.
+ */
+async function direccionDe(lat: number, lng: number): Promise<string | null> {
+  const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&accept-language=es&zoom=18&lat=${lat}&lon=${lng}`
+  try {
+    const r = await fetch(url, {
+      headers: { 'User-Agent': 'hub-mito/1.0 (informe de km del transporte)' },
+      signal: AbortSignal.timeout(6000),
+    })
+    if (!r.ok) return null
+    const d = (await r.json()) as { address?: Record<string, string>; display_name?: string }
+    const a = d.address ?? {}
+    const calle = [a.road, a.house_number].filter(Boolean).join(' ')
+    const zona = a.neighbourhood || a.suburb || a.village || a.town || a.city_district || a.city || ''
+    const corto = [calle, zona].filter(Boolean).join(', ')
+    return corto || (d.display_name ? d.display_name.split(',').slice(0, 3).join(',') : null)
+  } catch {
+    return null
+  }
+}
+
+/** Le agrega a cada parada dónde fue (sin cortar el informe si el buscador falla) */
+async function conDireccion(paradas: FilaParadaInforme[]): Promise<FilaParadaInforme[]> {
+  const salida: FilaParadaInforme[] = []
+  for (const [i, p] of paradas.entries()) {
+    if (i > 0) await new Promise((ok) => setTimeout(ok, 1100))
+    salida.push({ ...p, lugar: await direccionDe(p.lat, p.lng) })
+  }
+  return salida
+}
+
 /** Km del día y del último día anterior en que anduvieron (para comparar; los domingos no hay). */
 async function datosKm(fecha: string): Promise<{
   fecha: string; hoy: FilaKmInforme[]; ayer: FilaKmInforme[]; ayerFecha: string | null; vehiculos: VehiculoInforme[]
@@ -376,7 +410,11 @@ async function datosKm(fecha: string): Promise<{
     rpc<FilaParadaInforme>('tracking_paradas_fuera', { p_desde: fecha, p_hasta: fecha, p_min_min: 10 }),
   ])
   const ayerFecha = [...new Set(previos.filter((f) => Number(f.km) >= 1).map((f) => f.dia))].sort().pop() ?? null
-  return { fecha, hoy, ayer: previos.filter((f) => f.dia === ayerFecha), ayerFecha, vehiculos, locales, paradas, semana: { desde: lunes, filas: semana, anterior: semanaAnt } }
+  return {
+    fecha, hoy, ayer: previos.filter((f) => f.dia === ayerFecha), ayerFecha, vehiculos, locales,
+    paradas: await conDireccion(paradas),
+    semana: { desde: lunes, filas: semana, anterior: semanaAnt },
+  }
 }
 
 // ---------------------------------------------------------------------------

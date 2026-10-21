@@ -10,7 +10,11 @@ export interface VehiculoInforme { id: string; nombre: string; usuario_transport
 /** Locales distintos por los que pasó un vehículo ese día (RPC tracking_locales_dia). */
 export interface FilaLocalesInforme { vehiculo_id: string; dia: string; locales: number | string; nombres: string | null }
 /** Parada de al menos 10 min lejos de todo local o depósito (RPC tracking_paradas_fuera). */
-export interface FilaParadaInforme { vehiculo_id: string; dia: string; desde: string; hasta: string; minutos: number | string; lat: number; lng: number }
+export interface FilaParadaInforme {
+  vehiculo_id: string; dia: string; desde: string; hasta: string; minutos: number | string; lat: number; lng: number
+  /** Dirección del punto (OpenStreetMap); null si el buscador no contestó */
+  lugar?: string | null
+}
 
 const num = (v: unknown) => Number(v) || 0
 const nf = (n: number, dec = 0) => new Intl.NumberFormat('es-AR', { minimumFractionDigits: dec, maximumFractionDigits: dec }).format(n)
@@ -104,19 +108,21 @@ export function bloquesKm(datos: {
 
   // Paradas lejos de todo local o depósito: solo si hubo alguna
   const paradas = (datos.paradas ?? []).filter((p) => num(p.minutos) > 0)
+  /** La dirección si OpenStreetMap la dio; si no, las coordenadas */
+  const donde = (p: FilaParadaInforme) => p.lugar || `${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`
   if (paradas.length) {
     const nombreDe = (id: string) => datos.vehiculos.find((v) => v.id === id)?.nombre ?? '—'
     bloques.push({ tipo: 'seccion', texto: 'Paradas fuera de locales y depósito', color: '#ea580c' })
     bloques.push({
       tipo: 'tabla',
-      columnas: ['Vehículo', 'Desde', 'Hasta', 'Cuánto'],
-      anchos: [3, 1.2, 1.2, 1.4],
-      alinear: ['izq', 'der', 'der', 'der'],
-      colores: [null, '#475569', '#475569', '#ea580c'],
+      columnas: ['Vehículo', 'Desde', 'Hasta', 'Cuánto', 'Dónde'],
+      anchos: [2.2, 1, 1, 1.2, 4],
+      alinear: ['izq', 'der', 'der', 'der', 'izq'],
+      colores: [null, '#475569', '#475569', '#ea580c', null],
       filas: paradas
         .slice()
         .sort((a, b) => a.desde.localeCompare(b.desde))
-        .map((p) => [nombreDe(p.vehiculo_id), horaAr(p.desde), horaAr(p.hasta), hm(num(p.minutos))]),
+        .map((p) => [nombreDe(p.vehiculo_id), horaAr(p.desde), horaAr(p.hasta), hm(num(p.minutos)), donde(p)]),
     })
   }
 
@@ -170,7 +176,7 @@ export function bloquesKm(datos: {
          ...paradas
            .slice()
            .sort((a, b) => a.desde.localeCompare(b.desde))
-           .map((p) => `• ${datos.vehiculos.find((v) => v.id === p.vehiculo_id)?.nombre ?? '—'}: ${horaAr(p.desde)} a ${horaAr(p.hasta)} (${hm(num(p.minutos))}) https://maps.google.com/?q=${p.lat},${p.lng}`)]
+           .map((p) => `• ${datos.vehiculos.find((v) => v.id === p.vehiculo_id)?.nombre ?? '—'}: ${horaAr(p.desde)} a ${horaAr(p.hasta)} (${hm(num(p.minutos))}) · ${donde(p)} https://maps.google.com/?q=${p.lat},${p.lng}`)]
       : []),
   ].join('\n') + textoSemana
 
