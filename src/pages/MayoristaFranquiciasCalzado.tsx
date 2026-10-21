@@ -27,6 +27,9 @@ import {
 
 const VISTA_MATERIALES = 'DWH.dbo.vw_DIM_MATERIAL'
 
+const TEMPORADAS: Record<string, string> = { '0': 'Sin temporada', '1': 'Verano', '2': 'Continuo', '3': 'Invierno', '4': 'Atemporal' }
+const temporadaDe = (codigo: string) => TEMPORADAS[codigo] || (codigo ? `Temporada ${codigo}` : 'Sin temporada')
+
 const fmt = (n: number) => new Intl.NumberFormat('es-AR').format(n)
 const fmtPesos = (n: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n)
 const txt = (v: unknown) => String(v ?? '').trim()
@@ -46,6 +49,7 @@ interface Modelo {
   color: string
   descrip: string
   grupo: string
+  temporada: string
   talles: Map<string, number>
   stockTotal: number
   precio: number | null
@@ -66,6 +70,7 @@ export default function MayoristaFranquiciasCalzado() {
   const [tab, setTab] = useState<'simple' | 'doble'>('simple')
   const [busca, setBusca] = useState('')
   const [grupo, setGrupo] = useState('')
+  const [temporada, setTemporada] = useState('')
   /** art|color|talle -> pares pedidos */
   const [carrito, setCarrito] = useState<Record<string, number>>({})
 
@@ -112,15 +117,15 @@ export default function MayoristaFranquiciasCalzado() {
 
         // Artículos con stock > 0 (una sola pasada al maestro en Supabase)
         const arts = [...stock.porArticulo.entries()].filter(([, n]) => n > 0).map(([a]) => a)
-        const info = new Map<string, { descripcion: string; grupo: string }>()
+        const info = new Map<string, { descripcion: string; grupo: string; temporada: string }>()
         for (let i = 0; supabase && i < arts.length; i += 300) {
           const { data } = await supabase
             .from('articulos')
-            .select('id_art,descripcion,id_material,id_grupo')
+            .select('id_art,descripcion,id_material,id_grupo,id_temporada')
             .in('id_art', arts.slice(i, i + 300))
-          for (const a of (data as { id_art: string; descripcion: string | null; id_material: string | null; id_grupo: string | null }[] | null) ?? []) {
+          for (const a of (data as { id_art: string; descripcion: string | null; id_material: string | null; id_grupo: string | null; id_temporada: string | null }[] | null) ?? []) {
             if (!codCalzado.has(txt(a.id_material).toUpperCase())) continue
-            info.set(txt(a.id_art).toUpperCase(), { descripcion: txt(a.descripcion), grupo: txt(a.id_grupo) })
+            info.set(txt(a.id_art).toUpperCase(), { descripcion: txt(a.descripcion), grupo: txt(a.id_grupo), temporada: temporadaDe(txt(a.id_temporada)) })
           }
         }
         if (!activo) return
@@ -135,7 +140,7 @@ export default function MayoristaFranquiciasCalzado() {
           const key = `${art}|${color}`
           let m = porModelo.get(key)
           if (!m) {
-            m = { key, art, color, descrip: a.descripcion, grupo: a.grupo, talles: new Map(), stockTotal: 0, precio: null }
+            m = { key, art, color, descrip: a.descripcion, grupo: a.grupo, temporada: a.temporada, talles: new Map(), stockTotal: 0, precio: null }
             porModelo.set(key, m)
           }
           m.talles.set(talle, (m.talles.get(talle) ?? 0) + n)
@@ -200,16 +205,18 @@ export default function MayoristaFranquiciasCalzado() {
   }, [modelos, tab])
 
   const grupos = useMemo(() => [...new Set(modelos.map((m) => m.grupo).filter(Boolean))].sort(), [modelos])
+  const temporadas = useMemo(() => [...new Set(modelos.map((m) => m.temporada).filter(Boolean))].sort(), [modelos])
 
   const visibles = useMemo(() => {
     const q = busca.trim().toUpperCase()
     return modelos.filter((m) => {
       if (![...m.talles.keys()].some((t) => esDoble(t) === (tab === 'doble'))) return false
       if (grupo && m.grupo !== grupo) return false
+      if (temporada && m.temporada !== temporada) return false
       if (!q) return true
       return `${m.art} ${m.descrip} ${m.color}`.toUpperCase().includes(q)
     })
-  }, [modelos, tab, grupo, busca])
+  }, [modelos, tab, grupo, temporada, busca])
 
   const precioDe = (m: Modelo, talle: string) => precios.sku.get(claveSku(m.art, m.color, talle)) ?? precios.art.get(m.art) ?? 0
 
@@ -332,6 +339,12 @@ export default function MayoristaFranquiciasCalzado() {
               <select value={grupo} onChange={(e) => setGrupo(e.target.value)} className="rounded-full border border-line2 bg-surface px-3 py-1.5 text-xs text-ink">
                 <option value="">Todos los grupos</option>
                 {grupos.map((g) => <option key={g} value={g}>{g}</option>)}
+              </select>
+            )}
+            {temporadas.length > 1 && (
+              <select value={temporada} onChange={(e) => setTemporada(e.target.value)} className="rounded-full border border-line2 bg-surface px-3 py-1.5 text-xs text-ink">
+                <option value="">Todas las temporadas</option>
+                {temporadas.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             )}
           </div>
