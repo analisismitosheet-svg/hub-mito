@@ -317,6 +317,7 @@ export default function MayoristaFranquicias() {
                     <th className={`w-10 text-left ${th}`}>#</th>
                     <th className={`text-left ${th}`}>Foto</th>
                     <th className={`text-left ${th}`}>Artículo</th>
+                    <th className={`text-center ${th}`}>Estado</th>
                     <th className={`text-left ${th}`}>Descripción</th>
                     <th className={`text-left ${th}`}>Material</th>
                     <th className={`text-center ${th}`}>Color</th>
@@ -327,7 +328,6 @@ export default function MayoristaFranquicias() {
                     <th className={`text-center ${th}`}>Sugerencia reposición</th>
                     <th className={`text-right ${th}`}>Precio</th>
                     <th className={`text-right ${th}`}>Subtotal</th>
-                    <th className={`text-center ${th}`}>Estado</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -351,6 +351,12 @@ export default function MayoristaFranquicias() {
                         <td className="whitespace-nowrap px-3 py-2 text-[11px] tabular-nums text-sub">{i + 1}</td>
                         <td className="px-3 py-1.5"><FotoArticulo codigo={f.art} nombre={f.descrip} size={40} /></td>
                         <td className="whitespace-nowrap px-3 py-2 font-medium text-ink">{f.art}</td>
+                        <td className="px-3 py-2 text-center">
+                          <span className={`inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold ${e.cls}`}>
+                            <i style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 999, background: e.dot }} />
+                            {e.txt}
+                          </span>
+                        </td>
                         <td className="px-3 py-2 text-sub">{f.descrip || '—'}</td>
                         <td className="px-3 py-2 text-sub">{f.material || '—'}</td>
                         <td className="px-3 py-2 text-center text-sub">{f.color || 'U'}</td>
@@ -361,12 +367,6 @@ export default function MayoristaFranquicias() {
                         <td className={`px-3 py-2 text-center font-bold tabular-nums ${f.sugerido > 0 ? 'text-emerald-500' : 'text-sub'}`}>{f.sugerido > 0 ? fmt(f.sugerido) : '—'}</td>
                         <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-sub">{f.precio ? fmtPesos(f.precio) : cargandoPrecios ? '…' : '—'}</td>
                         <td className="whitespace-nowrap px-3 py-2 text-right font-semibold tabular-nums text-ink">{f.precio ? fmtPesos(subtotal(f)) : cargandoPrecios ? '…' : '—'}</td>
-                        <td className="px-3 py-2 text-center">
-                          <span className={`inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold ${e.cls}`}>
-                            <i style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 999, background: e.dot }} />
-                            {e.txt}
-                          </span>
-                        </td>
                       </tr>
                     )
                   })}
