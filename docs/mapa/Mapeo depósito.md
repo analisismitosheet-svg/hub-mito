@@ -5,3 +5,4 @@
 - **No se borra nada automáticamente por stock 0** (se sacó: el stock fallaba y borraba). Los de stock 0 se ocultan y aparecen con la tilde **«Ver sin stock»**. Se restauraron 38 códigos borrados (sin ubicación).
 - Borrar a mano: `veBorrar = isAdmin || can('mayorista.mapeo.borrar')`. Ese permiso lo tiene solo puesto3indo@gmail.com (individual) además del admin.
 - Permisos `mayorista.mapeo.view` / `.escanear` / `.borrar`. Ver [[Permisos y usuarios]].
+- El detalle de **no mandados** de Eficiencia mayorista muestra la ubicación de cada artículo desde `mapeo_deposito` (por artículo, con todas sus ubicaciones juntas) — ver `sql/vtd_no_mandados_det.sql`.

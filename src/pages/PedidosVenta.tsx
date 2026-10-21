@@ -398,19 +398,24 @@ export default function PedidosVenta() {
 
   // Estado de cada renglón (armado o repo diaria, sql/estado_lineas_pedido.sql): se pinta en verde
   // lo que ya salió. Se vuelve a pedir cuando cambia el avance del armado/repo (refresco de 12 s).
-  const [estadoLineas, setEstadoLineas] = useState<Record<number, { enviadas: number; estado: string }>>({})
+  const [estadoLineas, setEstadoLineas] = useState<Record<number, { enviadas: number; estado: string; corregida: boolean; corregidaNombre: string | null }>>({})
+  // Sube cuando el admin marca o desmarca una línea, para volver a pedir el estado
+  const [correccion, setCorreccion] = useState(0)
+  const [marcando, setMarcando] = useState<number | null>(null)
   const huellaAvance = sel ? `${armados[sel]?.estado ?? ''}|${armados[sel] ? (avanceArmados[armados[sel].id]?.unidadesOk ?? '') : ''}` : ''
   useEffect(() => {
     if (!sel || !supabase) { setEstadoLineas({}); return }
     let vivo = true
     void supabase.rpc('estado_lineas_pedido', { p_codigo: sel }).then(({ data }) => {
       if (!vivo) return
-      const m: Record<number, { enviadas: number; estado: string }> = {}
-      for (const f of (data as { linea: number; enviadas: number; estado: string }[] | null) ?? []) m[f.linea] = { enviadas: f.enviadas, estado: f.estado }
+      const m: Record<number, { enviadas: number; estado: string; corregida: boolean; corregidaNombre: string | null }> = {}
+      for (const f of (data as { linea: number; enviadas: number; estado: string; corregida: boolean; corregida_nombre: string | null }[] | null) ?? []) {
+        m[f.linea] = { enviadas: f.enviadas, estado: f.estado, corregida: Boolean(f.corregida), corregidaNombre: f.corregida_nombre }
+      }
       setEstadoLineas(m)
     })
     return () => { vivo = false }
-  }, [sel, version, huellaAvance])
+  }, [sel, version, huellaAvance, correccion])
 
   // Stock por SKU (color y talle) de las líneas: la lib lo baja una vez por
   // sesión y lo guarda; mientras no llegue, la columna muestra "—".
@@ -535,12 +540,36 @@ export default function PedidosVenta() {
   const idx = visibles.findIndex((p) => p.codigo === sel)
   const pedido = pedidos.find((p) => p.codigo === sel) ?? null
   /** Estado del armado de este pedido (si está pedido a armar). */
+  /**
+   * El admin pasa a verde una línea que quedó en rojo (o deshace la marca). Queda en una
+   * tabla aparte: no toca lo que escaneó el piso ni las estadísticas de Eficiencia mayorista.
+   */
+  async function marcarLinea(codigo: string, linea: number, ok: boolean) {
+    if (!supabase || !isAdmin) return
+    if (ok && !window.confirm(`Marcar esta línea como ENCONTRADA.\n\nQueda en verde para todos y en las estadísticas figura como revisada por un administrador, pero no cambia el rendimiento del piso.`)) return
+    setMarcando(linea)
+    const { error } = await supabase.rpc('marcar_linea_pedido', { p_codigo: codigo, p_linea: linea, p_ok: ok })
+    setMarcando(null)
+    if (error) { window.alert(`No se pudo marcar: ${error.message}`); return }
+    setCorreccion((v) => v + 1)
+  }
+
   const armPedido = pedido ? (armados[pedido.codigo] ?? null) : null
   const avancePedido = armPedido ? avanceArmados[armPedido.id] : undefined
   const ir = (d: number) => {
     const p = visibles[idx + d]
     if (p) setSel(p.codigo)
   }
+
+  /** Unidades que el admin pasó a verde a mano: se descuentan del aviso de faltantes */
+  const faltantesCorregidos = useMemo(
+    () => items.reduce((a, i) => {
+      const el = estadoLineas[i.linea]
+      return el?.corregida ? a + Math.max((i.cantidad ?? 0) - (el.enviadas ?? 0), 0) : a
+    }, 0),
+    [items, estadoLineas],
+  )
+  const faltantesVisibles = Math.max((armPedido?.faltantes ?? 0) - faltantesCorregidos, 0)
 
   const tot = useMemo(
     () =>
@@ -1082,11 +1111,20 @@ export default function PedidosVenta() {
                     </span>
                   </p>
                 )}
-                {armPedido && armPedido.estado === 'hecho' && (armPedido.faltantes ?? 0) > 0 && (
+                {armPedido && armPedido.estado === 'hecho' && faltantesVisibles > 0 && (
                   <p className="mt-1.5 flex items-start gap-1.5 rounded-lg bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-400" role="note">
                     <AlertTriangle size={13} className="mt-px shrink-0" aria-hidden />
                     <span>
-                      Faltantes de stock: {armPedido.faltantes} u. — las líneas se cerraron solas como faltantes (✕).
+                      Faltantes de stock: {faltantesVisibles} u. — las líneas se cerraron solas como faltantes (✕).
+                      {faltantesCorregidos > 0 && ` Otras ${faltantesCorregidos} u. las encontró un administrador.`}
+                    </span>
+                  </p>
+                )}
+                {armPedido && faltantesVisibles === 0 && faltantesCorregidos > 0 && (
+                  <p className="mt-1.5 flex items-start gap-1.5 rounded-lg bg-amber-500/10 px-2.5 py-1.5 text-xs font-medium text-amber-400" role="note">
+                    <AlertTriangle size={13} className="mt-px shrink-0" aria-hidden />
+                    <span>
+                      {faltantesCorregidos} u. que figuraban como faltantes las encontró un administrador. En Eficiencia salen aparte, como revisadas por administrador: el rendimiento del piso no cambia.
                     </span>
                   </p>
                 )}
@@ -1135,13 +1173,43 @@ export default function PedidosVenta() {
                             <td className="whitespace-nowrap px-3 py-1.5 tabular-nums text-sub">{colorDe(i)}</td>
                             <td className="px-3 py-1.5 text-sub">{i.talle}</td>
                             <td className="px-3 py-1.5 text-right tabular-nums text-ink">
-                              {el?.estado === 'hecho' && <span className="mr-1 text-emerald-400">✓</span>}
+                              {el?.estado === 'hecho' && !el.corregida && <span className="mr-1 text-emerald-400">✓</span>}
+                              {el?.corregida && (
+                                <span
+                                  className="mr-1 text-amber-400"
+                                  title={`Encontrado por un administrador${el.corregidaNombre ? `: ${el.corregidaNombre}` : ''}`}
+                                >
+                                  ✓
+                                </span>
+                              )}
                               {el && el.estado !== 'hecho' && el.enviadas > 0 && <span className="mr-1 text-[11px] text-emerald-400">{el.enviadas}/</span>}
                               {n0.format(i.cantidad ?? 0)}
                               {el?.estado === 'faltante' && (
                                 <span className="ml-1.5 inline-flex items-center gap-1 rounded-md bg-red-500/15 px-1.5 py-0.5 text-[10px] font-bold text-red-400">
                                   ✕ Faltan {n0.format(Math.max((i.cantidad ?? 0) - (el.enviadas ?? 0), 0))}
                                 </span>
+                              )}
+                              {isAdmin && el?.estado === 'faltante' && (
+                                <button
+                                  type="button"
+                                  onClick={() => void marcarLinea(pedido.codigo, i.linea, true)}
+                                  disabled={marcando === i.linea}
+                                  title="Marcar como encontrado (queda como revisado por administrador)"
+                                  className="btn-press ml-1.5 inline-flex items-center whitespace-nowrap rounded-md border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-bold text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-50"
+                                >
+                                  {marcando === i.linea ? <Loader2 size={10} className="animate-spin" aria-hidden /> : 'Encontrado'}
+                                </button>
+                              )}
+                              {isAdmin && el?.corregida && (
+                                <button
+                                  type="button"
+                                  onClick={() => void marcarLinea(pedido.codigo, i.linea, false)}
+                                  disabled={marcando === i.linea}
+                                  title="Volver a dejarla como faltante"
+                                  className="btn-press ml-1.5 inline-flex items-center whitespace-nowrap rounded-md border border-line2 px-1.5 py-0.5 text-[10px] font-semibold text-sub hover:text-ink disabled:opacity-50"
+                                >
+                                  {marcando === i.linea ? <Loader2 size={10} className="animate-spin" aria-hidden /> : 'Deshacer'}
+                                </button>
                               )}
                             </td>
                             <td className="px-3 py-1.5 text-right tabular-nums">{celdaStock(i)}</td>

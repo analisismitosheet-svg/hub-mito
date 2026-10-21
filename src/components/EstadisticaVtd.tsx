@@ -68,6 +68,8 @@ interface AvanceMotivo {
 
 interface PorLocal {
   local: string
+  /** unidades que figuraban como faltantes y un admin dio por encontradas (sólo informativo) */
+  revisado: number
   responsable: string
   venta: number
   repo: number
@@ -88,6 +90,10 @@ interface FilaDetalle {
   cantidad: number
   repuesto: number
   no_mandado: number
+  /** dónde está el artículo en el depósito (mapeo_deposito); puede ser más de una */
+  ubicacion: string | null
+  /** quién lo marcó como faltante: el del armado o el que cerró la línea en la repo */
+  marco: string | null
 }
 
 /**
@@ -96,7 +102,7 @@ interface FilaDetalle {
  * varios locales/pedidos quedan en una sola.
  */
 function agruparParaExcel(filas: FilaDetalle[], stock: StockSku | null) {
-  const grupos = new Map<string, { articulo: string; descripcion: string; color: string; talle: string; cantidad: number; noMandado: number; stock: number | null }>()
+  const grupos = new Map<string, { articulo: string; descripcion: string; color: string; talle: string; cantidad: number; noMandado: number; stock: number | null; ubicacion: string; marco: Set<string> }>()
   for (const f of filas) {
     const clave = `${f.articulo}|${f.color ?? ''}|${f.talle ?? ''}`
     const g = grupos.get(clave)
@@ -104,6 +110,8 @@ function agruparParaExcel(filas: FilaDetalle[], stock: StockSku | null) {
       g.cantidad += f.cantidad
       g.noMandado += f.no_mandado
       if (!g.descripcion && f.descripcion) g.descripcion = f.descripcion
+      if (!g.ubicacion && f.ubicacion) g.ubicacion = f.ubicacion
+      if (f.marco) g.marco.add(f.marco)
     } else {
       grupos.set(clave, {
         articulo: f.articulo,
@@ -113,6 +121,8 @@ function agruparParaExcel(filas: FilaDetalle[], stock: StockSku | null) {
         cantidad: f.cantidad,
         noMandado: f.no_mandado,
         stock: stockSkuDe(stock, f.articulo, f.color, f.talle),
+        ubicacion: f.ubicacion ?? '',
+        marco: new Set(f.marco ? [f.marco] : []),
       })
     }
   }
@@ -124,9 +134,11 @@ function agruparParaExcel(filas: FilaDetalle[], stock: StockSku | null) {
       Descripcion: g.descripcion,
       Color: g.color,
       Talle: g.talle,
+      Ubicacion: g.ubicacion || '—',
       Cantidad: g.cantidad,
       'Stock real': g.stock ?? '—',
       'No mandado': g.noMandado,
+      'No lo encontro': [...g.marco].sort().join(', ') || '—',
     }))
 }
 
@@ -190,7 +202,7 @@ function agruparLocales(filas: Fila[]): PorLocal[] {
   const m = new Map<string, PorLocal & { resp: Set<string> }>()
   for (const f of filas) {
     let r = m.get(f.local)
-    if (!r) { r = { local: f.local, responsable: '', venta: 0, repo: 0, noMandados: 0, segundos: 0, uniCrono: 0, resp: new Set() }; m.set(f.local, r) }
+    if (!r) { r = { local: f.local, revisado: 0, responsable: '', venta: 0, repo: 0, noMandados: 0, segundos: 0, uniCrono: 0, resp: new Set() }; m.set(f.local, r) }
     r.venta += f.venta
     r.repo += f.repo
     r.noMandados += noMandadosDe(f)
@@ -347,6 +359,19 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
     return () => { vivo = false }
   }, [desde, hasta, filas])
 
+  // Unidades que un admin dio por encontradas en Pedidos de venta. No tocan venta, repo
+  // ni no mandados: van en su propia columna para que se vea quién revisó qué.
+  const [revisado, setRevisado] = useState<Map<string, number>>(new Map())
+  useEffect(() => {
+    if (!supabase) return
+    let vivo = true
+    void supabase.rpc('revisado_admin_por_local', { p_desde: desde, p_hasta: hasta }).then(({ data }) => {
+      if (!vivo) return
+      setRevisado(new Map(((data as { local: string; unidades: number }[] | null) ?? []).map((r) => [r.local, Number(r.unidades) || 0])))
+    })
+    return () => { vivo = false }
+  }, [desde, hasta, filas])
+
   const repos = useMemo(() => agruparRepos(filas), [filas])
   const periodo = useMemo(() => repos.filter((r) => r.fecha >= desde && r.fecha <= hasta), [repos, desde, hasta])
   // Anterior: en un día, la última fecha con repo antes; si no, el período anterior del mismo largo
@@ -357,7 +382,11 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
     return ultima ? previas.filter((r) => r.fecha === ultima) : []
   }, [repos, desde, unDia])
   const filasPeriodo = useMemo(() => filas.filter((f) => f.fecha >= desde && f.fecha <= hasta), [filas, desde, hasta])
-  const filasLocal = useMemo(() => agruparLocales(filasPeriodo), [filasPeriodo])
+  const filasLocal = useMemo(
+    () => agruparLocales(filasPeriodo).map((l) => ({ ...l, revisado: revisado.get(l.local) ?? 0 })),
+    [filasPeriodo, revisado],
+  )
+  const hayRevisado = useMemo(() => filasLocal.some((l) => l.revisado > 0), [filasLocal])
   const personas = useMemo(() => new Set(filasPeriodo.map((f) => f.responsable_id).filter(Boolean)).size, [filasPeriodo])
 
   const suma = (rs: Repo[]) => rs.reduce(
@@ -523,6 +552,11 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
                   <th className="py-1.5 text-right">Venta</th>
                   <th className="py-1.5 text-right">Repo</th>
                   <th className="py-1.5 text-right">No mand.</th>
+                  {hayRevisado && (
+                    <th className="py-1.5 text-right" title="Faltantes que un administrador dio por encontrados en Pedidos de venta. No cambian el rendimiento del piso.">
+                      Revisado admin
+                    </th>
+                  )}
                   <th className="py-1.5 pl-2 text-right sm:pl-3 md:text-left">Avance</th>
                   <th className="py-1.5 text-right">Horas</th>
                   <th className="hidden py-1.5 text-right sm:table-cell">Prend/HS</th>
@@ -539,6 +573,9 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
                       <td className="py-1.5 text-right font-bold tabular-nums text-emerald-500">{n0.format(l.venta)}</td>
                       <td className="py-1.5 text-right tabular-nums">{n0.format(l.repo)}</td>
                       <td className="py-1.5 text-right font-semibold tabular-nums text-red-400">{l.noMandados ? n0.format(l.noMandados) : '—'}</td>
+                      {hayRevisado && (
+                        <td className="py-1.5 text-right font-semibold tabular-nums text-amber-400">{l.revisado ? n0.format(l.revisado) : '—'}</td>
+                      )}
                       <td className="py-1.5 pl-2 sm:pl-3">
                         <div className="flex items-center gap-2">
                           <div className="hidden flex-1 md:block"><BarraAvance ok={pc.ok} no={pc.no} alto="h-1.5" /></div>
@@ -554,7 +591,7 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
                   )
                 })}
                 {filasLocal.length === 0 && (
-                  <tr><td colSpan={8} className="py-4 text-center text-sub">Sin datos.</td></tr>
+                  <tr><td colSpan={hayRevisado ? 9 : 8} className="py-4 text-center text-sub">Sin datos.</td></tr>
                 )}
               </tbody>
             </table>
@@ -563,6 +600,7 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
             HS total: el reloj de la repo, del primer escaneo al último, contando una sola vez a las personas que trabajaron en paralelo
             (no se suman los cronómetros). Horas: promedio por persona (cronómetro ÷ personas). En el cuadro por local, las horas son las de
             ese local (cronómetro del armado). Si nadie usó el cronómetro, queda «—». Tocá una repo del período para ver ese día.
+            {hayRevisado && ' «Revisado admin» son faltantes que un administrador dio por encontrados en Pedidos de venta: quedan a la vista pero no cambian la venta, la repo ni los no mandados.'}
           </p>
         </>
       )}
@@ -611,9 +649,11 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
                         <th className="px-3 py-2">Descripción</th>
                         <th className="px-3 py-2 text-center">Color</th>
                         <th className="px-3 py-2 text-center">Talle</th>
+                        <th className="whitespace-nowrap px-3 py-2" title="Dónde está en el depósito (mapeo). Vacío = el artículo todavía no se mapeó">Ubicación</th>
                         <th className="px-3 py-2 text-center">Pedido</th>
                         <th className="px-3 py-2 text-center">Stock</th>
                         <th className="px-3 py-2 text-center">No mand.</th>
+                        <th className="whitespace-nowrap px-3 py-2" title="Quién marcó que no lo encontró: el del armado, o quien cerró la línea en la repo">No lo encontró</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-line">
@@ -627,23 +667,26 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
                             <td className="px-3 py-2 text-sub">{f.descripcion || '—'}</td>
                             <td className="px-3 py-2 text-center text-sub">{f.color || '—'}</td>
                             <td className="px-3 py-2 text-center text-sub">{f.talle || '—'}</td>
+                            <td className="whitespace-nowrap px-3 py-2 font-semibold text-sky-400">{f.ubicacion || '—'}</td>
                             <td className="px-3 py-2 text-center tabular-nums">{n0.format(f.cantidad)}</td>
                             <td className={`px-3 py-2 text-center tabular-nums ${st === null ? 'text-sub' : st > 0 ? 'font-semibold text-emerald-500' : 'font-semibold text-red-400'}`} title="Stock real de MITO de ese color y talle">
                               {st === null ? '—' : n0.format(st)}
                             </td>
                             <td className="px-3 py-2 text-center font-bold tabular-nums text-red-400">{n0.format(f.no_mandado)}</td>
+                            <td className="whitespace-nowrap px-3 py-2 text-sub">{f.marco || '—'}</td>
                           </tr>
                         )
                       })}
                     </tbody>
                     <tfoot>
                       <tr className="border-t border-line text-[12px]" style={{ backgroundColor: 'rgba(255,255,255,.04)' }}>
-                        <td className="px-3 py-2 font-semibold text-ink" colSpan={6}>
+                        <td className="px-3 py-2 font-semibold text-ink" colSpan={7}>
                           {n0.format(det.length)} artículo{det.length === 1 ? '' : 's'} en {n0.format(localesDet)} local{localesDet === 1 ? '' : 'es'}
                         </td>
                         <td className="px-3 py-2 text-center font-bold tabular-nums text-ink">{n0.format(totDet.cantidad)}</td>
                         <td className="px-3 py-2 text-center font-bold text-sub" title="El stock no se suma">—</td>
                         <td className="px-3 py-2 text-center font-bold tabular-nums text-red-400">{n0.format(totDet.noMandado)}</td>
+                        <td />
                       </tr>
                     </tfoot>
                   </table>
@@ -652,7 +695,7 @@ export default function EstadisticaVtd({ desde, hasta, onVerDia }: {
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-5 py-3">
-              <p className="min-w-0 text-[11px] text-sub">Lo marcado como <b className="text-ink">faltante</b> en Mi repo. El <b className="text-ink">Stock</b> es el real de MITO de ese color y talle. El Excel sale agrupado por artículo + color + talle.</p>
+              <p className="min-w-0 text-[11px] text-sub">Lo marcado como <b className="text-ink">faltante</b> en Mi repo. El <b className="text-ink">Stock</b> es el real de MITO de ese color y talle. La <b className="text-ink">Ubicación</b> sale del mapeo del depósito (vacía si el artículo todavía no se mapeó). El Excel sale agrupado por artículo + color + talle.</p>
               <div className="flex gap-2">
                 <button
                   type="button"
