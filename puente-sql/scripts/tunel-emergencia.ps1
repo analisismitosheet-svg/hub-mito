@@ -4,6 +4,10 @@
 #   127.0.0.1:4000 -> Servidor de agentes IA (el chat del hub)
 # Lo lanza la tarea "MITO - Tunel emergencia" (ver instalar-tunel.ps1).
 #
+# Si el Funnel de Tailscale esta sano (el hub llega solo a /api/sql/ping), los tuneles quedan
+# levantados como respaldo pero NO se toca la URL que usa el hub. Recien si el hub no llega se
+# publica la del tunel.
+#
 # Las URL que da Cloudflare son gratis y publicas (https://algo-algo.trycloudflare.com) pero CAMBIAN
 # en cada arranque. Quedan en data\tunel-url.txt (puente) y data\tunel-url-agentes.txt (agentes),
 # y se anotan en data\tunel-emergencia.log. Al cambiar hay que:
@@ -40,6 +44,17 @@ $envHub = Join-Path (Split-Path $raiz -Parent) '.env'
 $supaUrl = LeerEnv $envHub 'VITE_SUPABASE_URL'
 $supaAnon = LeerEnv $envHub 'VITE_SUPABASE_ANON_KEY'
 $puenteToken = LeerEnv $envPuente 'PUENTE_TOKEN'
+
+# El hub ya llega al puente? Si el Funnel de Tailscale esta sano no hay que pisar su URL
+# con la del tunel: el tunel queda de respaldo y el hub sigue entrando por el Funnel.
+function HubYaLlega {
+  try {
+    $r = Invoke-WebRequest 'https://hub-mito.vercel.app/api/sql/ping' -UseBasicParsing -TimeoutSec 25
+    return (($r.Content | ConvertFrom-Json).ok -eq $true)
+  } catch {
+    return $false
+  }
+}
 
 # Avisa al hub la URL nueva (funcion publicar_urls_puente: valida el token y el dominio),
 # asi no hay que pegar nada a mano cuando el tunel cambia de direccion.
@@ -109,6 +124,10 @@ while ($true) {
     if ($url) {
       $anterior = if (Test-Path $urlArch) { (Get-Content $urlArch -Raw).Trim() } else { '' }
       Set-Content -Path $urlArch -Encoding utf8 -Value $url
+      if (HubYaLlega) {
+        Anotar "Tunel de $($s.nombre) levantado ($url$($s.sufijo)) pero el hub ya llega solo: no se toca su URL"
+        continue
+      }
       $avisado = PublicarEnElHub $s.campo "$url$($s.sufijo)"
       if ($url -ne $anterior) {
         $comoFue = if ($avisado) { 'ya avisada al hub' } else { 'HAY QUE PONERLA A MANO EN EL HUB' }
