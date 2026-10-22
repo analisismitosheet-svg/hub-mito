@@ -25,7 +25,8 @@ const RAIZ = path.join(__dirname, '..')
 const LOG = path.join(RAIZ, 'data', 'sync-pedidos-venta.log')
 // Lotes por cantidad de ítems (hay pedidos de cientos de renglones): la llamada entra con la clave anon,
 // que tiene un límite de 3 s por consulta en Supabase
-const ITEMS_POR_LOTE = 2000
+// El RPC corre como anon (statement_timeout 3 s): lotes chicos para tener margen
+const ITEMS_POR_LOTE = 800
 const MAX_PEDIDOS_LOTE = 200
 const DIAS_RECIENTES = 7
 const COMPLETA = process.argv.includes('--todo')
