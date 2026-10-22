@@ -508,6 +508,17 @@ class Pista:
     y: float = 0.0
 
 
+def gpu_en_error(e: Exception) -> bool:
+    """
+    Error de CUDA del que no se vuelve: el contexto queda "sticky" y, a partir de ahi, TODOS
+    los cuadros fallan aunque el video siga llegando (la vista en vivo se ve congelada).
+    La unica salida es arrancar el proceso de nuevo, que es justo lo que hace iniciar.bat.
+    """
+    t = str(e).lower()
+    return any(m in t for m in ('cuda error', 'sticky', 'cublas', 'cudnn_status', 'device-side assert',
+                                'no kernel image', 'out of memory'))
+
+
 class Camara(threading.Thread):
     def __init__(self, cfg: dict, cam: dict, almacen: Almacen, ver: bool = False):
         super().__init__(daemon=True, name=f"cam-{cam['nombre']}")
@@ -525,6 +536,7 @@ class Camara(threading.Thread):
         self.uniforme = uniforme_compartido(float(cfg.get("uniforme_umbral", 0.86))) if cam.get("uniforme", True) else None
         self.ultima_deteccion = None  # (cuadro, cajas normalizadas) para marcar empleados desde el hub
         self.fps = 0.0
+        self.errores_gpu = 0  # errores de GPU seguidos: si se repiten, se reinicia el proceso
         self.n_cuadro = 0
         self.reloj = time.time  # evaluar.py lo cambia por el tiempo del video
         self.vista = None  # último cuadro anotado (con --ver o mientras alguien mira el video en vivo)
@@ -713,8 +725,17 @@ class Camara(threading.Thread):
             try:
                 res = self.detectar(modelo, cuadro)
                 self.procesar(res, cuadro)
+                self.errores_gpu = 0
             except Exception as e:  # noqa: BLE001 — un cuadro corrupto no debe tirar el contador
-                log.warning("[%s] error procesando: %s", self.nombre, e)
+                if gpu_en_error(e):
+                    self.errores_gpu += 1
+                    log.warning("[%s] error de GPU (%s de 10): %s", self.nombre, self.errores_gpu, e)
+                    if self.errores_gpu >= 10:
+                        log.error("[%s] la GPU quedo en error: se reinicia el contador para recuperarla", self.nombre)
+                        logging.shutdown()
+                        os._exit(3)  # iniciar.bat lo vuelve a levantar en 10 s, con la GPU limpia
+                else:
+                    log.warning("[%s] error procesando: %s", self.nombre, e)
                 continue
             ahora = time.time()
             self.fps = 0.9 * self.fps + 0.1 * (1.0 / max(ahora - t_prev, 1e-3))
