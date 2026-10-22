@@ -34,6 +34,11 @@ if (-not $exe) {
 }
 
 while ($true) {
+  # Si alguien ya dejo un tunel andando a mano, no se abre otro (seria otra URL distinta)
+  if (Get-Process cloudflared -ErrorAction SilentlyContinue) {
+    Start-Sleep -Seconds 60
+    continue
+  }
   if (Test-Path $salida) { Remove-Item $salida -Force -ErrorAction SilentlyContinue }
   $p = Start-Process -FilePath $exe -WorkingDirectory $raiz -WindowStyle Hidden -PassThru `
     -ArgumentList 'tunnel', '--no-autoupdate', '--url', 'http://127.0.0.1:3128' `
