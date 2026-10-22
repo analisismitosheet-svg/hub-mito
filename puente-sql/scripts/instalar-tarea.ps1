@@ -93,3 +93,14 @@ Register-ScheduledTask -TaskName 'MITO - Pedidos franquicias' -Force `
   -Trigger $cada1 `
   -Settings $ajustesFranq | Out-Null
 Write-Output 'OK  MITO - Pedidos franquicias (cada 1 minuto)'
+
+# Tunel de emergencia (Cloudflare) al puente, para cuando el Funnel de Tailscale no se publica.
+# Se instala pero conviene tenerlo APAGADO mientras el Funnel ande: Disable-ScheduledTask 'MITO - Tunel emergencia'.
+# La URL cambia en cada arranque: queda en data\tunel-url.txt y hay que pegarla en el hub
+# (Configuraciones > Conexion SQL). Ver scripts\tunel-emergencia.ps1.
+Register-ScheduledTask -TaskName 'MITO - Tunel emergencia' -Force `
+  -Description 'Tunel de Cloudflare al Puente SQL (127.0.0.1:3128) por si el Funnel de Tailscale no se publica. La URL queda en puente-sql\data\tunel-url.txt y hay que pegarla en Configuraciones > Conexion SQL del hub. Log: puente-sql\data\tunel-emergencia.log' `
+  -Action (Accion 'tunel-emergencia.ps1') `
+  -Trigger (New-ScheduledTaskTrigger -AtLogOn -User $usuario) `
+  -Settings $ajustes | Out-Null
+Write-Output 'OK  MITO - Tunel emergencia (al iniciar sesion)'
