@@ -16,12 +16,49 @@ $raiz = Split-Path $PSScriptRoot -Parent
 $log = Join-Path $raiz 'data\tunel-emergencia.log'
 
 $servicios = @(
-  @{ nombre = 'puente SQL'; puerto = 3128; urlArch = 'data\tunel-url.txt'; salida = 'data\tunel-cloudflared.log' }
-  @{ nombre = 'agentes IA'; puerto = 4000; urlArch = 'data\tunel-url-agentes.txt'; salida = 'data\tunel-agentes.log' }
+  @{ nombre = 'puente SQL'; puerto = 3128; urlArch = 'data\tunel-url.txt'; salida = 'data\tunel-cloudflared.log'
+     campo = 'p_url_puente'; sufijo = '/health' }
+  @{ nombre = 'agentes IA'; puerto = 4000; urlArch = 'data\tunel-url-agentes.txt'; salida = 'data\tunel-agentes.log'
+     campo = 'p_url_agentes'; sufijo = '' }
 )
 
 function Anotar($texto) {
   Add-Content -Path $log -Encoding utf8 -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')  $texto"
+}
+
+# Un valor del .env (el del puente o el del hub, que esta un nivel arriba)
+function LeerEnv($archivo, $clave) {
+  if (-not (Test-Path $archivo)) { return $null }
+  foreach ($l in Get-Content $archivo) {
+    if ($l -match "^\s*$clave\s*=\s*(.*)$") { return $Matches[1].Trim().Trim('"') }
+  }
+  return $null
+}
+
+$envPuente = Join-Path $raiz '.env'
+$envHub = Join-Path (Split-Path $raiz -Parent) '.env'
+$supaUrl = LeerEnv $envHub 'VITE_SUPABASE_URL'
+$supaAnon = LeerEnv $envHub 'VITE_SUPABASE_ANON_KEY'
+$puenteToken = LeerEnv $envPuente 'PUENTE_TOKEN'
+
+# Avisa al hub la URL nueva (funcion publicar_urls_puente: valida el token y el dominio),
+# asi no hay que pegar nada a mano cuando el tunel cambia de direccion.
+function PublicarEnElHub($campo, $url) {
+  if (-not $supaUrl -or -not $supaAnon -or -not $puenteToken) {
+    Anotar 'No se pudo avisar al hub: faltan VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY (.env del hub) o PUENTE_TOKEN'
+    return $false
+  }
+  $cuerpo = @{ p_token = $puenteToken }
+  $cuerpo[$campo] = $url
+  try {
+    Invoke-RestMethod -Method Post -Uri "$supaUrl/rest/v1/rpc/publicar_urls_puente" -TimeoutSec 25 `
+      -Headers @{ apikey = $supaAnon; Authorization = "Bearer $supaAnon" } `
+      -ContentType 'application/json' -Body ($cuerpo | ConvertTo-Json -Compress) | Out-Null
+    return $true
+  } catch {
+    Anotar "No se pudo avisar al hub de la URL de ${campo}: $($_.Exception.Message)"
+    return $false
+  }
 }
 
 function BuscarCloudflared {
@@ -72,10 +109,12 @@ while ($true) {
     if ($url) {
       $anterior = if (Test-Path $urlArch) { (Get-Content $urlArch -Raw).Trim() } else { '' }
       Set-Content -Path $urlArch -Encoding utf8 -Value $url
+      $avisado = PublicarEnElHub $s.campo "$url$($s.sufijo)"
       if ($url -ne $anterior) {
-        Anotar "URL NUEVA del tunel de $($s.nombre): $url  (hay que actualizarla en el hub)"
-      } else {
-        Anotar "Tunel de $($s.nombre) levantado con la misma URL: $url"
+        $comoFue = if ($avisado) { 'ya avisada al hub' } else { 'HAY QUE PONERLA A MANO EN EL HUB' }
+        Anotar "URL NUEVA del tunel de $($s.nombre): $url$($s.sufijo)  ($comoFue)"
+      } elseif (-not $avisado) {
+        Anotar "Tunel de $($s.nombre) con la misma URL ($url) pero no se pudo avisar al hub"
       }
     } else {
       Anotar "El tunel de $($s.nombre) arranco pero no se pudo leer la URL (ver $($s.salida))"
