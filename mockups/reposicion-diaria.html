@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MITO · Reposición diaria automática</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#050508; --paper:#0a0d12; --surface:#0e1116; --surface2:#141924;
+    --line:#1f2530; --line2:#2a3340; --ink:#f1f5f9; --sub:#94a3b8;
+    --amber:#d97706; --amber2:#fbbf24; --emerald:#34d399; --red:#ef4444; --sky:#38bdf8;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Plus Jakarta Sans",system-ui,-apple-system,Segoe UI,sans-serif;-webkit-font-smoothing:antialiased}
+  .doc{max-width:1280px;margin:0 auto;padding:22px 16px 90px}
+  a{color:inherit}
+  .top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .logo{font-weight:800;color:#ef4444;letter-spacing:-.02em;font-size:20px}
+  .top h1{font-size:19px;margin:0;font-weight:700;letter-spacing:-.01em}
+  .top .sub{color:var(--sub);font-size:12.5px;margin:2px 0 0}
+  .badge{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--amber2);border:1px solid rgba(217,119,6,.45);background:rgba(217,119,6,.12);padding:4px 9px;border-radius:999px}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;border:1px solid var(--line);background:var(--paper);padding:5px;border-radius:999px;width:max-content;max-width:100%;margin-bottom:14px}
+  .tab{border:0;background:transparent;color:var(--sub);font:inherit;font-size:12.5px;font-weight:600;padding:8px 14px;border-radius:999px;cursor:pointer;display:inline-flex;align-items:center;gap:7px}
+  .tab:hover{color:var(--ink)}
+  .tab.on{background:var(--surface2);color:var(--ink);box-shadow:0 1px 0 rgba(255,255,255,.05),0 4px 14px rgba(0,0,0,.35)}
+  .tab .n{font-size:10.5px;background:rgba(255,255,255,.08);border-radius:999px;padding:1px 7px}
+  section.tabpane{display:none}
+  section.tabpane.on{display:block}
+  .card{border:1px solid var(--line);background:var(--paper);border-radius:18px;padding:14px}
+  .card h2{font-size:14.5px;margin:0;font-weight:700}
+  .card p.hint{color:var(--sub);font-size:12px;margin:3px 0 0;line-height:1.55}
+  .grid{display:grid;gap:12px}
+  .grid.cfg{grid-template-columns:minmax(0,1.45fr) repeat(3,minmax(0,.62fr));margin-bottom:12px}
+  @media (max-width:980px){.grid.cfg{grid-template-columns:1fr 1fr}.grid.cfg .card.cfgmain{grid-column:1/-1}}
+  .kpi{border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:12px;min-width:0}
+  .kpi .lab{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--sub);margin:0}
+  .kpi .val{font-size:23px;font-weight:800;line-height:1.15;margin:6px 0 0;font-variant-numeric:tabular-nums}
+  .kpi .foot{font-size:11px;color:var(--sub);margin-top:4px}
+  .kpi .val small{font-size:12px;font-weight:600;color:var(--sub);margin-left:2px}
+  .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .row.between{justify-content:space-between}
+  .sw{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--sub);cursor:pointer;user-select:none}
+  .sw input{display:none}
+  .sw .track{width:36px;height:20px;border-radius:999px;background:#26303d;border:1px solid var(--line2);position:relative;transition:.18s}
+  .sw .track:after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:999px;background:#94a3b8;transition:.18s}
+  .sw input:checked + .track{background:rgba(52,211,153,.25);border-color:rgba(52,211,153,.5)}
+  .sw input:checked + .track:after{left:18px;background:var(--emerald)}
+  .fld{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--sub)}
+  input.f,select{background:var(--surface);border:1px solid var(--line2);color:#e2e8f0;border-radius:10px;padding:7px 9px;font:inherit;font-size:12.5px;outline:none}
+  input.f:focus,select:focus{border-color:var(--amber)}
+  input.f.sm{width:70px;text-align:center}
+  .days{display:flex;gap:4px;flex-wrap:wrap}
+  .day{width:30px;height:30px;border-radius:9px;border:1px solid var(--line2);background:var(--surface);color:var(--sub);font:inherit;font-size:11.5px;font-weight:700;cursor:pointer}
+  .day.on{background:rgba(217,119,6,.16);border-color:rgba(217,119,6,.5);color:var(--amber2)}
+  .btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line2);background:var(--surface);color:var(--ink);font:inherit;font-size:12px;font-weight:700;padding:7px 12px;border-radius:999px;cursor:pointer;white-space:nowrap}
+  .btn:hover{background:var(--surface2)}
+  .btn.primary{background:var(--amber);border-color:var(--amber);color:#0b0b0f}
+  .btn.primary:hover{background:#f59e0b}
+  .btn.green{background:#059669;border-color:#059669;color:white}
+  .btn.green:hover{background:#10b981}
+  .btn.ghost{background:transparent}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn.sm{font-size:11.5px;padding:5px 9px}
+  .wrap{border:1px solid var(--line);border-radius:14px;overflow:auto;max-height:520px;background:var(--paper)}
+  table{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px}
+  thead th{position:sticky;top:0;z-index:2;background:var(--surface);color:var(--sub);text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;font-weight:700;padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+  tbody td{padding:9px 10px;border-bottom:1px solid rgba(255,255,255,.06);vertical-align:middle}
+  tbody tr:hover td{background:rgba(255,255,255,.03)}
+  tbody tr.sel td{background:rgba(217,119,6,.07)}
+  .cli{display:flex;flex-direction:column;gap:1px;min-width:0}
+  .cli b{font-size:12.5px;font-weight:700;white-space:nowrap}
+  .cli span{font-size:11px;color:var(--sub);white-space:nowrap}
+  .code{font-family:ui-monospace,Menlo,monospace;font-weight:700;color:var(--amber2);font-size:12px}
+  .tag{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;border:1px solid var(--line2);background:var(--surface);color:var(--sub);white-space:nowrap}
+  .tag.ok{color:var(--emerald);border-color:rgba(52,211,153,.35);background:rgba(52,211,153,.1)}
+  .tag.warn{color:var(--amber2);border-color:rgba(217,119,6,.4);background:rgba(217,119,6,.12)}
+  .tag.err{color:#fca5a5;border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.1)}
+  .tag.mute{color:#64748b;border-color:var(--line);background:transparent}
+  .tag.sky{color:var(--sky);border-color:rgba(56,189,248,.35);background:rgba(56,189,248,.1)}
+  .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .muted{color:var(--sub)}
+  .prev{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:14px}
+  @media (max-width:900px){.prev{grid-template-columns:1fr}}
+  .msgbox{white-space:pre-wrap;font-size:12.5px;line-height:1.6;color:#dbe3ec;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 13px;max-height:440px;overflow:auto}
+  .msgbox b{color:var(--ink)}
+  .phone{border:1px solid var(--line2);border-radius:18px;overflow:hidden;background:#0b141a;display:flex;flex-direction:column;box-shadow:0 18px 50px rgba(0,0,0,.45)}
+  .waHead{display:flex;align-items:center;gap:9px;background:#1f2c34;padding:9px 11px;border-bottom:1px solid #111b21}
+  .waAvatar{width:34px;height:34px;border-radius:999px;background:linear-gradient(135deg,#d97706,#7c2d12);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:#fff}
+  .waHead b{font-size:12.5px;display:block}
+  .waHead span{font-size:10.5px;color:#8696a0}
+  .waBody{padding:12px 10px;background:#0b141a;background-image:radial-gradient(rgba(255,255,255,.035) 1px,transparent 1px);background-size:18px 18px;min-height:320px;max-height:420px;overflow:auto;display:flex;flex-direction:column;justify-content:flex-end;gap:4px}
+  .bubble{background:#005c4b;color:#e9edef;border-radius:12px 12px 2px 12px;padding:7px 9px 18px;max-width:94%;margin-left:auto;position:relative;font-size:12px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+  .bubble .hora{position:absolute;right:8px;bottom:3px;font-size:9.5px;color:rgba(233,237,239,.6)}
+  .bubble .tick{color:#53bdeb;margin-left:2px}
+  .waFoot{padding:8px 10px;background:#1f2c34;color:#8696a0;font-size:11px;display:flex;align-items:center;gap:6px}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .note{border:1px solid var(--line);background:var(--paper);border-radius:16px;padding:13px 15px;margin-top:12px}
+  .note h3{margin:0 0 6px;font-size:13px}
+  .note p,.note li{color:var(--sub);font-size:12.3px;line-height:1.65;margin:4px 0}
+  .note ol,.note ul{margin:6px 0 0;padding-left:20px}
+  .note code{color:var(--ink);background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:1px 5px;font-size:11.5px}
+  .flow{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .step{border:1px solid var(--line2);background:var(--surface);border-radius:12px;padding:9px 11px;font-size:11.5px;color:var(--sub);min-width:150px;flex:1}
+  .step b{display:block;color:var(--ink);font-size:12px;margin-bottom:2px}
+  .step .n{display:inline-flex;width:18px;height:18px;border-radius:999px;background:rgba(217,119,6,.18);color:var(--amber2);font-size:10px;font-weight:800;align-items:center;justify-content:center;margin-right:6px}
+  .opt{border:1px solid var(--line2);background:var(--surface);border-radius:14px;padding:13px;cursor:pointer}
+  .opt.on{border-color:rgba(217,119,6,.5);background:rgba(217,119,6,.08)}
+  .opt .hd{display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px}
+  .opt p{color:var(--sub);font-size:12px;line-height:1.55;margin:6px 0 0}
+  .opt .pill{font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;border-radius:999px;padding:2px 7px;border:1px solid rgba(52,211,153,.4);color:var(--emerald);background:rgba(52,211,153,.1)}
+  .opt .pill.alt{border-color:rgba(56,189,248,.4);color:var(--sky);background:rgba(56,189,248,.1)}
+  .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(20px);background:#0f1720;border:1px solid var(--line2);color:var(--ink);font-size:12.5px;font-weight:600;padding:10px 14px;border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,.55);opacity:0;pointer-events:none;transition:.2s;z-index:100;max-width:92vw;text-align:center}
+  .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+  .warnline{display:flex;align-items:flex-start;gap:8px;border:1px solid rgba(217,119,6,.35);background:rgba(217,119,6,.08);border-radius:12px;padding:9px 11px;font-size:12px;color:#fcd34d;line-height:1.5;margin-top:10px}
+  .okline{display:flex;align-items:flex-start;gap:8px;border:1px solid rgba(52,211,153,.35);background:rgba(52,211,153,.08);border-radius:12px;padding:9px 11px;font-size:12px;color:#6ee7b7;line-height:1.5;margin-top:10px}
+  .sep{height:1px;background:var(--line);margin:14px 0}
+  .mini{font-size:11px;color:var(--sub)}
+  @media (max-width:640px){
+    .doc{padding:16px 10px 70px}
+    .top h1{font-size:16px}
+    .kpi .val{font-size:19px}
+    table{font-size:11.5px}
+    tbody td,thead th{padding:7px 7px}
+  }
+</style>
+</head>
+<body>
+<div class="doc">
+  <header class="top">
+    <div class="logo">MITO</div>
+    <div style="min-width:0;flex:1">
+      <h1>Franquicias · Reposición diaria automática</h1>
+      <p class="sub">Cada mañana, el hub arma la propuesta con la venta de ayer y le manda el link por WhatsApp a cada cliente.</p>
+    </div>
+    <span class="badge">● Maqueta</span>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="Secciones">
+    <button class="tab on" data-tab="diaria" role="tab">📦 Reposición diaria <span class="n" id="tabN">3</span></button>
+    <button class="tab" data-tab="historial" role="tab">🗂 Historial</button>
+    <button class="tab" data-tab="wa" role="tab">💬 Conexión WhatsApp</button>
+  </nav>
+
+  <!-- ============================ DIARIA ============================ -->
+  <section class="tabpane on" id="pane-diaria">
+    <div class="grid cfg">
+      <div class="card cfgmain">
+        <div class="row between">
+          <div>
+            <h2>Programación</h2>
+            <p class="hint">Se ejecuta todos los días hábiles a la hora elegida, con la venta del día anterior.</p>
+          </div>
+          <label class="sw" title="Prender/apagar el envío automático">
+            <input type="checkbox" id="activo" checked />
+            <span class="track"></span>
+            <span id="activoTxt">Activa</span>
+          </label>
+        </div>
+        <div class="sep"></div>
+        <div class="row" style="gap:16px">
+          <label class="fld">Hora <input class="f" type="time" id="hora" value="08:30" /></label>
+          <div class="fld" style="gap:6px">Días
+            <div class="days" id="dias">
+              <button class="day on" data-d="1">L</button><button class="day on" data-d="2">M</button><button class="day on" data-d="3">M</button><button class="day on" data-d="4">J</button><button class="day on" data-d="5">V</button><button class="day" data-d="6">S</button><button class="day" data-d="0">D</button>
+            </div>
+          </div>
+          <label class="fld">Máx. artículos <input class="f sm" id="tope" type="number" min="5" max="40" value="15" /></label>
+        </div>
+        <div class="sep"></div>
+        <div class="row" style="gap:18px">
+          <label class="sw"><input type="checkbox" id="crearProp" checked /><span class="track"></span>Crear propuesta P-00N con link</label>
+          <label class="sw"><input type="checkbox" id="soloAlgo" checked /><span class="track"></span>No mandar si no hay nada para reponer</label>
+          <label class="sw"><input type="checkbox" id="urgentes" checked /><span class="track"></span>Incluir siempre los urgentes</label>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn primary" id="guardar">Guardar programación</button>
+          <button class="btn" id="enviarTodo">Enviar todo ahora</button>
+          <span class="mini" id="prox">Próxima: mañana 08:30</span>
+        </div>
+      </div>
+      <div class="kpi"><p class="lab">Franquicias</p><p class="val" id="kCli">3</p><div class="foot" id="kCliFoot">2 con base y WhatsApp</div></div>
+      <div class="kpi"><p class="lab">Mensajes de hoy</p><p class="val" id="kMsj">2</p><div class="foot" id="kMsjFoot">1 enviado · 1 programado</div></div>
+      <div class="kpi"><p class="lab">Sugerido hoy</p><p class="val" id="kUni">—</p><div class="foot" id="kImp">—</div></div>
+    </div>
+
+    <div class="card">
+      <div class="row between" style="margin-bottom:10px">
+        <div>
+          <h2>Franquicias de hoy <span class="mini" id="fechaHoy"></span></h2>
+          <p class="hint">Ventas del <b id="fechaAyer" style="color:#e2e8f0"></b> · stock del cliente por sucursal · stock real de MITO</p>
+        </div>
+        <div class="row">
+          <span class="tag sky">🔁 1 propuesta por cliente y por día</span>
+        </div>
+      </div>
+
+      <div class="wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Cliente</th>
+              <th>Base / stock</th>
+              <th>WhatsApp</th>
+              <th class="num">Ayer</th>
+              <th class="num">Sugerido</th>
+              <th class="num">Importe</th>
+              <th class="num">Urg.</th>
+              <th>Estado</th>
+              <th style="text-align:right">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="filas"></tbody>
+          <tfoot>
+            <tr>
+              <td colspan="3" style="padding:10px;border-top:1px solid var(--line2);font-weight:700" id="footTxt">—</td>
+              <td class="num" id="footVend" style="border-top:1px solid var(--line2);font-weight:700">—</td>
+              <td class="num" id="footSug" style="border-top:1px solid var(--line2);font-weight:800;color:var(--emerald)">—</td>
+              <td class="num" id="footImp" style="border-top:1px solid var(--line2);font-weight:800">—</td>
+              <td colspan="3" style="border-top:1px solid var(--line2)"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <div class="warnline" id="avisoSin" style="display:none">
+        <span>⚠️</span>
+        <span><b>SUR DEPORTES S.A.</b> tiene base asignada pero ningún contacto de WhatsApp. La propuesta se arma igual y queda para mandar a mano desde el hub.</span>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <div class="row between" style="margin-bottom:10px">
+        <div>
+          <h2>Mensaje que se manda</h2>
+          <p class="hint" id="prevSub">Elegí una franquicia de la tabla para ver su mensaje.</p>
+        </div>
+        <div class="row">
+          <span class="tag" id="prevEstado">—</span>
+        </div>
+      </div>
+      <div class="prev">
+        <div>
+          <div class="msgbox" id="msgTexto">—</div>
+          <div class="toolbar">
+            <button class="btn" id="copiar">📋 Copiar mensaje</button>
+            <button class="btn" id="abrirWa">Abrir WhatsApp</button>
+            <button class="btn green" id="enviarUno">Enviar por API</button>
+            <button class="btn ghost" id="verProp">Ver propuesta P-00N</button>
+          </div>
+          <p class="mini" style="margin-top:8px">El mensaje sale desde el número de MITO (no desde el celular de cada vendedor). El link es el mismo <code>/p/:token</code> de siempre: el cliente elige y confirma.</p>
+        </div>
+        <div class="phone" aria-label="Vista previa en WhatsApp">
+          <div class="waHead">
+            <div class="waAvatar" id="waAvatar">CF</div>
+            <div style="min-width:0"><b id="waNombre">CF Ushuaia</b><span id="waTel">+54 9 2901 15-123456</span></div>
+          </div>
+          <div class="waBody">
+            <div class="bubble" id="waBubble">—
+              <span class="hora">08:30 <span class="tick">✓✓</span></span>
+            </div>
+          </div>
+          <div class="waFoot">🔒 Los mensajes están cifrados de extremo a extremo.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <h3>Cómo lo haríamos (sin inventar nada nuevo)</h3>
+      <div class="flow">
+        <div class="step"><b><span class="n">1</span>Tarea diaria</b>Vercel Cron a las 08:30 → <code>/api/reposicion-diaria</code>.</div>
+        <div class="step"><b><span class="n">2</span>Calcular</b>Por cada cliente con base: ventas de ayer, su stock y el de MITO.</div>
+        <div class="step"><b><span class="n">3</span>Armar</b>Sugerido = vendido − stock cliente, topeado al stock de MITO.</div>
+        <div class="step"><b><span class="n">4</span>Propuesta</b>Se crea la P-00N con sus ítems y el token del link.</div>
+        <div class="step"><b><span class="n">5</span>WhatsApp</b>API de WhatsApp (plantilla aprobada) con el resumen y el link.</div>
+        <div class="step"><b><span class="n">6</span>Confirmación</b>El cliente confirma → el puente la carga en Dragon como hoy.</div>
+      </div>
+      <ol>
+        <li><b style="color:#e2e8f0">Una sola vez por día:</b> clave única <code>cliente_id + fecha</code> en la propuesta. Si la tarea corre dos veces, no duplica ni vuelve a mandar.</li>
+        <li><b style="color:#e2e8f0">No manda si no hay nada:</b> sin ventas de ayer o sin sugeridos &gt; 0, ese cliente no recibe mensaje (y queda el detalle en el historial).</li>
+        <li><b style="color:#e2e8f0">Urgentes primero:</b> stock cliente 0 + vendió + hay más de 1 en MITO. Se listan arriba con 🔴.</li>
+        <li><b style="color:#e2e8f0">Mismo circuito:</b> no cambia nada del link, la confirmación ni el alta en Dragon. Solo se automatiza el armado y el envío.</li>
+        <li><b style="color:#e2e8f0">Si la API falla:</b> la propuesta queda creada y el hub muestra “Mandar a mano” con el link (como hoy).</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ============================ HISTORIAL ============================ -->
+  <section class="tabpane" id="pane-historial">
+    <div class="card">
+      <div class="row between" style="margin-bottom:10px">
+        <div>
+          <h2>Historial de envíos</h2>
+          <p class="hint">Qué se mandó, a quién, cuándo y qué pasó con la propuesta.</p>
+        </div>
+        <div class="row">
+          <select id="hCli"><option value="">Todas las franquicias</option><option>CF Ushuaia</option><option>Zimith Ushuaia</option><option>CF Río Grande</option></select>
+          <button class="btn sm" id="hoyRango">Últimos 7 días</button>
+        </div>
+      </div>
+      <div class="wrap">
+        <table>
+          <thead>
+            <tr><th>Fecha</th><th>Cliente</th><th>Propuesta</th><th class="num">Artículos</th><th class="num">Unidades</th><th class="num">Importe</th><th>Envío</th><th>Resultado</th></tr>
+          </thead>
+          <tbody id="histRows"></tbody>
+        </table>
+      </div>
+      <p class="mini" style="margin-top:8px">El envío automático y el manual comparten historial. Las propuestas que no se confirmaron se pueden reenviar desde acá.</p>
+    </div>
+  </section>
+
+  <!-- ============================ WHATSAPP ============================ -->
+  <section class="tabpane" id="pane-wa">
+    <div class="grid" style="grid-template-columns:1fr 1fr;margin-bottom:12px">
+      <div class="opt on" data-prov="cloud">
+        <div class="hd">WhatsApp Cloud API <span class="pill">Recomendado</span></div>
+        <p>Número de MITO en la API de Meta. Envía solo, sin tener una PC prendida. Requiere plantilla aprobada para el primer mensaje.</p>
+      </div>
+      <div class="opt" data-prov="bridge">
+        <div class="hd">Puente en la PC <span class="pill alt">Alternativa</span></div>
+        <p>Un número de WhatsApp Web conectado en la PC del puente (Baileys). Más simple de arrancar, pero depende de que esa PC esté prendida y el número no se desloguee.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row between">
+        <div>
+          <h2>Conexión</h2>
+          <p class="hint">Número desde el que salen los mensajes de reposición.</p>
+        </div>
+        <span class="tag ok">● Conectado</span>
+      </div>
+      <div class="sep"></div>
+      <div class="row" style="gap:12px">
+        <label class="fld" style="flex-direction:column;align-items:flex-start">Número emisor
+          <input class="f" style="width:220px" value="+54 9 2901 55-0100" />
+        </label>
+        <label class="fld" style="flex-direction:column;align-items:flex-start">Phone number ID
+          <input class="f" style="width:220px" value="109384729384729" />
+        </label>
+        <label class="fld" style="flex-direction:column;align-items:flex-start">Token
+          <input class="f" style="width:260px" type="password" value="EAAG...demo" />
+        </label>
+        <label class="fld" style="flex-direction:column;align-items:flex-start">Plantilla
+          <input class="f" style="width:220px" value="reposicion_diaria" />
+        </label>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn primary" id="probarWa">Probar conexión</button>
+        <button class="btn" id="probarMsj">Mandarme un mensaje de prueba</button>
+        <span class="mini">Última prueba: hoy 08:12 ✓</span>
+      </div>
+      <div class="okline"><span>✓</span><span>La plantilla <code>reposicion_diaria</code> está aprobada. Variables: <b>{{1}}</b> nombre, <b>{{2}}</b> resumen, <b>{{3}}</b> link.</span></div>
+      <div class="note" style="margin-top:12px">
+        <h3>Lo que hay que definir antes de implementarlo</h3>
+        <ul>
+          <li><b style="color:#e2e8f0">Número:</b> ¿sale de un número nuevo de MITO o del WhatsApp que ya usan? (la API no puede usar un número que esté en la app común).</li>
+          <li><b style="color:#e2e8f0">Plantilla:</b> Meta tiene que aprobar el texto. El link va como botón de URL, no como texto suelto, para que no lo marque como spam.</li>
+          <li><b style="color:#e2e8f0">Contactos:</b> se mandan a los contactos cargados en cada franquicia (los mismos de las propuestas). Si hay varios, al principal y copia al resto.</li>
+          <li><b style="color:#e2e8f0">Horario:</b> 08:30 de Argentina. Si el cliente no confirmó, a las 24 h se le puede mandar un recordatorio (opcional).</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // ---------- datos de ejemplo (mismos criterios que producción) ----------
+  const ITEMS = {
+    cfu: [
+      { art:'CF221402', desc:'ZAPATILLA CAPTAIN FIN BASAM', color:'NEGRO', talle:'42', vendido:3, stockCli:0, stockMito:5, precio:78000 },
+      { art:'CF002304', desc:'ZAPATILLA CAPTAIN FIN RIVER', color:'NEGRO', talle:'41', vendido:2, stockCli:0, stockMito:8, precio:82000 },
+      { art:'CF006403', desc:'ZAPATILLA CAPTAIN FIN LAGO', color:'BEIGE', talle:'40', vendido:1, stockCli:0, stockMito:4, precio:76000 },
+      { art:'FR022008', desc:'ZAPATILLA FOREST NORDIC', color:'MARINO', talle:'43', vendido:2, stockCli:0, stockMito:3, precio:91000 },
+      { art:'FR023004', desc:'ZAPATILLA FOREST PAMPA', color:'NEGRO', talle:'39', vendido:1, stockCli:0, stockMito:9, precio:85000 },
+      { art:'ZI220110', desc:'CHANCLA ZIMITH WAVE', color:'ARENA', talle:'39/40', vendido:2, stockCli:0, stockMito:2, precio:42000 },
+      { art:'CF004902TA', desc:'ZAPATILLA CHALEX CAMEL', color:'CAMEL', talle:'38', vendido:3, stockCli:1, stockMito:6, precio:69000 },
+      { art:'LI031100', desc:'ZAPATILLA HOWARD BLACK', color:'BLACK', talle:'44', vendido:2, stockCli:1, stockMito:4, precio:88000 },
+      { art:'CF010101', desc:'ZAPATILLA CAPTAIN FIN CITY', color:'BLANCO', talle:'40', vendido:4, stockCli:2, stockMito:10, precio:74000 },
+      { art:'FR500500', desc:'BOTA FOREST TREKK', color:'GRIS', talle:'41', vendido:3, stockCli:0, stockMito:7, precio:112000 },
+    ],
+    zim: [
+      { art:'ZI110201', desc:'CHANCLA ZIMITH CORAL', color:'FUCSIA', talle:'37/38', vendido:4, stockCli:0, stockMito:6, precio:38000 },
+      { art:'ZI110202', desc:'CHANCLA ZIMITH CORAL', color:'NEGRO', talle:'39/40', vendido:2, stockCli:1, stockMito:5, precio:38000 },
+      { art:'ZI330401', desc:'SLIPPER ZIMITH HOUSE', color:'GRIS', talle:'41/42', vendido:3, stockCli:0, stockMito:4, precio:45000 },
+      { art:'CF221402', desc:'ZAPATILLA CAPTAIN FIN BASAM', color:'NEGRO', talle:'42', vendido:1, stockCli:0, stockMito:5, precio:78000 },
+    ],
+    cfrg: [
+      { art:'CF002304', desc:'ZAPATILLA CAPTAIN FIN RIVER', color:'NEGRO', talle:'42', vendido:2, stockCli:0, stockMito:8, precio:82000 },
+      { art:'CF010101', desc:'ZAPATILLA CAPTAIN FIN CITY', color:'BLANCO', talle:'41', vendido:1, stockCli:0, stockMito:10, precio:74000 },
+    ],
+  }
+
+  const clientes = [
+    { key:'cfu', codigo:'01140', nombre:'ARGENTINA S.R.L.', fantasia:'CF Ushuaia', base:'DRAGONFISH_CFU', sucursal:'CAPTAIN FIN USHUAIA', tel:'5492901123456', telTxt:'+54 9 2901 15-123456', contacto:'Diego', estado:'enviado' },
+    { key:'zim', codigo:'01820', nombre:'PATAGONIA OUTDOOR S.R.L.', fantasia:'Zimith Ushuaia', base:'DRAGONFISH_ZIM', sucursal:'ZIMITH USHUAIA', tel:'5492901654321', telTxt:'+54 9 2901 15-654321', contacto:'Sofía', estado:'programado' },
+    { key:'cfrg', codigo:'02315', nombre:'SUR DEPORTES S.A.', fantasia:'CF Río Grande', base:'DRAGONFISH_CFRG', sucursal:'CAPTAIN FIN RIO GRANDE', tel:'', telTxt:'Sin contacto', contacto:'', estado:'sintel' },
+  ]
+
+  const esUrgente = (i) => i.stockCli <= 0 && i.vendido >= 1 && i.stockMito > 1
+  const sugerido = (i) => Math.max(0, Math.min(i.vendido - i.stockCli, i.stockMito))
+  for (const c of clientes) {
+    c.items = ITEMS[c.key].filter((i) => sugerido(i) > 0)
+    c.vendido = c.items.reduce((s, i) => s + i.vendido, 0)
+    c.unidades = c.items.reduce((s, i) => s + sugerido(i), 0)
+    c.importe = c.items.reduce((s, i) => s + sugerido(i) * i.precio, 0)
+    c.urgentes = c.items.filter(esUrgente).length
+    c.skus = c.items.length
+  }
+
+  const fmt = (n) => new Intl.NumberFormat('es-AR').format(n)
+  const pesos = (n) => new Intl.NumberFormat('es-AR', { style:'currency', currency:'ARS', maximumFractionDigits:0 }).format(n)
+  const fecha = (d) => d.toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit' })
+  const fechaLarga = (d) => d.toLocaleDateString('es-AR', { weekday:'short', day:'2-digit', month:'2-digit' })
+  const hoy = new Date()
+  const ayer = new Date(hoy.getTime() - 86400000)
+  document.getElementById('fechaHoy').textContent = '(' + fechaLarga(hoy) + ')'
+  document.getElementById('fechaAyer').textContent = fecha(ayer)
+
+  const HIST = [
+    { fecha: ayer, cliente:'CF Ushuaia', prop:'P-012', skus:22, uni:38, imp:4185000, via:'Automático', res:'Confirmada', resCls:'ok' },
+    { fecha: ayer, cliente:'Zimith Ushuaia', prop:'P-013', skus:9, uni:14, imp:812000, via:'Automático', res:'Enviada · sin confirmar', resCls:'warn' },
+    { fecha: new Date(hoy.getTime() - 2*86400000), cliente:'CF Ushuaia', prop:'P-011', skus:19, uni:31, imp:3640000, via:'Automático', res:'En Dragon · pedido 0001-00048231', resCls:'ok' },
+  ]
+
+  let sel = 'cfu'
+  let activo = true
+  let enviando = new Set()
+
+  function toast(txt) {
+    const t = document.getElementById('toast')
+    t.textContent = txt
+    t.classList.add('on')
+    clearTimeout(toast._t)
+    toast._t = setTimeout(() => t.classList.remove('on'), 2600)
+  }
+
+  function chEstado(c) {
+    if (!activo) return '<span class="tag mute">Pausada</span>'
+    if (c.estado === 'enviado') return '<span class="tag ok">✓ Enviado 08:30</span>'
+    if (c.estado === 'enviando') return '<span class="tag sky">Enviando…</span>'
+    if (c.estado === 'sintel') return '<span class="tag err">Sin WhatsApp</span>'
+    if (c.estado === 'sindatos') return '<span class="tag mute">Sin ventas ayer</span>'
+    return '<span class="tag warn">Programado 08:30</span>'
+  }
+
+  function render() {
+    const tb = document.getElementById('filas')
+    tb.innerHTML = clientes.map((c) => {
+      const st = enviando.has(c.key) ? 'enviando' : c.estado
+      const cc = { ...c, estado: st }
+      const puede = Boolean(c.tel) && c.items.length > 0
+      return `<tr class="${sel===c.key?'sel':''}" data-key="${c.key}">
+        <td><div class="cli"><b>${c.nombre}</b><span><i class="code">${c.codigo}</i> · ${c.fantasia}</span></div></td>
+        <td><div class="cli"><b style="font-size:11.5px;color:#cbd5e1">${c.base}</b><span>${c.sucursal}</span></div></td>
+        <td><div class="cli"><b style="font-size:11.5px">${c.telTxt}</b><span>${c.contacto ? 'Contacto: '+c.contacto : 'Cargar contacto'}</span></div></td>
+        <td class="num muted">${fmt(c.vendido)} u.</td>
+        <td class="num" style="font-weight:800;color:var(--emerald)">${fmt(c.unidades)} u.</td>
+        <td class="num">${pesos(c.importe)}</td>
+        <td class="num">${c.urgentes ? '<span class="tag err" style="font-size:10px">'+c.urgentes+'</span>' : '<span class="muted">—</span>'}</td>
+        <td>${chEstado(cc)}</td>
+        <td style="text-align:right;white-space:nowrap">
+          <button class="btn sm" data-ver="${c.key}">Ver mensaje</button>
+          <button class="btn sm green" data-env="${c.key}" ${puede && activo ? '' : 'disabled'}>${c.estado === 'enviado' ? 'Reenviar' : 'Enviar ahora'}</button>
+        </td>
+      </tr>`
+    }).join('')
+
+    tb.querySelectorAll('tr[data-key]').forEach((tr) => {
+      tr.addEventListener('click', (e) => {
+        if (e.target.closest('button')) return
+        sel = tr.dataset.key
+        render()
+        pintarPreview()
+      })
+    })
+    tb.querySelectorAll('[data-ver]').forEach((b) => b.addEventListener('click', (e) => {
+      e.stopPropagation()
+      sel = b.dataset.ver
+      render(); pintarPreview()
+      document.getElementById('msgTexto').scrollIntoView({ behavior:'smooth', block:'center' })
+    }))
+    tb.querySelectorAll('[data-env]').forEach((b) => b.addEventListener('click', (e) => {
+      e.stopPropagation()
+      enviar(b.dataset.env)
+    }))
+
+    const conBase = clientes.filter((c) => c.tel).length
+    document.getElementById('kCli').textContent = String(clientes.length)
+    document.getElementById('kCliFoot').textContent = conBase + ' con base y WhatsApp'
+    const enviados = clientes.filter((c) => c.estado === 'enviado').length
+    const pend = clientes.filter((c) => c.tel && c.items.length && c.estado !== 'enviado').length
+    document.getElementById('kMsj').textContent = String(enviados + pend)
+    document.getElementById('kMsjFoot').textContent = enviados + ' enviado' + (enviados===1?'':'s') + ' · ' + pend + ' programado' + (pend===1?'':'s')
+    const uni = clientes.reduce((s, c) => s + (c.tel ? c.unidades : 0), 0)
+    const imp = clientes.reduce((s, c) => s + (c.tel ? c.importe : 0), 0)
+    document.getElementById('kUni').innerHTML = fmt(uni) + ' <small>u.</small>'
+    document.getElementById('kImp').textContent = pesos(imp) + ' · ' + clientes.filter(c=>c.items.length).length + ' franquicias'
+    document.getElementById('tabN').textContent = String(clientes.length)
+    document.getElementById('footTxt').textContent = clientes.filter(c=>c.items.length).length + ' franquicias con sugeridos'
+    document.getElementById('footVend').textContent = fmt(clientes.reduce((s,c)=>s+c.vendido,0)) + ' u.'
+    document.getElementById('footSug').textContent = fmt(clientes.reduce((s,c)=>s+c.unidades,0)) + ' u.'
+    document.getElementById('footImp').textContent = pesos(clientes.reduce((s,c)=>s+c.importe,0))
+    document.getElementById('avisoSin').style.display = clientes.some((c) => !c.tel) ? 'flex' : 'none'
+    document.getElementById('activoTxt').textContent = activo ? 'Activa' : 'Pausada'
+    document.getElementById('enviarTodo').disabled = !activo
+    pintarPreview()
+  }
+
+  function mensajeDe(c) {
+    if (!c.items.length) return 'Hoy no hay nada para reponer.\n\n(No se manda: sin ventas o sin sugeridos > 0)'
+    const tope = Math.max(5, Math.min(40, Number(document.getElementById('tope').value) || 15))
+    const urgs = c.items.filter(esUrgente).sort((a,b) => sugerido(b) - sugerido(a))
+    const resto = c.items.filter((i) => !esUrgente(i)).sort((a,b) => sugerido(b) - sugerido(a))
+    const siempreU = document.getElementById('urgentes').checked
+    let lista = []
+    if (siempreU) lista = [...urgs, ...resto]
+    else lista = [...c.items].sort((a,b) => sugerido(b) - sugerido(a))
+    const recorte = lista.slice(0, tope)
+    const quedan = lista.length - recorte.length
+    const lineas = recorte.map((i) => {
+      const u = esUrgente(i) ? '🔴' : '•'
+      const stock = i.stockCli === 0 ? 'no te queda' : 'te quedan ' + i.stockCli
+      return u + ' ' + i.art + ' · ' + i.color + '/' + i.talle + ' — vendiste ' + i.vendido + ', ' + stock + ' · reponer ' + sugerido(i)
+    })
+    const hola = c.contacto ? 'Hola ' + c.contacto + ' 👋' : 'Hola 👋'
+    const razon = c.nombre.replace(/\.\s*$/, '')
+    return hola + '\nTe armamos la reposición de hoy para *' + c.fantasia + '* · ' + razon + '.\n\n' +
+      'Según tu venta de ayer (*' + fecha(ayer) + '*' + '): *' + c.skus + ' artículos* para reponer.\n\n' +
+      lineas.join('\n') +
+      (quedan > 0 ? '\n… y ' + quedan + ' más en el link.' : '') +
+      '\n\nTotal: *' + c.unidades + ' u.* · *' + pesos(c.importe) + '*\n' +
+      'Elegí y confirmá acá 👉 https://hub-mito.vercel.app/p/3f9a7c2e\n' +
+      'Vale hasta mañana ' + document.getElementById('hora').value + '.'
+  }
+
+  function pintarPreview() {
+    const c = clientes.find((x) => x.key === sel) || clientes[0]
+    const txt = mensajeDe(c)
+    document.getElementById('prevSub').textContent = 'Para ' + c.fantasia + ' · ' + c.nombre + ' · ' + c.telTxt
+    document.getElementById('msgTexto').textContent = txt
+    document.getElementById('waNombre').textContent = c.fantasia
+    document.getElementById('waTel').textContent = c.telTxt
+    document.getElementById('waAvatar').textContent = (c.fantasia.match(/[A-Z]/g) || ['C']).slice(0,2).join('')
+    document.getElementById('waBubble').innerHTML = esc(txt) + '<span class="hora">' + document.getElementById('hora').value + ' <span class="tick">✓✓</span></span>'
+    document.getElementById('prevEstado').className = 'tag ' + (c.estado === 'enviado' ? 'ok' : c.estado === 'sintel' ? 'err' : 'warn')
+    document.getElementById('prevEstado').textContent = c.estado === 'enviado' ? 'Enviado 08:30' : c.estado === 'sintel' ? 'Sin WhatsApp' : 'Programado 08:30'
+    document.getElementById('enviarUno').disabled = !activo || !c.tel
+    document.getElementById('abrirWa').disabled = !c.tel
+    document.getElementById('copiar').disabled = false
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\*(.+?)\*/g,'<b>$1</b>')
+  }
+
+  function enviar(key) {
+    const c = clientes.find((x) => x.key === key)
+    if (!c || !c.tel) { toast('Ese cliente no tiene WhatsApp cargado.'); return }
+    if (!c.items.length) { toast('No hay nada para reponer: no se manda.'); return }
+    enviando.add(key); render()
+    setTimeout(() => {
+      enviando.delete(key)
+      c.estado = 'enviado'
+      HIST.unshift({ fecha: new Date(), cliente: c.fantasia, prop: 'P-014', skus: c.skus, uni: c.unidades, imp: c.importe, via:'Manual', res:'Enviada · esperando', resCls:'warn' })
+      render(); pintarHistorial()
+      toast('Mensaje enviado a ' + c.fantasia + ' (' + c.telTxt + ').')
+    }, 900)
+  }
+
+  function pintarHistorial() {
+    document.getElementById('histRows').innerHTML = HIST.map((h) => `<tr>
+      <td class="muted" style="white-space:nowrap">${fecha(h.fecha)}</td>
+      <td><b>${h.cliente}</b></td>
+      <td><span class="code">${h.prop}</span></td>
+      <td class="num">${fmt(h.skus)}</td>
+      <td class="num" style="font-weight:700">${fmt(h.uni)}</td>
+      <td class="num">${pesos(h.imp)}</td>
+      <td><span class="tag ${h.via==='Automático'?'sky':''}">${h.via}</span></td>
+      <td><span class="tag ${h.resCls}">${h.res}</span></td>
+    </tr>`).join('')
+  }
+
+  // ---------- interacciones ----------
+  document.querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach((x) => x.classList.remove('on'))
+    document.querySelectorAll('.tabpane').forEach((x) => x.classList.remove('on'))
+    b.classList.add('on')
+    document.getElementById('pane-' + b.dataset.tab).classList.add('on')
+  }))
+  document.querySelectorAll('.day').forEach((b) => b.addEventListener('click', () => b.classList.toggle('on')))
+  document.getElementById('activo').addEventListener('change', (e) => { activo = e.target.checked; render() })
+  document.getElementById('guardar').addEventListener('click', () => {
+    const h = document.getElementById('hora').value
+    const dias = [...document.querySelectorAll('.day.on')].map((b) => b.textContent).join(' ')
+    document.getElementById('prox').textContent = 'Próxima: ' + (dias ? 'días ' + dias : 'sin días') + ' a las ' + h
+    toast('Programación guardada: ' + h + ' · ' + (dias || 'sin días'))
+  })
+  document.getElementById('enviarTodo').addEventListener('click', () => {
+    const pend = clientes.filter((c) => c.tel && c.items.length && c.estado !== 'enviado')
+    if (!pend.length) { toast('No hay mensajes pendientes.'); return }
+    pend.forEach((c, i) => setTimeout(() => enviar(c.key), i * 450))
+  })
+  document.getElementById('copiar').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(document.getElementById('msgTexto').textContent); toast('Mensaje copiado.') }
+    catch { toast('No se pudo copiar (permiso del navegador).') }
+  })
+  document.getElementById('abrirWa').addEventListener('click', () => {
+    const c = clientes.find((x) => x.key === sel)
+    if (!c || !c.tel) return
+    window.open('https://wa.me/' + c.tel + '?text=' + encodeURIComponent(document.getElementById('msgTexto').textContent), '_blank')
+  })
+  document.getElementById('enviarUno').addEventListener('click', () => enviar(sel))
+  document.getElementById('verProp').addEventListener('click', () => {
+    toast('Abriría /p/3f9a7c2e (la propuesta P-014) en otra pestaña.')
+  })
+  document.getElementById('hora').addEventListener('change', pintarPreview)
+  document.getElementById('tope').addEventListener('change', pintarPreview)
+  document.getElementById('urgentes').addEventListener('change', pintarPreview)
+  document.querySelectorAll('.opt').forEach((o) => o.addEventListener('click', () => {
+    document.querySelectorAll('.opt').forEach((x) => x.classList.remove('on'))
+    o.classList.add('on')
+    toast(o.dataset.prov === 'cloud' ? 'Proveedor: WhatsApp Cloud API (Meta).' : 'Proveedor: puente en la PC (Baileys).')
+  }))
+  document.getElementById('probarWa').addEventListener('click', () => toast('Conexión OK: número verificado con Meta.'))
+  document.getElementById('probarMsj').addEventListener('click', () => toast('Mensaje de prueba enviado al +54 9 2901 55-0100.'))
+  document.getElementById('hoyRango').addEventListener('click', () => toast('Filtro: últimos 7 días.'))
+
+  render()
+  pintarHistorial()
+</script>
+</body>
+</html>
