@@ -1,8 +1,9 @@
 -- ============================================================================
 -- Pedidos de venta: estado de cada renglón por SKU (no por número de línea)
 --
--- Aplicar DESPUÉS de pedidos_completos.sql (esa es la versión viva de la función).
--- Idempotente.
+-- OJO: la versión viva ahora está en pedidos_venta_lineas_ok.sql
+-- (private.estado_lineas_pedido_base + correcciones del admin, también por SKU).
+-- Este archivo queda como historia del arreglo.
 --
 -- Problema (pedido 10124, cliente 01068, 13/10/2026): CJ264103 salía ROJO en
 -- Pedidos de venta aunque en el armado estaba hecho. Causa: el armado guarda la
