@@ -108,8 +108,10 @@ as $$
          c.linea IS NOT NULL,
          c.marcado_nombre
     FROM private.estado_lineas_pedido_base(p_codigo) b
-    FULL JOIN public.pedidos_venta_lineas_ok c
-      ON c.codigo = p_codigo AND c.linea = b.linea
+    -- El filtro por código va DENTRO de la subconsulta: en un FULL JOIN, puesto en el ON
+    -- no descarta nada y se colaban las correcciones de otros pedidos (por número de línea).
+    FULL JOIN (SELECT lo.linea, lo.marcado_nombre FROM public.pedidos_venta_lineas_ok lo WHERE lo.codigo = p_codigo) c
+      ON c.linea = b.linea
    WHERE private.es_admin() OR private.tengo_permiso('pedidos_venta.view');
 $$;
 
