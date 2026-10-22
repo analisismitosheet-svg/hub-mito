@@ -229,6 +229,18 @@ function servidorDe(alias) {
   return PARTE.test(alias) ? SERVIDORES.get(String(alias).toUpperCase()) ?? null : null
 }
 
+/**
+ * Reconecta el pool si quedó cerrado (el SQL se reinició, se cortó la red, etc.).
+ * Sin esto, una vez caída la conexión todas las consultas respondían
+ * "Connection is closed." hasta reiniciar el puente a mano.
+ */
+async function asegurarConexion(srv) {
+  const p = srv.pool
+  if (p.connected || p.connecting) return
+  await p.connect()
+  console.log(`[puente] Reconectado a SQL Server ${srv.alias}: ${srv.descripcion}`)
+}
+
 /** La base existe, está en línea y el usuario SQL tiene acceso. */
 async function baseAccesible(srv, base) {
   const { pool, sql } = srv
@@ -523,6 +535,7 @@ const server = http.createServer(async (req, res) => {
     if (body?.accion === 'bases' || body?.accion === 'objetos') {
       srvCat = servidorDe(body?.servidor)
       if (!srvCat) return enviar(res, 400, { error: `No existe el servidor ${body?.servidor}` })
+      await asegurarConexion(srvCat)
     }
     if (body?.accion === 'bases') {
       const r = await srvCat.pool.request().query(
@@ -561,6 +574,7 @@ const server = http.createServer(async (req, res) => {
     const mAlias = vista.match(/^([A-Za-z0-9_-]{1,128}):(.*)$/)
     const srv = servidorDe(mAlias ? mAlias[1] : '')
     if (!srv) return enviar(res, 400, { error: `No existe el servidor ${mAlias?.[1]}` })
+    await asegurarConexion(srv)
     const { pool, sql } = srv
     const nombre = mAlias ? mAlias[2] : vista
 
