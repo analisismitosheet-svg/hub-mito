@@ -40,7 +40,7 @@ interface Ubic {
   bateria: number | null
   recibido_at: string
 }
-interface BaseUbic { base_id: string; nombre: string | null; direccion: string | null; lat: number; lng: number; radio_m: number }
+interface BaseUbic { base_id: string; nombre: string | null; direccion: string | null; lat: number; lng: number; radio_m: number; es_local?: boolean }
 interface Lugar { display_name: string; lat: string; lon: string }
 interface Recorrido { vehiculo_id: string; base_id: string; dias: number[] | null; hora_limite: string | null }
 interface Control { vehiculo_id: string; base_id: string; hora_limite: string | null; paso_at: string | null }
@@ -178,6 +178,8 @@ function kmDelDia(us: Ubic[]): number {
   return total / 1000
 }
 const fmtKm = (km: number) => `${km.toLocaleString('es-AR', { maximumFractionDigits: km < 10 ? 1 : 0 })} km`
+const fmtBultosKm = (bultos: number, km: number) =>
+  km > 0 ? (bultos / km).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'
 
 function estadoDe(ultima: Ubic | undefined, esHoy: boolean): Estado {
   if (!ultima) return { label: 'Sin GPS', color: '#94a3b8' }
@@ -435,7 +437,7 @@ export default function TrackingTransporte() {
   }, [fecha, esHoy])
 
   const kpis = useMemo(() => {
-    let enRuta = 0, sinSenal = 0, aBordo = 0, entregados = 0, pcOk = 0, pcTotal = 0, pcMal = 0, km = 0
+    let enRuta = 0, sinSenal = 0, aBordo = 0, entregados = 0, pcOk = 0, pcTotal = 0, pcMal = 0, km = 0, bultos = 0
     for (const mv of moviles) {
       const us = mv.vehiculo ? ubicsDe.get(mv.vehiculo.id) : undefined
       km += us ? kmDelDia(us) : 0
@@ -444,17 +446,29 @@ export default function TrackingTransporte() {
       if (e === 'Sin señal') sinSenal++
       const r = resumen.get(mv.key)
       aBordo += r?.aBordo ?? 0
-      entregados += r ? new Set(r.entregas.map((x) => x.bulto_id)).size : 0
+      const ent = r ? new Set(r.entregas.map((x) => x.bulto_id)).size : 0
+      entregados += ent
+      bultos += ent + (r?.aBordo ?? 0)
     }
     for (const c of controles) {
       pcTotal++
       if (c.paso_at) pcOk++
       else if (vencido(c)) pcMal++
     }
-    return { enRuta, sinSenal, aBordo, entregados, pcOk, pcTotal, pcMal, km }
+    return { enRuta, sinSenal, aBordo, entregados, pcOk, pcTotal, pcMal, km, bultos }
   }, [moviles, ubicsDe, resumen, controles, vencido, esHoy])
 
   const actual = moviles.find((m) => m.key === sel) ?? null
+
+  // Bultos movidos y bultos/km del vehículo elegido (para el título y la pastilla)
+  const actualBultos = useMemo(() => {
+    if (!actual) return { ent: 0, aBordo: 0, tot: 0, km: 0 }
+    const r = resumen.get(actual.key)
+    const ent = r ? new Set(r.entregas.map((x) => x.bulto_id)).size : 0
+    const aBordo = r?.aBordo ?? 0
+    const km = actual.vehiculo ? kmDelDia(ubicsDe.get(actual.vehiculo.id) ?? []) : 0
+    return { ent, aBordo, tot: ent + aBordo, km }
+  }, [actual, resumen, ubicsDe])
 
   // ----- línea del día del seleccionado -----
   const dia = useMemo(() => {
@@ -502,14 +516,17 @@ export default function TrackingTransporte() {
   const divMapa = useRef<HTMLDivElement>(null)
   const mapa = useRef<L.Map | null>(null)
   const capa = useRef<L.LayerGroup | null>(null)
-  // Ubicar un local: se elige en la pestaña Locales y se toca el mapa
+  // Ubicar un local o una ubicación extra: se elige en la pestaña y se toca el mapa
   const [modo, setModo] = useState<string | null>(null)
   const modoRef = useRef(modo)
   modoRef.current = modo
+  const basesUbicRef = useRef(basesUbic)
+  basesUbicRef.current = basesUbic
   useEffect(() => {
     if (modo) divMapa.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }, [modo])
   const guardarBaseRef = useRef<(base_id: string, lat: number, lng: number) => Promise<void>>(async () => {})
+  const guardarExtraRef = useRef<(base_id: string, nombre: string, lat: number, lng: number, radio_m: number) => Promise<void>>(async () => {})
 
   useEffect(() => {
     if (!divMapa.current || mapa.current) return
@@ -518,7 +535,11 @@ export default function TrackingTransporte() {
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(m)
     capa.current = L.layerGroup().addTo(m)
     m.on('click', (e: L.LeafletMouseEvent) => {
-      if (modoRef.current) void guardarBaseRef.current(modoRef.current, e.latlng.lat, e.latlng.lng)
+      if (modoRef.current) {
+        const extra = basesUbicRef.current.find((b) => b.base_id === modoRef.current && (b as BaseUbic).es_local === false)
+        if (extra) void guardarExtraRef.current(extra.base_id, extra.nombre ?? extra.base_id, e.latlng.lat, e.latlng.lng, extra.radio_m)
+        else void guardarBaseRef.current(modoRef.current, e.latlng.lat, e.latlng.lng)
+      }
     })
     mapa.current = m
     // Si el contenedor todavía no tenía su ancho final, Leaflet deja franjas grises
@@ -565,6 +586,16 @@ export default function TrackingTransporte() {
       const c = ctl.get(b.base_id)
       const nombre = b.nombre ?? nombresBase.get(b.base_id) ?? ''
       let estado = ''
+      if ((b as BaseUbic).es_local === false) {
+        // Ubicación extra: se dibuja con 📌 y radio punteado
+        L.circle([b.lat, b.lng], { radius: b.radio_m, color: '#38bdf8', weight: 1.5, dashArray: '4 4', fillOpacity: 0.08 }).addTo(g)
+        L.marker([b.lat, b.lng], {
+          icon: L.divIcon({ html: `<div style="font-size:18px;line-height:20px">📌</div>`, className: '', iconSize: [20, 20], iconAnchor: [10, 10] }),
+        })
+          .bindTooltip(`📌 ${b.base_id} · ${nombre || b.base_id}${b.direccion ? `<br>${b.direccion.replace(/</g, '&lt;')}` : ''}<br>radio ${b.radio_m} m`)
+          .addTo(g)
+        continue
+      }
       if (c) {
         const col = c.paso_at ? '#22c55e' : vencido(c) ? '#ef4444' : '#f59e0b'
         estado = c.paso_at ? ` · ✓ pasó ${hora(c.paso_at)}` : vencido(c) ? ' · ⚠ no pasó' : ` · pendiente${c.hora_limite ? ` (hasta ${c.hora_limite.slice(0, 5)})` : ''}`
@@ -592,8 +623,11 @@ export default function TrackingTransporte() {
       // la última con buena precisión; si no hay, la última que llegó
       const ult = [...us].reverse().find((u) => (u.precision_m ?? 0) <= 100) ?? us[us.length - 1]
       const est = estadoDe(us[us.length - 1], esHoy)
+      const r = resumen.get(mv.key)
+      const ent = r ? new Set(r.entregas.map((x) => x.bulto_id)).size : 0
+      const tot = ent + (r?.aBordo ?? 0)
       L.circleMarker([ult.lat, ult.lng], { radius: esSel ? 11 : 9, color: '#fff', weight: 2, fillColor: mv.color, fillOpacity: 1 })
-        .bindTooltip(`🚚 ${mv.nombre} · ${est.label} · ${esHoy ? hace(ult.at) : hora(ult.at)}`, { permanent: true, direction: 'top', offset: [0, -10] })
+        .bindTooltip(`🚚 ${mv.nombre} · 📦 ${tot} (${fmtBultosKm(tot, us ? kmDelDia(us) : 0)}/km) · ${est.label} · ${esHoy ? hace(ult.at) : hora(ult.at)}`, { permanent: true, direction: 'top', offset: [0, -10] })
         .on('click', () => setSel(mv.key))
         .addTo(g)
       const punto = L.latLng(ult.lat, ult.lng)
@@ -617,6 +651,17 @@ export default function TrackingTransporte() {
     void cargarHub(true)
   }
   guardarBaseRef.current = guardarBase
+  guardarExtraRef.current = guardarUbicacionExtra
+
+  async function guardarUbicacionExtra(base_id: string, nombre: string, lat: number, lng: number, radio_m: number) {
+    const { error } = await supabase.from('tracking_bases').upsert(
+      { base_id, nombre, lat, lng, radio_m, es_local: false },
+      { onConflict: 'base_id' },
+    )
+    if (error) return alert(error.message)
+    setModo(null)
+    void cargarHub(true)
+  }
 
   return (
     <Layout>
@@ -647,10 +692,12 @@ export default function TrackingTransporte() {
         </div>
       )}
 
-      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-8">
         <Kpi label={esHoy ? 'Con señal' : 'Con GPS'} valor={kpis.enRuta} sub={esHoy ? 'ubicación en los últimos 15 min' : `el ${fmtFecha(fecha)}`} color="#22c55e" />
+        <Kpi label="Bultos movidos" valor={kpis.bultos} sub={`${kpis.entregados} entregados · ${kpis.aBordo} a bordo`} color="#38bdf8" />
         <Kpi label="Bultos a bordo" valor={kpis.aBordo} sub="cargados y sin recibir" color="#38bdf8" />
         <Kpi label="Entregados" valor={kpis.entregados} sub="recibidos en el local" color="#8b5cf6" />
+        <Kpi label="Bultos / km" valor={fmtBultosKm(kpis.bultos, kpis.km)} sub="bultos por km hoy" color="#0d9488" />
         <Kpi label="Sin señal" valor={kpis.sinSenal} sub="más de 15 min sin ubicación" color="#ef4444" />
         <Kpi label="Km recorridos" valor={fmtKm(kpis.km)} sub={`entre todos ${esHoy ? 'hoy' : `el ${fmtFecha(fecha)}`} · ver estadísticas ›`} color="#0d9488"
           onClick={() => navigate('/administradores/tracking/km')} />
@@ -687,6 +734,12 @@ export default function TrackingTransporte() {
                       <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: mv.color }} />
                     )}
                     <span className="truncate">{mv.nombre}</span>
+                    {tot > 0 && (
+                      <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                        <span className="rounded-md bg-sky-500/15 px-1.5 py-0.5 text-[11px] font-bold text-sky-400">📦 {tot}</span>
+                        <span className="rounded-md bg-teal-500/15 px-1.5 py-0.5 text-[11px] font-bold text-teal-400">⚡ {fmtBultosKm(tot, us ? kmDelDia(us) : 0)}</span>
+                      </span>
+                    )}
                   </div>
                   <div className="mt-1 text-xs">
                     <b style={{ color: est.color }}>● {est.label}</b>
@@ -699,7 +752,8 @@ export default function TrackingTransporte() {
                     </div>
                   )}
                   <div className="mt-1 text-[11px] text-sub">
-                    {us && us.length > 1 && <>🛣️ {fmtKm(kmDelDia(us))} · </>}{ent} entregados · {r?.aBordo ?? 0} a bordo
+                    {us && us.length > 1 && <>🛣️ {fmtKm(kmDelDia(us))} · </>}
+                    📦 {tot} movidos ({ent} entregados · {r?.aBordo ?? 0} a bordo) · <b className="text-teal-400">{fmtBultosKm(tot, us ? kmDelDia(us) : 0)} bultos/km</b>
                     {ps.length > 0 && <> · 🏪 {psOk}/{ps.length} obligatorios{psMal ? <b className="text-red-500"> · {psMal} ⚠</b> : ''}</>}
                   </div>
                   {r && r.destinos.size > 0 && (
@@ -761,6 +815,13 @@ export default function TrackingTransporte() {
       <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
         <section className="rounded-2xl border border-line bg-surface p-4">
           <h2 className="mb-3 font-semibold text-ink">{actual ? `El día de ${actual.nombre}` : 'El día'} · {fmtFecha(fecha)}</h2>
+          {actual && actualBultos.tot > 0 && (
+            <div className="mb-3 inline-flex flex-wrap items-center gap-2 rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-1.5 text-sm font-semibold text-sky-300">
+              📦 {actualBultos.tot} bultos movidos
+              <span className="text-sky-400/80">({actualBultos.ent} entregados · {actualBultos.aBordo} a bordo)</span>
+              <span className="text-teal-400">· ⚡ {fmtBultosKm(actualBultos.tot, actualBultos.km)} bultos/km</span>
+            </div>
+          )}
           {!dia.length && <p className="text-sm text-sub">Sin movimientos este día.</p>}
           <ol className="relative ml-2 border-l-2 border-line pl-4">
             {porHora.map((g) => {
@@ -849,7 +910,7 @@ function Gestion(props: {
   recargar: () => void
 }) {
   const { vehiculos, recorridos, conAvisos, choferes, bases, basesUbic, setModo, vehSel, centrar, recargar } = props
-  const [tab, setTab] = useState<'recorridos' | 'vehiculos' | 'locales'>('recorridos')
+  const [tab, setTab] = useState<'recorridos' | 'vehiculos' | 'locales' | 'extras'>('recorridos')
   const [veh, setVeh] = useState({ nombre: '', chofer: '', disp: '' })
   const [verDisp, setVerDisp] = useState<string | null>(null)
   const [busca, setBusca] = useState('')
@@ -980,6 +1041,7 @@ function Gestion(props: {
         <button className={tabCls('recorridos')} onClick={() => setTab('recorridos')}>🏪 Locales obligatorios</button>
         <button className={tabCls('vehiculos')} onClick={() => setTab('vehiculos')}>🚚 Vehículos</button>
         <button className={tabCls('locales')} onClick={() => setTab('locales')}>📍 Ubicar locales</button>
+        <button className={tabCls('extras')} onClick={() => setTab('extras')}>📌 Ubicaciones extras</button>
       </div>
 
       {tab === 'recorridos' && (
@@ -1146,6 +1208,41 @@ function Gestion(props: {
         </div>
       )}
 
+      {tab === 'extras' && (
+        <div>
+          <p className="mb-2 text-xs text-sub">
+            Puntos que no son locales de la app Transporte (proveedores, correo, taller, banco, depósito externo). Se ven en el mapa con 📌, se pueden marcar en el recorrido y no cuentan como parada desconocida.
+          </p>
+          <div className="mb-3 space-y-2 rounded-xl border border-line p-3">
+            <input className={inp} placeholder="Nombre (ej. Proveedor Talleres, Correo Andreani, Taller)" />
+            <div className="flex gap-2">
+              <input className={inp} placeholder="Dirección (ej. Av. Colón 2100, Córdoba) o usá «Elegir en mapa»" />
+              <input type="number" min={20} max={5000} defaultValue={150} className="h-9 w-16 rounded-lg border border-line bg-surface px-1 text-xs text-ink" aria-label="Radio en metros" />
+            </div>
+            <div className="flex gap-2">
+              <button className="btn-press inline-flex h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white">🔍 Buscar dirección y guardar</button>
+              <button onClick={() => setModo(null)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line px-3 text-xs font-semibold text-sub hover:text-ink">📍 Elegir en el mapa</button>
+            </div>
+          </div>
+          <ul className="max-h-[480px] divide-y divide-line overflow-y-auto text-sm">
+            {(basesUbic.filter((b) => (b as BaseUbic).es_local === false)).length
+              ? basesUbic.filter((b) => (b as BaseUbic).es_local === false).map((b) => (
+                <li key={b.base_id} className="py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-semibold text-ink">📌 {b.base_id} <span className="text-xs font-normal text-sub">{b.nombre}</span></div>
+                      <div className="truncate text-xs text-sub">{b.direccion ?? 'ubicado en el mapa'} · {b.radio_m} m</div>
+                    </div>
+                    <div className="flex shrink-0 gap-2 text-xs">
+                      <button onClick={() => setModo(b.base_id)} className="inline-flex items-center gap-0.5 rounded-lg border border-line px-2 py-1 text-xs font-semibold text-sub hover:text-ink"><MapPin size={12} /> Mapa</button>
+                    </div>
+                  </div>
+                </li>
+              ))
+              : <li className="py-2 text-xs text-sub">Todavía no hay ubicaciones extras. Cargalas acá arriba.</li>}
+          </ul>
+        </div>
+      )}
       {tab === 'locales' && (
         <div>
           <p className="mb-2 text-xs text-sub">

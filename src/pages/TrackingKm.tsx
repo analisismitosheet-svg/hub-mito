@@ -18,8 +18,9 @@ import { supabase as sb } from '@/lib/supabase'
 // La pantalla solo se abre logueado: Supabase siempre está configurado acá
 const supabase = sb!
 
-interface Vehiculo { id: string; nombre: string; color: string; usuario_transporte_nombre: string | null }
+interface Vehiculo { id: string; nombre: string; color: string; usuario_transporte_nombre: string | null; usuario_transporte_id: string | null }
 interface FilaKm { vehiculo_id: string; dia: string; km: number; minutos_mov: number; primera: string; ultima: string }
+interface FilaBulto { chofer_id: string; dia: string; bultos: number | string }
 
 const TOOLTIP = {
   contentStyle: {
@@ -34,6 +35,8 @@ const TOOLTIP = {
 
 const nf = (n: number, dec = 0) => n.toLocaleString('es-AR', { minimumFractionDigits: dec, maximumFractionDigits: dec })
 const fmtKm = (n: number) => `${nf(n, n < 10 ? 1 : 0)} km`
+const fmtBultosKm = (bultos: number, km: number) =>
+  km > 0 ? (bultos / km).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'
 const fmtFecha = (s: string) => { const [y, m, d] = s.split('-'); return `${d}/${m}/${y}` }
 const fmtCorta = (s: string) => { const [, m, d] = s.split('-'); return `${d}/${m}` }
 const DIA_SEM = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb']
@@ -55,8 +58,24 @@ export default function TrackingKm() {
   const [vehiculos, setVehiculos] = useState<Vehiculo[]>([])
   const [filas, setFilas] = useState<FilaKm[]>([])
   const [anterior, setAnterior] = useState<FilaKm[]>([])
+  const [bultos, setBultos] = useState<FilaBulto[]>([])
+  const [bultosAnt, setBultosAnt] = useState<FilaBulto[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  const leerBultos = useCallback(async (desde: string, hasta: string): Promise<FilaBulto[]> => {
+    try {
+      const { data } = await supabase.auth.getSession()
+      const r = await fetch(`/api/tracking?vista=bultos&desde=${desde}&hasta=${hasta}`, {
+        headers: { Authorization: `Bearer ${data.session?.access_token ?? ''}` },
+      })
+      if (!r.ok) return []
+      const body = await r.json().catch(() => ({}))
+      return (body.filas ?? []) as FilaBulto[]
+    } catch {
+      return []
+    }
+  }, [])
 
   const cargar = useCallback(async () => {
     setCargando(true)
@@ -64,23 +83,42 @@ export default function TrackingKm() {
     const largo = diasEntre(periodo.desde, periodo.hasta)
     const antHasta = sumarDias(periodo.desde, -1)
     const antDesde = sumarDias(antHasta, -(largo - 1))
-    const [v, k, a] = await Promise.all([
-      supabase.from('tracking_vehiculos').select('id,nombre,color,usuario_transporte_nombre').order('nombre'),
+    const [v, k, a, bcur, bant] = await Promise.all([
+      supabase.from('tracking_vehiculos').select('id,nombre,color,usuario_transporte_nombre,usuario_transporte_id').order('nombre'),
       supabase.rpc('tracking_km', { p_desde: periodo.desde, p_hasta: periodo.hasta }),
       supabase.rpc('tracking_km', { p_desde: antDesde, p_hasta: antHasta }),
+      leerBultos(periodo.desde, periodo.hasta),
+      leerBultos(antDesde, antHasta),
     ])
     if (k.error) setError(k.error.message)
     setVehiculos((v.data ?? []) as Vehiculo[])
     const num = (x: FilaKm) => ({ ...x, km: Number(x.km), minutos_mov: Number(x.minutos_mov) })
     setFilas(((k.data ?? []) as FilaKm[]).map(num))
     setAnterior(((a.data ?? []) as FilaKm[]).map(num))
+    setBultos(bcur)
+    setBultosAnt(bant)
     setCargando(false)
-  }, [periodo])
+  }, [periodo, leerBultos])
 
   useEffect(() => { void cargar() }, [cargar])
 
   const nombre = useCallback((id: string) => vehiculos.find((v) => v.id === id)?.nombre ?? '?', [vehiculos])
   const conKm = useMemo(() => vehiculos.filter((v) => filas.some((f) => f.vehiculo_id === v.id && f.km > 0)), [vehiculos, filas])
+
+  // Bultos por vehículo (del chofer vinculado, por día)
+  const bultosDe = useMemo(() => {
+    const m = new Map<string, { bultos: number; bultosAnt: number; dias: number }>()
+    for (const v of vehiculos) {
+      const cur = bultos.filter((f) => f.chofer_id === v.usuario_transporte_id)
+      const ant = bultosAnt.filter((f) => f.chofer_id === v.usuario_transporte_id)
+      m.set(v.id, {
+        bultos: cur.reduce((s, f) => s + Number(f.bultos), 0),
+        bultosAnt: ant.reduce((s, f) => s + Number(f.bultos), 0),
+        dias: cur.filter((f) => Number(f.bultos) > 0).length,
+      })
+    }
+    return m
+  }, [vehiculos, bultos, bultosAnt])
 
   // Totales
   const tot = useMemo(() => {
@@ -91,8 +129,10 @@ export default function TrackingKm() {
     const porVeh = new Map<string, number>()
     for (const f of filas) porVeh.set(f.vehiculo_id, (porVeh.get(f.vehiculo_id) ?? 0) + f.km)
     const top = [...porVeh].sort((a, b) => b[1] - a[1])[0]
-    return { km, kmAnt, mov, diasVeh, top }
-  }, [filas, anterior])
+    const bultosTot = [...bultosDe.values()].reduce((s, b) => s + b.bultos, 0)
+    const bultosAntTot = [...bultosDe.values()].reduce((s, b) => s + b.bultosAnt, 0)
+    return { km, kmAnt, mov, diasVeh, top, bultos: bultosTot, bultosAnt: bultosAntTot }
+  }, [filas, anterior, bultosDe])
 
   // Por vehículo
   const porVehiculo = useMemo(() => vehiculos.map((v) => {
@@ -101,8 +141,9 @@ export default function TrackingKm() {
     const kmAnt = anterior.filter((f) => f.vehiculo_id === v.id).reduce((s, f) => s + f.km, 0)
     const dias = fs.filter((f) => f.km >= 1)
     const max = [...fs].sort((a, b) => b.km - a.km)[0]
-    return { v, km, kmAnt, dias: dias.length, prom: dias.length ? km / dias.length : 0, max, mov: fs.reduce((s, f) => s + f.minutos_mov, 0) }
-  }).filter((x) => x.km > 0 || x.kmAnt > 0).sort((a, b) => b.km - a.km), [vehiculos, filas, anterior])
+    const b = bultosDe.get(v.id) ?? { bultos: 0, bultosAnt: 0, dias: 0 }
+    return { v, km, kmAnt, dias: dias.length, prom: dias.length ? km / dias.length : 0, max, mov: fs.reduce((s, f) => s + f.minutos_mov, 0), bultos: b.bultos, bultosAnt: b.bultosAnt, bultosDias: b.dias }
+  }).filter((x) => x.km > 0 || x.kmAnt > 0 || x.bultos > 0 || x.bultosAnt > 0).sort((a, b) => b.km - a.km), [vehiculos, filas, anterior, bultosDe])
 
   // Gráfico: por día, o por semana si el rango es largo
   const porSemana = diasEntre(periodo.desde, periodo.hasta) > 62
@@ -128,12 +169,18 @@ export default function TrackingKm() {
   // Tabla por día (solo días con algún km)
   const dias = useMemo(() => [...new Set(filas.filter((f) => f.km > 0).map((f) => f.dia))].sort().reverse(), [filas])
   const kmDe = (veh: string, dia: string) => filas.find((f) => f.vehiculo_id === veh && f.dia === dia)?.km ?? 0
+  const bultosPorDia = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const f of bultos) m.set(f.dia, (m.get(f.dia) ?? 0) + Number(f.bultos))
+    return m
+  }, [bultos])
 
   async function exportar() {
     const XLSX = await import('xlsx')
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(porVehiculo.map((x) => ({
       Vehículo: x.v.nombre, Chofer: x.v.usuario_transporte_nombre ?? '', Km: Number(x.km.toFixed(1)),
+      Bultos: x.bultos, 'Bultos/km': x.km > 0 ? Number((x.bultos / x.km).toFixed(2)) : '', 'Bultos/día': x.bultosDias ? Number((x.bultos / x.bultosDias).toFixed(1)) : '',
       'Días con recorrido': x.dias, 'Km por día': Number(x.prom.toFixed(1)),
       'Día con más km': x.max ? fmtFecha(x.max.dia) : '', 'Km ese día': x.max ? Number(x.max.km.toFixed(1)) : '',
       'Tiempo andando': hm(x.mov), 'Km período anterior': Number(x.kmAnt.toFixed(1)),
@@ -159,7 +206,7 @@ export default function TrackingKm() {
       <header className="mb-4 mt-2 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-semibold text-ink">Km recorridos</h1>
-          <p className="text-sm text-sub">Kilómetros de cada vehículo según el GPS (Traccar), por día, semana o mes.</p>
+          <p className="text-sm text-sub">Kilómetros de cada vehículo según el GPS (Traccar), bultos movidos y relación bultos/km, por día, semana o mes.</p>
         </div>
         <button onClick={() => void exportar()} disabled={!filas.length}
           className="btn-press inline-flex h-10 items-center gap-1.5 rounded-xl border border-line bg-surface px-4 text-sm font-semibold text-ink disabled:opacity-50">
@@ -177,10 +224,13 @@ export default function TrackingKm() {
         <div className="flex items-center gap-2 p-6 text-sm text-sub"><Loader2 size={16} className="animate-spin" /> Calculando km…</div>
       ) : (
         <>
-          <div className="mb-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
+          <div className="mb-4 grid grid-cols-2 gap-2 lg:grid-cols-6">
             <Kpi label="Km totales" valor={fmtKm(tot.km)} color="#0d9488"
               sub={varTot ? <span className={varTot.p >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500'}>{varTot.texto} vs período anterior ({fmtKm(tot.kmAnt)})</span> : etiquetaPeriodo(periodo)} />
             <Kpi label="Km por día" valor={tot.diasVeh ? fmtKm(tot.km / tot.diasVeh) : '—'} color="#2563eb" sub="promedio por vehículo en los días que anduvo" />
+            <Kpi label="Bultos movidos" valor={nf(tot.bultos)} color="#38bdf8"
+              sub={variacion(tot.bultos, tot.bultosAnt) ? <span className="text-green-600 dark:text-green-400">{variacion(tot.bultos, tot.bultosAnt)!.texto} vs período anterior ({nf(tot.bultosAnt)})</span> : `bultos en ${etiquetaPeriodo(periodo)}`} />
+            <Kpi label="Bultos / km" valor={fmtBultosKm(tot.bultos, tot.km)} color="#0d9488" sub={`${nf(tot.bultos)} bultos en ${fmtKm(tot.km)}`} />
             <Kpi label="Tiempo andando" valor={hm(tot.mov)} color="#7c3aed" sub={tot.mov ? `${nf(tot.km / (tot.mov / 60))} km/h de promedio` : 'en movimiento'} />
             <Kpi label="El que más anduvo" valor={tot.top ? nombre(tot.top[0]) : '—'} color="#ea580c" sub={tot.top ? fmtKm(tot.top[1]) : 'sin recorridos'} chico />
           </div>
@@ -211,11 +261,14 @@ export default function TrackingKm() {
 
               <section className="mb-4 overflow-x-auto rounded-2xl border border-line bg-surface p-4">
                 <h2 className="mb-2 font-semibold text-ink">Por vehículo</h2>
-                <table className="w-full min-w-[640px] text-sm">
+                <table className="w-full min-w-[760px] text-sm">
                   <thead>
                     <tr className="border-b border-line text-left text-xs text-sub">
                       <th className="py-2">Vehículo</th>
                       <th className="py-2 text-right">Km</th>
+                      <th className="py-2 text-right">📦 Bultos</th>
+                      <th className="py-2 text-right">⚡ Bultos/km</th>
+                      <th className="py-2 text-right">Bultos/día</th>
                       <th className="py-2 text-right">Días</th>
                       <th className="py-2 text-right">Km/día</th>
                       <th className="py-2 text-right">Día con más km</th>
@@ -235,6 +288,9 @@ export default function TrackingKm() {
                             {x.v.usuario_transporte_nombre && <div className="ml-4 text-[11px] text-sub">{x.v.usuario_transporte_nombre}</div>}
                           </td>
                           <td className="py-2 text-right font-semibold text-ink">{fmtKm(x.km)}</td>
+                          <td className="py-2 text-right text-ink">{x.bultos || '—'}</td>
+                          <td className="py-2 text-right font-semibold text-teal-500">{fmtBultosKm(x.bultos, x.km)}</td>
+                          <td className="py-2 text-right text-ink">{x.bultosDias ? nf(x.bultos / x.bultosDias, 1) : '—'}</td>
                           <td className="py-2 text-right text-ink">{x.dias}</td>
                           <td className="py-2 text-right text-ink">{x.dias ? fmtKm(x.prom) : '—'}</td>
                           <td className="py-2 text-right text-sub">{x.max && x.max.km > 0 ? `${fmtCorta(x.max.dia)} · ${fmtKm(x.max.km)}` : '—'}</td>
@@ -255,17 +311,25 @@ export default function TrackingKm() {
                       <th className="py-2">Fecha</th>
                       {conKm.map((v) => <th key={v.id} className="py-2 text-right" style={{ color: v.color }}>{v.nombre}</th>)}
                       <th className="py-2 text-right">Total</th>
+                      <th className="py-2 text-right">📦 Bultos</th>
+                      <th className="py-2 text-right">⚡ Bultos/km</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {dias.map((d) => (
-                      <tr key={d} onClick={() => navigate(`/administradores/tracking?fecha=${d}`)}
-                        className="cursor-pointer border-b border-line/60 last:border-0 hover:bg-surface2" title="Ver ese día en el mapa">
-                        <td className="py-2 text-ink">{diaSemana(d)} {fmtFecha(d)}</td>
-                        {conKm.map((v) => <td key={v.id} className="py-2 text-right text-ink">{kmDe(v.id, d) > 0 ? fmtKm(kmDe(v.id, d)) : '—'}</td>)}
-                        <td className="py-2 text-right font-semibold text-ink">{fmtKm(conKm.reduce((s, v) => s + kmDe(v.id, d), 0))}</td>
-                      </tr>
-                    ))}
+                    {dias.map((d) => {
+                      const kmTot = conKm.reduce((s, v) => s + kmDe(v.id, d), 0)
+                      const bultosDia = bultosPorDia.get(d) ?? 0
+                      return (
+                        <tr key={d} onClick={() => navigate(`/administradores/tracking?fecha=${d}`)}
+                          className="cursor-pointer border-b border-line/60 last:border-0 hover:bg-surface2" title="Ver ese día en el mapa">
+                          <td className="py-2 text-ink">{diaSemana(d)} {fmtFecha(d)}</td>
+                          {conKm.map((v) => <td key={v.id} className="py-2 text-right text-ink">{kmDe(v.id, d) > 0 ? fmtKm(kmDe(v.id, d)) : '—'}</td>)}
+                          <td className="py-2 text-right font-semibold text-ink">{fmtKm(kmTot)}</td>
+                          <td className="py-2 text-right text-ink">{bultosDia || '—'}</td>
+                          <td className="py-2 text-right font-semibold text-teal-500">{fmtBultosKm(bultosDia, kmTot)}</td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </section>

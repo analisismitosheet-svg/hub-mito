@@ -273,6 +273,45 @@ async function vistaHub(req: Req, res: Res) {
   })
 }
 
+/** Bultos únicos cargados por chofer y día en un rango (para Estadísticas de Km). */
+async function vistaBultos(req: Req, res: Res) {
+  if (!(await autorizado(tokenDe(cabecera(req, 'authorization')), ['tracking.view', 'tracking.gestionar']))) {
+    return res.status(401).json({ error: 'No autorizado' })
+  }
+  const hoy = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10)
+  const desdeStr = /^\d{4}-\d{2}-\d{2}$/.test(q(req, 'desde')) ? q(req, 'desde') : hoy
+  const hastaStr = /^\d{4}-\d{2}-\d{2}$/.test(q(req, 'hasta')) ? q(req, 'hasta') : desdeStr
+  const desde = inicioDia(desdeStr)
+  const hasta = new Date(inicioDia(hastaStr).getTime() + 86_400_000)
+  const t = transporte()
+
+  const porChoferDia = new Map<string, Set<string>>()
+  for (let offset = 0; offset < 20_000; offset += 1000) {
+    const lote = await getJson<{ bulto_id: string; usuario_registro_id: string | null; registrado_en: string }[]>(
+      `${t.url}/rest/v1/bultos_historial?select=bulto_id,usuario_registro_id,registrado_en` +
+        `&estado=eq.EN_CAMINO&usuario_registro_id=not.is.null` +
+        `&registrado_en=gte.${desde.toISOString()}&registrado_en=lt.${hasta.toISOString()}` +
+        `&order=registrado_en,bulto_id&limit=1000&offset=${offset}`,
+      t.headers,
+    )
+    for (const r of lote) {
+      if (!r.usuario_registro_id || !r.bulto_id) continue
+      const dia = new Date(new Date(r.registrado_en).getTime() - 3 * 3600_000).toISOString().slice(0, 10)
+      const k = `${r.usuario_registro_id}|${dia}`
+      let s = porChoferDia.get(k)
+      if (!s) { s = new Set(); porChoferDia.set(k, s) }
+      s.add(r.bulto_id)
+    }
+    if (lote.length < 1000) break
+  }
+
+  const filas = [...porChoferDia.entries()].map(([k, s]) => {
+    const [chofer_id, dia] = k.split('|')
+    return { chofer_id, dia, bultos: s.size }
+  })
+  return res.status(200).json({ ok: true, filas })
+}
+
 // ---------- 3) Chofer (app Transporte) ----------
 
 /** Usuario de Transporte del JWT (null si no es válido). */
@@ -411,6 +450,7 @@ export default async function handler(req: Req, res: Res) {
 
   try {
     if (vista === 'hub' && req.method === 'GET') return await vistaHub(req, res)
+    if (vista === 'bultos' && req.method === 'GET') return await vistaBultos(req, res)
     if (vista === 'chofer' && req.method === 'GET') return await vistaChofer(req, res)
     if (vista === 'push' && req.method === 'POST') return await vistaPush(req, res)
     if (vista === 'alertas') return await vistaAlertas(res)
