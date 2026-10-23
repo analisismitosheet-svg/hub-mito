@@ -1,30 +1,33 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Check, Loader2, Plus, Search } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { ArrowLeft, Check, Loader2, Phone, Plus, Search, Settings2 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
-import FranquiciasTabs from '@/components/FranquiciasTabs'
 import {
-  asignarBase,
   cargarClientes,
   cargarMapaFranquicias,
   claveFranquicia,
   crearBase,
+  guardarAsignacion,
+  guardarTelefonoCliente,
   type ClienteFranquicia,
   type MapaFranquicias,
 } from '@/lib/franquicias'
+import { normalizarTelefono, telefonoValido } from '@/lib/informes'
 
 /* ------------------------------------------------------------------ */
-/*  Franquicias · Clientes y bases                                    */
-/*  Cada cliente apunta a una base de Dragon (y a la sucursal de la   */
-/*  que se lee su stock). Lo usan la reposición y el pedido de        */
-/*  calzado. Datos: sql/franquicias_clientes_bases.sql.               */
+/*  Sistemas · Franquicias                                             */
+/*  Cada cliente apunta a una base de Dragon (y a la sucursal de la    */
+/*  que se lee su stock) y tiene el teléfono de WhatsApp que usa la    */
+/*  propuesta. Datos: sql/franquicias_telefono_cliente.sql.            */
 /* ------------------------------------------------------------------ */
 
 const fmt = (n: number) => new Intl.NumberFormat('es-AR').format(n)
 
-export default function MayoristaFranquiciasClientes() {
-  const [mapa, setMapa] = useState<MapaFranquicias>({ bases: [], clientes: {} })
+export default function SistemasFranquicias() {
+  const [mapa, setMapa] = useState<MapaFranquicias>({ bases: [], clientes: {}, telefonos: {} })
   const [clientes, setClientes] = useState<ClienteFranquicia[]>([])
+  const [telDraft, setTelDraft] = useState<Record<string, string>>({})
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [aviso, setAviso] = useState<{ ok: boolean; txt: string } | null>(null)
@@ -42,6 +45,9 @@ export default function MayoristaFranquiciasClientes() {
       const [m, cs] = await Promise.all([cargarMapaFranquicias(), cargarClientes()])
       setMapa(m)
       setClientes(cs)
+      const draft: Record<string, string> = {}
+      for (const c of cs) draft[c.codigo] = m.telefonos[c.codigo] ?? ''
+      setTelDraft(draft)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -51,33 +57,94 @@ export default function MayoristaFranquiciasClientes() {
   useEffect(() => { void cargar() }, [])
 
   const baseDe = (codigo: string) => mapa.clientes[codigo] ?? ''
+  const telefonoDe = (codigo: string) => mapa.telefonos[codigo] ?? ''
   const nombreBase = (base: string) => mapa.bases.find((b) => b.base === base)?.nombre || base
 
   const asignados = useMemo(() => clientes.filter((c) => Boolean(baseDe(c.codigo))).length, [clientes, mapa])
+  const conTelefono = useMemo(() => clientes.filter((c) => Boolean(telefonoDe(c.codigo))).length, [clientes, mapa])
 
   const visibles = useMemo(() => {
     const q = busca.trim().toUpperCase()
     return clientes.filter((c) => {
       const base = baseDe(c.codigo)
       if (filtroBase === '__sin' && base) return false
-      if (filtroBase && filtroBase !== '__sin' && base !== filtroBase) return false
+      if (filtroBase === '__sin_tel' && (!base || telefonoDe(c.codigo))) return false
+      if (filtroBase && !filtroBase.startsWith('__') && base !== filtroBase) return false
       if (!q) return true
-      return `${c.codigo} ${c.nCliente} ${c.razonSocial}`.toUpperCase().includes(q)
+      return `${c.codigo} ${c.nCliente} ${c.razonSocial} ${base} ${telefonoDe(c.codigo)}`.toUpperCase().includes(q)
     })
   }, [clientes, mapa, busca, filtroBase])
+
+  function actualizarMapa(codigo: string, base: string | null, telefono: string | null) {
+    setMapa((m) => {
+      const clientes = { ...m.clientes }
+      const telefonos = { ...m.telefonos }
+      if (base) clientes[codigo] = base
+      else delete clientes[codigo]
+      if (telefono) telefonos[codigo] = telefono
+      else delete telefonos[codigo]
+      return { ...m, clientes, telefonos }
+    })
+  }
+
+  function actualizarTelefono(codigo: string, telefono: string | null) {
+    setMapa((m) => {
+      const telefonos = { ...m.telefonos }
+      if (telefono) telefonos[codigo] = telefono
+      else delete telefonos[codigo]
+      return { ...m, telefonos }
+    })
+  }
 
   async function cambiarBase(c: ClienteFranquicia, base: string) {
     setGuardando(c.codigo)
     setAviso(null)
+    const rawTel = base ? (telDraft[c.codigo] ?? '') : ''
+    const tel = rawTel.trim() && telefonoValido(rawTel) ? normalizarTelefono(rawTel) : null
+    const telInvalido = Boolean(rawTel.trim() && !tel)
     try {
-      await asignarBase(c.codigo, base || null)
-      setMapa((m) => {
-        const clientes = { ...m.clientes }
-        if (base) clientes[c.codigo] = base
-        else delete clientes[c.codigo]
-        return { ...m, clientes }
+      await guardarAsignacion(c.codigo, base || null, tel)
+      actualizarMapa(c.codigo, base || null, tel)
+      if (tel) setTelDraft((d) => ({ ...d, [c.codigo]: tel }))
+      if (!base) setTelDraft((d) => ({ ...d, [c.codigo]: '' }))
+      setAviso({
+        ok: !telInvalido,
+        txt: !base
+          ? `${c.codigo} · ${c.razonSocial} quedó sin base ni teléfono`
+          : telInvalido
+            ? `${c.codigo} · ${c.razonSocial}: se guardó la base, pero el teléfono no es válido. Corregilo y guardalo de nuevo.`
+            : `${c.codigo} · ${c.razonSocial} → ${nombreBase(base)}${tel ? ' · WhatsApp +' + tel : ''}`,
       })
-      setAviso({ ok: true, txt: base ? `${c.codigo} · ${c.razonSocial} → ${nombreBase(base)}` : `${c.codigo} · ${c.razonSocial} quedó sin base` })
+    } catch (e) {
+      setAviso({ ok: false, txt: e instanceof Error ? e.message : String(e) })
+    } finally {
+      setGuardando(null)
+    }
+  }
+
+  async function guardarTelefono(c: ClienteFranquicia) {
+    const base = baseDe(c.codigo)
+    if (!base) {
+      setAviso({ ok: false, txt: `${c.codigo} · ${c.razonSocial}: primero asignale una base.` })
+      return
+    }
+    const raw = telDraft[c.codigo] ?? ''
+    if (raw.trim() && !telefonoValido(raw)) {
+      setAviso({ ok: false, txt: `El teléfono de ${c.razonSocial} no es válido. Usá el formato 2901 400000 o +54 9 2901 400000.` })
+      return
+    }
+    const tel = raw.trim() ? normalizarTelefono(raw) : null
+    if ((tel ?? '') === telefonoDe(c.codigo)) {
+      if (tel) setTelDraft((d) => ({ ...d, [c.codigo]: tel }))
+      return
+    }
+    setGuardando(c.codigo)
+    setAviso(null)
+    try {
+      await guardarTelefonoCliente(c.codigo, tel)
+      actualizarTelefono(c.codigo, tel)
+      setTelDraft((d) => ({ ...d, [c.codigo]: tel ?? '' }))
+      setAviso({ ok: true, txt: tel ? `WhatsApp de ${c.razonSocial}: +${tel}` : `${c.razonSocial} quedó sin teléfono configurado` })
     } catch (e) {
       setAviso({ ok: false, txt: e instanceof Error ? e.message : String(e) })
     } finally {
@@ -106,28 +173,49 @@ export default function MayoristaFranquiciasClientes() {
   return (
     <Layout>
       <div className="px-3 pt-3 md:px-4 md:pt-4">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-2">
             <BackButton />
-            <h1 className="font-display truncate text-lg font-semibold text-ink md:text-xl">Franquicias · Clientes y bases</h1>
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-cyan-500">Sistemas</p>
+              <h1 className="font-display truncate text-xl font-semibold text-ink md:text-2xl">Franquicias · configuración</h1>
+              <p className="mt-1 max-w-2xl text-sm text-sub">Asociá cada cliente con su base de Dragon, la sucursal de stock y el WhatsApp que recibe la propuesta.</p>
+            </div>
           </div>
+          <Link to="/mayorista/franquicias" className="btn-press inline-flex shrink-0 items-center gap-1.5 rounded-full border border-line2 bg-surface px-3 py-1.5 text-xs font-semibold text-ink hover:bg-surface2">
+            <ArrowLeft size={14} aria-hidden />
+            Ir a Reposición diaria
+          </Link>
         </div>
 
-        <FranquiciasTabs />
-
         <div id="frame" className="overflow-hidden rounded-2xl border border-line bg-paper p-3">
-          <div className="mb-3 mt-1 flex min-w-0 flex-wrap items-center gap-3">
+          <div className="mb-3 mt-1 flex min-w-0 flex-wrap items-start gap-3">
             <div className="min-w-0">
-              <h2 className="font-display text-lg font-semibold text-ink">Clientes y bases</h2>
-              <p className="text-sm text-sub">Cada cliente lee sus ventas y su stock de la base asignada. El cliente elegido es el destino del pedido en Dragon.</p>
+              <h2 className="font-display flex items-center gap-2 text-lg font-semibold text-ink">
+                <Settings2 size={18} aria-hidden />
+                Clientes, bases y teléfonos
+              </h2>
+              <p className="text-sm text-sub">Cada cliente lee sus ventas y su stock de la base asignada. El teléfono de acá es el contacto principal al mandar una propuesta.</p>
             </div>
           </div>
 
-          <div className="mb-3 flex flex-wrap gap-2 text-xs">
-            <span className="rounded-full border border-line bg-surface px-3 py-1 text-sub">Clientes activos: <b className="text-ink">{fmt(clientes.length)}</b></span>
-            <span className="rounded-full border border-line bg-surface px-3 py-1 text-sub">Con base: <b className="text-ink">{fmt(asignados)}</b></span>
-            <span className="rounded-full border border-line bg-surface px-3 py-1 text-sub">Sin base: <b className="text-ink">{fmt(clientes.length - asignados)}</b></span>
-            <span className="rounded-full border border-line bg-surface px-3 py-1 text-sub">Bases: <b className="text-ink">{fmt(mapa.bases.length)}</b></span>
+          <div className="mb-3 grid gap-2 sm:grid-cols-4">
+            <div className="rounded-xl border border-line bg-surface px-3 py-2">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-sub">Clientes activos</p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums text-ink">{fmt(clientes.length)}</p>
+            </div>
+            <div className="rounded-xl border border-line bg-surface px-3 py-2">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-sub">Con base</p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums text-emerald-500">{fmt(asignados)}</p>
+            </div>
+            <div className="rounded-xl border border-line bg-surface px-3 py-2">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-sub">Con teléfono</p>
+              <p className="mt-0.5 flex items-center gap-1.5 text-lg font-bold tabular-nums text-ink"><Phone size={15} className="text-emerald-500" aria-hidden />{fmt(conTelefono)}</p>
+            </div>
+            <div className="rounded-xl border border-line bg-surface px-3 py-2">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-sub">Bases</p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums text-ink">{fmt(mapa.bases.length)}</p>
+            </div>
           </div>
 
           {aviso && (
@@ -145,13 +233,14 @@ export default function MayoristaFranquiciasClientes() {
               <input
                 value={busca}
                 onChange={(e) => setBusca(e.target.value)}
-                placeholder="Buscar por código o razón social"
+                placeholder="Buscar por código, razón social, base o teléfono"
                 className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-sub"
               />
             </label>
             <select value={filtroBase} onChange={(e) => setFiltroBase(e.target.value)} className="rounded-full border border-line2 bg-surface px-3 py-1.5 text-xs text-ink">
               <option value="">Todas las bases</option>
               <option value="__sin">Sin base</option>
+              <option value="__sin_tel">Con base y sin teléfono</option>
               {mapa.bases.map((b) => <option key={b.base} value={b.base}>{b.nombre || b.base}</option>)}
             </select>
           </div>
@@ -164,24 +253,26 @@ export default function MayoristaFranquiciasClientes() {
                     <th className={th}>Código</th>
                     <th className={th}>Cliente</th>
                     <th className={th}>Base</th>
+                    <th className={th}>Teléfono WhatsApp</th>
                     <th className={th}>Stock del cliente</th>
                   </tr>
                 </thead>
                 <tbody>
                   {cargando && (
                     <tr>
-                      <td colSpan={4} className="px-3 py-10 text-center text-sub">
+                      <td colSpan={5} className="px-3 py-10 text-center text-sub">
                         <Loader2 size={16} className="mr-2 inline animate-spin" aria-hidden />
                         Cargando clientes y bases…
                       </td>
                     </tr>
                   )}
                   {!cargando && visibles.length === 0 && (
-                    <tr><td colSpan={4} className="px-3 py-10 text-center text-sub">No hay clientes para esa búsqueda.</td></tr>
+                    <tr><td colSpan={5} className="px-3 py-10 text-center text-sub">No hay clientes para esa búsqueda.</td></tr>
                   )}
                   {visibles.map((c) => {
                     const base = baseDe(c.codigo)
                     const b = mapa.bases.find((x) => x.base === base)
+                    const guardandoEsta = guardando === c.codigo
                     return (
                       <tr key={c.id} className="border-t border-line/60 hover:bg-white/5">
                         <td className="whitespace-nowrap px-3 py-2 font-medium tabular-nums text-ink">{c.codigo}</td>
@@ -191,14 +282,32 @@ export default function MayoristaFranquiciasClientes() {
                             <select
                               value={base}
                               onChange={(e) => void cambiarBase(c, e.target.value)}
-                              disabled={guardando === c.codigo}
+                              disabled={guardandoEsta}
                               className="max-w-[240px] rounded-full border border-line2 bg-surface px-2 py-1 text-xs text-ink disabled:opacity-50"
                             >
                               <option value="">Sin base</option>
                               {mapa.bases.map((x) => <option key={x.base} value={x.base}>{x.nombre || x.base} · {x.base}</option>)}
                             </select>
-                            {guardando === c.codigo && <Loader2 size={12} className="animate-spin text-sub" aria-hidden />}
-                            {guardando !== c.codigo && base && <Check size={12} className="text-emerald-500" aria-hidden />}
+                            {guardandoEsta && <Loader2 size={12} className="animate-spin text-sub" aria-hidden />}
+                            {!guardandoEsta && base && <Check size={12} className="text-emerald-500" aria-hidden />}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="tel"
+                              inputMode="tel"
+                              value={telDraft[c.codigo] ?? ''}
+                              onChange={(e) => setTelDraft((d) => ({ ...d, [c.codigo]: e.target.value }))}
+                              onBlur={() => void guardarTelefono(c)}
+                              onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                              disabled={!base || guardandoEsta}
+                              placeholder={base ? 'Ej. 2901 400000' : 'Asigná una base'}
+                              aria-label={`Teléfono de ${c.razonSocial}`}
+                              className="w-[155px] rounded-full border border-line2 bg-surface px-2.5 py-1 text-xs text-ink placeholder:text-sub disabled:opacity-45"
+                            />
+                            {guardandoEsta && <Loader2 size={12} className="animate-spin text-sub" aria-hidden />}
+                            {!guardandoEsta && base && telefonoDe(c.codigo) && <Check size={12} className="text-emerald-500" aria-hidden />}
                           </div>
                         </td>
                         <td className="px-3 py-2 text-sub">{b?.sucursal ? `${b.sucursal}` : base ? '—' : 'Sin base asignada'}</td>
@@ -209,6 +318,9 @@ export default function MayoristaFranquiciasClientes() {
               </table>
             </div>
           </div>
+          <p className="mt-2 text-[11px] text-sub">
+            El teléfono se guarda normalizado para WhatsApp (ej. 5492901400000). Se usa como contacto principal en <Link to="/mayorista/franquicias/propuestas" className="font-semibold text-brand-400 hover:underline">Propuesta de reposición</Link> y en <Link to="/mayorista/franquicias/materiales" className="font-semibold text-brand-400 hover:underline">Reposición de materiales</Link>.
+          </p>
 
           <div className="mt-4 rounded-xl border border-line bg-surface p-3">
             <h3 className="mb-2 text-sm font-semibold text-ink">Agregar una base</h3>

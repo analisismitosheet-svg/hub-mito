@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from '@/context/AuthContext'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import PermissionRoute from '@/components/PermissionRoute'
@@ -67,8 +67,9 @@ import SqlConexion from '@/pages/SqlConexion'
 import ComingSoon from '@/pages/ComingSoon'
 import Replicas from '@/pages/Replicas'
 import MayoristaFranquicias from '@/pages/MayoristaFranquicias'
-import MayoristaFranquiciasCalzado from '@/pages/MayoristaFranquiciasCalzado'
-import MayoristaFranquiciasClientes from '@/pages/MayoristaFranquiciasClientes'
+import MayoristaFranquiciasPropuestas from '@/pages/MayoristaFranquiciasPropuestas'
+import MayoristaFranquiciasMateriales from '@/pages/MayoristaFranquiciasMateriales'
+import SistemasFranquicias from '@/pages/SistemasFranquicias'
 import PropuestaFranquicia from '@/pages/PropuestaFranquicia'
 
 // Pantallas nuevas: se cargan bajo demanda para no agrandar el bundle principal
@@ -327,18 +328,28 @@ export default function App() {
             }
           />
           <Route
-            path="/mayorista/franquicias/calzado"
+            path="/mayorista/franquicias/propuestas"
             element={
               <PermissionRoute permiso="mayorista.franquicias.view">
-                <MayoristaFranquiciasCalzado />
+                <MayoristaFranquiciasPropuestas />
               </PermissionRoute>
             }
           />
           <Route
-            path="/mayorista/franquicias/clientes"
+            path="/mayorista/franquicias/materiales"
             element={
               <PermissionRoute permiso="mayorista.franquicias.view">
-                <MayoristaFranquiciasClientes />
+                <MayoristaFranquiciasMateriales />
+              </PermissionRoute>
+            }
+          />
+          <Route path="/mayorista/franquicias/calzado" element={<Navigate to="/mayorista/franquicias/materiales" replace />} />
+          <Route path="/mayorista/franquicias/clientes" element={<Navigate to="/sistemas/franquicias" replace />} />
+          <Route
+            path="/sistemas/franquicias"
+            element={
+              <PermissionRoute permiso="mayorista.franquicias.view">
+                <SistemasFranquicias />
               </PermissionRoute>
             }
           />

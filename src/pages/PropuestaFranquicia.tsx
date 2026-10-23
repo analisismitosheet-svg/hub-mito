@@ -27,7 +27,7 @@ interface PropuestaPub {
   numero: string
   franquicia: string
   cliente: string | null
-  tipo: 'reposicion' | 'calzado' | null
+  tipo: 'reposicion' | 'calzado' | 'materiales' | null
   desde: string | null
   hasta: string | null
   vence_at: string
@@ -106,7 +106,7 @@ export default function PropuestaFranquicia() {
       <header className="bg-neutral-950 px-4 pb-4 pt-5 text-white">
         <div className="mx-auto max-w-xl">
           <p className="font-display text-xl font-black tracking-tight text-red-500">MITO</p>
-          <h1 className="mt-1 text-lg font-bold">{prop?.tipo === 'calzado' ? 'Pedido de calzado' : 'Propuesta de reposición'}</h1>
+          <h1 className="mt-1 text-lg font-bold">{prop?.tipo === 'calzado' || prop?.tipo === 'materiales' ? 'Reposición de materiales' : 'Propuesta de reposición'}</h1>
           {prop && (
             <p className="text-xs text-white/70">
               {prop.cliente || prop.franquicia} · N° {prop.numero}

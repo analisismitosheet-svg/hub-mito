@@ -1,8 +1,9 @@
 import { supabase } from '@/lib/supabase'
 
 /* ------------------------------------------------------------------ */
-/*  Franquicias: cliente elegido -> base Dragonfish y sucursal de      */
-/*  stock. Lo usan las 3 solapas (reposición, calzado y clientes).     */
+/*  Franquicias: cliente elegido -> base Dragonfish, sucursal de       */
+/*  stock y teléfono de WhatsApp. Lo usan las pantallas de reposición, */
+/*  propuestas y materiales. La configuración se edita en Sistemas.    */
 /*  Tablas/RPC: sql/franquicias_clientes_bases.sql                     */
 /* ------------------------------------------------------------------ */
 
@@ -17,6 +18,8 @@ export interface MapaFranquicias {
   bases: BaseFranquicia[]
   /** cliente_id (5 dígitos, ej. 01140) -> base (ej. DRAGONFISH_CFU) */
   clientes: Record<string, string>
+  /** cliente_id -> teléfono internacional sin '+' (ej. 5492901400000) */
+  telefonos: Record<string, string>
 }
 
 export interface ClienteFranquicia {
@@ -35,16 +38,40 @@ export const claveCliente = (n: string | null | undefined) => String(n ?? '').tr
 export const claveFranquicia = (base: string) => String(base ?? '').toUpperCase().replace(/^DRAGONFISH_/, '')
 
 export async function cargarMapaFranquicias(): Promise<MapaFranquicias> {
-  if (!supabase) return { bases: [], clientes: {} }
+  if (!supabase) return { bases: [], clientes: {}, telefonos: {} }
   const { data, error } = await supabase.rpc('franquicias_bases_mapa')
   if (error) throw new Error(error.message)
   const m = (data ?? {}) as Partial<MapaFranquicias>
-  return { bases: m.bases ?? [], clientes: m.clientes ?? {} }
+  return { bases: m.bases ?? [], clientes: m.clientes ?? {}, telefonos: m.telefonos ?? {} }
 }
 
 export async function asignarBase(clienteId: string, base: string | null): Promise<void> {
   if (!supabase) throw new Error('Supabase no está configurado.')
   const { error } = await supabase.rpc('franquicias_asignar_base', { p_cliente: claveCliente(clienteId), p_base: base })
+  if (error) throw new Error(error.message)
+}
+
+/**
+ * Guarda la base y el teléfono de WhatsApp de un cliente en una sola llamada.
+ * Si la base queda vacía se borra la asignación completa (incluido el teléfono).
+ */
+export async function guardarAsignacion(clienteId: string, base: string | null, telefono: string | null): Promise<void> {
+  if (!supabase) throw new Error('Supabase no está configurado.')
+  const { error } = await supabase.rpc('franquicias_guardar_asignacion', {
+    p_cliente: claveCliente(clienteId),
+    p_base: base?.trim() || null,
+    p_telefono: telefono?.trim() || null,
+  })
+  if (error) throw new Error(error.message)
+}
+
+/** Cambia solo el teléfono (no toca la base). Requiere que el cliente tenga base. */
+export async function guardarTelefonoCliente(clienteId: string, telefono: string | null): Promise<void> {
+  if (!supabase) throw new Error('Supabase no está configurado.')
+  const { error } = await supabase.rpc('franquicias_asignar_telefono', {
+    p_cliente: claveCliente(clienteId),
+    p_telefono: telefono?.trim() || null,
+  })
   if (error) throw new Error(error.message)
 }
 
@@ -100,6 +127,8 @@ export interface DestinoFranquicia {
   nombre: string
   base: string
   origenStock: string
+  /** teléfono configurado para el cliente (internacional sin '+') */
+  telefono: string | null
 }
 
 /** Arma el destino (base + sucursal de stock) del cliente elegido. */
@@ -114,5 +143,6 @@ export function destinoDe(cliente: ClienteFranquicia, mapa: MapaFranquicias): De
     nombre: base?.nombre || baseNombre,
     base: baseNombre,
     origenStock: String(base?.sucursal ?? '').trim().toUpperCase(),
+    telefono: mapa.telefonos[cliente.codigo] ?? null,
   }
 }

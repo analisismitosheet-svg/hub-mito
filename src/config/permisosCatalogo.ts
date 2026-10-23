@@ -139,7 +139,7 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
     icon: TrendingUp, color: '#14b8a6', acciones: { ver: 'mayorista.estadisticas.view' },
   },
   {
-    id: 'mayorista-franquicias', areaId: 'mayorista', titulo: 'Franquicias', descripcion: 'Reposición sugerida y propuestas a las franquicias',
+    id: 'mayorista-franquicias', areaId: 'mayorista', titulo: 'Franquicias', descripcion: 'Reposición diaria, propuestas y materiales de las franquicias',
     icon: Building2, color: '#0891b2', acciones: { ver: 'mayorista.franquicias.view' },
   },
 

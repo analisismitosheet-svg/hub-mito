@@ -5,9 +5,15 @@
 --   1. franquicias_bases      : catálogo de bases Dragonfish. Cada base dice
 --                               de qué sucursal de vw_STOCK_SUCURSALES_REAL
 --                               se lee el stock del cliente.
---   2. franquicias_clientes   : asocia cada cliente (ZooLogic.CLI.CLCOD) a su base.
+--   2. franquicias_clientes   : asocia cada cliente (ZooLogic.CLI.CLCOD) a su base
+--                               y guarda su teléfono de WhatsApp.
 --      Con eso la reposición lee venta y stock de la BASE del cliente elegido.
+--   La migración de teléfono y RPCs nuevas está en
+--   sql/franquicias_telefono_cliente.sql.
 -- ============================================================
+
+-- Las RPCs/políticas validan con private.tengo_permiso().
+grant usage on schema private to authenticated;
 
 -- Catálogo de bases. "base" = nombre de la base en Dragonfish (ej. DRAGONFISH_CFU).
 -- "sucursal" = BD_ORIGEN en vw_STOCK_SUCURSALES_REAL (ej. CAPTAIN FIN USHUAIA).
@@ -23,6 +29,7 @@ create table if not exists public.franquicias_bases (
 create table if not exists public.franquicias_clientes (
   cliente_id text primary key,                -- 01140
   base       text not null references public.franquicias_bases(base) on update cascade,
+  telefono   text,                            -- WhatsApp internacional sin + (5492901400000)
   creado_at  timestamptz not null default now(),
   creado_por uuid
 );
@@ -79,6 +86,9 @@ returns jsonb language sql security invoker set search_path = public as $$
         'base', base, 'sucursal', sucursal, 'nombre', nombre, 'activa', activa)
         order by base) from public.franquicias_bases), '[]'::jsonb),
     'clientes', coalesce((select jsonb_object_agg(cliente_id, base)
-        from public.franquicias_clientes), '{}'::jsonb)
+        from public.franquicias_clientes), '{}'::jsonb),
+    'telefonos', coalesce((select jsonb_object_agg(cliente_id, telefono)
+        from public.franquicias_clientes
+        where telefono is not null and btrim(telefono) <> ''), '{}'::jsonb)
   );
 $$;

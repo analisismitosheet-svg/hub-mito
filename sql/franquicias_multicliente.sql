@@ -1,6 +1,6 @@
 -- ============================================================
 -- Franquicias multi-cliente: la propuesta guarda el cliente destino
--- (el que después se carga en Dragon) y el tipo (reposición / calzado).
+-- (el que después se carga en Dragon) y el tipo (reposición / materiales).
 -- Aplicado: (pendiente)
 -- ============================================================
 

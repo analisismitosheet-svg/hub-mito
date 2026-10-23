@@ -1,241 +1,36 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { ArrowRight, Loader2 } from 'lucide-react'
 import Layout from '@/components/Layout'
-import BackButton from '@/components/BackButton'
+import FranquiciasHeader from '@/components/FranquiciasHeader'
 import FotoArticulo from '@/components/FotoArticulo'
-import FranquiciaPropuestas from '@/components/FranquiciaPropuestas'
-import FranquiciasTabs from '@/components/FranquiciasTabs'
-import { supabase } from '@/lib/supabase'
-import { leerVista, leerVistaFiltrada, type FilaSql } from '@/lib/sqlApi'
-import { VISTA_ARTICULOS } from '@/lib/articulosConsulta'
-import { cargarStockSku, claveSku, stockSkuDe, type StockSku } from '@/lib/stockSku'
-import {
-  cargarClientes,
-  cargarMapaFranquicias,
-  clientesConBase,
-  destinoDe,
-  type ClienteFranquicia,
-  type MapaFranquicias,
-} from '@/lib/franquicias'
-
-type Fila = {
-  precio: number | null
-  art: string
-  descrip: string
-  color: string
-  talle: string
-  vendido: number
-  stock: number
-  stockCli: number
-  sugerido: number
-  material: string
-}
+import { normalizarTelefono } from '@/lib/informes'
+import { useReposicionFranquicia, type FilaReposicion } from '@/hooks/useReposicionFranquicia'
 
 const fmt = (n: number) => new Intl.NumberFormat('es-AR').format(n)
 const fmtPesos = (n: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n)
 
 /** Urgente: el cliente no tiene nada, vendió y en MITO hay más de 1 para reponer. */
-const esUrgente = (f: Fila) => f.stockCli <= 0 && f.vendido >= 1 && f.stock > 1
+const esUrgente = (f: FilaReposicion) => f.stockCli <= 0 && f.vendido >= 1 && f.stock > 1
 
-const estadoF = (f: Fila) => {
+const estadoF = (f: FilaReposicion) => {
   if (esUrgente(f)) return { txt: 'Urgente', cls: 'text-red-500', dot: '#ef4444' }
   if (f.stock < f.vendido) return { txt: 'Normal', cls: 'text-amber-400', dot: '#fbbf24' }
   return { txt: 'Normal', cls: 'text-emerald-500', dot: '#34d399' }
 }
 
-/**
- * Las ventas salen de la vista `venta_franquicias` y el stock del cliente de
- * `vw_STOCK_SUCURSALES_REAL` (columna BD_ORIGEN). El stock de MITO es el de
- * `vw_STOCK_SKU_MITO`. Qué base y qué sucursal se usan lo define el cliente
- * elegido (tabla franquicias_clientes, ver Clientes y bases).
- */
-const VISTA_VENTAS = 'DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.venta_franquicias'
-const VISTA_STOCK_SUC = 'DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.vw_STOCK_SUCURSALES_REAL'
-const VISTA_MATERIALES = 'DWH.dbo.vw_DIM_MATERIAL'
-
-const txt = (v: unknown) => String(v ?? '').trim()
-const num = (v: unknown) => Number(v) || 0
-/** FFCH llega como fecha ISO (medianoche UTC): los primeros 10 caracteres son el día */
-const diaDe = (v: unknown) => txt(v).slice(0, 10)
-const isoLocal = (d: Date) => d.toLocaleDateString('sv-SE')
-const haceDias = (n: number) => { const d = new Date(); d.setDate(d.getDate() - n); return isoLocal(d) }
 const fmtDia = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`
 
-interface Venta { base: string; dia: string; art: string; color: string; talle: string; cant: number; txt: string }
-
 export default function MayoristaFranquicias() {
-  const [mapa, setMapa] = useState<MapaFranquicias>({ bases: [], clientes: {} })
-  const [clientes, setClientes] = useState<ClienteFranquicia[]>([])
-  const [cargandoMapa, setCargandoMapa] = useState(true)
-  const [clienteSel, setClienteSel] = useState('')
+  const {
+    disponibles, franq, clienteSel, setClienteSel,
+    desde, setDesde, hasta, setHasta,
+    filas, cargando, cargandoPrecios, cargandoMapa, error,
+  } = useReposicionFranquicia()
 
-  const [ventas, setVentas] = useState<Venta[]>([])
-  const [stockPorSucursal, setStockPorSucursal] = useState<Map<string, Map<string, number>>>(new Map())
-  const [stockMito, setStockMito] = useState<StockSku | null>(null)
-  const [articulos, setArticulos] = useState<Map<string, { descripcion: string; material: string }>>(new Map())
-  const [cargando, setCargando] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [selMats, setSelMats] = useState<Set<string>>(new Set())
-  // Precio (columna PRECIO de vw_ARTICULOS_MITO) por SKU y por artículo
-  const [precios, setPrecios] = useState<{ sku: Map<string, number>; art: Map<string, number> }>({ sku: new Map(), art: new Map() })
-  const [cargandoPrecios, setCargandoPrecios] = useState(false)
-  const [desde, setDesde] = useState(haceDias(30))
-  const [hasta, setHasta] = useState(isoLocal(new Date()))
 
-  const disponibles = useMemo(() => clientesConBase(clientes, mapa), [clientes, mapa])
-  const cliente = disponibles.find((c) => c.codigo === clienteSel) ?? disponibles[0] ?? null
-  const franq = cliente ? destinoDe(cliente, mapa) : null
-
-  // Clientes y bases: qué base (y sucursal de stock) usa cada cliente
-  useEffect(() => {
-    let activo = true
-    ;(async () => {
-      try {
-        const [m, cs] = await Promise.all([cargarMapaFranquicias(), cargarClientes()])
-        if (!activo) return
-        setMapa(m)
-        setClientes(cs)
-        const con = clientesConBase(cs, m)
-        setClienteSel((prev) => (con.some((c) => c.codigo === prev) ? prev : con.find((c) => c.codigo === '01140')?.codigo ?? con[0]?.codigo ?? ''))
-      } catch (e) {
-        if (activo) setError(e instanceof Error ? e.message : String(e))
-      } finally {
-        if (activo) setCargandoMapa(false)
-      }
-    })()
-    return () => { activo = false }
-  }, [])
-
-  useEffect(() => {
-    let activo = true
-    ;(async () => {
-      try {
-        const [filasV, filasS, stock, filasM] = await Promise.all([
-          leerVista(VISTA_VENTAS),
-          leerVista(VISTA_STOCK_SUC),
-          cargarStockSku(),
-          leerVista(VISTA_MATERIALES).catch(() => [] as FilaSql[]),
-        ])
-        if (!activo) return
-
-        // Ventas netas: facturas y tickets suman, notas de crédito restan; remitos y demás no cuentan.
-        // Se guardan todas las bases y después se filtra por la del cliente elegido.
-        const vs: Venta[] = []
-        for (const f of filasV) {
-          const tipo = txt(f.DESCFW).toUpperCase()
-          const signo = /^(TICKET)?NOTADECREDITO/.test(tipo) ? -1 : /^(TICKET)?FACTURA/.test(tipo) ? 1 : 0
-          if (!signo) continue
-          vs.push({
-            base: txt(f.BASE_DATOS).toUpperCase(),
-            dia: diaDe(f.FFCH),
-            art: txt(f.FART).toUpperCase(),
-            color: txt(f.CCOLOR).toUpperCase(),
-            talle: txt(f.TALLE).toUpperCase(),
-            cant: signo * num(f.FCANT),
-            txt: txt(f.FTXT),
-          })
-        }
-
-        // Stock del cliente por sucursal (BD_ORIGEN) y por SKU
-        const sc = new Map<string, Map<string, number>>()
-        for (const f of filasS) {
-          const suc = txt(f.BD_ORIGEN).toUpperCase()
-          let m = sc.get(suc)
-          if (!m) { m = new Map(); sc.set(suc, m) }
-          const k = claveSku(f.ARTICULO, f.COLOR, f.TALLE)
-          m.set(k, (m.get(k) ?? 0) + num(f.CANTIDAD_REAL))
-        }
-
-        // Descripción y material del maestro (copia en Supabase) + nombres de material del DWH
-        const nombresMat = new Map(filasM.map((m) => [txt(m.ID_MATERIAL).toUpperCase(), txt(m.MATERIAL)]))
-        const arts = [...new Set(vs.map((v) => v.art))]
-        const info = new Map<string, { descripcion: string; material: string }>()
-        for (let i = 0; supabase && i < arts.length; i += 300) {
-          const { data } = await supabase.from('articulos').select('id_art,descripcion,id_material').in('id_art', arts.slice(i, i + 300))
-          for (const a of (data as { id_art: string; descripcion: string | null; id_material: string | null }[] | null) ?? []) {
-            const cod = txt(a.id_material).toUpperCase()
-            info.set(txt(a.id_art).toUpperCase(), { descripcion: txt(a.descripcion), material: nombresMat.get(cod) || cod })
-          }
-        }
-        if (!activo) return
-        setVentas(vs)
-        setStockPorSucursal(sc)
-        setStockMito(stock)
-        setArticulos(info)
-      } catch (e) {
-        if (activo) setError(e instanceof Error ? e.message : String(e))
-      } finally {
-        if (activo) setCargando(false)
-      }
-    })()
-    return () => { activo = false }
-  }, [])
-
-  // Una fila por SKU con lo vendido en el rango elegido (solo la base del cliente)
-  const filas = useMemo<Fila[]>(() => {
-    if (!franq) return []
-    const stockCli = stockPorSucursal.get(franq.origenStock) ?? new Map<string, number>()
-    const porSku = new Map<string, Fila>()
-    for (const v of ventas) {
-      if (v.base !== franq.base.toUpperCase()) continue
-      if (v.dia < desde || v.dia > hasta) continue
-      const k = claveSku(v.art, v.color, v.talle)
-      let f = porSku.get(k)
-      if (!f) {
-        const a = articulos.get(v.art)
-        f = { art: v.art, descrip: a?.descripcion || v.txt, color: v.color, talle: v.talle, vendido: 0, stock: 0, stockCli: 0, sugerido: 0, material: a?.material || '', precio: null }
-        porSku.set(k, f)
-      }
-      f.vendido += v.cant
-    }
-    for (const [k, f] of porSku) {
-      f.stock = stockSkuDe(stockMito, f.art, f.color, f.talle) ?? 0
-      f.stockCli = stockCli.get(k) ?? 0
-      // Reponer lo vendido menos lo que el cliente todavía tiene, sin pasarse del stock de MITO
-      f.sugerido = Math.max(0, Math.min(f.vendido - f.stockCli, f.stock))
-      f.precio = precios.sku.get(k) ?? precios.art.get(f.art) ?? null
-    }
-    return [...porSku.values()]
-  }, [ventas, desde, hasta, articulos, stockMito, stockPorSucursal, precios, franq?.base, franq?.origenStock])
-
-  // vw_ARTICULOS_MITO pesa ~6,8 MB: no se trae entera, se pide el precio de cada
-  // artículo que se va a reponer (filtro por ID_ARTICULO, de a 6 a la vez).
-  const artsAReponer = useMemo(
-    () => [...new Set(filas.filter((f) => f.stock > 0 && f.sugerido > 0).map((f) => f.art))].sort().join(','),
-    [filas],
-  )
-  useEffect(() => {
-    const faltan = artsAReponer.split(',').filter((a) => a && !precios.art.has(a))
-    if (!faltan.length) return
-    let activo = true
-    setCargandoPrecios(true)
-    ;(async () => {
-      const sku = new Map(precios.sku), art = new Map(precios.art)
-      const cola = [...faltan]
-      async function trabajador() {
-        for (let a = cola.shift(); a; a = cola.shift()) {
-          try {
-            const filasA = await leerVistaFiltrada(VISTA_ARTICULOS, { donde: ['ID_ARTICULO'], valor: a, coincide: 'igual' })
-            let max = 0
-            for (const r of filasA) {
-              const p = num(r.PRECIO)
-              if (p > 0) sku.set(claveSku(r.ID_ARTICULO, r.COLOR_CODIGO, r.TALLE_CODIGO), p)
-              max = Math.max(max, p)
-            }
-            art.set(a, max)
-          } catch {
-            art.set(a, 0)
-          }
-        }
-      }
-      await Promise.all(Array.from({ length: 6 }, trabajador))
-      if (!activo) return
-      setPrecios({ sku, art })
-      setCargandoPrecios(false)
-    })()
-    return () => { activo = false }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [artsAReponer])
+  useEffect(() => { setSelMats(new Set()) }, [franq?.base])
 
   const materiales = useMemo(() => [...new Set(filas.map((f) => f.material).filter(Boolean))].sort(), [filas])
   const selMat = [...selMats].join(', ')
@@ -253,7 +48,7 @@ export default function MayoristaFranquicias() {
 
   const visibles = filtrar().slice(0, 40)
   const totalSug = filtrar().reduce((s, f) => s + f.sugerido, 0)
-  const subtotal = (f: Fila) => (f.precio ? f.precio * f.sugerido : 0)
+  const subtotal = (f: FilaReposicion) => (f.precio ? f.precio * f.sugerido : 0)
   const totalPesos = filtrar().reduce((s, f) => s + subtotal(f), 0)
   const count = filtrar().length
 
@@ -265,13 +60,14 @@ export default function MayoristaFranquicias() {
     if (!franq) return
     const list = filtrar().slice(0, 40)
     const rango = `${fmtDia(desde)} al ${fmtDia(hasta)}`
-    let msg = `REPOSICIÓN SUGERIDA - ${franq.nombre.toUpperCase()} · ${franq.clienteNombre} (${rango})\nArtículos para reponer (solo con stock en MITO)${selMat ? ' - Material: ' + selMat : ''}:\n\n`
+    let msg = `REPOSICIÓN DIARIA - ${franq.nombre.toUpperCase()} · ${franq.clienteNombre} (${rango})\nArtículos para reponer (solo con stock en MITO)${selMat ? ' - Material: ' + selMat : ''}:\n\n`
     list.forEach((f, i) => {
       msg += `${i + 1}. ${f.art} ${(f.color || 'U')}/${f.talle || '-'} | Stock ${franq.id}:${f.stockCli || 0} | Vend:${f.vendido} | Stock MITO:${f.stock} | Sug.reposición:${f.sugerido} | Precio:${f.precio ? fmtPesos(f.precio) : '-'} | Subtotal:${fmtPesos(subtotal(f))} | Estado:${esUrgente(f) ? 'Urgente' : 'Normal'} | Mat:${f.material} | ${f.descrip || ''}\n`
     })
     if (list.length === 0) msg += '(Sin sugeridos con stock en MITO)\n'
     msg += `\nTotal sugerencia reposición: ${list.reduce((s, f) => s + f.sugerido, 0)} u. · Total: ${fmtPesos(list.reduce((s, f) => s + subtotal(f), 0))}`
-    window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank')
+    const tel = franq.telefono ? normalizarTelefono(franq.telefono) : ''
+    window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msg)}`, '_blank')
   }
 
   const exportExcel = () => {
@@ -285,29 +81,26 @@ export default function MayoristaFranquicias() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `reposicion-sugerida-${franq.id.toLowerCase()}.csv`
+    a.download = `reposicion-diaria-${franq.id.toLowerCase()}.csv`
     a.click()
     URL.revokeObjectURL(url)
   }
 
   const th = 'whitespace-nowrap px-3 py-2 text-[11px] uppercase tracking-wide text-sub'
+  const propuestaHref = `/mayorista/franquicias/propuestas?${new URLSearchParams({ cliente: clienteSel, desde, hasta }).toString()}`
 
   return (
     <Layout>
       <div className="px-3 pt-3 md:px-4 md:pt-4">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2">
-            <BackButton />
-            <h1 className="font-display truncate text-lg font-semibold text-ink md:text-xl">Franquicias · Reposición sugerida</h1>
-          </div>
-        </div>
-
-        <FranquiciasTabs />
+        <FranquiciasHeader
+          titulo="Reposición diaria"
+          descripcion="Qué reponerle a cada franquicia según lo que vendió y el stock real de MITO."
+        />
 
         <div id="frame" className="overflow-hidden rounded-2xl border border-line bg-paper p-3">
           <div className="mb-3 mt-1 flex min-w-0 flex-wrap items-center gap-3">
             <div className="min-w-0">
-              <h2 className="font-display text-lg font-semibold text-ink">Reposición sugerida</h2>
+              <h2 className="font-display text-lg font-semibold text-ink">Sugerencia del día</h2>
               <p className="truncate text-sm text-sub">
                 {franq?.nombre ?? 'Sin cliente'} · venta del {fmtDia(desde)} al {fmtDia(hasta)} · contra el stock real de MITO
               </p>
@@ -340,6 +133,11 @@ export default function MayoristaFranquicias() {
                   {franq.nombre.toUpperCase()} · {franq.base}
                 </span>
               )}
+              {franq?.telefono && (
+                <span className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-400">
+                  WhatsApp · +{franq.telefono}
+                </span>
+              )}
             </div>
           </div>
 
@@ -348,7 +146,7 @@ export default function MayoristaFranquicias() {
           )}
           {!cargandoMapa && !franq && (
             <p className="mb-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-400">
-              No hay ningún cliente con base asignada. Asignala en <b>Clientes y bases</b> para poder traer sus ventas y su stock.
+              No hay ningún cliente con base asignada. Configurala en <Link to="/sistemas/franquicias" className="font-semibold underline">Sistemas → Franquicias</Link> para poder traer sus ventas y su stock.
             </p>
           )}
 
@@ -454,31 +252,21 @@ export default function MayoristaFranquicias() {
               </table>
             </div>
           </div>
-          <div className="mt-2 flex items-center justify-between gap-2">
+
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
             <p className="text-[11px] text-sub">
               Solo se muestran los SKU con <b className="text-ink">stock en MITO &gt; 0</b> y sugerido &gt; 0 (máximo 40). Sugerido = vendido − stock del cliente, sin pasar el stock de MITO.
             </p>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button onClick={exportExcel} className="inline-flex items-center gap-2 rounded-full border border-line2 bg-surface px-3 py-1 text-xs font-semibold text-ink">⬇ Excel</button>
-              <button onClick={enviarWhatsApp} className="inline-flex items-center gap-2 rounded-full border border-line2 bg-surface px-3 py-1 text-xs font-semibold text-ink" title="Abre tu WhatsApp con la lista en texto">Compartir desde mi WhatsApp</button>
+              <button onClick={enviarWhatsApp} className="inline-flex items-center gap-2 rounded-full border border-line2 bg-surface px-3 py-1 text-xs font-semibold text-ink" title={franq?.telefono ? 'Abre el WhatsApp configurado del cliente' : 'Abre tu WhatsApp con la lista en texto'}>Compartir por WhatsApp</button>
+              <Link to={propuestaHref} className="inline-flex items-center gap-1.5 rounded-full bg-brand-600 px-3 py-1 text-xs font-semibold text-white hover:bg-brand-500">
+                Armar propuesta
+                <ArrowRight size={13} aria-hidden />
+              </Link>
             </div>
           </div>
         </div>
-
-        {franq && (
-          <FranquiciaPropuestas
-            franquicia={franq.id}
-            nombre={franq.nombre}
-            desde={desde}
-            hasta={hasta}
-            cliente={{ id: franq.clienteId, nombre: franq.clienteNombre }}
-            listo={!cargando && !cargandoPrecios && !error}
-            items={filtrar().map((f) => ({
-              art: f.art, descrip: f.descrip, material: f.material, color: f.color, talle: f.talle,
-              stockCli: f.stockCli, vendido: f.vendido, stock: f.stock, sugerido: f.sugerido, precio: f.precio,
-            }))}
-          />
-        )}
       </div>
     </Layout>
   )

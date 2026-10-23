@@ -16,6 +16,8 @@
 --    vez a las personas que trabajan en paralelo (no se suman los cronómetros).
 --    Si una sesión o un armado quedó abierto y cruzó la medianoche, inicio/fin van
 --    en NULL: no estira el reloj de ese día.
+-- OJO: la definición vigente de vw_tiempos_piso está en sql/eficiencia_solo_vtd_rep.sql
+-- (solo armados de pedidos VTD). Lo de acá quedó viejo.
 -- 2) vw_tiempos_piso (Tiempo real en piso): suma los armados terminados por
 --    empleado y día (cronómetro del armado, unidades escaneadas, faltantes).
 -- ============================================================================

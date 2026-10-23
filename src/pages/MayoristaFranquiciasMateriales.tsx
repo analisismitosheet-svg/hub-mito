@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Loader2, Search } from 'lucide-react'
 import Layout from '@/components/Layout'
-import BackButton from '@/components/BackButton'
 import FotoArticulo from '@/components/FotoArticulo'
 import FranquiciaPropuestas, { type ItemPropuesta } from '@/components/FranquiciaPropuestas'
-import FranquiciasTabs from '@/components/FranquiciasTabs'
+import FranquiciasHeader from '@/components/FranquiciasHeader'
 import { supabase } from '@/lib/supabase'
 import { leerVista, leerVistaFiltrada } from '@/lib/sqlApi'
 import { VISTA_ARTICULOS } from '@/lib/articulosConsulta'
@@ -19,10 +19,10 @@ import {
 } from '@/lib/franquicias'
 
 /* ------------------------------------------------------------------ */
-/*  Pedido de venta · Calzado por curva de talles                     */
+/*  Reposición de materiales · Calzado por curva de talles             */
 /*  Stock y precio: vw_STOCK_SKU_MITO + vw_ARTICULOS_MITO.             */
-/*  Se arma el pedido, se manda el link (/p/:token) y el cliente lo    */
-/*  confirma: el mismo circuito que la reposición.                     */
+/*  Se arma la reposición, se manda el link (/p/:token) y el cliente   */
+/*  la confirma: el mismo circuito que la propuesta de reposición.     */
 /* ------------------------------------------------------------------ */
 
 const VISTA_MATERIALES = 'DWH.dbo.vw_DIM_MATERIAL'
@@ -55,8 +55,8 @@ interface Modelo {
   precio: number | null
 }
 
-export default function MayoristaFranquiciasCalzado() {
-  const [mapa, setMapa] = useState<MapaFranquicias>({ bases: [], clientes: {} })
+export default function MayoristaFranquiciasMateriales() {
+  const [mapa, setMapa] = useState<MapaFranquicias>({ bases: [], clientes: {}, telefonos: {} })
   const [clientes, setClientes] = useState<ClienteFranquicia[]>([])
   const [cargandoMapa, setCargandoMapa] = useState(true)
   const [clienteSel, setClienteSel] = useState('')
@@ -262,19 +262,15 @@ export default function MayoristaFranquiciasCalzado() {
   return (
     <Layout>
       <div className="px-3 pt-3 md:px-4 md:pt-4">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2">
-            <BackButton />
-            <h1 className="font-display truncate text-lg font-semibold text-ink md:text-xl">Franquicias · Pedido de venta de calzado</h1>
-          </div>
-        </div>
-
-        <FranquiciasTabs />
+        <FranquiciasHeader
+          titulo="Reposición de materiales"
+          descripcion="Calzado por curva de talles con el stock real de MITO. Armá la reposición y mandale el link al cliente."
+        />
 
         <div id="frame" className="overflow-hidden rounded-2xl border border-line bg-paper p-3">
           <div className="mb-3 mt-1 flex min-w-0 flex-wrap items-center gap-3">
             <div className="min-w-0">
-              <h2 className="font-display text-lg font-semibold text-ink">Pedido de venta · Calzado por curva de talles</h2>
+              <h2 className="font-display text-lg font-semibold text-ink">Materiales por curva de talles</h2>
               <p className="truncate text-sm text-sub">Stock real de MITO por talle · el cliente confirma por el link y se carga en Dragon</p>
             </div>
             <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
@@ -297,6 +293,11 @@ export default function MayoristaFranquiciasCalzado() {
                   {franq.nombre.toUpperCase()} · {franq.base}
                 </span>
               )}
+              {franq?.telefono && (
+                <span className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-400">
+                  WhatsApp · +{franq.telefono}
+                </span>
+              )}
             </div>
           </div>
 
@@ -305,7 +306,7 @@ export default function MayoristaFranquiciasCalzado() {
           )}
           {!cargandoMapa && !franq && (
             <p className="mb-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-400">
-              No hay ningún cliente con base asignada. Asignala en <b>Clientes y bases</b> para poder armarle un pedido.
+              No hay ningún cliente con base asignada. Configurala en <Link to="/sistemas/franquicias" className="font-semibold underline">Sistemas → Franquicias</Link> para poder armarle la reposición.
             </p>
           )}
 
@@ -383,13 +384,13 @@ export default function MayoristaFranquiciasCalzado() {
                     <tr>
                       <td colSpan={6 + tallesTab.length} className="px-3 py-10 text-center text-sub">
                         <Loader2 size={16} className="mr-2 inline animate-spin" aria-hidden />
-                        Trayendo el calzado con stock…
+                        Trayendo los materiales con stock…
                       </td>
                     </tr>
                   )}
                   {!cargando && !error && visibles.length === 0 && (
                     <tr>
-                      <td colSpan={6 + tallesTab.length} className="px-3 py-10 text-center text-sub">No hay calzado con stock para esa búsqueda.</td>
+                      <td colSpan={6 + tallesTab.length} className="px-3 py-10 text-center text-sub">No hay materiales con stock para esa búsqueda.</td>
                     </tr>
                   )}
                   {visibles.map((m) => {
@@ -439,7 +440,7 @@ export default function MayoristaFranquiciasCalzado() {
             </div>
           </div>
           <p className="mt-2 text-[11px] text-sub">
-            Cada celda muestra arriba los pares a pedir y abajo el stock de MITO de ese talle. Solo aparecen modelos con stock.
+            Cada celda muestra arriba las unidades a reponer y abajo el stock de MITO de ese talle. Solo aparecen materiales con stock.
           </p>
         </div>
 
@@ -449,8 +450,9 @@ export default function MayoristaFranquiciasCalzado() {
             nombre={franq.nombre}
             desde={null}
             hasta={null}
-            tipo="calzado"
+            tipo="materiales"
             cliente={{ id: franq.clienteId, nombre: franq.clienteNombre }}
+            telefono={franq.telefono}
             listo={!cargando && !cargandoPrecios && !error}
             items={pedido}
           />

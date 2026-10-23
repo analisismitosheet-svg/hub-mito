@@ -79,7 +79,7 @@ async function main() {
     try {
       if (!cliente) throw new Error(`La franquicia ${p.franquicia} no tiene cliente de Dragon configurado`)
       if (!p.items?.length) throw new Error('La propuesta no tiene artículos pedidos')
-      const que = p.tipo === 'calzado' ? 'Pedido de calzado' : 'Propuesta'
+      const que = p.tipo === 'calzado' || p.tipo === 'materiales' ? 'Reposición de materiales' : 'Propuesta'
       const obs = `${cliente} (${descripcion}) - ${que} ${p.numero}${p.comentario ? ` - ${p.comentario}` : ''}`
       const fecha = new Date(new Date(p.confirmada_at).getTime() - 3 * 3600_000).toISOString().slice(0, 10)
       const r = await crearPedido({ cliente, lista: 'LISTA2', obs, items: p.items, fecha })

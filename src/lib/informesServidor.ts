@@ -325,7 +325,7 @@ async function datosEficiencia(fecha: string): Promise<{ fecha: string; vtd: Fil
     rpc<FilaVtd>('estadistica_vtd', { p_desde: fecha, p_hasta: fecha }),
     avanceVtd(fecha),
     jsonDe<{ empleado_id: string | null; repos: number; unidades: number; segundos: number; pendientes_fin: number }>(
-      `vw_tiempos_piso?select=empleado_id,repos,unidades,segundos,pendientes_fin&fecha=eq.${fecha}`,
+      `vw_tiempos_piso_motivo?select=empleado_id,repos,unidades,segundos,pendientes_fin&fecha=eq.${fecha}&motivo=eq.VTD`,
     ),
   ])
   const ids = [...new Set(tiempos.map((t) => t.empleado_id).filter((x): x is string => !!x))]

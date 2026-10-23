@@ -16,6 +16,7 @@ El detalle largo y la historia de cada módulo siguen en `CONTEXTO.md` (raíz de
 - [[Pedidos compra, venta y cancelaciones]]
 - [[Armado de pedidos]]: Mayorista pide, el piso arma en Mi repo
 - [[Repos Mayorista y Mi repo]]
+- [[Franquicias]]: reposición diaria, propuesta, materiales; configuración en Sistemas
 - [[Mapeo depósito]]
 - [[Transferencias]]: reposiciones y estadísticas
 - [[Facturación, guías y notas de crédito]]
@@ -39,6 +40,8 @@ El detalle largo y la historia de cada módulo siguen en `CONTEXTO.md` (raíz de
 | `/transferencias`, `/transferencias/estadisticas` | Transferencias.tsx, EstadisticasTransferencias.tsx | [[Transferencias]] |
 | `/mayorista` , `/mayorista/mi-repo`, `/mayorista/estadisticas` | Mayorista.tsx, MiRepo.tsx, EstadisticasRendimiento.tsx | [[Repos Mayorista y Mi repo]] |
 | `/mayorista/pausas` | PausasPendientes.tsx | [[Repos Mayorista y Mi repo]] |
+| `/mayorista/franquicias` (+ `/propuestas`, `/materiales`) | MayoristaFranquicias, MayoristaFranquiciasPropuestas, MayoristaFranquiciasMateriales | [[Franquicias]] |
+| `/sistemas/franquicias` | SistemasFranquicias.tsx | [[Franquicias]] |
 | `/informes` | Informes.tsx | [[Informes por WhatsApp]] |
 | `/administradores/tracking` (+ `/km`) | TrackingTransporte.tsx, TrackingKm.tsx | [[Tracking de transporte]] |
 | `/mayorista/mapeo` (+escanear, orden, ubicaciones) | MapeoEscanear/Orden/Ubicaciones.tsx | [[Mapeo depósito]] |

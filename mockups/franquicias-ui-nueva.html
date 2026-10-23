@@ -1,0 +1,682 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Franquicias · vista previa</title>
+<style>
+  :root{
+    color-scheme: dark;
+    --paper:#050508;
+    --surface:rgba(255,255,255,.035);
+    --surface2:rgba(255,255,255,.07);
+    --surface-solid:#101016;
+    --line:rgba(255,255,255,.08);
+    --line2:rgba(255,255,255,.18);
+    --ink:#f8fafc;
+    --sub:#94a3b8;
+    --brand:#ef4444;
+    --brand-600:#e11d2e;
+    --brand-soft:rgba(239,68,68,.12);
+    --green:#34d399;
+    --green-soft:rgba(52,211,153,.12);
+    --amber:#fbbf24;
+    --amber-soft:rgba(251,191,36,.12);
+    --blue:#60a5fa;
+    --blue-soft:rgba(96,165,250,.12);
+    --glow-1:rgba(59,130,246,.15);
+    --glow-2:rgba(168,85,247,.1);
+    --shadow:0 10px 30px -12px rgba(0,0,0,.65);
+  }
+  html.light{
+    color-scheme:light;
+    --paper:#eef0f5;
+    --surface:rgba(255,255,255,.62);
+    --surface2:rgba(15,23,42,.055);
+    --surface-solid:#fff;
+    --line:rgba(15,23,42,.09);
+    --line2:rgba(15,23,42,.18);
+    --ink:#0f172a;
+    --sub:#64748b;
+    --brand-soft:rgba(225,29,46,.09);
+    --green-soft:rgba(5,150,105,.09);
+    --amber-soft:rgba(217,119,6,.1);
+    --blue-soft:rgba(37,99,235,.08);
+    --glow-1:rgba(59,130,246,.18);
+    --glow-2:rgba(168,85,247,.14);
+    --shadow:0 8px 24px -12px rgba(15,23,42,.18);
+  }
+  *{box-sizing:border-box}
+  html,body{min-height:100%}
+  body{
+    margin:0;
+    font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+    color:var(--ink);
+    background:var(--paper);
+    -webkit-font-smoothing:antialiased;
+  }
+  body::before,body::after{
+    content:'';position:fixed;z-index:-1;border-radius:50%;filter:blur(120px);pointer-events:none;
+    transition:background-color .5s ease;
+  }
+  body::before{width:620px;height:620px;top:-220px;left:-220px;background:var(--glow-1)}
+  body::after{width:520px;height:520px;bottom:-140px;right:-120px;background:var(--glow-2)}
+  button,input,select{font:inherit}
+  button{cursor:pointer}
+  [hidden]{display:none!important}
+  .shell{max-width:1180px;margin:0 auto;padding:20px 22px 64px}
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:34px}
+  .topbar-left,.topbar-right{display:flex;align-items:center;gap:12px;min-width:0}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:-.04em;font-size:20px}
+  .brand-mark{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;background:linear-gradient(145deg,#ef4444,#b91c1c);color:#fff;font-size:15px;box-shadow:0 8px 24px rgba(239,68,68,.28)}
+  .brand small{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--sub);font-weight:700}
+  .top-divider{width:1px;height:24px;background:var(--line)}
+  .top-label{font-size:12px;color:var(--sub);font-weight:600}
+  .preview-pill{border:1px solid var(--line);background:var(--surface);color:var(--sub);border-radius:999px;padding:7px 11px;font-size:11px;font-weight:700;letter-spacing:.02em}
+  .icon-btn{width:38px;height:38px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink);display:grid;place-items:center;transition:.2s}
+  .icon-btn:hover{border-color:var(--line2);background:var(--surface2)}
+  .avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(145deg,#334155,#0f172a);border:1px solid var(--line2);display:grid;place-items:center;font-size:12px;font-weight:800;color:#fff}
+  .page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px}
+  .eyebrow{margin:0 0 5px;font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:var(--brand)}
+  h1{margin:0;font-size:clamp(24px,3vw,31px);line-height:1.08;letter-spacing:-.035em;font-weight:800;background:linear-gradient(90deg,var(--ink),var(--sub));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .page-desc{margin:8px 0 0;max-width:680px;color:var(--sub);font-size:13.5px;line-height:1.55}
+  .head-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;padding-top:3px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:9px 13px;font-size:12.5px;font-weight:700;transition:transform .18s,background .18s,border-color .18s,box-shadow .18s}
+  .btn:hover{background:var(--surface2);border-color:var(--line2);transform:translateY(-1px)}
+  .btn:active{transform:scale(.985)}
+  .btn-primary{background:linear-gradient(135deg,#ef4444,#c81e2f);border-color:rgba(239,68,68,.35);color:#fff;box-shadow:0 10px 24px -12px rgba(239,68,68,.55)}
+  .btn-primary:hover{background:linear-gradient(135deg,#f05252,#d01f30);border-color:rgba(239,68,68,.5)}
+  .btn-soft{background:var(--brand-soft);border-color:rgba(239,68,68,.22);color:#fca5a5}
+  html.light .btn-soft{color:#b91c1c}
+  .btn-sm{padding:7px 10px;font-size:11.5px;border-radius:10px}
+  .icon{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+  .icon-sm{width:14px;height:14px}
+  .icon-lg{width:19px;height:19px}
+  .tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;padding:6px;border:1px solid var(--line);border-radius:18px;background:var(--surface);margin-bottom:16px;box-shadow:var(--shadow)}
+  .tab{display:flex;align-items:center;gap:9px;padding:10px 12px;border-radius:13px;border:1px solid transparent;background:transparent;color:var(--sub);text-align:left;transition:.2s;min-width:0}
+  .tab:hover{background:var(--surface);color:var(--ink)}
+  .tab.active{background:linear-gradient(145deg,rgba(239,68,68,.15),rgba(239,68,68,.055));border-color:rgba(239,68,68,.24);color:var(--ink);box-shadow:0 8px 22px -15px rgba(239,68,68,.5)}
+  .tab-icon{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:var(--surface2);color:var(--sub);flex-shrink:0}
+  .tab.active .tab-icon{background:var(--brand-soft);color:var(--brand)}
+  .tab-text{min-width:0}
+  .tab-label{display:block;font-size:12.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tab-detail{display:block;font-size:10.5px;color:var(--sub);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .panel{border:1px solid var(--line);border-radius:20px;background:var(--surface);box-shadow:var(--shadow);overflow:hidden}
+  .panel-pad{padding:16px}
+  .filters{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.012)}
+  .field{display:flex;flex-direction:column;gap:5px;min-width:150px}
+  .field.grow{flex:1;min-width:230px}
+  .field label{font-size:9.5px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;color:var(--sub)}
+  .control{height:36px;border:1px solid var(--line);border-radius:10px;background:var(--surface-solid);color:var(--ink);padding:0 10px;font-size:12.5px;outline:none;min-width:0;width:100%}
+  .control:focus{border-color:rgba(239,68,68,.5);box-shadow:0 0 0 3px rgba(239,68,68,.12)}
+  select.control{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--sub) 50%),linear-gradient(135deg,var(--sub) 50%,transparent 50%);background-position:calc(100% - 14px) 15px,calc(100% - 10px) 15px;background-size:4px 4px,4px 4px;background-repeat:no-repeat;padding-right:28px}
+  .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:14px 16px;border-bottom:1px solid var(--line)}
+  .kpi{border:1px solid var(--line);border-radius:13px;background:rgba(255,255,255,.02);padding:11px 12px;min-width:0}
+  .kpi-label{font-size:9.5px;text-transform:uppercase;letter-spacing:.12em;color:var(--sub);font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .kpi-value{font-size:22px;font-weight:800;letter-spacing:-.035em;margin-top:3px;line-height:1}
+  .kpi-value.brand{color:var(--brand)}
+  .kpi-foot{font-size:10.5px;color:var(--sub);margin-top:4px}
+  .table-wrap{overflow:auto}
+  table{width:100%;border-collapse:collapse;min-width:760px}
+  th{padding:9px 11px;text-align:left;font-size:9.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--sub);font-weight:800;background:var(--surface2);white-space:nowrap}
+  td{padding:10px 11px;border-top:1px solid var(--line);font-size:12px;vertical-align:middle}
+  tbody tr{transition:background .15s}
+  tbody tr:hover{background:rgba(255,255,255,.022)}
+  .art{display:flex;align-items:center;gap:9px;min-width:170px}
+  .thumb{width:38px;height:38px;border-radius:10px;flex-shrink:0;display:grid;place-items:center;border:1px solid rgba(255,255,255,.1);background:linear-gradient(145deg,#1c1c24,#0b0b10);position:relative;overflow:hidden}
+  html.light .thumb{background:linear-gradient(145deg,#e7e9ef,#f8f9fb)}
+  .thumb::after{content:'';position:absolute;inset:auto 5px 6px;height:4px;border-radius:50%;background:rgba(255,255,255,.13);filter:blur(2px)}
+  .thumb svg{width:27px;height:27px;stroke:var(--sub);fill:none;stroke-width:1.5;opacity:.9}
+  .art-name{font-weight:800;line-height:1.2}
+  .art-sub{font-size:10.5px;color:var(--sub);margin-top:2px}
+  .num{font-variant-numeric:tabular-nums}
+  .muted{color:var(--sub)}
+  .strong{font-weight:800}
+  .badge{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:4px 8px;font-size:10px;font-weight:800;white-space:nowrap;border:1px solid transparent}
+  .badge .dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+  .badge.urgent{background:var(--brand-soft);color:#f87171;border-color:rgba(239,68,68,.22)}
+  .badge.ok{background:var(--green-soft);color:#34d399;border-color:rgba(52,211,153,.2)}
+  .badge.warn{background:var(--amber-soft);color:#fbbf24;border-color:rgba(251,191,36,.2)}
+  .badge.blue{background:var(--blue-soft);color:#60a5fa;border-color:rgba(96,165,250,.2)}
+  .row-actions{display:flex;gap:5px;justify-content:flex-end}
+  .empty-note{display:flex;gap:10px;padding:14px 16px;border-top:1px solid var(--line);background:rgba(255,255,255,.015);color:var(--sub);font-size:11.5px;align-items:flex-start;line-height:1.5}
+  .empty-note .icon{color:var(--brand);margin-top:1px}
+  .prop-check{width:15px;height:15px;accent-color:var(--brand);cursor:pointer}
+  .summary-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:13px 16px;border-top:1px solid var(--line);background:linear-gradient(90deg,rgba(239,68,68,.08),transparent 60%)}
+  .summary-main{display:flex;flex-wrap:wrap;align-items:baseline;gap:7px;font-size:12px;color:var(--sub)}
+  .summary-main b{color:var(--ink);font-size:16px;letter-spacing:-.02em}
+  .summary-main .sep{opacity:.35}
+  .section-title{margin:0;font-size:16px;font-weight:800;letter-spacing:-.02em}
+  .section-sub{margin:4px 0 0;color:var(--sub);font-size:11.5px;line-height:1.5}
+  .split{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:12px;align-items:start}
+  .stack{display:flex;flex-direction:column;gap:12px}
+  .model-card{padding:14px 16px}
+  .model-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}
+  .model-title{display:flex;align-items:center;gap:10px;min-width:0}
+  .model-title .thumb{width:46px;height:46px;border-radius:12px}
+  .model-title .thumb svg{width:32px;height:32px}
+  .model-name{font-size:14px;font-weight:800;line-height:1.15}
+  .model-meta{font-size:10.5px;color:var(--sub);margin-top:3px}
+  .sizes{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+  .size{border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.018);padding:7px 6px;text-align:center;min-width:0}
+  .size .talle{font-size:11px;font-weight:800}
+  .size .stock{font-size:9.5px;color:var(--sub);margin-top:2px}
+  .size input{width:100%;height:28px;margin-top:5px;border:1px solid var(--line);border-radius:7px;background:var(--surface-solid);color:var(--ink);text-align:center;font-size:11.5px;font-weight:700;outline:none;padding:0 2px}
+  .size input:focus{border-color:rgba(239,68,68,.5);box-shadow:0 0 0 2px rgba(239,68,68,.1)}
+  .cart-card{position:sticky;top:18px;padding:16px}
+  .cart-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:13px}
+  .cart-head h3{margin:0;font-size:13.5px;font-weight:800}
+  .cart-list{display:flex;flex-direction:column;gap:9px;margin-bottom:13px}
+  .cart-line{display:flex;justify-content:space-between;gap:10px;font-size:11.5px;color:var(--sub);border-bottom:1px dashed var(--line);padding-bottom:8px}
+  .cart-line b{color:var(--ink);font-weight:700}
+  .cart-total{display:flex;justify-content:space-between;align-items:baseline;margin:14px 0}
+  .cart-total span{font-size:11px;color:var(--sub);font-weight:700;text-transform:uppercase;letter-spacing:.1em}
+  .cart-total strong{font-size:22px;letter-spacing:-.035em}
+  .cart-card .btn{width:100%}
+  .config-note{display:flex;gap:10px;align-items:flex-start;padding:11px 13px;border:1px solid rgba(96,165,250,.18);border-radius:12px;background:var(--blue-soft);color:#93c5fd;font-size:11.5px;line-height:1.5;margin-bottom:12px}
+  html.light .config-note{color:#1d4ed8}
+  .config-note .icon{margin-top:1px;color:var(--blue)}
+  .config-list{display:flex;flex-direction:column}
+  .config-row{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(130px,.85fr) minmax(0,1.2fr) minmax(150px,.9fr) 92px;gap:10px;align-items:center;padding:11px 16px;border-top:1px solid var(--line)}
+  .config-row:first-child{border-top:0}
+  .config-client{min-width:0}
+  .config-client b{display:block;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .config-client span{display:block;font-size:10.5px;color:var(--sub);margin-top:2px}
+  .config-row .control{height:32px;font-size:11px}
+  .save-state{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:800;color:var(--green);white-space:nowrap}
+  .save-state.pending{color:var(--amber)}
+  .config-form{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end;padding:14px 16px;border-top:1px solid var(--line);background:rgba(255,255,255,.015)}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);opacity:0;pointer-events:none;transition:.25s cubic-bezier(.23,1,.32,1);background:var(--surface-solid);border:1px solid var(--line2);color:var(--ink);border-radius:13px;padding:11px 16px;font-size:12px;font-weight:600;box-shadow:0 18px 44px -18px rgba(0,0,0,.7);z-index:50;display:flex;align-items:center;gap:8px;max-width:calc(100vw - 32px)}
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+  .toast .icon{color:var(--green)}
+  .footer-note{text-align:center;color:var(--sub);font-size:10.5px;margin-top:24px;line-height:1.6}
+  .footer-note b{color:var(--ink)}
+  @media (max-width:960px){
+    .split{grid-template-columns:1fr}
+    .cart-card{position:static}
+    .config-row{grid-template-columns:1fr 1fr;gap:8px;padding:13px 16px}
+    .config-row .save-state{justify-self:start}
+    .config-form{grid-template-columns:1fr 1fr}
+  }
+  @media (max-width:720px){
+    .shell{padding:14px 12px 48px}
+    .topbar{margin-bottom:24px}
+    .topbar .top-divider,.topbar .top-label,.preview-pill{display:none}
+    .page-head{flex-direction:column;gap:12px}
+    .head-actions{width:100%}
+    .head-actions .btn{flex:1}
+    .tabs{grid-template-columns:1fr;gap:4px}
+    .tab-detail{display:none}
+    .tab{padding:8px 10px}
+    .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .filters{padding:12px}
+    .field,.field.grow{min-width:calc(50% - 6px);flex:1}
+    .config-row{grid-template-columns:1fr}
+    .config-row .save-state{margin-top:2px}
+    .config-form{grid-template-columns:1fr}
+    .sizes{grid-template-columns:repeat(4,minmax(0,1fr))}
+    .summary-bar{align-items:flex-start}
+    .summary-bar .btn{width:100%}
+  }
+</style>
+</head>
+<body>
+  <svg width="0" height="0" aria-hidden="true" style="position:absolute">
+    <defs>
+      <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/></symbol>
+      <symbol id="i-clipboard" viewBox="0 0 24 24"><path d="M9 5h6M9 3h6a2 2 0 0 1 2 2v1h1a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h1V5a2 2 0 0 1 2-2Z"/><path d="M8 12h8M8 16h5"/></symbol>
+      <symbol id="i-package" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 8 9 5 9-5M3 8v8l9 5 9-5V8"/></symbol>
+      <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6h.09A1.7 1.7 0 0 0 10 3.05V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9v.09a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1Z"/></symbol>
+      <symbol id="i-message" viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9.8 9.8 0 0 1-4-.9L3 21l1.7-4.6A8.4 8.4 0 1 1 21 11.5Z"/><path d="M8.5 10.5h7M8.5 14h4.5"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 21h16"/></symbol>
+      <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+      <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></symbol>
+      <symbol id="i-store" viewBox="0 0 24 24"><path d="M3 9 5 4h14l2 5M4 9v11h16V9M9 20v-6h6v6"/><path d="M3 9c0 1.4 1.2 2.5 2.6 2.5S8.3 10.4 8.3 9c0 1.4 1.2 2.5 2.6 2.5S13.5 10.4 13.5 9c0 1.4 1.2 2.5 2.6 2.5S18.7 10.4 18.7 9c0 1.4 1.2 2.5 2.6 2.5"/></symbol>
+      <symbol id="i-phone" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.4 19.4 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 2 .7 2.9a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.9.3 1.9.6 2.9.7a2 2 0 0 1 1.7 2Z"/></symbol>
+      <symbol id="i-shoe" viewBox="0 0 64 40"><path d="M7 26c8 0 12-3 16-9l5-7 7 4c3 2 5 5 9 7 6 3 13 4 13 10v4H7v-9Z"/><path d="M29 17c3 3 6 5 11 7"/><path d="M13 30h35"/></symbol>
+      <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/></symbol>
+    </defs>
+  </svg>
+
+  <main class="shell">
+    <header class="topbar">
+      <div class="topbar-left">
+        <div class="brand"><span class="brand-mark">M</span><span>MITO <small>Hub</small></span></div>
+        <span class="top-divider"></span>
+        <span class="top-label">Mayorista</span>
+        <span class="preview-pill">Vista previa estática</span>
+      </div>
+      <div class="topbar-right">
+        <button class="icon-btn" id="theme-btn" type="button" title="Cambiar tema" aria-label="Cambiar tema">
+          <svg class="icon icon-lg" id="theme-icon"><use href="#i-sun"/></svg>
+        </button>
+        <div class="avatar">AM</div>
+      </div>
+    </header>
+
+    <div class="page-head">
+      <div>
+        <p class="eyebrow" id="page-eyebrow">Franquicias</p>
+        <h1 id="page-title">Reposición diaria</h1>
+        <p class="page-desc" id="page-desc">Ventas de la franquicia contra el stock real del cliente y de MITO. Detectá qué falta y armá la reposición.</p>
+      </div>
+      <div class="head-actions">
+        <button class="btn" id="back-btn" data-toast="Volver a Franquicias" hidden>
+          <svg class="icon"><use href="#i-arrow-left"/></svg> Volver
+        </button>
+        <button class="btn btn-soft" id="config-btn" type="button">
+          <svg class="icon"><use href="#i-settings"/></svg> Configurar
+        </button>
+      </div>
+    </div>
+
+    <nav class="tabs" id="tabs" aria-label="Pantallas de Franquicias">
+      <button class="tab active" data-screen="diaria" type="button">
+        <span class="tab-icon"><svg class="icon"><use href="#i-calendar"/></svg></span>
+        <span class="tab-text"><span class="tab-label">Reposición diaria</span><span class="tab-detail">Ventas contra stock real</span></span>
+      </button>
+      <button class="tab" data-screen="propuestas" type="button">
+        <span class="tab-icon"><svg class="icon"><use href="#i-clipboard"/></svg></span>
+        <span class="tab-text"><span class="tab-label">Propuesta de reposición</span><span class="tab-detail">Armar, enviar y seguir</span></span>
+      </button>
+      <button class="tab" data-screen="materiales" type="button">
+        <span class="tab-icon"><svg class="icon"><use href="#i-package"/></svg></span>
+        <span class="tab-text"><span class="tab-label">Reposición de materiales</span><span class="tab-detail">Calzado por curva de talles</span></span>
+      </button>
+    </nav>
+
+    <!-- ===================== REPOSICIÓN DIARIA ===================== -->
+    <section data-view="diaria">
+      <div class="panel">
+        <div class="filters">
+          <div class="field grow">
+            <label for="diaria-cliente">Cliente</label>
+            <select class="control" id="diaria-cliente">
+              <option>01140 · CF Ushuaia · DRAGONFISH_CFU</option>
+              <option>01141 · CF Río Grande · sin base</option>
+              <option>01142 · CF Tolhuin · DRAGONFISH_CFU</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="diaria-desde">Desde</label>
+            <input class="control" id="diaria-desde" type="date" value="2026-10-13" />
+          </div>
+          <div class="field">
+            <label for="diaria-hasta">Hasta</label>
+            <input class="control" id="diaria-hasta" type="date" value="2026-10-22" />
+          </div>
+          <button class="btn" type="button" data-toast="Vista previa: se vuelven a leer ventas y stock.">
+            <svg class="icon"><use href="#i-refresh"/></svg> Actualizar
+          </button>
+          <button class="btn" type="button" data-toast="Vista previa: se descarga el CSV de la reposición.">
+            <svg class="icon"><use href="#i-download"/></svg> Excel
+          </button>
+        </div>
+
+        <div class="kpis">
+          <div class="kpi"><div class="kpi-label">Artículos</div><div class="kpi-value">18</div><div class="kpi-foot">SKU con venta en el período</div></div>
+          <div class="kpi"><div class="kpi-label">Unidades sugeridas</div><div class="kpi-value brand">246</div><div class="kpi-foot">según venta y stock</div></div>
+          <div class="kpi"><div class="kpi-label">Valor estimado</div><div class="kpi-value">$1.842.000</div><div class="kpi-foot">precio de lista</div></div>
+          <div class="kpi"><div class="kpi-label">Urgentes</div><div class="kpi-value" style="color:var(--brand)">4</div><div class="kpi-foot">cliente sin stock</div></div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Artículo</th><th>Talle</th><th>Vendido</th><th>Stock cliente</th><th>Stock MITO</th><th>Sugerido</th><th>Estado</th><th>Precio</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><div class="art"><span class="thumb"><svg class="icon"><use href="#i-shoe"/></svg></span><span><span class="art-name">Vans Old Skool</span><span class="art-sub">Negro · VN0005U</span></span></div></td>
+                <td class="num">42</td><td class="num">5</td><td class="num" style="color:var(--brand);font-weight:800">0</td><td class="num">8</td><td class="num strong">5</td>
+                <td><span class="badge urgent"><span class="dot"></span>Urgente</span></td>
+                <td class="num">$89.900</td>
+                <td><div class="row-actions"><button class="btn btn-sm" type="button" data-toast="Vista previa: abre el WhatsApp del cliente."><svg class="icon icon-sm"><use href="#i-message"/></svg></button><button class="btn btn-sm btn-primary" type="button" data-screen="propuestas">Armar</button></div></td>
+              </tr>
+              <tr>
+                <td><div class="art"><span class="thumb"><svg class="icon"><use href="#i-shoe"/></svg></span><span><span class="art-name">Vans Knu Skool</span><span class="art-sub">Gris · VN0009Q</span></span></div></td>
+                <td class="num">41</td><td class="num">4</td><td class="num" style="color:var(--brand);font-weight:800">1</td><td class="num">6</td><td class="num strong">3</td>
+                <td><span class="badge urgent"><span class="dot"></span>Urgente</span></td>
+                <td class="num">$102.500</td>
+                <td><div class="row-actions"><button class="btn btn-sm" type="button" data-toast="Vista previa: abre el WhatsApp del cliente."><svg class="icon icon-sm"><use href="#i-message"/></svg></button><button class="btn btn-sm btn-primary" type="button" data-screen="propuestas">Armar</button></div></td>
+              </tr>
+              <tr>
+                <td><div class="art"><span class="thumb"><svg class="icon"><use href="#i-shoe"/></svg></span><span><span class="art-name">Vans Authentic</span><span class="art-sub">Blanco · VN000EE</span></span></div></td>
+                <td class="num">40</td><td class="num">6</td><td class="num">2</td><td class="num">12</td><td class="num strong">4</td>
+                <td><span class="badge warn"><span class="dot"></span>Normal</span></td>
+                <td class="num">$74.900</td>
+                <td><div class="row-actions"><button class="btn btn-sm" type="button" data-toast="Vista previa: abre el WhatsApp del cliente."><svg class="icon icon-sm"><use href="#i-message"/></svg></button><button class="btn btn-sm btn-primary" type="button" data-screen="propuestas">Armar</button></div></td>
+              </tr>
+              <tr>
+                <td><div class="art"><span class="thumb"><svg class="icon"><use href="#i-shoe"/></svg></span><span><span class="art-name">Vans Slip-On</span><span class="art-sub">Negro · VN000EY</span></span></div></td>
+                <td class="num">43</td><td class="num">3</td><td class="num">1</td><td class="num">2</td><td class="num strong">1</td>
+                <td><span class="badge warn"><span class="dot"></span>Normal</span></td>
+                <td class="num">$81.200</td>
+                <td><div class="row-actions"><button class="btn btn-sm" type="button" data-toast="Vista previa: abre el WhatsApp del cliente."><svg class="icon icon-sm"><use href="#i-message"/></svg></button><button class="btn btn-sm btn-primary" type="button" data-screen="propuestas">Armar</button></div></td>
+              </tr>
+              <tr>
+                <td><div class="art"><span class="thumb"><svg class="icon"><use href="#i-shoe"/></svg></span><span><span class="art-name">Vans Sk8-Hi</span><span class="art-sub">Azul · VN0007N</span></span></div></td>
+                <td class="num">39</td><td class="num">2</td><td class="num" style="color:var(--brand);font-weight:800">0</td><td class="num">5</td><td class="num strong">2</td>
+                <td><span class="badge urgent"><span class="dot"></span>Urgente</span></td>
+                <td class="num">$112.400</td>
+                <td><div class="row-actions"><button class="btn btn-sm" type="button" data-toast="Vista previa: abre el WhatsApp del cliente."><svg class="icon icon-sm"><use href="#i-message"/></svg></button><button class="btn btn-sm btn-primary" type="button" data-screen="propuestas">Armar</button></div></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="empty-note"><svg class="icon"><use href="#i-alert"/></svg><span><b style="color:var(--ink)">Urgente</b> = el cliente no tiene stock, vendió y en MITO hay más de una unidad para reponer. El sugerido sale de la venta menos el stock del cliente, con tope en el stock de MITO.</span></div>
+      </div>
+    </section>
+
+    <!-- ===================== PROPUESTA ===================== -->
+    <section data-view="propuestas" hidden>
+      <div class="panel">
+        <div class="filters">
+          <div class="field grow">
+            <label for="prop-cliente">Cliente</label>
+            <select class="control" id="prop-cliente">
+              <option>01140 · CF Ushuaia · DRAGONFISH_CFU</option>
+              <option>01142 · CF Tolhuin · DRAGONFISH_CFU</option>
+            </select>
+          </div>
+          <div class="field"><label for="prop-desde">Desde</label><input class="control" id="prop-desde" type="date" value="2026-10-13" /></div>
+          <div class="field"><label for="prop-hasta">Hasta</label><input class="control" id="prop-hasta" type="date" value="2026-10-22" /></div>
+          <button class="btn" type="button" data-toast="Vista previa: se recalculan los artículos de la propuesta."><svg class="icon"><use href="#i-refresh"/></svg> Actualizar</button>
+        </div>
+
+        <div class="kpis">
+          <div class="kpi"><div class="kpi-label">Artículos</div><div class="kpi-value">18</div><div class="kpi-foot">disponibles para incluir</div></div>
+          <div class="kpi"><div class="kpi-label">Unidades</div><div class="kpi-value">246</div><div class="kpi-foot">máximo sugerido</div></div>
+          <div class="kpi"><div class="kpi-label">Valor</div><div class="kpi-value">$1.842.000</div><div class="kpi-foot">precio de lista</div></div>
+          <div class="kpi"><div class="kpi-label">Última propuesta</div><div class="kpi-value" style="font-size:17px">P-004</div><div class="kpi-foot">enviada 18/10 · confirmada</div></div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:32px"><input type="checkbox" class="prop-check" id="check-all" checked aria-label="Seleccionar todo" /></th>
+                <th>Artículo</th><th>Talle</th><th>Vendido</th><th>Stock cliente</th><th>Stock MITO</th><th>Sugerido</th><th>Precio</th>
+              </tr>
+            </thead>
+            <tbody id="prop-rows">
+              <tr><td><input class="prop-check row-check" type="checkbox" checked data-units="5" data-price="89900" aria-label="Incluir Vans Old Skool" /></td><td><div class="art"><span class="thumb"><svg class="icon"><use href="#i-shoe"/></svg></span><span><span class="art-name">Vans Old Skool</span><span class="art-sub">Negro · VN0005U</span></span></div></td><td>42</td><td>5</td><td style="color:var(--brand);font-weight:800">0</td><td>8</td><td class="strong">5</td><td>$89.900</td></tr>
+              <tr><td><input class="prop-check row-check" type="checkbox" checked data-units="3" data-price="102500" aria-label="Incluir Vans Knu Skool" /></td><td><div class="art"><span class="thumb"><svg class="icon"><use href="#i-shoe"/></svg></span><span><span class="art-name">Vans Knu Skool</span><span class="art-sub">Gris · VN0009Q</span></span></div></td><td>41</td><td>4</td><td style="color:var(--brand);font-weight:800">1</td><td>6</td><td class="strong">3</td><td>$102.500</td></tr>
+              <tr><td><input class="prop-check row-check" type="checkbox" checked data-units="4" data-price="74900" aria-label="Incluir Vans Authentic" /></td><td><div class="art"><span class="thumb"><svg class="icon"><use href="#i-shoe"/></svg></span><span><span class="art-name">Vans Authentic</span><span class="art-sub">Blanco · VN000EE</span></span></div></td><td>40</td><td>6</td><td>2</td><td>12</td><td class="strong">4</td><td>$74.900</td></tr>
+              <tr><td><input class="prop-check row-check" type="checkbox" checked data-units="1" data-price="81200" aria-label="Incluir Vans Slip-On" /></td><td><div class="art"><span class="thumb"><svg class="icon"><use href="#i-shoe"/></svg></span><span><span class="art-name">Vans Slip-On</span><span class="art-sub">Negro · VN000EY</span></span></div></td><td>43</td><td>3</td><td>1</td><td>2</td><td class="strong">1</td><td>$81.200</td></tr>
+              <tr><td><input class="prop-check row-check" type="checkbox" checked data-units="2" data-price="112400" aria-label="Incluir Vans Sk8-Hi" /></td><td><div class="art"><span class="thumb"><svg class="icon"><use href="#i-shoe"/></svg></span><span><span class="art-name">Vans Sk8-Hi</span><span class="art-sub">Azul · VN0007N</span></span></div></td><td>39</td><td>2</td><td style="color:var(--brand);font-weight:800">0</td><td>5</td><td class="strong">2</td><td>$112.400</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="summary-bar">
+          <div class="summary-main" id="prop-summary"><b>5</b> artículos <span class="sep">·</span> <b>15</b> u. <span class="sep">·</span> <b>$1.362.600</b> estimado</div>
+          <div style="display:flex;gap:7px;flex-wrap:wrap">
+            <button class="btn" type="button" data-toast="Vista previa: se genera el link público de la propuesta."><svg class="icon"><use href="#i-search"/></svg> Previsualizar</button>
+            <button class="btn btn-primary" type="button" data-toast="Vista previa: se crea la propuesta y se abre WhatsApp con el link."><svg class="icon"><use href="#i-message"/></svg> Crear propuesta</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:12px">
+        <div style="padding:14px 16px 10px"><h2 class="section-title">Últimas propuestas</h2><p class="section-sub">El envío en producción sigue siendo manual por WhatsApp.</p></div>
+        <div class="table-wrap">
+          <table style="min-width:680px">
+            <thead><tr><th>N°</th><th>Cliente</th><th>Creada</th><th>Artículos</th><th>Total</th><th>Estado</th><th></th></tr></thead>
+            <tbody>
+              <tr><td class="strong">P-004</td><td>CF Ushuaia</td><td class="muted">18/10 09:42</td><td class="num">12</td><td class="num strong">$1.264.000</td><td><span class="badge ok"><span class="dot"></span>Confirmada</span></td><td><div class="row-actions"><button class="btn btn-sm" type="button" data-toast="Vista previa: se abre el link público de P-004.">Ver</button><button class="btn btn-sm" type="button" data-toast="Vista previa: se comparte P-004 por WhatsApp."><svg class="icon icon-sm"><use href="#i-message"/></svg></button></div></td></tr>
+              <tr><td class="strong">P-003</td><td>CF Ushuaia</td><td class="muted">11/10 18:10</td><td class="num">9</td><td class="num strong">$842.300</td><td><span class="badge blue"><span class="dot"></span>Enviada</span></td><td><div class="row-actions"><button class="btn btn-sm" type="button" data-toast="Vista previa: se abre el link público de P-003.">Ver</button><button class="btn btn-sm" type="button" data-toast="Vista previa: se comparte P-003 por WhatsApp."><svg class="icon icon-sm"><use href="#i-message"/></svg></button></div></td></tr>
+              <tr><td class="strong">P-002</td><td>CF Tolhuin</td><td class="muted">03/10 12:25</td><td class="num">7</td><td class="num strong">$603.500</td><td><span class="badge ok"><span class="dot"></span>Confirmada</span></td><td><div class="row-actions"><button class="btn btn-sm" type="button" data-toast="Vista previa: se abre el link público de P-002.">Ver</button><button class="btn btn-sm" type="button" data-toast="Vista previa: se comparte P-002 por WhatsApp."><svg class="icon icon-sm"><use href="#i-message"/></svg></button></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== MATERIALES ===================== -->
+    <section data-view="materiales" hidden>
+      <div class="split">
+        <div class="stack">
+          <div class="panel">
+            <div class="filters" style="border-bottom:0">
+              <div class="field grow"><label for="mat-cliente">Cliente</label><select class="control" id="mat-cliente"><option>01140 · CF Ushuaia · DRAGONFISH_CFU</option><option>01142 · CF Tolhuin · DRAGONFISH_CFU</option></select></div>
+              <div class="field"><label for="mat-temporada">Temporada</label><select class="control" id="mat-temporada"><option>Verano</option><option>Continuo</option><option>Invierno</option><option>Todas</option></select></div>
+              <div class="field"><label>Tipo de curva</label><div style="display:flex;gap:5px"><button class="btn btn-sm btn-primary" type="button">Simples</button><button class="btn btn-sm" type="button" data-toast="Vista previa: se muestran los talles dobles 38/39, 40/41…">Dobles</button></div></div>
+            </div>
+          </div>
+
+          <article class="panel model-card">
+            <div class="model-head">
+              <div class="model-title"><span class="thumb"><svg class="icon"><use href="#i-shoe"/></svg></span><div><div class="model-name">Vans Knu Skool</div><div class="model-meta">Negro · Verano · 7 talles · 16 u. en MITO</div></div></div>
+              <span class="badge ok"><span class="dot"></span>7 talles</span>
+            </div>
+            <div class="sizes">
+              <div class="size"><div class="talle">38</div><div class="stock">2 disp.</div><input class="mat-qty" type="number" min="0" max="2" value="1" data-price="102500" aria-label="Cantidad talle 38" /></div>
+              <div class="size"><div class="talle">39</div><div class="stock">3 disp.</div><input class="mat-qty" type="number" min="0" max="3" value="2" data-price="102500" aria-label="Cantidad talle 39" /></div>
+              <div class="size"><div class="talle">40</div><div class="stock">1 disp.</div><input class="mat-qty" type="number" min="0" max="1" value="0" data-price="102500" aria-label="Cantidad talle 40" /></div>
+              <div class="size"><div class="talle">41</div><div class="stock">4 disp.</div><input class="mat-qty" type="number" min="0" max="4" value="2" data-price="102500" aria-label="Cantidad talle 41" /></div>
+              <div class="size"><div class="talle">42</div><div class="stock">3 disp.</div><input class="mat-qty" type="number" min="0" max="3" value="1" data-price="102500" aria-label="Cantidad talle 42" /></div>
+              <div class="size"><div class="talle">43</div><div class="stock">2 disp.</div><input class="mat-qty" type="number" min="0" max="2" value="1" data-price="102500" aria-label="Cantidad talle 43" /></div>
+              <div class="size"><div class="talle">44</div><div class="stock">1 disp.</div><input class="mat-qty" type="number" min="0" max="1" value="0" data-price="102500" aria-label="Cantidad talle 44" /></div>
+            </div>
+          </article>
+
+          <article class="panel model-card">
+            <div class="model-head">
+              <div class="model-title"><span class="thumb"><svg class="icon"><use href="#i-shoe"/></svg></span><div><div class="model-name">Vans Old Skool</div><div class="model-meta">Gris · Continuo · 6 talles · 22 u. en MITO</div></div></div>
+              <span class="badge ok"><span class="dot"></span>6 talles</span>
+            </div>
+            <div class="sizes" style="grid-template-columns:repeat(6,minmax(0,1fr))">
+              <div class="size"><div class="talle">39</div><div class="stock">4 disp.</div><input class="mat-qty" type="number" min="0" max="4" value="1" data-price="89900" aria-label="Cantidad talle 39" /></div>
+              <div class="size"><div class="talle">40</div><div class="stock">6 disp.</div><input class="mat-qty" type="number" min="0" max="6" value="2" data-price="89900" aria-label="Cantidad talle 40" /></div>
+              <div class="size"><div class="talle">41</div><div class="stock">3 disp.</div><input class="mat-qty" type="number" min="0" max="3" value="1" data-price="89900" aria-label="Cantidad talle 41" /></div>
+              <div class="size"><div class="talle">42</div><div class="stock">5 disp.</div><input class="mat-qty" type="number" min="0" max="5" value="2" data-price="89900" aria-label="Cantidad talle 42" /></div>
+              <div class="size"><div class="talle">43</div><div class="stock">2 disp.</div><input class="mat-qty" type="number" min="0" max="2" value="1" data-price="89900" aria-label="Cantidad talle 43" /></div>
+              <div class="size"><div class="talle">44</div><div class="stock">2 disp.</div><input class="mat-qty" type="number" min="0" max="2" value="0" data-price="89900" aria-label="Cantidad talle 44" /></div>
+            </div>
+          </article>
+        </div>
+
+        <aside class="panel cart-card">
+          <div class="cart-head"><h3>Reposición</h3><span class="badge blue"><span class="dot"></span>Materiales</span></div>
+          <div class="cart-list" id="mat-lines">
+            <div class="cart-line"><span>Vans Knu Skool · Negro</span><b>7 u.</b></div>
+            <div class="cart-line"><span>Vans Old Skool · Gris</span><b>7 u.</b></div>
+          </div>
+          <div style="font-size:10.5px;color:var(--sub);line-height:1.5">El cliente elige sobre esta propuesta. La cantidad no puede superar el stock de MITO.</div>
+          <div class="cart-total"><span>Total estimado</span><strong id="mat-total">$1.346.800</strong></div>
+          <button class="btn btn-primary" type="button" data-toast="Vista previa: se crea la reposición de materiales y se abre WhatsApp."><svg class="icon"><use href="#i-message"/></svg> Crear y enviar</button>
+          <div style="height:8px"></div>
+          <button class="btn" type="button" data-toast="Vista previa: se guarda el borrador de la reposición."><svg class="icon"><use href="#i-check"/></svg> Guardar borrador</button>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ===================== SISTEMAS / FRANQUICIAS ===================== -->
+    <section data-view="sistemas" hidden>
+      <div class="panel">
+        <div style="padding:14px 16px 12px">
+          <div class="config-note"><svg class="icon"><use href="#i-phone"/></svg><span>El teléfono configurado acá es el <b style="color:var(--ink)">contacto principal</b> de la propuesta. Se guarda normalizado para WhatsApp y se puede editar sin tocar la base.</span></div>
+          <h2 class="section-title">Clientes y asignaciones</h2>
+          <p class="section-sub">Cada cliente activo de Dragon apunta a una base y a la sucursal que se usa para leer su stock.</p>
+        </div>
+        <div class="config-list">
+          <div class="config-row">
+            <div class="config-client"><b>01140 · CF Ushuaia</b><span>Cliente activo</span></div>
+            <div><label class="kpi-label" for="base-01140">Base Dragon</label><select class="control" id="base-01140"><option>DRAGONFISH_CFU</option><option>DRAGONFISH_MITO</option></select></div>
+            <div><label class="kpi-label" for="suc-01140">Sucursal de stock</label><select class="control" id="suc-01140"><option>CAPTAIN FIN USHUAIA</option><option>CAPTAIN FIN RÍO GRANDE</option></select></div>
+            <div><label class="kpi-label" for="tel-01140">WhatsApp</label><input class="control" id="tel-01140" value="+54 9 2901 400000" /></div>
+            <div class="save-state"><svg class="icon icon-sm"><use href="#i-check"/></svg> Guardado</div>
+          </div>
+          <div class="config-row">
+            <div class="config-client"><b>01141 · CF Río Grande</b><span>Sin base asignada</span></div>
+            <div><label class="kpi-label" for="base-01141">Base Dragon</label><select class="control" id="base-01141"><option value="">Sin asignar</option><option>DRAGONFISH_CFU</option><option>DRAGONFISH_MITO</option></select></div>
+            <div><label class="kpi-label" for="suc-01141">Sucursal de stock</label><select class="control" id="suc-01141"><option>—</option><option>CAPTAIN FIN RÍO GRANDE</option></select></div>
+            <div><label class="kpi-label" for="tel-01141">WhatsApp</label><input class="control" id="tel-01141" placeholder="2901 400000" /></div>
+            <div class="save-state pending"><svg class="icon icon-sm"><use href="#i-alert"/></svg> Sin base</div>
+          </div>
+          <div class="config-row">
+            <div class="config-client"><b>01142 · CF Tolhuin</b><span>Cliente activo</span></div>
+            <div><label class="kpi-label" for="base-01142">Base Dragon</label><select class="control" id="base-01142"><option>DRAGONFISH_CFU</option><option>DRAGONFISH_MITO</option></select></div>
+            <div><label class="kpi-label" for="suc-01142">Sucursal de stock</label><select class="control" id="suc-01142"><option>CAPTAIN FIN USHUAIA</option><option>CAPTAIN FIN RÍO GRANDE</option></select></div>
+            <div><label class="kpi-label" for="tel-01142">WhatsApp</label><input class="control" id="tel-01142" placeholder="Sin teléfono" /></div>
+            <div class="save-state pending"><svg class="icon icon-sm"><use href="#i-alert"/></svg> Falta tel.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:12px">
+        <div style="padding:14px 16px 0"><h2 class="section-title">Nueva base</h2><p class="section-sub">La base es el nombre de la base de Dragonfish; la sucursal es el <b style="color:var(--ink)">BD_ORIGEN</b> que devuelve el stock.</p></div>
+        <div class="config-form">
+          <div class="field"><label for="nueva-base">Base</label><input class="control" id="nueva-base" placeholder="DRAGONFISH_CFU" /></div>
+          <div class="field"><label for="nueva-sucursal">Sucursal / BD_ORIGEN</label><input class="control" id="nueva-sucursal" placeholder="CAPTAIN FIN USHUAIA" /></div>
+          <div class="field"><label for="nuevo-nombre">Nombre visible</label><input class="control" id="nuevo-nombre" placeholder="CF Ushuaia" /></div>
+          <button class="btn btn-primary" type="button" data-toast="Vista previa: se guarda la nueva base."><svg class="icon"><use href="#i-check"/></svg> Guardar base</button>
+        </div>
+      </div>
+    </section>
+
+    <p class="footer-note"><b>Vista previa de interfaz</b> · datos de ejemplo, sin conexión a Supabase.<br />En producción el envío sigue siendo manual por WhatsApp.</p>
+  </main>
+
+  <div class="toast" id="toast" role="status"><svg class="icon"><use href="#i-check"/></svg><span id="toast-text"></span></div>
+
+  <script>
+    const SCREENS = {
+      diaria: {
+        eyebrow: 'Franquicias',
+        title: 'Reposición diaria',
+        desc: 'Ventas de la franquicia contra el stock real del cliente y de MITO. Detectá qué falta y armá la reposición.',
+      },
+      propuestas: {
+        eyebrow: 'Franquicias',
+        title: 'Propuesta de reposición',
+        desc: 'Elegí los artículos sugeridos, armá una propuesta por cliente y compartila por WhatsApp. Una propuesta por cliente y base.',
+      },
+      materiales: {
+        eyebrow: 'Franquicias',
+        title: 'Reposición de materiales',
+        desc: 'Calzado por curva de talles con el stock real de MITO. Armá la reposición y mandale el link al cliente.',
+      },
+      sistemas: {
+        eyebrow: 'Sistemas',
+        title: 'Franquicias',
+        desc: 'Clientes, base Dragon, sucursal de stock y teléfono de WhatsApp. La configuración sale de Franquicias y vive acá.',
+      },
+    };
+
+    const tabs = document.getElementById('tabs');
+    const configBtn = document.getElementById('config-btn');
+    const backBtn = document.getElementById('back-btn');
+    const title = document.getElementById('page-title');
+    const desc = document.getElementById('page-desc');
+    const eyebrow = document.getElementById('page-eyebrow');
+
+    function showScreen(name) {
+      const meta = SCREENS[name] || SCREENS.diaria;
+      document.querySelectorAll('[data-view]').forEach((section) => {
+        section.hidden = section.dataset.view !== name;
+      });
+      document.querySelectorAll('.tab').forEach((tab) => {
+        tab.classList.toggle('active', tab.dataset.screen === name);
+        tab.setAttribute('aria-selected', String(tab.dataset.screen === name));
+      });
+      title.textContent = meta.title;
+      desc.textContent = meta.desc;
+      eyebrow.textContent = meta.eyebrow;
+      const isConfig = name === 'sistemas';
+      tabs.hidden = isConfig;
+      configBtn.hidden = isConfig;
+      backBtn.hidden = !isConfig;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    document.querySelectorAll('[data-screen]').forEach((el) => {
+      el.addEventListener('click', () => showScreen(el.dataset.screen));
+    });
+    configBtn.addEventListener('click', () => showScreen('sistemas'));
+    backBtn.addEventListener('click', () => showScreen('diaria'));
+
+    // Toasts de la vista previa
+    let toastTimer;
+    function toast(message) {
+      const el = document.getElementById('toast');
+      document.getElementById('toast-text').textContent = message;
+      el.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+    }
+    document.querySelectorAll('[data-toast]').forEach((btn) => {
+      btn.addEventListener('click', () => toast(btn.dataset.toast));
+    });
+
+    // Tema oscuro / claro
+    const themeBtn = document.getElementById('theme-btn');
+    const themeIcon = document.getElementById('theme-icon');
+    themeBtn.addEventListener('click', () => {
+      const light = document.documentElement.classList.toggle('light');
+      themeIcon.querySelector('use').setAttribute('href', light ? '#i-moon' : '#i-sun');
+    });
+
+    // Resumen de la propuesta
+    const rowChecks = [...document.querySelectorAll('.row-check')];
+    const checkAll = document.getElementById('check-all');
+    const propSummary = document.getElementById('prop-summary');
+    const fmt = (n) => new Intl.NumberFormat('es-AR').format(n);
+
+    function updateProposal() {
+      const selected = rowChecks.filter((c) => c.checked);
+      const units = selected.reduce((sum, c) => sum + Number(c.dataset.units), 0);
+      const total = selected.reduce((sum, c) => sum + Number(c.dataset.units) * Number(c.dataset.price), 0);
+      propSummary.innerHTML = `<b>${selected.length}</b> artículos <span class="sep">·</span> <b>${fmt(units)}</b> u. <span class="sep">·</span> <b>$${fmt(total)}</b> estimado`;
+      checkAll.checked = selected.length === rowChecks.length;
+      checkAll.indeterminate = selected.length > 0 && selected.length < rowChecks.length;
+    }
+    rowChecks.forEach((c) => c.addEventListener('change', updateProposal));
+    checkAll.addEventListener('change', () => {
+      rowChecks.forEach((c) => { c.checked = checkAll.checked; });
+      updateProposal();
+    });
+    updateProposal();
+
+    // Resumen de materiales
+    const matInputs = [...document.querySelectorAll('.mat-qty')];
+    const matTotal = document.getElementById('mat-total');
+    const matLines = document.getElementById('mat-lines');
+
+    function updateMaterials() {
+      const cards = [...document.querySelectorAll('.model-card')];
+      let total = 0;
+      const lines = [];
+      cards.forEach((card) => {
+        const qty = [...card.querySelectorAll('.mat-qty')].reduce((sum, input) => {
+          const max = Number(input.max) || 0;
+          const value = Math.max(0, Math.min(max, Math.floor(Number(input.value) || 0)));
+          if (String(value) !== input.value) input.value = value;
+          return sum + value;
+        }, 0);
+        const name = card.querySelector('.model-name').textContent;
+        const color = card.querySelector('.model-meta').textContent.split('·')[0].trim();
+        total += qty * Number(card.querySelector('.mat-qty')?.dataset.price || 0);
+        if (qty > 0) lines.push(`<div class="cart-line"><span>${name} · ${color}</span><b>${qty} u.</b></div>`);
+      });
+      matTotal.textContent = '$' + fmt(total);
+      matLines.innerHTML = lines.length ? lines.join('') : '<div class="cart-line"><span>Sin cantidades cargadas</span><b>0 u.</b></div>';
+    }
+    matInputs.forEach((input) => {
+      input.addEventListener('input', updateMaterials);
+      input.addEventListener('blur', updateMaterials);
+    });
+    updateMaterials();
+
+    // Estado inicial
+    showScreen('diaria');
+  </script>
+</body>
+</html>

@@ -7,7 +7,9 @@
 -- VTD (venta diaria) o REP (reposición), o repos de Repos Mayorista. Quien solo
 -- arma otros pedidos (ej. legajo 279) no aparece.
 --   * private.usuarios_vtd_rep(desde, hasta): quiénes hicieron VTD/REP en el período.
---   * vw_tiempos_piso: los armados cuentan solo si el pedido es VTD o REP.
+--   * vw_tiempos_piso: ver abajo. 23/10/2026: la pantalla pasa a mostrar TODOS los
+--     motivos (lo que realmente hizo cada legajo) y el filtro vive en la pantalla;
+--     la definición vigente está en sql/tiempos_piso_motivo.sql.
 --   * estadistica_tiempos_muertos y estadistica_pausas: solo esos usuarios.
 -- ============================================================================
 
@@ -27,7 +29,7 @@ AS $$
    WHERE (s.iniciada_at AT TIME ZONE 'America/Argentina/Buenos_Aires')::date BETWEEN p_desde AND p_hasta
 $$;
 
--- ---- Tiempo real en piso: armados solo de pedidos VTD/REP ----
+-- ---- Tiempo real en piso (REEMPLAZADA: ver sql/tiempos_piso_motivo.sql) ----
 CREATE OR REPLACE VIEW public.vw_tiempos_piso
 WITH (security_invoker = true) AS
 SELECT x.empleado_id, x.fecha,

@@ -10,11 +10,23 @@ import { supabase } from '@/lib/supabase'
 import { FILTRO_EMPLEADOS_ACTIVOS } from '@/lib/empleadosActivos'
 import { usePermisosArea } from '@/hooks/usePermisosArea'
 
+/** Motivos del pedido que se pueden filtrar en «Tiempo real en piso» (vw_tiempos_piso_motivo) */
+const MOTIVOS = [
+  { id: 'VTD', label: 'Venta diaria' },
+  { id: 'REP', label: 'Reposición locales' },
+  { id: 'OTRO', label: 'Otros' },
+]
+
 interface Empleado { id: string; legajo: string | null; nombre: string }
-/** Tiempo real medido con Iniciar/Pausar/Finalizar en Mi repo (vista vw_tiempos_piso) */
+/**
+ * Tiempo real medido con Iniciar/Pausar/Finalizar en Mi repo, abierto por motivo del
+ * pedido (vista vw_tiempos_piso_motivo). La pantalla suma todos los motivos salvo que
+ * se filtre; el informe de WhatsApp, en cambio, toma sólo VTD.
+ */
 interface TiempoPiso {
   empleado_id: string | null
   fecha: string
+  motivo: string
   sesiones: number
   repos: number
   unidades: number
@@ -80,7 +92,7 @@ export default function EstadisticasRendimiento() {
 
       const [empData, tiemposData, muertosData] = await Promise.all([
         sb.from('empleados_basico').select('id,legajo,nombre').or(FILTRO_EMPLEADOS_ACTIVOS).order('nombre'),
-        sb.from('vw_tiempos_piso').select('empleado_id,fecha,sesiones,repos,unidades,segundos,pendientes_fin').gte('fecha', desdeQ).lte('fecha', hastaQ),
+        sb.from('vw_tiempos_piso_motivo').select('empleado_id,fecha,motivo,sesiones,repos,unidades,segundos,pendientes_fin').gte('fecha', desdeQ).lte('fecha', hastaQ),
         sb.rpc('estadistica_tiempos_muertos', { p_desde: desdeQ, p_hasta: hastaQ }),
       ])
       setEmpleados((empData.data as Empleado[] | null) ?? [])
@@ -100,11 +112,19 @@ export default function EstadisticasRendimiento() {
 
   useEffect(() => { void cargar(desde, hasta) }, [cargar, desde, hasta])
 
+  // Motivos elegidos; vacío = todos. Sólo afecta el cuadro de tiempo real en piso.
+  const [motivos, setMotivos] = useState<Set<string>>(new Set())
+  const motivosHay = useMemo(
+    () => MOTIVOS.filter((m) => tiempos.some((t) => t.motivo === m.id)),
+    [tiempos],
+  )
+
   const filasPiso = useMemo<FilaPiso[]>(() => {
     const porId = new Map(empleados.map((e) => [e.id, e]))
     const mapa = new Map<string, FilaPiso>()
     for (const t of tiempos) {
       if (!t.empleado_id) continue
+      if (motivos.size > 0 && !motivos.has(t.motivo)) continue
       const emp = porId.get(t.empleado_id)
       let f = mapa.get(t.empleado_id)
       if (!f) {
@@ -117,7 +137,7 @@ export default function EstadisticasRendimiento() {
       f.faltaron += t.pendientes_fin
     }
     return Array.from(mapa.values()).sort((a, b) => b.unidades - a.unidades)
-  }, [tiempos, empleados])
+  }, [tiempos, empleados, motivos])
 
   const sinDatos = filasPiso.length === 0 && muertos.length === 0 && pausas.length === 0
 
@@ -206,6 +226,32 @@ export default function EstadisticasRendimiento() {
             <Timer size={17} className="text-emerald-500" aria-hidden /> Tiempo real en piso
           </h2>
           <p className="mb-2 text-xs text-sub/70">Medido con Iniciar / Pausar / Finalizar en Mi repo. Las pausas no cuentan.</p>
+          {motivosHay.length > 1 && (
+            <div className="mb-2 flex flex-wrap items-center gap-1.5">
+              <span className="mr-1 text-xs text-sub">Motivo</span>
+              <button
+                type="button"
+                onClick={() => setMotivos(new Set())}
+                className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${motivos.size === 0 ? 'border-line2 bg-surface2 text-ink' : 'border-line bg-surface text-sub hover:text-ink'}`}
+              >
+                Todos
+              </button>
+              {motivosHay.map((m) => {
+                const on = motivos.has(m.id)
+                return (
+                  <button
+                    type="button"
+                    key={m.id}
+                    onClick={() => setMotivos((s) => { const n = new Set(s); if (n.has(m.id)) n.delete(m.id); else n.add(m.id); return n })}
+                    aria-pressed={on}
+                    className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${on ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-400' : 'border-line bg-surface text-sub hover:text-ink'}`}
+                  >
+                    {m.label}
+                  </button>
+                )
+              })}
+            </div>
+          )}
           <div className="w-full overflow-x-auto rounded-2xl border border-line">
             <table className="w-full table-auto border-collapse text-sm leading-tight">
               <thead>

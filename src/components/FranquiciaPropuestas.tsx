@@ -25,6 +25,8 @@ export interface ItemPropuesta {
 }
 
 interface Contacto { id: string; nombre: string | null; telefono: string }
+type TipoPropuesta = 'reposicion' | 'calzado' | 'materiales'
+const esMateriales = (tipo: TipoPropuesta | null | undefined) => tipo === 'calzado' || tipo === 'materiales'
 interface Propuesta {
   id: string
   numero: string
@@ -32,7 +34,7 @@ interface Propuesta {
   token: string
   cliente_id: string | null
   cliente_nombre: string | null
-  tipo: 'reposicion' | 'calzado' | null
+  tipo: TipoPropuesta | null
   desde: string | null
   hasta: string | null
   vence_at: string
@@ -77,10 +79,10 @@ function mensajeDe(
   p: { numero: string; token: string; vence_at: string; desde: string | null; hasta: string | null },
   franquicia: string,
   contacto?: string | null,
-  tipo: 'reposicion' | 'calzado' = 'reposicion',
+  tipo: TipoPropuesta = 'reposicion',
 ) {
   const hola = contacto?.trim() ? `Hola ${contacto.trim().split(/\s+/)[0]}` : 'Hola'
-  const que = tipo === 'calzado' ? 'el pedido de calzado' : 'la propuesta de reposición'
+  const que = esMateriales(tipo) ? 'la reposición de materiales' : 'la propuesta de reposición'
   const venta = tipo === 'reposicion' && p.desde && p.hasta ? `, según tu venta del ${diaIso(p.desde)} al ${diaIso(p.hasta)}` : ''
   return `${hola}, te armamos ${que} ${p.numero} para ${franquicia}${venta}.\nElegí qué querés y confirmá el pedido acá: ${linkDe(p.token)}\n(vale hasta el ${fmtDia(p.vence_at)})`
 }
@@ -88,7 +90,7 @@ function mensajeDe(
 const diaIso = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
 const urlWhatsapp = (texto: string, telefono?: string | null) => `https://wa.me/${telefono ? normalizarTelefono(telefono) : ''}?text=${encodeURIComponent(texto)}`
 
-export default function FranquiciaPropuestas({ franquicia, nombre, desde, hasta, items, listo, cliente, tipo = 'reposicion' }: {
+export default function FranquiciaPropuestas({ franquicia, nombre, desde, hasta, items, listo, cliente, telefono, tipo = 'reposicion' }: {
   franquicia: string
   nombre: string
   desde: string | null
@@ -99,8 +101,10 @@ export default function FranquiciaPropuestas({ franquicia, nombre, desde, hasta,
   listo: boolean
   /** cliente destino del pedido (el que se carga en Dragon) */
   cliente?: { id: string; nombre: string } | null
-  /** reposición (por ventas) o pedido de calzado (por curva de talles) */
-  tipo?: 'reposicion' | 'calzado'
+  /** teléfono configurado en Sistemas → Franquicias; se usa como contacto principal */
+  telefono?: string | null
+  /** reposición (por ventas) o reposición de materiales (por curva de talles) */
+  tipo?: TipoPropuesta
 }) {
   const [contactos, setContactos] = useState<Contacto[]>([])
   const [verContactos, setVerContactos] = useState(false)
@@ -112,7 +116,13 @@ export default function FranquiciaPropuestas({ franquicia, nombre, desde, hasta,
   const [enviando, setEnviando] = useState(false)
   const [aviso, setAviso] = useState<{ ok: boolean; txt: string } | null>(null)
   // A quién va: '' = elegir el chat en WhatsApp; si no, el id de un contacto guardado
-  const [para, setPara] = useState('')
+  const [para, setPara] = useState(telefono ? '__cliente' : '')
+
+  // Al cambiar de franquicia o de teléfono configurado, volvemos al contacto
+  // principal del cliente para no arrastrar un contacto de la franquicia anterior.
+  useEffect(() => {
+    setPara(telefono ? '__cliente' : '')
+  }, [franquicia, telefono])
 
   const cargar = useCallback(async () => {
     if (!supabase) return
@@ -138,13 +148,14 @@ export default function FranquiciaPropuestas({ franquicia, nombre, desde, hasta,
     void cargar()
   }
 
-  const contactoPara = contactos.find((c) => c.id === para) ?? null
+  const contactosPara = telefono ? [{ id: '__cliente', nombre: null, telefono }, ...contactos] : contactos
+  const contactoPara = contactosPara.find((c) => c.id === para) ?? null
 
   async function enviarPropuesta() {
     if (!supabase || !items.length) return
     const unidades = items.reduce((s, f) => s + f.sugerido, 0)
     const total = items.reduce((s, f) => s + (f.precio ?? 0) * f.sugerido, 0)
-    const que = tipo === 'calzado' ? 'el pedido de calzado' : 'la propuesta'
+    const que = esMateriales(tipo) ? 'la reposición de materiales' : 'la propuesta'
     if (!window.confirm(`Se arma ${que} para ${nombre} con ${items.length} artículos · ${fmt(unidades)} u.${total ? ` · ${fmtPesos(total)}` : ''} y se abre WhatsApp con el link. ¿Seguir?`)) return
     // La pestaña se abre ya (con el clic); si se abre después de guardar, el navegador la bloquea
     const ventana = window.open('', '_blank')
@@ -180,7 +191,7 @@ export default function FranquiciaPropuestas({ franquicia, nombre, desde, hasta,
   }
 
   function compartir(p: Propuesta) {
-    window.open(urlWhatsapp(mensajeDe(p, nombre, contactoPara?.nombre, tipo), contactoPara?.telefono), '_blank')
+    window.open(urlWhatsapp(mensajeDe(p, nombre, contactoPara?.nombre, p.tipo ?? tipo), contactoPara?.telefono), '_blank')
   }
 
   async function abrir(p: Propuesta) {
@@ -226,19 +237,19 @@ export default function FranquiciaPropuestas({ franquicia, nombre, desde, hasta,
       <div className="flex flex-wrap items-center gap-2">
         <div className="min-w-0 flex-1">
           <h2 className="font-display text-base font-semibold text-ink">
-            {tipo === 'calzado' ? 'Pedido de calzado para que elija' : 'Propuesta para que elija'} {nombre}
+            {esMateriales(tipo) ? 'Reposición de materiales para que elija' : 'Propuesta para que elija'} {nombre}
           </h2>
           <p className="text-xs text-sub">Se abre tu WhatsApp con un link para mandárselo desde cualquier número: marca sí / no y cantidades, y confirma. Vence a los 7 días.</p>
         </div>
         <button type="button" onClick={() => setVerContactos((v) => !v)} className="inline-flex items-center gap-1.5 rounded-full border border-line2 bg-surface px-3 py-1.5 text-xs font-semibold text-ink">
-          <Users size={13} aria-hidden /> Contactos ({contactos.length})
+          <Users size={13} aria-hidden /> Contactos ({contactosPara.length})
         </button>
-        {contactos.length > 0 && (
+        {contactosPara.length > 0 && (
           <label className="flex items-center gap-1.5 text-xs text-sub">
             Para
             <select value={para} onChange={(e) => setPara(e.target.value)} className="rounded-full border border-line2 bg-surface px-2 py-1 text-xs text-ink">
               <option value="">Elegir en WhatsApp</option>
-              {contactos.map((c) => <option key={c.id} value={c.id}>{c.nombre || `+${c.telefono}`}</option>)}
+              {contactosPara.map((c) => <option key={c.id} value={c.id}>{c.id === '__cliente' ? `Cliente · +${c.telefono}` : c.nombre || `+${c.telefono}`}</option>)}
             </select>
           </label>
         )}
@@ -261,7 +272,13 @@ export default function FranquiciaPropuestas({ franquicia, nombre, desde, hasta,
       {verContactos && (
         <div className="mt-3 rounded-xl border border-line bg-surface p-3">
           <p className="mb-2 text-xs font-semibold text-ink">WhatsApp de {nombre} <span className="font-normal text-sub">(opcional: para abrir directo su chat)</span></p>
-          {contactos.length === 0 && <p className="mb-2 text-xs text-sub">Todavía no hay contactos.</p>}
+          {telefono && (
+            <p className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-2 py-1.5 text-xs text-emerald-400">
+              <b>Cliente · +{telefono}</b>
+              <span className="text-sub">El teléfono principal se edita en Sistemas → Franquicias.</span>
+            </p>
+          )}
+          {contactos.length === 0 && <p className="mb-2 text-xs text-sub">Todavía no hay contactos extra.</p>}
           <ul className="mb-2 flex flex-col gap-1">
             {contactos.map((c) => (
               <li key={c.id} className="flex items-center gap-2 text-sm text-ink">
