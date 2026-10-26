@@ -24,7 +24,9 @@ const { execFileSync } = require('child_process')
 
 const RAIZ = path.join(__dirname, '..')
 const LOG = path.join(RAIZ, 'data', 'sync-pedidos-compra.log')
-const LOTE = 100 // pedidos por llamada (cada uno con sus ítems)
+// Pedidos por llamada (cada uno con sus ítems). El RPC entra como anon (statement_timeout 3 s):
+// con 100 pedidos (~4000 ítems) se pasaba del tiempo
+const LOTE = 25
 
 function leerEnv(archivo) {
   const out = {}
@@ -207,9 +209,20 @@ async function main() {
 
   const token = cfg('PUENTE_TOKEN')
   const gen = Date.now()
-  for (let i = 0; i < lista.length; i += LOTE) {
-    await rpc('pedidos_compra_sync_lote', { p_token: token, p_gen: gen, p_pedidos: lista.slice(i, i + LOTE) })
+  // Si un lote se pasa del statement_timeout se parte en dos y se reintenta cada mitad
+  // (hasta llegar a un pedido solo), igual que en sync-pedidos-venta.js
+  async function subir(lote) {
+    try {
+      await rpc('pedidos_compra_sync_lote', { p_token: token, p_gen: gen, p_pedidos: lote })
+    } catch (err) {
+      if (!/statement timeout/.test(String(err))) throw err
+      if (lote.length === 1) throw new Error(`${err instanceof Error ? err.message : err} (pedido ${lote[0].codigo ?? lote[0].numero ?? '?'})`)
+      const mitad = Math.ceil(lote.length / 2)
+      await subir(lote.slice(0, mitad))
+      await subir(lote.slice(mitad))
+    }
   }
+  for (let i = 0; i < lista.length; i += LOTE) await subir(lista.slice(i, i + LOTE))
   const borrados = await rpc('pedidos_compra_sync_fin', {
     p_token: token,
     p_gen: gen,
