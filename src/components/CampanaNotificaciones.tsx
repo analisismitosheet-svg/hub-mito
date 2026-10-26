@@ -398,8 +398,14 @@ export default function CampanaNotificaciones() {
       }
     }
     void cargar()
-    const intervalo = setInterval(cargar, 30000)
-    return () => { activo = false; clearInterval(intervalo) }
+    // Solo con la pestaña a la vista: las PC de los locales dejan el hub abierto todo el día y
+    // este sondeo (transfer_items cada 30 s en segundo plano) llegó a saturar la base (26/10/2026)
+    const intervalo = setInterval(() => {
+      if (document.visibilityState === 'visible') void cargar()
+    }, 60000)
+    const alVolver = () => { if (document.visibilityState === 'visible') void cargar() }
+    document.addEventListener('visibilitychange', alVolver)
+    return () => { activo = false; clearInterval(intervalo); document.removeEventListener('visibilitychange', alVolver) }
   }, [isAdmin, esMayorista, esLocal, origenesUsuario, visible])
 
   if (!visible || !supabase) return null
