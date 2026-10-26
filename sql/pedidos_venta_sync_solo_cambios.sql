@@ -14,6 +14,12 @@
 -- pedidos distintos. De paso, un pedido sin cambios ya no se renumera.
 -- El puente además baja ITEMS_POR_LOTE de 2000 a 800.
 --
+-- Igual el límite de 3 s de `anon` seguía matando lotes (ver
+-- puente-sql/data/sync-pedidos-venta.log): el statement_timeout que se le ponga
+-- a la función NO pisa el del rol cuando la llamada entra por PostgREST. El
+-- arreglo de eso está del lado del puente, que entra con la service role key
+-- (sin ese límite): ver puente-sql/scripts/sync-pedidos-venta.js.
+--
 -- Aplicado en Supabase (migración pedidos_venta_sync_solo_cambios). Idempotente.
 -- ============================================================================
 

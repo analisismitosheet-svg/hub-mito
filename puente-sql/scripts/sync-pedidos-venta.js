@@ -23,9 +23,9 @@ const { execFileSync } = require('child_process')
 
 const RAIZ = path.join(__dirname, '..')
 const LOG = path.join(RAIZ, 'data', 'sync-pedidos-venta.log')
-// Lotes por cantidad de ítems (hay pedidos de cientos de renglones): la llamada entra con la clave anon,
-// que tiene un límite de 3 s por consulta en Supabase
-// El RPC corre como anon (statement_timeout 3 s): lotes chicos para tener margen
+// Lotes por cantidad de ítems (hay pedidos de cientos de renglones): el RPC entra
+// con la service role key (sin el statement_timeout de 3 s que tiene `anon`); la
+// protección sigue siendo el PUENTE_TOKEN. Se mantiene chico igual para ir por partes.
 const ITEMS_POR_LOTE = 800
 const MAX_PEDIDOS_LOTE = 200
 const DIAS_RECIENTES = 7
@@ -49,6 +49,12 @@ const cfg = (k) => process.env[k] ?? envPuente[k]
 
 const SUPABASE_URL = cfg('SUPABASE_URL') ?? envHub.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY = cfg('SUPABASE_ANON_KEY') ?? envHub.VITE_SUPABASE_ANON_KEY
+// La service role key NO tiene el statement_timeout de 3 s que tiene `anon` en
+// Supabase. El RPC sigue protegido por el PUENTE_TOKEN (private.clave_sync_ok),
+// así que entrar con service role no afloja nada: solo evita que los lotes
+// mueran a los 3 s. Sin service role, cae al anon (con el límite de 3 s).
+const SUPABASE_SERVICE_ROLE_KEY = cfg('SUPABASE_SERVICE_ROLE_KEY') ?? envHub.SUPABASE_SERVICE_ROLE_KEY
+const RPC_KEY = SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY
 const SERVIDOR = cfg('PEDIDOS_SQL_SERVER') || 'localhost'
 const BASE = cfg('PEDIDOS_VENTA_BASE') || 'MITO.DRAGONFISH_MITO.ZooLogic'
 
@@ -67,8 +73,8 @@ async function rpc(nombre, params) {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${nombre}`, {
     method: 'POST',
     headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      apikey: RPC_KEY,
+      Authorization: `Bearer ${RPC_KEY}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(params),
@@ -232,17 +238,30 @@ async function main() {
   }
   if (actual.length) lotes.push(actual)
 
-  for (const lote of lotes) {
+  // Si un lote se pasa del statement_timeout se parte en dos y se reintenta cada mitad
+  // (hasta llegar a un pedido solo), así un pedido pesado no frena a todos los demás
+  async function subir(lote) {
     for (let intento = 1; ; intento++) {
       try {
         await rpc('pedidos_venta_sync_lote', { p_token: token, p_gen: gen, p_pedidos: lote })
-        break
+        return
       } catch (err) {
-        if (intento >= 3 || /Clave de sincronizaci/.test(String(err))) throw err
+        if (/Clave de sincronizaci/.test(String(err))) throw err
+        if (/statement timeout/.test(String(err)) && lote.length > 1) {
+          const mitad = Math.ceil(lote.length / 2)
+          await subir(lote.slice(0, mitad))
+          await subir(lote.slice(mitad))
+          return
+        }
+        if (intento >= 3) {
+          const p = lote[0]
+          throw new Error(`${err instanceof Error ? err.message : err} (lote de ${lote.length} pedido(s), ej. ${p.codigo} con ${p.items.length} ítems)`)
+        }
         await new Promise((r) => setTimeout(r, 5000 * intento))
       }
     }
   }
+  for (const lote of lotes) await subir(lote)
   const borrados = await rpc('pedidos_venta_sync_fin', {
     p_token: token,
     p_gen: gen,
