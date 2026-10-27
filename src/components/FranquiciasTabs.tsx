@@ -4,7 +4,7 @@ import { CalendarDays, ClipboardList, Package, type LucideIcon } from 'lucide-re
 /* Una pantalla por función: reposición diaria, propuesta y materiales. */
 
 const TABS: { to: string; label: string; detalle: string; Icon: LucideIcon; end: boolean }[] = [
-  { to: '/mayorista/franquicias', label: 'Reposición diaria', detalle: 'Ventas contra stock real', Icon: CalendarDays, end: true },
+  { to: '/mayorista/franquicias/diaria', label: 'Reposición diaria', detalle: 'Ventas contra stock real', Icon: CalendarDays, end: true },
   { to: '/mayorista/franquicias/propuestas', label: 'Propuesta de reposición', detalle: 'Armar, enviar y seguir', Icon: ClipboardList, end: false },
   { to: '/mayorista/franquicias/materiales', label: 'Reposición de materiales', detalle: 'Calzado por curva de talles', Icon: Package, end: false },
 ]

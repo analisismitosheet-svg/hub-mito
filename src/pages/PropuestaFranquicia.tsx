@@ -34,6 +34,11 @@ interface PropuestaPub {
   vencida: boolean
   confirmada: boolean
   confirmada_at: string | null
+  /** número que confirmó (los links por número de la reposición automática) */
+  confirmada_por?: string | null
+  /** true si la confirmó este mismo número: si no, el cartel es de bloqueo */
+  confirmada_por_mi?: boolean
+  dragon_pedido?: string | null
   comentario: string | null
   items: ItemPub[]
 }
@@ -41,10 +46,12 @@ interface PropuestaPub {
 const fmtPesos = (n: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n)
 const diaIso = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
 const fmtFecha = (iso: string) => new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date(iso))
+const fmtHora = (iso: string) => new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date(iso))
 
 export default function PropuestaFranquicia() {
   const { token = '' } = useParams()
   const [prop, setProp] = useState<PropuestaPub | null>(null)
+  const [recarga, setRecarga] = useState(0)
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   // por ítem: true = sí, false = no, null = sin responder; y la cantidad
@@ -67,7 +74,7 @@ export default function PropuestaFranquicia() {
       }
       setCargando(false)
     })
-  }, [token])
+  }, [token, recarga])
 
   const cerrado = Boolean(prop?.confirmada || prop?.vencida || hecho)
   const elegidos = useMemo(() => (prop?.items ?? []).filter((i) => si[i.id] === true && (cant[i.id] ?? 0) > 0), [prop, si, cant])
@@ -96,7 +103,12 @@ export default function PropuestaFranquicia() {
       p_comentario: comentario,
     })
     setEnviando(false)
-    if (e) { setError(e.message || 'No se pudo confirmar el pedido.'); return }
+    if (e) {
+      setError(e.message || 'No se pudo confirmar el pedido.')
+      // Otro número la aceptó mientras tanto: se recarga para mostrar el cartel de bloqueo
+      if (/ya fue aceptado/i.test(e.message ?? '')) setRecarga((n) => n + 1)
+      return
+    }
     const r = data as { unidades: number; total: number }
     setHecho({ unidades: r.unidades, total: Number(r.total) || 0 })
   }
@@ -130,9 +142,19 @@ export default function PropuestaFranquicia() {
 
         {prop && !hecho && (
           <>
-            {prop.confirmada && (
+            {prop.confirmada && prop.confirmada_por_mi === false ? (
+              <div role="status" className="mb-3 rounded-xl border-2 border-amber-400 bg-amber-50 p-3 text-amber-900">
+                <p className="text-base font-extrabold">🔒 Este pedido ya fue aceptado</p>
+                <p className="mt-1 text-sm leading-relaxed">
+                  Otro contacto de tu franquicia{prop.confirmada_por ? <> (<b>+{prop.confirmada_por}</b>)</> : ''} ya confirmó esta reposición
+                  {prop.confirmada_at ? <> el <b>{fmtFecha(prop.confirmada_at)} a las {fmtHora(prop.confirmada_at)} hs</b></> : ''} y ya entró en preparación en MITO.
+                  <br /><b>El formulario quedó bloqueado</b> para no duplicar el pedido. Abajo están las cantidades que se confirmaron:
+                </p>
+              </div>
+            ) : prop.confirmada && (
               <p className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-                Este pedido ya fue confirmado{prop.confirmada_at ? ` el ${fmtFecha(prop.confirmada_at)}` : ''}. Así quedó:
+                {prop.confirmada_por ? '✓ Confirmaste' : 'Este pedido ya fue confirmado'}{prop.confirmada_at ? ` el ${fmtFecha(prop.confirmada_at)} a las ${fmtHora(prop.confirmada_at)} hs` : ''}
+                {prop.dragon_pedido ? <> y ya está cargado en MITO (pedido N° <b>{prop.dragon_pedido}</b>)</> : ''}. Así quedó:
               </p>
             )}
             {prop.vencida && (

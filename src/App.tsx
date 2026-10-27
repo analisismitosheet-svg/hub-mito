@@ -67,6 +67,7 @@ import SqlConexion from '@/pages/SqlConexion'
 import ComingSoon from '@/pages/ComingSoon'
 import Replicas from '@/pages/Replicas'
 import MayoristaFranquicias from '@/pages/MayoristaFranquicias'
+import FranquiciasReposicionAuto from '@/pages/FranquiciasReposicionAuto'
 import MayoristaFranquiciasPropuestas from '@/pages/MayoristaFranquiciasPropuestas'
 import MayoristaFranquiciasMateriales from '@/pages/MayoristaFranquiciasMateriales'
 import SistemasFranquicias from '@/pages/SistemasFranquicias'
@@ -321,6 +322,15 @@ export default function App() {
           />
           <Route
             path="/mayorista/franquicias"
+            element={
+              <PermissionRoute permiso="mayorista.franquicias.view">
+                <FranquiciasReposicionAuto />
+              </PermissionRoute>
+            }
+          />
+          {/* Pantallas anteriores: fuera del menú por ahora (27/10/2026), siguen andando por link */}
+          <Route
+            path="/mayorista/franquicias/diaria"
             element={
               <PermissionRoute permiso="mayorista.franquicias.view">
                 <MayoristaFranquicias />

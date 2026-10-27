@@ -2,9 +2,18 @@
 
 Área Mayorista + configuración en Sistemas. Permiso `mayorista.franquicias.view` (rol `mayorista`, ver [[Permisos y usuarios]]). Tres pantallas (`src/components/FranquiciasTabs.tsx`) y la configuración separada; lógica común en `src/lib/franquicias.ts` y `src/hooks/useReposicionFranquicia.ts`.
 
-## Pantallas
+## Reposición diaria automática (desde 27/10/2026, la única en el menú)
 
-- **Reposición diaria** — `/mayorista/franquicias`, `MayoristaFranquicias.tsx`.
+- `/mayorista/franquicias`, `FranquiciasReposicionAuto.tsx`. Las pantallas de abajo quedaron fuera del menú (siguen por link; la vieja diaria pasó a `/mayorista/franquicias/diaria`).
+- **Paso 1**: cliente ↔ base, sucursal de stock (es de la base), **varios WhatsApps**, automático activo, días (1 = lunes … 7 = domingo) y hora. RPC `franquicias_guardar_auto`. Columnas nuevas en `franquicias_clientes`: `telefonos[]`, `auto_activo`, `auto_dias[]`, `auto_hora`, `auto_ultimo_hasta`, `auto_pedido_at`, `auto_error`.
+- **Paso 2**: por cliente, una reposición por fecha de venta (propuestas `tipo = 'reposicion'`), con la tabla de lo vendido, lo que va en el link (editable con − / + mientras nadie la aceptó), el estado de cada WhatsApp y quién aceptó. «Armar ahora» (`franquicias_pedir_armado`) hace que el puente la arme en el próximo minuto.
+- **Armado**: `puente-sql/scripts/reposicion-franquicias-auto.js`, corre en la tarea "MITO - Pedidos franquicias" (cada 1 min, después de la carga en Dragon). Pide `franquicias_auto_pendientes` (activo + hoy es su día + pasó la hora + la venta de ayer no se armó, o «Armar ahora»), lee el SQL local con sqlcmd (venta neta de `venta_franquicias`, stock cliente, `vw_STOCK_SKU_MITO`, precio de `vw_ARTICULOS_MITO`) y guarda con `franquicias_auto_crear`. Rango: desde el día siguiente al último armado (máx. 7 días) hasta ayer. Sin nada para reponer no crea propuesta. Prueba sin guardar: `--probar BASE "SUCURSAL" desde hasta`.
+- **Envío**: una fila por número en `franquicias_propuesta_envios`, cada una con **su token**. `/api/informe?evento=franquicias` (pg_cron `franquicias-whatsapp` cada 5 min, y el puente apenas arma) manda la plantilla `reposicion_franquicia` (es_AR, 6 variables: cliente, N°, venta del, artículos, unidades, link) — `src/lib/franquiciasWhatsapp.ts`. Reintenta 12 veces (~1 h). Desde la pantalla: «Enviar por WhatsApp los que faltan» (POST `/api/informe {franquicias: id}`) o «WhatsApp a mano» (wa.me con el link de ese número).
+- **Bloqueo**: `/p/:token` acepta el token de la propuesta o el de un envío. El primero que confirma guarda `confirmada_por` (su número); a los demás el link les muestra «🔒 Este pedido ya fue aceptado por +…» con lo que se pidió. SQL: `sql/franquicias_reposicion_auto.sql`, `sql/franquicias_whatsapp_cron.sql`.
+
+## Pantallas anteriores (fuera del menú)
+
+- **Reposición diaria** — `/mayorista/franquicias/diaria`, `MayoristaFranquicias.tsx`.
   - Se elige el **cliente** (solo los que tienen base asignada; por defecto `01140`). La base, la sucursal de stock y el teléfono salen de *Sistemas → Franquicias*.
   - Ventas de `VISTAS_CONSOLIDADAS.dbo.venta_franquicias` filtradas por `BASE_DATOS` = base del cliente; stock del cliente de `vw_STOCK_SUCURSALES_REAL` por `BD_ORIGEN` = sucursal de la base; stock MITO de `vw_STOCK_SKU_MITO`. Detalle de fuentes en [[Puente SQL y syncs]].
   - Sugerido = máx(0, mín(vendido − stock cliente, stock MITO)). La columna **Estado** (Urgente/Normal) va al lado del artículo.

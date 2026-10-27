@@ -7,6 +7,9 @@
  *   GET  /api/informe   (Bearer $CRON_SECRET ó JWT)    -> dispara los diarios vencidos
  *   GET  /api/informe?evento=repo                      -> si la repo del día llegó al 100%, manda los
  *        informes "al completar la repo" que no salieron hoy (lo llama pg_cron cada 5 min; sin datos sensibles)
+ *   GET  /api/informe?evento=franquicias               -> manda los WhatsApp en cola de la reposición diaria
+ *        automática de franquicias (pg_cron cada 5 min y el puente apenas la arma)
+ *   POST /api/informe   { franquicias: id, todos? }    -> manda ya el WhatsApp de esa reposición (Franquicias)
  *
  * Antes eran dos funciones (informe-enviar e informe-cron); se unificaron para no
  * pasar el tope de 12 Serverless Functions del plan Hobby de Vercel. El método
@@ -18,6 +21,7 @@
 import { armarCuerpo, enviarInforme, estadoWhatsapp, generarImagenInforme, repoCompleta, tienePermiso, usuarioDe } from '../src/lib/informesServidor.js'
 import { formatoDe, type Informe } from '../src/lib/informes.js'
 import { mismoSecreto } from '../src/lib/apiAuth.js'
+import { enviarPendientesFranquicias, reenviarPropuesta } from '../src/lib/franquiciasWhatsapp.js'
 
 type Req = {
   method?: string
@@ -115,6 +119,18 @@ async function eventoRepo(res: Res) {
 
 async function cron(req: Req, res: Res) {
   if (req.query?.evento === 'repo') return eventoRepo(res)
+  // ?evento=franquicias: WhatsApp de la reposición diaria automática (pg_cron cada 5 min y el
+  // puente apenas la arma). Sin autenticación como ?evento=repo: no recibe nada ni devuelve
+  // datos, solo manda los envíos que ya están en cola.
+  if (req.query?.evento === 'franquicias') {
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return res.status(500).json({ error: 'Falta la configuración de Supabase' })
+    try {
+      const r = await enviarPendientesFranquicias()
+      return res.status(200).json({ enviados: r.enviados, errores: r.errores })
+    } catch (e) {
+      return res.status(502).json({ error: (e as Error).message })
+    }
+  }
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return res.status(500).json({ error: 'Falta la configuración de Supabase' })
   }
@@ -190,6 +206,17 @@ async function manual(req: Req, res: Res) {
 
   const datos = cuerpo(req)
   const preview = datos.preview === true
+
+  // --- Franquicias: mandar ya el WhatsApp de una reposición ---
+  if (typeof datos.franquicias === 'string') {
+    if (!(await tienePermiso(token, ['mayorista.franquicias.view']))) return res.status(403).json({ error: 'No tenés permiso para esta acción' })
+    if (!/^[0-9a-f-]{36}$/i.test(datos.franquicias)) return res.status(400).json({ error: 'Propuesta inválida' })
+    try {
+      return res.status(200).json(await reenviarPropuesta(datos.franquicias, datos.todos === true))
+    } catch (e) {
+      return res.status(502).json({ error: (e as Error).message })
+    }
+  }
 
   // --- Estado de la conexión con WhatsApp (Meta) ---
   if (datos.estado === true) {
