@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import {
   AlertTriangle, ArrowLeft, ArrowRight, Building2, CheckCheck, ClipboardCheck, Clock, Download,
-  Link2, Loader2, Lock, Package, PackageCheck, Pencil, Plus, Search, Upload, X,
+  Link2, Loader2, Lock, Package, PackageCheck, Pencil, Plus, Search, Trash2, Upload, X,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -720,6 +720,23 @@ export default function RecepcionIndo() {
     await cargar()
   }
 
+  // Borrar una línea: solo admin (la función recepcion_indo_borrar lo vuelve a chequear)
+  function pedirBorrar(f: Fila) {
+    setConfirma({
+      titulo: 'Borrar línea',
+      texto: `Se va a borrar la recepción de la guía ${f.n_guia || '(sin guía)'} — ${f.proveedor || 'sin proveedor'}.\n\nNo se puede deshacer.`,
+      accion: async () => {
+        if (!supabase) return
+        setSalvandoClave(f.clave)
+        setMsg(null)
+        const { error: e } = await supabase.rpc('recepcion_indo_borrar', { p_clave: f.clave })
+        setSalvandoClave(null)
+        if (e) { setMsg({ ok: false, texto: e.message }); return }
+        setMsg({ ok: true, texto: 'Línea borrada' })
+        await cargar()
+      },
+    })
+  }
 
   async function cambiarProveedor(f: Fila, nombre: string) {
     if (!nombre.trim() || nombre.trim() === f.proveedor.trim()) return
@@ -1233,6 +1250,17 @@ export default function RecepcionIndo() {
                     )}
                     {controlada && f.dias_atraso != null && f.dias_atraso > 0 && (
                       <div className="text-[10px] text-amber-500/90">{f.dias_atraso} días de atraso</div>
+                    )}
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => pedirBorrar(f)}
+                        disabled={saving}
+                        title="Borrar esta línea (solo administradores)"
+                        className="mt-1.5 inline-flex items-center gap-1 rounded-md border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-red-500 hover:bg-red-500/20 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50"
+                      >
+                        <Trash2 size={11} aria-hidden /> Borrar
+                      </button>
                     )}
                   </td>
                 </tr>
