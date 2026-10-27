@@ -7,7 +7,7 @@ import SelectorEmpleado from '@/components/SelectorEmpleado'
 import { supabase } from '@/lib/supabase'
 import { FILTRO_EMPLEADOS_ACTIVOS } from '@/lib/empleadosActivos'
 import { useAuth } from '@/context/AuthContext'
-import { ubicacionesDeArticulos } from '@/lib/mapeo'
+import { useUbicacionesMapeo } from '@/lib/useUbicacionesMapeo'
 import { imprimirRepos, nombreMaterial } from '@/lib/imprimirRepo'
 
 type EstadoM = 'pendiente' | 'hecho' | 'faltante'
@@ -391,8 +391,10 @@ export default function Mayorista() {
     setCargando(false)
   }, [periodo])
 
-  // Ubicaciones del Mapeo depósito por artículo (código en mayúsculas -> PB-A1, …)
-  const [ubicaciones, setUbicaciones] = useState<Map<string, string[]>>(new Map())
+  // Ubicaciones del Mapeo depósito por artículo (código en mayúsculas -> PB-A1, …) de los
+  // lotes abiertos. Se actualizan solas apenas alguien mapea (useUbicacionesMapeo).
+  const codigosAbiertos = useMemo(() => Object.values(itemsCache).flat().map((i) => i.codigo ?? ''), [itemsCache])
+  const ubicaciones = useUbicacionesMapeo(codigosAbiertos)
   const ubicacionesDe = (it: Item) => ubicaciones.get(String(it.codigo ?? '').trim().toUpperCase()) ?? []
 
   // Trae los ítems de UN lote al abrirlo (cache por lote).
@@ -416,10 +418,6 @@ export default function Mayorista() {
         if (error || chunk.length < PAGE) break
       }
       setItemsCache((prev) => ({ ...prev, [loteId]: all }))
-      // Ubicaciones del mapeo: no frenan la carga; si fallan, se ve igual sin ubicación
-      ubicacionesDeArticulos(all.map((i) => i.codigo ?? ''))
-        .then((m) => setUbicaciones((prev) => new Map([...prev, ...m])))
-        .catch(() => { /* sin mapeo: sin ubicaciones */ })
     } finally {
       setCargandoLote(null)
     }

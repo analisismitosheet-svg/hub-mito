@@ -10,7 +10,8 @@ import { avisarFaltantes, avisarPausa } from '@/lib/push'
 import { suscribirCambios } from '@/lib/realtime'
 import { supabase } from '@/lib/supabase'
 import { normalizaCodigo } from '@/lib/loginEmpleado'
-import { compararUbicaciones, ubicacionesDeArticulos } from '@/lib/mapeo'
+import { compararUbicaciones } from '@/lib/mapeo'
+import { useUbicacionesMapeo } from '@/lib/useUbicacionesMapeo'
 import { PRIORIDADES, avanceDe, nroDePedido, COLUMNAS_ITEM_ARMADO, type Armado, type ArmadoItem } from '@/lib/armados'
 
 /* ------------------------------------------------------------------ */
@@ -146,12 +147,9 @@ export default function ArmadoPedido({ armado, alVolver, alCambiar }: Props) {
   }, [sesion])
 
   // Ubicaciones del Mapeo depósito (como en el repo): chip al lado del código y orden del recorrido
-  const [ubicaciones, setUbicaciones] = useState<Map<string, string[]>>(new Map())
-  const codigosItems = useMemo(() => [...new Set(items.map((i) => String(i.articulo ?? '').trim().toUpperCase()).filter(Boolean))].sort().join(','), [items])
-  useEffect(() => {
-    if (!codigosItems) return
-    void ubicacionesDeArticulos(codigosItems.split(',')).then(setUbicaciones).catch(() => { /* sin mapeo: sin ubicaciones */ })
-  }, [codigosItems])
+  // (se actualizan solas apenas alguien mapea: useUbicacionesMapeo)
+  const codigosItems = useMemo(() => items.map((i) => String(i.articulo ?? '')), [items])
+  const ubicaciones = useUbicacionesMapeo(codigosItems)
   const ubicacionesDe = useCallback((i: ArmadoItem) => ubicaciones.get(String(i.articulo ?? '').trim().toUpperCase()) ?? [], [ubicaciones])
 
   // Pausa con motivo y cooldown de 15 min (sql/pausas_autorizacion.sql): se pide y el

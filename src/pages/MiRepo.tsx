@@ -13,7 +13,8 @@ import MotivoPausaDialog, { nombreMotivoPausa, type MotivoPausa } from '@/compon
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { normalizaCodigo } from '@/lib/loginEmpleado'
-import { compararUbicaciones, ubicacionesDeArticulos } from '@/lib/mapeo'
+import { compararUbicaciones } from '@/lib/mapeo'
+import { useUbicacionesMapeo } from '@/lib/useUbicacionesMapeo'
 import { nombreMaterial } from '@/lib/imprimirRepo'
 import {
   COLUMNAS_ARMADO, PRIORIDADES, avanceDeArmados, esMio, nroDePedido, ordenArmados, paraLegajo,
@@ -143,8 +144,10 @@ export default function MiRepo() {
   const [asignaciones, setAsignaciones] = useState<Asignacion[]>([])
   const [lotes, setLotes] = useState<Record<string, Lote>>({})
   const [items, setItems] = useState<Item[]>([])
-  // Ubicaciones del Mapeo depósito por artículo (código en mayúsculas -> PB-A1, …)
-  const [ubicaciones, setUbicaciones] = useState<Map<string, string[]>>(new Map())
+  // Ubicaciones del Mapeo depósito por artículo (código en mayúsculas -> PB-A1, …).
+  // Se actualizan solas apenas alguien mapea (useUbicacionesMapeo).
+  const codigosItems = useMemo(() => items.map((i) => i.codigo ?? ''), [items])
+  const ubicaciones = useUbicacionesMapeo(codigosItems)
   // Copia para leer los ítems dentro de callbacks sin re-crearlos en cada escaneo
   const itemsRef = useRef<Item[]>([])
   useEffect(() => {
@@ -361,9 +364,6 @@ export default function MiRepo() {
         const deAsignados = todosItems.filter((i) => asignadas.has(claveDe(i)))
         setItems(deAsignados)
         setCargando(false)
-        ubicacionesDeArticulos(deAsignados.map((i) => i.codigo ?? ''))
-          .then(setUbicaciones)
-          .catch(() => { /* sin mapeo: sin ubicaciones */ })
       } catch (e) {
         setError(e instanceof Error ? e.message : 'No se pudieron cargar los repos.')
         setCargando(false)
@@ -459,10 +459,6 @@ export default function MiRepo() {
       setItems(mios)
       setCargando(false)
       enfocar()
-      // Ubicaciones del mapeo: no frenan la carga; si fallan, la lista queda en su orden de siempre
-      ubicacionesDeArticulos(mios.map((i) => i.codigo ?? ''))
-        .then(setUbicaciones)
-        .catch(() => { /* sin mapeo: sin ubicaciones */ })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudieron cargar tus repos.')
       setCargando(false)
