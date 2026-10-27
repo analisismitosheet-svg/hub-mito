@@ -30,6 +30,7 @@ import {
   ShieldCheck,
   Settings,
   Navigation,
+  Wallet,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -262,6 +263,10 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
   {
     id: 'tracking', areaId: 'administradores', titulo: 'Tracking de transporte', descripcion: 'Ubicación de los vehículos, cargas y entregas',
     icon: Navigation, color: '#2563eb', acciones: { ver: 'tracking.view', editar: 'tracking.gestionar' }, etiquetas: { editar: 'Vehículos y puntos de control' },
+  },
+  {
+    id: 'stock-valorizado', areaId: 'administradores', titulo: 'Stock valorizado', descripcion: 'Unidades y plata a costo por sucursal',
+    icon: Wallet, color: '#10b981', acciones: { ver: 'stock_valorizado.view' },
   },
 
   // ===== Configuración =====

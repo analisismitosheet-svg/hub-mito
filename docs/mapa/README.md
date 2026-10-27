@@ -22,6 +22,7 @@ El detalle largo y la historia de cada módulo siguen en `CONTEXTO.md` (raíz de
 - [[Facturación, guías y notas de crédito]]
 - [[Informes por WhatsApp]]: Envío informes y reportes (Sistemas)
 - [[Tracking de transporte]]: área Administradores, GPS de los choferes (Traccar), puntos de control
+- [[Stock valorizado]]: área Administradores, unidades y plata a costo por sucursal
 - [[Otros módulos]]: RRHH, RMA, contador de clientes, encuestas, QR, réplicas
 - [[UI y estilo]]
 - [[Reglas y decisiones]]: lo que no hay que romper
@@ -44,6 +45,7 @@ El detalle largo y la historia de cada módulo siguen en `CONTEXTO.md` (raíz de
 | `/sistemas/franquicias` | SistemasFranquicias.tsx | [[Franquicias]] |
 | `/informes` | Informes.tsx | [[Informes por WhatsApp]] |
 | `/administradores/tracking` (+ `/km`) | TrackingTransporte.tsx, TrackingKm.tsx | [[Tracking de transporte]] |
+| `/administradores/stock-valorizado` | StockValorizado.tsx | [[Stock valorizado]] |
 | `/mayorista/mapeo` (+escanear, orden, ubicaciones) | MapeoEscanear/Orden/Ubicaciones.tsx | [[Mapeo depósito]] |
 | `/mayorista/consulta-articulos` | ConsultaArticulos.tsx | [[Artículos y F12]] |
 | `/mayorista/facturacion-fabrica`, `/guias`, `/notas-credito`, `/clientes`, `/transportes` | FacturacionFabrica, Guias, NotasCredito, Clientes, Transportes | [[Facturación, guías y notas de crédito]] |

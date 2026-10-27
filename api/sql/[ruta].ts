@@ -5,6 +5,7 @@
  *   GET /api/sql/ping                          -> { ok }: el puente responde desde afuera (vigilante)
  *   GET /api/sql/status                        -> estado de la conexión (Configuraciones > Conexión SQL)
  *   GET /api/sql/catalogo?...                  -> explorador de bases/objetos (solo admins)
+ *   GET /api/sql/stock-valorizado[?forzar=1]   -> stock valorizado a costo por sucursal (Administradores)
  *   GET /api/sql/<vista>[?where=&value=&limit=] -> filas de una vista habilitada
  *
  * Antes eran tres funciones (sql/[view], sql/status, sql/catalogo); se unificaron para
@@ -22,6 +23,7 @@
 import vista from '../../src/lib/sqlVista.js'
 import status from '../../src/lib/sqlStatus.js'
 import catalogo from '../../src/lib/sqlCatalogo.js'
+import stockValorizado from '../../src/lib/stockValorizadoApi.js'
 
 type Req = {
   method?: string
@@ -80,6 +82,7 @@ export default async function handler(req: Req, res: Res) {
 
   if (ruta === 'status') return status(req, res)
   if (ruta === 'catalogo') return catalogo(req, res)
+  if (ruta === 'stock-valorizado') return stockValorizado(req, res)
 
   // Cualquier otro nombre es una vista: se la pasa como ?view= a la lógica de siempre,
   // pero con el MISMO req (jamás un spread: se perdería req.headers y crashearía).

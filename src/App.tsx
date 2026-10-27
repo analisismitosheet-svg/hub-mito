@@ -78,6 +78,7 @@ import PropuestaFranquicia from '@/pages/PropuestaFranquicia'
 const ComparativaPrecios = lazy(() => import('@/pages/ComparativaPrecios'))
 const TrackingTransporte = lazy(() => import('@/pages/TrackingTransporte'))
 const TrackingKm = lazy(() => import('@/pages/TrackingKm'))
+const StockValorizado = lazy(() => import('@/pages/StockValorizado'))
 
 export default function App() {
   return (
@@ -457,6 +458,16 @@ export default function App() {
               <PermissionRoute permiso="tracking.view">
                 <Suspense fallback={null}>
                   <TrackingKm />
+                </Suspense>
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/administradores/stock-valorizado"
+            element={
+              <PermissionRoute permiso="stock_valorizado.view">
+                <Suspense fallback={null}>
+                  <StockValorizado />
                 </Suspense>
               </PermissionRoute>
             }

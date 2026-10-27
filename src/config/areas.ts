@@ -228,6 +228,17 @@ export const APPS: AppDef[] = [
     permiso: 'tracking.view',
   },
   {
+    id: 'stock-valorizado',
+    areaId: 'administradores',
+    title: 'Stock valorizado',
+    description: 'Cuántas unidades hay y cuánta plata es, a costo, sucursal por sucursal.',
+    icon: Wallet,
+    kind: 'internal',
+    target: '/administradores/stock-valorizado',
+    color: '#10b981',
+    permiso: 'stock_valorizado.view',
+  },
+  {
     id: 'mayorista-repo',
     areaId: 'mayorista',
     title: 'Repos Mayorista',

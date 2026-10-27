@@ -31,6 +31,9 @@
  *                   de Pedidos de compra: corre scripts/sync-pedidos-compra.js en el momento)
  *   POST /          body: { accion: 'sync_pedidos_venta' }  -> { ok, mensaje }  (ídem Pedidos de venta:
  *                   scripts/sync-pedidos-venta.js, últimos 7 días)
+ *   POST /          body: { accion: 'stock_valorizado', forzar? } -> { bases, articulos, costo, calculado }
+ *                   (Administradores > Stock valorizado: sql/stock-valorizado.sql contra el
+ *                    servidor principal, recorre todas las bases DRAGONFISH_*; cache 10 min)
  *                   ^ NO sale del SQL remoto: lee el Replicador SQL de ESTA PC
  *                     (sql/replicas.sql contra la instancia local + config.json
  *                     + historial.csv). Es lo que usa Sistemas > Réplicas.
@@ -473,6 +476,72 @@ async function estadoReplicas() {
   return datos
 }
 
+/* =========================================================================
+ * Stock valorizado a costo (Administradores > Stock valorizado)
+ *
+ * Corre sql/stock-valorizado.sql contra el SQL Server PRINCIPAL (ahí viven
+ * todas las bases DRAGONFISH_* del grupo). Tarda ~12 s porque recorre base
+ * por base, así que se cachea 10 minutos: el stock de un depósito no cambia
+ * de un minuto al otro y la pantalla tiene botón "Actualizar" (forzar: true).
+ * ========================================================================= */
+
+const SCRIPT_STOCK_VALORIZADO = path.join(__dirname, 'sql', 'stock-valorizado.sql')
+const STOCK_VALORIZADO_CACHE_MS = 600_000
+
+let cacheStockValorizado = { en: 0, datos: null }
+let stockValorizadoEnCurso = null
+
+async function stockValorizado(forzar) {
+  const ahora = Date.now()
+  if (!forzar && cacheStockValorizado.datos && ahora - cacheStockValorizado.en < STOCK_VALORIZADO_CACHE_MS) {
+    return { ...cacheStockValorizado.datos, cacheado: true }
+  }
+  // Dos pedidos a la vez comparten la misma corrida (la consulta es pesada)
+  if (stockValorizadoEnCurso) return stockValorizadoEnCurso
+
+  stockValorizadoEnCurso = (async () => {
+    if (!fs.existsSync(SCRIPT_STOCK_VALORIZADO)) throw new Error('Falta sql/stock-valorizado.sql junto a server.js')
+    const srv = servidorDe('')
+    if (!srv) throw new Error('No hay servidor SQL principal configurado')
+    await asegurarConexion(srv)
+
+    const t0 = Date.now()
+    const r = await srv.pool.request().query(fs.readFileSync(SCRIPT_STOCK_VALORIZADO, 'utf8'))
+    const [bases = [], articulos = [], costo = []] = r.recordsets ?? []
+
+    const datos = {
+      servidor: srv.alias,
+      bases: bases.map((f) => ({
+        base: String(f.base ?? ''),
+        unidades: Number(f.unidades) || 0,
+        valorizado: Number(f.valorizado) || 0,
+        unidades_sin_costo: Number(f.unidades_sin_costo) || 0,
+        skus: Number(f.skus) || 0,
+      })),
+      articulos: articulos.map((f) => ({
+        articulo: String(f.articulo ?? '').trim(),
+        descripcion: String(f.descripcion ?? '').trim(),
+        unidades: Number(f.unidades) || 0,
+        valorizado: Number(f.valorizado) || 0,
+        costo: f.costo == null ? null : Number(f.costo),
+      })),
+      costo: {
+        lista: 'LISTA0',
+        lista_nombre: 'Compra',
+        articulos_con_costo: Number(costo[0]?.articulos_con_costo) || 0,
+      },
+      calculado: new Date().toISOString(),
+      segundos: Math.round((Date.now() - t0) / 100) / 10,
+    }
+    cacheStockValorizado = { en: Date.now(), datos }
+    return { ...datos, cacheado: false }
+  })().finally(() => {
+    stockValorizadoEnCurso = null
+  })
+
+  return stockValorizadoEnCurso
+}
+
 
 /* ---- Pedidos de compra / venta: copia forzada desde el hub (una a la vez por script) ---- */
 const syncEnCurso = new Map()
@@ -564,6 +633,11 @@ const server = http.createServer(async (req, res) => {
     // Estado de las réplicas (Sistemas > Réplicas): Replicador SQL local
     if (body?.accion === 'replicas') {
       return enviar(res, 200, await estadoReplicas())
+    }
+
+    // Stock valorizado a costo por sucursal (Administradores > Stock valorizado)
+    if (body?.accion === 'stock_valorizado') {
+      return enviar(res, 200, await stockValorizado(body?.forzar === true))
     }
 
     vista = String(body?.vista ?? '')

@@ -58,10 +58,12 @@ export default defineConfig({
     // En dev no existe api/ (eso corre en Vercel): para previsualizar
     // Sistemas > Réplicas hay que levantar `node scripts/mock-replicas.mjs`
     // con el Puente SQL corriendo; Administradores > Tracking, con
-    // `npx tsx scripts/dev-tracking.mts`. El resto de /api/* sigue sin existir.
+    // `npx tsx scripts/dev-tracking.mts`; Administradores > Stock valorizado,
+    // con `node scripts/mock-stock-valorizado.mjs`. El resto de /api/* sigue sin existir.
     proxy: {
       '/api/replicas': 'http://localhost:4173',
       '/api/tracking': 'http://localhost:4174',
+      '/api/sql/stock-valorizado': 'http://localhost:4175',
     },
   },
 })
