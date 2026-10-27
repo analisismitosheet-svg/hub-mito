@@ -5,6 +5,7 @@ Cuántas unidades hay y cuánta plata es, **a costo**, sucursal por sucursal.
 
 ## De dónde salen los números
 - **Stock**: `ZooLogic.COMB` (una fila por SKU: `COART`, `COCOL`, `TALLE`, `COCANT`) de **cada base `DRAGONFISH_*`** del SQL Server principal (M1T0O1\ZOOLOGIC). Se recorren todas las que el usuario del puente puede leer; solo cuenta `COCANT > 0`.
+- **Bases excluidas** (tabla `#fuera` arriba de `sql/stock-valorizado.sql`, las pidió sacar el usuario el 27/10/2026): DRAGON, TEMPOD, CAPACITA, SHOWROOM, CHILE, REPOLOC, ROBOD y CONSIGNA. No se recorren ni entran en el total, el detalle o el top. Para volver a sumar una, se borra su línea del `.sql` y se aprieta **Actualizar** (el archivo se lee en cada corrida: no hace falta reiniciar el puente).
 - **Costo**: lista de precios **«Compra» = `LISTA0`** de `DRAGONFISH_MITO.ZooLogic.PRECIOAR`, tomando la `FECHAVIG` más nueva de cada artículo. En Dragon el costo está cargado **por artículo** (`CCOLOR`/`TALLE` vienen vacíos salvo un puñado), así que se valoriza por artículo, no por SKU.
 - Las unidades de artículos **sin costo** cargado se cuentan en "Unidades" pero suman $0 (la pantalla las muestra aparte, en ámbar).
 - Nombres de sucursal: la tabla `NOMBRES` de `src/lib/replicas.ts` (`DRAGONFISH_VCPD` → CARLOS PAZ).
@@ -22,6 +23,6 @@ Cuántas unidades hay y cuánta plata es, **a costo**, sucursal por sucursal.
 - **Bases sin costo cargado**: las que valorizan $0 quedan afuera del total de entrada (hoy `DRAGONFISH_NOMED`, ~1,67 M de unidades de insumos) y se suman con el botón ámbar, para que el total no engañe.
 - Dev: `node scripts/mock-stock-valorizado.mjs` (vite proxyea `/api/sql/stock-valorizado` a `:4175`) con el Puente SQL corriendo.
 
-> Al tocar `puente-sql/server.js` hay que **reiniciar el puente** de la PC central: la tarea "MITO - Puente SQL" lo relevanta sola cuando el puerto 3128 queda libre (chequea cada 60 s).
+> Al tocar `puente-sql/server.js` hay que **reiniciar el puente** de la PC central: la tarea "MITO - Puente SQL" lo relevanta sola cuando el puerto 3128 queda libre (chequea cada 60 s). Tocar solo `sql/stock-valorizado.sql` **no** necesita reinicio.
 
 Relacionado: [[Puente SQL y syncs]] · [[Artículos y F12]] · [[Permisos y usuarios]]

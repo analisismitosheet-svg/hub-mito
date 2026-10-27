@@ -25,6 +25,23 @@
 SET NOCOUNT ON;
 SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 
+/* ---- 0. Bases que NO van al informe ----
+   Las pidió sacar el usuario (27/10/2026): no son stock propio para valorizar.
+   Quedan afuera del total, del detalle por sucursal y del top de artículos, y
+   además no se recorren (el cálculo tarda menos). Para volver a sumar una,
+   borrar su línea y reiniciar el puente. */
+IF OBJECT_ID('tempdb..#fuera') IS NOT NULL DROP TABLE #fuera;
+CREATE TABLE #fuera (base sysname PRIMARY KEY);
+INSERT INTO #fuera (base) VALUES
+  ('DRAGONFISH_DRAGON'),
+  ('DRAGONFISH_TEMPOD'),
+  ('DRAGONFISH_CAPACITA'),
+  ('DRAGONFISH_SHOWROOM'),
+  ('DRAGONFISH_CHILE'),
+  ('DRAGONFISH_REPOLOC'),
+  ('DRAGONFISH_ROBOD'),
+  ('DRAGONFISH_CONSIGNA');
+
 /* ---- 1. Costo por artículo: lista "Compra" (LISTA0) de la base central ---- */
 IF OBJECT_ID('tempdb..#costo') IS NOT NULL DROP TABLE #costo;
 CREATE TABLE #costo (art varchar(50) PRIMARY KEY, costo float, vigencia datetime);
@@ -61,6 +78,7 @@ DECLARE cur CURSOR LOCAL FAST_FORWARD FOR
      AND HAS_DBACCESS(d.name) = 1
      AND d.name LIKE 'DRAGONFISH[_]%'
      AND d.name NOT LIKE '%[_]Publication[_]%'   -- bases internas de replicación
+     AND NOT EXISTS (SELECT 1 FROM #fuera f WHERE f.base = d.name)
    ORDER BY d.name;
 
 OPEN cur;
