@@ -10,7 +10,7 @@ import { avisarFaltantes, avisarPausa } from '@/lib/push'
 import { suscribirCambios } from '@/lib/realtime'
 import { supabase } from '@/lib/supabase'
 import { normalizaCodigo } from '@/lib/loginEmpleado'
-import { compararUbicaciones } from '@/lib/mapeo'
+import { compararLineasPiso } from '@/lib/ordenPiso'
 import { useUbicacionesMapeo } from '@/lib/useUbicacionesMapeo'
 import { PRIORIDADES, avanceDe, nroDePedido, COLUMNAS_ITEM_ARMADO, type Armado, type ArmadoItem } from '@/lib/armados'
 
@@ -277,11 +277,9 @@ export default function ArmadoPedido({ armado, alVolver, alCambiar }: Props) {
   const pendientes = useMemo(
     () => items
       .filter((i) => i.estado !== 'hecho' && i.escaneadas < i.cantidad)
-      .sort((a, b) => {
-        const ua = ubicacionesDe(a)[0]
-        const ub = ubicacionesDe(b)[0]
-        return (ua && ub ? compararUbicaciones(ua, ub) : ua ? -1 : ub ? 1 : 0) || a.linea - b.linea
-      }),
+      // ubicación → código → color → talle (XS, S, M, L, XL, XXL, 3XL, 4XL)
+      .sort((a, b) => compararLineasPiso({ ...a, codigo: a.articulo }, { ...b, codigo: b.articulo },
+        ubicacionesDe(a)[0], ubicacionesDe(b)[0])),
     [items, ubicacionesDe],
   )
   const listos = useMemo(() => items.filter((i) => i.estado === 'hecho' || i.escaneadas >= i.cantidad), [items])

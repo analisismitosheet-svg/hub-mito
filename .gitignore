@@ -26,3 +26,6 @@ manuales/
 
 # Exportaciones de equipos de Tailscale (IPs de la red): nunca al repo
 *-devices-*.csv
+
+# cache de typescript (lo genera tsc --noEmit)
+*.tsbuildinfo

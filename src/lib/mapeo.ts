@@ -1,4 +1,7 @@
 import { supabase } from '@/lib/supabase'
+// El orden del depósito vive en ordenPiso.ts (sin dependencias, lo usa también Mi repo)
+export { PLANTAS, ordenPlanta, compararUbicaciones } from '@/lib/ordenPiso'
+import { PLANTAS, ordenPlanta, compararUbicaciones } from '@/lib/ordenPiso'
 
 /* ------------------------------------------------------------------ */
 /*  Mapeo depósito: tipos y helpers compartidos entre sus pantallas    */
@@ -25,22 +28,8 @@ export interface Ubicacion {
   nivel: number
 }
 
-/** Plantas sugeridas (se puede escribir otra) */
-export const PLANTAS: { codigo: string; nombre: string }[] = [
-  { codigo: 'PB', nombre: 'Planta baja' },
-  { codigo: 'EP', nombre: 'Entrepiso' },
-  { codigo: 'P1', nombre: 'Primer piso' },
-  { codigo: 'P2', nombre: 'Segundo piso' },
-]
-
 export function nombrePlanta(planta: string): string {
   return PLANTAS.find((p) => p.codigo === planta)?.nombre ?? planta
-}
-
-/** Orden de plantas: las sugeridas en su orden, después el resto alfabético */
-export function ordenPlanta(planta: string): number {
-  const i = PLANTAS.findIndex((p) => p.codigo === planta)
-  return i === -1 ? PLANTAS.length : i
 }
 
 /** 1 -> "A", 2 -> "B" … */
@@ -136,19 +125,6 @@ export function limpiarUbicacion(texto: string): string {
 /* ------------------------------------------------------------------ */
 
 /** "PB-A10" -> [orden de planta, planta, letra, nivel]; otros textos van al final */
-function partesUbicacion(u: string): [number, string, string, number] | null {
-  const m = /^([A-Z0-9]+)-([A-Z])(\d+)$/.exec(u.trim().toUpperCase())
-  return m ? [ordenPlanta(m[1]), m[1], m[2], Number(m[3])] : null
-}
-
-/** Compara ubicaciones en el orden del depósito (PB-A1 < PB-A2 < PB-A10 < PB-B1 < EP-A1) */
-export function compararUbicaciones(a: string, b: string): number {
-  const pa = partesUbicacion(a)
-  const pb = partesUbicacion(b)
-  if (!pa || !pb) return pa ? -1 : pb ? 1 : a.localeCompare(b)
-  return pa[0] - pb[0] || pa[1].localeCompare(pb[1]) || pa[2].localeCompare(pb[2]) || pa[3] - pb[3]
-}
-
 /** Ubicaciones mapeadas de cada artículo (código en mayúsculas -> ubicaciones ordenadas) */
 export async function ubicacionesDeArticulos(codigos: string[]): Promise<Map<string, string[]>> {
   const out = new Map<string, string[]>()

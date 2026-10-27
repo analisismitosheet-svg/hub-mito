@@ -13,7 +13,7 @@ import MotivoPausaDialog, { nombreMotivoPausa, type MotivoPausa } from '@/compon
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { normalizaCodigo } from '@/lib/loginEmpleado'
-import { compararUbicaciones } from '@/lib/mapeo'
+import { compararLineasPiso } from '@/lib/ordenPiso'
 import { useUbicacionesMapeo } from '@/lib/useUbicacionesMapeo'
 import { nombreMaterial } from '@/lib/imprimirRepo'
 import {
@@ -526,21 +526,13 @@ export default function MiRepo() {
     [ubicaciones],
   )
 
-  // Pendientes en el orden del depósito (PB-A1, PB-A2 …); los que no están mapeados, al final
+  // Pendientes en el orden del depósito (PB-A1, PB-A2 …) y, dentro de cada ubicación,
+  // por código, color y talle (XS, S, M, L, XL, XXL, 3XL, 4XL). Los no mapeados, al final.
   const pendientesDeSel = useMemo(() => {
     if (!asignacionSel) return []
     return itemsDe(asignacionSel)
       .filter((i) => i.estado === 'pendiente' && i.escaneadas < i.cantidad)
-      .sort((a, b) => {
-        const ua = ubicacionesDe(a)[0]
-        const ub = ubicacionesDe(b)[0]
-        const porUbicacion = ua && ub ? compararUbicaciones(ua, ub) : ua ? -1 : ub ? 1 : 0
-        return (
-          porUbicacion ||
-          a.orden - b.orden ||
-          String(a.codigo ?? '').localeCompare(String(b.codigo ?? ''), 'es')
-        )
-      })
+      .sort((a, b) => compararLineasPiso(a, b, ubicacionesDe(a)[0], ubicacionesDe(b)[0]))
   }, [asignacionSel, itemsDe, ubicacionesDe])
 
   const progresoSel = asignacionSel ? progreso(asignacionSel) : null
