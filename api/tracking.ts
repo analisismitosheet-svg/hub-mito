@@ -335,14 +335,22 @@ async function vistaChofer(req: Req, res: Res) {
     `${h.url}/rest/v1/tracking_vehiculos?select=id,nombre&activo=eq.true&usuario_transporte_id=eq.${id}`, h.headers)
   if (!veh.length) return res.status(200).json({ ok: true, configurado: false })
 
-  const ult = await getJson<{ at: string; recibido_at: string }[]>(
-    `${h.url}/rest/v1/tracking_ubicaciones?select=at,recibido_at&vehiculo_id=eq.${veh[0].id}&order=at.desc&limit=1`, h.headers)
+  // Ultima ubicacion que LLEGO (recibido_at), igual que vistaAlertas. Antes se
+  // ordenaba por `at` (hora del celular): un punto con la hora adelantada o
+  // reenviado del buffer de Traccar quedaba "primero" para siempre y el chofer
+  // veia el bloqueo aunque siguieran llegando ubicaciones nuevas.
+  // Si el chofer tiene mas de un vehiculo, vale el que reporto mas reciente.
+  const desde = new Date(Date.now() - 2 * 86_400_000).toISOString()
+  const ult = await getJson<{ vehiculo_id: string; recibido_at: string }[]>(
+    `${h.url}/rest/v1/tracking_ubicaciones?select=vehiculo_id,recibido_at` +
+    `&vehiculo_id=in.(${veh.map((v) => v.id).join(',')})&recibido_at=gte.${desde}&order=recibido_at.desc&limit=1`, h.headers)
+  const vehiculo = veh.find((v) => v.id === ult[0]?.vehiculo_id) ?? veh[0]
   const ultima = ult[0]?.recibido_at ?? null
   const minutos = ultima ? Math.floor((Date.now() - new Date(ultima).getTime()) / 60_000) : null
   return res.status(200).json({
     ok: true,
     configurado: true,
-    vehiculo: veh[0].nombre,
+    vehiculo: vehiculo.nombre,
     ultima,
     minutos,
     habilitado: minutos !== null && minutos <= MIN_SIN_UBICACION,
