@@ -2,7 +2,7 @@
  * Administradores > Stock valorizado.
  *
  *   GET /api/sql/stock-valorizado[?forzar=1]
- *     -> { servidor, bases: [...], articulos: [...], costo, calculado, cacheado }
+ *     -> { servidor, bases: [...], articulos: [...], sin_costo: [...], costo, calculado, cacheado }
  *
  * No sale de una vista: es una acción propia del Puente SQL
  * (`POST / {accion:'stock_valorizado'}` → puente-sql/sql/stock-valorizado.sql),
@@ -52,10 +52,22 @@ export interface ArticuloValorizado {
   costo: number | null
 }
 
+export interface ArticuloSinCosto {
+  articulo: string
+  descripcion: string
+  /** unidades totales, sumando todas las sucursales */
+  unidades: number
+  /** de esas, las que están en sucursales que valorizan (no insumos tipo NOMED) */
+  unidades_val: number
+  sucursales: number
+  bases: string
+}
+
 export interface StockValorizado {
   servidor: string
   bases: BaseValorizada[]
   articulos: ArticuloValorizado[]
+  sin_costo: ArticuloSinCosto[]
   costo: { lista: string; lista_nombre: string; articulos_con_costo: number }
   calculado: string | null
   cacheado: boolean
@@ -144,6 +156,7 @@ export default async function handler(req: Req, res: Res) {
     servidor: datos.servidor ?? '',
     bases: datos.bases,
     articulos: Array.isArray(datos.articulos) ? datos.articulos : [],
+    sin_costo: Array.isArray(datos.sin_costo) ? datos.sin_costo : [],
     costo: datos.costo ?? { lista: 'LISTA0', lista_nombre: 'Compra', articulos_con_costo: 0 },
     calculado: datos.calculado ?? null,
     cacheado: datos.cacheado === true,

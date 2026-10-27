@@ -507,7 +507,7 @@ async function stockValorizado(forzar) {
 
     const t0 = Date.now()
     const r = await srv.pool.request().query(fs.readFileSync(SCRIPT_STOCK_VALORIZADO, 'utf8'))
-    const [bases = [], articulos = [], costo = []] = r.recordsets ?? []
+    const [bases = [], articulos = [], costo = [], sinCosto = []] = r.recordsets ?? []
 
     const datos = {
       servidor: srv.alias,
@@ -530,6 +530,15 @@ async function stockValorizado(forzar) {
         lista_nombre: 'Compra',
         articulos_con_costo: Number(costo[0]?.articulos_con_costo) || 0,
       },
+      // Todos los que tienen stock y no tienen costo cargado (valen $0)
+      sin_costo: sinCosto.map((f) => ({
+        articulo: String(f.articulo ?? '').trim(),
+        descripcion: String(f.descripcion ?? '').trim(),
+        unidades: Number(f.unidades) || 0,
+        unidades_val: Number(f.unidades_val) || 0,
+        sucursales: Number(f.sucursales) || 0,
+        bases: String(f.bases ?? '').trim(),
+      })),
       calculado: new Date().toISOString(),
       segundos: Math.round((Date.now() - t0) / 100) / 10,
     }

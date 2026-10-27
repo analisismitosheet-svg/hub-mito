@@ -13,10 +13,13 @@
      2. Recorre cada base DRAGONFISH_* a la que el usuario del puente tiene
         acceso y que tiene la tabla ZooLogic.COMB (el stock por SKU: COART,
         COCOL, TALLE, COCANT) y suma unidades y unidades x costo.
-     3. Devuelve tres resultados:
+     3. Devuelve cuatro resultados:
           - una fila por base (unidades, valorizado, unidades sin costo, SKUs)
           - el top de artículos por valorizado, sumando todas las bases
           - una fila de contexto del costo (artículos con costo, última vigencia)
+          - TODOS los artículos con stock y sin costo cargado (los que valen $0).
+            Va último a propósito: así un puente que todavía no lo lee sigue
+            encontrando los tres primeros en el mismo orden.
 
    Solo lectura: nada de INSERT/UPDATE/DELETE sobre las bases (las temporales
    #costo / #bases / #art son de la sesión y se tiran al cerrar).
@@ -67,7 +70,7 @@ IF OBJECT_ID('tempdb..#bases') IS NOT NULL DROP TABLE #bases;
 CREATE TABLE #bases (base sysname, unidades float, valorizado float, unidades_sin_costo float, skus int);
 
 IF OBJECT_ID('tempdb..#art') IS NOT NULL DROP TABLE #art;
-CREATE TABLE #art (art varchar(50), unidades float, valorizado float);
+CREATE TABLE #art (base sysname, art varchar(50), unidades float, valorizado float);
 
 DECLARE @b sysname, @sql nvarchar(max);
 DECLARE cur CURSOR LOCAL FAST_FORWARD FOR
@@ -99,8 +102,9 @@ BEGIN
           LEFT JOIN #costo k ON k.art = LTRIM(RTRIM(c.COART))
          WHERE c.COCANT > 0;
 
-        INSERT INTO #art (art, unidades, valorizado)
-        SELECT LTRIM(RTRIM(c.COART)),
+        INSERT INTO #art (base, art, unidades, valorizado)
+        SELECT @b,
+               LTRIM(RTRIM(c.COART)),
                SUM(CAST(c.COCANT AS float)),
                SUM(CAST(c.COCANT AS float) * ISNULL(k.costo, 0))
           FROM ' + QUOTENAME(@b) + N'.ZooLogic.COMB c
@@ -144,3 +148,24 @@ SELECT COUNT(*) AS articulos_con_costo,
        MAX(vigencia) AS ultima_vigencia,
        MIN(vigencia) AS primera_vigencia
   FROM #costo;
+
+/* Artículos con stock y SIN costo cargado en la lista Compra: son los que
+   suman unidades y $0. Van todos (no hay TOP) para poder cargarles el costo.
+
+   `unidades_val` son las que están en bases que SÍ valorizan algo; el resto
+   (`unidades` - `unidades_val`) vive en las bases de insumos tipo NOMED, que la
+   pantalla deja afuera del total salvo que se aprete el botón ámbar. Así el
+   listado se filtra igual que el total y no arranca con 4.000 avíos. */
+SELECT a.art AS articulo,
+       MAX(LTRIM(RTRIM(ISNULL(d.ARTDES, '')))) AS descripcion,
+       SUM(a.unidades) AS unidades,
+       SUM(CASE WHEN v.base IS NOT NULL THEN a.unidades ELSE 0 END) AS unidades_val,
+       COUNT(DISTINCT a.base) AS sucursales,
+       STRING_AGG(REPLACE(a.base, 'DRAGONFISH_', ''), ' · ') WITHIN GROUP (ORDER BY a.base) AS bases
+  FROM #art a
+  LEFT JOIN #costo k ON k.art = a.art
+  LEFT JOIN DRAGONFISH_MITO.ZooLogic.ART d ON LTRIM(RTRIM(d.ARTCOD)) = a.art
+  LEFT JOIN (SELECT base FROM #bases WHERE ISNULL(valorizado, 0) > 0) v ON v.base = a.base
+ WHERE k.costo IS NULL
+ GROUP BY a.art
+ ORDER BY SUM(CASE WHEN v.base IS NOT NULL THEN a.unidades ELSE 0 END) DESC, SUM(a.unidades) DESC;

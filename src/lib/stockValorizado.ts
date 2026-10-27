@@ -29,10 +29,24 @@ export interface ArticuloValorizado {
   costo: number | null
 }
 
+/** Artículo con stock que no tiene costo cargado en la lista Compra: vale $0. */
+export interface ArticuloSinCosto {
+  articulo: string
+  descripcion: string
+  /** unidades totales, sumando todas las sucursales */
+  unidades: number
+  /** de esas, las que están en sucursales que valorizan (no insumos tipo NOMED) */
+  unidades_val: number
+  sucursales: number
+  /** sucursales donde está, ya sin el prefijo DRAGONFISH_ */
+  bases: string
+}
+
 export interface StockValorizado {
   servidor: string
   bases: BaseValorizada[]
   articulos: ArticuloValorizado[]
+  sin_costo: ArticuloSinCosto[]
   costo: { lista: string; lista_nombre: string; articulos_con_costo: number }
   calculado: string | null
   cacheado: boolean
@@ -55,6 +69,7 @@ export async function cargarStockValorizado(forzar = false): Promise<StockValori
     servidor: body.servidor ?? '',
     bases: body.bases ?? [],
     articulos: body.articulos ?? [],
+    sin_costo: body.sin_costo ?? [],
     costo: body.costo ?? { lista: 'LISTA0', lista_nombre: 'Compra', articulos_con_costo: 0 },
     calculado: body.calculado ?? null,
     cacheado: body.cacheado === true,
@@ -62,10 +77,36 @@ export async function cargarStockValorizado(forzar = false): Promise<StockValori
   }
 }
 
-/** 'DRAGONFISH_VCPD' -> 'CARLOS PAZ' (si no está en la tabla, el código pelado). */
+/**
+ * Nombres de las bases que aparecen acá y no están en la tabla de `replicas.ts`
+ * (esa usa los códigos del Replicador, que no siempre son el nombre de la base:
+ * `BUSTD` vs `DRAGONFISH_BUSTOD`). Se consulta primero esta.
+ */
+const NOMBRES_BASE: Record<string, string> = {
+  '9DEJUL2': '9 DE JULIO',
+  BUSTOD: 'BUSTOS',
+  CENTRALD: 'CENTRAL',
+  DINOD: 'DINO',
+  ESPINOD: 'ESPINOSA',
+  FABRICA: 'FÁBRICA',
+  FALLASD: 'FALLAS',
+  GRALPAZ: 'GENERAL PAZ',
+  LIBERD: 'LIBERTAD',
+  MUNOZ: 'MUÑOZ',
+  NOMED: 'NOMED (insumos)',
+  NVOCED2: 'NUEVO CENTRO',
+  OUTLETD: 'OUTLET',
+  PRODUC: 'PRODUCCIÓN',
+  RIVERAD: 'RIVERA',
+  RUTA9D2: 'RUTA 9',
+  'TX-POLO': 'POLO 52 (TX)',
+  WALMARTD: 'WALMART',
+}
+
+/** 'DRAGONFISH_VCPD' -> 'CARLOS PAZ' (si no está en ninguna tabla, el código pelado). */
 export function nombreBase(base: string): string {
   const cod = codigoDe(String(base ?? '').toUpperCase())
-  return NOMBRES[cod] ?? cod
+  return NOMBRES_BASE[cod] ?? NOMBRES[cod] ?? cod
 }
 
 const PESOS = new Intl.NumberFormat('es-AR', {

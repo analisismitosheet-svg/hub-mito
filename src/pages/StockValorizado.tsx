@@ -27,6 +27,9 @@ import {
  * 10 minutos; "Actualizar" recalcula de cero (forzar=1).
  */
 
+/** Filas que se dibujan en la tabla de artículos sin costo (el resto, al Excel). */
+const TOPE_TABLA = 300
+
 export default function StockValorizado() {
   const [datos, setDatos] = useState<Datos | null>(null)
   const [cargando, setCargando] = useState(false)
@@ -34,6 +37,7 @@ export default function StockValorizado() {
   const [busqueda, setBusqueda] = useState('')
   const [verArticulos, setVerArticulos] = useState(false)
   const [incluirSinValor, setIncluirSinValor] = useState(false)
+  const [verSinCosto, setVerSinCosto] = useState(false)
 
   const cargar = useCallback(async (forzar = false) => {
     setCargando(true)
@@ -70,6 +74,15 @@ export default function StockValorizado() {
   }, [bases, busqueda])
 
   const articulos = datos?.articulos ?? []
+  /* Mismo criterio que el total: con el botón ámbar apagado se muestran solo
+     los artículos que están en sucursales que valorizan (si no, el listado
+     arranca con miles de avíos de NOMED). */
+  const sinCosto = useMemo(() => {
+    const lista = datos?.sin_costo ?? []
+    return incluirSinValor ? lista : lista.filter((a) => a.unidades_val > 0)
+  }, [datos, incluirSinValor])
+  const unidadesSinCosto = (a: { unidades: number; unidades_val: number }) =>
+    incluirSinValor ? a.unidades : a.unidades_val
 
   // Íconos de las tarjetas: sin tonos repetidos en la pantalla
   const [cEmerald, cBlue, cViolet, cAmber] = coloresUnicos(['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b'])
@@ -106,6 +119,21 @@ export default function StockValorizado() {
           })),
         ),
         'Top artículos',
+      )
+    }
+    if (sinCosto.length > 0) {
+      XLSX.utils.book_append_sheet(
+        wb,
+        XLSX.utils.json_to_sheet(
+          sinCosto.map((a) => ({
+            Artículo: a.articulo,
+            Descripción: a.descripcion,
+            Unidades: unidadesSinCosto(a),
+            Sucursales: a.sucursales,
+            'En qué sucursales': a.bases,
+          })),
+        ),
+        'Sin costo',
       )
     }
     XLSX.writeFile(wb, `stock_valorizado_${new Date().toISOString().slice(0, 10)}.xlsx`)
@@ -315,6 +343,56 @@ export default function StockValorizado() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* Artículos sin costo cargado */}
+          {sinCosto.length > 0 && (
+            <section className="rounded-2xl border border-amber-500/30 bg-amber-500/5">
+              <button
+                type="button"
+                onClick={() => setVerSinCosto((v) => !v)}
+                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-ink"
+              >
+                <ChevronDown size={16} className={`transition ${verSinCosto ? '' : '-rotate-90'}`} aria-hidden />
+                <TriangleAlert size={15} style={{ color: cAmber }} aria-hidden />
+                Artículos sin costo cargado ({sinCosto.length})
+                <span className="ml-auto text-xs font-normal text-sub/70">
+                  {numero(sinCosto.reduce((t, a) => t + unidadesSinCosto(a), 0))} unidades que hoy valen $0
+                </span>
+              </button>
+              {verSinCosto && (
+                <div className="overflow-x-auto border-t border-amber-500/20">
+                  <table className="w-full min-w-[640px] text-sm">
+                    <thead>
+                      <tr className="border-b border-amber-500/20 text-left text-xs uppercase tracking-wide text-sub">
+                        <th className="px-3 py-2 font-medium">Artículo</th>
+                        <th className="px-3 py-2 font-medium">Descripción</th>
+                        <th className="px-3 py-2 text-right font-medium">Unidades</th>
+                        <th className="px-3 py-2 font-medium">Sucursales</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sinCosto.slice(0, TOPE_TABLA).map((a) => (
+                        <tr key={a.articulo} className="border-b border-amber-500/10 last:border-0">
+                          <td className="px-3 py-2 font-mono text-xs text-ink">{a.articulo}</td>
+                          <td className="px-3 py-2 text-sub">{a.descripcion || '—'}</td>
+                          <td className="px-3 py-2 text-right tabular-nums text-ink">{numero(unidadesSinCosto(a))}</td>
+                          <td className="px-3 py-2 text-xs text-sub/80" title={a.bases}>
+                            {a.sucursales > 3 ? `${a.sucursales} sucursales` : a.bases || '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {sinCosto.length > TOPE_TABLA && (
+                    <p className="px-3 py-2 text-[11px] text-sub/70">
+                      Se muestran los {numero(TOPE_TABLA)} de más unidades. Los {numero(sinCosto.length)} están
+                      completos en el Excel, hoja «Sin costo».
+                    </p>
+                  )}
                 </div>
               )}
             </section>

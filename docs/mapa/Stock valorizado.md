@@ -8,14 +8,15 @@ Cuántas unidades hay y cuánta plata es, **a costo**, sucursal por sucursal.
 - **Bases excluidas** (tabla `#fuera` arriba de `sql/stock-valorizado.sql`, las pidió sacar el usuario el 27/10/2026): DRAGON, TEMPOD, CAPACITA, SHOWROOM, CHILE, REPOLOC, ROBOD y CONSIGNA. No se recorren ni entran en el total, el detalle o el top. Para volver a sumar una, se borra su línea del `.sql` y se aprieta **Actualizar** (el archivo se lee en cada corrida: no hace falta reiniciar el puente).
 - **Costo**: lista de precios **«Compra» = `LISTA0`** de `DRAGONFISH_MITO.ZooLogic.PRECIOAR`, tomando la `FECHAVIG` más nueva de cada artículo. En Dragon el costo está cargado **por artículo** (`CCOLOR`/`TALLE` vienen vacíos salvo un puñado), así que se valoriza por artículo, no por SKU.
 - Las unidades de artículos **sin costo** cargado se cuentan en "Unidades" pero suman $0 (la pantalla las muestra aparte, en ámbar).
-- Nombres de sucursal: la tabla `NOMBRES` de `src/lib/replicas.ts` (`DRAGONFISH_VCPD` → CARLOS PAZ).
+- Nombres de sucursal: `NOMBRES_BASE` de `src/lib/stockValorizado.ts` y, de respaldo, la tabla `NOMBRES` de `src/lib/replicas.ts`. Hacen falta las dos porque el Replicador usa otros códigos que el nombre de la base (`BUSTD` vs `DRAGONFISH_BUSTOD`).
 
 ## Camino
 `StockValorizado.tsx` → `src/lib/stockValorizado.ts` → `GET /api/sql/stock-valorizado[?forzar=1]` → `src/lib/stockValorizadoApi.ts` (cuelga del router `api/sql/[ruta].ts`, igual que `status` y `catalogo`, por el tope de 12 funciones de Vercel) → Puente SQL `{ accion: 'stock_valorizado' }` → `puente-sql/sql/stock-valorizado.sql`.
 
 - La consulta recorre ~40 bases y tarda **~12 s**: el puente la **cachea 10 minutos** y comparte la corrida si llegan dos pedidos juntos. El botón **Actualizar** manda `forzar` y recalcula de cero.
 - Es solo lectura: nada de DDL ni escrituras (las temporales `#costo`/`#bases`/`#art` son de la sesión).
-- Devuelve tres cosas: fila por base, top 200 artículos por valorizado (todas las bases juntas) y el contexto del costo (artículos con costo).
+- Devuelve cuatro cosas: fila por base, top 200 artículos por valorizado, el contexto del costo y **todos los artículos con stock sin costo cargado** (`sin_costo`, sin tope). Ese cuarto resultado va último en el `.sql` a propósito, para que un puente que todavía no lo lee encuentre los tres primeros en el mismo orden.
+- `sin_costo` trae `unidades` (todas) y `unidades_val` (las que están en sucursales que valorizan): la pantalla usa `unidades_val` salvo que se aprete el botón ámbar, así el listado no arranca con miles de avíos de NOMED. En pantalla se dibujan las primeras 300 filas; las ~4.300 completas van en la hoja «Sin costo» del Excel.
 
 ## Detalles de la pantalla
 - Tarjetas: valorizado total, unidades + SKUs, sucursales, unidades sin costo (con su %).
