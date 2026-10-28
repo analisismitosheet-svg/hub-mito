@@ -480,37 +480,74 @@ async function estadoReplicas() {
  * Stock valorizado a costo (Administradores > Stock valorizado)
  *
  * Corre sql/stock-valorizado.sql contra el SQL Server PRINCIPAL (ahí viven
- * todas las bases DRAGONFISH_* del grupo). Tarda ~12 s porque recorre base
- * por base, así que se cachea 10 minutos: el stock de un depósito no cambia
- * de un minuto al otro y la pantalla tiene botón "Actualizar" (forzar: true).
+ * todas las bases DRAGONFISH_* del grupo). Tarda entre 8 y 20 s porque recorre
+ * base por base, así que se cachea 10 minutos: el stock de un depósito no
+ * cambia de un minuto al otro y la pantalla tiene botón "Actualizar"
+ * (forzar: true, que sí espera el recálculo).
+ *
+ * Vencido el cache se entrega igual la foto anterior y el recálculo arranca por
+ * detrás: así espera el primero que entra y nadie más.
  * ========================================================================= */
 
 const SCRIPT_STOCK_VALORIZADO = path.join(__dirname, 'sql', 'stock-valorizado.sql')
-const STOCK_VALORIZADO_CACHE_MS = 600_000
+const STOCK_VALORIZADO_CACHE_MS = Math.max(10_000, Number(process.env.STOCK_VALORIZADO_CACHE_MS) || 600_000)
+
+/**
+ * Esta consulta no puede ir por el pool común: los pools se arman con el
+ * requestTimeout que trae mssql de fábrica (15 s) y recorrer ~30 bases tarda
+ * entre 8 y 20 s según cómo esté el servidor, así que caía con
+ * "Timeout: Request failed to complete in 15000ms". Subirle el timeout al pool
+ * principal dejaría a cualquier vista pesada colgada 3 minutos; en cambio, acá
+ * se abre una conexión propia, se usa y se cierra.
+ */
+const STOCK_VALORIZADO_TIMEOUT_MS = Math.max(30_000, Number(process.env.STOCK_VALORIZADO_TIMEOUT_MS) || 180_000)
+
+async function conexionLarga() {
+  const { host, port } = hostPuerto(SQL_SERVER)
+  const pool = new sql.ConnectionPool({
+    server: host,
+    ...(port ? { port } : {}),
+    database: SQL_DATABASE,
+    user: SQL_USER,
+    password: SQL_PASSWORD,
+    options: { encrypt: SQL_ENCRYPT === 'true', trustServerCertificate: SQL_TRUST_CERT !== 'false' },
+    requestTimeout: STOCK_VALORIZADO_TIMEOUT_MS,
+    pool: { max: 1, min: 0, idleTimeoutMillis: 1000 },
+  })
+  pool.on('error', (err) => console.error('[puente] Error de pool (stock valorizado):', err.message))
+  return pool.connect()
+}
 
 let cacheStockValorizado = { en: 0, datos: null }
 let stockValorizadoEnCurso = null
 
 async function stockValorizado(forzar) {
   const ahora = Date.now()
-  if (!forzar && cacheStockValorizado.datos && ahora - cacheStockValorizado.en < STOCK_VALORIZADO_CACHE_MS) {
-    return { ...cacheStockValorizado.datos, cacheado: true }
-  }
+  const hay = cacheStockValorizado.datos
+  const fresco = hay && ahora - cacheStockValorizado.en < STOCK_VALORIZADO_CACHE_MS
+  if (!forzar && fresco) return { ...hay, cacheado: true }
+
   // Dos pedidos a la vez comparten la misma corrida (la consulta es pesada)
-  if (stockValorizadoEnCurso) return stockValorizadoEnCurso
+  if (stockValorizadoEnCurso) {
+    // Con una foto vieja a mano, se la devuelve ya en vez de hacer esperar 20 s
+    return !forzar && hay ? { ...hay, cacheado: true } : stockValorizadoEnCurso
+  }
 
   stockValorizadoEnCurso = (async () => {
     if (!fs.existsSync(SCRIPT_STOCK_VALORIZADO)) throw new Error('Falta sql/stock-valorizado.sql junto a server.js')
-    const srv = servidorDe('')
-    if (!srv) throw new Error('No hay servidor SQL principal configurado')
-    await asegurarConexion(srv)
 
     const t0 = Date.now()
-    const r = await srv.pool.request().query(fs.readFileSync(SCRIPT_STOCK_VALORIZADO, 'utf8'))
+    const pool = await conexionLarga()
+    let r
+    try {
+      r = await pool.request().query(fs.readFileSync(SCRIPT_STOCK_VALORIZADO, 'utf8'))
+    } finally {
+      await pool.close().catch(() => {})
+    }
     const [bases = [], articulos = [], costo = [], sinCosto = []] = r.recordsets ?? []
 
     const datos = {
-      servidor: srv.alias,
+      servidor: ALIAS_PRINCIPAL,
       bases: bases.map((f) => ({
         base: String(f.base ?? ''),
         unidades: Number(f.unidades) || 0,
@@ -549,6 +586,13 @@ async function stockValorizado(forzar) {
   })().finally(() => {
     stockValorizadoEnCurso = null
   })
+
+  // Cache vencido: se devuelve la foto anterior al toque y el recálculo sigue
+  // por detrás (así solo espera el primero del día, no uno cada diez minutos).
+  if (!forzar && hay) {
+    stockValorizadoEnCurso.catch((e) => console.error('[puente] stock valorizado:', e.message))
+    return { ...hay, cacheado: true }
+  }
 
   return stockValorizadoEnCurso
 }
