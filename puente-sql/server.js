@@ -31,6 +31,8 @@
  *                   de Pedidos de compra: corre scripts/sync-pedidos-compra.js en el momento)
  *   POST /          body: { accion: 'sync_pedidos_venta' }  -> { ok, mensaje }  (ídem Pedidos de venta:
  *                   scripts/sync-pedidos-venta.js, últimos 7 días)
+ *   POST /          body: { accion: 'items_pedido_venta', codigo } -> [{ linea, articulo, ... }]
+ *                   (renglones de un pedido de venta, en vivo de Dragonfish: los viejos ya no se copian)
  *   POST /          body: { accion: 'stock_valorizado', forzar? } -> { bases, articulos, costo, calculado }
  *                   (Administradores > Stock valorizado: sql/stock-valorizado.sql contra el
  *                    servidor principal, recorre todas las bases DRAGONFISH_*; cache 10 min)
@@ -224,6 +226,47 @@ if (process.env.SQL2_SERVER) {
       driver: process.env.SQL2_ODBC_DRIVER,
     })
   }
+}
+
+/**
+ * Renglones de un pedido de venta, igual que los copia scripts/sync-pedidos-venta.js
+ * (mismas columnas y la línea numerada en el orden en que vienen). Va por el servidor
+ * local (SQL2, usuario de Windows), que es el que ve el linked server de Dragonfish.
+ */
+const BASE_PEDIDOS_VENTA = process.env.PEDIDOS_VENTA_BASE || 'MITO.DRAGONFISH_MITO.ZooLogic'
+async function itemsPedidoVenta(codigo) {
+  const cod = String(codigo ?? '').trim()
+  if (!/^[A-Za-z0-9]{1,40}$/.test(cod)) throw new Error('Código de pedido inválido')
+  const partes = BASE_PEDIDOS_VENTA.split('.')
+  if (partes.length < 2 || partes.length > 3 || !partes.every((p) => PARTE.test(p))) {
+    throw new Error('PEDIDOS_VENTA_BASE inválida')
+  }
+  const srv = [...SERVIDORES.values()].find((s) => !s.principal)
+  if (!srv) throw new Error('Falta el servidor local (SQL2_*) para leer Dragonfish')
+  await asegurarConexion(srv)
+  const b = partes.map((p) => `[${p}]`).join('.')
+  const r = await srv.pool
+    .request()
+    .input('c', srv.sql.NVarChar(40), cod)
+    .query(
+      `SELECT D.FART, D.FTXT, D.CCOLOR, D.FCOLTXT, D.TALLE, D.FCANT, D.FPRECIO, D.FNETO, D.FMTOIVA, D.FBRUTO
+         FROM ${b}.[COMPROBANTEVDET] D WHERE D.CODIGO = @c`,
+    )
+  const txt = (v) => String(v ?? '').trim()
+  const num = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v))
+  return (r.recordset ?? []).map((f, i) => ({
+    linea: i + 1,
+    articulo: txt(f.FART).replace(/\s/g, '').toUpperCase() || null,
+    descripcion: txt(f.FTXT) || null,
+    color: txt(f.CCOLOR) || null,
+    color_nombre: txt(f.FCOLTXT) || null,
+    talle: txt(f.TALLE) || null,
+    cantidad: num(f.FCANT),
+    precio: num(f.FPRECIO),
+    neto: num(f.FNETO),
+    iva: num(f.FMTOIVA),
+    bruto: num(f.FBRUTO),
+  }))
 }
 
 /** Servidor por alias (sin alias = el principal). null si no existe. */
@@ -654,6 +697,13 @@ const server = http.createServer(async (req, res) => {
     }
     if (body?.accion === 'sync_pedidos_venta') {
       return enviar(res, 200, await correrSync('sync-pedidos-venta.js'))
+    }
+
+    // Detalle de un pedido de venta leído en vivo de Dragonfish (Mayorista > Pedidos de venta).
+    // En Supabase solo quedan los renglones de los últimos 120 días (sql/pedidos_venta_items_ventana.sql);
+    // los pedidos más viejos se abren desde acá. Lee por el servidor local (linked server MITO).
+    if (body?.accion === 'items_pedido_venta') {
+      return enviar(res, 200, await itemsPedidoVenta(body?.codigo))
     }
 
     // Servidores configurados (para elegir en el explorador del hub)

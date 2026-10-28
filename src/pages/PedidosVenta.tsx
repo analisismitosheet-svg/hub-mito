@@ -79,6 +79,22 @@ const $ = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFrac
 const n0 = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 })
 const plata = (v: number | null | undefined) => (v == null ? '—' : $.format(v))
 const fechaCorta = (f: string | null) => (f ? f.split('-').reverse().join('/') : '—')
+
+/** Renglones de un pedido viejo (fuera de los 120 días que guarda Supabase), en vivo por el Puente SQL. */
+async function itemsDesdeDragonfish(codigo: string): Promise<ItemPedido[]> {
+  if (!supabase) return []
+  const { data } = await supabase.auth.getSession()
+  const token = data.session?.access_token
+  if (!token) return []
+  const res = await fetch(`/api/sql/pedido-venta-items?codigo=${encodeURIComponent(codigo)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const body = (await res.json().catch(() => null)) as ItemPedido[] | { error?: string } | null
+  if (!res.ok || !Array.isArray(body)) {
+    throw new Error((body as { error?: string } | null)?.error ?? `Error ${res.status} leyendo el pedido de Dragonfish`)
+  }
+  return body
+}
 const PAGINA = 1000 // filas por pedido a Supabase (su tope por consulta)
 const MAX_PEDIDOS = 20000
 /** Tope de pedir_armado (SQL): no se pueden pedir más de 100 armados de una. */
@@ -385,7 +401,17 @@ export default function PedidosVenta() {
       .then(async ({ data, error: e }) => {
         if (!vivo) return
         if (e) setError(e.message)
-        const its = (data as ItemPedido[] | null) ?? []
+        let its = (data as ItemPedido[] | null) ?? []
+        // En Supabase solo quedan los renglones de los últimos 120 días
+        // (sql/pedidos_venta_items_ventana.sql): los de un pedido viejo se leen en vivo de Dragonfish.
+        if (!e && its.length === 0) {
+          try {
+            its = await itemsDesdeDragonfish(sel)
+          } catch (err) {
+            if (vivo) setError(err instanceof Error ? err.message : 'No se pudo leer el pedido de Dragonfish')
+          }
+          if (!vivo) return
+        }
         setItems(its)
         setCargandoItems(false)
         const desc = await descripcionesMaestro(its.map((i) => i.articulo ?? '')).catch(() => new Map<string, string>())
