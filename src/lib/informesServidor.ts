@@ -15,7 +15,8 @@
 import { postAlPuente } from './puenteRetry.js'
 import { renderReporteImagen, type BloqueImagen, type ReporteImagen } from './informesImagen.js'
 import { bloquesEficiencia, corta, porcentajes, type AvanceVtd, type FilaPiso, type FilaVtd } from './informeEficiencia.js'
-import { bloquesKm, type FilaKmInforme, type FilaLocalesInforme, type FilaParadaInforme, type VehiculoInforme } from './informeKmTransporte.js'
+import { bloquesConversion, type DatosConversion } from './informeConversion.js'
+import { bloquesKm,type FilaKmInforme, type FilaLocalesInforme, type FilaParadaInforme, type VehiculoInforme } from './informeKmTransporte.js'
 import {
   formatoDe,
   normalizarTelefono,
@@ -165,7 +166,7 @@ async function logicUrlDeDb(): Promise<string | null> {
 }
 
 /** Igual que api/sql/[view].ts: lee una vista por el Puente SQL / Logic App. */
-async function leerVistaRemota(vista: string, cfg: ConfigVista): Promise<Record<string, unknown>[]> {
+async function leerVistaRemota(vista: string, cfg: ConfigVista, maxFilas = SQL_MAX_ROWS): Promise<Record<string, unknown>[]> {
   if (!/^([A-Za-z0-9_-]+:)?[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+){0,2}$/.test(vista)) {
     throw new Error('Nombre de vista inválido')
   }
@@ -181,7 +182,7 @@ async function leerVistaRemota(vista: string, cfg: ConfigVista): Promise<Record<
   const valor = (cfg.valor ?? '').trim()
   const filtro = valor && donde.length ? { donde: donde.join(','), valor, coincide: cfg.coincide === 'contiene' ? 'contiene' : 'igual' } : null
 
-  const top = Math.min(Math.max(Number(cfg.tope) || 50, 1), SQL_MAX_ROWS)
+  const top = Math.min(Math.max(Number(cfg.tope) || 50, 1), maxFilas)
   const r = await postAlPuente(
     logicUrl,
     {
@@ -292,6 +293,8 @@ async function cuerpoApp(cfg: ConfigApp): Promise<string> {
     }
     case 'km_transporte':
       return bloquesKm(await datosKm(ahoraAr().fecha)).texto
+    case 'tasa_conversion':
+      return bloquesConversion(await datosConversion(ahoraAr().fecha)).texto
     default:
       throw new Error('Tipo de informe desconocido')
   }
@@ -347,6 +350,57 @@ async function datosEficiencia(fecha: string): Promise<{ fecha: string; vtd: Fil
     ? vtd.map((f) => (f.responsable_id && fuera.has(f.responsable_id) ? { ...f, responsable: null, responsable_id: null } : f))
     : vtd
   return { fecha, vtd: vtdSinFuera, piso, avance }
+}
+
+// ---------------------------------------------------------------------------
+// Tasa de conversión (Locales > Tasa de conversión)
+// ---------------------------------------------------------------------------
+
+/** Entradas por local de un día (hora de Argentina) de contador_visitas. */
+async function entradasDelDia(fecha: string): Promise<Map<string, number>> {
+  const desde = new Date(`${fecha}T00:00:00-03:00`).toISOString()
+  const hasta = new Date(new Date(`${fecha}T00:00:00-03:00`).getTime() + 86_400_000).toISOString()
+  const m = new Map<string, number>()
+  for (let offset = 0; offset < 50_000; offset += 1000) {
+    const lote = await jsonDe<{ local: string; entradas: number }>(
+      `contador_visitas?select=local,entradas&desde=gte.${encodeURIComponent(desde)}&desde=lt.${encodeURIComponent(hasta)}&order=local,camara,desde&limit=1000&offset=${offset}`,
+    )
+    for (const f of lote) m.set(f.local, (m.get(f.local) ?? 0) + (Number(f.entradas) || 0))
+    if (lote.length < 1000) break
+  }
+  return m
+}
+
+/** Hoy y el mismo día de la semana anterior: entradas, tickets y facturado por local. */
+async function datosConversion(fecha: string): Promise<DatosConversion> {
+  const d = new Date(`${fecha}T12:00:00Z`)
+  d.setUTCDate(d.getUTCDate() - 7)
+  const antes = d.toISOString().slice(0, 10)
+  const cfgVista = await jsonDe<{ valor: unknown }>('config_app?clave=eq.contador_vista_ventas&select=valor')
+  const vista = typeof cfgVista[0]?.valor === 'string' ? (cfgVista[0].valor as string) : ''
+  if (!vista) throw new Error('Falta configurar la vista de ventas del contador (config_app contador_vista_ventas)')
+  const [entradas, entradasAntes, filasVentas, locales] = await Promise.all([
+    entradasDelDia(fecha),
+    entradasDelDia(antes),
+    // Una fila por local y día (180 días, ~1.200 filas): se pide entera, sin el tope general
+    leerVistaRemota(vista, { vista, tope: 20_000 }, 20_000),
+    jsonDe<{ codigo: string; nombre: string | null }>('locales?select=codigo,nombre'),
+  ])
+  const ventas = new Map<string, { tickets: number; total: number }>()
+  const ventasAntes = new Map<string, { tickets: number; total: number }>()
+  const val = (f: Record<string, unknown>, k: string) => f[k] ?? f[k.toUpperCase()]
+  for (const f of filasVentas) {
+    const dia = String(val(f, 'fecha') ?? '').slice(0, 10)
+    const destino = dia === fecha ? ventas : dia === antes ? ventasAntes : null
+    if (!destino) continue
+    const local = String(val(f, 'local') ?? '').trim().toUpperCase()
+    const v = destino.get(local) ?? { tickets: 0, total: 0 }
+    v.tickets += Number(val(f, 'tickets')) || 0
+    v.total += Number(val(f, 'total')) || 0
+    destino.set(local, v)
+  }
+  const nombres = Object.fromEntries(locales.map((l) => [l.codigo, l.nombre ?? '']))
+  return { fecha, antes, entradas, entradasAntes, ventas, ventasAntes, nombres }
 }
 
 // ---------------------------------------------------------------------------
@@ -537,6 +591,13 @@ async function construirReporteImagen(informe: Informe): Promise<{ reporte: Repo
         return {
           reporte: { titulo: limpiarParaImagen(enc || 'Km recorridos del transporte'), subtitulo: r.subtitulo, pie, bloques: r.bloques },
           caption: limpiarParaImagen(enc || informe.nombre || 'Km recorridos del transporte').slice(0, 900),
+        }
+      }
+      if (cfg.tipo === 'tasa_conversion') {
+        const r = bloquesConversion(await datosConversion(d.fecha))
+        return {
+          reporte: { titulo: limpiarParaImagen(enc || 'Tasa de conversión'), subtitulo: r.subtitulo, pie, bloques: r.bloques },
+          caption: limpiarParaImagen(enc || informe.nombre || 'Tasa de conversión').slice(0, 900),
         }
       }
       if (cfg.tipo === 'eficiencia_mayorista') {
