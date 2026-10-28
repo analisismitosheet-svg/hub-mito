@@ -118,9 +118,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setPermisos(new Set())
       }
     })
+    // Sesión anulada desde otro lado (salida global en otra PC, admin): el token sigue sirviendo
+    // para leer hasta que vence, pero /api responde «No autorizado». Al abrir y al volver a la
+    // pestaña se pregunta a Auth si la sesión existe; si no, se cierra acá y vuelve al login.
+    const revisarSesion = async () => {
+      if (!supabase || document.visibilityState !== 'visible') return
+      const { data } = await supabase.auth.getSession()
+      if (!data.session) return
+      const { error } = await supabase.auth.getUser()
+      const codigo = (error as { code?: string } | null)?.code
+      if (codigo === 'session_not_found' || codigo === 'bad_jwt' || codigo === 'user_not_found') {
+        await supabase.auth.signOut({ scope: 'local' })
+      }
+    }
+    void revisarSesion()
+    document.addEventListener('visibilitychange', revisarSesion)
     return () => {
       activo = false
       sub.subscription.unsubscribe()
+      document.removeEventListener('visibilitychange', revisarSesion)
     }
   }, [cargarPerfil])
 
