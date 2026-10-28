@@ -29,7 +29,6 @@
  *   TRANSPORTE_SERVICE_ROLE_KEY                         - lectura de sesiones/bultos de Transporte
  *   VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY (VAPID_SUBJECT) - las mismas de api/push.ts
  */
-import webpush from 'web-push'
 import { autorizado, tokenDe } from '../src/lib/apiAuth.js'
 
 type Req = {
@@ -392,6 +391,9 @@ async function vistaAlertas(res: Res) {
   const pub = env('VAPID_PUBLIC_KEY')
   const priv = env('VAPID_PRIVATE_KEY')
   if (!pub || !priv) return res.status(500).json({ error: 'Faltan VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY' })
+  // web-push se carga solo acá: la ingesta GPS (casi todas las llamadas) no lo necesita
+  // y cargarlo en cada arranque en frío gasta CPU de Vercel (Fluid Active CPU).
+  const { default: webpush } = await import('web-push')
   webpush.setVapidDetails(env('VAPID_SUBJECT') || 'https://hub-mito.vercel.app', pub, priv)
 
   const h = hub()
