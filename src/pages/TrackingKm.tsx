@@ -21,6 +21,11 @@ const supabase = sb!
 interface Vehiculo { id: string; nombre: string; color: string; usuario_transporte_nombre: string | null; usuario_transporte_id: string | null }
 interface FilaKm { vehiculo_id: string; dia: string; km: number; minutos_mov: number; primera: string; ultima: string }
 interface FilaBulto { chofer_id: string; dia: string; bultos: number | string }
+/** Parada de 10 min o más lejos de todo local o depósito (sql/tracking_paradas_fuera.sql) */
+interface FilaParada {
+  vehiculo_id: string; dia: string; desde: string; hasta: string; minutos: number | string
+  lat: number; lng: number; cerca_de: string | null; cerca_m: number | string | null
+}
 
 const TOOLTIP = {
   contentStyle: {
@@ -38,6 +43,11 @@ const fmtKm = (n: number) => `${nf(n, n < 10 ? 1 : 0)} km`
 const fmtBultosKm = (bultos: number, km: number) =>
   km > 0 ? (bultos / km).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'
 const fmtFecha = (s: string) => { const [y, m, d] = s.split('-'); return `${d}/${m}/${y}` }
+const fmtHora = (iso: string) =>
+  new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Cordoba', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(iso))
+/** "GENERAL PAZ · 441 m" */
+const fmtCerca = (nombre: string | null, metros: number) =>
+  !nombre || !metros ? '—' : `${nombre} · ${metros < 1000 ? `${nf(metros)} m` : `${nf(metros / 1000, 1)} km`}`
 const fmtCorta = (s: string) => { const [, m, d] = s.split('-'); return `${d}/${m}` }
 const DIA_SEM = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb']
 const diaSemana = (s: string) => { const [y, m, d] = s.split('-').map(Number); return DIA_SEM[new Date(y, m - 1, d).getDay()] }
@@ -60,6 +70,7 @@ export default function TrackingKm() {
   const [anterior, setAnterior] = useState<FilaKm[]>([])
   const [bultos, setBultos] = useState<FilaBulto[]>([])
   const [bultosAnt, setBultosAnt] = useState<FilaBulto[]>([])
+  const [paradas, setParadas] = useState<FilaParada[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -83,12 +94,13 @@ export default function TrackingKm() {
     const largo = diasEntre(periodo.desde, periodo.hasta)
     const antHasta = sumarDias(periodo.desde, -1)
     const antDesde = sumarDias(antHasta, -(largo - 1))
-    const [v, k, a, bcur, bant] = await Promise.all([
+    const [v, k, a, bcur, bant, pa] = await Promise.all([
       supabase.from('tracking_vehiculos').select('id,nombre,color,usuario_transporte_nombre,usuario_transporte_id').order('nombre'),
       supabase.rpc('tracking_km', { p_desde: periodo.desde, p_hasta: periodo.hasta }),
       supabase.rpc('tracking_km', { p_desde: antDesde, p_hasta: antHasta }),
       leerBultos(periodo.desde, periodo.hasta),
       leerBultos(antDesde, antHasta),
+      supabase.rpc('tracking_paradas_fuera', { p_desde: periodo.desde, p_hasta: periodo.hasta, p_min_min: 10 }),
     ])
     if (k.error) setError(k.error.message)
     setVehiculos((v.data ?? []) as Vehiculo[])
@@ -97,6 +109,7 @@ export default function TrackingKm() {
     setAnterior(((a.data ?? []) as FilaKm[]).map(num))
     setBultos(bcur)
     setBultosAnt(bant)
+    setParadas(((pa.data ?? []) as FilaParada[]).slice().sort((x, y) => y.desde.localeCompare(x.desde)))
     setCargando(false)
   }, [periodo, leerBultos])
 
@@ -332,6 +345,58 @@ export default function TrackingKm() {
                     })}
                   </tbody>
                 </table>
+              </section>
+
+              <section className="overflow-x-auto rounded-2xl border border-line bg-surface p-4">
+                <h2 className="mb-1 font-semibold text-ink">Paradas fuera de locales y depósito</h2>
+                <p className="mb-2 text-xs text-sub">
+                  Donde el vehículo se quedó quieto 10 minutos o más lejos de todo local, del depósito y de la fábrica.
+                </p>
+                {!paradas.length ? (
+                  <p className="py-4 text-center text-sm text-sub">Ninguna parada fuera de locales en este período.</p>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-line text-left text-xs text-sub">
+                        <th className="py-2">Vehículo</th>
+                        <th className="py-2">Fecha</th>
+                        <th className="py-2 text-right">Desde</th>
+                        <th className="py-2 text-right">Hasta</th>
+                        <th className="py-2 text-right">Cuánto</th>
+                        <th className="py-2">Más cerca de</th>
+                        <th className="py-2 text-right">Mapa</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paradas.map((p) => {
+                        const v = vehiculos.find((x) => x.id === p.vehiculo_id)
+                        return (
+                          <tr key={`${p.vehiculo_id}|${p.desde}`}
+                            onClick={() => navigate(`/administradores/tracking?fecha=${p.dia}`)}
+                            className="cursor-pointer border-b border-line/60 last:border-0 hover:bg-surface2" title="Ver ese día en el mapa">
+                            <td className="py-2 font-medium" style={{ color: v?.color }}>{v?.nombre ?? '?'}</td>
+                            <td className="py-2 text-ink">{diaSemana(p.dia)} {fmtFecha(p.dia)}</td>
+                            <td className="py-2 text-right text-sub">{fmtHora(p.desde)}</td>
+                            <td className="py-2 text-right text-sub">{fmtHora(p.hasta)}</td>
+                            <td className="py-2 text-right font-semibold text-orange-500">{hm(Number(p.minutos))}</td>
+                            <td className="py-2 text-ink">{fmtCerca(p.cerca_de, Number(p.cerca_m))}</td>
+                            <td className="py-2 text-right">
+                              <a
+                                href={`https://maps.google.com/?q=${p.lat},${p.lng}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-xs font-medium text-teal-500 hover:underline"
+                              >
+                                Ver punto
+                              </a>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                )}
               </section>
             </>
           )}
