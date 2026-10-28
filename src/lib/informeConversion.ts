@@ -80,19 +80,18 @@ export function bloquesConversion(d: DatosConversion): { subtitulo: string; bloq
   bloques.push({ tipo: 'seccion', texto: 'Por local', color: '#16a34a' })
   bloques.push({
     tipo: 'tabla',
-    columnas: ['Local', 'Entradas', 'Tickets', 'Conversión', 'Facturado', 'Ticket prom.', `vs ${diaCorto(d.antes).slice(4)}`],
-    anchos: [2.4, 1, 1, 1.2, 1.6, 1.4, 1.2],
-    alinear: ['izq', 'der', 'der', 'der', 'der', 'der', 'der'],
-    colores: [null, '#2563eb', '#7c3aed', '#16a34a', null, '#475569', null],
+    columnas: ['Local', 'Entradas', 'Tickets', 'Conversión', 'Facturado', 'Ticket prom.'],
+    anchos: [2.4, 1, 1, 1.2, 1.6, 1.4],
+    alinear: ['izq', 'der', 'der', 'der', 'der', 'der'],
+    colores: [null, '#2563eb', '#7c3aed', '#16a34a', null, '#475569'],
     total: true,
     filas: [
       ...filas.map((f) => [
         f.nombre ? `${f.nombre}` : f.local,
         nf(f.entradas), nf(f.tickets), pct(f.conv), pesos(f.total),
         f.tickets ? pesos(f.total / f.tickets) : '—',
-        puntos(f.conv, f.convAnt),
       ]),
-      ['Total', nf(ent), nf(tk), pct(convTot), pesos(tot), tk ? pesos(tot / tk) : '—', puntos(convTot, convAntTot)],
+      ['Total', nf(ent), nf(tk), pct(convTot), pesos(tot), tk ? pesos(tot / tk) : '—'],
     ],
   })
 
