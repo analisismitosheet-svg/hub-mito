@@ -4,9 +4,9 @@
  *   node scripts/sync-ventas-locales.js          (últimos 10 días; si nunca corrió, todo desde 2024-12-20)
  *   node scripts/sync-ventas-locales.js --todo   (todo desde 2024-12-20)
  *
- * Venta = tickets netos, mismo criterio que la tasa de conversión (vw_ventas_TICKET): comprobantes
- * DESCFW LIKE 'TICKET%' no anulados, TOTAL = suma de FTOTAL (las notas de crédito restan) y
- * TICKETS = cantidad de TICKETFACTURA. Lee el COMPROBANTEV de cada base en el servidor principal
+ * Venta = tickets netos: comprobantes DESCFW LIKE 'TICKET%' no anulados, TOTAL = suma de
+ * FTOTAL × SIGNOMOV (las notas de crédito vienen en positivo con SIGNOMOV -1, así restan) y
+ * TICKETS = cantidad de TICKETFACTURA. La WEB (punto 39 de 9 de Julio) cuenta sus facturas electrónicas. Lee el COMPROBANTEV de cada base en el servidor principal
  * (SQL_SERVER del .env), solo lectura.
  *
  * Lo lanza la tarea "MITO - Pedidos franquicias" (sync-franquicias-dragon.ps1, cada 1 min), pero
@@ -41,9 +41,16 @@ const cfg = (k) => process.env[k] ?? envPuente[k]
 const SUPABASE_URL = cfg('SUPABASE_URL') ?? envHub.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY = cfg('SUPABASE_ANON_KEY') ?? envHub.VITE_SUPABASE_ANON_KEY
 
-/** Local del hub (tabla locales) → base(s) de Dragon. 9 de Julio cambió de base en mar-2025. */
+/**
+ * Local del hub (tabla locales) → base(s) de Dragon. 9 de Julio cambió de base en mar-2025.
+ * Por defecto cuenta los TICKET% del local. Un local puede traer su propio filtro: la WEB es el
+ * punto de venta 39 de la base de 9 de Julio y factura con FACTURAELECTRONICA (no ticket).
+ */
+const TICKETS = "C.DESCFW LIKE 'TICKET%'"
+const WEB = "C.FPTOVEN = 39 AND (C.DESCFW LIKE 'FACTURAELECTRONICA%' OR C.DESCFW LIKE 'NOTADECREDITOELECTRONICA%')"
 const LOCALES = {
   '9DEJULIO': ['DRAGONFISH_9DEJULIO', 'DRAGONFISH_9DEJUL2'],
+  WEB: { bases: ['DRAGONFISH_9DEJULIO', 'DRAGONFISH_9DEJUL2'], filtro: WEB },
   BUSTOD: ['DRAGONFISH_BUSTOD'],
   CFD: ['DRAGONFISH_CFD'],
   CFPO: ['DRAGONFISH_CFPO'],
@@ -109,14 +116,16 @@ async function main() {
 
   const filas = []
   try {
-    for (const [local, bases] of Object.entries(LOCALES)) {
+    for (const [local, def] of Object.entries(LOCALES)) {
+      const { bases, filtro } = Array.isArray(def) ? { bases: def, filtro: TICKETS } : def
+      // Las notas de crédito vienen con FTOTAL positivo y SIGNOMOV = -1: el total es FTOTAL × SIGNOMOV
       const union = bases
-        .map((b) => `SELECT CAST(C.FFCH AS date) AS F, C.DESCFW, C.FTOTAL FROM [${b}].ZooLogic.COMPROBANTEV AS C
-                       WHERE C.ANULADO = 0 AND C.DESCFW LIKE 'TICKET%' AND C.FFCH >= @desde`)
+        .map((b) => `SELECT CAST(C.FFCH AS date) AS F, C.DESCFW, C.FTOTAL * C.SIGNOMOV AS NETO FROM [${b}].ZooLogic.COMPROBANTEV AS C
+                       WHERE C.ANULADO = 0 AND ${filtro} AND C.FFCH >= @desde`)
         .join(' UNION ALL ')
       const r = await pool.request().input('desde', sql.Date, desde).query(`
-        SELECT CONVERT(varchar(10), T.F, 23) AS fecha, SUM(T.FTOTAL) AS total,
-               COUNT(CASE WHEN T.DESCFW LIKE 'TICKETFACTURA%' THEN 1 END) AS tickets
+        SELECT CONVERT(varchar(10), T.F, 23) AS fecha, SUM(T.NETO) AS total,
+               COUNT(CASE WHEN T.DESCFW LIKE 'TICKETFACTURA%' OR T.DESCFW LIKE 'FACTURAELECTRONICA%' THEN 1 END) AS tickets
           FROM (${union}) AS T GROUP BY T.F`)
       for (const f of r.recordset) filas.push({ local, fecha: f.fecha, total: Number(f.total) || 0, tickets: Number(f.tickets) || 0 })
     }
