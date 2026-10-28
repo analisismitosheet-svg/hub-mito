@@ -181,7 +181,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       async signOut() {
         if (!supabase) return
-        await supabase.auth.signOut()
+        // Solo este dispositivo: el signOut() por defecto es global y deja sin sesión a las otras
+        // PCs con el mismo usuario (la pantalla sigue andando, pero /api responde «No autorizado»)
+        await supabase.auth.signOut({ scope: 'local' })
         setPerfil(null)
         setPermisos(new Set())
       },
