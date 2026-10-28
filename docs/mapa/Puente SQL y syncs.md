@@ -18,7 +18,7 @@
 - Del lado de Vercel entra por `api/sql/[ruta].ts` (vista / `status` / `catalogo` / `stock-valorizado`, lógica en `src/lib/sqlVista.ts`, `sqlStatus.ts`, `sqlCatalogo.ts`, `stockValorizadoApi.ts`). Respuesta máx. ~4,5 MB: ver [[Arquitectura]].
 - `src/lib/sqlApi.ts`: si el servidor responde 401 (sesión cerrada en Supabase con token local vigente) renueva la sesión y reintenta; si no puede, pide volver a entrar.
 - Vistas habilitadas: Configuraciones → Conexión SQL, o fijas en env `SQL_VIEWS` de Vercel (`vw_STOCK_SKU_MITO`, `vw_STOCK_ARTICULO_MITO`).
-- **Acciones propias** (no son vistas): `replicas` (Sistemas → Réplicas), `sync_pedidos_compra` / `sync_pedidos_venta`, `servidores` / `bases` / `objetos` (explorador) y `stock_valorizado` (`sql/stock-valorizado.sql`, cache 10 min → [[Stock valorizado]]). Al tocar `server.js` hay que reiniciar el puente: la tarea lo relevanta cuando el 3128 queda libre.
+- **Acciones propias** (no son vistas): `replicas` (Sistemas → Réplicas), `sync_pedidos_compra` / `sync_pedidos_venta`, `servidores` / `bases` / `objetos` (explorador) y `stock_valorizado` (`sql/stock-valorizado.sql`, cache 10 min → [[Stock valorizado]]), `items_pedido_venta` (renglones de un pedido de venta viejo, por el servidor local → [[Pedidos compra, venta y cancelaciones]]). Al tocar `server.js` hay que reiniciar el puente: la tarea lo relevanta cuando el 3128 queda libre.
 
 ## Syncs a Supabase (`puente-sql/scripts/`, tareas en `instalar-tarea.ps1`)
 | Tarea | Script | Cuándo | Escribe en |

@@ -12,6 +12,7 @@ Todo es copia de Dragonfish sincronizada por el puente ([[Puente SQL y syncs]]).
 ## Venta (`/mayorista/pedidos-venta`)
 - `PedidosVenta.tsx`. Tablas `pedidos_venta` + items, con **motivo** (de `vw_comprobantes_PEDIDO_VENTA`, `sql/pedidos_venta_motivo.sql`): la lista se separa por motivo.
 - Buscador también por artículo código/descripción: RPC `pedidos_venta_por_articulo` (devuelve `text[]` por el límite de 1000, `sql/pedidos_venta_buscar_articulo.sql`).
+- **Solo 120 días de renglones en Supabase** (`sql/pedidos_venta_items_ventana.sql`, 28/10/2026, para bajar la base del hub de 366 a 202 MB): `pedidos_venta_items` guarda los pedidos con fecha ≥ `private.pedidos_venta_items_limite()` (hoy − 120) o con armado activo; el sync descarta los viejos y la copia completa diaria purga. Las cabeceras siguen todas y `pedidos_venta.unidades` (lo llena el sync) alimenta `estadistica_vtd` / `avance_vtd_rep`. El detalle de un pedido viejo se lee en vivo de Dragonfish: `PedidosVenta.tsx` → `/api/sql/pedido-venta-items` (`src/lib/pedidoVentaItemsApi.ts`) → acción `items_pedido_venta` del puente. La búsqueda por artículo y el estado por línea solo cubren la ventana.
 - Columna Stock por SKU (`src/lib/stockSku.ts`, ver [[Artículos y F12]]). Descripciones con `descripcionesMaestro`.
 - Pedir armado → [[Armado de pedidos]]. Permiso `pedidos_venta.view`.
 - **Período**: Hoy / semana / anterior / 4 semanas / todas; «Hoy» es una opción más del período (no se combina con las semanas). Si el motivo guardado no tiene pedidos en el período, se ven todos (`motivoActivo`).
