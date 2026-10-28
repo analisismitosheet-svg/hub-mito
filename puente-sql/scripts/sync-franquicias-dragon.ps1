@@ -10,4 +10,7 @@ if (-not $node) { $node = Join-Path $env:ProgramFiles 'nodejs\node.exe' }
 $codigo = $LASTEXITCODE
 & $node (Join-Path $raiz 'scripts\reposicion-franquicias-auto.js')
 if ($codigo -eq 0) { $codigo = $LASTEXITCODE }
+# Venta diaria de los locales para Locales -> Objetivos (corre de verdad una vez por hora)
+& $node (Join-Path $raiz 'scripts\sync-ventas-locales.js')
+if ($codigo -eq 0) { $codigo = $LASTEXITCODE }
 exit $codigo

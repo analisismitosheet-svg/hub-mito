@@ -32,6 +32,7 @@ import Opiniones from '@/pages/Opiniones'
 import ContadorClientes from '@/pages/ContadorClientes'
 import IaCamaras from '@/pages/IaCamaras'
 import TasaConversion from '@/pages/TasaConversion'
+import ObjetivosLocales from '@/pages/ObjetivosLocales'
 import CalibrarCamara from '@/pages/CalibrarCamara'
 import Opinar from '@/pages/Opinar'
 import EncuestasAdmin from '@/pages/EncuestasAdmin'
@@ -495,6 +496,14 @@ export default function App() {
             element={
               <PermissionRoute permiso="conversion.view">
                 <TasaConversion />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/objetivos-locales"
+            element={
+              <PermissionRoute permiso="objetivos.view">
+                <ObjetivosLocales />
               </PermissionRoute>
             }
           />

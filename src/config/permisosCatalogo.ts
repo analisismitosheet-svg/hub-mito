@@ -16,6 +16,7 @@ import {
   ArrowRightLeft,
   ClipboardList,
   Percent,
+  Target,
   CreditCard,
   BookOpen,
   FolderOpen,
@@ -224,6 +225,11 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
   {
     id: 'conversion', areaId: 'locales', titulo: 'Tasa de conversión', descripcion: 'Ventas contra entradas',
     icon: Percent, color: '#db2777', acciones: { ver: 'conversion.view' },
+  },
+  {
+    id: 'objetivos', areaId: 'locales', titulo: 'Objetivos', descripcion: 'Objetivo por local con el IPC del mes',
+    icon: Target, color: '#84cc16', acciones: { ver: 'objetivos.view', editar: 'objetivos.edit' },
+    etiquetas: { editar: 'Cargar IPC' },
   },
   {
     id: 'sectores', areaId: 'locales', titulo: 'Sectores y QR', descripcion: 'Sectores de los locales y sus QR',

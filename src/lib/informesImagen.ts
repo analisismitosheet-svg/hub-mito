@@ -24,6 +24,8 @@ export type BloqueImagen =
       anchos?: number[]
       /** color de texto por columna (ej. venta en verde, no mandados en rojo) */
       colores?: Array<string | null>
+      /** color de texto de una celda puntual [fila][columna]; pisa al de la columna */
+      coloresCelda?: Array<Array<string | null> | null>
       /** la última fila es un total: va resaltada */
       total?: boolean
     }
@@ -106,7 +108,7 @@ function bloqueTabla(b: BloqueTabla, key: number) {
           borderTop: esTotal ? '2px solid #94a3b8' : '1px solid #eef2f7',
         },
       },
-      ...cols.map((_, ci) => celda(val(fila[ci]), false, maxCharsDe(ci), { ...opc(ci), color: b.colores?.[ci], negrita: esTotal })),
+      ...cols.map((_, ci) => celda(val(fila[ci]), false, maxCharsDe(ci), { ...opc(ci), color: b.coloresCelda?.[ri]?.[ci] ?? b.colores?.[ci], negrita: esTotal })),
     )
   })
   return h(

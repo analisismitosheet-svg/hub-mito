@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Objetivos de locales · maqueta</title>
+<style>
+  :root{
+    color-scheme: dark;
+    --paper:#050508; --surface:rgba(255,255,255,.035); --surface2:rgba(255,255,255,.07);
+    --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.18);
+    --ink:#f8fafc; --sub:#94a3b8;
+    --green:#34d399; --amber:#fbbf24; --red:#f87171; --blue:#60a5fa; --violet:#a78bfa; --teal:#2dd4bf;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:14px/1.45 'Segoe UI',system-ui,sans-serif;padding:18px 16px 60px;
+    background-image:radial-gradient(600px 500px at 0 0,rgba(16,185,129,.12),transparent 70%),radial-gradient(500px 400px at 100% 0,rgba(59,130,246,.10),transparent 70%)}
+  .wrap{max-width:1180px;margin:0 auto}
+  .aviso{border:1px solid rgba(96,165,250,.4);background:rgba(16,16,22,.9);border-radius:12px;padding:8px 12px;font-size:12px;color:#dbeafe;margin-bottom:16px}
+  .eyebrow{font-size:11px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--green)}
+  h1{margin:2px 0 4px;font-size:24px} .lead{margin:0;color:var(--sub);font-size:13px;max-width:760px}
+  .tabs{display:flex;gap:6px;margin:16px 0 12px;flex-wrap:wrap}
+  .tab{border:1px solid var(--line);background:var(--surface2);color:var(--sub);padding:8px 14px;border-radius:999px;font-weight:600;font-size:12.5px;cursor:pointer}
+  .tab.on{background:#059669;border-color:#059669;color:#fff}
+  .card{border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:14px;margin-bottom:14px}
+  .card h2{margin:0 0 4px;font-size:15px} .card p.s{margin:0 0 10px;color:var(--sub);font-size:12px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+  label.f{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--sub)}
+  select,input{height:36px;border-radius:10px;border:1px solid var(--line2);background:#101016;color:var(--ink);padding:0 10px;font-size:13px}
+  input.n{width:78px;text-align:right}
+  .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
+  @media(max-width:800px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .kpi{border:1px solid var(--line);border-radius:14px;padding:10px 12px;background:var(--surface)}
+  .kpi b{display:block;font-size:20px;margin-top:2px} .kpi span{font-size:11px;color:var(--sub);text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+  .kpi small{color:var(--sub);font-size:11.5px}
+  .tw{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+  table{width:100%;border-collapse:collapse;min-width:900px;font-size:12.5px}
+  th{background:rgba(255,255,255,.05);color:var(--sub);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;text-align:right;padding:9px 10px;white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  td{padding:8px 10px;border-top:1px solid var(--line);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+  tr.tot td{font-weight:800;background:rgba(255,255,255,.04);border-top:2px solid var(--line2)}
+  .g{color:var(--green)} .a{color:var(--amber)} .r{color:var(--red)} .b{color:var(--blue)} .v{color:var(--violet)} .t{color:var(--teal)} .sub{color:var(--sub)}
+  .pill{display:inline-block;border-radius:999px;padding:2px 8px;font-size:10.5px;font-weight:700}
+  .pill.man{background:rgba(251,191,36,.14);color:var(--amber);border:1px solid rgba(251,191,36,.35)}
+  .pill.auto{background:rgba(52,211,153,.12);color:var(--green);border:1px solid rgba(52,211,153,.3)}
+  .formula{border:1px dashed var(--line2);border-radius:12px;padding:10px 12px;font-size:12.5px;color:#d1fae5;background:rgba(16,185,129,.06);margin-bottom:12px}
+  .btn{height:36px;border:none;border-radius:10px;background:#059669;color:#fff;font-weight:700;padding:0 14px;cursor:pointer}
+  .btn.sec{background:var(--surface2);border:1px solid var(--line2);color:var(--ink)}
+  .ipc-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+  @media(max-width:800px){.ipc-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+  .ipc{border:1px solid var(--line);border-radius:12px;padding:8px 10px;background:var(--surface)}
+  .ipc .m{font-size:11px;font-weight:800;text-transform:uppercase;color:var(--sub);letter-spacing:.06em}
+  .ipc input{width:100%;margin-top:4px}
+  .ipc .ac{font-size:11px;color:var(--sub);margin-top:4px}
+  .oculto{display:none}
+  .bar{height:6px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:4px;width:90px;margin-left:auto}
+  .bar i{display:block;height:100%}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="aviso">🧪 Maqueta para discutir: <b>Locales → Objetivos</b>. Los números son de ejemplo. Tocá el IPC, el mes o el % extra y mirá cómo se recalcula todo.</div>
+
+  <div class="eyebrow">Locales</div>
+  <h1>Objetivos</h1>
+  <p class="lead">El objetivo de cada local se calcula solo: <b>lo que vendió ese mismo mes el año pasado, actualizado por el IPC</b> que se carga mes a mes. Si querés exigir algo más, se le suma un % de crecimiento por local. Cualquier objetivo se puede pisar a mano.</p>
+
+  <div class="tabs">
+    <button class="tab on" data-v="obj">🎯 Objetivos del mes</button>
+    <button class="tab" data-v="ipc">📈 IPC mensual</button>
+  </div>
+
+  <!-- ===================== OBJETIVOS ===================== -->
+  <div id="v-obj">
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <div class="row">
+          <label class="f">Mes<select id="mes"></select></label>
+          <label class="f">Crecimiento extra general<input id="extraGral" class="n" type="number" step="0.5" value="5"></label>
+        </div>
+        <div class="row">
+          <button class="btn sec">⬇ Excel</button>
+          <button class="btn">💾 Guardar objetivos</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="formula" id="formula"></div>
+
+    <div class="kpis">
+      <div class="kpi"><span>Objetivo total</span><b id="kObj"></b><small id="kObjS"></small></div>
+      <div class="kpi"><span>Vendido en el mes</span><b id="kVen"></b><small id="kVenS"></small></div>
+      <div class="kpi"><span>% completado</span><b id="kPct"></b><small id="kPctS"></small></div>
+      <div class="kpi"><span>Ritmo para llegar</span><b id="kRit"></b><small>por día, lo que falta / días que quedan</small></div>
+    </div>
+
+    <div class="tw">
+      <table>
+        <thead><tr>
+          <th>Local</th><th id="thBase">Venta mismo mes año pasado</th><th>IPC interanual</th><th>Extra %</th>
+          <th>Objetivo calculado</th><th>Objetivo final</th><th>Vendido</th><th>% completado</th><th>Diferencia</th>
+        </tr></thead>
+        <tbody id="tb"></tbody>
+      </table>
+    </div>
+    <p class="sub" style="font-size:11.5px;margin-top:8px">«Objetivo final» = el calculado, salvo que lo pises a mano (queda marcado <span class="pill man">a mano</span>). El vendido sale de la misma vista de ventas que usa Tasa de conversión.</p>
+  </div>
+
+  <!-- ===================== IPC ===================== -->
+  <div id="v-ipc" class="oculto">
+    <div class="card">
+      <h2>IPC mensual (INDEC)</h2>
+      <p class="s">Cargás el % de cada mes cuando sale. Con los últimos 12 meses se arma el IPC interanual que actualiza la venta del año pasado. Si un mes todavía no salió, se repite el último cargado (queda marcado como estimado).</p>
+      <div class="row" style="margin-bottom:10px"><label class="f">Año<select id="anio"><option>2026</option><option>2025</option></select></label></div>
+      <div class="ipc-grid" id="ipcGrid"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+const MESES_L = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
+// IPC mensual de ejemplo (%), nov-2025 a dic-2026
+const ipc = {
+  '2025-11':2.4,'2025-12':2.7,
+  '2026-01':2.2,'2026-02':2.4,'2026-03':3.7,'2026-04':2.8,'2026-05':1.5,'2026-06':1.6,'2026-07':1.9,'2026-08':1.9,'2026-09':2.1,'2026-10':null,'2026-11':null,'2026-12':null,
+  '2025-01':2.2,'2025-02':2.4,'2025-03':3.7,'2025-04':2.8,'2025-05':1.5,'2025-06':1.6,'2025-07':1.9,'2025-08':1.9,'2025-09':2.1,'2025-10':2.3,
+}
+// Venta del mismo mes del año pasado (ejemplo) por local
+const locales = [
+  {cod:'NVOCED',nom:'NUEVO CENTRO',base:262000000,vend:306610729,extra:null,manual:null},
+  {cod:'ESPINOD',nom:'ESPINOSA',base:158000000,vend:193195174,extra:null,manual:null},
+  {cod:'RUTA9D2',nom:'RUTA 9',base:101000000,vend:117958663,extra:null,manual:null},
+  {cod:'RIVERAD',nom:'RIVERA',base:104000000,vend:115780253,extra:8,manual:null},
+  {cod:'MUNOZ',nom:'MUÑOZ',base:84000000,vend:109226682,extra:null,manual:null},
+  {cod:'9DEJULIO',nom:'9 DE JULIO',base:96000000,vend:105507274,extra:null,manual:null},
+  {cod:'VCPD',nom:'CARLOS PAZ',base:61000000,vend:75045997,extra:null,manual:80000000},
+]
+const pesos = n => '$ ' + Math.round(n).toLocaleString('es-AR')
+const pct = (n,d=1) => n.toLocaleString('es-AR',{minimumFractionDigits:d,maximumFractionDigits:d}) + '%'
+const clave = (a,m) => `${a}-${String(m).padStart(2,'0')}`
+
+/** IPC de un mes; si falta, el último cargado antes (estimado) */
+function ipcDe(a, m) {
+  let aa = a, mm = m
+  for (let i = 0; i < 24; i++) {
+    const v = ipc[clave(aa,mm)]
+    if (v != null) return { v, est: i > 0 }
+    mm--; if (mm === 0) { mm = 12; aa-- }
+  }
+  return { v: 0, est: true }
+}
+/** IPC interanual: producto de los 12 meses que terminan en ese mes */
+function interanual(a, m) {
+  let f = 1, est = false, aa = a, mm = m
+  for (let i = 0; i < 12; i++) { const x = ipcDe(aa, mm); f *= 1 + x.v / 100; est = est || x.est; mm--; if (mm === 0) { mm = 12; aa-- } }
+  return { pct: (f - 1) * 100, est }
+}
+
+const selMes = document.getElementById('mes')
+for (let m = 1; m <= 12; m++) selMes.insertAdjacentHTML('beforeend', `<option value="${m}" ${m===10?'selected':''}>${MESES_L[m-1]} 2026</option>`)
+
+function render() {
+  const m = +selMes.value, a = 2026
+  const extraGral = +document.getElementById('extraGral').value || 0
+  const ia = interanual(a, m)
+  // Días del mes para el ritmo (ejemplo: hoy 28/10)
+  const diasMes = new Date(a, m, 0).getDate(), hoy = m === 10 ? 28 : (m < 10 ? diasMes : 0)
+  document.getElementById('thBase').textContent = `Venta ${MESES[m-1].toLowerCase()} ${a-1}`
+  document.getElementById('formula').innerHTML =
+    `🧮 <b>Objetivo = venta de ${MESES_L[m-1]} ${a-1} × (1 + IPC interanual ${pct(ia.pct)}${ia.est?' <span class="a">estimado</span>':''}) × (1 + extra %)</b><br>` +
+    `<span class="sub">El IPC interanual sale de multiplicar los 12 IPC mensuales de ${MESES_L[m % 12]} ${a-1} a ${MESES_L[m-1]} ${a}. Extra general ${pct(extraGral)}; cada local puede tener el suyo.</span>`
+  let tObj = 0, tVen = 0, tBase = 0
+  const filas = locales.map(l => {
+    const extra = l.extra ?? extraGral
+    const calc = l.base * (1 + ia.pct/100) * (1 + extra/100)
+    const fin = l.manual ?? calc
+    const vend = m === 10 ? l.vend : (m < 10 ? l.base * (1 + ia.pct/100) * (0.9 + Math.random()*0.3) : 0)
+    tObj += fin; tVen += vend; tBase += l.base
+    const p = fin ? 100 * vend / fin : 0, dif = vend - fin
+    const col = p >= 100 ? 'g' : p >= 80 ? 'a' : 'r'
+    return `<tr>
+      <td><b>${l.nom}</b> <span class="sub">${l.cod}</span></td>
+      <td class="sub">${pesos(l.base)}</td>
+      <td class="t">${pct(ia.pct)}</td>
+      <td><input class="n" type="number" step="0.5" value="${extra}" data-cod="${l.cod}" data-k="extra" ${l.extra==null?'style="color:#94a3b8"':''}></td>
+      <td>${pesos(calc)}</td>
+      <td>${l.manual!=null?'<span class="pill man">a mano</span> ':''}<b>${pesos(fin)}</b></td>
+      <td>${pesos(vend)}</td>
+      <td class="${col}"><b>${pct(p,0)}</b><div class="bar"><i style="width:${Math.min(100,p)}%;background:var(--${col==='g'?'green':col==='a'?'amber':'red'})"></i></div></td>
+      <td class="${dif>=0?'g':'r'}">${dif<0?'-':''}${pesos(Math.abs(dif))}</td>
+    </tr>`
+  })
+  const pT = 100 * tVen / tObj
+  filas.push(`<tr class="tot"><td>Total</td><td>${pesos(tBase)}</td><td></td><td></td><td></td><td>${pesos(tObj)}</td><td>${pesos(tVen)}</td>
+    <td class="${pT>=100?'g':pT>=80?'a':'r'}">${pct(pT,0)}</td><td class="${tVen-tObj>=0?'g':'r'}">${tVen-tObj<0?'-':''}${pesos(Math.abs(tVen-tObj))}</td></tr>`)
+  document.getElementById('tb').innerHTML = filas.join('')
+  document.getElementById('kObj').textContent = pesos(tObj)
+  document.getElementById('kObjS').textContent = `+${pct(100*(tObj/tBase-1))} vs ${MESES_L[m-1]} ${a-1}`
+  document.getElementById('kVen').textContent = pesos(tVen)
+  document.getElementById('kVenS').textContent = hoy ? `al ${hoy}/${String(m).padStart(2,'0')} · ${hoy} de ${diasMes} días` : 'mes sin empezar'
+  document.getElementById('kPct').innerHTML = `<span class="${pT>=100?'g':pT>=80?'a':'r'}">${pct(pT,0)}</span>`
+  document.getElementById('kPctS').textContent = hoy ? `del mes transcurrido: ${pct(100*hoy/diasMes,0)}` : ''
+  const faltan = Math.max(0, tObj - tVen), quedan = Math.max(1, diasMes - hoy)
+  document.getElementById('kRit').textContent = faltan ? pesos(faltan / quedan) : '✓ cumplido'
+
+  document.querySelectorAll('input[data-k=extra]').forEach(i => i.onchange = () => { const l = locales.find(x => x.cod === i.dataset.cod); l.extra = i.value === '' ? null : +i.value; render() })
+}
+
+function renderIpc() {
+  const a = +document.getElementById('anio').value
+  const g = document.getElementById('ipcGrid')
+  g.innerHTML = MESES.map((n, i) => {
+    const k = clave(a, i + 1), v = ipc[k], ia = interanual(a, i + 1)
+    return `<div class="ipc"><div class="m">${n} ${a}</div>
+      <input type="number" step="0.1" placeholder="sin cargar" value="${v ?? ''}" data-k="${k}">
+      <div class="ac">Interanual: <b class="${ia.est?'a':'t'}">${pct(ia.pct)}</b>${ia.est?' (est.)':''}</div></div>`
+  }).join('')
+  g.querySelectorAll('input').forEach(i => i.onchange = () => { ipc[i.dataset.k] = i.value === '' ? null : +i.value; renderIpc(); render() })
+}
+
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === t))
+  document.getElementById('v-obj').classList.toggle('oculto', t.dataset.v !== 'obj')
+  document.getElementById('v-ipc').classList.toggle('oculto', t.dataset.v !== 'ipc')
+})
+selMes.onchange = render
+document.getElementById('extraGral').oninput = render
+document.getElementById('anio').onchange = renderIpc
+render(); renderIpc()
+</script>
+</body>
+</html>
