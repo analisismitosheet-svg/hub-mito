@@ -37,6 +37,8 @@ export default function StockValorizado() {
   const [busqueda, setBusqueda] = useState('')
   const [incluirSinValor, setIncluirSinValor] = useState(false)
   const [verSinCosto, setVerSinCosto] = useState(false)
+  /** Solapa: la plata por sucursal o artículo por artículo. */
+  const [solapa, setSolapa] = useState<'sucursal' | 'articulo'>('sucursal')
   /** Artículos sin costo con el detalle por sucursal desplegado. */
   const [abiertos, setAbiertos] = useState<string[]>([])
 
@@ -98,6 +100,23 @@ export default function StockValorizado() {
     return mapa
   }, [datos, incluirSinValor])
 
+  /* Solapa "Por artículo": todo lo que hay en stock, sumando las sucursales.
+     Viene ordenado por valorizado desde el SQL. */
+  const articulos = datos?.articulos ?? []
+  const articulosVisibles = useMemo(() => {
+    const q = busqueda.trim().toLowerCase()
+    if (!q) return articulos
+    return articulos.filter((a) => `${a.articulo} ${a.descripcion}`.toLowerCase().includes(q))
+  }, [articulos, busqueda])
+  const totalArticulos = useMemo(
+    () =>
+      articulosVisibles.reduce(
+        (t, a) => ({ unidades: t.unidades + a.unidades, valorizado: t.valorizado + a.valorizado }),
+        { unidades: 0, valorizado: 0 },
+      ),
+    [articulosVisibles],
+  )
+
   const hayDetalle = (datos?.sin_costo_detalle ?? []).length > 0
   const alternar = (articulo: string) =>
     setAbiertos((a) => (a.includes(articulo) ? a.filter((x) => x !== articulo) : [...a, articulo]))
@@ -124,43 +143,83 @@ export default function StockValorizado() {
       ),
       'Por sucursal',
     )
-    if (sinCosto.length > 0) {
-      /* Las dos cifras juntas: el total de la empresa y el que entra al
-         valorizado. En pantalla se ve una sola (la que dice el botón ámbar),
-         acá van las dos para no tener que exportar dos veces. */
-      XLSX.utils.book_append_sheet(
-        wb,
-        XLSX.utils.json_to_sheet(
-          sinCosto.map((a) => ({
-            Artículo: a.articulo,
-            Descripción: a.descripcion,
-            'Unidades (todas)': a.unidades,
-            'Unidades en sucursales que valorizan': a.unidades_val,
-            Sucursales: a.sucursales,
-            'En qué sucursales': a.bases,
-          })),
-        ),
-        'Sin costo',
-      )
-      /* Y el mismo listado abierto por sucursal. Van todas las sucursales de
-         esos artículos, con la columna ¿Valoriza? para distinguirlas: igual que
-         arriba, el Excel se lleva el panorama completo. */
-      const descripciones = new Map(sinCosto.map((a) => [a.articulo, a.descripcion]))
-      const detalle = (datos?.sin_costo_detalle ?? [])
-        .filter((f) => descripciones.has(f.articulo))
-        .map((f) => ({
-          Artículo: f.articulo,
-          Descripción: descripciones.get(f.articulo) ?? '',
-          Sucursal: nombreBase(f.base),
-          Base: f.base,
-          Unidades: f.unidades,
-          '¿Valoriza?': f.valoriza ? 'Sí' : 'No',
-        }))
-      if (detalle.length > 0) {
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detalle), 'Sin costo x sucursal')
-      }
+    if (articulos.length > 0) {
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasPorArticulo(articulos)), 'Por artículo')
     }
+    agregarHojasSinCosto(XLSX, wb)
     XLSX.writeFile(wb, `stock_valorizado_${new Date().toISOString().slice(0, 10)}.xlsx`)
+  }
+
+  /** Columnas de la solapa "Por artículo", en el mismo orden que la pantalla. */
+  const filasPorArticulo = (lista: typeof articulos) =>
+    lista.map((a) => ({
+      Artículo: a.articulo,
+      Descripción: a.descripcion,
+      Stock: a.unidades,
+      'Precio costo': a.costo ?? '',
+      'Total valorizado': Math.round(a.valorizado),
+    }))
+
+  /** Solo el listado por artículo, en su propio archivo (lo que se ve en la solapa). */
+  async function exportarArticulos() {
+    if (articulosVisibles.length === 0) return
+    const XLSX = await import('xlsx')
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasPorArticulo(articulosVisibles)), 'Por artículo')
+    XLSX.writeFile(wb, `stock_valorizado_articulos_${new Date().toISOString().slice(0, 10)}.xlsx`)
+  }
+
+  /**
+   * Las dos hojas de los artículos sin costo. Las usan el Excel completo y el
+   * botón de la sección ámbar, que baja solo esto (es lo que más se pide:
+   * la lista para ir a cargarles el costo en Dragon).
+   */
+  function agregarHojasSinCosto(XLSX: typeof import('xlsx'), wb: import('xlsx').WorkBook): number {
+    if (sinCosto.length === 0) return 0
+    /* Las dos cifras juntas: el total de la empresa y el que entra al
+       valorizado. En pantalla se ve una sola (la que dice el botón ámbar),
+       acá van las dos para no tener que exportar dos veces. */
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.json_to_sheet(
+        sinCosto.map((a) => ({
+          Artículo: a.articulo,
+          Descripción: a.descripcion,
+          'Unidades (todas)': a.unidades,
+          'Unidades en sucursales que valorizan': a.unidades_val,
+          Sucursales: a.sucursales,
+          'En qué sucursales': a.bases,
+        })),
+      ),
+      'Sin costo',
+    )
+    /* Y el mismo listado abierto por sucursal. Van todas las sucursales de
+       esos artículos, con la columna ¿Valoriza? para distinguirlas: igual que
+       arriba, el Excel se lleva el panorama completo. */
+    const descripciones = new Map(sinCosto.map((a) => [a.articulo, a.descripcion]))
+    const detalle = (datos?.sin_costo_detalle ?? [])
+      .filter((f) => descripciones.has(f.articulo))
+      .map((f) => ({
+        Artículo: f.articulo,
+        Descripción: descripciones.get(f.articulo) ?? '',
+        Sucursal: nombreBase(f.base),
+        Base: f.base,
+        Unidades: f.unidades,
+        '¿Valoriza?': f.valoriza ? 'Sí' : 'No',
+      }))
+    if (detalle.length > 0) {
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detalle), 'Sin costo x sucursal')
+    }
+    return sinCosto.length
+  }
+
+  /** Solo los artículos sin costo, en su propio archivo. */
+  async function exportarSinCosto() {
+    if (sinCosto.length === 0) return
+    const XLSX = await import('xlsx')
+    const wb = XLSX.utils.book_new()
+    agregarHojasSinCosto(XLSX, wb)
+    XLSX.writeFile(wb, `articulos_sin_costo_${new Date().toISOString().slice(0, 10)}.xlsx`)
   }
 
   const btnChico =
@@ -236,6 +295,29 @@ export default function StockValorizado() {
             ))}
           </div>
 
+          {/* Solapas */}
+          <div className="flex items-center gap-1 rounded-xl border border-line bg-surface p-1 sm:w-fit">
+            {([
+              { id: 'sucursal', texto: 'Por sucursal', icono: Layers },
+              { id: 'articulo', texto: 'Por artículo', icono: Boxes },
+            ] as const).map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => {
+                  setSolapa(t.id)
+                  setBusqueda('')
+                }}
+                className={`btn-press inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-medium transition sm:flex-none ${
+                  solapa === t.id ? 'bg-surface2 text-ink' : 'text-sub hover:text-ink'
+                }`}
+              >
+                <t.icono size={15} style={{ color: solapa === t.id ? (t.id === 'sucursal' ? cViolet : cBlue) : undefined }} aria-hidden />
+                {t.texto}
+              </button>
+            ))}
+          </div>
+
           {/* Buscador + bases sin costo */}
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative max-w-xs flex-1">
@@ -243,10 +325,20 @@ export default function StockValorizado() {
             <input
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
-              placeholder="Buscar sucursal…"
+              placeholder={solapa === 'sucursal' ? 'Buscar sucursal…' : 'Buscar artículo o descripción…'}
               className="h-10 w-full rounded-xl border border-line bg-surface pl-9 pr-3 text-sm text-ink placeholder:text-sub/60"
               />
             </div>
+            {solapa === 'articulo' && (
+              <button
+                type="button"
+                onClick={() => void exportarArticulos()}
+                disabled={articulosVisibles.length === 0}
+                className="btn-press inline-flex h-10 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-xs font-medium text-ink transition hover:bg-surface2 disabled:opacity-50"
+              >
+                <Download size={13} aria-hidden /> Excel ({numero(articulosVisibles.length)})
+              </button>
+            )}
             {sinValor.length > 0 && (
               <button
                 type="button"
@@ -266,85 +358,152 @@ export default function StockValorizado() {
           </div>
 
           {/* Por sucursal */}
-          <div className="overflow-x-auto rounded-2xl border border-line bg-surface">
-            <table className="w-full min-w-[720px] text-sm">
-              <thead>
-                <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-sub">
-                  <th className="px-3 py-2 font-medium">Sucursal</th>
-                  <th className="px-3 py-2 text-right font-medium">Unidades</th>
-                  <th className="px-3 py-2 text-right font-medium">Costo prom.</th>
-                  <th className="px-3 py-2 text-right font-medium">Valorizado</th>
-                  <th className="px-3 py-2 font-medium">% del total</th>
-                  <th className="px-3 py-2 text-right font-medium">Sin costo</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibles.map((b) => {
-                  const parte = total.valorizado > 0 ? (b.valorizado / total.valorizado) * 100 : 0
-                  return (
-                    <tr key={b.base} className="border-b border-line/60 last:border-0">
-                      <td className="px-3 py-2">
-                        <span className="font-medium text-ink">{nombreBase(b.base)}</span>
-                        <span className="ml-2 font-mono text-[11px] text-sub/70">{b.base}</span>
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-ink">{numero(b.unidades)}</td>
-                      <td className="px-3 py-2 text-right tabular-nums text-sub">{pesos(costoUnitario(b))}</td>
-                      <td className="px-3 py-2 text-right tabular-nums font-semibold text-ink">{pesos(b.valorizado)}</td>
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-2">
-                          <div className="h-1.5 w-24 overflow-hidden rounded-full bg-surface2">
-                            <div className="h-full rounded-full" style={{ width: `${parte}%`, backgroundColor: cEmerald }} />
+          {solapa === 'sucursal' && (
+            <div className="overflow-x-auto rounded-2xl border border-line bg-surface">
+              <table className="w-full min-w-[720px] text-sm">
+                <thead>
+                  <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-sub">
+                    <th className="px-3 py-2 font-medium">Sucursal</th>
+                    <th className="px-3 py-2 text-right font-medium">Unidades</th>
+                    <th className="px-3 py-2 text-right font-medium">Costo prom.</th>
+                    <th className="px-3 py-2 text-right font-medium">Valorizado</th>
+                    <th className="px-3 py-2 font-medium">% del total</th>
+                    <th className="px-3 py-2 text-right font-medium">Sin costo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibles.map((b) => {
+                    const parte = total.valorizado > 0 ? (b.valorizado / total.valorizado) * 100 : 0
+                    return (
+                      <tr key={b.base} className="border-b border-line/60 last:border-0">
+                        <td className="px-3 py-2">
+                          <span className="font-medium text-ink">{nombreBase(b.base)}</span>
+                          <span className="ml-2 font-mono text-[11px] text-sub/70">{b.base}</span>
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums text-ink">{numero(b.unidades)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-sub">{pesos(costoUnitario(b))}</td>
+                        <td className="px-3 py-2 text-right tabular-nums font-semibold text-ink">{pesos(b.valorizado)}</td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <div className="h-1.5 w-24 overflow-hidden rounded-full bg-surface2">
+                              <div className="h-full rounded-full" style={{ width: `${parte}%`, backgroundColor: cEmerald }} />
+                            </div>
+                            <span className="tabular-nums text-xs text-sub">{parte.toFixed(1)} %</span>
                           </div>
-                          <span className="tabular-nums text-xs text-sub">{parte.toFixed(1)} %</span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-xs text-amber-500">
-                        {b.unidades_sin_costo > 0 ? numero(b.unidades_sin_costo) : '—'}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums text-xs text-amber-500">
+                          {b.unidades_sin_costo > 0 ? numero(b.unidades_sin_costo) : '—'}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                  {visibles.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-3 py-6 text-center text-sm text-sub">
+                        No hay sucursales que coincidan.
                       </td>
                     </tr>
-                  )
-                })}
-                {visibles.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="px-3 py-6 text-center text-sm text-sub">
-                      No hay sucursales que coincidan.
-                    </td>
-                  </tr>
+                  )}
+                </tbody>
+                {visibles.length > 0 && (
+                  <tfoot>
+                    <tr className="border-t border-line bg-surface2/50 font-semibold text-ink">
+                      <td className="px-3 py-2">Total</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{numero(total.unidades)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-sub">{pesos(costoUnitario(total))}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{pesos(total.valorizado)}</td>
+                      <td className="px-3 py-2" />
+                      <td className="px-3 py-2 text-right tabular-nums text-amber-500">
+                        {total.unidades_sin_costo > 0 ? numero(total.unidades_sin_costo) : '—'}
+                      </td>
+                    </tr>
+                  </tfoot>
                 )}
-              </tbody>
-              {visibles.length > 0 && (
-                <tfoot>
-                  <tr className="border-t border-line bg-surface2/50 font-semibold text-ink">
-                    <td className="px-3 py-2">Total</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{numero(total.unidades)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-sub">{pesos(costoUnitario(total))}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{pesos(total.valorizado)}</td>
-                    <td className="px-3 py-2" />
-                    <td className="px-3 py-2 text-right tabular-nums text-amber-500">
-                      {total.unidades_sin_costo > 0 ? numero(total.unidades_sin_costo) : '—'}
-                    </td>
+              </table>
+            </div>
+          )}
+
+          {solapa === 'articulo' && (
+            <div className="overflow-x-auto rounded-2xl border border-line bg-surface">
+              <table className="w-full min-w-[720px] text-sm">
+                <thead>
+                  <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-sub">
+                    <th className="px-3 py-2 font-medium">Artículo</th>
+                    <th className="px-3 py-2 font-medium">Descripción</th>
+                    <th className="px-3 py-2 text-right font-medium">Stock</th>
+                    <th className="px-3 py-2 text-right font-medium">Precio costo</th>
+                    <th className="px-3 py-2 text-right font-medium">Total valorizado</th>
                   </tr>
-                </tfoot>
+                </thead>
+                <tbody>
+                  {articulosVisibles.slice(0, TOPE_TABLA).map((a) => (
+                    <tr key={a.articulo} className="border-b border-line/60 last:border-0">
+                      <td className="px-3 py-2 font-mono text-xs text-ink">{a.articulo}</td>
+                      <td className="px-3 py-2 text-sub">{a.descripcion || '—'}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-ink">{numero(a.unidades)}</td>
+                      <td className={`px-3 py-2 text-right tabular-nums ${a.costo == null ? 'text-amber-500' : 'text-sub'}`}>
+                        {a.costo == null ? 'sin costo' : pesos(a.costo)}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums font-semibold text-ink">{pesos(a.valorizado)}</td>
+                    </tr>
+                  ))}
+                  {articulosVisibles.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-3 py-6 text-center text-sm text-sub">
+                        No hay artículos que coincidan.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+                {articulosVisibles.length > 0 && (
+                  <tfoot>
+                    <tr className="border-t border-line bg-surface2/50 font-semibold text-ink">
+                      <td className="px-3 py-2" colSpan={2}>
+                        Total ({numero(articulosVisibles.length)} artículos)
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums">{numero(totalArticulos.unidades)}</td>
+                      <td className="px-3 py-2" />
+                      <td className="px-3 py-2 text-right tabular-nums">{pesos(totalArticulos.valorizado)}</td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+              {articulosVisibles.length > TOPE_TABLA && (
+                <p className="border-t border-line px-3 py-2 text-[11px] text-sub/70">
+                  Se dibujan los {numero(TOPE_TABLA)} de más plata. El total de arriba y el Excel llevan los{' '}
+                  {numero(articulosVisibles.length)}; para encontrar uno puntual, buscalo arriba.
+                </p>
               )}
-            </table>
-          </div>
+            </div>
+          )}
+
 
           {/* Artículos sin costo cargado */}
           {sinCosto.length > 0 && (
             <section className="rounded-2xl border border-amber-500/30 bg-amber-500/5">
-              <button
-                type="button"
-                onClick={() => setVerSinCosto((v) => !v)}
-                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-ink"
-              >
-                <ChevronDown size={16} className={`transition ${verSinCosto ? '' : '-rotate-90'}`} aria-hidden />
-                <TriangleAlert size={15} style={{ color: cAmber }} aria-hidden />
-                Artículos sin costo cargado ({sinCosto.length})
-                <span className="ml-auto text-xs font-normal text-sub/70">
-                  {numero(sinCosto.reduce((t, a) => t + unidadesSinCosto(a), 0))} unidades que hoy valen $0
-                  {hayDetalle ? ' · tocá las sucursales para abrir el detalle' : ''}
-                </span>
-              </button>
+              <div className="flex items-center gap-2 pr-3">
+                <button
+                  type="button"
+                  onClick={() => setVerSinCosto((v) => !v)}
+                  className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-ink"
+                >
+                  <ChevronDown size={16} className={`transition ${verSinCosto ? '' : '-rotate-90'}`} aria-hidden />
+                  <TriangleAlert size={15} style={{ color: cAmber }} aria-hidden />
+                  Artículos sin costo cargado ({sinCosto.length})
+                  <span className="ml-auto hidden text-xs font-normal text-sub/70 sm:inline">
+                    {numero(sinCosto.reduce((t, a) => t + unidadesSinCosto(a), 0))} unidades que hoy valen $0
+                    {hayDetalle ? ' · tocá las sucursales para abrir el detalle' : ''}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void exportarSinCosto()}
+                  className="btn-press inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 text-xs font-medium text-amber-500 transition hover:bg-amber-500/20"
+                  title={`Bajar los ${numero(sinCosto.length)} artículos sin costo a Excel`}
+                >
+                  <Download size={13} aria-hidden /> Excel
+                </button>
+              </div>
               {verSinCosto && (
                 <div className="overflow-x-auto border-t border-amber-500/20">
                   <table className="w-full min-w-[640px] text-sm">

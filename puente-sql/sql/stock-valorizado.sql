@@ -15,7 +15,7 @@
         COCOL, TALLE, COCANT) y suma unidades y unidades x costo.
      3. Devuelve cinco resultados:
           - una fila por base (unidades, valorizado, unidades sin costo, SKUs)
-          - el top de artículos por valorizado, sumando todas las bases
+          - todos los artículos con stock, por valorizado (antes era un top 200)
           - una fila de contexto del costo (artículos con costo, última vigencia)
           - TODOS los artículos con stock y sin costo cargado (los que valen $0)
           - esos mismos, abiertos por sucursal (una fila por artículo y base).
@@ -158,8 +158,10 @@ SELECT base,
  WHERE ISNULL(unidades, 0) <> 0
  ORDER BY valorizado DESC;
 
-SELECT TOP 200
-       a.art AS articulo,
+/* Artículo por artículo, sumando todas las sucursales: stock, costo y plata.
+   Van TODOS (hoy ~11.000 con stock, unos 1,3 MB de JSON): era un TOP 200 y lo
+   pidió entero el usuario el 28/10/2026 para la solapa "Por artículo". */
+SELECT a.art AS articulo,
        MAX(ISNULL(d.descripcion, '')) AS descripcion,
        SUM(a.unidades) AS unidades,
        SUM(a.valorizado) AS valorizado,
