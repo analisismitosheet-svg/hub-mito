@@ -6,7 +6,7 @@
 import type { BloqueImagen } from './informesImagen.js'
 
 export interface FilaKmInforme { vehiculo_id: string; dia: string; km: number | string; minutos_mov: number | string; primera: string; ultima: string }
-export interface VehiculoInforme { id: string; nombre: string; usuario_transporte_nombre: string | null; activo: boolean }
+export interface VehiculoInforme { id: string; nombre: string; usuario_transporte_id?: string | null; usuario_transporte_nombre: string | null; activo: boolean }
 /** Locales distintos por los que pasó un vehículo ese día (RPC tracking_locales_dia). */
 export interface FilaLocalesInforme { vehiculo_id: string; dia: string; locales: number | string; nombres: string | null }
 /** Parada de al menos 10 min lejos de todo local o depósito (RPC tracking_paradas_fuera). */
@@ -24,6 +24,8 @@ const horaAr = (iso: string) =>
   new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(iso))
 const corta = (s: string) => { const [y, m, d] = s.split('-'); return `${d}/${m}/${y}` }
 const DIAS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb']
+/** "MERCEDES TRANSPORTE" -> "MERCEDES": en la tabla no entra el nombre entero */
+const corto = (n: string) => n.replace(/\s+TRANSPORTE$/i, '')
 const sumarDia = (s: string) => { const d = new Date(`${s}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10) }
 /** «lun 13/10» */
 const diaCorto = (s: string) => { const [y, m, d] = s.split('-').map(Number); return `${DIAS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]} ${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}` }
@@ -39,6 +41,8 @@ export function bloquesKm(datos: {
   locales?: FilaLocalesInforme[]
   /** Paradas largas fuera de todo local o depósito */
   paradas?: FilaParadaInforme[]
+  /** Bultos que cargó cada chofer ese día, por usuario de Transporte */
+  bultos?: Map<string, number>
   semana?: { desde: string; filas: FilaKmInforme[]; anterior: FilaKmInforme[] }
 }): {
   subtitulo: string
@@ -58,6 +62,7 @@ export function bloquesKm(datos: {
       return {
         v, km: num(h?.km), kmAyer: num(a?.km), mov: num(h?.minutos_mov), primera: h?.primera ?? null, ultima: h?.ultima ?? null,
         locales: num(l?.locales), nombres: l?.nombres ?? null,
+        bultos: num(v.usuario_transporte_id ? datos.bultos?.get(v.usuario_transporte_id) : 0),
       }
     })
     .filter((x) => x.km > 0 || x.v.activo)
@@ -65,6 +70,7 @@ export function bloquesKm(datos: {
 
   // Locales tocados en el día: suma por vehículo (si dos pasan por el mismo, cuenta en los dos)
   const totalLocales = filas.reduce((s, x) => s + x.locales, 0)
+  const totalBultos = filas.reduce((s, x) => s + x.bultos, 0)
 
   const bloques: BloqueImagen[] = []
   if (kmHoy <= 0) {
@@ -79,29 +85,32 @@ export function bloquesKm(datos: {
         totalLocales > 0
           ? { titulo: 'Locales', valor: String(totalLocales), pie: `${filas.filter((x) => x.km > 0).length} vehículos con recorrido`, color: '#2563eb' }
           : { titulo: 'Vehículos', valor: String(filas.filter((x) => x.km > 0).length), pie: 'con recorrido', color: '#2563eb' },
-        { titulo: 'El que más anduvo', valor: top ? fmtKm(top.km) : '—', pie: top?.v.nombre ?? '', color: '#ea580c' },
+        totalBultos > 0
+          ? { titulo: 'Bultos', valor: nf(totalBultos), pie: kmHoy > 0 ? `${nf(totalBultos / kmHoy, 2)} por km` : 'cargados', color: '#b45309' }
+          : { titulo: 'El que más anduvo', valor: top ? fmtKm(top.km) : '—', pie: top?.v.nombre ?? '', color: '#ea580c' },
       ],
     })
     bloques.push({ tipo: 'seccion', texto: 'Por vehículo', color: '#0d9488' })
     bloques.push({
       tipo: 'tabla',
-      columnas: ['Vehículo', 'Km', 'Andando', 'Locales', 'Primera', 'Última', datos.ayerFecha ? `vs ${diaCorto(datos.ayerFecha).slice(4)}` : 'vs anterior'],
-      anchos: [2.8, 1.1, 1.5, 1, 1, 1, 1.1],
-      alinear: ['izq', 'der', 'der', 'der', 'der', 'der', 'der'],
-      colores: [null, '#0d9488', null, '#2563eb', '#475569', '#475569', null],
+      columnas: ['Vehículo', 'Km', 'Andando', 'Bultos', 'Locales', 'Primera', 'Última', datos.ayerFecha ? `vs ${diaCorto(datos.ayerFecha).slice(4)}` : 'vs anterior'],
+      anchos: [2.4, 1, 1.4, 1, 1, 1, 1, 1.1],
+      alinear: ['izq', 'der', 'der', 'der', 'der', 'der', 'der', 'der'],
+      colores: [null, '#0d9488', null, '#b45309', '#2563eb', '#475569', '#475569', null],
       total: true,
       filas: [
         ...filas.map((x) => [
           // el chofer solo si no es el mismo nombre que el vehículo
-          x.v.usuario_transporte_nombre && x.v.usuario_transporte_nombre !== x.v.nombre ? `${x.v.nombre} (${x.v.usuario_transporte_nombre})` : x.v.nombre,
+          x.v.usuario_transporte_nombre && x.v.usuario_transporte_nombre !== x.v.nombre ? `${corto(x.v.nombre)} (${corto(x.v.usuario_transporte_nombre)})` : corto(x.v.nombre),
           x.km > 0 ? fmtKm(x.km) : '—',
           x.mov ? hm(x.mov) : '—',
+          x.bultos ? nf(x.bultos) : '—',
           x.locales ? String(x.locales) : '—',
           x.primera ? horaAr(x.primera) : '—',
           x.ultima ? horaAr(x.ultima) : '—',
           variacion(x.km, x.kmAyer),
         ]),
-        ['Total', fmtKm(kmHoy), hm(mov), totalLocales ? String(totalLocales) : '—', '', '', variacion(kmHoy, kmAyer)],
+        ['Total', fmtKm(kmHoy), hm(mov), totalBultos ? nf(totalBultos) : '—', totalLocales ? String(totalLocales) : '—', '', '', variacion(kmHoy, kmAyer)],
       ],
     })
   }
@@ -122,7 +131,7 @@ export function bloquesKm(datos: {
       filas: paradas
         .slice()
         .sort((a, b) => a.desde.localeCompare(b.desde))
-        .map((p) => [nombreDe(p.vehiculo_id), horaAr(p.desde), horaAr(p.hasta), hm(num(p.minutos)), donde(p)]),
+        .map((p) => [corto(nombreDe(p.vehiculo_id)), horaAr(p.desde), horaAr(p.hasta), hm(num(p.minutos)), donde(p)]),
     })
   }
 
@@ -138,7 +147,6 @@ export function bloquesKm(datos: {
     const dias: string[] = []
     for (let d = sem.desde; d <= datos.fecha; d = sumarDia(d)) dias.push(d)
     const kmDe = (veh: string, d: string) => num(sem.filas.find((f) => f.vehiculo_id === veh && f.dia === d)?.km)
-    const corto = (n: string) => n.replace(/\s+TRANSPORTE$/i, '')
     const titulo = sem.desde === datos.fecha ? `Semana (lunes ${diaCorto(sem.desde).slice(4)})` : `Semana del ${diaCorto(sem.desde)} al ${diaCorto(datos.fecha)}`
     bloques.push({ tipo: 'seccion', texto: titulo, color: '#2563eb' })
     bloques.push({
@@ -168,8 +176,9 @@ export function bloquesKm(datos: {
     `*Km recorridos del transporte — ${corta(datos.fecha)}*`,
     kmHoy > 0 ? `Total: ${fmtKm(kmHoy)}${datos.ayerFecha ? ` (${variacion(kmHoy, kmAyer)} vs ${diaCorto(datos.ayerFecha)})` : ''} · andando ${hm(mov)}` : 'Sin recorridos con GPS.',
     ...filas.filter((x) => x.km > 0).map((x) => {
+      const bul = x.bultos ? ` · ${nf(x.bultos)} ${x.bultos === 1 ? 'bulto' : 'bultos'}` : ''
       const loc = x.locales ? ` · ${x.locales} ${x.locales === 1 ? 'local' : 'locales'}${x.nombres ? `: ${x.nombres}` : ''}` : ''
-      return `• ${x.v.nombre}: ${fmtKm(x.km)} · ${hm(x.mov)}${loc}`
+      return `• ${x.v.nombre}: ${fmtKm(x.km)} · ${hm(x.mov)}${bul}${loc}`
     }),
     ...(paradas.length
       ? ['', `_Paradas fuera de locales y depósito (desde 10 min):_`,

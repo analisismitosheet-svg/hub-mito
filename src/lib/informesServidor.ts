@@ -377,6 +377,44 @@ async function direccionDe(lat: number, lng: number): Promise<string | null> {
   }
 }
 
+/**
+ * Bultos distintos que cargó cada chofer ese día (clave: usuario de Transporte).
+ * Sale de la base de **Transporte** con su service role, igual que
+ * api/tracking?vista=bultos, que es lo que muestra Tracking > Km recorridos.
+ * Sin esas credenciales devuelve vacío y el informe sale sin la columna.
+ */
+async function bultosDelDia(fecha: string): Promise<Map<string, number>> {
+  const url = process.env.TRANSPORTE_URL?.replace(/\/$/, '')
+  const key = process.env.TRANSPORTE_SERVICE_ROLE_KEY
+  const porChofer = new Map<string, Set<string>>()
+  if (!url || !key) return new Map()
+  const desde = new Date(`${fecha}T00:00:00-03:00`)
+  const hasta = new Date(desde.getTime() + 86_400_000)
+  try {
+    for (let offset = 0; offset < 20_000; offset += 1000) {
+      const r = await fetch(
+        `${url}/rest/v1/bultos_historial?select=bulto_id,usuario_registro_id` +
+          `&estado=eq.EN_CAMINO&usuario_registro_id=not.is.null` +
+          `&registrado_en=gte.${desde.toISOString()}&registrado_en=lt.${hasta.toISOString()}` +
+          `&order=registrado_en,bulto_id&limit=1000&offset=${offset}`,
+        { headers: { apikey: key, Authorization: `Bearer ${key}` } },
+      )
+      if (!r.ok) break
+      const lote = (await r.json()) as { bulto_id: string | null; usuario_registro_id: string | null }[]
+      for (const b of lote) {
+        if (!b.bulto_id || !b.usuario_registro_id) continue
+        const s = porChofer.get(b.usuario_registro_id) ?? new Set<string>()
+        s.add(b.bulto_id)
+        porChofer.set(b.usuario_registro_id, s)
+      }
+      if (lote.length < 1000) break
+    }
+  } catch {
+    return new Map()
+  }
+  return new Map([...porChofer].map(([id, s]) => [id, s.size]))
+}
+
 /** Le agrega a cada parada dónde fue (sin cortar el informe si el buscador falla) */
 async function conDireccion(paradas: FilaParadaInforme[]): Promise<FilaParadaInforme[]> {
   const salida: FilaParadaInforme[] = []
@@ -392,27 +430,31 @@ async function datosKm(fecha: string): Promise<{
   fecha: string; hoy: FilaKmInforme[]; ayer: FilaKmInforme[]; ayerFecha: string | null; vehiculos: VehiculoInforme[]
   locales: FilaLocalesInforme[]
   paradas: FilaParadaInforme[]
+  bultos: Map<string, number>
   semana: { desde: string; filas: FilaKmInforme[]; anterior: FilaKmInforme[] }
 }> {
   const dia = (n: number, base = fecha) => { const d = new Date(`${base}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10) }
   // Semana: del lunes hasta ese día, contra los mismos días de la semana anterior
   const dow = new Date(`${fecha}T12:00:00Z`).getUTCDay()
   const lunes = dia(-((dow + 6) % 7))
-  const [hoy, previos, vehiculos, semana, semanaAnt, locales, paradas] = await Promise.all([
+  const [hoy, previos, vehiculos, semana, semanaAnt, locales, paradas, bultos] = await Promise.all([
     rpc<FilaKmInforme>('tracking_km', { p_desde: fecha, p_hasta: fecha }),
     rpc<FilaKmInforme>('tracking_km', { p_desde: dia(-7), p_hasta: dia(-1) }),
-    jsonDe<VehiculoInforme>('tracking_vehiculos?select=id,nombre,usuario_transporte_nombre,activo&order=nombre'),
+    jsonDe<VehiculoInforme>('tracking_vehiculos?select=id,nombre,usuario_transporte_id,usuario_transporte_nombre,activo&order=nombre'),
     rpc<FilaKmInforme>('tracking_km', { p_desde: lunes, p_hasta: fecha }),
     rpc<FilaKmInforme>('tracking_km', { p_desde: dia(-7, lunes), p_hasta: dia(-7) }),
     // Locales distintos por los que pasó cada vehículo (sql/tracking_locales_dia.sql)
     rpc<FilaLocalesInforme>('tracking_locales_dia', { p_desde: fecha, p_hasta: fecha }),
     // Dónde se quedó quieto lejos de todo local o depósito (sql/tracking_paradas_fuera.sql)
     rpc<FilaParadaInforme>('tracking_paradas_fuera', { p_desde: fecha, p_hasta: fecha, p_min_min: 10 }),
+    // Bultos que cargó cada chofer (base de Transporte)
+    bultosDelDia(fecha),
   ])
   const ayerFecha = [...new Set(previos.filter((f) => Number(f.km) >= 1).map((f) => f.dia))].sort().pop() ?? null
   return {
     fecha, hoy, ayer: previos.filter((f) => f.dia === ayerFecha), ayerFecha, vehiculos, locales,
     paradas: await conDireccion(paradas),
+    bultos,
     semana: { desde: lunes, filas: semana, anterior: semanaAnt },
   }
 }
