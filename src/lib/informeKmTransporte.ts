@@ -14,6 +14,9 @@ export interface FilaParadaInforme {
   vehiculo_id: string; dia: string; desde: string; hasta: string; minutos: number | string; lat: number; lng: number
   /** Dirección del punto (OpenStreetMap); null si el buscador no contestó */
   lugar?: string | null
+  /** Punto conocido más cercano y a cuántos metros (para ubicarla igual sin dirección) */
+  cerca_de?: string | null
+  cerca_m?: number | string | null
 }
 
 const num = (v: unknown) => Number(v) || 0
@@ -119,19 +122,25 @@ export function bloquesKm(datos: {
   const paradas = (datos.paradas ?? []).filter((p) => num(p.minutos) > 0)
   /** La dirección si OpenStreetMap la dio; si no, las coordenadas */
   const donde = (p: FilaParadaInforme) => p.lugar || `${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`
+  /** "GENERAL PAZ · 440 m": a qué punto conocido quedó más cerca */
+  const cercaDe = (p: FilaParadaInforme) => {
+    const m = num(p.cerca_m)
+    if (!p.cerca_de || !m) return '—'
+    return `${p.cerca_de} · ${m < 1000 ? `${nf(m)} m` : `${nf(m / 1000, 1)} km`}`
+  }
   if (paradas.length) {
     const nombreDe = (id: string) => datos.vehiculos.find((v) => v.id === id)?.nombre ?? '—'
     bloques.push({ tipo: 'seccion', texto: 'Paradas fuera de locales y depósito', color: '#ea580c' })
     bloques.push({
       tipo: 'tabla',
-      columnas: ['Vehículo', 'Desde', 'Hasta', 'Cuánto', 'Dónde'],
-      anchos: [2.2, 1, 1, 1.2, 4],
-      alinear: ['izq', 'der', 'der', 'der', 'izq'],
-      colores: [null, '#475569', '#475569', '#ea580c', null],
+      columnas: ['Vehículo', 'Desde', 'Hasta', 'Cuánto', 'Dónde', 'Más cerca de'],
+      anchos: [1.6, 0.9, 0.9, 1.1, 3.2, 2.3],
+      alinear: ['izq', 'der', 'der', 'der', 'izq', 'izq'],
+      colores: [null, '#475569', '#475569', '#ea580c', null, '#2563eb'],
       filas: paradas
         .slice()
         .sort((a, b) => a.desde.localeCompare(b.desde))
-        .map((p) => [corto(nombreDe(p.vehiculo_id)), horaAr(p.desde), horaAr(p.hasta), hm(num(p.minutos)), donde(p)]),
+        .map((p) => [corto(nombreDe(p.vehiculo_id)), horaAr(p.desde), horaAr(p.hasta), hm(num(p.minutos)), donde(p), cercaDe(p)]),
     })
   }
 
@@ -185,7 +194,10 @@ export function bloquesKm(datos: {
          ...paradas
            .slice()
            .sort((a, b) => a.desde.localeCompare(b.desde))
-           .map((p) => `• ${datos.vehiculos.find((v) => v.id === p.vehiculo_id)?.nombre ?? '—'}: ${horaAr(p.desde)} a ${horaAr(p.hasta)} (${hm(num(p.minutos))}) · ${donde(p)} https://maps.google.com/?q=${p.lat},${p.lng}`)]
+           .map((p) => {
+             const cerca = p.cerca_de && num(p.cerca_m) ? ` · más cerca de ${cercaDe(p)}` : ''
+             return `• ${datos.vehiculos.find((v) => v.id === p.vehiculo_id)?.nombre ?? '—'}: ${horaAr(p.desde)} a ${horaAr(p.hasta)} (${hm(num(p.minutos))}) · ${donde(p)}${cerca} https://maps.google.com/?q=${p.lat},${p.lng}`
+           })]
       : []),
   ].join('\n') + textoSemana
 

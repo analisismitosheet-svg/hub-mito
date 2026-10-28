@@ -17,12 +17,17 @@
 --
 -- Al radio de cada base se le dan 100 m de más, para no marcar como «fuera» una
 -- parada pegada a la puerta de un local. Por defecto cuentan desde 10 minutos.
+--
+-- cerca_de / cerca_m: el punto conocido más cercano y a cuántos metros quedó. Sirve
+-- para ubicar la parada cuando OpenStreetMap no tiene el nombre de la calle
+-- (migración tracking_paradas_fuera_cerca).
 -- Ver docs/mapa/Tracking de transporte.md.
 -- ============================================================================
 
-CREATE OR REPLACE FUNCTION public.tracking_paradas_fuera(p_desde date, p_hasta date, p_min_min integer DEFAULT 10)
+DROP FUNCTION IF EXISTS public.tracking_paradas_fuera(date, date, integer);
+CREATE FUNCTION public.tracking_paradas_fuera(p_desde date, p_hasta date, p_min_min integer DEFAULT 10)
 RETURNS TABLE (vehiculo_id uuid, dia date, desde timestamptz, hasta timestamptz, minutos integer,
-               lat double precision, lng double precision)
+               lat double precision, lng double precision, cerca_de text, cerca_m integer)
 LANGUAGE plpgsql STABLE SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
@@ -64,6 +69,10 @@ BEGIN
         vehiculo_id := a_veh; dia := a_dia; desde := a_desde; hasta := v_fin;
         minutos := round(extract(epoch FROM v_fin - a_desde) / 60)::int;
         lat := a_lat; lng := a_lng;
+        SELECT c.nombre, c.m INTO cerca_de, cerca_m FROM (
+          SELECT coalesce(nullif(btrim(b.nombre), ''), b.base_id) AS nombre,
+                 round(public.metros_entre(a_lat, a_lng, b.lat, b.lng))::int AS m
+            FROM public.tracking_bases b ORDER BY 2 LIMIT 1) c;
         RETURN NEXT;
       END IF;
     END IF;
@@ -81,6 +90,10 @@ BEGIN
     vehiculo_id := a_veh; dia := a_dia; desde := a_desde; hasta := a_hasta;
     minutos := round(extract(epoch FROM a_hasta - a_desde) / 60)::int;
     lat := a_lat; lng := a_lng;
+    SELECT c.nombre, c.m INTO cerca_de, cerca_m FROM (
+      SELECT coalesce(nullif(btrim(b.nombre), ''), b.base_id) AS nombre,
+             round(public.metros_entre(a_lat, a_lng, b.lat, b.lng))::int AS m
+        FROM public.tracking_bases b ORDER BY 2 LIMIT 1) c;
     RETURN NEXT;
   END IF;
 END

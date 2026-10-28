@@ -369,8 +369,10 @@ async function direccionDe(lat: number, lng: number): Promise<string | null> {
     const d = (await r.json()) as { address?: Record<string, string>; display_name?: string }
     const a = d.address ?? {}
     const calle = [a.road, a.house_number].filter(Boolean).join(' ')
-    const zona = a.neighbourhood || a.suburb || a.village || a.town || a.city_district || a.city || ''
-    const corto = [calle, zona].filter(Boolean).join(', ')
+    const zona = a.neighbourhood || a.suburb || a.quarter || a.city_district || ''
+    // La ciudad solo si salió de Córdoba (Carlos Paz, Alta Gracia…): ahí importa
+    const ciudad = a.city || a.town || a.village || ''
+    const corto = [calle, zona, /c[oó]rdoba/i.test(ciudad) ? '' : ciudad].filter(Boolean).join(', ')
     return corto || (d.display_name ? d.display_name.split(',').slice(0, 3).join(',') : null)
   } catch {
     return null
