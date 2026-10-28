@@ -8,7 +8,7 @@
  * (`POST / {accion:'stock_valorizado'}` → puente-sql/sql/stock-valorizado.sql),
  * que recorre todas las bases DRAGONFISH_* del SQL principal sumando el stock
  * por SKU (ZooLogic.COMB) por el costo de la lista "Compra" (LISTA0) de
- * DRAGONFISH_MITO. Tarda ~12 s, así que el puente la cachea 10 minutos;
+ * DRAGONFISH_INDOD. Tarda ~12 s, así que el puente la cachea 10 minutos;
  * `forzar=1` (botón "Actualizar" de la pantalla) saltea ese cache.
  *
  * Vive acá y no en api/ porque el plan Hobby de Vercel tope 12 Serverless
@@ -68,7 +68,7 @@ export interface StockValorizado {
   bases: BaseValorizada[]
   articulos: ArticuloValorizado[]
   sin_costo: ArticuloSinCosto[]
-  costo: { lista: string; lista_nombre: string; articulos_con_costo: number }
+  costo: { lista: string; lista_nombre: string; base: string; articulos_con_costo: number }
   calculado: string | null
   cacheado: boolean
   segundos: number | null
@@ -157,7 +157,7 @@ export default async function handler(req: Req, res: Res) {
     bases: datos.bases,
     articulos: Array.isArray(datos.articulos) ? datos.articulos : [],
     sin_costo: Array.isArray(datos.sin_costo) ? datos.sin_costo : [],
-    costo: datos.costo ?? { lista: 'LISTA0', lista_nombre: 'Compra', articulos_con_costo: 0 },
+    costo: datos.costo ?? { lista: 'LISTA0', lista_nombre: 'Compra', base: 'INDO', articulos_con_costo: 0 },
     calculado: datos.calculado ?? null,
     cacheado: datos.cacheado === true,
     segundos: datos.segundos ?? null,

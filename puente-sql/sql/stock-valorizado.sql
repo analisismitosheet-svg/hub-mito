@@ -7,7 +7,7 @@
 
    Qué hace:
      1. Arma el costo por artículo con la lista de precios "Compra" (LISTA0) de
-        DRAGONFISH_MITO, tomando el registro más nuevo por FECHAVIG. El costo en
+        DRAGONFISH_INDOD, tomando el registro más nuevo por FECHAVIG. El costo en
         Dragon está cargado por artículo (CCOLOR/TALLE vienen vacíos salvo un
         puñado de casos), así que se valoriza por artículo, no por SKU.
      2. Recorre cada base DRAGONFISH_* a la que el usuario del puente tiene
@@ -45,7 +45,9 @@ INSERT INTO #fuera (base) VALUES
   ('DRAGONFISH_ROBOD'),
   ('DRAGONFISH_CONSIGNA');
 
-/* ---- 1. Costo por artículo: lista "Compra" (LISTA0) de la base central ---- */
+/* ---- 1. Costo por artículo: lista "Compra" (LISTA0) de DRAGONFISH_INDOD ----
+   La base de costos es INDO, no MITO (lo marcó el usuario el 28/10/2026): ahí
+   está cargada la lista Compra entera (99.025 artículos contra 18.614 en MITO). */
 IF OBJECT_ID('tempdb..#costo') IS NOT NULL DROP TABLE #costo;
 CREATE TABLE #costo (art varchar(50) PRIMARY KEY, costo float, vigencia datetime);
 
@@ -59,11 +61,31 @@ SELECT art, costo, vigencia
              PARTITION BY LTRIM(RTRIM(ARTICULO))
              ORDER BY FECHAVIG DESC, HMODIFW DESC
            ) AS rn
-      FROM DRAGONFISH_MITO.ZooLogic.PRECIOAR
+      FROM DRAGONFISH_INDOD.ZooLogic.PRECIOAR
      WHERE LTRIM(RTRIM(LISTAPRE)) = 'LISTA0'
        AND LTRIM(RTRIM(ISNULL(ARTICULO, ''))) <> ''
   ) x
  WHERE rn = 1;
+
+/* ---- 1b. Descripción por artículo: la de MITO y, lo que no está ahí, la de INDO.
+   Se arma una sola vez en una temporal: salía mucho más caro repetir el join
+   contra las dos tablas ART en cada agregación del final. ---- */
+IF OBJECT_ID('tempdb..#desc') IS NOT NULL DROP TABLE #desc;
+CREATE TABLE #desc (art varchar(50) PRIMARY KEY, descripcion varchar(200));
+
+INSERT INTO #desc (art, descripcion)
+SELECT art, MAX(descripcion)
+  FROM (
+    SELECT LTRIM(RTRIM(ARTCOD)) AS art, LTRIM(RTRIM(ISNULL(ARTDES, ''))) AS descripcion
+      FROM DRAGONFISH_MITO.ZooLogic.ART
+     WHERE LTRIM(RTRIM(ISNULL(ARTDES, ''))) <> ''
+    UNION ALL
+    SELECT LTRIM(RTRIM(ARTCOD)), LTRIM(RTRIM(ISNULL(ARTDES, '')))
+      FROM DRAGONFISH_INDOD.ZooLogic.ART
+     WHERE LTRIM(RTRIM(ISNULL(ARTDES, ''))) <> ''
+  ) x
+ WHERE art <> ''
+ GROUP BY art;
 
 /* ---- 2. Una pasada por base ---- */
 IF OBJECT_ID('tempdb..#bases') IS NOT NULL DROP TABLE #bases;
@@ -134,13 +156,13 @@ SELECT base,
 
 SELECT TOP 200
        a.art AS articulo,
-       MAX(LTRIM(RTRIM(ISNULL(d.ARTDES, '')))) AS descripcion,
+       MAX(ISNULL(d.descripcion, '')) AS descripcion,
        SUM(a.unidades) AS unidades,
        SUM(a.valorizado) AS valorizado,
        MAX(k.costo) AS costo
   FROM #art a
   LEFT JOIN #costo k ON k.art = a.art
-  LEFT JOIN DRAGONFISH_MITO.ZooLogic.ART d ON LTRIM(RTRIM(d.ARTCOD)) = a.art
+  LEFT JOIN #desc d ON d.art = a.art
  GROUP BY a.art
  ORDER BY SUM(a.valorizado) DESC;
 
@@ -157,14 +179,14 @@ SELECT COUNT(*) AS articulos_con_costo,
    pantalla deja afuera del total salvo que se aprete el botón ámbar. Así el
    listado se filtra igual que el total y no arranca con 4.000 avíos. */
 SELECT a.art AS articulo,
-       MAX(LTRIM(RTRIM(ISNULL(d.ARTDES, '')))) AS descripcion,
+       MAX(ISNULL(d.descripcion, '')) AS descripcion,
        SUM(a.unidades) AS unidades,
        SUM(CASE WHEN v.base IS NOT NULL THEN a.unidades ELSE 0 END) AS unidades_val,
        COUNT(DISTINCT a.base) AS sucursales,
        STRING_AGG(REPLACE(a.base, 'DRAGONFISH_', ''), ' · ') WITHIN GROUP (ORDER BY a.base) AS bases
   FROM #art a
   LEFT JOIN #costo k ON k.art = a.art
-  LEFT JOIN DRAGONFISH_MITO.ZooLogic.ART d ON LTRIM(RTRIM(d.ARTCOD)) = a.art
+  LEFT JOIN #desc d ON d.art = a.art
   LEFT JOIN (SELECT base FROM #bases WHERE ISNULL(valorizado, 0) > 0) v ON v.base = a.base
  WHERE k.costo IS NULL
  GROUP BY a.art

@@ -6,8 +6,9 @@ Cuántas unidades hay y cuánta plata es, **a costo**, sucursal por sucursal.
 ## De dónde salen los números
 - **Stock**: `ZooLogic.COMB` (una fila por SKU: `COART`, `COCOL`, `TALLE`, `COCANT`) de **cada base `DRAGONFISH_*`** del SQL Server principal (M1T0O1\ZOOLOGIC). Se recorren todas las que el usuario del puente puede leer; solo cuenta `COCANT > 0`.
 - **Bases excluidas** (tabla `#fuera` arriba de `sql/stock-valorizado.sql`, las pidió sacar el usuario el 27/10/2026): DRAGON, TEMPOD, CAPACITA, SHOWROOM, CHILE, REPOLOC, ROBOD y CONSIGNA. No se recorren ni entran en el total, el detalle o el top. Para volver a sumar una, se borra su línea del `.sql` y se aprieta **Actualizar** (el archivo se lee en cada corrida: no hace falta reiniciar el puente).
-- **Costo**: lista de precios **«Compra» = `LISTA0`** de `DRAGONFISH_MITO.ZooLogic.PRECIOAR`, tomando la `FECHAVIG` más nueva de cada artículo. En Dragon el costo está cargado **por artículo** (`CCOLOR`/`TALLE` vienen vacíos salvo un puñado), así que se valoriza por artículo, no por SKU.
+- **Costo**: lista de precios **«Compra» = `LISTA0`** de **`DRAGONFISH_INDOD.ZooLogic.PRECIOAR`** (la base de costos es INDO, lo marcó el usuario el 28/10/2026: tiene 99.025 artículos con costo contra 18.614 de MITO), tomando la `FECHAVIG` más nueva de cada artículo. En Dragon el costo está cargado **por artículo** (`CCOLOR`/`TALLE` vienen vacíos salvo un puñado), así que se valoriza por artículo, no por SKU.
 - Las unidades de artículos **sin costo** cargado se cuentan en "Unidades" pero suman $0 (la pantalla las muestra aparte, en ámbar).
+- **Descripciones**: temporal `#desc` con `ZooLogic.ART` de MITO y, lo que falta ahí, de INDO. Se arma una sola vez: repetir los dos joins en cada agregación del final llevaba la consulta de 10 a 30 s.
 - Nombres de sucursal: `NOMBRES_BASE` de `src/lib/stockValorizado.ts` y, de respaldo, la tabla `NOMBRES` de `src/lib/replicas.ts`. Hacen falta las dos porque el Replicador usa otros códigos que el nombre de la base (`BUSTD` vs `DRAGONFISH_BUSTOD`).
 
 ## Camino

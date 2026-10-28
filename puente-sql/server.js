@@ -528,6 +528,8 @@ async function stockValorizado(forzar) {
       costo: {
         lista: 'LISTA0',
         lista_nombre: 'Compra',
+        // Base de donde sale la lista de costos (ver sql/stock-valorizado.sql)
+        base: 'INDO',
         articulos_con_costo: Number(costo[0]?.articulos_con_costo) || 0,
       },
       // Todos los que tienen stock y no tienen costo cargado (valen $0)

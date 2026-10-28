@@ -5,7 +5,7 @@ import { NOMBRES, codigoDe } from '@/lib/replicas'
  * Administradores > Stock valorizado: unidades y plata (a costo) por sucursal.
  *
  * Sale de /api/sql/stock-valorizado → Puente SQL → sql/stock-valorizado.sql.
- * El costo es el de la lista "Compra" (LISTA0) de Dragon, cargada por artículo:
+ * El costo es el de la lista "Compra" (LISTA0) de la base INDO, cargada por artículo:
  * las unidades de un artículo sin costo cargado se cuentan pero valen 0, y la
  * pantalla las muestra aparte para que el número no engañe.
  *
@@ -47,7 +47,7 @@ export interface StockValorizado {
   bases: BaseValorizada[]
   articulos: ArticuloValorizado[]
   sin_costo: ArticuloSinCosto[]
-  costo: { lista: string; lista_nombre: string; articulos_con_costo: number }
+  costo: { lista: string; lista_nombre: string; base: string; articulos_con_costo: number }
   calculado: string | null
   cacheado: boolean
   segundos: number | null
@@ -70,7 +70,7 @@ export async function cargarStockValorizado(forzar = false): Promise<StockValori
     bases: body.bases ?? [],
     articulos: body.articulos ?? [],
     sin_costo: body.sin_costo ?? [],
-    costo: body.costo ?? { lista: 'LISTA0', lista_nombre: 'Compra', articulos_con_costo: 0 },
+    costo: body.costo ?? { lista: 'LISTA0', lista_nombre: 'Compra', base: 'INDO', articulos_con_costo: 0 },
     calculado: body.calculado ?? null,
     cacheado: body.cacheado === true,
     segundos: body.segundos ?? null,

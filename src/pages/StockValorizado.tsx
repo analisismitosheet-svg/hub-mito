@@ -21,7 +21,7 @@ import {
  * Los números salen de /api/sql/stock-valorizado → Puente SQL →
  * puente-sql/sql/stock-valorizado.sql: stock por SKU de cada base
  * DRAGONFISH_* (ZooLogic.COMB) por el costo de la lista "Compra" (LISTA0)
- * de Dragon, que está cargada por artículo.
+ * de la base INDO, que está cargada por artículo.
  *
  * El cálculo recorre ~40 bases y tarda unos 12 s, así que el puente lo cachea
  * 10 minutos; "Actualizar" recalcula de cero (forzar=1).
@@ -166,7 +166,7 @@ export default function StockValorizado() {
           <Wallet size={22} style={{ color: cEmerald }} aria-hidden /> Stock valorizado
         </h1>
         <span className="text-xs text-sub/70">
-          a costo · lista «{datos?.costo.lista_nombre ?? 'Compra'}» de Dragon
+          a costo · lista «{datos?.costo.lista_nombre ?? 'Compra'}» de {datos?.costo.base || 'Dragon'}
           {datos?.costo.articulos_con_costo ? ` · ${numero(datos.costo.articulos_con_costo)} artículos con costo` : ''}
         </span>
         {datos?.calculado && (
@@ -399,8 +399,8 @@ export default function StockValorizado() {
           )}
 
           <p className="text-[11px] leading-relaxed text-sub/70">
-            El costo es el de la lista «{datos.costo.lista_nombre}» ({datos.costo.lista}) cargada en Dragon, tomando la
-            vigencia más nueva de cada artículo. Las unidades de artículos sin costo cargado se cuentan en «Unidades»
+            El costo es el de la lista «{datos.costo.lista_nombre}» ({datos.costo.lista}) de la base{' '}
+            {datos.costo.base || 'de Dragon'}, tomando la vigencia más nueva de cada artículo. Las unidades de artículos sin costo cargado se cuentan en «Unidades»
             pero suman $0 al valorizado. Stock por SKU de cada base <span className="font-mono">DRAGONFISH_*</span>{' '}
             {datos.servidor ? `del servidor ${datos.servidor}` : ''}.
           </p>
