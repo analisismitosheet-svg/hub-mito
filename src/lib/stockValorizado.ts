@@ -42,11 +42,21 @@ export interface ArticuloSinCosto {
   bases: string
 }
 
+/** Una fila por artículo sin costo y sucursal: dónde están esas unidades. */
+export interface SinCostoPorBase {
+  articulo: string
+  base: string
+  unidades: number
+  /** si esa base suma al total (las de insumos tipo NOMED valen $0 enteras) */
+  valoriza: boolean
+}
+
 export interface StockValorizado {
   servidor: string
   bases: BaseValorizada[]
   articulos: ArticuloValorizado[]
   sin_costo: ArticuloSinCosto[]
+  sin_costo_detalle: SinCostoPorBase[]
   costo: { lista: string; lista_nombre: string; base: string; articulos_con_costo: number }
   calculado: string | null
   cacheado: boolean
@@ -70,6 +80,7 @@ export async function cargarStockValorizado(forzar = false): Promise<StockValori
     bases: body.bases ?? [],
     articulos: body.articulos ?? [],
     sin_costo: body.sin_costo ?? [],
+    sin_costo_detalle: body.sin_costo_detalle ?? [],
     costo: body.costo ?? { lista: 'LISTA0', lista_nombre: 'Compra', base: 'INDO', articulos_con_costo: 0 },
     calculado: body.calculado ?? null,
     cacheado: body.cacheado === true,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { Boxes, ChevronDown, Download, Layers, Loader2, RefreshCw, Search, TriangleAlert, Wallet } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -35,9 +35,10 @@ export default function StockValorizado() {
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busqueda, setBusqueda] = useState('')
-  const [verArticulos, setVerArticulos] = useState(false)
   const [incluirSinValor, setIncluirSinValor] = useState(false)
   const [verSinCosto, setVerSinCosto] = useState(false)
+  /** Artículos sin costo con el detalle por sucursal desplegado. */
+  const [abiertos, setAbiertos] = useState<string[]>([])
 
   const cargar = useCallback(async (forzar = false) => {
     setCargando(true)
@@ -73,7 +74,6 @@ export default function StockValorizado() {
     return bases.filter((b) => `${nombreBase(b.base)} ${b.base}`.toLowerCase().includes(q))
   }, [bases, busqueda])
 
-  const articulos = datos?.articulos ?? []
   /* Mismo criterio que el total: con el botón ámbar apagado se muestran solo
      los artículos que están en sucursales que valorizan (si no, el listado
      arranca con miles de avíos de NOMED). */
@@ -83,6 +83,24 @@ export default function StockValorizado() {
   }, [datos, incluirSinValor])
   const unidadesSinCosto = (a: { unidades: number; unidades_val: number }) =>
     incluirSinValor ? a.unidades : a.unidades_val
+
+  /* Dónde están esas unidades: el detalle por sucursal, agrupado por artículo y
+     filtrado con el mismo criterio que las unidades de arriba, para que lo que
+     se despliega sume exactamente lo que dice la fila. */
+  const detallePorArticulo = useMemo(() => {
+    const mapa = new Map<string, { base: string; unidades: number; valoriza: boolean }[]>()
+    for (const f of datos?.sin_costo_detalle ?? []) {
+      if (!incluirSinValor && !f.valoriza) continue
+      const filas = mapa.get(f.articulo)
+      if (filas) filas.push(f)
+      else mapa.set(f.articulo, [f])
+    }
+    return mapa
+  }, [datos, incluirSinValor])
+
+  const hayDetalle = (datos?.sin_costo_detalle ?? []).length > 0
+  const alternar = (articulo: string) =>
+    setAbiertos((a) => (a.includes(articulo) ? a.filter((x) => x !== articulo) : [...a, articulo]))
 
   // Íconos de las tarjetas: sin tonos repetidos en la pantalla
   const [cEmerald, cBlue, cViolet, cAmber] = coloresUnicos(['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b'])
@@ -106,35 +124,41 @@ export default function StockValorizado() {
       ),
       'Por sucursal',
     )
-    if (articulos.length > 0) {
-      XLSX.utils.book_append_sheet(
-        wb,
-        XLSX.utils.json_to_sheet(
-          articulos.map((a) => ({
-            Artículo: a.articulo,
-            Descripción: a.descripcion,
-            Unidades: a.unidades,
-            Costo: a.costo ?? '',
-            Valorizado: Math.round(a.valorizado),
-          })),
-        ),
-        'Top artículos',
-      )
-    }
     if (sinCosto.length > 0) {
+      /* Las dos cifras juntas: el total de la empresa y el que entra al
+         valorizado. En pantalla se ve una sola (la que dice el botón ámbar),
+         acá van las dos para no tener que exportar dos veces. */
       XLSX.utils.book_append_sheet(
         wb,
         XLSX.utils.json_to_sheet(
           sinCosto.map((a) => ({
             Artículo: a.articulo,
             Descripción: a.descripcion,
-            Unidades: unidadesSinCosto(a),
+            'Unidades (todas)': a.unidades,
+            'Unidades en sucursales que valorizan': a.unidades_val,
             Sucursales: a.sucursales,
             'En qué sucursales': a.bases,
           })),
         ),
         'Sin costo',
       )
+      /* Y el mismo listado abierto por sucursal. Van todas las sucursales de
+         esos artículos, con la columna ¿Valoriza? para distinguirlas: igual que
+         arriba, el Excel se lleva el panorama completo. */
+      const descripciones = new Map(sinCosto.map((a) => [a.articulo, a.descripcion]))
+      const detalle = (datos?.sin_costo_detalle ?? [])
+        .filter((f) => descripciones.has(f.articulo))
+        .map((f) => ({
+          Artículo: f.articulo,
+          Descripción: descripciones.get(f.articulo) ?? '',
+          Sucursal: nombreBase(f.base),
+          Base: f.base,
+          Unidades: f.unidades,
+          '¿Valoriza?': f.valoriza ? 'Sí' : 'No',
+        }))
+      if (detalle.length > 0) {
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detalle), 'Sin costo x sucursal')
+      }
     }
     XLSX.writeFile(wb, `stock_valorizado_${new Date().toISOString().slice(0, 10)}.xlsx`)
   }
@@ -305,49 +329,6 @@ export default function StockValorizado() {
             </table>
           </div>
 
-          {/* Top artículos */}
-          {articulos.length > 0 && (
-            <section className="rounded-2xl border border-line bg-surface">
-              <button
-                type="button"
-                onClick={() => setVerArticulos((v) => !v)}
-                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-ink"
-              >
-                <ChevronDown size={16} className={`transition ${verArticulos ? '' : '-rotate-90'}`} aria-hidden />
-                Artículos que más plata tienen ({articulos.length})
-                <span className="ml-auto text-xs font-normal text-sub/70">todas las sucursales juntas</span>
-              </button>
-              {verArticulos && (
-                <div className="overflow-x-auto border-t border-line">
-                  <table className="w-full min-w-[640px] text-sm">
-                    <thead>
-                      <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-sub">
-                        <th className="px-3 py-2 font-medium">Artículo</th>
-                        <th className="px-3 py-2 font-medium">Descripción</th>
-                        <th className="px-3 py-2 text-right font-medium">Unidades</th>
-                        <th className="px-3 py-2 text-right font-medium">Costo</th>
-                        <th className="px-3 py-2 text-right font-medium">Valorizado</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {articulos.map((a) => (
-                        <tr key={a.articulo} className="border-b border-line/60 last:border-0">
-                          <td className="px-3 py-2 font-mono text-xs text-ink">{a.articulo}</td>
-                          <td className="px-3 py-2 text-sub">{a.descripcion || '—'}</td>
-                          <td className="px-3 py-2 text-right tabular-nums text-ink">{numero(a.unidades)}</td>
-                          <td className="px-3 py-2 text-right tabular-nums text-sub">
-                            {a.costo == null ? '—' : pesos(a.costo)}
-                          </td>
-                          <td className="px-3 py-2 text-right tabular-nums font-semibold text-ink">{pesos(a.valorizado)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
-          )}
-
           {/* Artículos sin costo cargado */}
           {sinCosto.length > 0 && (
             <section className="rounded-2xl border border-amber-500/30 bg-amber-500/5">
@@ -361,6 +342,7 @@ export default function StockValorizado() {
                 Artículos sin costo cargado ({sinCosto.length})
                 <span className="ml-auto text-xs font-normal text-sub/70">
                   {numero(sinCosto.reduce((t, a) => t + unidadesSinCosto(a), 0))} unidades que hoy valen $0
+                  {hayDetalle ? ' · tocá las sucursales para abrir el detalle' : ''}
                 </span>
               </button>
               {verSinCosto && (
@@ -375,22 +357,68 @@ export default function StockValorizado() {
                       </tr>
                     </thead>
                     <tbody>
-                      {sinCosto.slice(0, TOPE_TABLA).map((a) => (
-                        <tr key={a.articulo} className="border-b border-amber-500/10 last:border-0">
-                          <td className="px-3 py-2 font-mono text-xs text-ink">{a.articulo}</td>
-                          <td className="px-3 py-2 text-sub">{a.descripcion || '—'}</td>
-                          <td className="px-3 py-2 text-right tabular-nums text-ink">{numero(unidadesSinCosto(a))}</td>
-                          <td className="px-3 py-2 text-xs text-sub/80" title={a.bases}>
-                            {a.sucursales > 3 ? `${a.sucursales} sucursales` : a.bases || '—'}
-                          </td>
-                        </tr>
-                      ))}
+                      {sinCosto.slice(0, TOPE_TABLA).map((a) => {
+                        const detalle = detallePorArticulo.get(a.articulo) ?? []
+                        const abierto = abiertos.includes(a.articulo)
+                        return (
+                          <Fragment key={a.articulo}>
+                            <tr className="border-b border-amber-500/10 last:border-0">
+                              <td className="px-3 py-2 font-mono text-xs text-ink">{a.articulo}</td>
+                              <td className="px-3 py-2 text-sub">{a.descripcion || '—'}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-ink">
+                                {numero(unidadesSinCosto(a))}
+                              </td>
+                              <td className="px-3 py-2 text-xs text-sub/80">
+                                {detalle.length > 0 ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => alternar(a.articulo)}
+                                    className="btn-press inline-flex items-center gap-1 rounded-lg px-1.5 py-1 text-left transition hover:bg-amber-500/10"
+                                    aria-expanded={abierto}
+                                  >
+                                    <ChevronDown
+                                      size={13}
+                                      className={`shrink-0 transition ${abierto ? '' : '-rotate-90'}`}
+                                      aria-hidden
+                                    />
+                                    {detalle.length > 3 ? `${detalle.length} sucursales` : a.bases || '—'}
+                                  </button>
+                                ) : (
+                                  <span title={a.bases}>
+                                    {a.sucursales > 3 ? `${a.sucursales} sucursales` : a.bases || '—'}
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                            {abierto && detalle.length > 0 && (
+                              <tr className="border-b border-amber-500/10">
+                                <td colSpan={4} className="bg-amber-500/5 px-3 pb-2.5 pt-1">
+                                  <ul className="ml-1 grid gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
+                                    {detalle.map((f) => (
+                                      <li
+                                        key={f.base}
+                                        className="flex items-baseline justify-between gap-3 border-b border-amber-500/10 py-0.5 text-xs last:border-0"
+                                      >
+                                        <span className={f.valoriza ? 'text-sub' : 'text-sub/60'}>
+                                          {nombreBase(f.base)}
+                                          {!f.valoriza && <span className="ml-1 text-[10px]">(no valoriza)</span>}
+                                        </span>
+                                        <span className="tabular-nums text-ink">{numero(f.unidades)}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        )
+                      })}
                     </tbody>
                   </table>
                   {sinCosto.length > TOPE_TABLA && (
                     <p className="px-3 py-2 text-[11px] text-sub/70">
                       Se muestran los {numero(TOPE_TABLA)} de más unidades. Los {numero(sinCosto.length)} están
-                      completos en el Excel, hoja «Sin costo».
+                      completos en el Excel, hojas «Sin costo» y «Sin costo x sucursal».
                     </p>
                   )}
                 </div>

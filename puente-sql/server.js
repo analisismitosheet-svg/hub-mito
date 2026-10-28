@@ -544,7 +544,7 @@ async function stockValorizado(forzar) {
     } finally {
       await pool.close().catch(() => {})
     }
-    const [bases = [], articulos = [], costo = [], sinCosto = []] = r.recordsets ?? []
+    const [bases = [], articulos = [], costo = [], sinCosto = [], sinCostoDetalle = []] = r.recordsets ?? []
 
     const datos = {
       servidor: ALIAS_PRINCIPAL,
@@ -577,6 +577,13 @@ async function stockValorizado(forzar) {
         unidades_val: Number(f.unidades_val) || 0,
         sucursales: Number(f.sucursales) || 0,
         bases: String(f.bases ?? '').trim(),
+      })),
+      // Esos mismos, abiertos por sucursal: una fila por artículo y base
+      sin_costo_detalle: sinCostoDetalle.map((f) => ({
+        articulo: String(f.articulo ?? '').trim(),
+        base: String(f.base ?? ''),
+        unidades: Number(f.unidades) || 0,
+        valoriza: Number(f.valoriza) === 1,
       })),
       calculado: new Date().toISOString(),
       segundos: Math.round((Date.now() - t0) / 100) / 10,

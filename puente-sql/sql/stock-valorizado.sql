@@ -13,13 +13,17 @@
      2. Recorre cada base DRAGONFISH_* a la que el usuario del puente tiene
         acceso y que tiene la tabla ZooLogic.COMB (el stock por SKU: COART,
         COCOL, TALLE, COCANT) y suma unidades y unidades x costo.
-     3. Devuelve cuatro resultados:
+     3. Devuelve cinco resultados:
           - una fila por base (unidades, valorizado, unidades sin costo, SKUs)
           - el top de artículos por valorizado, sumando todas las bases
           - una fila de contexto del costo (artículos con costo, última vigencia)
-          - TODOS los artículos con stock y sin costo cargado (los que valen $0).
-            Va último a propósito: así un puente que todavía no lo lee sigue
-            encontrando los tres primeros en el mismo orden.
+          - TODOS los artículos con stock y sin costo cargado (los que valen $0)
+          - esos mismos, abiertos por sucursal (una fila por artículo y base).
+
+   Los resultados se agregan al final y nunca se cambian de lugar: el puente los
+   lee por posición, así que uno que todavía no conoce los últimos sigue
+   encontrando los primeros donde siempre. Por eso el top de artículos sigue acá
+   aunque la pantalla ya no lo muestre (28/10/2026, lo pidió sacar el usuario).
 
    Solo lectura: nada de INSERT/UPDATE/DELETE sobre las bases (las temporales
    #costo / #bases / #art son de la sesión y se tiran al cerrar).
@@ -191,3 +195,18 @@ SELECT a.art AS articulo,
  WHERE k.costo IS NULL
  GROUP BY a.art
  ORDER BY SUM(CASE WHEN v.base IS NOT NULL THEN a.unidades ELSE 0 END) DESC, SUM(a.unidades) DESC;
+
+/* Lo mismo, abierto por sucursal: una fila por artículo y base. Es lo que la
+   pantalla despliega debajo de cada artículo para saber DÓNDE están esas
+   unidades, y lo que baja a la hoja «Sin costo x sucursal» del Excel.
+   `valoriza` marca si esa base suma al total (las de insumos tipo NOMED valen
+   $0 enteras y quedan afuera salvo que se apriete el botón ámbar). */
+SELECT a.art AS articulo,
+       a.base,
+       a.unidades,
+       CASE WHEN v.base IS NOT NULL THEN 1 ELSE 0 END AS valoriza
+  FROM #art a
+  LEFT JOIN #costo k ON k.art = a.art
+  LEFT JOIN (SELECT base FROM #bases WHERE ISNULL(valorizado, 0) > 0) v ON v.base = a.base
+ WHERE k.costo IS NULL
+ ORDER BY a.art, a.unidades DESC;
