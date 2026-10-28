@@ -327,12 +327,16 @@ export default function TrackingTransporte() {
   }, [fecha, mostrarCache, cargarHub, cargarTransporte])
 
   useEffect(() => { void cargar() }, [cargar])
-  // Hoy: ubicaciones nuevas cada 30 s (el celular manda cada ~30 s); escaneos de Transporte cada 1 min
+  // Hoy: ubicaciones nuevas cada 30 s (el celular manda cada ~30 s); escaneos de Transporte cada 1 min.
+  // Con la pestaña oculta no se pide nada (cada pedido de escaneos es CPU de Vercel); al volver, se pone al día.
   useEffect(() => {
     if (!esHoy) return
-    const t1 = setInterval(() => { void cargarHub(true); setTick((x) => x + 1) }, 30000)
-    const t2 = setInterval(() => { void cargarTransporte() }, 60000)
-    return () => { clearInterval(t1); clearInterval(t2) }
+    const visible = () => document.visibilityState === 'visible'
+    const t1 = setInterval(() => { if (visible()) { void cargarHub(true); setTick((x) => x + 1) } }, 30000)
+    const t2 = setInterval(() => { if (visible()) void cargarTransporte() }, 60000)
+    const alVolver = () => { if (visible()) { void cargarHub(true); void cargarTransporte(); setTick((x) => x + 1) } }
+    document.addEventListener('visibilitychange', alVolver)
+    return () => { clearInterval(t1); clearInterval(t2); document.removeEventListener('visibilitychange', alVolver) }
   }, [esHoy, cargarHub, cargarTransporte])
 
   // Color del vehículo en el mapa (se cambia tocando el punto de color de su tarjeta)

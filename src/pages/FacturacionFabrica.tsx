@@ -342,7 +342,9 @@ export default function FacturacionFabrica() {
     void cargarRecibidos()
     // Refresca cada 60s y al volver a enfocar la pestaña, para que el verde
     // aparezca sin recargar la página.
-    const id = window.setInterval(() => void cargarRecibidos(), 60_000)
+    const id = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void cargarRecibidos()
+    }, 60_000)
     const onFocus = () => void cargarRecibidos()
     window.addEventListener('focus', onFocus)
     return () => {

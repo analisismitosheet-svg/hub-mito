@@ -515,7 +515,8 @@ export default function Transferencias() {
     let enCurso = false
 
     const ejecutar = async () => {
-      if (enCurso || abortado) return
+      // Con la pestaña oculta no se consulta (cada lectura es una llamada a /api/sql en Vercel)
+      if (enCurso || abortado || document.visibilityState !== 'visible') return
       enCurso = true
       try {
         const filas = await leerVista(vistaSalidas)
