@@ -104,13 +104,21 @@ export default function TasaConversion() {
   useEffect(() => {
     void sb().from('locales').select('codigo,nombre').then(({ data }) =>
       setNombres(Object.fromEntries((data ?? []).map((l) => [l.codigo as string, (l.nombre as string) ?? '']))))
-    void (async () => {
-      const { data } = await sb().from('config_app').select('valor').eq('clave', CLAVE_VISTA).maybeSingle()
-      const vista = typeof data?.valor === 'string' ? data.valor : ''
-      if (!vista) return setVentas(null)
-      try { setVentas(aVentas(await leerVista(vista, 5000))) } catch { setVentas(null) }
-    })()
   }, [])
+
+  // Ventas: la vista trae una fila por local + día + hora (~11 000 filas en 180 días): se pide entera
+  // (con un tope chico quedaban afuera horas de hoy) y se vuelve a pedir cada 2 minutos.
+  const cargarVentas = useCallback(async () => {
+    const { data } = await sb().from('config_app').select('valor').eq('clave', CLAVE_VISTA).maybeSingle()
+    const vista = typeof data?.valor === 'string' ? data.valor : ''
+    if (!vista) return setVentas(null)
+    try { setVentas(aVentas(await leerVista(vista, 50000))) } catch { /* se mantiene lo último que llegó */ }
+  }, [])
+  useEffect(() => {
+    void cargarVentas()
+    const t = setInterval(() => { if (document.visibilityState === 'visible') void cargarVentas() }, 2 * 60 * 1000)
+    return () => clearInterval(t)
+  }, [cargarVentas])
 
   // Ventas acumuladas de todo el día por local
   const ventasDia = useMemo(() => {

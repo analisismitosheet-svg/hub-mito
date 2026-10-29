@@ -171,7 +171,7 @@ export default function ContadorClientes() {
       const { data } = await sb().from('config_app').select('valor').eq('clave', CLAVE_VISTA).maybeSingle()
       const vista = typeof data?.valor === 'string' ? data.valor : ''
       if (!vista) return setVentas(null)
-      try { setVentas(aVentas(await leerVista(vista, 5000))) } catch { setVentas(null) }
+      try { setVentas(aVentas(await leerVista(vista, 50000))) } catch { setVentas(null) }  // una fila por local+día+hora
     })()
   }, [])
 
