@@ -2,7 +2,8 @@
 -- Locales → Objetivos (28/10/2026)
 --
 -- Objetivo de venta por local y por día, que se arma solo cuando se carga el IPC del mes:
---   Objetivo_2026(fecha) = Venta_2025(fecha − 364 días) × (1 + IPC del mes de objetivos)
+--   Objetivo_2026(fecha) = Venta_2025(fecha − 364 días) × IPC acumulado de 12 meses
+--   (el producto de (1 + IPC mensual) de los 12 meses que terminan en el mes de objetivos)
 --   (364 días = 52 semanas: el día de la semana coincide siempre)
 --   El mes de objetivos va del 26 al 25: del 26/10 al 25/11 son los objetivos de noviembre
 --   y usan el IPC de noviembre.
@@ -104,7 +105,8 @@ grant execute on function public.ventas_locales_dia_sync(text, jsonb) to anon, a
 
 -- ---------------------------------------------------------------------------
 -- Objetivos y venta por local y día del rango. Solo salen los días cuyo mes de objetivos
--- (26 al 25) tiene IPC cargado.
+-- (26 al 25) tiene cargados los 12 IPC mensuales que terminan en él.
+--   ipc        = IPC acumulado de esos 12 meses (%), el que se aplica a la venta base
 --   venta_base = venta del día base (fecha − 364); para CFR4, la generada desde CFR9
 --   opera      = el local vendió ese día base (si no: sin objetivo, «no abre»)
 --   feriado    = cargado en objetivos_feriados: sin objetivo
@@ -133,10 +135,17 @@ begin
   end if;
   return query
   with dias as (
-    select d::date as fecha, (d::date - 364) as base, i.pct
+    -- IPC acumulado de los 12 meses que terminan en el mes de objetivos (interanual).
+    -- Si falta alguno de los 12, ese mes no tiene objetivo.
+    select d::date as fecha, (d::date - 364) as base, a.pct
       from generate_series(p_desde, p_hasta, interval '1 day') d
       cross join lateral (select (date_trunc('month', d) + case when extract(day from d) >= 26 then interval '1 month' else interval '0' end)::date as mes_obj) m
-      join public.ipc_mensual i on i.anio = extract(year from m.mes_obj)::int and i.mes = extract(month from m.mes_obj)::int
+      cross join lateral (
+        select round((exp(sum(ln(1 + i.pct / 100))) - 1) * 100, 4) as pct, count(*) as n
+          from public.ipc_mensual i
+         where make_date(i.anio, i.mes, 1) between (m.mes_obj - interval '11 months')::date and m.mes_obj
+      ) a
+     where a.n = 12
   ),
   -- semanas completas alrededor del rango base (para repartir el domingo de CFR9)
   base as (

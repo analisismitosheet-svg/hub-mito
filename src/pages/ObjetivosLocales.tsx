@@ -8,8 +8,8 @@ import { useAuth } from '@/context/AuthContext'
 /* ------------------------------------------------------------------ */
 /*  Locales → Objetivos.                                                */
 /*  Objetivo 2026 = venta 2025 del mismo día de la semana (fecha − 364) */
-/*  × (1 + IPC del mes de objetivos). El mes de objetivos va del 26 al  */
-/*  25: del 26/10 al 25/11 son los objetivos de noviembre (IPC de nov). */
+/*  × IPC acumulado de los 12 meses que terminan en el mes de objetivos */
+/*  (va del 26 al 25: del 26/10 al 25/11 son los objetivos de noviembre). */
 /*  CFR4 sale de CFR9: el domingo de cada semana se reparte entre       */
 /*  lunes y sábado según lo que vendió cada día (domingo cerrado).      */
 /*  El admin ve todos los locales, el detalle, el comparativo, el IPC y */
@@ -194,7 +194,7 @@ export default function ObjetivosLocales() {
         ) : !dias.length ? (
           <div className="rounded-2xl border border-line bg-surface p-4 text-sm text-sub">
             {isAdmin
-              ? <>Todavía no hay IPC de {MESES[periodo.mes - 1]} {periodo.anio}. Cargalo en <button onClick={() => setVista('ipc')} className="font-semibold text-brand-400 underline">IPC mensual</button> y los objetivos del {ddmm(rango.desde)} al {ddmm(rango.hasta)} se arman solos.</>
+              ? <>Faltan IPC para {MESES[periodo.mes - 1]} {periodo.anio}: el objetivo usa el acumulado de los 12 meses que terminan en {MESES[periodo.mes - 1]}. Cargalos en <button onClick={() => setVista('ipc')} className="font-semibold text-brand-400 underline">IPC mensual</button> y los objetivos del {ddmm(rango.desde)} al {ddmm(rango.hasta)} se arman solos.</>
               : `Todavía no están los objetivos de ${MESES[periodo.mes - 1]} ${periodo.anio}.`}
           </div>
         ) : (
@@ -534,6 +534,18 @@ function IpcMensual({ onCambio }: { onCambio: () => void }) {
   }, [])
   useEffect(() => { void cargarIpc() }, [cargarIpc])
 
+  /** IPC acumulado de los 12 meses que terminan en anio/m (el que usa el objetivo de ese mes) */
+  function acumulado(m: number) {
+    let f = 1, faltan = 0
+    for (let k = 0; k < 12; k++) {
+      const t = anio * 12 + (m - 1) - k
+      const v = ipcs.find((x) => x.anio === Math.floor(t / 12) && x.mes === (t % 12) + 1)?.pct
+      if (v == null) faltan++
+      else f *= 1 + v / 100
+    }
+    return { pct: (f - 1) * 100, faltan }
+  }
+
   async function guardarIpc(m: number, valor: string) {
     if (!supabase) return
     const txt = valor.trim().replace(',', '.')
@@ -554,9 +566,9 @@ function IpcMensual({ onCambio }: { onCambio: () => void }) {
   return (
     <div className="rounded-2xl border border-line bg-surface p-4">
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <p className="text-sm text-sub">Cargá el IPC (%) de cada mes. Apenas se guarda, se arman los objetivos de ese mes: del 26 del mes anterior al 25.</p>
+        <p className="text-sm text-sub">Cargá el IPC mensual (%) de cada mes. El objetivo de un mes (del 26 del mes anterior al 25) usa el IPC <b className="text-ink">acumulado de los 12 meses</b> que terminan en él, así que para cada mes tienen que estar cargados los 11 anteriores.</p>
         <select value={anio} onChange={(e) => setAnio(Number(e.target.value))} aria-label="Año" className="ml-auto h-8 rounded-lg border border-line bg-surface2 px-2 text-xs text-ink">
-          {[2026, 2027].map((a) => <option key={a} value={a}>{a}</option>)}
+          {[2025, 2026, 2027].map((a) => <option key={a} value={a}>{a}</option>)}
         </select>
       </div>
       {error && <p role="alert" className="mb-3 text-sm text-brand-400">{error}</p>}
@@ -575,7 +587,12 @@ function IpcMensual({ onCambio }: { onCambio: () => void }) {
                 <span className="text-sm text-sub">%</span>
                 {guardando === i + 1 && <Loader2 size={13} className="animate-spin text-sub" aria-hidden />}
               </span>
-              <span className={`mt-1 block text-[11px] ${v != null ? 'text-lime-400' : 'text-sub/60'}`}>{v != null ? 'objetivo armado' : 'sin IPC'}</span>
+              {(() => {
+                const a = acumulado(i + 1)
+                return a.faltan
+                  ? <span className="mt-1 block text-[11px] text-sub/60">{v == null ? 'sin IPC' : `faltan ${a.faltan} de los 12 meses`}</span>
+                  : <span className="mt-1 block text-[11px] text-lime-400">12 meses: {pct(a.pct, 2)}</span>
+              })()}
             </label>
           )
         })}
