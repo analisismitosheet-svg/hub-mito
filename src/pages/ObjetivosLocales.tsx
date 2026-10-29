@@ -25,7 +25,9 @@ interface FilaObj {
 }
 interface Ipc { anio: number; mes: number; pct: number }
 interface Feriado { id: number; fecha: string; local: string | null; motivo: string | null }
-interface Dia { fecha: string; objetivo: number; venta: number | null; feriado: boolean; opera: boolean }
+interface Dia { fecha: string; objetivo: number; venta: number | null; feriado: boolean; opera: boolean; sinVenta: boolean }
+/** día que ya pasó y el local no vendió nada: no se le calcula objetivo */
+const sinVentaPasada = (f: FilaObj, hoy: string) => f.fecha < hoy && !f.venta
 
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
@@ -112,14 +114,17 @@ export default function ObjetivosLocales() {
   // El que no es admin recibe solo su local; el admin elige (vacío = todos)
   const verLocal = isAdmin ? localSel : (locales[0] ?? miLocal ?? '')
   const dias = useMemo<Dia[]>(() => {
+    const hoy = hoyIso()
     const m = new Map<string, Dia>()
     for (const f of filas) {
       if (verLocal && f.local !== verLocal) continue
-      const d = m.get(f.fecha) ?? { fecha: f.fecha, objetivo: 0, venta: null, feriado: true, opera: false }
-      d.objetivo += f.objetivo ?? 0
+      const d = m.get(f.fecha) ?? { fecha: f.fecha, objetivo: 0, venta: null, feriado: true, opera: false, sinVenta: true }
+      const sinVenta = sinVentaPasada(f, hoy)
+      d.objetivo += sinVenta ? 0 : f.objetivo ?? 0
       if (f.venta != null) d.venta = (d.venta ?? 0) + f.venta
       d.feriado = d.feriado && f.feriado
       d.opera = d.opera || f.opera
+      d.sinVenta = d.sinVenta && sinVenta
       m.set(f.fecha, d)
     }
     return [...m.values()].sort((a, b) => a.fecha.localeCompare(b.fecha))
@@ -260,7 +265,7 @@ function Calendario({ dias }: { dias: Dia[] }) {
         <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-emerald-500" />100% o más</span>
         <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-amber-500" />80% a 99%</span>
         <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-red-500" />menos de 80%</span>
-        <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-slate-500" />feriado o no abre: sin objetivo</span>
+        <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-slate-500" />feriado, no abre o no vendió: sin objetivo</span>
         <span>El % y la diferencia cuentan solo los días que ya pasaron.</span>
       </p>
     </>
@@ -269,14 +274,14 @@ function Calendario({ dias }: { dias: Dia[] }) {
 
 function CeldaDia({ d, hoy }: { d: Dia | null; hoy: string }) {
   if (!d) return <div />
-  const sinObjetivo = d.objetivo === 0 && (d.feriado || !d.opera)
+  const sinObjetivo = d.objetivo === 0 && (d.feriado || !d.opera || d.sinVenta)
   const p = d.fecha < hoy && d.objetivo ? (100 * (d.venta ?? 0)) / d.objetivo : null
   if (sinObjetivo) {
     return (
       <div className="rounded-lg border border-line border-l-4 border-l-slate-500 bg-paper px-2 py-1.5"
         style={{ backgroundImage: 'repeating-linear-gradient(135deg, rgba(148,163,184,.10) 0 8px, transparent 8px 16px)' }}>
         <p className="mb-1 flex items-center justify-between text-[11px] text-sub">{ddmm(d.fecha)}
-          <span className="rounded-full bg-line px-1.5 text-[10px] text-ink">{d.feriado ? 'Feriado' : 'No abre'}</span></p>
+          <span className="rounded-full bg-line px-1.5 text-[10px] text-ink">{d.feriado ? 'Feriado' : !d.opera ? 'No abre' : 'Sin venta'}</span></p>
         <Fila t="Venta" v={d.venta != null ? plata(d.venta) : '—'} />
         <Fila t="Objetivo" v="sin objetivo" />
         <Fila t="Dif." v="—" />
@@ -341,10 +346,11 @@ function DetalleObjetivos({ filas, desde, hasta, nom }: { filas: FilaObj[]; desd
   // Clic en una columna = de mayor a menor (Tienda: A a Z); otro clic = al revés
   const [orden, setOrden] = useState<{ k: ColDetalle; asc: boolean }>({ k: 'pct', asc: false })
   const datos = useMemo<FilaDetalle[]>(() => {
+    // Solo cuentan los días con venta: sin venta (cerró, todavía no pasó) no hay objetivo que medir
     const m = new Map<string, { o: number; v: number }>()
     for (const f of filas) {
       const x = m.get(f.local) ?? { o: 0, v: 0 }
-      x.o += f.objetivo ?? 0
+      x.o += f.venta ? f.objetivo ?? 0 : 0
       x.v += f.venta ?? 0
       m.set(f.local, x)
     }
