@@ -19,6 +19,7 @@ import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
+import { comprimirImagen } from '@/lib/comprimirImagen'
 import { usePermisosArea } from '@/hooks/usePermisosArea'
 
 interface Cliente {
@@ -393,8 +394,10 @@ function ClienteForm({
     setPreview(URL.createObjectURL(f))
   }
 
-  async function subirFoto(f: File): Promise<string | null> {
+  async function subirFoto(original: File): Promise<string | null> {
     if (!supabase) return null
+    // Las fotos del celu pesan varios MB (o vienen en HEIF): se suben achicadas a JPEG
+    const f = await comprimirImagen(original)
     const ext = (f.name.split('.').pop() || 'jpg').toLowerCase()
     const path = `nuevos/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
     const { error } = await supabase.storage
@@ -486,7 +489,6 @@ function ClienteForm({
                 ref={fileRef}
                 type="file"
                 accept="image/*"
-                capture="environment"
                 onChange={elegirFoto}
                 className="hidden"
               />
@@ -497,7 +499,7 @@ function ClienteForm({
               >
                 <Camera size={15} aria-hidden /> Subir o sacar foto
               </button>
-              <p className="text-xs text-sub">En el celu abre la cámara; en la compu, elegís un archivo.</p>
+              <p className="text-xs text-sub">En el celu podés sacarla con la cámara o elegirla de la galería.</p>
             </div>
           </div>
         </div>
