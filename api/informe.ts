@@ -175,6 +175,12 @@ async function cron(req: Req, res: Res) {
 
     const r = await enviarInforme(i, 'cron')
     enviados.push({ nombre: i.nombre, ok: r.ok, detalle: r.detalle })
+    // Plantilla todavía sin aprobar en Meta (#132001) para todos: no le llegó a nadie, así que se
+    // libera y se reintenta en 5 min (hasta la medianoche) en vez de esperar al día siguiente.
+    const partes = r.detalle.split(' · ')
+    if (!r.ok && partes.length === (i.destinatarios?.length ?? 0) && partes.every((p) => p.includes('(#132001)'))) {
+      await rest(`informes?id=eq.${i.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ ultimo_envio: null }) }).catch(() => undefined)
+    }
   }
 
   return res.status(200).json({ fecha, hora, dia, informes: informes.length, procesados: enviados.length, enviados })
