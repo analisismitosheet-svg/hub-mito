@@ -21,7 +21,7 @@ import { useAuth } from '@/context/AuthContext'
 
 interface FilaObj {
   local: string; fecha: string; fecha_base: string; venta_base: number | null; ipc: number
-  objetivo: number | null; opera: boolean; feriado: boolean; venta: number | null
+  objetivo: number | null; opera: boolean; feriado: boolean; venta: number | null; manual: boolean
 }
 interface Ipc { anio: number; mes: number; pct: number | null; interanual: number | null }
 interface Feriado { id: number; fecha: string; local: string | null; motivo: string | null }
@@ -445,7 +445,8 @@ function Comparativo({ filas, locales, nom }: { filas: FilaObj[]; locales: strin
   const controles = useMemo(() => {
     const fechas = new Set(filas.map((f) => f.fecha)).size
     const dowMal = filas.filter((f) => dow(f.fecha) !== dow(f.fecha_base)).length
-    const ratioMal = filas.filter((f) => f.objetivo != null && f.venta_base && Math.abs(f.objetivo / f.venta_base - (1 + f.ipc / 100)) > 1e-4).length
+    const ratioMal = filas.filter((f) => !f.manual && f.objetivo != null && f.venta_base && Math.abs(f.objetivo / f.venta_base - (1 + f.ipc / 100)) > 1e-4).length
+    const cargados = filas.filter((f) => f.manual).length
     // CFR9 vs CFR4: solo semanas ISO enteras dentro del rango base
     const porSemana = new Map<string, { dias: number; cfr9: number; cfr4: number }>()
     for (const f of filas) {
@@ -458,13 +459,13 @@ function Comparativo({ filas, locales, nom }: { filas: FilaObj[]; locales: strin
     const enteras = [...porSemana.values()].filter((x) => x.dias === 7)
     const t9 = enteras.reduce((s, x) => s + x.cfr9, 0)
     const t4 = enteras.reduce((s, x) => s + x.cfr4, 0)
-    return { fechas, dowMal, ratioMal, semanas: enteras.length, t9, t4, okCfr: enteras.length > 0 && Math.abs(t9 - t4) < 1 }
+    return { fechas, dowMal, ratioMal, cargados, semanas: enteras.length, t9, t4, okCfr: enteras.length > 0 && Math.abs(t9 - t4) < 1 }
   }, [filas])
 
   if (!filas.length) return <div className="rounded-2xl border border-line bg-surface p-4 text-sm text-sub">Sin IPC cargado para este período.</div>
   return (
     <div className="overflow-x-auto rounded-2xl border border-line bg-surface p-4">
-      <p className="mb-2 text-xs text-sub">Venta 2025 corrida 364 días (mismo día de la semana), sin feriados ni días que no abre</p>
+      <p className="mb-2 text-xs text-sub">Venta 2025 corrida 364 días (mismo día de la semana), sin feriados ni días que no abre. En los meses con objetivos cargados (Excel), el % aumento es el que resulta de esos objetivos.</p>
       <table className="w-full text-sm tabular-nums">
         <thead className="text-left text-[11px] uppercase tracking-wider text-sub/70">
           <tr>
@@ -500,7 +501,7 @@ function Comparativo({ filas, locales, nom }: { filas: FilaObj[]; locales: strin
         <Control ok={controles.dowMal === 0} titulo="Mismo día de la semana" texto={controles.dowMal === 0 ? `Las ${controles.fechas} fechas caen el mismo día que en 2025.` : `${controles.dowMal} fechas no coinciden.`} />
         <Control ok={controles.okCfr} titulo="CFR9 = CFR4 (redistribuido)"
           texto={controles.semanas ? `${controles.semanas} semanas enteras: CFR9 ${plata(controles.t9)} · CFR4 ${plata(controles.t4)}.` : 'No hay semanas enteras en el rango para comparar.'} />
-        <Control ok={controles.ratioMal === 0} titulo="Objetivo / venta = 1 + IPC" texto={controles.ratioMal === 0 ? 'Todas las celdas dan exacto.' : `${controles.ratioMal} celdas no dan.`} />
+        <Control ok={controles.ratioMal === 0} titulo="Objetivo / venta = 1 + IPC" texto={`${controles.ratioMal === 0 ? 'Todas las celdas calculadas dan exacto.' : `${controles.ratioMal} celdas no dan.`}${controles.cargados ? ` ${controles.cargados} días usan el objetivo cargado (Excel), no el cálculo.` : ''}`} />
       </div>
     </div>
   )

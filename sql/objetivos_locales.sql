@@ -109,20 +109,42 @@ end $$;
 revoke all on function public.ventas_locales_dia_sync(text, jsonb) from public;
 grant execute on function public.ventas_locales_dia_sync(text, jsonb) to anon, authenticated;
 
+-- Objetivos cargados a mano (por ahora, el Excel que se hacía antes: G:\Mi unidad\objetivos.xlsx).
+-- Si un local tiene objetivos cargados en un mes de objetivos (26 al 25), ese mes usa solo los
+-- cargados: el día que no tiene uno queda sin objetivo (no se calcula con el IPC).
+create table if not exists public.objetivos_cargados (
+  local text not null,
+  fecha date not null,
+  monto numeric not null,
+  origen text,
+  cargado_at timestamptz not null default now(),
+  primary key (local, fecha)
+);
+alter table public.objetivos_cargados enable row level security;
+drop policy if exists objetivos_cargados_ver on public.objetivos_cargados;
+create policy objetivos_cargados_ver on public.objetivos_cargados for select to authenticated
+  using (private.es_admin());
+drop policy if exists objetivos_cargados_editar on public.objetivos_cargados;
+create policy objetivos_cargados_editar on public.objetivos_cargados for all to authenticated
+  using (private.es_admin()) with check (private.es_admin());
+
 -- ---------------------------------------------------------------------------
--- Objetivos y venta por local y día del rango. Solo salen los días cuyo mes de objetivos
--- (26 al 25) tiene cargados los 12 IPC mensuales que terminan en él.
---   ipc        = IPC acumulado de esos 12 meses (%), el que se aplica a la venta base
+-- Objetivos y venta por local y día del rango. Salen los días con objetivo cargado o cuyo
+-- mes de objetivos (26 al 25) tiene IPC: el interanual de ese mes o los 12 mensuales.
+--   ipc        = IPC que se aplica a la venta base (%)
 --   venta_base = venta del día base (fecha − 364); para CFR4, la generada desde CFR9
---   opera      = el local vendió ese día base (si no: sin objetivo, «no abre»)
+--   opera      = el local vendió ese día base; en un mes con objetivos cargados, que tenga uno ese día
+--                (si no: «no abre», sin objetivo)
 --   feriado    = cargado en objetivos_feriados: sin objetivo
+--   manual     = el objetivo viene de objetivos_cargados, no del cálculo
 --   venta      = venta real del día (tickets netos)
 -- p_local: solo el admin puede pedir cualquier local (null = todos); el resto ve el suyo.
 -- ---------------------------------------------------------------------------
 drop function if exists public.objetivos_locales_dia(date, date);
+drop function if exists public.objetivos_locales_dia(date, date, text);
 create or replace function public.objetivos_locales_dia(p_desde date, p_hasta date, p_local text default null)
 returns table (local text, fecha date, fecha_base date, venta_base numeric, ipc numeric, objetivo numeric,
-               opera boolean, feriado boolean, venta numeric)
+               opera boolean, feriado boolean, venta numeric, manual boolean)
 language plpgsql stable security definer set search_path = public as $$
 declare v_local text;
 begin
@@ -142,8 +164,9 @@ begin
   return query
   with dias as (
     -- Interanual del mes de objetivos si está cargado; si no, el acumulado de los 12 IPC
-    -- mensuales que terminan en él. Sin ninguno de los dos, ese mes no tiene objetivo.
-    select d::date as fecha, (d::date - 364) as base, coalesce(ia.interanual, a.pct) as pct
+    -- mensuales que terminan en él (null si falta alguno).
+    select d::date as fecha, (d::date - 364) as base, m.mes_obj,
+           coalesce(ia.interanual, case when a.n = 12 then a.pct end) as pct
       from generate_series(p_desde, p_hasta, interval '1 day') d
       cross join lateral (select (date_trunc('month', d) + case when extract(day from d) >= 26 then interval '1 month' else interval '0' end)::date as mes_obj) m
       left join public.ipc_mensual ia on ia.anio = extract(year from m.mes_obj)::int and ia.mes = extract(month from m.mes_obj)::int
@@ -152,7 +175,6 @@ begin
           from public.ipc_mensual i
          where make_date(i.anio, i.mes, 1) between (m.mes_obj - interval '11 months')::date and m.mes_obj
       ) a
-     where ia.interanual is not null or a.n = 12
   ),
   -- semanas completas alrededor del rango base (para repartir el domingo de CFR9)
   base as (
@@ -174,19 +196,35 @@ begin
      where c.dow < 7
   ),
   todas as (select * from base union all select * from cfr4),
-  locs as (select distinct t.local from todas t where v_local is null or t.local = v_local),
+  cargados as (
+    select upper(o.local) as local, o.fecha, o.monto,
+           (date_trunc('month', o.fecha) + case when extract(day from o.fecha) >= 26 then interval '1 month' else interval '0' end)::date as mes_obj
+      from public.objetivos_cargados o
+     where o.fecha between p_desde - 31 and p_hasta + 31
+  ),
+  -- local y mes de objetivos con objetivos cargados: ahí no se calcula nada (día sin cargar = sin objetivo)
+  meses_cargados as (select distinct c.local, c.mes_obj from cargados c),
+  locs as (
+    select x.local from (select t.local from todas t union select c.local from cargados c) x
+     where v_local is null or x.local = v_local
+  ),
   armado as (
-    select l.local, d.fecha, d.base, t.total as vb, d.pct,
-           coalesce(t.total, 0) <> 0 as opera,
+    select l.local, d.fecha, d.base, t.total as vb, d.pct, c.monto, mc.local is not null as mes_cargado,
+           case when mc.local is not null then coalesce(c.monto, 0) <> 0 else coalesce(t.total, 0) <> 0 end as opera,
            exists (select 1 from public.objetivos_feriados f
                     where f.fecha = d.fecha and (f.local is null or upper(f.local) = l.local)) as feriado
       from dias d
      cross join locs l
       left join todas t on t.local = l.local and t.fecha = d.base
+      left join cargados c on c.local = l.local and c.fecha = d.fecha
+      left join meses_cargados mc on mc.local = l.local and mc.mes_obj = d.mes_obj
+     where d.pct is not null or mc.local is not null
   )
   select a.local, a.fecha, a.base, a.vb, a.pct,
-         case when a.opera and not a.feriado then round(a.vb * (1 + a.pct / 100), 2) end,
-         a.opera, a.feriado, v.total
+         case when a.feriado then null
+              when a.mes_cargado then a.monto
+              when a.opera and a.pct is not null then round(a.vb * (1 + a.pct / 100), 2) end,
+         a.opera, a.feriado, v.total, a.monto is not null
     from armado a
     left join public.ventas_locales_dia v on v.local = a.local and v.fecha = a.fecha
    order by a.local, a.fecha;
