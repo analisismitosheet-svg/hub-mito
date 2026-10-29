@@ -28,6 +28,8 @@ insert into public.permisos (clave, modulo, accion, label, orden) values
   ('objetivos.view', 'locales', 'view', 'Ver objetivos de los locales', 864),
   ('objetivos.edit', 'locales', 'edit', 'Cargar el IPC de los objetivos', 865)
 on conflict (clave) do nothing;
+-- El rol Locales ve los objetivos (cada usuario, solo los de su local: usuarios.local)
+insert into public.rol_permisos (rol, permiso_clave) values ('locales', 'objetivos.view') on conflict do nothing;
 
 -- Venta diaria por local (la escribe solo el puente)
 create table if not exists public.ventas_locales_dia (
@@ -41,8 +43,9 @@ create table if not exists public.ventas_locales_dia (
 alter table public.ventas_locales_dia enable row level security;
 drop policy if exists ventas_locales_dia_ver on public.ventas_locales_dia;
 create policy ventas_locales_dia_ver on public.ventas_locales_dia for select to authenticated
-  using (private.es_admin() or private.tengo_permiso('conversion.view')
-         or (private.tengo_permiso('objetivos.view') and upper(local) = upper(coalesce(private.mi_local(), ''))));
+  using (private.es_admin() or private.tengo_permiso('contador.ver_todo')
+         or ((private.tengo_permiso('objetivos.view') or private.tengo_permiso('conversion.view'))
+             and upper(local) = upper(coalesce(private.mi_local(), ''))));
 
 -- IPC mensual (%), lo carga la pantalla
 create table if not exists public.ipc_mensual (
