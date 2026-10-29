@@ -23,7 +23,7 @@ interface FilaObj {
   local: string; fecha: string; fecha_base: string; venta_base: number | null; ipc: number
   objetivo: number | null; opera: boolean; feriado: boolean; venta: number | null
 }
-interface Ipc { anio: number; mes: number; pct: number }
+interface Ipc { anio: number; mes: number; pct: number | null; interanual: number | null }
 interface Feriado { id: number; fecha: string; local: string | null; motivo: string | null }
 interface Dia { fecha: string; objetivo: number; venta: number | null; feriado: boolean; opera: boolean; sinVenta: boolean }
 /** día que ya pasó y el local no vendió nada: no se le calcula objetivo */
@@ -194,7 +194,7 @@ export default function ObjetivosLocales() {
         ) : !dias.length ? (
           <div className="rounded-2xl border border-line bg-surface p-4 text-sm text-sub">
             {isAdmin
-              ? <>Faltan IPC para {MESES[periodo.mes - 1]} {periodo.anio}: el objetivo usa el acumulado de los 12 meses que terminan en {MESES[periodo.mes - 1]}. Cargalos en <button onClick={() => setVista('ipc')} className="font-semibold text-brand-400 underline">IPC mensual</button> y los objetivos del {ddmm(rango.desde)} al {ddmm(rango.hasta)} se arman solos.</>
+              ? <>Faltan IPC para {MESES[periodo.mes - 1]} {periodo.anio}: cargá el interanual de {MESES[periodo.mes - 1]} o los 12 mensuales que terminan en él, en <button onClick={() => setVista('ipc')} className="font-semibold text-brand-400 underline">IPC mensual</button> y los objetivos del {ddmm(rango.desde)} al {ddmm(rango.hasta)} se arman solos.</>
               : `Todavía no están los objetivos de ${MESES[periodo.mes - 1]} ${periodo.anio}.`}
           </div>
         ) : (
@@ -523,77 +523,94 @@ function Control({ ok, titulo, texto }: { ok: boolean; titulo: string; texto: st
 function IpcMensual({ onCambio }: { onCambio: () => void }) {
   const [anio, setAnio] = useState(periodoDe(hoyIso()).anio)
   const [ipcs, setIpcs] = useState<Ipc[]>([])
-  const [guardando, setGuardando] = useState<number | null>(null)
+  const [guardando, setGuardando] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const cargarIpc = useCallback(async () => {
     if (!supabase) return
-    const { data, error: e } = await supabase.from('ipc_mensual').select('anio,mes,pct').order('anio').order('mes')
+    const { data, error: e } = await supabase.from('ipc_mensual').select('anio,mes,pct,interanual').order('anio').order('mes')
     if (e) setError(e.message)
-    setIpcs(((data as Ipc[] | null) ?? []).map((i) => ({ ...i, pct: Number(i.pct) })))
+    setIpcs(((data as Ipc[] | null) ?? []).map((i) => ({
+      ...i, pct: i.pct == null ? null : Number(i.pct), interanual: i.interanual == null ? null : Number(i.interanual),
+    })))
   }, [])
   useEffect(() => { void cargarIpc() }, [cargarIpc])
 
-  /** IPC acumulado de los 12 meses que terminan en anio/m (el que usa el objetivo de ese mes) */
-  function acumulado(m: number) {
+  const del = (a: number, m: number) => ipcs.find((x) => x.anio === a && x.mes === m)
+
+  /** IPC que usa el objetivo de anio/m: el interanual si está; si no, el acumulado de 12 mensuales */
+  function usado(m: number) {
+    const ia = del(anio, m)?.interanual
+    if (ia != null) return { pct: ia, faltan: 0, interanual: true }
     let f = 1, faltan = 0
     for (let k = 0; k < 12; k++) {
       const t = anio * 12 + (m - 1) - k
-      const v = ipcs.find((x) => x.anio === Math.floor(t / 12) && x.mes === (t % 12) + 1)?.pct
+      const v = del(Math.floor(t / 12), (t % 12) + 1)?.pct
       if (v == null) faltan++
       else f *= 1 + v / 100
     }
-    return { pct: (f - 1) * 100, faltan }
+    return { pct: (f - 1) * 100, faltan, interanual: false }
   }
 
-  async function guardarIpc(m: number, valor: string) {
+  async function guardar(m: number, campo: 'pct' | 'interanual', valor: string) {
     if (!supabase) return
     const txt = valor.trim().replace(',', '.')
-    const actual = ipcs.find((i) => i.anio === anio && i.mes === m)?.pct
-    setGuardando(m)
+    const fila = del(anio, m)
+    const nuevo = txt === '' ? null : Number(txt)
+    if (nuevo != null && !Number.isFinite(nuevo)) { setError('Escribí un número, por ejemplo 2,4'); return }
+    if (nuevo === (fila?.[campo] ?? null)) return
+    const otro = campo === 'pct' ? fila?.interanual ?? null : fila?.pct ?? null
+    setGuardando(`${m}-${campo}`)
     setError(null)
-    const { error: e } = txt === ''
+    const { error: e } = nuevo == null && otro == null
       ? await supabase.from('ipc_mensual').delete().eq('anio', anio).eq('mes', m)
-      : Number.isFinite(Number(txt)) && Number(txt) !== actual
-        ? await supabase.from('ipc_mensual').upsert({ anio, mes: m, pct: Number(txt), actualizado_at: new Date().toISOString() })
-        : { error: null }
+      : await supabase.from('ipc_mensual').upsert({ anio, mes: m, pct: fila?.pct ?? null, interanual: fila?.interanual ?? null, [campo]: nuevo, actualizado_at: new Date().toISOString() })
     setGuardando(null)
     if (e) setError(e.message)
     await cargarIpc()
     onCambio()
   }
 
+  const campo = (m: number, c: 'pct' | 'interanual', titulo: string) => {
+    const v = del(anio, m)?.[c]
+    return (
+      <span className="mt-1 flex items-center gap-1">
+        <span className="w-16 shrink-0 text-[10px] text-sub">{titulo}</span>
+        <input key={`${anio}-${m}-${c}-${v ?? ''}`} defaultValue={v ?? ''} inputMode="decimal" placeholder="—" aria-label={`${titulo} ${MESES[m - 1]} ${anio}`}
+          onBlur={(e) => void guardar(m, c, e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+          className="h-8 w-full min-w-0 rounded-lg border border-line2 bg-surface2 px-2 text-right text-sm text-ink" />
+        <span className="text-xs text-sub">%</span>
+        {guardando === `${m}-${c}` && <Loader2 size={12} className="animate-spin text-sub" aria-hidden />}
+      </span>
+    )
+  }
+
   return (
     <div className="rounded-2xl border border-line bg-surface p-4">
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <p className="text-sm text-sub">Cargá el IPC mensual (%) de cada mes. El objetivo de un mes (del 26 del mes anterior al 25) usa el IPC <b className="text-ink">acumulado de los 12 meses</b> que terminan en él, así que para cada mes tienen que estar cargados los 11 anteriores.</p>
+        <p className="text-sm text-sub">
+          El objetivo de un mes (del 26 del mes anterior al 25) usa el IPC <b className="text-ink">interanual</b> de ese mes si lo cargás.
+          Si no, acumula los <b className="text-ink">12 IPC mensuales</b> que terminan en él (tienen que estar los 12).
+        </p>
         <select value={anio} onChange={(e) => setAnio(Number(e.target.value))} aria-label="Año" className="ml-auto h-8 rounded-lg border border-line bg-surface2 px-2 text-xs text-ink">
           {[2025, 2026, 2027].map((a) => <option key={a} value={a}>{a}</option>)}
         </select>
       </div>
       {error && <p role="alert" className="mb-3 text-sm text-brand-400">{error}</p>}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-6">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
         {MESES.map((n, i) => {
-          const v = ipcs.find((x) => x.anio === anio && x.mes === i + 1)?.pct
           const r = rangoPeriodo(anio, i + 1)
+          const u = usado(i + 1)
           return (
-            <label key={n} className="rounded-xl border border-line bg-paper p-2">
+            <div key={n} className="rounded-xl border border-line bg-paper p-2">
               <span className="block text-[11px] font-semibold uppercase tracking-wide text-sub">{n}</span>
-              <span className="block text-[10px] text-sub/70">{ddmm(r.desde)} al {ddmm(r.hasta)}</span>
-              <span className="mt-1 flex items-center gap-1">
-                <input key={`${anio}-${i}-${v ?? ''}`} defaultValue={v ?? ''} inputMode="decimal" placeholder="—"
-                  onBlur={(e) => void guardarIpc(i + 1, e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                  className="h-9 w-full rounded-lg border border-line2 bg-surface2 px-2 text-right text-sm text-ink" />
-                <span className="text-sm text-sub">%</span>
-                {guardando === i + 1 && <Loader2 size={13} className="animate-spin text-sub" aria-hidden />}
-              </span>
-              {(() => {
-                const a = acumulado(i + 1)
-                return a.faltan
-                  ? <span className="mt-1 block text-[11px] text-sub/60">{v == null ? 'sin IPC' : `faltan ${a.faltan} de los 12 meses`}</span>
-                  : <span className="mt-1 block text-[11px] text-lime-400">12 meses: {pct(a.pct, 2)}</span>
-              })()}
-            </label>
+              <span className="block text-[10px] text-sub/70">objetivos del {ddmm(r.desde)} al {ddmm(r.hasta)}</span>
+              {campo(i + 1, 'pct', 'Mensual')}
+              {campo(i + 1, 'interanual', 'Interanual')}
+              {u.faltan
+                ? <span className="mt-1 block text-[11px] text-sub/60">{u.faltan === 12 ? 'sin IPC' : `faltan ${u.faltan} mensuales (o cargá el interanual)`}</span>
+                : <span className="mt-1 block text-[11px] text-lime-400">usa {pct(u.pct, 2)} {u.interanual ? '(interanual)' : '(12 mensuales)'}</span>}
+            </div>
           )
         })}
       </div>

@@ -3,7 +3,8 @@
 --
 -- Objetivo de venta por local y por día, que se arma solo cuando se carga el IPC del mes:
 --   Objetivo_2026(fecha) = Venta_2025(fecha − 364 días) × IPC acumulado de 12 meses
---   (el producto de (1 + IPC mensual) de los 12 meses que terminan en el mes de objetivos)
+--   (el producto de (1 + IPC mensual) de los 12 meses que terminan en el mes de objetivos),
+--   o el IPC interanual de ese mes si se cargó directo (tiene prioridad)
 --   (364 días = 52 semanas: el día de la semana coincide siempre)
 --   El mes de objetivos va del 26 al 25: del 26/10 al 25/11 son los objetivos de noviembre
 --   y usan el IPC de noviembre.
@@ -52,6 +53,11 @@ create table if not exists public.ipc_mensual (
   actualizado_at timestamptz not null default now(),
   primary key (anio, mes)
 );
+-- Por mes se carga el IPC mensual (pct), el interanual (interanual) o los dos.
+alter table public.ipc_mensual alter column pct drop not null;
+alter table public.ipc_mensual add column if not exists interanual numeric check (interanual > -50 and interanual < 1000);
+alter table public.ipc_mensual drop constraint if exists ipc_mensual_algo;
+alter table public.ipc_mensual add constraint ipc_mensual_algo check (pct is not null or interanual is not null);
 alter table public.ipc_mensual enable row level security;
 drop policy if exists ipc_mensual_ver on public.ipc_mensual;
 create policy ipc_mensual_ver on public.ipc_mensual for select to authenticated
@@ -135,17 +141,18 @@ begin
   end if;
   return query
   with dias as (
-    -- IPC acumulado de los 12 meses que terminan en el mes de objetivos (interanual).
-    -- Si falta alguno de los 12, ese mes no tiene objetivo.
-    select d::date as fecha, (d::date - 364) as base, a.pct
+    -- Interanual del mes de objetivos si está cargado; si no, el acumulado de los 12 IPC
+    -- mensuales que terminan en él. Sin ninguno de los dos, ese mes no tiene objetivo.
+    select d::date as fecha, (d::date - 364) as base, coalesce(ia.interanual, a.pct) as pct
       from generate_series(p_desde, p_hasta, interval '1 day') d
       cross join lateral (select (date_trunc('month', d) + case when extract(day from d) >= 26 then interval '1 month' else interval '0' end)::date as mes_obj) m
+      left join public.ipc_mensual ia on ia.anio = extract(year from m.mes_obj)::int and ia.mes = extract(month from m.mes_obj)::int
       cross join lateral (
-        select round((exp(sum(ln(1 + i.pct / 100))) - 1) * 100, 4) as pct, count(*) as n
+        select round((exp(sum(ln(1 + i.pct / 100))) - 1) * 100, 4) as pct, count(i.pct) as n
           from public.ipc_mensual i
          where make_date(i.anio, i.mes, 1) between (m.mes_obj - interval '11 months')::date and m.mes_obj
       ) a
-     where a.n = 12
+     where ia.interanual is not null or a.n = 12
   ),
   -- semanas completas alrededor del rango base (para repartir el domingo de CFR9)
   base as (
