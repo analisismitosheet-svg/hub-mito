@@ -2,8 +2,14 @@
 -- Locales → Objetivos (28/10/2026)
 --
 -- Objetivo de venta por local y por día, que se arma solo cuando se carga el IPC del mes:
---   Objetivo_2026(fecha) = Venta_2025(fecha − 364 días) × (1 + IPC del mes de la fecha)
+--   Objetivo_2026(fecha) = Venta_2025(fecha − 364 días) × (1 + IPC del mes de objetivos)
 --   (364 días = 52 semanas: el día de la semana coincide siempre)
+--   El mes de objetivos va del 26 al 25: del 26/10 al 25/11 son los objetivos de noviembre
+--   y usan el IPC de noviembre.
+--
+-- Quién ve qué: el admin ve todos los locales, el comparativo, el IPC y los feriados. El
+-- resto (con objetivos.view) ve solo el local de su usuario (usuarios.local).
+-- Feriados: objetivos_feriados (fecha + local, o todos los locales): ese día no hay objetivo.
 --
 -- CFR4 (Captain Fin Río 4, abrió en nov-2025) se regenera desde CFR9: por cada semana ISO
 -- de 2025, el domingo de CFR9 se reparte entre lunes y sábado en proporción a la venta de
@@ -33,7 +39,8 @@ create table if not exists public.ventas_locales_dia (
 alter table public.ventas_locales_dia enable row level security;
 drop policy if exists ventas_locales_dia_ver on public.ventas_locales_dia;
 create policy ventas_locales_dia_ver on public.ventas_locales_dia for select to authenticated
-  using (private.tengo_permiso('objetivos.view') or private.tengo_permiso('conversion.view'));
+  using (private.es_admin() or private.tengo_permiso('conversion.view')
+         or (private.tengo_permiso('objetivos.view') and upper(local) = upper(coalesce(private.mi_local(), ''))));
 
 -- IPC mensual (%), lo carga la pantalla
 create table if not exists public.ipc_mensual (
@@ -47,11 +54,28 @@ create table if not exists public.ipc_mensual (
 alter table public.ipc_mensual enable row level security;
 drop policy if exists ipc_mensual_ver on public.ipc_mensual;
 create policy ipc_mensual_ver on public.ipc_mensual for select to authenticated
-  using (private.tengo_permiso('objetivos.view'));
+  using (private.es_admin());
 drop policy if exists ipc_mensual_editar on public.ipc_mensual;
 create policy ipc_mensual_editar on public.ipc_mensual for all to authenticated
-  using (private.tengo_permiso('objetivos.edit'))
-  with check (private.tengo_permiso('objetivos.edit'));
+  using (private.es_admin()) with check (private.es_admin());
+
+-- Feriados sin objetivo (local null = todos los locales). Los carga el admin.
+create table if not exists public.objetivos_feriados (
+  id bigint generated always as identity primary key,
+  fecha date not null,
+  local text,
+  motivo text,
+  creado_por uuid default auth.uid(),
+  creado_at timestamptz not null default now()
+);
+create unique index if not exists objetivos_feriados_uq on public.objetivos_feriados (fecha, coalesce(local, '*'));
+alter table public.objetivos_feriados enable row level security;
+drop policy if exists objetivos_feriados_ver on public.objetivos_feriados;
+create policy objetivos_feriados_ver on public.objetivos_feriados for select to authenticated
+  using (private.tengo_permiso('objetivos.view'));
+drop policy if exists objetivos_feriados_editar on public.objetivos_feriados;
+create policy objetivos_feriados_editar on public.objetivos_feriados for all to authenticated
+  using (private.es_admin()) with check (private.es_admin());
 
 -- ---------------------------------------------------------------------------
 -- Puente: sube/actualiza la venta diaria. p_filas: [{local, fecha, total, tickets}]
@@ -79,15 +103,29 @@ revoke all on function public.ventas_locales_dia_sync(text, jsonb) from public;
 grant execute on function public.ventas_locales_dia_sync(text, jsonb) to anon, authenticated;
 
 -- ---------------------------------------------------------------------------
--- Objetivos por local y día del rango. Solo salen los días cuyo mes tiene IPC cargado.
+-- Objetivos y venta por local y día del rango. Solo salen los días cuyo mes de objetivos
+-- (26 al 25) tiene IPC cargado.
 --   venta_base = venta del día base (fecha − 364); para CFR4, la generada desde CFR9
---   opera = el local vendió ese día base (si no: celda gris)
+--   opera      = el local vendió ese día base (si no: sin objetivo, «no abre»)
+--   feriado    = cargado en objetivos_feriados: sin objetivo
+--   venta      = venta real del día (tickets netos)
+-- p_local: solo el admin puede pedir cualquier local (null = todos); el resto ve el suyo.
 -- ---------------------------------------------------------------------------
-create or replace function public.objetivos_locales_dia(p_desde date, p_hasta date)
-returns table (local text, fecha date, fecha_base date, venta_base numeric, ipc numeric, objetivo numeric, opera boolean)
+drop function if exists public.objetivos_locales_dia(date, date);
+create or replace function public.objetivos_locales_dia(p_desde date, p_hasta date, p_local text default null)
+returns table (local text, fecha date, fecha_base date, venta_base numeric, ipc numeric, objetivo numeric,
+               opera boolean, feriado boolean, venta numeric)
 language plpgsql stable security definer set search_path = public as $$
+declare v_local text;
 begin
-  if not (private.tengo_permiso('objetivos.view') or auth.role() = 'service_role') then
+  if auth.role() = 'service_role' or private.es_admin() then
+    v_local := nullif(upper(btrim(p_local)), '');
+  elsif private.tengo_permiso('objetivos.view') then
+    v_local := upper(btrim(private.mi_local()));
+    if v_local is null or v_local = '' then
+      raise exception 'Tu usuario no tiene un local asignado' using errcode = '42501';
+    end if;
+  else
     raise exception 'Sin permiso para ver los objetivos' using errcode = '42501';
   end if;
   if p_hasta < p_desde or p_hasta - p_desde > 400 then
@@ -97,7 +135,8 @@ begin
   with dias as (
     select d::date as fecha, (d::date - 364) as base, i.pct
       from generate_series(p_desde, p_hasta, interval '1 day') d
-      join public.ipc_mensual i on i.anio = extract(year from d)::int and i.mes = extract(month from d)::int
+      cross join lateral (select (date_trunc('month', d) + case when extract(day from d) >= 26 then interval '1 month' else interval '0' end)::date as mes_obj) m
+      join public.ipc_mensual i on i.anio = extract(year from m.mes_obj)::int and i.mes = extract(month from m.mes_obj)::int
   ),
   -- semanas completas alrededor del rango base (para repartir el domingo de CFR9)
   base as (
@@ -119,14 +158,22 @@ begin
      where c.dow < 7
   ),
   todas as (select * from base union all select * from cfr4),
-  locs as (select distinct t.local from todas t)
-  select l.local, d.fecha, d.base, t.total, d.pct,
-         round(t.total * (1 + d.pct / 100), 2),
-         coalesce(t.total, 0) <> 0
-    from dias d
-   cross join locs l
-    left join todas t on t.local = l.local and t.fecha = d.base
-   order by l.local, d.fecha;
+  locs as (select distinct t.local from todas t where v_local is null or t.local = v_local),
+  armado as (
+    select l.local, d.fecha, d.base, t.total as vb, d.pct,
+           coalesce(t.total, 0) <> 0 as opera,
+           exists (select 1 from public.objetivos_feriados f
+                    where f.fecha = d.fecha and (f.local is null or upper(f.local) = l.local)) as feriado
+      from dias d
+     cross join locs l
+      left join todas t on t.local = l.local and t.fecha = d.base
+  )
+  select a.local, a.fecha, a.base, a.vb, a.pct,
+         case when a.opera and not a.feriado then round(a.vb * (1 + a.pct / 100), 2) end,
+         a.opera, a.feriado, v.total
+    from armado a
+    left join public.ventas_locales_dia v on v.local = a.local and v.fecha = a.fecha
+   order by a.local, a.fecha;
 end $$;
-revoke all on function public.objetivos_locales_dia(date, date) from public, anon;
-grant execute on function public.objetivos_locales_dia(date, date) to authenticated, service_role;
+revoke all on function public.objetivos_locales_dia(date, date, text) from public, anon;
+grant execute on function public.objetivos_locales_dia(date, date, text) to authenticated, service_role;

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, Loader2, RefreshCw, Target, TriangleAlert } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { CheckCircle2, ChevronLeft, ChevronRight, Loader2, MapPin, RefreshCw, Target, Trash2, TriangleAlert } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
@@ -8,125 +8,383 @@ import { useAuth } from '@/context/AuthContext'
 /* ------------------------------------------------------------------ */
 /*  Locales → Objetivos.                                                */
 /*  Objetivo 2026 = venta 2025 del mismo día de la semana (fecha − 364) */
-/*  × (1 + IPC del mes). Se arma solo apenas se carga el IPC del mes.   */
+/*  × (1 + IPC del mes de objetivos). El mes de objetivos va del 26 al  */
+/*  25: del 26/10 al 25/11 son los objetivos de noviembre (IPC de nov). */
 /*  CFR4 sale de CFR9: el domingo de cada semana se reparte entre       */
 /*  lunes y sábado según lo que vendió cada día (domingo cerrado).      */
+/*  El admin ve todos los locales, el detalle, el comparativo, el IPC y */
+/*  los feriados; el resto ve solo el calendario de su local (lo filtra */
+/*  la RPC con usuarios.local).                                          */
 /*  Datos: sql/objetivos_locales.sql (RPC objetivos_locales_dia), venta */
 /*  diaria que sube puente-sql/scripts/sync-ventas-locales.js.          */
 /* ------------------------------------------------------------------ */
 
-interface FilaObj { local: string; fecha: string; fecha_base: string; venta_base: number | null; ipc: number; objetivo: number | null; opera: boolean }
+interface FilaObj {
+  local: string; fecha: string; fecha_base: string; venta_base: number | null; ipc: number
+  objetivo: number | null; opera: boolean; feriado: boolean; venta: number | null
+}
 interface Ipc { anio: number; mes: number; pct: number }
+interface Feriado { id: number; fecha: string; local: string | null; motivo: string | null }
+interface Dia { fecha: string; objetivo: number; venta: number | null; feriado: boolean; opera: boolean }
 
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
-const DIAS = ['D', 'L', 'M', 'X', 'J', 'V', 'S']
-const pesos = (n: number) => `$ ${Math.round(n).toLocaleString('es-AR')}`
-/** 4.523.000 -> «4,5 M» (en las celdas del pivote; el número entero va en el title) */
-const corto = (n: number) => (Math.abs(n) >= 1e6 ? `${(n / 1e6).toLocaleString('es-AR', { maximumFractionDigits: 1 })} M` : `${Math.round(n / 1e3).toLocaleString('es-AR')} k`)
-const pct = (n: number, dec = 1) => `${n.toLocaleString('es-AR', { minimumFractionDigits: dec, maximumFractionDigits: dec })}%`
+const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+const DIAS_NOMBRE = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+const plata = (n: number) => `$ ${n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+const pct = (n: number, dec = 1) => `${n.toLocaleString('es-AR', { minimumFractionDigits: dec, maximumFractionDigits: dec })} %`
 const dow = (iso: string) => new Date(`${iso}T12:00:00Z`).getUTCDay()
-const diaMes = (iso: string) => Number(iso.slice(8, 10))
-const ultimoDia = (a: number, m: number) => new Date(Date.UTC(a, m, 0)).getUTCDate()
-const iso = (a: number, m: number, d: number) => `${a}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-/** lunes de la semana ISO */
-const semanaIso = (f: string) => { const d = new Date(`${f}T12:00:00Z`); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d.toISOString().slice(0, 10) }
+const iso = (a: number, m: number, d: number) => new Date(Date.UTC(a, m - 1, d)).toISOString().slice(0, 10)
+const sumarDias = (f: string, n: number) => { const d = new Date(`${f}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10) }
+const ddmm = (f: string) => `${f.slice(8, 10)}/${f.slice(5, 7)}`
+const ddmmaaaa = (f: string) => `${ddmm(f)}/${f.slice(0, 4)}`
+const hoyIso = () => new Date().toLocaleDateString('sv-SE')
+/** mes de objetivos de una fecha: del 26 en adelante cuenta para el mes siguiente */
+function periodoDe(f: string) {
+  const a = Number(f.slice(0, 4)), m = Number(f.slice(5, 7)), d = Number(f.slice(8, 10))
+  return d >= 26 ? (m === 12 ? { anio: a + 1, mes: 1 } : { anio: a, mes: m + 1 }) : { anio: a, mes: m }
+}
+const rangoPeriodo = (anio: number, mes: number) => ({ desde: iso(anio, mes - 1, 26), hasta: iso(anio, mes, 25) })
+const numerico = (f: FilaObj): FilaObj => ({
+  ...f, ipc: Number(f.ipc),
+  venta_base: f.venta_base == null ? null : Number(f.venta_base),
+  objetivo: f.objetivo == null ? null : Number(f.objetivo),
+  venta: f.venta == null ? null : Number(f.venta),
+})
+/** color del cumplimiento: verde desde 100%, naranja 80-99%, rojo abajo */
+const tono = (p: number) => (p >= 100 ? 'ok' : p >= 80 ? 'medio' : 'mal')
+const BORDE = { ok: 'border-l-emerald-500', medio: 'border-l-amber-500', mal: 'border-l-red-500' } as const
+const TEXTO = { ok: 'text-emerald-400', medio: 'text-amber-400', mal: 'text-red-400' } as const
 
 export default function ObjetivosLocales() {
-  const { can, isAdmin } = useAuth()
-  const puedeEditar = isAdmin || can('objetivos.edit')
-  const [anio, setAnio] = useState(2026)
-  const [ipcs, setIpcs] = useState<Ipc[]>([])
-  const [mes, setMes] = useState<number | 'todos'>('todos')
+  const { isAdmin, perfil } = useAuth()
+  const miLocal = perfil?.local ?? null
+  const inicial = periodoDe(hoyIso())
+  const [periodo, setPeriodo] = useState(inicial)
+  const rango = useMemo(() => rangoPeriodo(periodo.anio, periodo.mes), [periodo])
   const [filas, setFilas] = useState<FilaObj[]>([])
   const [nombres, setNombres] = useState<Record<string, string>>({})
+  const [localSel, setLocalSel] = useState<string>('')
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [vista, setVista] = useState<'dias' | 'comparativo' | 'ipc'>('dias')
-  const [guardando, setGuardando] = useState<number | null>(null)
+  const [vista, setVista] = useState<'dias' | 'comparativo' | 'ipc' | 'feriados'>('dias')
 
-  const mesesConIpc = useMemo(() => ipcs.filter((i) => i.anio === anio).map((i) => i.mes).sort((a, b) => a - b), [ipcs, anio])
-
-  const cargarIpc = useCallback(async () => {
-    if (!supabase) return
-    const { data, error: e } = await supabase.from('ipc_mensual').select('anio,mes,pct').order('anio').order('mes')
-    if (e) setError(e.message)
-    setIpcs(((data as Ipc[] | null) ?? []).map((i) => ({ ...i, pct: Number(i.pct) })))
-  }, [])
+  // Detalle (admin): rango libre, por defecto el período hasta ayer
+  const ayer = sumarDias(hoyIso(), -1)
+  const [desde, setDesde] = useState(rango.desde)
+  const [hasta, setHasta] = useState(rango.hasta < ayer ? rango.hasta : ayer)
+  const [detalle, setDetalle] = useState<FilaObj[]>([])
+  useEffect(() => {
+    setDesde(rango.desde)
+    setHasta(rango.hasta < ayer ? rango.hasta : ayer < rango.desde ? rango.desde : ayer)
+  }, [rango, ayer])
 
   useEffect(() => {
-    void cargarIpc()
     if (supabase) void supabase.from('locales').select('codigo,nombre').then(({ data }) =>
       setNombres(Object.fromEntries(((data as { codigo: string; nombre: string | null }[] | null) ?? []).map((l) => [l.codigo, l.nombre ?? '']))))
-  }, [cargarIpc])
-
-  // Mes elegido: si deja de tener IPC (o cambia el año) vuelve a «todos»
-  useEffect(() => { if (mes !== 'todos' && !mesesConIpc.includes(mes)) setMes(mesesConIpc[mesesConIpc.length - 1] ?? 'todos') }, [mesesConIpc, mes])
+  }, [])
 
   const cargar = useCallback(async () => {
     if (!supabase) return
-    if (!mesesConIpc.length) { setFilas([]); return }
-    const m1 = mes === 'todos' ? mesesConIpc[0] : mes
-    const m2 = mes === 'todos' ? mesesConIpc[mesesConIpc.length - 1] : mes
     setCargando(true)
     setError(null)
-    const { data, error: e } = await supabase.rpc('objetivos_locales_dia', { p_desde: iso(anio, m1, 1), p_hasta: iso(anio, m2, ultimoDia(anio, m2)) })
+    const { data, error: e } = await supabase.rpc('objetivos_locales_dia', { p_desde: rango.desde, p_hasta: rango.hasta })
     setCargando(false)
-    if (e) { setError(e.message); return }
-    setFilas(((data as FilaObj[] | null) ?? []).map((f) => ({ ...f, venta_base: f.venta_base == null ? null : Number(f.venta_base), objetivo: f.objetivo == null ? null : Number(f.objetivo), ipc: Number(f.ipc) })))
-  }, [anio, mes, mesesConIpc])
+    if (e) { setError(e.message); setFilas([]); return }
+    setFilas(((data as FilaObj[] | null) ?? []).map(numerico))
+  }, [rango])
   useEffect(() => { void cargar() }, [cargar])
 
-  async function guardarIpc(m: number, valor: string) {
-    if (!supabase || !puedeEditar) return
-    const txt = valor.trim().replace(',', '.')
-    const actual = ipcs.find((i) => i.anio === anio && i.mes === m)?.pct
-    setGuardando(m)
-    setError(null)
-    const { error: e } = txt === ''
-      ? await supabase.from('ipc_mensual').delete().eq('anio', anio).eq('mes', m)
-      : Number.isFinite(Number(txt)) && Number(txt) !== actual
-        ? await supabase.from('ipc_mensual').upsert({ anio, mes: m, pct: Number(txt), actualizado_at: new Date().toISOString() })
-        : { error: null }
-    setGuardando(null)
-    if (e) setError(e.message)
-    await cargarIpc()
-  }
+  const cargarDetalle = useCallback(async () => {
+    if (!supabase || !isAdmin || !desde || !hasta || hasta < desde) return
+    const { data, error: e } = await supabase.rpc('objetivos_locales_dia', { p_desde: desde, p_hasta: hasta })
+    if (e) { setError(e.message); return }
+    setDetalle(((data as FilaObj[] | null) ?? []).map(numerico))
+  }, [isAdmin, desde, hasta])
+  useEffect(() => { void cargarDetalle() }, [cargarDetalle])
 
-  /* ---------------- pivote ---------------- */
-  const fechas = useMemo(() => [...new Set(filas.map((f) => f.fecha))].sort(), [filas])
   const locales = useMemo(() => {
     const tot = new Map<string, number>()
     for (const f of filas) tot.set(f.local, (tot.get(f.local) ?? 0) + (f.objetivo ?? 0))
     return [...tot.entries()].sort((a, b) => b[1] - a[1]).map(([l]) => l)
   }, [filas])
-  const celda = useMemo(() => new Map(filas.map((f) => [`${f.local}|${f.fecha}`, f])), [filas])
-  const totLocal = (l: string, campo: 'objetivo' | 'venta_base') => filas.reduce((s, f) => (f.local === l ? s + (f[campo] ?? 0) : s), 0)
-  const totFecha = (d: string) => filas.reduce((s, f) => (f.fecha === d ? s + (f.objetivo ?? 0) : s), 0)
-  const totGeneral = filas.reduce((s, f) => s + (f.objetivo ?? 0), 0)
-  const baseGeneral = filas.reduce((s, f) => s + (f.venta_base ?? 0), 0)
+  const nom = (l: string) => nombres[l] || l
 
-  /** escala de color por local: del día más flojo (claro) al más fuerte (verde intenso) */
-  const escala = useMemo(() => {
-    const m = new Map<string, { min: number; max: number }>()
+  // El que no es admin recibe solo su local; el admin elige (vacío = todos)
+  const verLocal = isAdmin ? localSel : (locales[0] ?? miLocal ?? '')
+  const dias = useMemo<Dia[]>(() => {
+    const m = new Map<string, Dia>()
     for (const f of filas) {
-      if (!f.opera || f.objetivo == null) continue
-      const e = m.get(f.local) ?? { min: Infinity, max: -Infinity }
-      e.min = Math.min(e.min, f.objetivo); e.max = Math.max(e.max, f.objetivo)
-      m.set(f.local, e)
+      if (verLocal && f.local !== verLocal) continue
+      const d = m.get(f.fecha) ?? { fecha: f.fecha, objetivo: 0, venta: null, feriado: true, opera: false }
+      d.objetivo += f.objetivo ?? 0
+      if (f.venta != null) d.venta = (d.venta ?? 0) + f.venta
+      d.feriado = d.feriado && f.feriado
+      d.opera = d.opera || f.opera
+      m.set(f.fecha, d)
     }
-    return m
-  }, [filas])
-  const fondo = (f: FilaObj | undefined) => {
-    if (!f || !f.opera || f.objetivo == null) return 'rgba(148,163,184,.14)'
-    const e = escala.get(f.local)
-    const t = e && e.max > e.min ? (f.objetivo - e.min) / (e.max - e.min) : 0.5
-    return `rgba(16,185,129,${(0.08 + t * 0.5).toFixed(2)})`
-  }
+    return [...m.values()].sort((a, b) => a.fecha.localeCompare(b.fecha))
+  }, [filas, verLocal])
 
-  /* ---------------- controles ---------------- */
+  const nombreMes = `${MESES[periodo.mes - 1][0].toUpperCase()}${MESES[periodo.mes - 1].slice(1)} ${periodo.anio}`
+  const mover = (n: number) => setPeriodo((p) => {
+    const t = p.anio * 12 + (p.mes - 1) + n
+    return { anio: Math.floor(t / 12), mes: (t % 12) + 1 }
+  })
+
+  const pestañas = isAdmin
+    ? ([['dias', 'Objetivos por día'], ['comparativo', 'Comparativo por local'], ['ipc', 'IPC mensual'], ['feriados', 'Feriados']] as const)
+    : null
+
+  return (
+    <Layout>
+      <BackButton />
+      <header className="mb-4 mt-2 flex flex-wrap items-center gap-2">
+        <h1 className="flex items-center gap-2 font-display text-2xl font-semibold text-ink">
+          <Target size={22} className="text-lime-500" aria-hidden /> Objetivos
+        </h1>
+        <span className="text-xs text-sub/70">El mes de objetivos va del 26 al 25</span>
+        <button onClick={() => { void cargar(); void cargarDetalle() }}
+          className="btn-press ml-auto inline-flex h-8 items-center gap-1 rounded-lg border border-line bg-surface2 px-2.5 text-xs font-medium text-ink hover:bg-line">
+          <RefreshCw size={13} className={cargando ? 'animate-spin' : ''} aria-hidden /> Actualizar
+        </button>
+      </header>
+
+      {pestañas && (
+        <nav className="mb-4 flex flex-wrap gap-1.5" aria-label="Vistas">
+          {pestañas.map(([v, t]) => (
+            <button key={v} onClick={() => setVista(v)} aria-pressed={vista === v}
+              className={`h-9 rounded-xl px-3 text-sm font-medium transition ${vista === v ? 'bg-brand-600 text-white' : 'border border-line bg-surface text-ink hover:bg-surface2'}`}>{t}</button>
+          ))}
+        </nav>
+      )}
+
+      {error && <p role="alert" className="mb-4 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
+
+      {(vista === 'dias' || vista === 'comparativo') && (
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <button onClick={() => mover(-1)} aria-label="Mes anterior" className="btn-press grid h-8 w-8 place-items-center rounded-lg border border-line bg-surface2 text-ink hover:bg-line"><ChevronLeft size={16} aria-hidden /></button>
+          <span className="text-base font-semibold text-ink">{nombreMes} <span className="text-xs font-normal text-sub">{ddmm(rango.desde)} al {ddmm(rango.hasta)}</span></span>
+          <button onClick={() => mover(1)} aria-label="Mes siguiente" className="btn-press grid h-8 w-8 place-items-center rounded-lg border border-line bg-surface2 text-ink hover:bg-line"><ChevronRight size={16} aria-hidden /></button>
+          {vista === 'dias' && (isAdmin ? (
+            <select value={localSel} onChange={(e) => setLocalSel(e.target.value)} aria-label="Local"
+              className="h-8 rounded-lg border border-line bg-surface2 px-2 text-xs text-ink">
+              <option value="">Todos los locales</option>
+              {[...locales].sort((a, b) => nom(a).localeCompare(nom(b))).map((l) => <option key={l} value={l}>{nom(l)}</option>)}
+            </select>
+          ) : verLocal ? (
+            <span className="inline-flex h-8 items-center gap-1 rounded-lg border border-line bg-surface2 px-2.5 text-xs text-ink"><MapPin size={13} aria-hidden /> {nom(verLocal)}</span>
+          ) : null)}
+          {vista === 'dias' && isAdmin && (
+            <div className="flex flex-wrap items-center gap-2 text-xs text-sub">
+              <label className="flex items-center gap-1">Desde <input id="obj-desde" type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className="h-8 rounded-lg border border-line bg-surface2 px-2 text-xs text-ink" /></label>
+              <label className="flex items-center gap-1">Hasta <input id="obj-hasta" type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className="h-8 rounded-lg border border-line bg-surface2 px-2 text-xs text-ink" /></label>
+            </div>
+          )}
+        </div>
+      )}
+
+      {vista === 'dias' && (
+        cargando && !filas.length ? (
+          <p className="flex items-center gap-2 py-10 text-sub"><Loader2 size={16} className="animate-spin" aria-hidden /> Calculando…</p>
+        ) : !dias.length ? (
+          <div className="rounded-2xl border border-line bg-surface p-4 text-sm text-sub">
+            {isAdmin
+              ? <>Todavía no hay IPC de {MESES[periodo.mes - 1]} {periodo.anio}. Cargalo en <button onClick={() => setVista('ipc')} className="font-semibold text-brand-400 underline">IPC mensual</button> y los objetivos del {ddmm(rango.desde)} al {ddmm(rango.hasta)} se arman solos.</>
+              : `Todavía no están los objetivos de ${MESES[periodo.mes - 1]} ${periodo.anio}.`}
+          </div>
+        ) : (
+          <Calendario dias={dias} />
+        )
+      )}
+
+      {vista === 'dias' && isAdmin && <DetalleObjetivos filas={detalle} desde={desde} hasta={hasta} />}
+
+      {vista === 'comparativo' && isAdmin && <Comparativo filas={filas} locales={locales} nom={nom} />}
+      {vista === 'ipc' && isAdmin && <IpcMensual onCambio={() => void cargar()} />}
+      {vista === 'feriados' && isAdmin && <Feriados locales={locales} nom={nom} onCambio={() => { void cargar(); void cargarDetalle() }} />}
+    </Layout>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/*  Calendario lunes a domingo + total por semana                       */
+/* ------------------------------------------------------------------ */
+function Calendario({ dias }: { dias: Dia[] }) {
+  const hoy = hoyIso()
+  const pasado = (d: Dia) => d.fecha < hoy
+  const objTotal = dias.reduce((s, d) => s + d.objetivo, 0)
+  const ventaTotal = dias.reduce((s, d) => s + (d.venta ?? 0), 0)
+  const objALaFecha = dias.filter(pasado).reduce((s, d) => s + d.objetivo, 0)
+  const ventaALaFecha = dias.filter(pasado).reduce((s, d) => s + (d.venta ?? 0), 0)
+
+  // Grilla: huecos hasta el lunes de la primera semana y hasta el domingo de la última
+  const celdas: (Dia | null)[] = [...Array((dow(dias[0].fecha) + 6) % 7).fill(null), ...dias]
+  while (celdas.length % 7) celdas.push(null)
+  const semanas = Array.from({ length: celdas.length / 7 }, (_, i) => celdas.slice(i * 7, i * 7 + 7))
+
+  return (
+    <>
+      <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+        <Kpi titulo="Objetivo del período" valor={plata(objTotal)} />
+        <Kpi titulo="Venta del período" valor={plata(ventaTotal)} />
+        <Kpi titulo="% cumplido a la fecha" valor={objALaFecha ? pct((100 * ventaALaFecha) / objALaFecha) : '—'} />
+        <Kpi titulo="Falta para el objetivo" valor={plata(Math.max(0, objTotal - ventaTotal))} />
+      </div>
+      <div className="overflow-x-auto rounded-2xl border border-line bg-surface p-2">
+        <div className="grid min-w-[1340px] grid-cols-[repeat(7,minmax(160px,1fr))_minmax(170px,1.1fr)] gap-1 tabular-nums">
+          {DIAS_SEMANA.map((d) => <div key={d} className="py-1 text-center text-xs text-sub">{d}</div>)}
+          <div className="py-1 text-center text-xs font-semibold text-lime-400">Total semana</div>
+          {semanas.map((sem, i) => {
+            let obj = 0, venta = 0, objPas = 0
+            for (const d of sem) {
+              if (!d) continue
+              obj += d.objetivo
+              if (d.venta != null) venta += d.venta
+              if (pasado(d)) objPas += d.objetivo
+            }
+            const p = objPas ? (100 * venta) / objPas : null
+            return [
+              ...sem.map((d, j) => <CeldaDia key={d?.fecha ?? `v${i}-${j}`} d={d} hoy={hoy} />),
+              <div key={`s${i}`} className={`rounded-lg border border-lime-500/60 border-l-4 bg-paper px-2 py-1.5 ${p != null ? BORDE[tono(p)] : ''}`}>
+                <p className="mb-1 text-[11px] text-sub">Semana {i + 1}</p>
+                <Fila t="Venta" v={venta ? plata(venta) : '—'} />
+                <Fila t="Objetivo" v={plata(obj)} />
+                <Fila t="Dif." v={venta ? plata(venta - objPas) : '—'} />
+                <Fila t="%" v={p != null ? <span className={`font-bold ${TEXTO[tono(p)]}`}>{pct(p)}</span> : '—'} />
+              </div>,
+            ]
+          })}
+        </div>
+      </div>
+      <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-sub">
+        <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-emerald-500" />100% o más</span>
+        <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-amber-500" />80% a 99%</span>
+        <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-red-500" />menos de 80%</span>
+        <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-slate-500" />feriado o no abre: sin objetivo</span>
+        <span>El % y la diferencia cuentan solo los días que ya pasaron.</span>
+      </p>
+    </>
+  )
+}
+
+function CeldaDia({ d, hoy }: { d: Dia | null; hoy: string }) {
+  if (!d) return <div />
+  const sinObjetivo = d.objetivo === 0 && (d.feriado || !d.opera)
+  const p = d.fecha < hoy && d.objetivo ? (100 * (d.venta ?? 0)) / d.objetivo : null
+  if (sinObjetivo) {
+    return (
+      <div className="rounded-lg border border-line border-l-4 border-l-slate-500 bg-paper px-2 py-1.5"
+        style={{ backgroundImage: 'repeating-linear-gradient(135deg, rgba(148,163,184,.10) 0 8px, transparent 8px 16px)' }}>
+        <p className="mb-1 flex items-center justify-between text-[11px] text-sub">{ddmm(d.fecha)}
+          <span className="rounded-full bg-line px-1.5 text-[10px] text-ink">{d.feriado ? 'Feriado' : 'No abre'}</span></p>
+        <Fila t="Venta" v={d.venta != null ? plata(d.venta) : '—'} />
+        <Fila t="Objetivo" v="sin objetivo" />
+        <Fila t="Dif." v="—" />
+        <Fila t="%" v="—" />
+      </div>
+    )
+  }
+  return (
+    <div className={`rounded-lg border border-line border-l-4 bg-paper px-2 py-1.5 ${p != null ? BORDE[tono(p)] : ''} ${d.fecha === hoy ? 'ring-2 ring-amber-400' : ''}`}>
+      <p className="mb-1 text-[11px] text-sub">{ddmm(d.fecha)}</p>
+      <Fila t="Venta" v={d.venta != null ? plata(d.venta) : '—'} />
+      <Fila t="Objetivo" v={plata(d.objetivo)} />
+      <Fila t="Dif." v={p != null ? plata((d.venta ?? 0) - d.objetivo) : '—'} />
+      <Fila t="%" v={p != null ? <span className={`font-bold ${TEXTO[tono(p)]}`}>{pct(p)}</span> : '—'} />
+    </div>
+  )
+}
+
+function Fila({ t, v }: { t: string; v: ReactNode }) {
+  return <p className="flex justify-between gap-2 text-xs leading-5"><span className="text-sub">{t}</span><b className="whitespace-nowrap font-semibold text-ink">{v}</b></p>
+}
+
+function Kpi({ titulo, valor }: { titulo: string; valor: string }) {
+  return (
+    <div className="rounded-xl border border-line bg-surface px-3 py-2">
+      <p className="text-[11px] text-sub">{titulo}</p>
+      <p className="text-base font-bold tabular-nums text-ink">{valor}</p>
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/*  Detalle objetivos (admin): por local en el rango Desde / Hasta      */
+/* ------------------------------------------------------------------ */
+function fondoPct(p: number) {
+  if (p >= 100) return p >= 120 ? '#15803d' : '#166534'
+  const t = Math.max(0, Math.min(1, (p - 50) / 50)) // 50% rojo oscuro → 100% oliva
+  return `rgb(${Math.round(127 - 50 * t)},${Math.round(29 + 48 * t)},${Math.round(29 - 9 * t)})`
+}
+
+function DetalleObjetivos({ filas, desde, hasta }: { filas: FilaObj[]; desde: string; hasta: string }) {
+  const porLocal = useMemo(() => {
+    const m = new Map<string, { o: number; v: number }>()
+    for (const f of filas) {
+      const x = m.get(f.local) ?? { o: 0, v: 0 }
+      x.o += f.objetivo ?? 0
+      x.v += f.venta ?? 0
+      m.set(f.local, x)
+    }
+    return [...m.entries()].filter(([, x]) => x.o > 0).sort((a, b) => b[1].v / b[1].o - a[1].v / a[1].o)
+  }, [filas])
+  if (!porLocal.length) return null
+  const to = porLocal.reduce((s, [, x]) => s + x.o, 0), tv = porLocal.reduce((s, [, x]) => s + x.v, 0)
+  const num = 'whitespace-nowrap px-2 py-1 text-right'
+  return (
+    <section className="mt-5 rounded-lg bg-black p-2">
+      <h2 className="mx-1 mb-2 text-lg text-white">DETALLE OBJETIVOS <span className="ml-2 text-xs text-zinc-400">{ddmmaaaa(desde)} al {ddmmaaaa(hasta)}</span></h2>
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-[13px] tabular-nums text-zinc-100">
+          <thead>
+            <tr className="border-b-2 border-red-600 bg-zinc-700 text-left text-xs text-white">
+              <th className="px-2 py-1.5">TIENDA</th><th className="px-2 py-1.5">OBJETIVO</th><th className="border-l-2 border-red-600 px-2 py-1.5">VENTA</th>
+              <th className="px-2 py-1.5">% Completado</th><th className="px-2 py-1.5">DIFERENCIA</th>
+            </tr>
+          </thead>
+          <tbody>
+            {porLocal.map(([l, x], i) => {
+              const p = (100 * x.v) / x.o, d = x.v - x.o
+              return (
+                <tr key={l} className={`border-b border-zinc-800 ${i % 2 ? 'bg-zinc-800' : 'bg-zinc-900'}`}>
+                  <td className="px-2 py-1">{l}</td>
+                  <td className={num}>{plata(x.o)}</td>
+                  <td className={`${num} border-l-2 border-red-600`}>{plata(x.v)}</td>
+                  <td className={num} style={{ background: fondoPct(p) }}>{Math.round(p)} %</td>
+                  <td className={num} style={{ background: d >= 0 ? '#15803d' : '#dc2626' }}>{plata(d)}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+          <tfoot>
+            <tr className="bg-zinc-700 font-bold text-zinc-400">
+              <td className="px-2 py-1">Total</td>
+              <td className={num}>{plata(to)}</td>
+              <td className={`${num} border-l-2 border-red-600`}>{plata(tv)}</td>
+              <td className={num}>{Math.round((100 * tv) / to)} %</td>
+              <td className={num}>{plata(tv - to)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </section>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/*  Comparativo por local (admin)                                       */
+/* ------------------------------------------------------------------ */
+/** lunes de la semana ISO */
+const semanaIso = (f: string) => { const d = new Date(`${f}T12:00:00Z`); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d.toISOString().slice(0, 10) }
+
+function Comparativo({ filas, locales, nom }: { filas: FilaObj[]; locales: string[]; nom: (l: string) => string }) {
+  const tot = (l: string, campo: 'objetivo' | 'venta_base') => filas.reduce((s, f) => (f.local === l && f.objetivo != null ? s + (f[campo] ?? 0) : s), 0)
+  const baseGeneral = locales.reduce((s, l) => s + tot(l, 'venta_base'), 0)
+  const objGeneral = locales.reduce((s, l) => s + tot(l, 'objetivo'), 0)
   const controles = useMemo(() => {
+    const fechas = new Set(filas.map((f) => f.fecha)).size
     const dowMal = filas.filter((f) => dow(f.fecha) !== dow(f.fecha_base)).length
-    const ratioMal = filas.filter((f) => f.opera && f.venta_base && Math.abs((f.objetivo ?? 0) / f.venta_base - (1 + f.ipc / 100)) > 1e-4).length
+    const ratioMal = filas.filter((f) => f.objetivo != null && f.venta_base && Math.abs(f.objetivo / f.venta_base - (1 + f.ipc / 100)) > 1e-4).length
     // CFR9 vs CFR4: solo semanas ISO enteras dentro del rango base
     const porSemana = new Map<string, { dias: number; cfr9: number; cfr4: number }>()
     for (const f of filas) {
@@ -139,178 +397,51 @@ export default function ObjetivosLocales() {
     const enteras = [...porSemana.values()].filter((x) => x.dias === 7)
     const t9 = enteras.reduce((s, x) => s + x.cfr9, 0)
     const t4 = enteras.reduce((s, x) => s + x.cfr4, 0)
-    return { dowMal, ratioMal, semanas: enteras.length, t9, t4, okCfr: enteras.length > 0 && Math.abs(t9 - t4) < 1 }
+    return { fechas, dowMal, ratioMal, semanas: enteras.length, t9, t4, okCfr: enteras.length > 0 && Math.abs(t9 - t4) < 1 }
   }, [filas])
 
-  const nom = (l: string) => nombres[l] || l
-  const thSub = 'px-1.5 py-1 text-[10px] font-semibold text-sub'
-
+  if (!filas.length) return <div className="rounded-2xl border border-line bg-surface p-4 text-sm text-sub">Sin IPC cargado para este período.</div>
   return (
-    <Layout>
-      <BackButton />
-      <header className="mb-4 mt-2 flex flex-wrap items-center gap-2">
-        <h1 className="flex items-center gap-2 font-display text-2xl font-semibold text-ink">
-          <Target size={22} className="text-lime-500" aria-hidden /> Objetivos
-        </h1>
-        <span className="text-xs text-sub/70">Venta 2025 del mismo día de la semana × (1 + IPC del mes)</span>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <select value={anio} onChange={(e) => setAnio(Number(e.target.value))} className="h-8 rounded-lg border border-line bg-surface2 px-2 text-xs text-ink">
-            {[2026, 2027].map((a) => <option key={a} value={a}>{a}</option>)}
-          </select>
-          {vista !== 'ipc' && (
-            <select value={mes} onChange={(e) => setMes(e.target.value === 'todos' ? 'todos' : Number(e.target.value))} disabled={!mesesConIpc.length}
-              className="h-8 rounded-lg border border-line bg-surface2 px-2 text-xs text-ink disabled:opacity-50">
-              <option value="todos">Todos los meses con IPC</option>
-              {mesesConIpc.map((m) => <option key={m} value={m}>{MESES[m - 1]} {anio}</option>)}
-            </select>
-          )}
-          <button onClick={() => void cargar()} className="btn-press inline-flex h-8 items-center gap-1 rounded-lg border border-line bg-surface2 px-2.5 text-xs font-medium text-ink hover:bg-line">
-            <RefreshCw size={13} className={cargando ? 'animate-spin' : ''} aria-hidden /> Actualizar
-          </button>
-        </div>
-      </header>
-
-      <nav className="mb-4 flex flex-wrap gap-1.5" aria-label="Vistas">
-        {([['dias', 'Objetivos por día'], ['comparativo', 'Comparativo por local'], ['ipc', 'IPC mensual']] as const).map(([v, t]) => (
-          <button key={v} onClick={() => setVista(v)} aria-pressed={vista === v}
-            className={`h-9 rounded-xl px-3 text-sm font-medium transition ${vista === v ? 'bg-brand-600 text-white' : 'border border-line bg-surface text-ink hover:bg-surface2'}`}>{t}</button>
-        ))}
-      </nav>
-
-      {error && <p role="alert" className="mb-4 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
-
-      {vista !== 'ipc' && !mesesConIpc.length && (
-        <div className="rounded-2xl border border-line bg-surface p-4 text-sm text-sub">
-          Todavía no hay IPC cargado para {anio}. Cargalo en <button onClick={() => setVista('ipc')} className="font-semibold text-brand-400 underline">IPC mensual</button> y el objetivo de ese mes se arma solo.
-        </div>
-      )}
-
-      {/* ---------------- Objetivos por día ---------------- */}
-      {vista === 'dias' && mesesConIpc.length > 0 && (
-        cargando && !filas.length ? (
-          <p className="flex items-center gap-2 py-10 text-sub"><Loader2 size={16} className="animate-spin" aria-hidden /> Calculando…</p>
-        ) : (
-          <div className="overflow-x-auto rounded-2xl border border-line bg-surface">
-            <table className="border-collapse text-[11.5px] tabular-nums">
-              <thead>
-                <tr className="bg-surface2">
-                  <th rowSpan={2} className="sticky left-0 z-10 bg-surface2 px-3 py-2 text-left text-[11px] uppercase tracking-wide text-sub">Local</th>
-                  {fechas.map((d) => (
-                    <th key={d} className={`px-1.5 pt-2 text-center text-[11px] font-semibold ${diaMes(d) === 1 ? 'border-l-2 border-line2' : ''} ${dow(d) === 0 ? 'text-amber-400' : 'text-ink'}`}>
-                      {diaMes(d) === 1 || d === fechas[0] ? `${diaMes(d)}/${d.slice(5, 7)}` : diaMes(d)}
-                    </th>
-                  ))}
-                  <th rowSpan={2} className="px-3 py-2 text-right text-[11px] uppercase tracking-wide text-sub">Total</th>
-                </tr>
-                <tr className="bg-surface2">
-                  {fechas.map((d) => <th key={d} className={`${thSub} text-center ${dow(d) === 0 ? 'text-amber-400' : ''}`}>{DIAS[dow(d)]}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {locales.map((l) => (
-                  <tr key={l} className="border-t border-line">
-                    <td className="sticky left-0 z-10 whitespace-nowrap bg-paper px-3 py-1.5 font-medium text-ink">{nom(l)}</td>
-                    {fechas.map((d) => {
-                      const f = celda.get(`${l}|${d}`)
-                      return (
-                        <td key={d} title={f?.opera ? `${nom(l)} · ${d}\nObjetivo ${pesos(f.objetivo ?? 0)}\nVenta ${f.fecha_base}: ${pesos(f.venta_base ?? 0)} · IPC ${pct(f.ipc)}` : `${nom(l)} · ${d}: no opera`}
-                          style={{ background: fondo(f) }}
-                          className={`min-w-[46px] px-1.5 py-1.5 text-right ${diaMes(d) === 1 ? 'border-l-2 border-line2' : ''} ${f?.opera ? 'text-ink' : 'text-sub/50'}`}>
-                          {f?.opera && f.objetivo != null ? corto(f.objetivo) : ''}
-                        </td>
-                      )
-                    })}
-                    <td className="whitespace-nowrap px-3 py-1.5 text-right font-semibold text-ink">{pesos(totLocal(l, 'objetivo'))}</td>
-                  </tr>
-                ))}
-                <tr className="border-t-2 border-line2 bg-surface2 font-semibold">
-                  <td className="sticky left-0 z-10 bg-surface2 px-3 py-1.5 text-ink">Total</td>
-                  {fechas.map((d) => <td key={d} className={`px-1.5 py-1.5 text-right text-ink ${diaMes(d) === 1 ? 'border-l-2 border-line2' : ''}`} title={pesos(totFecha(d))}>{corto(totFecha(d))}</td>)}
-                  <td className="whitespace-nowrap px-3 py-1.5 text-right text-lime-400">{pesos(totGeneral)}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        )
-      )}
-      {vista === 'dias' && mesesConIpc.length > 0 && (
-        <p className="mt-2 text-[11px] text-sub">Celdas en millones (M) o miles (k); pasá el mouse para ver el número entero, la fecha de 2025 que se usó y el IPC. Más verde = día más fuerte de ese local. Gris = el local no operó ese día base (CFR4 cierra los domingos).</p>
-      )}
-
-      {/* ---------------- Comparativo ---------------- */}
-      {vista === 'comparativo' && mesesConIpc.length > 0 && (
-        <div className="overflow-x-auto rounded-2xl border border-line bg-surface p-4">
-          <p className="mb-2 text-xs text-sub">
-            {mes === 'todos' ? `Meses con IPC de ${anio}: ${mesesConIpc.map((m) => MESES[m - 1]).join(', ')}` : `${MESES[mes - 1]} ${anio}`} · venta 2025 corrida 364 días (mismo día de la semana)
-          </p>
-          <table className="w-full text-sm tabular-nums">
-            <thead className="text-left text-[11px] uppercase tracking-wider text-sub/70">
-              <tr>
-                <th className="py-1.5 pr-3">Local</th>
-                <th className="py-1.5 pr-3 text-right">Venta 2025 (mapeada)</th>
-                <th className="py-1.5 pr-3 text-right">Objetivo {anio}</th>
-                <th className="py-1.5 text-right">% aumento</th>
+    <div className="overflow-x-auto rounded-2xl border border-line bg-surface p-4">
+      <p className="mb-2 text-xs text-sub">Venta 2025 corrida 364 días (mismo día de la semana), sin feriados ni días que no abre</p>
+      <table className="w-full text-sm tabular-nums">
+        <thead className="text-left text-[11px] uppercase tracking-wider text-sub/70">
+          <tr>
+            <th className="py-1.5 pr-3">Local</th>
+            <th className="py-1.5 pr-3 text-right">Venta 2025 (mapeada)</th>
+            <th className="py-1.5 pr-3 text-right">Objetivo</th>
+            <th className="py-1.5 text-right">% aumento</th>
+          </tr>
+        </thead>
+        <tbody>
+          {locales.map((l) => {
+            const b = tot(l, 'venta_base'), o = tot(l, 'objetivo')
+            return (
+              <tr key={l} className="border-t border-line">
+                <td className="py-1.5 pr-3 font-medium text-ink">{nom(l)} <span className="text-xs font-normal text-sub">{l}{l === 'CFR4' ? ' · desde CFR9' : ''}</span></td>
+                <td className="py-1.5 pr-3 text-right text-sub">{plata(b)}</td>
+                <td className="py-1.5 pr-3 text-right font-semibold text-ink">{plata(o)}</td>
+                <td className="py-1.5 text-right text-lime-400">{b ? pct(100 * (o / b - 1)) : '—'}</td>
               </tr>
-            </thead>
-            <tbody>
-              {locales.map((l) => {
-                const b = totLocal(l, 'venta_base'), o = totLocal(l, 'objetivo')
-                return (
-                  <tr key={l} className="border-t border-line">
-                    <td className="py-1.5 pr-3 font-medium text-ink">{nom(l)} <span className="text-xs font-normal text-sub">{l}{l === 'CFR4' ? ' · desde CFR9' : ''}</span></td>
-                    <td className="py-1.5 pr-3 text-right text-sub">{pesos(b)}</td>
-                    <td className="py-1.5 pr-3 text-right font-semibold text-ink">{pesos(o)}</td>
-                    <td className="py-1.5 text-right text-lime-400">{b ? pct(100 * (o / b - 1)) : '—'}</td>
-                  </tr>
-                )
-              })}
-              <tr className="border-t-2 border-line2 font-semibold">
-                <td className="py-1.5 pr-3 text-ink">Total</td>
-                <td className="py-1.5 pr-3 text-right text-sub">{pesos(baseGeneral)}</td>
-                <td className="py-1.5 pr-3 text-right text-ink">{pesos(totGeneral)}</td>
-                <td className="py-1.5 text-right text-lime-400">{baseGeneral ? pct(100 * (totGeneral / baseGeneral - 1)) : '—'}</td>
-              </tr>
-            </tbody>
-          </table>
+            )
+          })}
+          <tr className="border-t-2 border-line2 font-semibold">
+            <td className="py-1.5 pr-3 text-ink">Total</td>
+            <td className="py-1.5 pr-3 text-right text-sub">{plata(baseGeneral)}</td>
+            <td className="py-1.5 pr-3 text-right text-ink">{plata(objGeneral)}</td>
+            <td className="py-1.5 text-right text-lime-400">{baseGeneral ? pct(100 * (objGeneral / baseGeneral - 1)) : '—'}</td>
+          </tr>
+        </tbody>
+      </table>
 
-          {/* Controles de la cuenta */}
-          <div className="mt-4 grid gap-2 md:grid-cols-3">
-            <Control ok={controles.dowMal === 0} titulo="Mismo día de la semana" texto={controles.dowMal === 0 ? `Las ${fechas.length} fechas caen el mismo día que en 2025.` : `${controles.dowMal} fechas no coinciden.`} />
-            <Control ok={controles.okCfr} titulo="CFR9 = CFR4 (redistribuido)"
-              texto={controles.semanas ? `${controles.semanas} semanas enteras: CFR9 ${pesos(controles.t9)} · CFR4 ${pesos(controles.t4)}.` : 'No hay semanas enteras en el rango para comparar.'} />
-            <Control ok={controles.ratioMal === 0} titulo="Objetivo / venta = 1 + IPC" texto={controles.ratioMal === 0 ? 'Todas las celdas dan exacto.' : `${controles.ratioMal} celdas no dan.`} />
-          </div>
-        </div>
-      )}
-
-      {/* ---------------- IPC ---------------- */}
-      {vista === 'ipc' && (
-        <div className="rounded-2xl border border-line bg-surface p-4">
-          <p className="mb-3 text-sm text-sub">
-            Cargá el IPC (%) de cada mes de {anio}. Apenas se guarda, el objetivo de ese mes se arma solo con la venta de {anio - 1} del mismo día de la semana.
-            {!puedeEditar && <b className="text-amber-400"> Solo lectura: falta el permiso «Cargar el IPC de los objetivos».</b>}
-          </p>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-6">
-            {MESES.map((n, i) => {
-              const v = ipcs.find((x) => x.anio === anio && x.mes === i + 1)?.pct
-              return (
-                <label key={n} className="rounded-xl border border-line bg-paper p-2">
-                  <span className="block text-[11px] font-semibold uppercase tracking-wide text-sub">{n}</span>
-                  <span className="mt-1 flex items-center gap-1">
-                    <input key={`${anio}-${i}-${v ?? ''}`} defaultValue={v ?? ''} disabled={!puedeEditar} inputMode="decimal" placeholder="—"
-                      onBlur={(e) => void guardarIpc(i + 1, e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                      className="h-9 w-full rounded-lg border border-line2 bg-surface2 px-2 text-right text-sm text-ink disabled:opacity-60" />
-                    <span className="text-sm text-sub">%</span>
-                    {guardando === i + 1 && <Loader2 size={13} className="animate-spin text-sub" aria-hidden />}
-                  </span>
-                  <span className={`mt-1 block text-[11px] ${v != null ? 'text-lime-400' : 'text-sub/60'}`}>{v != null ? 'objetivo armado' : 'sin IPC'}</span>
-                </label>
-              )
-            })}
-          </div>
-        </div>
-      )}
-    </Layout>
+      {/* Controles de la cuenta */}
+      <div className="mt-4 grid gap-2 md:grid-cols-3">
+        <Control ok={controles.dowMal === 0} titulo="Mismo día de la semana" texto={controles.dowMal === 0 ? `Las ${controles.fechas} fechas caen el mismo día que en 2025.` : `${controles.dowMal} fechas no coinciden.`} />
+        <Control ok={controles.okCfr} titulo="CFR9 = CFR4 (redistribuido)"
+          texto={controles.semanas ? `${controles.semanas} semanas enteras: CFR9 ${plata(controles.t9)} · CFR4 ${plata(controles.t4)}.` : 'No hay semanas enteras en el rango para comparar.'} />
+        <Control ok={controles.ratioMal === 0} titulo="Objetivo / venta = 1 + IPC" texto={controles.ratioMal === 0 ? 'Todas las celdas dan exacto.' : `${controles.ratioMal} celdas no dan.`} />
+      </div>
+    </div>
   )
 }
 
@@ -321,6 +452,156 @@ function Control({ ok, titulo, texto }: { ok: boolean; titulo: string; texto: st
         {ok ? <CheckCircle2 size={14} aria-hidden /> : <TriangleAlert size={14} aria-hidden />} {titulo}
       </p>
       <p className="mt-1 text-sub">{texto}</p>
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/*  IPC mensual (admin)                                                 */
+/* ------------------------------------------------------------------ */
+function IpcMensual({ onCambio }: { onCambio: () => void }) {
+  const [anio, setAnio] = useState(periodoDe(hoyIso()).anio)
+  const [ipcs, setIpcs] = useState<Ipc[]>([])
+  const [guardando, setGuardando] = useState<number | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const cargarIpc = useCallback(async () => {
+    if (!supabase) return
+    const { data, error: e } = await supabase.from('ipc_mensual').select('anio,mes,pct').order('anio').order('mes')
+    if (e) setError(e.message)
+    setIpcs(((data as Ipc[] | null) ?? []).map((i) => ({ ...i, pct: Number(i.pct) })))
+  }, [])
+  useEffect(() => { void cargarIpc() }, [cargarIpc])
+
+  async function guardarIpc(m: number, valor: string) {
+    if (!supabase) return
+    const txt = valor.trim().replace(',', '.')
+    const actual = ipcs.find((i) => i.anio === anio && i.mes === m)?.pct
+    setGuardando(m)
+    setError(null)
+    const { error: e } = txt === ''
+      ? await supabase.from('ipc_mensual').delete().eq('anio', anio).eq('mes', m)
+      : Number.isFinite(Number(txt)) && Number(txt) !== actual
+        ? await supabase.from('ipc_mensual').upsert({ anio, mes: m, pct: Number(txt), actualizado_at: new Date().toISOString() })
+        : { error: null }
+    setGuardando(null)
+    if (e) setError(e.message)
+    await cargarIpc()
+    onCambio()
+  }
+
+  return (
+    <div className="rounded-2xl border border-line bg-surface p-4">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <p className="text-sm text-sub">Cargá el IPC (%) de cada mes. Apenas se guarda, se arman los objetivos de ese mes: del 26 del mes anterior al 25.</p>
+        <select value={anio} onChange={(e) => setAnio(Number(e.target.value))} aria-label="Año" className="ml-auto h-8 rounded-lg border border-line bg-surface2 px-2 text-xs text-ink">
+          {[2026, 2027].map((a) => <option key={a} value={a}>{a}</option>)}
+        </select>
+      </div>
+      {error && <p role="alert" className="mb-3 text-sm text-brand-400">{error}</p>}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-6">
+        {MESES.map((n, i) => {
+          const v = ipcs.find((x) => x.anio === anio && x.mes === i + 1)?.pct
+          const r = rangoPeriodo(anio, i + 1)
+          return (
+            <label key={n} className="rounded-xl border border-line bg-paper p-2">
+              <span className="block text-[11px] font-semibold uppercase tracking-wide text-sub">{n}</span>
+              <span className="block text-[10px] text-sub/70">{ddmm(r.desde)} al {ddmm(r.hasta)}</span>
+              <span className="mt-1 flex items-center gap-1">
+                <input key={`${anio}-${i}-${v ?? ''}`} defaultValue={v ?? ''} inputMode="decimal" placeholder="—"
+                  onBlur={(e) => void guardarIpc(i + 1, e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                  className="h-9 w-full rounded-lg border border-line2 bg-surface2 px-2 text-right text-sm text-ink" />
+                <span className="text-sm text-sub">%</span>
+                {guardando === i + 1 && <Loader2 size={13} className="animate-spin text-sub" aria-hidden />}
+              </span>
+              <span className={`mt-1 block text-[11px] ${v != null ? 'text-lime-400' : 'text-sub/60'}`}>{v != null ? 'objetivo armado' : 'sin IPC'}</span>
+            </label>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/*  Feriados sin objetivo (admin)                                       */
+/* ------------------------------------------------------------------ */
+function Feriados({ locales, nom, onCambio }: { locales: string[]; nom: (l: string) => string; onCambio: () => void }) {
+  const [lista, setLista] = useState<Feriado[]>([])
+  const [fecha, setFecha] = useState('')
+  const [local, setLocal] = useState('')
+  const [motivo, setMotivo] = useState('')
+  const [ocupado, setOcupado] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const cargarLista = useCallback(async () => {
+    if (!supabase) return
+    const { data, error: e } = await supabase.from('objetivos_feriados').select('id,fecha,local,motivo').order('fecha', { ascending: false })
+    if (e) setError(e.message)
+    setLista((data as Feriado[] | null) ?? [])
+  }, [])
+  useEffect(() => { void cargarLista() }, [cargarLista])
+
+  async function agregar(e: FormEvent) {
+    e.preventDefault()
+    if (!supabase || !fecha) return
+    setOcupado(true)
+    setError(null)
+    const { error: err } = await supabase.from('objetivos_feriados').insert({ fecha, local: local || null, motivo: motivo.trim() || null })
+    setOcupado(false)
+    if (err) { setError(err.code === '23505' ? 'Ese feriado ya está cargado.' : err.message); return }
+    setFecha(''); setMotivo('')
+    await cargarLista()
+    onCambio()
+  }
+
+  async function quitar(id: number) {
+    if (!supabase) return
+    const { error: err } = await supabase.from('objetivos_feriados').delete().eq('id', id)
+    if (err) { setError(err.message); return }
+    await cargarLista()
+    onCambio()
+  }
+
+  return (
+    <div className="rounded-2xl border border-line bg-surface p-4">
+      <p className="mb-3 text-sm text-sub">Ese día el local no lleva objetivo: no suma al objetivo de la semana ni del mes.</p>
+      <form onSubmit={(e) => void agregar(e)} className="mb-4 flex flex-wrap items-center gap-2">
+        <input id="fer-fecha" type="date" required value={fecha} onChange={(e) => setFecha(e.target.value)} aria-label="Fecha"
+          className="h-9 rounded-lg border border-line bg-surface2 px-2 text-sm text-ink" />
+        <select id="fer-local" value={local} onChange={(e) => setLocal(e.target.value)} aria-label="Local" className="h-9 rounded-lg border border-line bg-surface2 px-2 text-sm text-ink">
+          <option value="">Todos los locales</option>
+          {[...locales].sort((a, b) => nom(a).localeCompare(nom(b))).map((l) => <option key={l} value={l}>{nom(l)}</option>)}
+        </select>
+        <input id="fer-motivo" value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Motivo (opcional)" aria-label="Motivo"
+          className="h-9 min-w-0 flex-1 rounded-lg border border-line bg-surface2 px-2 text-sm text-ink" />
+        <button type="submit" disabled={ocupado || !fecha} className="btn-press h-9 rounded-lg bg-lime-500 px-3 text-sm font-semibold text-black disabled:opacity-50">
+          {ocupado ? 'Guardando…' : 'Agregar feriado'}
+        </button>
+      </form>
+      {error && <p role="alert" className="mb-3 text-sm text-brand-400">{error}</p>}
+      {lista.length ? (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-left text-[11px] uppercase tracking-wider text-sub/70">
+              <tr><th className="py-1.5 pr-3">Fecha</th><th className="py-1.5 pr-3">Día</th><th className="py-1.5 pr-3">Local</th><th className="py-1.5 pr-3">Motivo</th><th /></tr>
+            </thead>
+            <tbody>
+              {lista.map((f) => (
+                <tr key={f.id} className="border-t border-line">
+                  <td className="py-1.5 pr-3 tabular-nums text-ink">{ddmmaaaa(f.fecha)}</td>
+                  <td className="py-1.5 pr-3 text-sub">{DIAS_NOMBRE[dow(f.fecha)]}</td>
+                  <td className="py-1.5 pr-3 text-ink">{f.local ? nom(f.local) : 'Todos los locales'}</td>
+                  <td className="py-1.5 pr-3 text-sub">{f.motivo ?? ''}</td>
+                  <td className="py-1.5 text-right">
+                    <button onClick={() => void quitar(f.id)} className="inline-flex items-center gap-1 text-xs text-red-400 hover:underline"><Trash2 size={13} aria-hidden /> Quitar</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : <p className="text-sm text-sub">No hay feriados cargados.</p>}
     </div>
   )
 }

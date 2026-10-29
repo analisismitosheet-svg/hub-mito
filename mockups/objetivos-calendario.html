@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Objetivos calendario</title>
+<style>
+  :root { --bg:#0f172a; --card:#1e293b; --borde:#334155; --txt:#e2e8f0; --sub:#94a3b8; --acento:#84cc16; --ok:#22c55e; --medio:#f59e0b; --mal:#ef4444; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt); font:14px system-ui, sans-serif; padding:16px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .nota { color:var(--sub); font-size:13px; margin:0 0 16px; }
+  .vistas { display:grid; gap:24px; }
+  .marco { min-width:0; background:var(--card); border:1px solid var(--borde); border-radius:14px; padding:14px; }
+  .rol { display:inline-block; font-size:12px; padding:3px 8px; border-radius:999px; margin-bottom:10px; }
+  .rol.enc { background:#0e7490; } .rol.adm { background:#7c3aed; }
+  .tabs { display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap; }
+  .tab { padding:6px 12px; border-radius:8px; background:#0f172a; color:var(--sub); border:1px solid var(--borde); font-size:13px; }
+  .tab.on { background:var(--acento); color:#0f172a; font-weight:600; border-color:var(--acento); }
+  .barra { display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
+  .mes { font-weight:700; font-size:16px; }
+  .btn { background:#0f172a; border:1px solid var(--borde); color:var(--txt); border-radius:8px; padding:4px 10px; }
+  select { background:#0f172a; color:var(--txt); border:1px solid var(--borde); border-radius:8px; padding:5px 8px; }
+  .fijo { padding:5px 10px; border-radius:8px; background:#0f172a; border:1px solid var(--borde); }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:8px; margin-bottom:12px; }
+  .kpi { background:#0f172a; border:1px solid var(--borde); border-radius:10px; padding:8px 10px; }
+  .kpi .t { font-size:12px; color:var(--sub); }
+  .kpi .v { font-size:16px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .scroll { overflow-x:auto; }
+  .cal { display:grid; grid-template-columns:repeat(7, minmax(160px, 1fr)) minmax(170px, 1.1fr); gap:4px; min-width:1340px; }
+  .cab { font-size:12px; color:var(--sub); text-align:center; padding:4px 0; }
+  .cab.sem { color:var(--acento); font-weight:600; }
+  .dia, .semana { border-radius:8px; padding:6px 8px; background:#0f172a; border:1px solid var(--borde); border-left-width:4px; font-variant-numeric:tabular-nums; }
+  .dia.fuera { background:transparent; border:none; }
+  .dia.hoy { outline:2px solid #fbbf24; }
+  .semana { border-color:var(--acento); }
+  .top { display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px; }
+  .top .n { color:var(--sub); }
+  .p { font-weight:700; }
+  .fila { display:flex; justify-content:space-between; gap:6px; font-size:12px; line-height:1.5; }
+  .fila span:first-child { color:var(--sub); }
+  .fila b { font-weight:600; white-space:nowrap; }
+  .ok { border-left-color:var(--ok); } .ok .p { color:var(--ok); }
+  .medio { border-left-color:var(--medio); } .medio .p { color:var(--medio); }
+  .mal { border-left-color:var(--mal); } .mal .p { color:var(--mal); }
+  .ley { display:flex; gap:14px; font-size:12px; color:var(--sub); margin-top:10px; flex-wrap:wrap; }
+  .ley i { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:4px; vertical-align:-1px; }
+  .dia.feriado { border-left-color:#64748b; background:repeating-linear-gradient(135deg, #0f172a 0 8px, #172033 8px 16px); }
+  .feriado .etq { font-size:11px; color:#cbd5e1; background:#334155; border-radius:999px; padding:1px 7px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; margin-top:8px; }
+  th, td { text-align:left; padding:7px 8px; border-bottom:1px solid var(--borde); }
+  th { color:var(--sub); font-weight:600; font-size:12px; }
+  .quitar { color:var(--mal); background:none; border:none; cursor:pointer; }
+  .alta { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .alta input, .alta select { background:#0f172a; color:var(--txt); border:1px solid var(--borde); border-radius:8px; padding:5px 8px; }
+  .alta button { background:var(--acento); color:#0f172a; border:none; border-radius:8px; padding:6px 12px; font-weight:600; }
+  .rango { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--sub); }
+  .rango input { background:#0f172a; color:var(--txt); border:1px solid var(--borde); border-radius:8px; padding:4px 8px; }
+  .detalle { margin-top:14px; background:#000; border-radius:8px; padding:8px; }
+  .det-tit { font-size:18px; color:#fff; margin:2px 4px 8px; }
+  .det-tit span { font-size:12px; color:var(--sub); margin-left:8px; }
+  table.det { margin:0; font-variant-numeric:tabular-nums; }
+  table.det th { background:#3f3f46; color:#fff; border-bottom:2px solid #dc2626; font-size:12px; }
+  table.det td { border-bottom:1px solid #27272a; background:#18181b; padding:4px 8px; }
+  table.det tr:nth-child(even) td { background:#27272a; }
+  table.det .num { text-align:right; white-space:nowrap; }
+  table.det .sep { border-left:2px solid #dc2626; }
+  table.det tfoot td { background:#3f3f46 !important; color:#a1a1aa; font-weight:700; }
+  .candado { font-size:12px; color:var(--sub); margin-top:6px; }
+</style>
+</head>
+<body>
+<h1>Locales → Objetivos (maqueta)</h1>
+<p class="nota">El mes de objetivos va del 26 al 25: «Octubre 2026» = 26/09 al 25/10. Datos reales de Nuevo Centro; objetivo = venta del mismo día de 2025 × (1 + IPC de prueba 30%).</p>
+
+<div class="vistas">
+  <div class="marco">
+    <span class="rol enc">Encargado de Nuevo Centro (permiso para ver Locales)</span>
+    <div class="tabs"><span class="tab on">Objetivos por día</span></div>
+    <div class="barra">
+      <button class="btn">‹</button><span class="mes">Octubre 2026 <small style="font-weight:400;color:var(--sub)">26/09 al 25/10</small></span><button class="btn">›</button>
+      <span class="fijo">📍 Nuevo Centro</span>
+    </div>
+    <div class="kpis" id="k1"></div>
+    <div class="scroll"><div class="cal" id="cal1"></div></div>
+    <div class="ley"><span><i style="background:var(--ok)"></i>100% o más</span><span><i style="background:var(--medio)"></i>80% a 99%</span><span><i style="background:var(--mal)"></i>menos de 80%</span><span><i style="background:var(--borde)"></i>todavía no pasó</span><span><i style="background:#64748b"></i>feriado, sin objetivo</span></div>
+    <p class="candado">Solo ve su local (el de su usuario). No ve las pestañas Comparativo ni IPC.</p>
+  </div>
+
+  <div class="marco">
+    <span class="rol adm">Admin</span>
+    <div class="tabs"><span class="tab on">Objetivos por día</span><span class="tab">Comparativo por local</span><span class="tab">IPC mensual</span><span class="tab on" style="outline:2px dashed #fbbf24">Feriados (nueva)</span></div>
+    <div class="barra">
+      <button class="btn">‹</button><span class="mes">Octubre 2026 <small style="font-weight:400;color:var(--sub)">26/09 al 25/10</small></span><button class="btn">›</button>
+      <select><option>Nuevo Centro</option><option>Todos los locales</option><option>9 de Julio</option><option>WEB</option><option>…</option></select>
+      <label class="rango">Desde <input id="r-desde" type="date" value="2026-09-26"></label>
+      <label class="rango">Hasta <input id="r-hasta" type="date" value="2026-10-25"></label>
+    </div>
+    <p class="candado" style="margin:0">En «Objetivos por día» ve el mismo calendario y elige el local (o «Todos», que suma). Abajo, la pestaña nueva:</p>
+    <div class="detalle">
+      <div class="det-tit">DETALLE OBJETIVOS <span>26/09/2026 al 25/10/2026</span></div>
+      <div class="scroll"><table class="det" id="det"></table></div>
+    </div>
+    <p class="candado">La tabla toma el rango Desde / Hasta de arriba (por defecto, el período del mes: del 26 al 25) y va de mayor a menor % completado.</p>
+    <h3 style="margin:14px 0 0;font-size:15px">Feriados sin objetivo</h3>
+    <p class="nota" style="margin:2px 0 0">Ese día el local no lleva objetivo: no suma al objetivo de la semana ni del mes.</p>
+    <div class="scroll"><table>
+      <thead><tr><th>Fecha</th><th>Día</th><th>Local</th><th>Motivo</th><th></th></tr></thead>
+      <tbody>
+        <tr><td>12/10/2026</td><td>Lunes</td><td>Nuevo Centro</td><td>Día de la Diversidad Cultural</td><td><button class="quitar">Quitar</button></td></tr>
+        <tr><td>20/11/2026</td><td>Viernes</td><td>Todos los locales</td><td>Día de la Soberanía Nacional</td><td><button class="quitar">Quitar</button></td></tr>
+        <tr><td>08/12/2026</td><td>Martes</td><td>9 de Julio, WEB</td><td>Inmaculada Concepción</td><td><button class="quitar">Quitar</button></td></tr>
+      </tbody>
+    </table></div>
+    <div class="alta">
+      <input id="f-fecha" type="date" value="2026-12-25">
+      <select id="f-local"><option>Todos los locales</option><option>Nuevo Centro</option><option>9 de Julio</option><option>WEB</option><option>…</option></select>
+      <input id="f-motivo" placeholder="Motivo (opcional)" value="Navidad">
+      <button>Agregar feriado</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // [día, objetivo, venta]; objetivo null = el local no abrió ese día del año base
+  const datos = [["26/09",20387088.67,17181056.5],["27/09",20478869.53,18578440.05],["28/09",null,null],["29/09",10169505.97,6627980.45],["30/09",6713761.86,8328701.95],["01/10",9564435.8,8126198.95],["02/10",13735643.61,7830567.62],["03/10",21230606.36,18824713.95],["04/10",17075076.33,14700328.95],["05/10",7797991.76,4925629],["06/10",8357219.46,5934821.5],["07/10",7224563.32,6393441],["08/10",11333705.83,9144077.95],["09/10",27172318.62,7905224],["10/10",19976044.73,20987201.15],["11/10",23596855.88,19075555],["12/10",7289328.48,18025364.7],["13/10",10824311.04,5206035.95],["14/10",8647494.71,4431730],["15/10",13658294.52,11426513.45],["16/10",18193698.06,12782303],["17/10",37116041.3,31066270.8],["18/10",15436114.92,12781640.95],["19/10",8165896.83,6813567.5],["20/10",6884188.84,3827087.5],["21/10",8994445.88,4794733],["22/10",9387333.75,8640783],["23/10",7472551.63,12549404.35],["24/10",23011816.31,18081440],["25/10",15089541.61,13734346]]
+  const FERIADOS = ['12/10']
+  datos.forEach((d) => { if (FERIADOS.includes(d[0]) || d[1] == null) d[1] = 0 })
+  const fmt = (n) => '$ ' + n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const pct = (v, o) => (o ? (v / o) * 100 : 0)
+  const clase = (p) => (p >= 100 ? 'ok' : p >= 80 ? 'medio' : 'mal')
+  const fila = (t, v) => `<div class="fila"><span>${t}</span><b>${v}</b></div>`
+
+  const objMes = datos.reduce((a, d) => a + d[1], 0)
+  const conVenta = datos.filter((d) => d[2] != null)
+  const ventaMes = conVenta.reduce((a, d) => a + d[2], 0)
+  const objALaFecha = conVenta.reduce((a, d) => a + d[1], 0)
+  document.getElementById('k1').innerHTML = [
+    ['Objetivo del período', fmt(objMes)],
+    ['Venta del período', fmt(ventaMes)],
+    ['% cumplido a la fecha', pct(ventaMes, objALaFecha).toFixed(1).replace('.', ',') + ' %'],
+    ['Falta para el objetivo', fmt(objMes - ventaMes)],
+  ].map(([t, v]) => `<div class="kpi"><div class="t">${t}</div><div class="v">${v}</div></div>`).join('')
+
+  const cal = document.getElementById('cal1')
+  ;['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'].forEach((d) => cal.insertAdjacentHTML('beforeend', `<div class="cab">${d}</div>`))
+  cal.insertAdjacentHTML('beforeend', '<div class="cab sem">Total semana</div>')
+  // 26/09/2026 es sábado → 5 huecos antes
+  const celdas = Array(5).fill(null).concat(datos)
+  while (celdas.length % 7) celdas.push(null)
+  for (let s = 0; s < celdas.length / 7; s++) {
+    let obj = 0, venta = 0, objPasado = 0
+    for (let d = 0; d < 7; d++) {
+      const c = celdas[s * 7 + d]
+      if (!c) { cal.insertAdjacentHTML('beforeend', '<div class="dia fuera"></div>'); continue }
+      const [dia, o, v] = c
+      if (!o && !FERIADOS.includes(dia)) {
+        cal.insertAdjacentHTML('beforeend', `<div class="dia feriado"><div class="top"><span class="n">${dia}</span><span class="etq">No abre</span></div>
+          ${fila('Venta', '—')}${fila('Objetivo', 'sin objetivo')}${fila('Dif.', '—')}${fila('%', '—')}</div>`)
+        continue
+      }
+      if (FERIADOS.includes(dia)) {
+        if (v != null) venta += v
+        cal.insertAdjacentHTML('beforeend', `<div class="dia feriado"><div class="top"><span class="n">${dia}</span><span class="etq">Feriado</span></div>
+          ${fila('Venta', v != null ? fmt(v) : '—')}${fila('Objetivo', 'sin objetivo')}${fila('Dif.', '—')}${fila('%', '—')}</div>`)
+        continue
+      }
+      obj += o
+      if (v != null) { venta += v; objPasado += o }
+      const p = v != null ? pct(v, o) : null
+      cal.insertAdjacentHTML('beforeend', `<div class="dia ${p != null ? clase(p) : ''}">
+        <div class="top"><span class="n">${dia}</span></div>
+        ${fila('Venta', v != null ? fmt(v) : '—')}${fila('Objetivo', fmt(o))}${fila('Dif.', v != null ? fmt(v - o) : '—')}${fila('%', p != null ? '<span class="p">' + p.toFixed(1).replace('.', ',') + ' %</span>' : '—')}</div>`)
+    }
+    const p = objPasado ? pct(venta, objPasado) : null
+    cal.insertAdjacentHTML('beforeend', `<div class="semana ${p != null ? clase(p) : ''}">
+      <div class="top"><span class="n">Semana ${s + 1}</span></div>
+      ${fila('Venta', venta ? fmt(venta) : '—')}${fila('Objetivo', fmt(obj))}${fila('Dif.', venta ? fmt(venta - objPasado) : '—')}${fila('%', p != null ? '<span class="p">' + p.toFixed(1).replace('.', ',') + ' %</span>' : '—')}</div>`)
+  }
+
+  // Detalle objetivos (admin): [tienda, objetivo, venta]
+  const det = [["WEB",38605127.61,47763034.39],["CFR4",41489902.1,37421262.5],["NVOCED",414984745.61,338725158.22],["CFPO",79980625.27,63312660.5],["GPAZD",112159929.04,88778836.45],["CFRA",70097021.25,55026988.58],["ESPINOD",266582376.77,204190445.71],["CFD",81998966.65,61677392.5],["9DEJULIO",144493943.89,105979159],["BUSTOD",253414137.93,179370979.19],["CFR9",42494057.19,29123526],["LIBERD",224067993.88,149018953.45],["DINOD",154720069.27,100404049.5],["RUTA9D2",200937268.71,125315835.44],["VCPD",138355300.43,82621340.5],["WALMARTD",171835968.85,102524900.91],["MUNOZ",190652007.15,113030093.41],["RIVERAD",213179188.44,125408045.85]]
+    .sort((a, b) => b[2] / b[1] - a[2] / a[1])
+  const fondoPct = (p) => {
+    if (p >= 100) return p >= 120 ? '#15803d' : '#166534'
+    const t = Math.max(0, Math.min(1, (p - 50) / 50)) // 50% → rojo oscuro, 100% → oliva
+    const r = Math.round(127 + (77 - 127) * t), g = Math.round(29 + (77 - 29) * t), b = Math.round(29 + (20 - 29) * t)
+    return `rgb(${r},${g},${b})`
+  }
+  const pctTxt = (p) => Math.round(p) + ' %'
+  let to = 0, tv = 0
+  const filas = det.map(([l, o, v]) => {
+    to += o; tv += v
+    const p = pct(v, o), d = v - o
+    return `<tr><td>${l}</td><td class="num">${fmt(o)}</td><td class="num sep">${fmt(v)}</td>
+      <td class="num" style="background:${fondoPct(p)}">${pctTxt(p)}</td>
+      <td class="num" style="background:${d >= 0 ? '#15803d' : '#dc2626'}">${fmt(d)}</td></tr>`
+  }).join('')
+  document.getElementById('det').innerHTML = `<thead><tr><th>TIENDA</th><th>OBJETIVO</th><th class="sep">VENTA</th><th>% Completado</th><th>DIFERENCIA</th></tr></thead>
+    <tbody>${filas}</tbody>
+    <tfoot><tr><td>Total</td><td class="num">${fmt(to)}</td><td class="num sep">${fmt(tv)}</td><td class="num">${pctTxt(pct(tv, to))}</td><td class="num">${fmt(tv - to)}</td></tr></tfoot>`
+</script>
+</body>
+</html>
