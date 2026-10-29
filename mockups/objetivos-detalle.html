@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Detalle objetivos</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --paper:#050508; --surface:rgba(255,255,255,.035); --surface2:rgba(255,255,255,.07);
+    --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.18); --ink:#f8fafc; --sub:#94a3b8;
+    --ok:#10b981; --medio:#f59e0b; --mal:#ef4444; --lima:#84cc16;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--paper); color:var(--ink); font:14px 'Plus Jakarta Sans', system-ui, sans-serif; padding:24px 16px; }
+  .nota { color:var(--sub); font-size:12px; margin:0 0 14px; }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:16px; max-width:1100px; }
+  .cab { display:flex; flex-wrap:wrap; align-items:baseline; gap:8px 12px; margin-bottom:14px; }
+  .cab h2 { margin:0; font-size:17px; font-weight:600; display:flex; align-items:center; gap:8px; }
+  .cab h2 i { width:8px; height:8px; border-radius:50%; background:var(--lima); display:inline-block; }
+  .cab .rango { color:var(--sub); font-size:12px; }
+  .chips { margin-left:auto; display:flex; gap:6px; flex-wrap:wrap; }
+  .chip { font-size:11px; padding:3px 9px; border-radius:999px; border:1px solid var(--line); background:var(--surface2); color:var(--sub); }
+  .chip b { font-weight:700; }
+  .scroll { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; min-width:720px; }
+  th { text-align:left; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:rgba(148,163,184,.7); padding:6px 10px; border-bottom:1px solid var(--line2); }
+  th.n, td.n { text-align:right; }
+  .ord { all:unset; cursor:pointer; display:inline-flex; align-items:center; gap:5px; border-radius:6px; padding:2px 4px; margin:-2px -4px; }
+  .ord span { font-size:9px; opacity:.45; }
+  .ord:hover { color:var(--ink); background:var(--surface2); }
+  .ord:focus-visible { outline:2px solid var(--lima); }
+  .ord.on { color:var(--lima); } .ord.on span { opacity:1; }
+  td { padding:9px 10px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  tbody tr:hover td { background:var(--surface2); }
+  td.tienda { border-left:3px solid transparent; }
+  .ok td.tienda { border-left-color:var(--ok); } .medio td.tienda { border-left-color:var(--medio); } .mal td.tienda { border-left-color:var(--mal); }
+  .tienda b { font-weight:600; }
+  .tienda span { color:var(--sub); font-size:11px; margin-left:6px; }
+  .obj { color:var(--sub); }
+  .venta { font-weight:600; }
+  .pct { display:flex; align-items:center; gap:10px; min-width:170px; }
+  .barra { position:relative; flex:1; height:6px; border-radius:999px; background:var(--surface2); overflow:visible; }
+  .barra > i { position:absolute; inset:0 auto 0 0; border-radius:999px; }
+  .barra::after { content:''; position:absolute; left:calc(100% / 1.3); top:-3px; bottom:-3px; width:1px; background:var(--line2); }
+  .pct b { width:46px; text-align:right; font-weight:700; }
+  .ok .pct b, .ok .dif { color:var(--ok); } .medio .pct b { color:var(--medio); } .mal .pct b { color:var(--mal); }
+  .ok .barra > i { background:var(--ok); } .medio .barra > i { background:var(--medio); } .mal .barra > i { background:var(--mal); }
+  .dif { font-weight:600; } .neg { color:#f87171; } .pos { color:var(--ok); }
+  tfoot td { border-bottom:none; border-top:2px solid var(--line2); font-weight:700; padding-top:11px; }
+  tfoot .obj { color:var(--ink); }
+  .ley { display:flex; flex-wrap:wrap; gap:6px 16px; font-size:11px; color:var(--sub); margin-top:12px; }
+  .ley i { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; vertical-align:-1px; }
+</style>
+</head>
+<body>
+<p class="nota">Maqueta: tabla «Detalle objetivos» del admin con el mismo estilo de la pantalla (tarjeta translúcida, bordes finos, colores de cumplimiento del calendario). Datos reales del 26/09 al 25/10 con IPC de prueba 30%.</p>
+
+<section class="card">
+  <div class="cab">
+    <h2><i></i>Detalle objetivos</h2>
+    <span class="rango">26/09/2026 al 25/10/2026</span>
+    <div class="chips" id="chips"></div>
+  </div>
+  <div class="scroll"><table id="t"></table></div>
+  <div class="ley">
+    <span><i style="background:var(--ok)"></i>100% o más</span>
+    <span><i style="background:var(--medio)"></i>80% a 99%</span>
+    <span><i style="background:var(--mal)"></i>menos de 80%</span>
+    <span>La rayita de la barra marca el 100%. Tocá el título de una columna para ordenar; otra vez, al revés.</span>
+  </div>
+</section>
+
+<script>
+  const nombres = { WEB:'WEB', CFR4:'CAPTAIN FIN RIO 4', NVOCED:'NUEVO CENTRO', CFPO:'CAPTAIN FIN PATIO OLMOS', GPAZD:'GENERAL PAZ OUTLET', CFRA:'CAPTAIN FIN RIVERA INDARTE', ESPINOD:'ESPINOSA', CFD:'CAPTAIN FIN BUSTOS', '9DEJULIO':'9 DE JULIO', BUSTOD:'BUSTOS', CFR9:'CAPTAIN FIN RUTA 9', LIBERD:'LIBERTAD', DINOD:'DINO R20', RUTA9D2:'RUTA 9', VCPD:'CARLOS PAZ', WALMARTD:'WALMART', MUNOZ:'MUÑOZ', RIVERAD:'RIVERA' }
+  const det = [["WEB",38605127.61,47763034.39],["CFR4",41489902.1,37421262.5],["NVOCED",414984745.61,338725158.22],["CFPO",79980625.27,63312660.5],["GPAZD",112159929.04,88778836.45],["CFRA",70097021.25,55026988.58],["ESPINOD",266582376.77,204190445.71],["CFD",81998966.65,61677392.5],["9DEJULIO",144493943.89,105979159],["BUSTOD",253414137.93,179370979.19],["CFR9",42494057.19,29123526],["LIBERD",224067993.88,149018953.45],["DINOD",154720069.27,100404049.5],["RUTA9D2",200937268.71,125315835.44],["VCPD",138355300.43,82621340.5],["WALMARTD",171835968.85,102524900.91],["MUNOZ",190652007.15,113030093.41],["RIVERAD",213179188.44,125408045.85]]
+  const plata = (n) => '$ ' + n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const tono = (p) => (p >= 100 ? 'ok' : p >= 80 ? 'medio' : 'mal')
+  // Orden: clic en una columna = descendente; otro clic = ascendente
+  const COLS = [
+    { k: 'tienda', t: 'Tienda', val: (r) => r.nombre },
+    { k: 'obj', t: 'Objetivo', n: true, val: (r) => r.o },
+    { k: 'venta', t: 'Venta', n: true, val: (r) => r.v },
+    { k: 'pct', t: '% completado', val: (r) => r.p },
+    { k: 'dif', t: 'Diferencia', n: true, val: (r) => r.d },
+  ]
+  let orden = { k: 'pct', dir: 'desc' }
+  const filasDatos = det.map(([l, o, v]) => ({ l, nombre: nombres[l] ?? l, o, v, p: (100 * v) / o, d: v - o }))
+  const to = filasDatos.reduce((s, r) => s + r.o, 0), tv = filasDatos.reduce((s, r) => s + r.v, 0)
+  const barra = (p) => `<div class="pct"><div class="barra"><i style="width:${Math.min(p, 130) / 1.3}%"></i></div><b>${Math.round(p)} %</b></div>`
+
+  function dibujar() {
+    const col = COLS.find((c) => c.k === orden.k)
+    const filas = [...filasDatos].sort((a, b) => {
+      const x = col.val(a), y = col.val(b)
+      const c = typeof x === 'string' ? x.localeCompare(y, 'es') : x - y
+      return orden.dir === 'asc' ? c : -c
+    })
+    const cab = COLS.map((c) => {
+      const on = c.k === orden.k
+      const flecha = on ? (orden.dir === 'asc' ? '▲' : '▼') : '↕'
+      return `<th class="${c.n ? 'n' : ''}" aria-sort="${on ? (orden.dir === 'asc' ? 'ascending' : 'descending') : 'none'}">
+        <button class="ord${on ? ' on' : ''}" data-k="${c.k}">${c.t}<span>${flecha}</span></button></th>`
+    }).join('')
+    const cuerpo = filas.map((r) => `<tr class="${tono(r.p)}">
+      <td class="tienda"><b>${r.nombre}</b><span>${r.l}</span></td>
+      <td class="n obj">${plata(r.o)}</td>
+      <td class="n venta">${plata(r.v)}</td>
+      <td>${barra(r.p)}</td>
+      <td class="n dif ${r.d >= 0 ? 'pos' : 'neg'}">${plata(r.d)}</td></tr>`).join('')
+    const pt = (100 * tv) / to
+    document.getElementById('t').innerHTML = `<thead><tr>${cab}</tr></thead><tbody>${cuerpo}</tbody>
+      <tfoot><tr class="${tono(pt)}"><td class="tienda"><b>Total</b></td><td class="n obj">${plata(to)}</td><td class="n venta">${plata(tv)}</td>
+        <td>${barra(pt)}</td><td class="n dif ${tv - to >= 0 ? 'pos' : 'neg'}">${plata(tv - to)}</td></tr></tfoot>`
+  }
+  document.getElementById('t').addEventListener('click', (e) => {
+    const b = e.target.closest('button.ord')
+    if (!b) return
+    orden = orden.k === b.dataset.k ? { k: b.dataset.k, dir: orden.dir === 'desc' ? 'asc' : 'desc' } : { k: b.dataset.k, dir: b.dataset.k === 'tienda' ? 'asc' : 'desc' }
+    dibujar()
+  })
+  dibujar()
+
+  const cuenta = { ok: 0, medio: 0, mal: 0 }
+  for (const r of filasDatos) cuenta[tono(r.p)]++
+  document.getElementById('chips').innerHTML =
+    `<span class="chip"><b style="color:var(--ok)">${cuenta.ok}</b> cumplen</span><span class="chip"><b style="color:var(--medio)">${cuenta.medio}</b> cerca</span><span class="chip"><b style="color:var(--mal)">${cuenta.mal}</b> abajo</span>`
+</script>
+</body>
+</html>

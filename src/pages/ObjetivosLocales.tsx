@@ -107,7 +107,7 @@ export default function ObjetivosLocales() {
     for (const f of filas) tot.set(f.local, (tot.get(f.local) ?? 0) + (f.objetivo ?? 0))
     return [...tot.entries()].sort((a, b) => b[1] - a[1]).map(([l]) => l)
   }, [filas])
-  const nom = (l: string) => nombres[l] || l
+  const nom = useCallback((l: string) => nombres[l] || l, [nombres])
 
   // El que no es admin recibe solo su local; el admin elige (vacío = todos)
   const verLocal = isAdmin ? localSel : (locales[0] ?? miLocal ?? '')
@@ -197,7 +197,7 @@ export default function ObjetivosLocales() {
         )
       )}
 
-      {vista === 'dias' && isAdmin && <DetalleObjetivos filas={detalle} desde={desde} hasta={hasta} />}
+      {vista === 'dias' && isAdmin && <DetalleObjetivos filas={detalle} desde={desde} hasta={hasta} nom={nom} />}
 
       {vista === 'comparativo' && isAdmin && <Comparativo filas={filas} locales={locales} nom={nom} />}
       {vista === 'ipc' && isAdmin && <IpcMensual onCambio={() => void cargar()} />}
@@ -311,14 +311,36 @@ function Kpi({ titulo, valor }: { titulo: string; valor: string }) {
 /* ------------------------------------------------------------------ */
 /*  Detalle objetivos (admin): por local en el rango Desde / Hasta      */
 /* ------------------------------------------------------------------ */
-function fondoPct(p: number) {
-  if (p >= 100) return p >= 120 ? '#15803d' : '#166534'
-  const t = Math.max(0, Math.min(1, (p - 50) / 50)) // 50% rojo oscuro → 100% oliva
-  return `rgb(${Math.round(127 - 50 * t)},${Math.round(29 + 48 * t)},${Math.round(29 - 9 * t)})`
+type ColDetalle = 'tienda' | 'obj' | 'venta' | 'pct' | 'dif'
+interface FilaDetalle { l: string; nombre: string; o: number; v: number; p: number; d: number }
+const COLS_DETALLE: { k: ColDetalle; t: string; num?: boolean; val: (r: FilaDetalle) => number | string }[] = [
+  { k: 'tienda', t: 'Tienda', val: (r) => r.nombre },
+  { k: 'obj', t: 'Objetivo', num: true, val: (r) => r.o },
+  { k: 'venta', t: 'Venta', num: true, val: (r) => r.v },
+  { k: 'pct', t: '% completado', val: (r) => r.p },
+  { k: 'dif', t: 'Diferencia', num: true, val: (r) => r.d },
+]
+const FRANJA = { ok: 'border-l-emerald-500', medio: 'border-l-amber-500', mal: 'border-l-red-500' } as const
+const BARRA = { ok: 'bg-emerald-500', medio: 'bg-amber-500', mal: 'bg-red-500' } as const
+
+/** barra de avance hasta 130%; la rayita marca el 100% */
+function BarraPct({ p }: { p: number }) {
+  const t = tono(p)
+  return (
+    <div className="flex min-w-[170px] items-center gap-2.5">
+      <div className="relative h-1.5 flex-1 rounded-full bg-surface2">
+        <i className={`absolute inset-y-0 left-0 rounded-full ${BARRA[t]}`} style={{ width: `${Math.min(p, 130) / 1.3}%` }} />
+        <i className="absolute -inset-y-[3px] w-px bg-line2" style={{ left: `${100 / 1.3}%` }} />
+      </div>
+      <b className={`w-12 text-right font-bold ${TEXTO[t]}`}>{Math.round(p)} %</b>
+    </div>
+  )
 }
 
-function DetalleObjetivos({ filas, desde, hasta }: { filas: FilaObj[]; desde: string; hasta: string }) {
-  const porLocal = useMemo(() => {
+function DetalleObjetivos({ filas, desde, hasta, nom }: { filas: FilaObj[]; desde: string; hasta: string; nom: (l: string) => string }) {
+  // Clic en una columna = de mayor a menor (Tienda: A a Z); otro clic = al revés
+  const [orden, setOrden] = useState<{ k: ColDetalle; asc: boolean }>({ k: 'pct', asc: false })
+  const datos = useMemo<FilaDetalle[]>(() => {
     const m = new Map<string, { o: number; v: number }>()
     for (const f of filas) {
       const x = m.get(f.local) ?? { o: 0, v: 0 }
@@ -326,47 +348,80 @@ function DetalleObjetivos({ filas, desde, hasta }: { filas: FilaObj[]; desde: st
       x.v += f.venta ?? 0
       m.set(f.local, x)
     }
-    return [...m.entries()].filter(([, x]) => x.o > 0).sort((a, b) => b[1].v / b[1].o - a[1].v / a[1].o)
-  }, [filas])
-  if (!porLocal.length) return null
-  const to = porLocal.reduce((s, [, x]) => s + x.o, 0), tv = porLocal.reduce((s, [, x]) => s + x.v, 0)
-  const num = 'whitespace-nowrap px-2 py-1 text-right'
+    return [...m.entries()].filter(([, x]) => x.o > 0).map(([l, x]) => ({ l, nombre: nom(l), o: x.o, v: x.v, p: (100 * x.v) / x.o, d: x.v - x.o }))
+  }, [filas, nom])
+  const ordenadas = useMemo(() => {
+    const col = COLS_DETALLE.find((c) => c.k === orden.k)!
+    return [...datos].sort((a, b) => {
+      const x = col.val(a), y = col.val(b)
+      const c = typeof x === 'string' ? x.localeCompare(String(y), 'es') : x - Number(y)
+      return orden.asc ? c : -c
+    })
+  }, [datos, orden])
+  if (!datos.length) return null
+
+  const to = datos.reduce((s, r) => s + r.o, 0), tv = datos.reduce((s, r) => s + r.v, 0)
+  const pt = (100 * tv) / to
+  const cuenta = { ok: 0, medio: 0, mal: 0 }
+  for (const r of datos) cuenta[tono(r.p)]++
+  const td = 'whitespace-nowrap px-2.5 py-2'
+  const ordenar = (k: ColDetalle) => setOrden((o) => (o.k === k ? { k, asc: !o.asc } : { k, asc: k === 'tienda' }))
+
   return (
-    <section className="mt-5 rounded-lg bg-black p-2">
-      <h2 className="mx-1 mb-2 text-lg text-white">DETALLE OBJETIVOS <span className="ml-2 text-xs text-zinc-400">{ddmmaaaa(desde)} al {ddmmaaaa(hasta)}</span></h2>
+    <section className="mt-5 rounded-2xl border border-line bg-surface p-4">
+      <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-2">
+        <h2 className="flex items-center gap-2 text-[17px] font-semibold text-ink"><i className="inline-block h-2 w-2 rounded-full bg-lime-500" /> Detalle objetivos</h2>
+        <span className="text-xs text-sub">{ddmmaaaa(desde)} al {ddmmaaaa(hasta)}</span>
+        <div className="ml-auto flex flex-wrap gap-1.5 text-[11px] text-sub">
+          <span className="rounded-full border border-line bg-surface2 px-2 py-0.5"><b className="text-emerald-400">{cuenta.ok}</b> cumplen</span>
+          <span className="rounded-full border border-line bg-surface2 px-2 py-0.5"><b className="text-amber-400">{cuenta.medio}</b> cerca</span>
+          <span className="rounded-full border border-line bg-surface2 px-2 py-0.5"><b className="text-red-400">{cuenta.mal}</b> abajo</span>
+        </div>
+      </div>
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-[13px] tabular-nums text-zinc-100">
+        <table className="w-full min-w-[720px] border-collapse text-sm tabular-nums">
           <thead>
-            <tr className="border-b-2 border-red-600 bg-zinc-700 text-left text-xs text-white">
-              <th className="px-2 py-1.5">TIENDA</th><th className="px-2 py-1.5">OBJETIVO</th><th className="border-l-2 border-red-600 px-2 py-1.5">VENTA</th>
-              <th className="px-2 py-1.5">% Completado</th><th className="px-2 py-1.5">DIFERENCIA</th>
+            <tr className="border-b border-line2">
+              {COLS_DETALLE.map((c) => {
+                const on = orden.k === c.k
+                return (
+                  <th key={c.k} aria-sort={on ? (orden.asc ? 'ascending' : 'descending') : 'none'}
+                    className={`px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider ${c.num ? 'text-right' : 'text-left'}`}>
+                    <button onClick={() => ordenar(c.k)}
+                      className={`-mx-1 inline-flex items-center gap-1 rounded-md px-1 py-0.5 uppercase hover:bg-surface2 hover:text-ink ${on ? 'text-lime-400' : 'text-sub/70'}`}>
+                      {c.t}<span className={`text-[9px] ${on ? '' : 'opacity-50'}`}>{on ? (orden.asc ? '▲' : '▼') : '↕'}</span>
+                    </button>
+                  </th>
+                )
+              })}
             </tr>
           </thead>
           <tbody>
-            {porLocal.map(([l, x], i) => {
-              const p = (100 * x.v) / x.o, d = x.v - x.o
+            {ordenadas.map((r) => {
+              const t = tono(r.p)
               return (
-                <tr key={l} className={`border-b border-zinc-800 ${i % 2 ? 'bg-zinc-800' : 'bg-zinc-900'}`}>
-                  <td className="px-2 py-1">{l}</td>
-                  <td className={num}>{plata(x.o)}</td>
-                  <td className={`${num} border-l-2 border-red-600`}>{plata(x.v)}</td>
-                  <td className={num} style={{ background: fondoPct(p) }}>{Math.round(p)} %</td>
-                  <td className={num} style={{ background: d >= 0 ? '#15803d' : '#dc2626' }}>{plata(d)}</td>
+                <tr key={r.l} className="border-b border-line hover:bg-surface2">
+                  <td className={`${td} border-l-[3px] ${FRANJA[t]}`}><b className="font-semibold text-ink">{r.nombre}</b>{r.nombre !== r.l && <span className="ml-1.5 text-[11px] text-sub">{r.l}</span>}</td>
+                  <td className={`${td} text-right text-sub`}>{plata(r.o)}</td>
+                  <td className={`${td} text-right font-semibold text-ink`}>{plata(r.v)}</td>
+                  <td className={td}><BarraPct p={r.p} /></td>
+                  <td className={`${td} text-right font-semibold ${r.d >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{plata(r.d)}</td>
                 </tr>
               )
             })}
           </tbody>
           <tfoot>
-            <tr className="bg-zinc-700 font-bold text-zinc-400">
-              <td className="px-2 py-1">Total</td>
-              <td className={num}>{plata(to)}</td>
-              <td className={`${num} border-l-2 border-red-600`}>{plata(tv)}</td>
-              <td className={num}>{Math.round((100 * tv) / to)} %</td>
-              <td className={num}>{plata(tv - to)}</td>
+            <tr className="border-t-2 border-line2 font-bold">
+              <td className={`${td} border-l-[3px] ${FRANJA[tono(pt)]} text-ink`}>Total</td>
+              <td className={`${td} text-right text-ink`}>{plata(to)}</td>
+              <td className={`${td} text-right text-ink`}>{plata(tv)}</td>
+              <td className={td}><BarraPct p={pt} /></td>
+              <td className={`${td} text-right ${tv - to >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{plata(tv - to)}</td>
             </tr>
           </tfoot>
         </table>
       </div>
+      <p className="mt-2 text-[11px] text-sub">La rayita de la barra marca el 100%. Tocá el título de una columna para ordenar; otra vez, al revés.</p>
     </section>
   )
 }
