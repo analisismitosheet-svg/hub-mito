@@ -17,8 +17,8 @@
 -- de 2025, el domingo de CFR9 se reparte entre lunes y sábado en proporción a la venta de
 -- cada día. CFR4 = CFR9 sin domingos, con el mismo total semanal (domingo cerrado).
 --
--- Venta = tickets netos (TICKET% no anulados, las notas de crédito restan), igual que la
--- tasa de conversión. La sube el puente: puente-sql/scripts/sync-ventas-locales.js.
+-- Venta = tickets + facturas electrónicas netos (TICKET%, FACTURAELECTRONICA% y
+-- NOTADECREDITOELECTRONICA% no anulados, las notas de crédito restan), como el Excel de objetivos. La sube el puente: puente-sql/scripts/sync-ventas-locales.js.
 --
 -- Aplicado en Supabase (migración objetivos_locales). Idempotente.
 -- ============================================================================

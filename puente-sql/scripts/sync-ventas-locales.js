@@ -4,9 +4,11 @@
  *   node scripts/sync-ventas-locales.js          (últimos 10 días; si nunca corrió, todo desde 2024-12-20)
  *   node scripts/sync-ventas-locales.js --todo   (todo desde 2024-12-20)
  *
- * Venta = tickets netos: comprobantes DESCFW LIKE 'TICKET%' no anulados, TOTAL = suma de
- * FTOTAL × SIGNOMOV (las notas de crédito vienen en positivo con SIGNOMOV -1, así restan) y
- * TICKETS = cantidad de TICKETFACTURA. La WEB (punto 39 de 9 de Julio) cuenta sus facturas electrónicas. Lee el COMPROBANTEV de cada base en el servidor principal
+ * Venta = tickets + facturas electrónicas, netos: comprobantes TICKET%, FACTURAELECTRONICA% y
+ * NOTADECREDITOELECTRONICA% no anulados (sin remitos), TOTAL = suma de FTOTAL × SIGNOMOV (las notas
+ * de crédito vienen en positivo con SIGNOMOV -1, así restan) y TICKETS = cantidad de TICKETFACTURA +
+ * FACTURAELECTRONICA. Es la misma venta que usaba el Excel de objetivos. La WEB (punto 39 de 9 de
+ * Julio) es un local aparte, así que 9 de Julio no cuenta ese punto. Lee el COMPROBANTEV de cada base en el servidor principal
  * (SQL_SERVER del .env), solo lectura.
  *
  * Lo lanza la tarea "MITO - Pedidos franquicias" (sync-franquicias-dragon.ps1, cada 1 min), pero
@@ -43,13 +45,13 @@ const SUPABASE_ANON_KEY = cfg('SUPABASE_ANON_KEY') ?? envHub.VITE_SUPABASE_ANON_
 
 /**
  * Local del hub (tabla locales) → base(s) de Dragon. 9 de Julio cambió de base en mar-2025.
- * Por defecto cuenta los TICKET% del local. Un local puede traer su propio filtro: la WEB es el
- * punto de venta 39 de la base de 9 de Julio y factura con FACTURAELECTRONICA (no ticket).
+ * Por defecto cuenta tickets y facturas electrónicas del local. Un local puede traer su propio
+ * filtro: la WEB es el punto de venta 39 de la base de 9 de Julio (solo factura electrónica).
  */
-const TICKETS = "C.DESCFW LIKE 'TICKET%'"
+const VENTA = "(C.DESCFW LIKE 'TICKET%' OR C.DESCFW LIKE 'FACTURAELECTRONICA%' OR C.DESCFW LIKE 'NOTADECREDITOELECTRONICA%')"
 const WEB = "C.FPTOVEN = 39 AND (C.DESCFW LIKE 'FACTURAELECTRONICA%' OR C.DESCFW LIKE 'NOTADECREDITOELECTRONICA%')"
 const LOCALES = {
-  '9DEJULIO': ['DRAGONFISH_9DEJULIO', 'DRAGONFISH_9DEJUL2'],
+  '9DEJULIO': { bases: ['DRAGONFISH_9DEJULIO', 'DRAGONFISH_9DEJUL2'], filtro: `${VENTA} AND C.FPTOVEN <> 39` },
   WEB: { bases: ['DRAGONFISH_9DEJULIO', 'DRAGONFISH_9DEJUL2'], filtro: WEB },
   BUSTOD: ['DRAGONFISH_BUSTOD'],
   CFD: ['DRAGONFISH_CFD'],
@@ -117,7 +119,7 @@ async function main() {
   const filas = []
   try {
     for (const [local, def] of Object.entries(LOCALES)) {
-      const { bases, filtro } = Array.isArray(def) ? { bases: def, filtro: TICKETS } : def
+      const { bases, filtro } = Array.isArray(def) ? { bases: def, filtro: VENTA } : def
       // Las notas de crédito vienen con FTOTAL positivo y SIGNOMOV = -1: el total es FTOTAL × SIGNOMOV
       const union = bases
         .map((b) => `SELECT CAST(C.FFCH AS date) AS F, C.DESCFW, C.FTOTAL * C.SIGNOMOV AS NETO FROM [${b}].ZooLogic.COMPROBANTEV AS C
