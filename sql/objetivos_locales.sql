@@ -151,9 +151,9 @@ returns table (local text, fecha date, fecha_base date, venta_base numeric, ipc 
 language plpgsql stable security definer set search_path = public as $$
 declare v_local text;
 begin
-  if auth.role() = 'service_role' or private.es_admin() then
+  if auth.role() = 'service_role' or private.es_admin() or private.tengo_permiso('contador.ver_todo') then
     v_local := nullif(upper(btrim(p_local)), '');
-  elsif private.tengo_permiso('objetivos.view') then
+  elsif private.tengo_permiso('objetivos.view') or private.tengo_permiso('conversion.view') then
     v_local := upper(btrim(private.mi_local()));
     if v_local is null or v_local = '' then
       raise exception 'Tu usuario no tiene un local asignado' using errcode = '42501';

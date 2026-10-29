@@ -173,8 +173,17 @@ AS $$
     FROM hoy GROUP BY local
   ),
   por_hora AS (
-    SELECT local, jsonb_agg(jsonb_build_object('hora', hora, 'entradas', e) ORDER BY hora) AS horas
-    FROM (SELECT local, extract(hour FROM ts)::int AS hora, sum(entradas)::int AS e FROM hoy GROUP BY 1, 2) h
+    SELECT local, jsonb_agg(jsonb_build_object(
+             'hora', hora, 'entradas', e, 'salidas', s,
+             'transeuntes', t, 'empleados', emp, 'nuevos', n, 'reingresos', r
+           ) ORDER BY hora) AS horas
+    FROM (
+      SELECT local, extract(hour FROM ts)::int AS hora,
+             sum(entradas)::int AS e, sum(salidas)::int AS s,
+             sum(transeuntes)::int AS t, sum(empleados)::int AS emp,
+             sum(nuevos)::int AS n, sum(reingresos)::int AS r
+      FROM hoy GROUP BY 1, 2
+    ) h
     GROUP BY local
   ),
   pcs AS (

@@ -49,7 +49,7 @@ export interface Dispositivo {
   estado: { version?: string; camaras?: { nombre: string; ok: boolean; fps: number; error: string | null; entradas_hoy?: number; vista_base?: string | null; kbps?: number | null; resolucion?: string }[] } | null
 }
 
-export type Venta = { local: string; fecha: string; tickets: number; total?: number }
+export type Venta = { local: string; fecha: string; hora?: number; tickets: number; total?: number }
 
 export const CLAVE_VISTA = 'contador_vista_ventas'
 const REFRESCO_MS = 60000
@@ -103,8 +103,16 @@ export function aVentas(filas: Record<string, unknown>[]): Venta[] {
     const tickets = Number(col(f, 'tickets', 'cantidad', 'comprobantes', 'ventas'))
     const totalBruto = col(f, 'total', 'importe', 'monto', 'facturado')
     const total = Number(totalBruto)
+    const horaBruta = col(f, 'hora')
+    const hora = horaBruta != null && horaBruta !== '' ? Number(horaBruta) : undefined
     if (!local || !/^\d{4}-\d{2}-\d{2}$/.test(fecha) || !Number.isFinite(tickets)) return []
-    return [{ local, fecha, tickets, ...(totalBruto != null && Number.isFinite(total) ? { total } : {}) }]
+    return [{
+      local,
+      fecha,
+      tickets,
+      ...(totalBruto != null && Number.isFinite(total) ? { total } : {}),
+      ...(hora != null && Number.isInteger(hora) && hora >= 0 && hora <= 23 ? { hora } : {}),
+    }]
   })
 }
 
