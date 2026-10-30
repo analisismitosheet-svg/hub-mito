@@ -386,11 +386,15 @@ async function datosConversion(fecha: string): Promise<DatosConversion> {
     leerVistaRemota(vista, { vista, tope: 20_000 }, 20_000),
     jsonDe<{ codigo: string; nombre: string | null }>('locales?select=codigo,nombre'),
     // Objetivo del día (Locales → Objetivo); si falla, el informe sale sin esas columnas
-    rpc<{ local: string; objetivo: number | null }>('objetivos_locales_dia', { p_desde: fecha, p_hasta: fecha }).catch(() => []),
+    rpc<{ local: string; objetivo: number | null; venta: number | null }>('objetivos_locales_dia', { p_desde: fecha, p_hasta: fecha }).catch(() => []),
   ])
   const objetivos = new Map<string, number>()
+  const ventasDia = new Map<string, number>()
   for (const f of filasObj) {
-    if (f.local && f.objetivo != null && Number.isFinite(Number(f.objetivo))) objetivos.set(String(f.local).trim().toUpperCase(), Number(f.objetivo))
+    const local = String(f.local ?? '').trim().toUpperCase()
+    if (!local) continue
+    if (f.objetivo != null && Number.isFinite(Number(f.objetivo))) objetivos.set(local, Number(f.objetivo))
+    if (f.venta != null && Number.isFinite(Number(f.venta))) ventasDia.set(local, Number(f.venta))
   }
   const ventas = new Map<string, { tickets: number; total: number }>()
   const ventasAntes = new Map<string, { tickets: number; total: number }>()
@@ -406,7 +410,7 @@ async function datosConversion(fecha: string): Promise<DatosConversion> {
     destino.set(local, v)
   }
   const nombres = Object.fromEntries(locales.map((l) => [l.codigo, l.nombre ?? '']))
-  return { fecha, antes, entradas, entradasAntes, ventas, ventasAntes, nombres, objetivos }
+  return { fecha, antes, entradas, entradasAntes, ventas, ventasAntes, nombres, objetivos, ventasDia }
 }
 
 // ---------------------------------------------------------------------------

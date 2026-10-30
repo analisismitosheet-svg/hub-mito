@@ -22,6 +22,8 @@ export interface DatosConversion {
   nombres: Record<string, string>
   /** Objetivo de facturación del día por local (Locales → Objetivo); sin objetivos no salen esas columnas */
   objetivos?: Map<string, number>
+  /** Venta del día de todos los locales (ventas_locales_dia, vía objetivos): para los que no tienen cámara */
+  ventasDia?: Map<string, number>
 }
 
 /** Locales que no van en el contador ni en la tasa de conversión (pantallas e informe) aunque tengan cámara registrada */
@@ -110,7 +112,7 @@ export function bloquesConversion(d: DatosConversion): { subtitulo: string; bloq
   bloques.push({
     tipo: 'tabla',
     columnas: ['Local', 'Entradas', 'Tickets', 'Conversión', 'Facturado', ...(conObj ? ['Objetivo', 'Diferencia'] : []), 'Ticket prom.'],
-    anchos: conObj ? [2.2, 1, 0.9, 1.1, 1.5, 1.5, 1.5, 1.3] : [2.4, 1, 1, 1.2, 1.6, 1.4],
+    anchos: conObj ? [1.9, 1.05, 0.85, 1.25, 1.5, 1.45, 1.5, 1.45] : [2.4, 1, 1, 1.2, 1.6, 1.4],
     alinear: ['izq', 'der', 'der', 'der', 'der', ...(conObj ? (['der', 'der'] as const) : []), 'der'],
     colores: [null, '#2563eb', '#7c3aed', '#16a34a', null, ...(conObj ? ['#475569', null] : []), '#475569'],
     ...(conObj
@@ -125,11 +127,43 @@ export function bloquesConversion(d: DatosConversion): { subtitulo: string; bloq
     filas: [...filas.map(fila), filaTot],
   })
 
+  // Locales sin cámara: no tienen conversión, pero sí facturado contra el objetivo del día
+  const conCamara = new Set(filas.map((f) => f.local))
+  const sinCamara = [...new Set([...(d.objetivos?.keys() ?? []), ...(d.ventasDia?.keys() ?? [])])]
+    .filter((l) => !conCamara.has(l) && !LOCALES_FUERA_DEL_CONTADOR.has(l))
+    .map((local) => ({ local, nombre: (d.nombres[local] || local).toUpperCase(), total: d.ventasDia?.get(local) ?? 0, o: obj(local) }))
+    .sort((a, b) => b.total - a.total)
+  if (sinCamara.length) {
+    const scObj = sinCamara.filter((f) => f.o != null)
+    const scTot = sinCamara.reduce((s, f) => s + f.total, 0)
+    const scObjTot = scObj.reduce((s, f) => s + (f.o ?? 0), 0)
+    const scFactObj = scObj.reduce((s, f) => s + f.total, 0)
+    const avance = (v: number, o: number | undefined) => (o ? `${nf((100 * v) / o)}%` : '—')
+    bloques.push({ tipo: 'seccion', texto: 'Locales sin cámara', color: '#475569' })
+    bloques.push({
+      tipo: 'tabla',
+      columnas: ['Local', 'Facturado', 'Objetivo', '% objetivo', 'Diferencia'],
+      anchos: [2.4, 1.6, 1.6, 1.2, 1.6],
+      alinear: ['izq', 'der', 'der', 'der', 'der'],
+      colores: [null, null, '#475569', null, null],
+      coloresCelda: [
+        ...sinCamara.map((f) => { const c = f.o != null ? colorDif(f.total, f.o) : null; return [null, null, null, c, c] }),
+        (() => { const c = scObj.length ? colorDif(scFactObj, scObjTot) : null; return [null, null, null, c, c] })(),
+      ],
+      total: true,
+      filas: [
+        ...sinCamara.map((f) => [f.nombre, pesos(f.total), f.o != null ? pesos(f.o) : '—', avance(f.total, f.o), f.o != null ? difTxt(f.total - f.o) : '—']),
+        ['Total', pesos(scTot), scObj.length ? pesos(scObjTot) : '—', avance(scFactObj, scObjTot), scObj.length ? difTxt(scFactObj - scObjTot) : '—'],
+      ],
+    })
+  }
+
   const texto = [
     `*Tasa de conversión* — ${corta(d.fecha)}`,
     `Total: ${pct(convTot)} (${nf(tk)} tickets / ${nf(ent)} entradas)${convAntTot != null ? ` · ${puntos(convTot, convAntTot)} vs ${diaCorto(d.antes)}` : ''}`,
     '',
     ...filas.map((f) => { const o = obj(f.local); return `• ${f.nombre || f.local}: ${pct(f.conv)} (${nf(f.tickets)}/${nf(f.entradas)}) · ${pesos(f.total)}${o != null ? ` (obj. ${pesos(o)}, ${difTxt(f.total - o)})` : ''}` }),
+    ...(sinCamara.length ? ['', '_Sin cámara_', ...sinCamara.map((f) => `• ${f.nombre}: ${pesos(f.total)}${f.o != null ? ` (obj. ${pesos(f.o)}, ${difTxt(f.total - f.o)})` : ''}`)] : []),
   ].join('\n')
   return { subtitulo, bloques, texto }
 }
