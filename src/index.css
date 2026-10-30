@@ -391,37 +391,35 @@ select option:disabled {
   font-weight: 700;
   font-size: 1.1em;
   text-transform: uppercase;
-  overflow: hidden;
+  flex-shrink: 0;
+  overflow-wrap: anywhere;
 }
 
 .etiqueta-bulto .etq-line {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  flex-shrink: 0;
+  overflow-wrap: anywhere;
 }
 
 .etiqueta-bulto .etq-dir {
+  flex-shrink: 0;
   font-weight: 700;
   font-size: 1.05em;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
 }
 
+/* OBS ocupa todo el alto libre del membrete (sin tope de renglones) */
 .etiqueta-bulto .etq-obs {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
 }
 
 .etiqueta-bulto .etq-transp {
+  flex-shrink: 0;
   font-weight: 700;
   margin-top: auto;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 /* Zona de impresión: oculta en pantalla, al 100% al imprimir */
