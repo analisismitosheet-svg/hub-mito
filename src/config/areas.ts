@@ -50,6 +50,7 @@ import {
   Home,
   ShieldCheck,
   Navigation,
+  ShoppingBag,
   type LucideIcon,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -238,6 +239,17 @@ export const APPS: AppDef[] = [
     target: '/administradores/stock-valorizado',
     color: '#10b981',
     permiso: 'stock_valorizado.view',
+  },
+  {
+    id: 'ventas-web',
+    areaId: 'administradores',
+    title: 'Ventas web',
+    description: 'Pedidos y facturación de la tienda Tiendanube, día por día.',
+    icon: ShoppingBag,
+    kind: 'internal',
+    target: '/administradores/ventas-web',
+    color: '#a855f7',
+    permiso: 'tiendanube.view',
   },
   {
     id: 'mayorista-repo',

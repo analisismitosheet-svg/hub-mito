@@ -28,6 +28,7 @@
 - `transferencias.view` → [[Transferencias]].
 - `contador.view` → contador de clientes ([[Otros módulos]]).
 - `tracking.view` / `tracking.gestionar` → [[Tracking de transporte]] (área Administradores, `area_administradores.view`).
+- `tiendanube.view` → [[Ventas web (Tiendanube)]] (sin rol: admin + a mano).
 - `compras_precios.view` → [[Comparativa de precios]] (asignado a administrador y compras).
 
 ## Pruebas de RLS

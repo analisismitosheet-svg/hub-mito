@@ -31,6 +31,7 @@ import {
   ShieldCheck,
   Settings,
   Navigation,
+  ShoppingBag,
   Wallet,
   type LucideIcon,
 } from 'lucide-react'
@@ -273,6 +274,10 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
   {
     id: 'stock-valorizado', areaId: 'administradores', titulo: 'Stock valorizado', descripcion: 'Unidades y plata a costo por sucursal',
     icon: Wallet, color: '#10b981', acciones: { ver: 'stock_valorizado.view' },
+  },
+  {
+    id: 'ventas-web', areaId: 'administradores', titulo: 'Ventas web', descripcion: 'Pedidos y facturación de la tienda Tiendanube',
+    icon: ShoppingBag, color: '#a855f7', acciones: { ver: 'tiendanube.view' },
   },
 
   // ===== Configuración =====

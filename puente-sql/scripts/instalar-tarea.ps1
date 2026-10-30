@@ -72,6 +72,16 @@ Register-ScheduledTask -TaskName 'MITO - Sync pedidos venta completo' -Force `
   -Settings $ajustesVentaTodo | Out-Null
 Write-Output 'OK  MITO - Sync pedidos venta completo (todos los dias 6:30)'
 
+# Pedidos de la tienda Tiendanube (API) -> Supabase, para Administradores > Ventas web.
+# Cada 20 minutos trae lo modificado desde la ultima corrida (marca en data\sync-tiendanube.json).
+$cada20 = New-ScheduledTaskTrigger -Once -At (Get-Date).Date.AddMinutes(7) -RepetitionInterval (New-TimeSpan -Minutes 20)
+Register-ScheduledTask -TaskName 'MITO - Sync Tiendanube' -Force `
+  -Description 'Copia los pedidos de Tiendanube (Indonesiashop) modificados desde la ultima corrida a Supabase cada 20 minutos. Log: puente-sql\data\sync-tiendanube.log' `
+  -Action (Accion 'sync-tiendanube.ps1') `
+  -Trigger $cada20 `
+  -Settings $ajustesPedidos | Out-Null
+Write-Output 'OK  MITO - Sync Tiendanube (cada 20 minutos)'
+
 # Vigilante: cada 5 minutos revisa puente local, Funnel y el camino desde el hub; arregla solo.
 $cada5 = New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval (New-TimeSpan -Minutes 5)
 $ajustesVig = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
