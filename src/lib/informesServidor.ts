@@ -379,13 +379,19 @@ async function datosConversion(fecha: string): Promise<DatosConversion> {
   const cfgVista = await jsonDe<{ valor: unknown }>('config_app?clave=eq.contador_vista_ventas&select=valor')
   const vista = typeof cfgVista[0]?.valor === 'string' ? (cfgVista[0].valor as string) : ''
   if (!vista) throw new Error('Falta configurar la vista de ventas del contador (config_app contador_vista_ventas)')
-  const [entradas, entradasAntes, filasVentas, locales] = await Promise.all([
+  const [entradas, entradasAntes, filasVentas, locales, filasObj] = await Promise.all([
     entradasDelDia(fecha),
     entradasDelDia(antes),
     // Una fila por local y día (180 días, ~1.200 filas): se pide entera, sin el tope general
     leerVistaRemota(vista, { vista, tope: 20_000 }, 20_000),
     jsonDe<{ codigo: string; nombre: string | null }>('locales?select=codigo,nombre'),
+    // Objetivo del día (Locales → Objetivo); si falla, el informe sale sin esas columnas
+    rpc<{ local: string; objetivo: number | null }>('objetivos_locales_dia', { p_desde: fecha, p_hasta: fecha }).catch(() => []),
   ])
+  const objetivos = new Map<string, number>()
+  for (const f of filasObj) {
+    if (f.local && f.objetivo != null && Number.isFinite(Number(f.objetivo))) objetivos.set(String(f.local).trim().toUpperCase(), Number(f.objetivo))
+  }
   const ventas = new Map<string, { tickets: number; total: number }>()
   const ventasAntes = new Map<string, { tickets: number; total: number }>()
   const val = (f: Record<string, unknown>, k: string) => f[k] ?? f[k.toUpperCase()]
@@ -400,7 +406,7 @@ async function datosConversion(fecha: string): Promise<DatosConversion> {
     destino.set(local, v)
   }
   const nombres = Object.fromEntries(locales.map((l) => [l.codigo, l.nombre ?? '']))
-  return { fecha, antes, entradas, entradasAntes, ventas, ventasAntes, nombres }
+  return { fecha, antes, entradas, entradasAntes, ventas, ventasAntes, nombres, objetivos }
 }
 
 // ---------------------------------------------------------------------------
