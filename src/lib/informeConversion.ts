@@ -24,6 +24,9 @@ export interface DatosConversion {
   objetivos?: Map<string, number>
 }
 
+/** Locales que no van en la tasa de conversión (pantalla e informe) aunque tengan cámara registrada */
+export const FUERA_DE_CONVERSION = new Set(['MARIANOMAX'])
+
 const nf = (n: number, dec = 0) => new Intl.NumberFormat('es-AR', { minimumFractionDigits: dec, maximumFractionDigits: dec }).format(n)
 const pesos = (n: number) => `$ ${nf(n)}`
 const pct = (n: number | null) => (n == null ? '—' : `${nf(n, 1)}%`)
@@ -41,7 +44,7 @@ function puntos(act: number | null, ant: number | null): string {
 export function bloquesConversion(d: DatosConversion): { subtitulo: string; bloques: BloqueImagen[]; texto: string } {
   const subtitulo = `Conversión del ${corta(d.fecha)} · vs ${diaCorto(d.antes)}`
   const filas = [...d.entradas.entries()]
-    .filter(([, e]) => e > 0)
+    .filter(([local, e]) => e > 0 && !FUERA_DE_CONVERSION.has(local))
     .map(([local, entradas]) => {
       const v = d.ventas.get(local) ?? { tickets: 0, total: 0 }
       const eAnt = d.entradasAntes.get(local) ?? 0

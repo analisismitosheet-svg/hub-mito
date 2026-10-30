@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase'
 import { leerVista } from '@/lib/sqlApi'
 import { CLAVE_VISTA, aVentas, type Venta, type Dispositivo } from '@/pages/ContadorClientes'
 import { ErrorVideo, pedirPase, urlVideo } from '@/lib/videoContador'
+import { FUERA_DE_CONVERSION } from '@/lib/informeConversion'
 
 /**
  * Tasa de conversión (Locales): video en vivo de la puerta con el conteo
@@ -82,7 +83,7 @@ export default function TasaConversion() {
     if (err) setError(err.message)
     else {
       setError(null)
-      setDatos((data as LocalHoy[]) ?? [])
+      setDatos(((data as LocalHoy[]) ?? []).filter((l) => !FUERA_DE_CONVERSION.has(l.local)))
     }
     if (!objRes.error && Array.isArray(objRes.data)) {
       const m = new Map<string, number>()
