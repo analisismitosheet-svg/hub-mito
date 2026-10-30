@@ -25,7 +25,7 @@ export default function Area() {
   const apps = appsDeAreaConOverrides(areaId, overrides)
     .filter((a) => (!a.permiso || can(a.permiso)) && (!a.soloLegajo || esLegajo || isAdmin))
     .sort((a, b) => a.title.localeCompare(b.title, 'es', { sensitivity: 'base' }))
-  const verArchivos = can('documentos.view')
+  const verArchivos = can('documentos.view') && !AREAS_SIN_ARCHIVOS.has(areaId)
 
   // La luz de fondo de arriba toma el color del área mientras estás adentro
   useEffect(() => {
@@ -102,6 +102,9 @@ export default function Area() {
     </Layout>
   )
 }
+
+/** Áreas donde no se muestra la tarjeta "Archivos" (Administradores: lo pidió sacar el usuario el 30/10/2026). */
+const AREAS_SIN_ARCHIVOS = new Set(['administradores'])
 
 /** Un color por tarjeta sin repetir tonos en el área (Archivos usa el del área). */
 function conColores(
