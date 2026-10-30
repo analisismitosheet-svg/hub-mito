@@ -1,6 +1,6 @@
 # Ventas web (Tiendanube)
 
-Área **Administradores** → `/administradores/ventas-web` (`VentasWeb.tsx`, permiso `tiendanube.view`).
+Área **WEB** (`area_web.view`) → `/web/ventas` (`VentasWeb.tsx`, permiso `tiendanube.view`). Hasta el 30/10/2026 estaba en Administradores; `/administradores/ventas-web` redirige.
 Pedidos de la tienda Tiendanube **Indonesiashop** (`indonesiashop.com.ar`, tienda `1245791`): facturado, pedidos, ticket promedio, unidades, por día, más vendidos, medio de pago, envío/retiro, provincia y la lista de pedidos con sus productos.
 
 ## De dónde salen los datos
@@ -15,7 +15,7 @@ Pedidos de la tienda Tiendanube **Indonesiashop** (`indonesiashop.com.ar`, tiend
 - `tn_pedidos_items`: renglones (`sku`, `nombre` sin variante, `variante` "COLOR / TALLE", `cantidad`, `precio`).
 - `tn_sync`: hora de la última corrida (la muestra la pantalla).
 - **Datos personales**: no se guardan mail, teléfono, DNI ni dirección; solo el nombre de contacto y provincia/ciudad de entrega (de la sucursal si es retiro).
-- RLS: solo lectura con `tiendanube.view`. El permiso **no está en ningún rol** (son números de plata, como Stock valorizado): admin siempre, al resto se le da en Roles.
+- RLS: solo lectura con `tiendanube.view`. Lo trae el **rol `web`** (`sql/area_web.sql`, junto con `area_web.view`): registrar a alguien con rol Web alcanza para que vea el área y las ventas. Admin siempre.
 
 ## Pantalla
 - Rango: Hoy / 7 días / Este mes / Mes anterior o fechas a mano (máx. 400 días). Días en hora de Córdoba.

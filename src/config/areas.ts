@@ -51,6 +51,7 @@ import {
   ShieldCheck,
   Navigation,
   ShoppingBag,
+  Globe,
   type LucideIcon,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -127,6 +128,7 @@ export const AREAS: AreaDef[] = [
   { id: 'mantenimiento', name: 'Mantenimiento', icon: Wrench, accent: 'text-slate-400', color: '#64748b' },
   { id: 'produccion', name: 'Producción', icon: Factory, accent: 'text-yellow-600', color: '#ca8a04' },
   { id: 'administradores', name: 'Administradores', icon: ShieldCheck, accent: 'text-red-600', color: '#dc2626' },
+  { id: 'web', name: 'WEB', icon: Globe, accent: 'text-blue-600', color: '#2563eb' },
 ]
 
 const URL_TRANSPORTE =
@@ -242,12 +244,12 @@ export const APPS: AppDef[] = [
   },
   {
     id: 'ventas-web',
-    areaId: 'administradores',
+    areaId: 'web',
     title: 'Ventas web',
     description: 'Pedidos y facturación de la tienda Tiendanube, día por día.',
     icon: ShoppingBag,
     kind: 'internal',
-    target: '/administradores/ventas-web',
+    target: '/web/ventas',
     color: '#a855f7',
     permiso: 'tiendanube.view',
   },

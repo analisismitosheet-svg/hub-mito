@@ -356,6 +356,7 @@ export default function App() {
               </PermissionRoute>
             }
           />
+          <Route path="/administradores/ventas-web" element={<Navigate to="/web/ventas" replace />} />
           <Route path="/mayorista/franquicias/calzado" element={<Navigate to="/mayorista/franquicias/materiales" replace />} />
           <Route path="/mayorista/franquicias/clientes" element={<Navigate to="/sistemas/franquicias" replace />} />
           <Route
@@ -475,7 +476,7 @@ export default function App() {
             }
           />
           <Route
-            path="/administradores/ventas-web"
+            path="/web/ventas"
             element={
               <PermissionRoute permiso="tiendanube.view">
                 <Suspense fallback={null}>
