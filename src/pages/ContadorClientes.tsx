@@ -12,6 +12,7 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import { useAuth } from '@/context/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { leerVista } from '@/lib/sqlApi'
+import { LOCALES_FUERA_DEL_CONTADOR } from '@/lib/informeConversion'
 
 function sb() {
   if (!supabase) throw new Error('Supabase no está configurado.')
@@ -149,15 +150,17 @@ export default function ContadorClientes() {
   const cargar = useCallback(async () => {
     setCargando(true)
     setError(null)
+    // Sin filtro de local se piden todos menos los que no van en el contador (Mariano Max)
+    const pLocales = fLocal ? [fLocal] : locales.length ? locales : null
     const [res, disp] = await Promise.all([
-      sb().rpc('contador_resumen', { p_desde: rango.desde, p_hasta: rango.hasta, p_locales: fLocal ? [fLocal] : null }),
+      sb().rpc('contador_resumen', { p_desde: rango.desde, p_hasta: rango.hasta, p_locales: pLocales }),
       sb().from('contador_dispositivos').select('id,local,nombre,activo,ultimo_latido,estado').order('local'),
     ])
     if (res.error) setError(res.error.message)
     else setDatos(res.data as Resumen)
-    setDispositivos((disp.data as Dispositivo[] | null) ?? [])
+    setDispositivos(((disp.data as Dispositivo[] | null) ?? []).filter((d) => !LOCALES_FUERA_DEL_CONTADOR.has(d.local)))
     setCargando(false)
-  }, [rango.desde, rango.hasta, fLocal])
+  }, [rango.desde, rango.hasta, fLocal, locales])
 
   useEffect(() => { void cargar() }, [cargar])
   useEffect(() => {
@@ -166,7 +169,7 @@ export default function ContadorClientes() {
   }, [cargar])
 
   useEffect(() => {
-    void sb().from('locales').select('codigo').order('codigo').then(({ data }) => setLocales((data ?? []).map((l) => l.codigo as string).filter((c) => verTodo || c === miLocal)))
+    void sb().from('locales').select('codigo').order('codigo').then(({ data }) => setLocales((data ?? []).map((l) => l.codigo as string).filter((c) => (verTodo || c === miLocal) && !LOCALES_FUERA_DEL_CONTADOR.has(c))))
     void (async () => {
       const { data } = await sb().from('config_app').select('valor').eq('clave', CLAVE_VISTA).maybeSingle()
       const vista = typeof data?.valor === 'string' ? data.valor : ''
