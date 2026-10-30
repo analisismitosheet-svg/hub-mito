@@ -262,6 +262,17 @@ export default function StockValorizado() {
           <button onClick={() => void exportar()} disabled={bases.length === 0} className={btnChico} type="button">
             <Download size={13} aria-hidden /> Excel
           </button>
+          {/* Atajo a la vista: el mismo Excel del botón de la sección ámbar */}
+          {sinCosto.length > 0 && (
+            <button
+              onClick={() => void exportarSinCosto()}
+              className="btn-press inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 text-xs font-medium text-amber-500 transition hover:bg-amber-500/20"
+              title={`Bajar los ${numero(sinCosto.length)} artículos sin costo a Excel`}
+              type="button"
+            >
+              <Download size={13} aria-hidden /> Sin costo ({numero(sinCosto.length)})
+            </button>
+          )}
           <button onClick={() => void cargar(true)} disabled={cargando} className={btnChico} type="button">
             <RefreshCw size={13} className={cargando ? 'animate-spin' : ''} aria-hidden /> Actualizar
           </button>
