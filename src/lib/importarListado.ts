@@ -95,6 +95,21 @@ const MAPEO: Record<string, Record<string, string[]>> = {
 
 const CAMPOS_FECHA = new Set(['fecha_ingreso', 'fecha_nacimiento', 'fecha_egreso', 'fin_plan', 'entrega_remeras'])
 const CAMPOS_NUMERO = new Set(['horas', 'antiguedad_2025', 'dias_vacaciones_2025'])
+const CAMPOS_LOCAL = new Set(['lugar', 'area_sector'])
+const MESES = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE']
+
+/**
+ * Local escrito en la celda. Excel convierte "9/07" en fecha y llega como
+ * número de serie (46212); ningún local es un número, así que se vuelve a
+ * armar el nombre: 9 DE JULIO.
+ */
+function localDeCelda(v: unknown): string | null {
+  const s = String(v ?? '').trim()
+  if (!s) return null
+  if (!/^\d+(\.\d+)?$/.test(s)) return s
+  const iso = fechaExcelAISO(Number(s))
+  return iso ? `${+iso.slice(8, 10)} DE ${MESES[+iso.slice(5, 7) - 1]}` : s
+}
 
 /** Normaliza un encabezado: sin acentos, sin símbolos raros, en minúscula. */
 function norm(s: unknown): string {
@@ -212,6 +227,7 @@ export async function leerListado(file: File, estadoPorDefecto: string): Promise
         const v = (fila as unknown[])[i]
         if (CAMPOS_FECHA.has(campo)) reg[campo] = fechaExcelAISO(v)
         else if (CAMPOS_NUMERO.has(campo)) reg[campo] = aNumero(v)
+        else if (CAMPOS_LOCAL.has(campo)) reg[campo] = localDeCelda(v)
         else reg[campo] = String(v ?? '').trim() || null
       }
       salida.push(reg)
