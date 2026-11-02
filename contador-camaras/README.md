@@ -92,7 +92,7 @@ la cámara puede conectarse con el SDK oficial de Dahua, por el mismo puerto que
 |---|---|
 | **Entradas / salidas** | Modo `zonas`: pasar de la zona exterior (roja) a la interior (azul) y al revés. Modo `linea`: cruzar la línea según la flecha. |
 | **Transeúntes** | Cruzar de la zona A a la B (o al revés) por la vereda sin entrar. En el hub: tasa de atracción = entradas / transeúntes. |
-| **Personal** | Color de credencial/uniforme en el torso (se marca con `calibrar.py`, tecla 6). No suma a entradas ni salidas. |
+| **Personal** | Color de credencial/uniforme en el torso (se marca con `calibrar.py`, tecla 6), o **la cara** (`caras.py`): se carga cada empleado en el hub (IA Cámaras → Calibrar → *Caras del personal*, con fotos o tocándolo en la cámara). Se guarda solo el vector de la cara en `caras_personal.json` (no va a git), nunca fotos ni caras de clientes. Hacen falta 2 coincidencias; si la cara se reconoce hasta 2 min después de contar su entrada, esa entrada pasa de cliente a personal. No suma a entradas ni salidas. Modelos YuNet y SFace de [opencv_zoo](https://github.com/opencv/opencv_zoo) en `modelos/`. |
 | **Grupos** | Clientes que cruzan la puerta juntos: hasta `grupo_segundos` (4) después del anterior y a menos de `grupo_distancia` (0,25 de la imagen) de él. Encadena (A, B a los 3 s, C a los 3 s de B = 1 grupo de 3). Cada uno igual suma su entrada. En el hub: conversión por grupo = tickets / grupos. |
 | **Únicos / reingresos** | `"reid": true`: reconoce si la persona ya entró hoy. Además descarta el doble conteo cuando el seguimiento pierde y recupera a alguien en menos de `dedupe_segundos`. |
 

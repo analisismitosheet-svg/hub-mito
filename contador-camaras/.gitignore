@@ -20,3 +20,5 @@ conexiones tailscail.csv
 *.db-journal
 *.db-wal
 *.db-shm
+caras_personal.json
+caras_personal.tmp

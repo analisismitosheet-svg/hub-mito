@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Loader2, RefreshCw, Save, Undo2, Trash2, ArrowLeftRight, CheckCircle2, AlertTriangle, Crosshair, LayoutGrid, X, ZoomIn, ZoomOut } from 'lucide-react'
+import { Loader2, RefreshCw, Save, Undo2, Trash2, ArrowLeftRight, CheckCircle2, AlertTriangle, Crosshair, LayoutGrid, X, ZoomIn, ZoomOut, ScanFace, Upload } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
@@ -105,6 +105,7 @@ export default function CalibrarCamara() {
   const [base, setBase] = useState<CamEstado | null>(null) // cámara del mismo DVR para pedir fotos de canales
   const [elegirCanal, setElegirCanal] = useState(false)
   const [pase, setPase] = useState<string | null>(null)
+  const [caras, setCaras] = useState(false)
   const [marcando, setMarcando] = useState(false) // pase temporal (alcance gestión) para fotos de la PC contadora
   const [cal, setCal] = useState<Calibracion>(VACIA)
   const [historial, setHistorial] = useState<Calibracion[]>([])
@@ -503,6 +504,14 @@ export default function CalibrarCamara() {
                     <span className="block text-sub/80">Tocá en la foto a alguien del personal con la remera de la empresa. Sirve para todos los locales.</span>
                   </span>
                 </button>
+                <button onClick={() => setCaras(true)} disabled={!base?.vista_base || !pase}
+                  className="flex items-start gap-2 rounded-xl border border-line bg-surface2/60 p-2 text-left text-xs disabled:opacity-50">
+                  <ScanFace size={13} className="mt-0.5 shrink-0 text-lime-500" aria-hidden />
+                  <span>
+                    <span className="font-semibold text-ink">Caras del personal</span>
+                    <span className="block text-sub/80">Cargá la cara de cada empleado (fotos o desde la cámara): no cuenta al entrar ni al salir.</span>
+                  </span>
+                </button>
                 {cal.empleados?.activo && (
                   <div className="flex items-center gap-2 rounded-xl border border-line p-2 text-[11px] text-sub">
                     HSV {cal.empleados.hsv_min.join(',')} → {cal.empleados.hsv_max.join(',')}
@@ -603,6 +612,9 @@ export default function CalibrarCamara() {
       {marcando && base?.vista_base && pase && (
         <MarcarEmpleado base={base.vista_base} camara={base.nombre} pase={pase} onCerrar={() => setMarcando(false)} />
       )}
+      {caras && base?.vista_base && pase && (
+        <CarasPersonal base={base.vista_base} camara={base.nombre} pase={pase} localCam={local} onCerrar={() => setCaras(false)} />
+      )}
       {elegirCanal && base?.vista_base && pase && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true">
           <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-line bg-surface p-4">
@@ -687,6 +699,201 @@ function MarcarEmpleado({ base, camara, pase, onCerrar }: { base: string; camara
           </div>
         )}
         {msg && <p className="mt-2 rounded-xl border border-line bg-surface2 p-2 text-xs text-ink">{msg}</p>}
+      </div>
+    </div>
+  )
+}
+
+interface Empleado { id: string; nombre: string; local: string; vectores: number; alta?: string }
+
+/** Achica la foto en el navegador (las de celular pesan varios MB) y la devuelve en base64 JPEG. */
+async function fotoBase64(archivo: File): Promise<string> {
+  const bmp = await createImageBitmap(archivo)
+  const f = Math.min(1, 1280 / Math.max(bmp.width, bmp.height))
+  const lienzo = document.createElement('canvas')
+  lienzo.width = Math.round(bmp.width * f)
+  lienzo.height = Math.round(bmp.height * f)
+  lienzo.getContext('2d')!.drawImage(bmp, 0, 0, lienzo.width, lienzo.height)
+  return lienzo.toDataURL('image/jpeg', 0.9).split(',')[1]
+}
+
+/**
+ * Caras del personal (contador-camaras/caras.py): quien coincide no suma entradas ni salidas.
+ * La PC contadora guarda solo el vector de cada cara (no la foto). Se cargan subiendo fotos de
+ * frente o tocando a la persona en la foto de la cámara. Sirve para todas las cámaras de esa PC.
+ */
+function CarasPersonal({ base, camara, pase, localCam, onCerrar }: { base: string; camara: string; pase: string; localCam: string; onCerrar: () => void }) {
+  const raiz = base.replace(/\/$/, '')
+  const k = encodeURIComponent(pase)
+  const [personal, setPersonal] = useState<Empleado[] | null>(null)
+  const [disponible, setDisponible] = useState(true)
+  const [nombre, setNombre] = useState('')
+  const [local, setLocal] = useState(localCam)
+  const [msg, setMsg] = useState<string | null>(null)
+  const [enviando, setEnviando] = useState(false)
+  const [foto, setFoto] = useState<{ foto: string | null; cajas: number[][]; aviso?: string } | null>(null)
+  const [borrar, setBorrar] = useState<Empleado | null>(null)
+
+  const cargar = useCallback(async () => {
+    try {
+      const r = await fetch(`${raiz}/personal/${encodeURIComponent(camara)}?k=${k}`)
+      if (!r.ok) throw new Error()
+      const j = (await r.json()) as { personal: Empleado[]; disponible: boolean }
+      setPersonal(j.personal)
+      setDisponible(j.disponible)
+    } catch {
+      setMsg('No se pudo leer el personal de la PC contadora (¿está actualizada y en línea?).')
+      setPersonal([])
+    }
+  }, [raiz, camara, k])
+  useEffect(() => { void cargar() }, [cargar])
+
+  const enviar = async (ruta: string, cuerpo: Record<string, unknown>) => {
+    setEnviando(true)
+    try {
+      const r = await fetch(`${raiz}${ruta}?k=${k}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ camara, ...cuerpo }),
+      })
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; personal?: Empleado[]; empleado?: Empleado }
+      if (j.personal) setPersonal(j.personal)
+      return j
+    } catch {
+      return { ok: false, error: 'No se pudo conectar con la PC contadora.' }
+    } finally {
+      setEnviando(false)
+    }
+  }
+
+  const subirFotos = async (archivos: FileList | null) => {
+    if (!archivos?.length) return
+    if (nombre.trim().length < 2) return setMsg('Primero poné el nombre del empleado.')
+    setMsg(null)
+    let ok = 0
+    const errores: string[] = []
+    for (const a of Array.from(archivos)) {
+      const j = await enviar('/personal/foto', { nombre: nombre.trim(), local, imagen: await fotoBase64(a) })
+      if (j.ok) ok++
+      else errores.push(`${a.name}: ${j.error ?? 'error'}`)
+    }
+    setMsg([ok ? `Guardada${ok > 1 ? 's' : ''} ${ok} cara${ok > 1 ? 's' : ''} de ${nombre.trim()}.` : '', ...errores].filter(Boolean).join(' '))
+  }
+
+  const pedirFoto = async () => {
+    if (nombre.trim().length < 2) return setMsg('Primero poné el nombre del empleado.')
+    setMsg(null)
+    setFoto(null)
+    try {
+      const r = await fetch(`${raiz}/personas/${encodeURIComponent(camara)}?k=${k}`)
+      setFoto(await r.json())
+    } catch {
+      setMsg('No se pudo pedir la foto a la PC contadora.')
+    }
+  }
+
+  const marcar = async (i: number) => {
+    const j = await enviar('/personal/marcar', { indice: i, nombre: nombre.trim(), local })
+    setMsg(j.ok ? `Cara de ${nombre.trim()} guardada desde la cámara.` : j.error ?? 'No se pudo guardar.')
+  }
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true">
+      <div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-line bg-surface p-4">
+        <div className="mb-2 flex items-center gap-2">
+          <ScanFace size={16} className="text-lime-500" aria-hidden />
+          <h2 className="text-sm font-semibold text-ink">Caras del personal</h2>
+          {personal && <span className="text-xs text-sub">{personal.length} persona(s)</span>}
+          <button onClick={onCerrar} className="ml-auto rounded-lg p-1 text-sub hover:bg-surface2" aria-label="Cerrar"><X size={16} /></button>
+        </div>
+        <p className="mb-3 text-xs text-sub">
+          Si la cámara reconoce la cara de alguien de esta lista, sus entradas y salidas no cuentan como clientes (igual que el uniforme).
+          Sirve para todas las cámaras de la PC contadora. Se guarda solo una huella numérica de la cara, no la foto.
+          Conviene cargar 2 o 3 fotos de frente por persona, con buena luz.
+        </p>
+        {!disponible && (
+          <p className="mb-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-300">
+            La PC contadora no tiene los modelos de caras (modelos/face_detection_yunet_2023mar.onnx y face_recognition_sface_2021dec.onnx).
+          </p>
+        )}
+
+        <div className="mb-3 flex flex-wrap items-end gap-2 rounded-xl border border-line bg-surface2/60 p-3">
+          <label className="block">
+            <span className="mb-0.5 block text-[11px] font-medium text-sub">Nombre</span>
+            <input value={nombre} onChange={(e) => setNombre(e.target.value)} maxLength={60} placeholder="Laura Gómez"
+              className="h-8 w-48 rounded-lg border border-line bg-surface px-2 text-xs" />
+          </label>
+          <label className="block">
+            <span className="mb-0.5 block text-[11px] font-medium text-sub">Local</span>
+            <input value={local} onChange={(e) => setLocal(e.target.value.toUpperCase())} maxLength={20}
+              className="h-8 w-28 rounded-lg border border-line bg-surface px-2 text-xs" />
+          </label>
+          <label className={'inline-flex h-8 cursor-pointer items-center gap-1 rounded-lg bg-brand-600 px-3 text-xs font-medium text-white ' + (enviando ? 'opacity-50' : '')}>
+            <Upload size={13} aria-hidden /> Subir fotos
+            <input type="file" accept="image/*" multiple className="hidden" disabled={enviando}
+              onChange={(e) => { void subirFotos(e.target.files); e.target.value = '' }} />
+          </label>
+          <button onClick={() => void pedirFoto()} disabled={enviando}
+            className="inline-flex h-8 items-center gap-1 rounded-lg border border-line bg-surface px-3 text-xs font-medium text-ink disabled:opacity-50">
+            <Crosshair size={13} aria-hidden /> Marcar en la cámara
+          </button>
+          {enviando && <Loader2 size={15} className="animate-spin text-sub" aria-hidden />}
+        </div>
+
+        {msg && <p className="mb-3 rounded-xl border border-line bg-surface2 p-2 text-xs text-ink">{msg}</p>}
+
+        {foto && (
+          <div className="mb-3">
+            <div className="mb-1 flex items-center gap-2 text-xs text-sub">
+              Tocá a {nombre.trim() || 'la persona'} en la foto (tiene que verse la cara de frente).
+              <button onClick={() => void pedirFoto()} className="ml-auto inline-flex h-7 items-center gap-1 rounded-lg border border-line bg-surface2 px-2 text-xs text-ink"><RefreshCw size={12} aria-hidden /> Otra foto</button>
+            </div>
+            {!foto.foto ? (
+              <p className="py-6 text-center text-sm text-sub">{foto.aviso ?? 'No hay personas en cámara ahora.'}</p>
+            ) : (
+              <div className="relative mx-auto w-fit max-w-full overflow-hidden rounded-xl bg-black">
+                <img src={`data:image/jpeg;base64,${foto.foto}`} alt="Foto con las personas detectadas" className="block h-auto max-h-[55vh] w-auto max-w-full" />
+                {foto.cajas.map(([x1, y1, x2, y2], i) => (
+                  <button key={i} disabled={enviando} onClick={() => void marcar(i)} title={`Es ${nombre.trim()}`}
+                    className="absolute rounded border-2 border-lime-400 bg-lime-400/10 hover:bg-lime-400/30"
+                    style={{ left: `${x1 * 100}%`, top: `${y1 * 100}%`, width: `${(x2 - x1) * 100}%`, height: `${(y2 - y1) * 100}%` }} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {!personal ? (
+          <div className="flex items-center justify-center gap-2 py-6 text-sub"><Loader2 size={16} className="animate-spin" aria-hidden /> Cargando…</div>
+        ) : personal.length === 0 ? (
+          <p className="py-4 text-center text-sm text-sub">Todavía no hay personal cargado.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="text-left text-[11px] uppercase tracking-wider text-sub/70">
+              <tr><th className="py-1.5 pr-3">Nombre</th><th className="py-1.5 pr-3">Local</th><th className="py-1.5 pr-3 text-right">Caras</th><th className="py-1.5" /></tr>
+            </thead>
+            <tbody>
+              {personal.map((e) => (
+                <tr key={e.id} className="border-t border-line">
+                  <td className="py-1.5 pr-3 font-medium text-ink">
+                    <button onClick={() => { setNombre(e.nombre); setLocal(e.local) }} className="hover:underline" title="Sumarle otra foto">{e.nombre}</button>
+                  </td>
+                  <td className="py-1.5 pr-3 text-sub">{e.local || '—'}</td>
+                  <td className="py-1.5 pr-3 text-right tabular-nums">{e.vectores}</td>
+                  <td className="py-1.5 text-right">
+                    <button onClick={() => setBorrar(e)} className="inline-flex items-center gap-1 text-xs text-sub hover:text-red-400"><Trash2 size={12} aria-hidden /> Quitar</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {borrar && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-red-500/40 bg-red-500/10 p-2 text-xs text-ink">
+            ¿Quitar a {borrar.nombre}? Se borran sus caras y vuelve a contar como cliente.
+            <button onClick={() => { const id = borrar.id; setBorrar(null); void enviar('/personal/quitar', { id }) }}
+              className="ml-auto rounded-lg bg-red-600 px-2.5 py-1 font-medium text-white">Quitar</button>
+            <button onClick={() => setBorrar(null)} className="rounded-lg border border-line px-2.5 py-1">Cancelar</button>
+          </div>
+        )}
       </div>
     </div>
   )

@@ -13,6 +13,8 @@ Además (opcionales, por cámara):
   - transeúntes: gente que cruza de la zona A a la B (o al revés) por la
     vereda SIN entrar -> tasa de atracción.
   - empleados: color de credencial/uniforme en el torso -> no suman a entradas.
+  - caras del personal (caras.py): si la cara coincide con alguien del personal cargado
+    en el hub, no suma entradas ni salidas. Solo se guardan los vectores del personal.
   - reid: reconoce a la misma persona en el día (únicos vs reingresos) y
     descarta dobles conteos cuando el tracker pierde y recupera a alguien.
     Los vectores viven SOLO en memoria y se borran cada día. Nunca se guardan fotos.
@@ -113,7 +115,7 @@ class Almacen:
                     self.db.execute(f"ALTER TABLE tramos ADD COLUMN {col} INTEGER NOT NULL DEFAULT 0")
             self.db.commit()
 
-    def sumar(self, camara: str, *campos: str) -> None:
+    def sumar(self, camara: str, *campos: str) -> int:
         assert all(c in CAMPOS for c in campos)
         desde = int(time.time()) // TRAMO_S * TRAMO_S
         cols = ", ".join(campos)
@@ -125,6 +127,17 @@ class Almacen:
                     ON CONFLICT (camara, desde) DO UPDATE SET {sets}, pendiente = 1""",
                 (camara, desde),
             )
+            self.db.commit()
+        return desde
+
+    def corregir(self, camara: str, desde: int, restar: tuple[str, ...], sumar: tuple[str, ...]) -> None:
+        """Pasa un conteo ya hecho de unos campos a otros en SU tramo (ej. una entrada de cliente
+        que resultó ser del personal). Nunca deja negativos; se vuelve a subir al hub."""
+        assert all(c in CAMPOS for c in restar + sumar)
+        sets = [f"{c} = MAX({c} - 1, 0)" for c in restar] + [f"{c} = {c} + 1" for c in sumar]
+        with self.lock:
+            self.db.execute(f"UPDATE tramos SET {', '.join(sets)}, pendiente = 1 WHERE camara = ? AND desde = ?",
+                            (camara, desde))
             self.db.commit()
 
     def pendientes(self, limite: int = 1000) -> list[tuple]:
@@ -403,6 +416,7 @@ class Persona:
     entradas: int = 0
     adentro: bool = False
     ultima_entrada: float = -1e12
+    registro: tuple[float, int, tuple[str, ...]] | None = None  # (cuándo, tramo, campos) de su última entrada de cliente
     empleado: bool = False          # reconocida por el uniforme: sus entradas no cuentan como clientes
     tid: int | None = None          # pista que la está siguiendo ahora
     visto: float = -1e12
@@ -497,6 +511,10 @@ class Pista:
     emp_total: int = 0
     unif_si: int = 0              # votos "tiene el uniforme del personal"
     unif_total: int = 0
+    cara_si: int = 0              # cuadros en que la cara coincidió con alguien del personal
+    cara_intentos: int = 0
+    cara_nombre: str | None = None  # del personal, reconocido por la cara
+    registro: tuple[float, int, tuple[str, ...]] | None = None  # entrada de cliente contada (cuándo, tramo, campos)
     cnn: np.ndarray | None = None  # sumas de apariencia de esta pista (hasta saber quién es)
     col: np.ndarray | None = None
     n: int = 0
@@ -545,6 +563,11 @@ class Camara(threading.Thread):
         self.n_grupo = 0                       # grupos abiertos (numeración para el video)
         self.tamano_grupo: dict[int, int] = {}  # nro de grupo -> personas que entraron con él
         self.uniforme = uniforme_compartido(float(cfg.get("uniforme_umbral", 0.86))) if cam.get("uniforme", True) else None
+        if cam.get("caras", True):
+            from caras import Caras
+            self.caras = Caras.compartida()
+        else:
+            self.caras = None
         self.ultima_deteccion = None  # (cuadro, cajas normalizadas) para marcar empleados desde el hub
         self.fps = 0.0
         self.errores_gpu = 0  # errores de GPU seguidos: si se repiten, se reinicia el proceso
@@ -810,6 +833,19 @@ class Camara(threading.Thread):
                 p.unif_si += 1
                 if p.persona is not None and p.unif_si >= 2 and p.unif_si / p.unif_total >= 0.4:
                     p.persona.empleado = True
+        # Cara del personal: hasta 20 intentos por pista, cada 2 cuadros (la cara se ve al entrar de frente)
+        if (self.caras is not None and self.caras.activo and p.cara_nombre is None and p.cara_intentos < 20
+                and recorte.shape[0] >= 60 and self.n_cuadro % 2 == 1):
+            p.cara_intentos += 1
+            r = self.caras.en_persona(recorte)
+            if r:
+                p.cara_si += 1
+                if p.cara_si >= 2:  # 2 cuadros distintos: una sola coincidencia con cara chica puede ser un cliente
+                    p.cara_nombre = r[0]
+                    if p.persona is not None:
+                        p.persona.empleado = True
+                    log.info("[%s] id %s es del personal por la cara: %s (parecido %.2f)", self.nombre, p.tid, r[0], r[1])
+                    self.corregir_entrada(p, ahora)
         if not self.reid:
             return
         if p.persona is not None:
@@ -834,6 +870,10 @@ class Camara(threading.Thread):
 
     def es_empleado(self, p: Pista) -> bool:
         if p.persona is not None and p.persona.empleado:
+            return True
+        if p.cara_nombre:  # reconocido por la cara (el reid lo recuerda el resto del día)
+            if p.persona is not None:
+                p.persona.empleado = True
             return True
         if p.unif_si >= 2 and p.unif_si / max(p.unif_total, 1) >= 0.4:  # uniforme en varias imágenes
             if p.persona is not None:
@@ -936,8 +976,37 @@ class Camara(threading.Thread):
         per.adentro, per.ultima_entrada = True, ahora
         self.registrar(p, "entradas", tipo, *self.grupo_nuevo(p))
 
+    # Una entrada contada como cliente se pasa a personal si la cara se reconoce hasta este tiempo después
+    CORREGIR_S = 120
+
+    def corregir_entrada(self, p: Pista, ahora: float) -> None:
+        """La cara se suele ver bien recién adentro, cuando la entrada ya se contó: se pasa a personal.
+        El grupo solo se descuenta si entró sola (si entró con otros, el grupo sigue existiendo)."""
+        dueno = p if p.registro else p.persona if p.persona is not None and p.persona.registro else None
+        if dueno is None or ahora - dueno.registro[0] > self.CORREGIR_S:
+            return
+        _, desde, campos = dueno.registro
+        restar = tuple(c for c in campos if c != "grupos" or self.tamano_grupo.get(p.grupo, 1) <= 1)
+        self.almacen.corregir(self.nombre, desde, restar, ("empleados",))
+        if self.tamano_grupo.get(p.grupo, 0) > 0:
+            self.tamano_grupo[p.grupo] -= 1
+            # Grupo vacío (era solo ella): quien entre después abre un grupo nuevo, no se suma a uno ya descontado
+            if self.tamano_grupo[p.grupo] == 0 and self.ultimo_cruce and self.ultimo_cruce[3] == p.grupo:
+                self.ultimo_cruce = None
+        p.registro = None
+        if p.persona is not None:
+            p.persona.registro = None
+            if p.persona.entradas:
+                p.persona.entradas -= 1
+        self.eventos.append("corregida")
+        log.info("[%s] entrada de id %s corregida: era del personal (%s)", self.nombre, p.tid, " - ".join(restar))
+
     def registrar(self, p: Pista, *campos: str) -> None:
-        self.almacen.sumar(self.nombre, *campos)
+        desde = self.almacen.sumar(self.nombre, *campos)
+        if campos[0] == "entradas":
+            p.registro = (self.reloj(), desde, campos)
+            if p.persona is not None:
+                p.persona.registro = p.registro
         self.eventos.append(campos[0])
         quien = f" persona {p.persona.id}" if p.persona else ""
         log.info("[%s] %s (id %s%s)", self.nombre, " + ".join(c.upper() for c in campos), p.tid, quien)
@@ -955,6 +1024,13 @@ class Camara(threading.Thread):
             if z:
                 cv2.polylines(img, [z.pixeles(ancho, alto)], True, color, 1)
         self.anotar_grupos(img)
+        ahora = self.reloj()
+        for p in self.pistas.values():  # personal reconocido por la cara: no cuenta
+            if p.cara_nombre and p.caja and ahora - p.visto < 1.0:
+                x1, y1, x2, y2 = p.caja
+                cv2.rectangle(img, (x1, y1), (x2, y2), (255, 255, 255), 3)
+                cv2.rectangle(img, (x1, max(0, y1 - 24)), (x1 + 86, max(24, y1)), (255, 255, 255), -1)
+                cv2.putText(img, "Personal", (x1 + 4, max(18, y1 - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2, cv2.LINE_AA)
         return img
 
     # Colores (BGR) para distinguir grupos que están en pantalla a la vez

@@ -16,6 +16,10 @@ canales) exige además el permiso contador.gestionar.
     GET  /canal/<camara>/<n>?k=<pase>      foto de otro canal del DVR     (alcance gestion)
     GET  /personas/<camara>?k=<pase>      foto + personas detectadas (para marcar empleados; gestion)
     POST /empleado?k=<pase>                {"camara", "indice"} -> guarda al marcado como referencia del uniforme
+    GET  /personal/<camara>?k=<pase>       personal reconocido por la cara (nombre, local, cuántas caras) (gestion)
+    POST /personal/foto?k=<pase>           {"camara", "nombre", "local", "imagen": base64 JPEG} -> suma su cara
+    POST /personal/marcar?k=<pase>         {"camara", "indice", "nombre", "local"} -> cara de la persona tocada
+    POST /personal/quitar?k=<pase>         {"camara", "id"} -> borra a esa persona y sus vectores
     GET  /salud                            {"ok": true}
 
 Config (config.json):
@@ -193,6 +197,8 @@ class ServidorVista:
                 url_post = urllib.parse.urlparse(self.path)
                 if url_post.path == "/empleado":
                     return self.marcar_empleado(url_post)
+                if url_post.path in ("/personal/foto", "/personal/marcar", "/personal/quitar"):
+                    return self.personal(url_post)
                 if url_post.path != "/pase":
                     return self.json(404, {"error": "no existe"})
                 if servidor.autorizador is None:
@@ -246,6 +252,51 @@ class ServidorVista:
                 Uniforme.agregar(recorte)
                 return self.json(200, {"ok": True, "referencias": Uniforme.cantidad()})
 
+            def personal(self, url_post) -> None:
+                """Alta/baja de caras del personal (solo vectores; la foto no se guarda)."""
+                import numpy as np
+                from caras import Caras
+                try:
+                    largo = int(self.headers.get("Content-Length") or 0)
+                    if largo > 8_000_000:
+                        return self.json(413, {"error": "la foto es muy pesada (máximo 8 MB)"})
+                    pedido = json.loads(self.rfile.read(largo) or b"{}")
+                except ValueError:
+                    return self.json(400, {"error": "JSON inválido"})
+                nombre_cam = str(pedido.get("camara") or "")
+                pase = urllib.parse.parse_qs(url_post.query).get("k", [""])[0]
+                if not servidor.validar(pase, nombre_cam, "gestion"):
+                    return self.json(401, {"error": "pase invalido o vencido"})
+                caras = Caras.compartida()
+                if url_post.path == "/personal/quitar":
+                    ok = caras.quitar(str(pedido.get("id") or ""))
+                    return self.json(200 if ok else 404, {"ok": ok, "personal": caras.lista()})
+                nombre = str(pedido.get("nombre") or "").strip()
+                if len(nombre) < 2:
+                    return self.json(400, {"error": "poné el nombre del empleado"})
+                if url_post.path == "/personal/foto":
+                    try:
+                        crudo = base64.b64decode(str(pedido.get("imagen") or "").split(",")[-1])
+                        img = cv2.imdecode(np.frombuffer(crudo, np.uint8), cv2.IMREAD_COLOR)
+                    except (ValueError, TypeError):
+                        img = None
+                    if img is None:
+                        return self.json(400, {"error": "no se pudo leer la foto"})
+                else:  # marcar: la persona tocada en la última foto de /personas
+                    try:
+                        i = int(pedido.get("indice"))
+                        cuadro, cajas = servidor.instantaneas[nombre_cam]
+                        x1, y1, x2, y2 = cajas[i]
+                    except (TypeError, ValueError, IndexError, KeyError):
+                        return self.json(400, {"error": "volvé a pedir la foto y tocá una persona"})
+                    h, w = cuadro.shape[:2]
+                    img = cuadro[max(0, int(y1 * h)):int(y2 * h), max(0, int(x1 * w)):int(x2 * w)]
+                vector, motivo = caras.vector_de_foto(img)
+                if vector is None:
+                    return self.json(400, {"error": motivo})
+                emp = caras.agregar(nombre, str(pedido.get("local") or ""), vector)
+                return self.json(200, {"ok": True, "empleado": emp, "personal": caras.lista()})
+
             def do_GET(self):  # noqa: N802
                 url = urllib.parse.urlparse(self.path)
                 if url.path == "/salud":
@@ -253,6 +304,12 @@ class ServidorVista:
                 q = urllib.parse.parse_qs(url.query)
                 pase = q.get("k", [""])[0]
                 partes = url.path.strip("/").split("/", 1)
+                if len(partes) == 2 and partes[0] == "personal":
+                    from caras import Caras
+                    if not servidor.validar(pase, urllib.parse.unquote(partes[1]), "gestion"):
+                        return self.responder(401, b"pase invalido o vencido", "text/plain")
+                    caras = Caras.compartida()
+                    return self.json(200, {"personal": caras.lista(), "disponible": caras.disponible})
                 if len(partes) != 2 or partes[0] not in ("video", "foto", "canales", "canal", "personas"):
                     return self.responder(404, b"no existe", "text/plain")
                 numero = None
