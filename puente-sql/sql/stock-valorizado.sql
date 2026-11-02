@@ -133,15 +133,39 @@ SELECT art, costo, vigencia
   ) x
  WHERE rn = 1;
 
+/* ---- 1e. Costo de DRAGONFISH_OUTLETD: lista OUTLET de INDO ----
+   Lo pidió el usuario el 02/11/2026: lo que está en la base Outlet se valoriza
+   con la lista «OUTLET». Se toma de INDO (la base de costos, más al día que la
+   copia de OUTLETD) con la FECHAVIG más nueva; lo que no tiene precio OUTLET
+   cae a la LISTA0 (#costo) para no quedar en $0. */
+IF OBJECT_ID('tempdb..#costoout') IS NOT NULL DROP TABLE #costoout;
+CREATE TABLE #costoout (art varchar(50) PRIMARY KEY, costo float, vigencia datetime);
+
+INSERT INTO #costoout (art, costo, vigencia)
+SELECT art, costo, vigencia
+  FROM (
+    SELECT LTRIM(RTRIM(ARTICULO)) AS art,
+           CAST(PDIRECTO AS float) AS costo,
+           FECHAVIG AS vigencia,
+           ROW_NUMBER() OVER (
+             PARTITION BY LTRIM(RTRIM(ARTICULO))
+             ORDER BY FECHAVIG DESC, HMODIFW DESC
+           ) AS rn
+      FROM DRAGONFISH_INDOD.ZooLogic.PRECIOAR
+     WHERE LTRIM(RTRIM(LISTAPRE)) = 'OUTLET'
+       AND LTRIM(RTRIM(ISNULL(ARTICULO, ''))) <> ''
+  ) x
+ WHERE rn = 1;
+
 /* ---- 2. Una pasada por base ---- */
 IF OBJECT_ID('tempdb..#bases') IS NOT NULL DROP TABLE #bases;
 CREATE TABLE #bases (base sysname, unidades float, valorizado float, unidades_sin_costo float, skus int);
 
 IF OBJECT_ID('tempdb..#art') IS NOT NULL DROP TABLE #art;
--- costo = el que se usó en ESA base (NOMED usa LISTA9, el resto LISTA0); NULL = sin costo
+-- costo = el que se usó en ESA base (NOMED LISTA9, OUTLETD OUTLET, el resto LISTA0); NULL = sin costo
 CREATE TABLE #art (base sysname, art varchar(50), unidades float, valorizado float, costo float);
 
-DECLARE @b sysname, @sql nvarchar(max), @tc nvarchar(20), @resp bit;
+DECLARE @b sysname, @sql nvarchar(max), @tc nvarchar(20), @tr nvarchar(20), @resp bit;
 DECLARE cur CURSOR LOCAL FAST_FORWARD FOR
   SELECT d.name
     FROM sys.databases d
@@ -160,9 +184,11 @@ BEGIN
   IF OBJECT_ID(QUOTENAME(@b) + '.ZooLogic.COMB') IS NOT NULL
   BEGIN
     BEGIN TRY
-      -- lista de costo de la base (k) y respaldo LISTA9 (k9, solo FABRICA)
-      SET @tc = CASE WHEN @b = 'DRAGONFISH_NOMED' THEN N'#costo9' ELSE N'#costo' END;
-      SET @resp = CASE WHEN @b = 'DRAGONFISH_FABRICA' THEN 1 ELSE 0 END;
+      -- lista de costo de la base (k) y de respaldo (k9) si el artículo no está en la primera:
+      --   NOMED: LISTA9 · FABRICA: LISTA0 y si no LISTA9 · OUTLETD: OUTLET y si no LISTA0 · resto: LISTA0
+      SET @tc = CASE @b WHEN 'DRAGONFISH_NOMED' THEN N'#costo9' WHEN 'DRAGONFISH_OUTLETD' THEN N'#costoout' ELSE N'#costo' END;
+      SET @tr = CASE @b WHEN 'DRAGONFISH_OUTLETD' THEN N'#costo' ELSE N'#costo9' END;
+      SET @resp = CASE WHEN @b IN ('DRAGONFISH_FABRICA', 'DRAGONFISH_OUTLETD') THEN 1 ELSE 0 END;
       SET @sql = N'
         INSERT INTO #bases (base, unidades, valorizado, unidades_sin_costo, skus)
         SELECT @b,
@@ -172,7 +198,7 @@ BEGIN
                COUNT(*)
           FROM ' + QUOTENAME(@b) + N'.ZooLogic.COMB c
           LEFT JOIN ' + @tc + N' k ON k.art = LTRIM(RTRIM(c.COART))
-          LEFT JOIN #costo9 k9 ON k9.art = LTRIM(RTRIM(c.COART)) AND @resp = 1
+          LEFT JOIN ' + @tr + N' k9 ON k9.art = LTRIM(RTRIM(c.COART)) AND @resp = 1
          WHERE c.COCANT > 0
            AND NOT EXISTS (SELECT 1 FROM #sinprov s WHERE s.art = LTRIM(RTRIM(c.COART)));
 
@@ -184,7 +210,7 @@ BEGIN
                MAX(COALESCE(k.costo, k9.costo))
           FROM ' + QUOTENAME(@b) + N'.ZooLogic.COMB c
           LEFT JOIN ' + @tc + N' k ON k.art = LTRIM(RTRIM(c.COART))
-          LEFT JOIN #costo9 k9 ON k9.art = LTRIM(RTRIM(c.COART)) AND @resp = 1
+          LEFT JOIN ' + @tr + N' k9 ON k9.art = LTRIM(RTRIM(c.COART)) AND @resp = 1
          WHERE c.COCANT > 0
            AND NOT EXISTS (SELECT 1 FROM #sinprov s WHERE s.art = LTRIM(RTRIM(c.COART)))
          GROUP BY LTRIM(RTRIM(c.COART));';
@@ -216,8 +242,8 @@ SELECT a.art AS articulo,
        MAX(ISNULL(d.descripcion, '')) AS descripcion,
        SUM(a.unidades) AS unidades,
        SUM(a.valorizado) AS valorizado,
-       -- el de la lista Compra; si el artículo solo está en NOMED, el de su LISTA9
-       COALESCE(MAX(CASE WHEN a.base <> 'DRAGONFISH_NOMED' THEN a.costo END), MAX(a.costo)) AS costo
+       -- el de la lista Compra; si el artículo solo está en NOMED u OUTLETD, el de su lista
+       COALESCE(MAX(CASE WHEN a.base NOT IN ('DRAGONFISH_NOMED', 'DRAGONFISH_OUTLETD') THEN a.costo END), MAX(a.costo)) AS costo
   FROM #art a
   LEFT JOIN #desc d ON d.art = a.art
  GROUP BY a.art
