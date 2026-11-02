@@ -43,6 +43,9 @@ export interface BaseValorizada {
   valorizado: number
   unidades_sin_costo: number
   skus: number
+  /** mercadería en tránsito (ya sumada en unidades/valorizado); falta con un puente viejo */
+  transito?: number
+  transito_val?: number
 }
 
 export interface ArticuloValorizado {
@@ -51,6 +54,8 @@ export interface ArticuloValorizado {
   unidades: number
   valorizado: number
   costo: number | null
+  /** de esas unidades, las que están en tránsito */
+  transito?: number
 }
 
 export interface ArticuloSinCosto {

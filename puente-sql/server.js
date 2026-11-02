@@ -597,6 +597,9 @@ async function stockValorizado(forzar) {
         valorizado: Number(f.valorizado) || 0,
         unidades_sin_costo: Number(f.unidades_sin_costo) || 0,
         skus: Number(f.skus) || 0,
+        // Mercadería en tránsito (ya va sumada en unidades/valorizado)
+        transito: Number(f.transito) || 0,
+        transito_val: Number(f.transito_val) || 0,
       })),
       articulos: articulos.map((f) => ({
         articulo: String(f.articulo ?? '').trim(),
@@ -604,6 +607,7 @@ async function stockValorizado(forzar) {
         unidades: Number(f.unidades) || 0,
         valorizado: Number(f.valorizado) || 0,
         costo: f.costo == null ? null : Number(f.costo),
+        transito: Number(f.transito) || 0,
       })),
       costo: {
         lista: 'LISTA0',

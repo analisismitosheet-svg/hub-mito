@@ -157,13 +157,19 @@ SELECT art, costo, vigencia
   ) x
  WHERE rn = 1;
 
-/* ---- 2. Una pasada por base ---- */
+/* ---- 2. Una pasada por base ----
+   Unidades = stock (COCANT > 0) + MERCADERÍA EN TRÁNSITO (ENTRANSITO > 0), pedido del
+   usuario el 02/11/2026. Dragon descuenta del stock de origen al mandar y el envío
+   figura en tránsito en UNA sola base hasta que se recibe (comprobado siguiendo un SKU
+   por todas las bases), así que se suma una vez, con el costo de la base donde figura. */
 IF OBJECT_ID('tempdb..#bases') IS NOT NULL DROP TABLE #bases;
-CREATE TABLE #bases (base sysname, unidades float, valorizado float, unidades_sin_costo float, skus int);
+-- unidades/valorizado ya incluyen lo que está en tránsito; transito/transito_val es esa parte sola
+CREATE TABLE #bases (base sysname, unidades float, valorizado float, unidades_sin_costo float, skus int,
+                     transito float, transito_val float);
 
 IF OBJECT_ID('tempdb..#art') IS NOT NULL DROP TABLE #art;
 -- costo = el que se usó en ESA base (NOMED LISTA9, OUTLETD OUTLET, el resto LISTA0); NULL = sin costo
-CREATE TABLE #art (base sysname, art varchar(50), unidades float, valorizado float, costo float);
+CREATE TABLE #art (base sysname, art varchar(50), unidades float, valorizado float, costo float, transito float);
 
 DECLARE @b sysname, @sql nvarchar(max), @tc nvarchar(20), @tr nvarchar(20), @resp bit;
 DECLARE cur CURSOR LOCAL FAST_FORWARD FOR
@@ -190,28 +196,35 @@ BEGIN
       SET @tr = CASE @b WHEN 'DRAGONFISH_OUTLETD' THEN N'#costo' ELSE N'#costo9' END;
       SET @resp = CASE WHEN @b IN ('DRAGONFISH_FABRICA', 'DRAGONFISH_OUTLETD') THEN 1 ELSE 0 END;
       SET @sql = N'
-        INSERT INTO #bases (base, unidades, valorizado, unidades_sin_costo, skus)
+        INSERT INTO #bases (base, unidades, valorizado, unidades_sin_costo, skus, transito, transito_val)
         SELECT @b,
-               SUM(CAST(c.COCANT AS float)),
-               SUM(CAST(c.COCANT AS float) * ISNULL(COALESCE(k.costo, k9.costo), 0)),
-               SUM(CASE WHEN COALESCE(k.costo, k9.costo) IS NULL THEN CAST(c.COCANT AS float) ELSE 0 END),
-               COUNT(*)
+               SUM(q.cant),
+               SUM(q.cant * ISNULL(COALESCE(k.costo, k9.costo), 0)),
+               SUM(CASE WHEN COALESCE(k.costo, k9.costo) IS NULL THEN q.cant ELSE 0 END),
+               COUNT(*),
+               SUM(q.trans),
+               SUM(q.trans * ISNULL(COALESCE(k.costo, k9.costo), 0))
           FROM ' + QUOTENAME(@b) + N'.ZooLogic.COMB c
+          CROSS APPLY (SELECT CASE WHEN c.ENTRANSITO > 0 THEN CAST(c.ENTRANSITO AS float) ELSE 0 END AS trans) t
+          CROSS APPLY (SELECT CASE WHEN c.COCANT > 0 THEN CAST(c.COCANT AS float) ELSE 0 END + t.trans AS cant, t.trans) q
           LEFT JOIN ' + @tc + N' k ON k.art = LTRIM(RTRIM(c.COART))
           LEFT JOIN ' + @tr + N' k9 ON k9.art = LTRIM(RTRIM(c.COART)) AND @resp = 1
-         WHERE c.COCANT > 0
+         WHERE (c.COCANT > 0 OR c.ENTRANSITO > 0)
            AND NOT EXISTS (SELECT 1 FROM #sinprov s WHERE s.art = LTRIM(RTRIM(c.COART)));
 
-        INSERT INTO #art (base, art, unidades, valorizado, costo)
+        INSERT INTO #art (base, art, unidades, valorizado, costo, transito)
         SELECT @b,
                LTRIM(RTRIM(c.COART)),
-               SUM(CAST(c.COCANT AS float)),
-               SUM(CAST(c.COCANT AS float) * ISNULL(COALESCE(k.costo, k9.costo), 0)),
-               MAX(COALESCE(k.costo, k9.costo))
+               SUM(q.cant),
+               SUM(q.cant * ISNULL(COALESCE(k.costo, k9.costo), 0)),
+               MAX(COALESCE(k.costo, k9.costo)),
+               SUM(q.trans)
           FROM ' + QUOTENAME(@b) + N'.ZooLogic.COMB c
+          CROSS APPLY (SELECT CASE WHEN c.ENTRANSITO > 0 THEN CAST(c.ENTRANSITO AS float) ELSE 0 END AS trans) t
+          CROSS APPLY (SELECT CASE WHEN c.COCANT > 0 THEN CAST(c.COCANT AS float) ELSE 0 END + t.trans AS cant, t.trans) q
           LEFT JOIN ' + @tc + N' k ON k.art = LTRIM(RTRIM(c.COART))
           LEFT JOIN ' + @tr + N' k9 ON k9.art = LTRIM(RTRIM(c.COART)) AND @resp = 1
-         WHERE c.COCANT > 0
+         WHERE (c.COCANT > 0 OR c.ENTRANSITO > 0)
            AND NOT EXISTS (SELECT 1 FROM #sinprov s WHERE s.art = LTRIM(RTRIM(c.COART)))
          GROUP BY LTRIM(RTRIM(c.COART));';
       EXEC sp_executesql @sql, N'@b sysname, @resp bit', @b = @b, @resp = @resp;
@@ -230,7 +243,9 @@ SELECT base,
        ISNULL(unidades, 0) AS unidades,
        ISNULL(valorizado, 0) AS valorizado,
        ISNULL(unidades_sin_costo, 0) AS unidades_sin_costo,
-       ISNULL(skus, 0) AS skus
+       ISNULL(skus, 0) AS skus,
+       ISNULL(transito, 0) AS transito,
+       ISNULL(transito_val, 0) AS transito_val
   FROM #bases
  WHERE ISNULL(unidades, 0) <> 0
  ORDER BY valorizado DESC;
@@ -243,7 +258,8 @@ SELECT a.art AS articulo,
        SUM(a.unidades) AS unidades,
        SUM(a.valorizado) AS valorizado,
        -- el de la lista Compra; si el artículo solo está en NOMED u OUTLETD, el de su lista
-       COALESCE(MAX(CASE WHEN a.base NOT IN ('DRAGONFISH_NOMED', 'DRAGONFISH_OUTLETD') THEN a.costo END), MAX(a.costo)) AS costo
+       COALESCE(MAX(CASE WHEN a.base NOT IN ('DRAGONFISH_NOMED', 'DRAGONFISH_OUTLETD') THEN a.costo END), MAX(a.costo)) AS costo,
+       SUM(a.transito) AS transito
   FROM #art a
   LEFT JOIN #desc d ON d.art = a.art
  GROUP BY a.art

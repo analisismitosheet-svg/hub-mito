@@ -19,6 +19,9 @@ export interface BaseValorizada {
   valorizado: number
   unidades_sin_costo: number
   skus: number
+  /** mercadería en tránsito (ya sumada en unidades/valorizado); falta con un puente viejo */
+  transito?: number
+  transito_val?: number
 }
 
 export interface ArticuloValorizado {
@@ -27,6 +30,8 @@ export interface ArticuloValorizado {
   unidades: number
   valorizado: number
   costo: number | null
+  /** de esas unidades, las que están en tránsito */
+  transito?: number
 }
 
 /** Artículo con stock que no tiene costo cargado en la lista Compra: vale $0. */
@@ -147,6 +152,8 @@ export interface TotalValorizado {
   unidades_sin_costo: number
   skus: number
   sucursales: number
+  transito: number
+  transito_val: number
 }
 
 export function totalDe(bases: BaseValorizada[]): TotalValorizado {
@@ -157,8 +164,10 @@ export function totalDe(bases: BaseValorizada[]): TotalValorizado {
       unidades_sin_costo: t.unidades_sin_costo + b.unidades_sin_costo,
       skus: t.skus + b.skus,
       sucursales: t.sucursales + 1,
+      transito: t.transito + (b.transito ?? 0),
+      transito_val: t.transito_val + (b.transito_val ?? 0),
     }),
-    { unidades: 0, valorizado: 0, unidades_sin_costo: 0, skus: 0, sucursales: 0 },
+    { unidades: 0, valorizado: 0, unidades_sin_costo: 0, skus: 0, sucursales: 0, transito: 0, transito_val: 0 },
   )
 }
 

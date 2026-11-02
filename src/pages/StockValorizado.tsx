@@ -69,6 +69,9 @@ export default function StockValorizado() {
     [todas, incluirSinValor],
   )
   const total = useMemo(() => totalDe(bases), [bases])
+  /* Mercadería en tránsito: ya viene sumada en unidades y valorizado de cada base;
+     la columna aparte se muestra solo si el puente la manda (uno viejo no la trae). */
+  const hayTransito = todas.some((b) => b.transito !== undefined)
 
   const visibles = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
@@ -139,6 +142,7 @@ export default function StockValorizado() {
           Valorizado: Math.round(b.valorizado),
           'Unidades sin costo': b.unidades_sin_costo,
           SKUs: b.skus,
+          ...(hayTransito ? { 'En tránsito (u.)': b.transito ?? 0, 'En tránsito ($)': Math.round(b.transito_val ?? 0) } : {}),
         })),
       ),
       'Por sucursal',
@@ -158,6 +162,7 @@ export default function StockValorizado() {
       Stock: a.unidades,
       'Precio costo': a.costo ?? '',
       'Total valorizado': Math.round(a.valorizado),
+      ...(hayTransito ? { 'En tránsito': a.transito ?? 0 } : {}),
     }))
 
   /** Solo el listado por artículo, en su propio archivo (lo que se ve en la solapa). */
@@ -227,7 +232,16 @@ export default function StockValorizado() {
 
   const tarjetas = [
     { titulo: 'Valorizado total', valor: pesosCorto(total.valorizado), pie: pesos(total.valorizado), icono: Wallet, color: cEmerald },
-    { titulo: 'Unidades', valor: numero(total.unidades), pie: `${numero(total.skus)} SKUs con stock`, icono: Boxes, color: cBlue },
+    {
+      titulo: 'Unidades',
+      valor: numero(total.unidades),
+      pie:
+        hayTransito && total.transito > 0
+          ? `${numero(total.transito)} en tránsito (${pesosCorto(total.transito_val)}) · ${numero(total.skus)} SKUs`
+          : `${numero(total.skus)} SKUs con stock`,
+      icono: Boxes,
+      color: cBlue,
+    },
     { titulo: 'Sucursales', valor: numero(total.sucursales), pie: 'bases con stock cargado', icono: Layers, color: cViolet },
     {
       titulo: 'Unidades sin costo',
@@ -376,6 +390,7 @@ export default function StockValorizado() {
                   <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-sub">
                     <th className="px-3 py-2 font-medium">Sucursal</th>
                     <th className="px-3 py-2 text-right font-medium">Unidades</th>
+                    {hayTransito && <th className="px-3 py-2 text-right font-medium">En tránsito</th>}
                     <th className="px-3 py-2 text-right font-medium">Costo prom.</th>
                     <th className="px-3 py-2 text-right font-medium">Valorizado</th>
                     <th className="px-3 py-2 font-medium">% del total</th>
@@ -392,6 +407,11 @@ export default function StockValorizado() {
                           <span className="ml-2 font-mono text-[11px] text-sub/70">{b.base}</span>
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums text-ink">{numero(b.unidades)}</td>
+                        {hayTransito && (
+                          <td className="px-3 py-2 text-right tabular-nums text-xs text-sub" title={pesos(b.transito_val ?? 0)}>
+                            {b.transito ? numero(b.transito) : '—'}
+                          </td>
+                        )}
                         <td className="px-3 py-2 text-right tabular-nums text-sub">{pesos(costoUnitario(b))}</td>
                         <td className="px-3 py-2 text-right tabular-nums font-semibold text-ink">{pesos(b.valorizado)}</td>
                         <td className="px-3 py-2">
@@ -410,7 +430,7 @@ export default function StockValorizado() {
                   })}
                   {visibles.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-3 py-6 text-center text-sm text-sub">
+                      <td colSpan={hayTransito ? 7 : 6} className="px-3 py-6 text-center text-sm text-sub">
                         No hay sucursales que coincidan.
                       </td>
                     </tr>
@@ -421,6 +441,11 @@ export default function StockValorizado() {
                     <tr className="border-t border-line bg-surface2/50 font-semibold text-ink">
                       <td className="px-3 py-2">Total</td>
                       <td className="px-3 py-2 text-right tabular-nums">{numero(total.unidades)}</td>
+                      {hayTransito && (
+                        <td className="px-3 py-2 text-right tabular-nums text-sub" title={pesos(total.transito_val)}>
+                          {total.transito > 0 ? numero(total.transito) : '—'}
+                        </td>
+                      )}
                       <td className="px-3 py-2 text-right tabular-nums text-sub">{pesos(costoUnitario(total))}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{pesos(total.valorizado)}</td>
                       <td className="px-3 py-2" />
