@@ -291,6 +291,10 @@ async function webhookWhatsapp(req: Req, res: Res) {
     if (q['hub.mode'] === 'subscribe' && q['hub.verify_token'] === VERIFY_TOKEN) {
       return res.status(200).send(String(q['hub.challenge'] ?? ''))
     }
+    // Abierta a mano en el navegador (sin los datos de Meta): no es un error, solo se avisa
+    if (!q['hub.mode']) {
+      return res.status(200).json({ ok: true, mensaje: 'Webhook de WhatsApp del hub listo. Meta lo verifica solo al guardarlo con el token.' })
+    }
     return res.status(403).json({ error: 'Token de verificación inválido' })
   }
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return res.status(500).json({ error: 'Falta la configuración de Supabase' })
