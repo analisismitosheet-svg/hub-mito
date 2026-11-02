@@ -112,6 +112,16 @@ function mesCorto(mes: string | null): string {
 
 const MESES_LIQUIDACION = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE']
 
+// Liquidacion en curso (periodo del 26 al 25): desde el 26 pasa al mes siguiente,
+// y el año suma 1 solo cuando ese salto es de diciembre a enero.
+const periodoEnCurso = () => {
+  const hoy = new Date()
+  const pasa = hoy.getDate() >= 26
+  const idx = (hoy.getMonth() + (pasa ? 1 : 0)) % 12
+  const anio = hoy.getFullYear() + (pasa && hoy.getMonth() === 11 ? 1 : 0)
+  return { anio: String(anio), mes: MESES_LIQUIDACION[idx] }
+}
+
 /** Ejecuta una query paginándola (Supabase limita a 1000 filas por request). */
 async function cargarTodas(query: any): Promise<{ data: Novedad[]; error: any }> {
   const CHUNK = 1000
@@ -184,15 +194,8 @@ export default function CargaNovedades() {
 
   // Filtros
   const [q, setQ] = useState('')
-  const [fAnio, setFAnio] = useState(() => {
-    const hoy = new Date()
-    return String(hoy.getFullYear() + (hoy.getDate() >= 26 ? 1 : 0))
-  })
-  const [fMes, setFMes] = useState(() => {
-    const hoy = new Date()
-    const idx = hoy.getDate() >= 26 ? hoy.getMonth() + 1 : hoy.getMonth()
-    return MESES_LIQUIDACION[idx % 12]
-  })
+  const [fAnio, setFAnio] = useState(() => periodoEnCurso().anio)
+  const [fMes, setFMes] = useState(() => periodoEnCurso().mes)
   const [fMotivo, setFMotivo] = useState('')
   const [fLocal, setFLocal] = useState('')
   const [fTipo, setFTipo] = useState('')
@@ -418,12 +421,7 @@ export default function CargaNovedades() {
 
   // Mes de liquidacion en curso (periodo del 26 al 25): las filas por legajo
   // se arman solo cuando el filtro coincide con ese mes.
-  const mesEnCurso = useMemo(() => {
-    const hoy = new Date()
-    const anio = String(hoy.getFullYear() + (hoy.getDate() >= 26 ? 1 : 0))
-    const idx = (hoy.getDate() >= 26 ? hoy.getMonth() + 1 : hoy.getMonth()) % 12
-    return { anio, mes: MESES_LIQUIDACION[idx] }
-  }, [])
+  const mesEnCurso = useMemo(periodoEnCurso, [])
   const esMesEnCurso = fAnio === mesEnCurso.anio && fMes === mesEnCurso.mes
 
   const colVal = useCallback((n: Novedad, clave: string): unknown => {
