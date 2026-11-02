@@ -104,6 +104,30 @@ function fmtDuracion(desdeIso: string, hastaIso: string): string {
   return m ? `${h} h ${m} min` : `${h} h`
 }
 
+type NuevoItem = Omit<Item, 'id' | 'lote_id' | 'estado' | 'hecho_at'>
+
+/** Control de carga del Excel: unidades esperadas (TOTAL del Excel) vs leídas vs grabadas. */
+interface FilaControl {
+  clave: string
+  esperado: number
+  leido: number
+  grabado?: number
+}
+interface ControlCarga {
+  porOrigen: FilaControl[]
+  porDestino: FilaControl[]
+  celdasInvalidas: { hoja: string; fila: number; columna: string; valor: string }[]
+  renglonesGrabados?: number
+}
+const nuevoControl = (): ControlCarga => ({ porOrigen: [], porDestino: [], celdasInvalidas: [] })
+function sumar(filas: FilaControl[], clave: string, esperado: number, leido: number) {
+  let f = filas.find((x) => x.clave === clave)
+  if (!f) filas.push((f = { clave, esperado: 0, leido: 0 }))
+  f.esperado += esperado
+  f.leido += leido
+}
+const pct = (parte: number, total: number) => (total > 0 ? Math.round((parte / total) * 1000) / 10 : 100)
+
 // Encabezados del Excel que no son locales aunque queden entre los datos del artículo y TOTAL.
 const NO_LOCAL = /^(TOTAL|STOCK|VENTAS?|PRIORIDAD|CURVA|PRECIO|COSTO|MARCA|RUBRO|TEMPORADA|PROVEEDOR|OBS)/
 
@@ -405,6 +429,8 @@ export default function Transferencias() {
   const [archivo, setArchivo] = useState<File | null>(null)
   const [nombreNuevo, setNombreNuevo] = useState('')
   const [motivoNuevo, setMotivoNuevo] = useState('')
+  const [previa, setPrevia] = useState<{ nuevos: NuevoItem[]; control: ControlCarga } | null>(null)
+  const [resultado, setResultado] = useState<{ nombre: string; control: ControlCarga } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   // Autorrelleno desde el SQL local: la vista de salidas reporta qué artículos ya
   // se remitieron; se consulta en bucle y se marcan solos los que coinciden.
@@ -616,9 +642,11 @@ export default function Transferencias() {
   function onSelectFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0] ?? null
     setArchivo(f)
+    setPrevia(null)
     if (f && !nombreNuevo) setNombreNuevo(f.name.replace(/\.(xlsx|xls)$/i, ''))
   }
 
+  // Lee el Excel y arma el control de carga; no graba nada hasta que se confirme.
   async function procesar() {
     const f = archivo
     if (!f || !supabase) return
@@ -628,10 +656,12 @@ export default function Transferencias() {
     }
     setSubiendo(true)
     setError(null)
+    setPrevia(null)
     try {
       const XLSX = await import('xlsx')
       const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' })
-      const nuevos: Omit<Item, 'id' | 'lote_id' | 'estado' | 'hecho_at'>[] = []
+      const nuevos: NuevoItem[] = []
+      const ctl = nuevoControl()
       let orden = 0
       const quitarAcentos = (s: string) =>
         s.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toUpperCase()
@@ -669,17 +699,27 @@ export default function Transferencias() {
         const end = idxTotal >= 0 ? idxTotal : header.length
         const destCols: number[] = []
         for (let j = start; j < end; j++) if (header[j]?.trim() && !NO_LOCAL.test(up[j])) destCols.push(j)
+        const ancho = Math.max(header.length, ...rows.slice(hidx + 1).map((r) => r.length))
+        const origen = hoja.trim()
         for (let i = hidx + 1; i < rows.length; i++) {
           const row = rows[i]
           const art = String(row[idxArt] ?? '').trim()
           if (!art) continue
-          for (const j of destCols) {
+          let leidas = 0
+          let enCeldas = 0
+          for (let j = start; j < ancho; j++) {
+            if (j === idxTotal) continue
             const raw = row[j]
             const n = typeof raw === 'number' ? raw : parseInt(String(raw).trim(), 10)
-            if (raw !== '' && raw != null && !Number.isNaN(n) && n > 0) {
+            const conDato = raw !== '' && raw != null
+            const tomada = destCols.includes(j)
+            if (tomada && conDato && !Number.isNaN(n) && n > 0) {
+              leidas += n
+              enCeldas += n
+              sumar(ctl.porDestino, header[j].trim(), n, n)
               nuevos.push({
                 orden: orden++,
-                origen: hoja.trim(),
+                origen,
                 destino: header[j].trim(),
                 articulo: art,
                 descripcion: String(row[idxDesc] ?? '').trim() || null,
@@ -689,45 +729,90 @@ export default function Transferencias() {
                 tipo: idxTipo >= 0 ? String(row[idxTipo] ?? '').trim() || null : null,
                 cantidad: n,
               })
+            } else if (tomada && conDato && String(raw).trim() !== '0') {
+              // Hay algo escrito en la celda del local pero no es una cantidad válida
+              ctl.celdasInvalidas.push({ hoja: origen, fila: i + 1, columna: header[j], valor: String(raw) })
+            } else if (!tomada && conDato && !Number.isNaN(n) && n > 0 && (j >= end || !NO_LOCAL.test(up[j]))) {
+              // Cantidad en una columna que no se toma (sin encabezado o después de TOTAL)
+              enCeldas += n
+              const col = header[j]?.trim() || `(columna ${XLSX.utils.encode_col(j)} sin encabezado)`
+              sumar(ctl.porDestino, col, n, 0)
             }
           }
+          // Lo esperado del renglón es su TOTAL; si el Excel no trae TOTAL, la suma de sus celdas.
+          const total = idxTotal >= 0 ? Number(row[idxTotal]) : NaN
+          const esperado = Number.isFinite(total) && total > 0 ? total : enCeldas
+          sumar(ctl.porOrigen, origen, esperado, leidas)
         }
       }
-      const origenesLeidos = [...new Set(nuevos.map((n) => n.origen))]
-      const destinosLeidos = [...new Set(nuevos.map((n) => n.destino))]
       if (!nuevos.length) {
         setError('No se detectaron transferencias en el Excel. Revisá que tenga una fila de encabezado con "ARTICULO" y columnas por local.')
-      } else if (
-        !window.confirm(
-          `Se van a cargar ${nuevos.length} renglones.\n\n` +
-            `Locales origen (${origenesLeidos.length}): ${origenesLeidos.join(', ')}\n\n` +
-            `Locales destino (${destinosLeidos.length}): ${destinosLeidos.join(', ')}\n\n` +
-            '¿Está bien? Si falta algún local, cancelá y revisá los encabezados del Excel.',
-        )
-      ) {
-        // cancelado: no se crea el lote
       } else {
-        const { data: lote, error: e1 } = await supabase
-          .from('transfer_lotes')
-          .insert({ nombre: nombreNuevo.trim(), motivo: motivoNuevo.trim() || null, subido_por: perfil?.id ?? null })
-          .select('id')
-          .single()
-        if (e1 || !lote) throw new Error(e1?.message ?? 'No se pudo crear el lote')
-        const loteId = (lote as { id: string }).id
-        const { error: e2 } = await supabase.from('transfer_items').insert(nuevos.map((n) => ({ ...n, lote_id: loteId })))
-        if (e2) throw new Error(e2.message)
-        // limpiar y cerrar
-        setModal(false)
-        setArchivo(null)
-        setNombreNuevo('')
-        setMotivoNuevo('')
-        if (fileRef.current) fileRef.current.value = ''
-        await cargar()
+        setPrevia({ nuevos, control: ctl })
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo leer el Excel.')
     }
     setSubiendo(false)
+  }
+
+  // Graba lo leído y después relee el lote para comparar contra el Excel.
+  async function grabar() {
+    if (!previa || !supabase) return
+    setSubiendo(true)
+    setError(null)
+    try {
+      const { nuevos, control } = previa
+      const { data: lote, error: e1 } = await supabase
+        .from('transfer_lotes')
+        .insert({ nombre: nombreNuevo.trim(), motivo: motivoNuevo.trim() || null, subido_por: perfil?.id ?? null })
+        .select('id')
+        .single()
+      if (e1 || !lote) throw new Error(e1?.message ?? 'No se pudo crear el lote')
+      const loteId = (lote as { id: string }).id
+      const { error: e2 } = await supabase.from('transfer_items').insert(nuevos.map((n) => ({ ...n, lote_id: loteId })))
+      if (e2) throw new Error(e2.message)
+      const grabados: { origen: string; destino: string; cantidad: number }[] = []
+      for (let desde = 0; ; desde += 1000) {
+        const { data, error: e3 } = await supabase
+          .from('transfer_items')
+          .select('origen, destino, cantidad')
+          .eq('lote_id', loteId)
+          .order('orden')
+          .range(desde, desde + 999)
+        if (e3) throw new Error(e3.message)
+        grabados.push(...((data ?? []) as typeof grabados))
+        if (!data || data.length < 1000) break
+      }
+      const ctl: ControlCarga = {
+        ...control,
+        renglonesGrabados: grabados.length,
+        porOrigen: control.porOrigen.map((f) => ({ ...f, grabado: 0 })),
+        porDestino: control.porDestino.map((f) => ({ ...f, grabado: 0 })),
+      }
+      for (const g of grabados) {
+        const o = ctl.porOrigen.find((f) => f.clave === g.origen)
+        if (o) o.grabado = (o.grabado ?? 0) + Number(g.cantidad)
+        const d = ctl.porDestino.find((f) => f.clave === g.destino)
+        if (d) d.grabado = (d.grabado ?? 0) + Number(g.cantidad)
+      }
+      setPrevia(null)
+      setResultado({ nombre: nombreNuevo.trim(), control: ctl })
+      setArchivo(null)
+      setNombreNuevo('')
+      setMotivoNuevo('')
+      if (fileRef.current) fileRef.current.value = ''
+      await cargar()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo grabar el archivo.')
+    }
+    setSubiendo(false)
+  }
+
+  function cerrarModal() {
+    setModal(false)
+    setPrevia(null)
+    setResultado(null)
   }
 
   async function borrarLote(id: string) {
@@ -1126,15 +1211,28 @@ export default function Transferencias() {
       )}
 
       {modal && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4" onClick={() => !subiendo && setModal(false)}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4" onClick={() => !subiendo && cerrarModal()}>
           <div className="w-[95vw] max-w-[1400px] rounded-t-2xl border border-line bg-surface shadow-soft-lg sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-line px-4 py-3">
-              <h2 className="font-display font-semibold text-ink">Nuevo archivo</h2>
-              <button onClick={() => setModal(false)} aria-label="Cerrar" className="rounded-lg p-1.5 text-sub hover:bg-line hover:text-ink">
+              <h2 className="font-display font-semibold text-ink">{resultado ? 'Control de carga' : 'Nuevo archivo'}</h2>
+              <button onClick={cerrarModal} disabled={subiendo} aria-label="Cerrar" className="rounded-lg p-1.5 text-sub hover:bg-line hover:text-ink">
                 <X size={18} aria-hidden />
               </button>
             </div>
-            <div className="space-y-4 p-4">
+            {resultado ? (
+              <div className="max-h-[75vh] space-y-3 overflow-y-auto p-4">
+                <p className="text-sm text-sub">
+                  Archivo <b className="text-ink">{resultado.nombre}</b> grabado: {resultado.control.renglonesGrabados} renglones. Comparación del Excel contra lo que quedó en el hub:
+                </p>
+                <ControlCargaTabla control={resultado.control} />
+              </div>
+            ) : (
+            <div className="max-h-[75vh] space-y-4 overflow-y-auto p-4">
+              {error && (
+                <p role="alert" className="rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">
+                  {error}
+                </p>
+              )}
               <div>
                 <span className="mb-1 block text-sm font-medium text-ink">Archivo Excel</span>
                 <input
@@ -1164,19 +1262,36 @@ export default function Transferencias() {
                 />
               </label>
               <p className="text-xs text-sub">La fecha y hora se registran automáticamente al cargar.</p>
+              {previa && (
+                <div className="space-y-2 border-t border-line pt-3">
+                  <p className="text-sm text-sub">
+                    Control antes de grabar: {previa.nuevos.length} renglones leídos. Revisá que no haya locales en rojo.
+                  </p>
+                  <ControlCargaTabla control={previa.control} />
+                </div>
+              )}
             </div>
+            )}
             <div className="flex gap-2 border-t border-line px-4 py-3">
+              {resultado ? (
+                <button onClick={cerrarModal} className="btn-press inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand-600 py-2.5 text-sm font-medium text-white hover:bg-brand-700">
+                  <Check size={16} aria-hidden /> Listo
+                </button>
+              ) : (
               <button
-                onClick={procesar}
+                onClick={previa ? grabar : procesar}
                 disabled={subiendo || !archivo || !nombreNuevo.trim()}
                 className="btn-press inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand-600 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
               >
-                {subiendo ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Upload size={16} aria-hidden />}
-                {subiendo ? 'Procesando…' : 'Cargar'}
+                {subiendo ? <Loader2 size={16} className="animate-spin" aria-hidden /> : previa ? <Check size={16} aria-hidden /> : <Upload size={16} aria-hidden />}
+                {subiendo ? 'Procesando…' : previa ? 'Confirmar y grabar' : 'Leer y controlar'}
               </button>
-              <button onClick={() => setModal(false)} disabled={subiendo} className="btn-press rounded-xl border border-line bg-surface2 px-4 py-2.5 text-sm font-medium text-ink hover:bg-line disabled:opacity-50">
+              )}
+              {!resultado && (
+              <button onClick={cerrarModal} disabled={subiendo} className="btn-press rounded-xl border border-line bg-surface2 px-4 py-2.5 text-sm font-medium text-ink hover:bg-line disabled:opacity-50">
                 Cancelar
               </button>
+              )}
             </div>
           </div>
         </div>
@@ -1189,6 +1304,81 @@ export default function Transferencias() {
 /* ------------------------------------------------------------------ */
 /*  Enviar transferencia (mail)                                        */
 /* ------------------------------------------------------------------ */
+
+/**
+ * Tabla del control de carga. "Excel" = unidades que trae el archivo (TOTAL de cada renglón
+ * para los orígenes; celdas de la columna para los destinos), "Leído" = lo que tomó el
+ * importador y "Grabado" = lo que quedó en transfer_items. En rojo lo que no da 100 %.
+ */
+function ControlCargaTabla({ control }: { control: ControlCarga }) {
+  const conGrabado = control.renglonesGrabados != null
+  const final = (f: FilaControl) => (conGrabado ? Math.min(f.leido, f.grabado ?? 0) : f.leido)
+  const esperado = control.porOrigen.reduce((a, f) => a + f.esperado, 0)
+  const correcto = control.porOrigen.reduce((a, f) => a + final(f), 0)
+  const total = pct(correcto, esperado)
+  const ok = (f: FilaControl) => f.esperado > 0 && f.leido === f.esperado && (!conGrabado || f.grabado === f.leido)
+  const tabla = (titulo: string, filas: FilaControl[]) => (
+    <div className="overflow-x-auto rounded-xl border border-line">
+      <table className="w-full text-sm">
+        <thead className="bg-surface2 text-xs text-sub">
+          <tr>
+            <th className="px-2 py-1.5 text-left font-medium">{titulo}</th>
+            <th className="px-2 py-1.5 text-right font-medium">Excel</th>
+            <th className="px-2 py-1.5 text-right font-medium">Leído</th>
+            {conGrabado && <th className="px-2 py-1.5 text-right font-medium">Grabado</th>}
+            <th className="px-2 py-1.5 text-right font-medium">%</th>
+          </tr>
+        </thead>
+        <tbody>
+          {[...filas]
+            .sort((a, b) => Number(ok(a)) - Number(ok(b)) || a.clave.localeCompare(b.clave))
+            .map((f) => {
+              const bien = ok(f)
+              return (
+                <tr key={f.clave} className={`border-t border-line ${bien ? 'text-ink' : 'bg-red-500/10 font-medium text-red-400'}`}>
+                  <td className="px-2 py-1">{f.clave}</td>
+                  <td className="px-2 py-1 text-right tabular-nums">{f.esperado}</td>
+                  <td className="px-2 py-1 text-right tabular-nums">{f.leido}</td>
+                  {conGrabado && <td className="px-2 py-1 text-right tabular-nums">{f.grabado ?? 0}</td>}
+                  <td className="px-2 py-1 text-right tabular-nums">{pct(final(f), f.esperado)} %</td>
+                </tr>
+              )
+            })}
+        </tbody>
+      </table>
+    </div>
+  )
+  return (
+    <div className="space-y-3">
+      <div
+        className={`flex flex-wrap items-baseline gap-x-3 rounded-xl border px-3 py-2 ${
+          total === 100 ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500' : 'border-red-500/40 bg-red-500/10 text-red-400'
+        }`}
+      >
+        <span className="font-display text-2xl font-bold tabular-nums">{total} %</span>
+        <span className="text-sm">
+          de carga correcta · {correcto} de {esperado} unidades del Excel {conGrabado ? 'grabadas' : 'leídas'}
+        </span>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        {tabla('Local origen (hoja)', control.porOrigen)}
+        {tabla('Local destino (columna)', control.porDestino)}
+      </div>
+      {control.celdasInvalidas.length > 0 && (
+        <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-400">
+          <p className="font-medium">{control.celdasInvalidas.length} celda(s) con algo escrito que no es una cantidad (no se cargan):</p>
+          <ul className="mt-1 list-disc pl-5">
+            {control.celdasInvalidas.slice(0, 10).map((c, i) => (
+              <li key={i}>
+                Hoja {c.hoja}, fila {c.fila}, {c.columna}: «{c.valor}»
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
 
 function EnviarTransferencia({ lote, items, usuariosLocales, onClose }: {
   lote: Lote
