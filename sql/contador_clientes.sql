@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS public.contador_visitas (
   empleados      integer     NOT NULL DEFAULT 0 CHECK (empleados >= 0),    -- entradas de personal (NO suman a entradas)
   nuevos         integer     NOT NULL DEFAULT 0 CHECK (nuevos >= 0),       -- clientes vistos por 1ra vez en el día
   reingresos     integer     NOT NULL DEFAULT 0 CHECK (reingresos >= 0),   -- el mismo cliente volvió a entrar el mismo día
+  grupos         integer     NOT NULL DEFAULT 0 CHECK (grupos >= 0),       -- clientes que entraron juntos (≤ 4 s y cerca) = 1 grupo
   dispositivo_id uuid REFERENCES public.contador_dispositivos(id) ON DELETE SET NULL,
   updated_at     timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (local, camara, desde)
@@ -41,6 +42,9 @@ ALTER TABLE public.contador_visitas
   ADD COLUMN IF NOT EXISTS empleados   integer NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS nuevos      integer NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS reingresos  integer NOT NULL DEFAULT 0;
+-- Grupos (02/11/2026): personas que cruzan la puerta juntas cuentan como 1 grupo (además de cada entrada)
+ALTER TABLE public.contador_visitas
+  ADD COLUMN IF NOT EXISTS grupos      integer NOT NULL DEFAULT 0 CHECK (grupos >= 0);
 CREATE INDEX IF NOT EXISTS contador_visitas_desde_idx ON public.contador_visitas (desde DESC);
 
 -- ---- Permisos ----
@@ -97,7 +101,7 @@ DECLARE
 BEGIN
   WITH v AS (
     SELECT local, camara, (desde AT TIME ZONE tz) AS ts, entradas, salidas,
-           transeuntes, empleados, nuevos, reingresos
+           transeuntes, empleados, nuevos, reingresos, grupos
     FROM public.contador_visitas
     WHERE desde >= (p_desde::timestamp AT TIME ZONE tz)
       AND desde <  ((p_hasta + 1)::timestamp AT TIME ZONE tz)
@@ -118,6 +122,7 @@ BEGIN
                   'empleados',   coalesce(sum(empleados), 0),
                   'nuevos',      coalesce(sum(nuevos), 0),
                   'reingresos',  coalesce(sum(reingresos), 0),
+                  'grupos',      coalesce(sum(grupos), 0),
                   'dias',     count(DISTINCT ts::date)) FROM v),
     'porHora', (SELECT coalesce(jsonb_agg(x ORDER BY x.hora), '[]') FROM (
                   SELECT extract(hour FROM ts)::int AS hora,
@@ -126,19 +131,21 @@ BEGIN
                   FROM v GROUP BY 1) x),
     'porDia',  (SELECT coalesce(jsonb_agg(x ORDER BY x.fecha), '[]') FROM (
                   SELECT to_char(ts::date, 'YYYY-MM-DD') AS fecha,
-                         sum(entradas)::int AS entradas, sum(salidas)::int AS salidas
+                         sum(entradas)::int AS entradas, sum(salidas)::int AS salidas, sum(grupos)::int AS grupos
                   FROM v GROUP BY 1) x),
     -- Días en que cada local realmente MIDIÓ (al menos una entrada). La conversión
     -- contra las ventas solo puede contar los tickets de esos días: en los demás hay
     -- venta pero no conteo de cámara, y mezclarlos infla/desinfla el porcentaje.
     -- Solo se mandan los días con entradas > 0 (los de 0 no aportan al cociente).
     'porLocalDia', (SELECT coalesce(jsonb_agg(x ORDER BY x.local, x.fecha), '[]') FROM (
-                  SELECT local, to_char(ts::date, 'YYYY-MM-DD') AS fecha, sum(entradas)::int AS entradas
+                  SELECT local, to_char(ts::date, 'YYYY-MM-DD') AS fecha, sum(entradas)::int AS entradas,
+                         sum(grupos)::int AS grupos
                   FROM v GROUP BY 1, 2 HAVING sum(entradas) > 0) x),
     'porLocal', (SELECT coalesce(jsonb_agg(x ORDER BY x.entradas DESC), '[]') FROM (
                   SELECT local, sum(entradas)::int AS entradas, sum(salidas)::int AS salidas,
                          sum(transeuntes)::int AS transeuntes, sum(empleados)::int AS empleados,
-                         sum(nuevos)::int AS nuevos, sum(reingresos)::int AS reingresos
+                         sum(nuevos)::int AS nuevos, sum(reingresos)::int AS reingresos,
+                         sum(grupos)::int AS grupos
                   FROM v GROUP BY 1) x),
     -- Ocupación estimada ahora = entradas - salidas de hoy (nunca negativa)
     'ocupacion', (SELECT coalesce(jsonb_agg(jsonb_build_object(
@@ -159,7 +166,7 @@ LANGUAGE sql STABLE SECURITY INVOKER SET search_path = public
 AS $$
   WITH hoy AS (
     SELECT local, camara, (desde AT TIME ZONE 'America/Argentina/Buenos_Aires') AS ts,
-           entradas, salidas, transeuntes, empleados, nuevos, reingresos, updated_at
+           entradas, salidas, transeuntes, empleados, nuevos, reingresos, grupos, updated_at
     FROM public.contador_visitas
     WHERE desde >= (date_trunc('day', now() AT TIME ZONE 'America/Argentina/Buenos_Aires')
                     AT TIME ZONE 'America/Argentina/Buenos_Aires')
@@ -169,19 +176,20 @@ AS $$
            sum(entradas)::int AS entradas, sum(salidas)::int AS salidas,
            sum(transeuntes)::int AS transeuntes, sum(empleados)::int AS empleados,
            sum(nuevos)::int AS nuevos, sum(reingresos)::int AS reingresos,
+           sum(grupos)::int AS grupos,
            max(updated_at) AS actualizado
     FROM hoy GROUP BY local
   ),
   por_hora AS (
     SELECT local, jsonb_agg(jsonb_build_object(
              'hora', hora, 'entradas', e, 'salidas', s,
-             'transeuntes', t, 'empleados', emp, 'nuevos', n, 'reingresos', r
+             'transeuntes', t, 'empleados', emp, 'nuevos', n, 'reingresos', r, 'grupos', g
            ) ORDER BY hora) AS horas
     FROM (
       SELECT local, extract(hour FROM ts)::int AS hora,
              sum(entradas)::int AS e, sum(salidas)::int AS s,
              sum(transeuntes)::int AS t, sum(empleados)::int AS emp,
-             sum(nuevos)::int AS n, sum(reingresos)::int AS r
+             sum(nuevos)::int AS n, sum(reingresos)::int AS r, sum(grupos)::int AS g
       FROM hoy GROUP BY 1, 2
     ) h
     GROUP BY local
@@ -198,6 +206,7 @@ AS $$
            'entradas', coalesce(p.entradas, 0), 'salidas', coalesce(p.salidas, 0),
            'transeuntes', coalesce(p.transeuntes, 0), 'empleados', coalesce(p.empleados, 0),
            'nuevos', coalesce(p.nuevos, 0), 'reingresos', coalesce(p.reingresos, 0),
+           'grupos', coalesce(p.grupos, 0),
            'adentro', greatest(coalesce(p.entradas, 0) - coalesce(p.salidas, 0), 0),
            'actualizado', p.actualizado,
            'horas', coalesce(h.horas, '[]'::jsonb),

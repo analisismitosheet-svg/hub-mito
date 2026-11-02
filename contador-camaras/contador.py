@@ -16,6 +16,8 @@ Además (opcionales, por cámara):
   - reid: reconoce a la misma persona en el día (únicos vs reingresos) y
     descarta dobles conteos cuando el tracker pierde y recupera a alguien.
     Los vectores viven SOLO en memoria y se borran cada día. Nunca se guardan fotos.
+  - grupos: los clientes que cruzan la puerta juntos (familia, amigas) cuentan
+    como UN grupo además de cada uno como entrada -> conversión por grupo.
 
 Los conteos se agrupan en tramos de 15 minutos, se guardan en SQLite local
 (conteos.db) y se suben al Hub MITO (/api/contador-ingesta). Si no hay
@@ -59,7 +61,7 @@ VERSION = "2.0.0"
 BASE = Path(__file__).resolve().parent
 TRAMO_S = 15 * 60
 CLASE_PERSONA = 0
-CAMPOS = ("entradas", "salidas", "transeuntes", "empleados", "nuevos", "reingresos")
+CAMPOS = ("entradas", "salidas", "transeuntes", "empleados", "nuevos", "reingresos", "grupos")
 
 log = logging.getLogger("contador")
 
@@ -501,6 +503,7 @@ class Pista:
     persona: Persona | None = None
     vinculo: str = ""                # 'seguro' | 'reciente' | 'dia' | 'nueva'
     entrada_pend: float | None = None  # entrada detectada, esperando reconocer quién es
+    cruce: tuple[float, float, float] | None = None  # (cuándo, x, y) cruzó la puerta para entrar (grupos)
     inicio: float = 0.0              # cuándo y dónde apareció (para unir ids que cambian)
     x0: float = -1.0
     y0: float = -1.0
@@ -533,6 +536,10 @@ class Camara(threading.Thread):
         self.min_muestras = int(cam.get("reid_muestras", 4))
         self.espera_entrada = float(cam.get("reid_espera_segundos", 5))
         self.frames_zona = int(cam.get("frames_confirmar", 2))
+        # Grupo: cruza la puerta hasta grupo_segundos después del anterior Y cerca de él (0..1 de la imagen)
+        self.grupo_s = float(cam.get("grupo_segundos", 4))
+        self.grupo_dist = float(cam.get("grupo_distancia", 0.25))
+        self.ultimo_cruce: tuple[float, float, float] | None = None  # último cliente que entró (cuándo, x, y)
         self.uniforme = uniforme_compartido(float(cfg.get("uniforme_umbral", 0.86))) if cam.get("uniforme", True) else None
         self.ultima_deteccion = None  # (cuadro, cajas normalizadas) para marcar empleados desde el hub
         self.fps = 0.0
@@ -657,7 +664,7 @@ class Camara(threading.Thread):
         error = self.lector.error if self.lector else None
         return {"nombre": self.nombre, "modo": self.modo, "ok": error is None, "error": error,
                 "fps": round(self.fps, 1), "entradas_hoy": h["entradas"], "salidas_hoy": h["salidas"],
-                "transeuntes_hoy": h["transeuntes"], "empleados_hoy": h["empleados"], "vista_base": self.vista_base,
+                "transeuntes_hoy": h["transeuntes"], "empleados_hoy": h["empleados"], "grupos_hoy": h["grupos"], "vista_base": self.vista_base,
                 "calibracion": self.calibracion(), "config_version": self.config_version,
                 "canales": getattr(self.lector, "canales", 0) or 0,
                 "kbps": getattr(self.lector, "kbps", None), "resolucion": self.resolucion()}
@@ -873,12 +880,29 @@ class Camara(threading.Thread):
                 self.registrar(p, "salidas")
             return
         p.entro = True
+        p.cruce = (ahora, p.x, p.y)
         if self.reid:
             p.entrada_pend = ahora  # se cuenta cuando se sabe quién es (o a los pocos segundos)
         elif empleado:
             self.registrar(p, "empleados")
         else:
-            self.registrar(p, "entradas")
+            self.registrar(p, "entradas", *self.grupo_nuevo(p))
+
+    def grupo_nuevo(self, p: Pista) -> tuple[str, ...]:
+        """('grupos',) si este cliente abre un grupo nuevo; () si entró con el anterior.
+        Encadena: A, B a los 3 s de A y C a los 3 s de B = un grupo de 3. Con reid las entradas
+        se confirman con unos segundos de atraso y pueden llegar desordenadas: se compara contra
+        el momento en que cruzó, no contra cuándo se confirmó."""
+        t, x, y = p.cruce or (self.reloj(), p.x, p.y)
+        previo = self.ultimo_cruce
+        junto = (previo is not None and abs(t - previo[0]) <= self.grupo_s
+                 and ((x - previo[1]) ** 2 + (y - previo[2]) ** 2) ** 0.5 <= self.grupo_dist)
+        if previo is None or t >= previo[0]:
+            self.ultimo_cruce = (t, x, y)
+        if junto:
+            log.info("[%s] id %s entró en grupo con el anterior (%.1f s)", self.nombre, p.tid, abs(t - previo[0]))
+            return ()
+        return ("grupos",)
 
     def cerrar_entrada(self, p: Pista, ahora: float) -> None:
         p.entrada_pend = None
@@ -897,7 +921,7 @@ class Camara(threading.Thread):
         tipo = "reingresos" if per.entradas else "nuevos"
         per.entradas += 1
         per.adentro, per.ultima_entrada = True, ahora
-        self.registrar(p, "entradas", tipo)
+        self.registrar(p, "entradas", tipo, *self.grupo_nuevo(p))
 
     def registrar(self, p: Pista, *campos: str) -> None:
         self.almacen.sumar(self.nombre, *campos)

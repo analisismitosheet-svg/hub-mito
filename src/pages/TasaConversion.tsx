@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
-  Loader2, RefreshCw, Percent, Gauge, LogIn, Footprints, Receipt, VideoOff, Video, ChevronRight, Info, Target, TrendingUp,
+  Loader2, RefreshCw, Percent, Gauge, LogIn, Footprints, Receipt, VideoOff, Video, ChevronRight, Info, Target, TrendingUp, Users,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -10,6 +10,7 @@ import { leerVista } from '@/lib/sqlApi'
 import { CLAVE_VISTA, aVentas, type Venta, type Dispositivo } from '@/pages/ContadorClientes'
 import { ErrorVideo, pedirPase, urlVideo } from '@/lib/videoContador'
 import { LOCALES_FUERA_DEL_CONTADOR } from '@/lib/informeConversion'
+import { coloresUnicos } from '@/lib/coloresUnicos'
 
 /**
  * Tasa de conversión (Locales): video en vivo de la puerta con el conteo
@@ -20,6 +21,7 @@ import { LOCALES_FUERA_DEL_CONTADOR } from '@/lib/informeConversion'
  * valida el usuario contra el hub (cada local ve solo lo suyo). El hub nunca recibe ni guarda imágenes.
  * Ventas: vista SQL configurada en config_app 'contador_vista_ventas'
  * (local, fecha, hora, tickets, total). Si no hay, se muestra solo el conteo.
+ * Grupos: clientes que entran juntos (≤ 4 s y cerca) = 1 grupo; conversión por grupo = tickets / grupos.
  */
 
 interface CamaraEstado { nombre: string; ok: boolean; fps: number; error: string | null; vista_base?: string | null }
@@ -31,6 +33,7 @@ interface HoraLocal {
   empleados?: number
   nuevos?: number
   reingresos?: number
+  grupos?: number
 }
 interface LocalHoy {
   local: string
@@ -40,6 +43,7 @@ interface LocalHoy {
   empleados: number
   nuevos: number
   reingresos: number
+  grupos?: number
   adentro: number
   actualizado: string | null
   horas: HoraLocal[]
@@ -172,6 +176,7 @@ export default function TasaConversion() {
         transeuntes: l.transeuntes,
         nuevos: l.nuevos,
         reingresos: l.reingresos,
+        grupos: l.grupos ?? 0,
       }
     }
     const h = l.horas.find((x) => x.hora === hora)
@@ -180,6 +185,7 @@ export default function TasaConversion() {
       transeuntes: h?.transeuntes ?? 0,
       nuevos: h?.nuevos ?? 0,
       reingresos: h?.reingresos ?? 0,
+      grupos: h?.grupos ?? 0,
     }
   }, [])
 
@@ -187,6 +193,13 @@ export default function TasaConversion() {
     ventasActivas && entradas > 0 ? (100 * (tk ?? 0)) / entradas : null
 
   const totEntradas = locales.reduce((a, l) => a + metricasDe(l, horaSel).entradas, 0)
+  const totGrupos = locales.reduce((a, l) => a + metricasDe(l, horaSel).grupos, 0)
+  // Los grupos se cuentan desde el 02/11/2026: sin grupos (contador viejo) no se muestran las columnas
+  const hayGrupos = locales.some((l) => (l.grupos ?? 0) > 0)
+  // Conversión por grupo general: solo los locales que contaron grupos (los otros no tienen denominador)
+  const tkConGrupos = ventasActivas
+    ? locales.reduce((a, l) => a + (metricasDe(l, horaSel).grupos > 0 ? ventasActivas.tickets.get(l.local) ?? 0 : 0), 0)
+    : null
   const totTickets = ventasActivas ? ventasActivas.generalTickets : null
   const totTotal = hayTotal && ventasActivas ? ventasActivas.generalTotal : null
   const toggleHora = (h: number | null) => setHoraSel((prev) => (prev === h ? null : h))
@@ -207,7 +220,9 @@ export default function TasaConversion() {
           <span className="text-xs text-sub">
             {horaSel != null && <><strong className="text-emerald-400">{horaSel}h</strong> · </>}
             Total: <strong className="text-ink">{nf(totEntradas)}</strong> entradas
+            {hayGrupos && <> · <strong className="text-ink">{nf(totGrupos)}</strong> grupos</>}
             {totTickets != null && <> · <strong className="text-ink">{nf(totTickets)}</strong> tickets · <strong className="text-ink">{totEntradas ? ((100 * totTickets) / totEntradas).toFixed(1) : '—'}%</strong></>}
+            {hayGrupos && tkConGrupos != null && totGrupos > 0 && <> (<strong className="text-ink">{((100 * tkConGrupos) / totGrupos).toFixed(1)}%</strong> por grupo)</>}
             {totTotal != null && <> · <strong className="text-ink">{nfMoneda(totTotal)}</strong></>}
           </span>
           <button onClick={() => void cargar()} className="btn-press inline-flex h-8 items-center gap-1 rounded-lg border border-line bg-surface2 px-2.5 text-xs font-medium text-ink hover:bg-line">
@@ -279,11 +294,13 @@ export default function TasaConversion() {
                   <tr>
                     <th className="py-1.5 pr-3">Local</th>
                     <th className="py-1.5 pr-3 text-right">Entradas</th>
+                    {hayGrupos && <th className="py-1.5 pr-3 text-right" title="Clientes que entraron juntos (≤ 4 s y cerca) = 1 grupo">Grupos</th>}
                     <th className="py-1.5 pr-3 text-right">Tickets</th>
                     {hayTotal && <th className="py-1.5 pr-3 text-right">Total</th>}
                     {hayObjetivos && <th className="py-1.5 pr-3 text-right">Objetivo día</th>}
                     {hayTotal && hayObjetivos && <th className="py-1.5 pr-3 text-right">Diferencia</th>}
-                    <th className="py-1.5 text-right">Conversión</th>
+                    <th className={'py-1.5 text-right' + (hayGrupos ? ' pr-3' : '')}>Conversión</th>
+                    {hayGrupos && <th className="py-1.5 text-right" title="Tickets / grupos">Conv. grupo</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -295,12 +312,14 @@ export default function TasaConversion() {
                     const dif = obj != null ? tot - obj : null
                     const pctObj = obj && obj > 0 ? (100 * tot) / obj : 0
                     const c = conv(m.entradas, tk)
+                    const cg = conv(m.grupos, tk)
                     const difColor = dif == null ? 'text-sub' : dif >= 0 ? 'text-emerald-400' : pctObj >= 80 ? 'text-amber-400' : 'text-red-400'
                     return (
                       <tr key={l.local} className={'cursor-pointer border-t border-line hover:bg-surface2/60 ' + (l.local === elegido?.local ? 'bg-surface2/40' : '')}
                         onClick={() => setParams({ local: l.local }, { replace: true })}>
                         <td className="py-1.5 pr-3 font-medium text-ink">{l.local} <span className="text-xs font-normal text-sub">{nombres[l.local]}</span></td>
                         <td className="py-1.5 pr-3 text-right tabular-nums">{nf(m.entradas)}</td>
+                        {hayGrupos && <td className="py-1.5 pr-3 text-right tabular-nums">{m.grupos ? nf(m.grupos) : '—'}</td>}
                         <td className="py-1.5 pr-3 text-right tabular-nums">{ventasActivas ? nf(tk ?? 0) : '—'}</td>
                         {hayTotal && <td className="py-1.5 pr-3 text-right tabular-nums">{nfMoneda(tot)}</td>}
                         {hayObjetivos && <td className="py-1.5 pr-3 text-right tabular-nums">{obj != null ? nfMoneda(obj) : '—'}</td>}
@@ -309,7 +328,8 @@ export default function TasaConversion() {
                             {dif != null ? `${dif >= 0 ? '+' : ''}${nfMoneda(dif)}` : '—'}
                           </td>
                         )}
-                        <td className="py-1.5 text-right font-semibold tabular-nums text-ink">{c != null ? `${c.toFixed(1)}%` : '—'}</td>
+                        <td className={'py-1.5 text-right font-semibold tabular-nums text-ink' + (hayGrupos ? ' pr-3' : '')}>{c != null ? `${c.toFixed(1)}%` : '—'}</td>
+                        {hayGrupos && <td className="py-1.5 text-right tabular-nums text-ink">{cg != null ? `${cg.toFixed(1)}%` : '—'}</td>}
                       </tr>
                     )
                   })}
@@ -332,7 +352,7 @@ function DetalleLocal({
   horaSel: number | null
   onSelectHora: (h: number | null) => void
   onSelectLocal: (cod: string) => void
-  metricas: { entradas: number; transeuntes: number; nuevos: number; reingresos: number }
+  metricas: { entradas: number; transeuntes: number; nuevos: number; reingresos: number; grupos: number }
   tickets?: number
   hayVentas: boolean
   total?: number
@@ -346,6 +366,11 @@ function DetalleLocal({
   useEffect(() => setCamIdx(0), [l.local])
   const cam = camaras[Math.min(camIdx, Math.max(camaras.length - 1, 0))]
   const c = hayVentas && metricas.entradas > 0 ? (100 * (tickets ?? 0)) / metricas.entradas : null
+  const cg = hayVentas && metricas.grupos > 0 ? (100 * (tickets ?? 0)) / metricas.grupos : null
+  // Íconos de los datos sin colores repetidos en la pantalla (el primero es el del título, verde)
+  const [colConv, colConvG, colEnt, colGru, colFps, colTra, colTot, colObj, colTk, colDif] = coloresUnicos([
+    '#22c55e', '#ec4899', '#f43f5e', '#10b981', '#f97316', '#0ea5e9', '#8b5cf6', '#f59e0b', '#22d3ee', '#84cc16', '#fbbf24',
+  ]).slice(1)
   const horas = Array.from({ length: 16 }, (_, i) => i + 8).map((h) => ({
     hora: h,
     entradas: l.horas.find((x) => x.hora === h)?.entradas ?? 0,
@@ -388,31 +413,38 @@ function DetalleLocal({
       <div className="flex flex-col gap-3">
         <div className="grid grid-cols-2 gap-3">
           {/* 1. Conversión */}
-          <Dato icono={<Percent size={15} className="text-pink-500" />} label={horaSel != null ? `Conversión (${horaSel}h)` : 'Conversión'}
+          <Dato icono={<Percent size={15} style={{ color: colConv }} />} label={horaSel != null ? `Conversión (${horaSel}h)` : 'Conversión'}
             valor={c != null ? `${c.toFixed(1)}%` : '—'} grande
-            nota={hayVentas ? `${nf(tickets ?? 0)} tickets / ${nf(metricas.entradas)} entradas` : 'faltan las ventas'} />
-          {/* 2. Entradas */}
-          <Dato icono={<LogIn size={15} className="text-emerald-500" />} label={`Entradas${sufijoHora}`} valor={nf(metricas.entradas)} grande
-            nota={metricas.nuevos + metricas.reingresos > 0 ? `${nf(metricas.nuevos)} clientes únicos · ${nf(metricas.reingresos)} volvieron` : undefined} />
+            nota={hayVentas ? `${nf(tickets ?? 0)} tickets / ${nf(metricas.entradas)} personas` : 'faltan las ventas'} />
+          {/* 2. Entradas (personas) */}
+          <Dato icono={<LogIn size={15} style={{ color: colEnt }} />} label={`Entradas${sufijoHora}`} valor={nf(metricas.entradas)} grande
+            nota={metricas.nuevos + metricas.reingresos > 0 ? `${nf(metricas.nuevos)} clientes únicos · ${nf(metricas.reingresos)} volvieron` : 'personas'} />
+          {/* 2b. Conversión por grupo */}
+          <Dato icono={<Percent size={15} style={{ color: colConvG }} />} label={horaSel != null ? `Conv. por grupo (${horaSel}h)` : 'Conversión por grupo'}
+            valor={cg != null ? `${cg.toFixed(1)}%` : '—'}
+            nota={!hayVentas ? 'faltan las ventas' : metricas.grupos > 0 ? `${nf(tickets ?? 0)} tickets / ${nf(metricas.grupos)} grupos` : 'sin grupos contados'} />
+          {/* 2c. Grupos */}
+          <Dato icono={<Users size={15} style={{ color: colGru }} />} label={`Grupos${sufijoHora}`} valor={metricas.grupos > 0 ? nf(metricas.grupos) : '—'}
+            nota={metricas.grupos > 0 ? `${(metricas.entradas / metricas.grupos).toFixed(1).replace('.', ',')} personas por grupo` : 'entran juntos (≤ 4 s y cerca)'} />
           {/* 3. FPS */}
-          <Dato icono={<Gauge size={15} className="text-sky-500" />} label="FPS" valor={cam && cam.online && cam.ok ? (Number(cam.fps) || 0).toFixed(1) : '—'}
+          <Dato icono={<Gauge size={15} style={{ color: colFps }} />} label="FPS" valor={cam && cam.online && cam.ok ? (Number(cam.fps) || 0).toFixed(1) : '—'}
             nota={cam ? (camaras.length > 1 ? cam.nombre : 'cuadros por segundo que analiza la IA') : undefined} />
           {/* 4. Transeúntes */}
-          <Dato icono={<Footprints size={15} className="text-violet-500" />} label={horaSel != null ? `Transeúntes (${horaSel}h)` : 'Transeúntes'}
+          <Dato icono={<Footprints size={15} style={{ color: colTra }} />} label={horaSel != null ? `Transeúntes (${horaSel}h)` : 'Transeúntes'}
             valor={nf(metricas.transeuntes)} />
           {/* 5. Total hoy (arriba) */}
-          <Dato icono={<Receipt size={15} className="text-amber-500" />} label={`Total${sufijoHora}`}
+          <Dato icono={<Receipt size={15} style={{ color: colTot }} />} label={`Total${sufijoHora}`}
             valor={hayVentas && hayTotal ? nfMoneda(totVal) : '—'}
             nota={horaSel != null && hayVentas && hayTotal ? `acumulado hoy: ${nfMoneda(totalDia ?? 0)}` : 'acumulado del día'} />
           {/* 6. Objetivo hoy */}
-          <Dato icono={<Target size={15} className="text-cyan-400" />} label="Objetivo hoy"
+          <Dato icono={<Target size={15} style={{ color: colObj }} />} label="Objetivo hoy"
             valor={objetivo != null ? nfMoneda(objetivo) : '—'}
             nota={objetivo != null ? (horaSel != null && pctObj != null ? `esta hora aporta ${pctObj.toFixed(1)}% de la meta` : 'meta del día') : 'sin objetivo cargado'} />
           {/* 7. Tickets hoy (abajo) */}
-          <Dato icono={<Receipt size={15} className="text-lime-500" />} label={`Tickets${sufijoHora}`}
+          <Dato icono={<Receipt size={15} style={{ color: colTk }} />} label={`Tickets${sufijoHora}`}
             valor={hayVentas ? nf(tickets ?? 0) : '—'} />
           {/* 8. Diferencia entre Total y Objetivo */}
-          <Dato icono={<TrendingUp size={15} className="text-amber-400" />} label={horaSel != null ? `Diferencia (${horaSel}h vs obj)` : 'Diferencia'}
+          <Dato icono={<TrendingUp size={15} style={{ color: colDif }} />} label={horaSel != null ? `Diferencia (${horaSel}h vs obj)` : 'Diferencia'}
             valor={dif != null ? `${dif >= 0 ? '+' : ''}${nfMoneda(dif)}` : '—'}
             valorColor={colorDif}
             nota={pctObj != null ? `${pctObj.toFixed(1)}% del objetivo` : undefined} />
@@ -477,6 +509,7 @@ function DetalleLocal({
                   <tr>
                     <th className="py-1 pr-2">Local</th>
                     <th className="py-1 pr-2 text-right">Entradas</th>
+                    <th className="py-1 pr-2 text-right">Grupos</th>
                     {hayVentas && <th className="py-1 pr-2 text-right">Tickets</th>}
                     {hayVentas && hayTotal && <th className="py-1 pr-2 text-right">Venta hora</th>}
                     <th className="py-1 text-right">{hayVentas ? 'Conversión' : '% de la hora'}</th>
@@ -498,6 +531,7 @@ function DetalleLocal({
                           {loc.local} <span className="text-[11px] font-normal text-sub">{nombres[loc.local]}</span>
                         </td>
                         <td className="py-1.5 pr-2 text-right font-semibold tabular-nums text-emerald-400">{nf(eHora)}</td>
+                        <td className="py-1.5 pr-2 text-right tabular-nums text-ink">{hObj?.grupos ? nf(hObj.grupos) : '—'}</td>
                         {hayVentas && <td className="py-1.5 pr-2 text-right tabular-nums text-ink">{nf(tkHora)}</td>}
                         {hayVentas && hayTotal && <td className="py-1.5 pr-2 text-right tabular-nums text-amber-300">{nfMoneda(vHora)}</td>}
                         <td className="py-1.5 text-right font-semibold tabular-nums text-ink">{convHora}</td>

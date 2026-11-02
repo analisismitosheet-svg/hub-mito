@@ -93,6 +93,7 @@ la cámara puede conectarse con el SDK oficial de Dahua, por el mismo puerto que
 | **Entradas / salidas** | Modo `zonas`: pasar de la zona exterior (roja) a la interior (azul) y al revés. Modo `linea`: cruzar la línea según la flecha. |
 | **Transeúntes** | Cruzar de la zona A a la B (o al revés) por la vereda sin entrar. En el hub: tasa de atracción = entradas / transeúntes. |
 | **Personal** | Color de credencial/uniforme en el torso (se marca con `calibrar.py`, tecla 6). No suma a entradas ni salidas. |
+| **Grupos** | Clientes que cruzan la puerta juntos: hasta `grupo_segundos` (4) después del anterior y a menos de `grupo_distancia` (0,25 de la imagen) de él. Encadena (A, B a los 3 s, C a los 3 s de B = 1 grupo de 3). Cada uno igual suma su entrada. En el hub: conversión por grupo = tickets / grupos. |
 | **Únicos / reingresos** | `"reid": true`: reconoce si la persona ya entró hoy. Además descarta el doble conteo cuando el seguimiento pierde y recupera a alguien en menos de `dedupe_segundos`. |
 
 Para migrar un local ya calibrado en ContadorIA:
@@ -123,6 +124,7 @@ Para migrar un local ya calibrado en ContadorIA:
 | `fps_auto_max` | Tope por cámara aunque haya pocas activas (15 = no pedir más de lo que suele mandar el DVR). |
 | `margen` (por cámara) | Zona muerta alrededor de la línea (0.02 = 2 % del alto) para no contar a quien queda parado encima. |
 | `invertir` | Da vuelta entradas y salidas. |
+| `grupo_segundos` / `grupo_distancia` (por cámara) | Criterio de grupo: segundos entre uno y otro (4) y distancia máxima en la imagen (0.25). |
 
 ## Problemas comunes
 

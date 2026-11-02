@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  Loader2, RefreshCw, Footprints, LogIn, Percent, Cctv, Plus, Copy, Check, Power, Trash2,
+  Loader2, RefreshCw, Footprints, LogIn, Percent, Cctv, Plus, Copy, Check, Power, Trash2, Users,
 } from 'lucide-react'
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend, ComposedChart, Line,
@@ -29,15 +29,18 @@ function sb() {
  * tickets / entradas. Solo entran los tickets de los días en que la cámara MIDIÓ
  * entradas de ese local (`porLocalDia`): en los días sin conteo hay venta pero no
  * entradas, y sumarlos distorsiona el porcentaje.
+ *
+ * Grupos: los clientes que cruzan la puerta juntos (≤ 4 s y cerca) cuentan como 1 grupo,
+ * además de cada uno como entrada. Conversión por grupo = tickets / grupos.
  */
 
 interface Resumen {
-  totales: { entradas: number; salidas: number; transeuntes: number; empleados: number; nuevos: number; reingresos: number; dias: number }
+  totales: { entradas: number; salidas: number; transeuntes: number; empleados: number; nuevos: number; reingresos: number; grupos?: number; dias: number }
   porHora: { hora: number; entradas: number; salidas: number; promedio: number }[]
-  porDia: { fecha: string; entradas: number; salidas: number }[]
-  porLocal: { local: string; entradas: number; salidas: number; transeuntes: number; empleados: number; nuevos: number; reingresos: number }[]
+  porDia: { fecha: string; entradas: number; salidas: number; grupos?: number }[]
+  porLocal: { local: string; entradas: number; salidas: number; transeuntes: number; empleados: number; nuevos: number; reingresos: number; grupos?: number }[]
   /** Días con entradas > 0 por local: los únicos que sirven para la conversión. */
-  porLocalDia: { local: string; fecha: string; entradas: number }[]
+  porLocalDia: { local: string; fecha: string; entradas: number; grupos?: number }[]
   ocupacion: { local: string; entradas: number; salidas: number; adentro: number }[]
 }
 
@@ -239,6 +242,30 @@ export default function ContadorClientes() {
     return datos.porLocal.reduce((a, l) => a + (conVentas.has(l.local) ? l.entradas : 0), 0)
   }, [datos, ventas, conVentas])
   const convTotal = totalTickets != null && entradasComparables ? conversion(entradasComparables, totalTickets) : null
+  // Grupos: el contador los cuenta desde el 02/11/2026; antes vale 0 y no hay conversión por grupo
+  const grupos = datos?.totales.grupos ?? 0
+  const hayGrupos = grupos > 0
+  // La conversión por grupo cruza solo los días en que se contaron grupos (si no, los tickets
+  // de días anteriores al 02/11 inflarían el porcentaje), igual que la de personas con los días medidos.
+  const diasConGrupos = useMemo(() => {
+    const m = new Set<string>()
+    for (const d of datos?.porLocalDia ?? []) if ((d.grupos ?? 0) > 0) m.add(`${d.local}|${d.fecha}`)
+    return m
+  }, [datos])
+  const ticketsGrupo = useMemo(() => {
+    if (!ventas) return null
+    const porLocal = new Map<string, number>()
+    for (const v of ventas) if (enRango(v) && diasConGrupos.has(`${v.local}|${v.fecha}`)) porLocal.set(v.local, (porLocal.get(v.local) ?? 0) + v.tickets)
+    return porLocal
+  }, [ventas, enRango, diasConGrupos])
+  const gruposComparables = useMemo(() => {
+    if (!datos) return 0
+    return datos.porLocal.reduce((a, l) => a + (!ventas || conVentas.has(l.local) ? l.grupos ?? 0 : 0), 0)
+  }, [datos, ventas, conVentas])
+  const totalTicketsGrupo = ticketsGrupo ? [...ticketsGrupo.values()].reduce((a, b) => a + b, 0) : null
+  const convGrupo = totalTicketsGrupo != null && gruposComparables ? conversion(gruposComparables, totalTicketsGrupo) : null
+  // Personas por grupo: solo con las entradas de los días en que se contaron grupos
+  const entradasConGrupos = (datos?.porDia ?? []).reduce((a, d) => a + ((d.grupos ?? 0) > 0 ? d.entradas : 0), 0)
 
   const serieDia = useMemo(() => {
     if (!datos) return []
@@ -250,6 +277,7 @@ export default function ContadorClientes() {
     return datos.porDia.map((d) => ({
       ...d, name: d.fecha.slice(5).split('-').reverse().join('/'),
       conversion: ventas ? conversion(d.entradas, tkDia.get(d.fecha) ?? 0) : null,
+      conversionGrupo: ventas && d.grupos ? conversion(d.grupos, tkDia.get(d.fecha) ?? 0) : null,
     }))
   }, [datos, ventas, fLocal, mideElDia])
 
@@ -311,8 +339,10 @@ export default function ContadorClientes() {
             <div className="flex items-center justify-center gap-2 py-10 text-sub"><Loader2 size={18} className="animate-spin" aria-hidden /> Cargando datos...</div>
           ) : (
             <div className={'flex flex-col gap-4 transition-opacity ' + (cargando ? 'opacity-60' : '')}>
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <Kpi icono={<LogIn size={16} className="text-emerald-500" />} label="Entradas" valor={nf(datos.totales.entradas)} />
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+                <Kpi icono={<LogIn size={16} className="text-emerald-500" />} label="Entradas" valor={nf(datos.totales.entradas)} nota="personas" />
+                <Kpi icono={<Users size={16} className="text-orange-500" />} label="Grupos" valor={hayGrupos ? nf(grupos) : '—'}
+                  nota={hayGrupos ? `${(entradasConGrupos / grupos).toFixed(1).replace('.', ',')} personas por grupo` : 'entran juntos (≤ 4 s): se cuenta desde el 02/11'} />
                 <Kpi icono={<Footprints size={16} className="text-violet-500" />} label="Promedio / día" valor={nf(datos.totales.entradas / Math.max(datos.totales.dias, 1))} />
                 <Kpi icono={<Footprints size={16} className="text-sky-500" />} label="Transeúntes" valor={nf(datos.totales.transeuntes)}
                   nota={datos.totales.transeuntes ? `${nf(datos.totales.nuevos)} únicos` : `${nf(datos.totales.empleados)} entradas de personal (no suman)`} />
@@ -322,6 +352,12 @@ export default function ContadorClientes() {
                     ? `${nf(totalTickets ?? 0)} tickets / ${nf(entradasComparables ?? 0)} entradas${diasConCamara ? ` · ${diasConCamara} ${diasConCamara === 1 ? 'día' : 'días'} con cámara` : ''}${hayTotal ? ` · ${nfMoneda(totales.general)}` : ''}`
                     : 'configurá la vista de ventas en Cámaras'} />
               </div>
+              {ventas && hayGrupos && (
+                <p className="-mt-2 text-[11px] text-sub/70">
+                  Conversión por grupo: <strong className="text-ink">{convGrupo != null ? `${convGrupo.toFixed(1)}%` : '—'}</strong>
+                  {' '}({nf(totalTicketsGrupo ?? 0)} tickets / {nf(gruposComparables)} grupos, solo días con grupos contados). Un grupo que compra una vez cuenta como una venta del grupo entero.
+                </p>
+              )}
 
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 <div className={tarjeta}>
@@ -344,10 +380,12 @@ export default function ContadorClientes() {
                       <XAxis dataKey="name" tick={{ fontSize: 10 }} />
                       <YAxis yAxisId="c" tick={{ fontSize: 10 }} />
                       {ventas && <YAxis yAxisId="p" orientation="right" unit="%" tick={{ fontSize: 10 }} />}
-                      <Tooltip {...TOOLTIP} formatter={(v, n) => (n === 'Conversión' ? `${Number(v).toFixed(1)}%` : nf(Number(v)))} />
+                      <Tooltip {...TOOLTIP} formatter={(v, n) => (String(n).startsWith('Conversión') ? `${Number(v).toFixed(1)}%` : nf(Number(v)))} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
                       <Bar yAxisId="c" dataKey="entradas" name="Entradas" fill="#34d399" radius={[4, 4, 0, 0]} />
+                      {hayGrupos && <Bar yAxisId="c" dataKey="grupos" name="Grupos" fill="#fb923c" radius={[4, 4, 0, 0]} />}
                       {ventas && <Line yAxisId="p" dataKey="conversion" name="Conversión" stroke="#f472b6" strokeWidth={2} dot={false} />}
+                      {ventas && hayGrupos && <Line yAxisId="p" dataKey="conversionGrupo" name="Conversión por grupo" stroke="#fdba74" strokeWidth={2} strokeDasharray="4 3" dot={false} />}
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
@@ -366,15 +404,18 @@ export default function ContadorClientes() {
                             <th className="py-1.5 pr-3">Local</th>
                             <th className="py-1.5 pr-3 text-right" title={`Días con entradas medidas, sobre los ${diasRango} del rango (si la PC contadora estuvo apagada, ese día no entra)`}>Días</th>
                             <th className="py-1.5 pr-3 text-right">Entradas</th>
+                            {hayGrupos && <th className="py-1.5 pr-3 text-right" title="Clientes que entraron juntos (≤ 4 s y cerca) = 1 grupo">Grupos</th>}
                             {ventas && <th className="py-1.5 pr-3 text-right">Tickets</th>}
                             {ventas && hayTotal && <th className="py-1.5 pr-3 text-right">Total</th>}
-                            {ventas && <th className="py-1.5 text-right">Conversión</th>}
+                            {ventas && <th className={'py-1.5 text-right' + (hayGrupos ? ' pr-3' : '')}>Conversión</th>}
+                            {ventas && hayGrupos && <th className="py-1.5 text-right" title="Tickets / grupos">Conv. grupo</th>}
                           </tr>
                         </thead>
                         <tbody>
                           {datos.porLocal.map((l) => {
                             const tk = tickets?.get(l.local)
                             const conv = conVentas.has(l.local) ? conversion(l.entradas, tk ?? 0) : null
+                            const convG = conVentas.has(l.local) && l.grupos ? conversion(l.grupos, ticketsGrupo?.get(l.local) ?? 0) : null
                             return (
                               <tr key={l.local} className="border-t border-line">
                                 <td className="py-1.5 pr-3 font-medium text-ink">
@@ -382,9 +423,11 @@ export default function ContadorClientes() {
                                 </td>
                                 <td className="py-1.5 pr-3 text-right tabular-nums text-sub">{diasMedidos.get(l.local)?.size ?? 0}/{diasRango}</td>
                                 <td className="py-1.5 pr-3 text-right tabular-nums">{nf(l.entradas)}</td>
+                                {hayGrupos && <td className="py-1.5 pr-3 text-right tabular-nums">{l.grupos ? nf(l.grupos) : '—'}</td>}
                                 {ventas && <td className="py-1.5 pr-3 text-right tabular-nums">{nf(tk ?? 0)}</td>}
                                 {ventas && hayTotal && <td className="py-1.5 pr-3 text-right tabular-nums">{nfMoneda(totales.porLocal.get(l.local) ?? 0)}</td>}
-                                {ventas && <td className="py-1.5 text-right tabular-nums">{conv != null ? `${conv.toFixed(1)}%` : '—'}</td>}
+                                {ventas && <td className={'py-1.5 text-right tabular-nums' + (hayGrupos ? ' pr-3' : '')}>{conv != null ? `${conv.toFixed(1)}%` : '—'}</td>}
+                                {ventas && hayGrupos && <td className="py-1.5 text-right tabular-nums">{convG != null ? `${convG.toFixed(1)}%` : '—'}</td>}
                               </tr>
                             )
                           })}

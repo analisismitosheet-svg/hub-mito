@@ -12,7 +12,7 @@
  *   POST  header  X-Contador-Token: <token del dispositivo>
  *         body    {
  *                   tramos: [{ camara, desde (ISO UTC, múltiplo de 15 min), entradas, salidas,
- *                              transeuntes?, empleados?, nuevos?, reingresos? }],
+ *                              transeuntes?, empleados?, nuevos?, reingresos?, grupos? }],
  *                   estado?: { version, camaras: [{ nombre, ok, fps, error }] }
  *                 }
  *   -> 200 { ok: true, guardados: n, local, config: { <camara>: { config, actualizado } } }
@@ -45,9 +45,10 @@ interface Tramo {
   empleados: number
   nuevos: number
   reingresos: number
+  grupos: number
 }
 
-const OPCIONALES = ['transeuntes', 'empleados', 'nuevos', 'reingresos'] as const
+const OPCIONALES = ['transeuntes', 'empleados', 'nuevos', 'reingresos', 'grupos'] as const
 
 const MAX_TRAMOS = 2000
 const QUINCE_MIN = 15 * 60 * 1000
