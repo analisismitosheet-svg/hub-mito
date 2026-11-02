@@ -504,6 +504,8 @@ class Pista:
     vinculo: str = ""                # 'seguro' | 'reciente' | 'dia' | 'nueva'
     entrada_pend: float | None = None  # entrada detectada, esperando reconocer quién es
     cruce: tuple[float, float, float] | None = None  # (cuándo, x, y) cruzó la puerta para entrar (grupos)
+    grupo: int = 0                   # nro de grupo con el que entró (para marcarlo en el video)
+    caja: tuple[int, int, int, int] | None = None  # última caja en píxeles (x1, y1, x2, y2)
     inicio: float = 0.0              # cuándo y dónde apareció (para unir ids que cambian)
     x0: float = -1.0
     y0: float = -1.0
@@ -539,7 +541,9 @@ class Camara(threading.Thread):
         # Grupo: cruza la puerta hasta grupo_segundos después del anterior Y cerca de él (0..1 de la imagen)
         self.grupo_s = float(cam.get("grupo_segundos", 4))
         self.grupo_dist = float(cam.get("grupo_distancia", 0.25))
-        self.ultimo_cruce: tuple[float, float, float] | None = None  # último cliente que entró (cuándo, x, y)
+        self.ultimo_cruce: tuple[float, float, float, int] | None = None  # último cliente que entró (cuándo, x, y, grupo)
+        self.n_grupo = 0                       # grupos abiertos (numeración para el video)
+        self.tamano_grupo: dict[int, int] = {}  # nro de grupo -> personas que entraron con él
         self.uniforme = uniforme_compartido(float(cfg.get("uniforme_umbral", 0.86))) if cam.get("uniforme", True) else None
         self.ultima_deteccion = None  # (cuadro, cajas normalizadas) para marcar empleados desde el hub
         self.fps = 0.0
@@ -767,6 +771,7 @@ class Camara(threading.Thread):
                 if p.x0 < 0:
                     p.x0, p.y0 = px, py
                 p.x, p.y = px, py
+                p.caja = (int(x1), int(y1), int(x2), int(y2))
                 recorte = cuadro[max(0, int(y1)):int(y2), max(0, int(x1)):int(x2)]
                 entero = x1 > 2 and y1 > 2 and x2 < ancho - 2 and y2 < alto - 2
                 self.observar(p, recorte, entero and (y2 - y1) >= 0.12 * alto, ahora)
@@ -897,8 +902,16 @@ class Camara(threading.Thread):
         previo = self.ultimo_cruce
         junto = (previo is not None and abs(t - previo[0]) <= self.grupo_s
                  and ((x - previo[1]) ** 2 + (y - previo[2]) ** 2) ** 0.5 <= self.grupo_dist)
+        if junto:
+            p.grupo = previo[3]
+        else:
+            self.n_grupo += 1
+            p.grupo = self.n_grupo
+            if len(self.tamano_grupo) > 500:  # solo hacen falta los recientes (para el video)
+                self.tamano_grupo = {g: n for g, n in self.tamano_grupo.items() if g > self.n_grupo - 100}
+        self.tamano_grupo[p.grupo] = self.tamano_grupo.get(p.grupo, 0) + 1
         if previo is None or t >= previo[0]:
-            self.ultimo_cruce = (t, x, y)
+            self.ultimo_cruce = (t, x, y, p.grupo)
         if junto:
             log.info("[%s] id %s entró en grupo con el anterior (%.1f s)", self.nombre, p.tid, abs(t - previo[0]))
             return ()
@@ -930,7 +943,7 @@ class Camara(threading.Thread):
         log.info("[%s] %s (id %s%s)", self.nombre, " + ".join(c.upper() for c in campos), p.tid, quien)
 
     def anotar(self, img, ancho, alto):
-        # Sin texto sobre el video (entradas, FPS, etc. se ven en el hub): solo zonas, línea y personas
+        # Sin conteos sobre el video (entradas, FPS, etc. se ven en el hub): zonas, línea, personas y grupos
         if self.modo == "linea":
             a = (int(self.linea.ax * ancho), int(self.linea.ay * alto))
             b = (int(self.linea.bx * ancho), int(self.linea.by * alto))
@@ -941,7 +954,35 @@ class Camara(threading.Thread):
         for z, color in ((self.zona_a, (0, 200, 255)), (self.zona_b, (255, 200, 0))):
             if z:
                 cv2.polylines(img, [z.pixeles(ancho, alto)], True, color, 1)
+        self.anotar_grupos(img)
         return img
+
+    # Colores (BGR) para distinguir grupos que están en pantalla a la vez
+    COLORES_GRUPO = ((0, 140, 255), (255, 0, 255), (0, 255, 0), (255, 255, 0), (80, 80, 255), (255, 120, 0))
+
+    def anotar_grupos(self, img) -> None:
+        """Los clientes que entraron juntos (grupo de 2 o más) se marcan con una caja gruesa del mismo
+        color, una línea que los une y la etiqueta "Grupo de N" arriba del primero que se ve."""
+        ahora = self.reloj()
+        visibles: dict[int, list[Pista]] = {}
+        for p in self.pistas.values():
+            if p.grupo and p.caja and ahora - p.visto < 1.0 and self.tamano_grupo.get(p.grupo, 0) >= 2:
+                visibles.setdefault(p.grupo, []).append(p)
+        for g, miembros in visibles.items():
+            color = self.COLORES_GRUPO[g % len(self.COLORES_GRUPO)]
+            centros = []
+            for p in miembros:
+                x1, y1, x2, y2 = p.caja
+                cv2.rectangle(img, (x1, y1), (x2, y2), color, 3)
+                centros.append(((x1 + x2) // 2, (y1 + y2) // 2))
+            for a, b in zip(centros, centros[1:]):
+                cv2.line(img, a, b, color, 2)
+            x1, y1 = miembros[0].caja[:2]
+            texto = f"Grupo de {self.tamano_grupo[g]}"
+            (tw, th), _ = cv2.getTextSize(texto, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+            y_txt = max(th + 6, y1 - 6)
+            cv2.rectangle(img, (x1, y_txt - th - 6), (x1 + tw + 8, y_txt + 4), color, -1)
+            cv2.putText(img, texto, (x1 + 4, y_txt), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2, cv2.LINE_AA)
 
 
 # ------------------------------------------------------------------ envío ---
