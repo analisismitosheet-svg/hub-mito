@@ -110,7 +110,10 @@ WHERE art <> '';
    NOMED son insumos/avíos y no están en la lista Compra de INDO (valorizaba $0
    entera). El 02/11/2026 el usuario pidió valorizar TODO lo de NOMED con la
    LISTA9, tomada de DRAGONFISH_NOMED.ZooLogic.PRECIOAR (la de INDO no tiene esos
-   artículos). Mismo criterio que #costo: la FECHAVIG más nueva por artículo. */
+   artículos). Mismo criterio que #costo: la FECHAVIG más nueva por artículo.
+   También es el RESPALDO de DRAGONFISH_FABRICA (02/11/2026): lo que no tiene
+   LISTA0 se toma de esta LISTA9 (la LISTA9 de la propia FABRICA está vacía para
+   esos artículos y la de NOMED los tiene). */
 IF OBJECT_ID('tempdb..#costo9') IS NOT NULL DROP TABLE #costo9;
 CREATE TABLE #costo9 (art varchar(50) PRIMARY KEY, costo float, vigencia datetime);
 
@@ -138,7 +141,7 @@ IF OBJECT_ID('tempdb..#art') IS NOT NULL DROP TABLE #art;
 -- costo = el que se usó en ESA base (NOMED usa LISTA9, el resto LISTA0); NULL = sin costo
 CREATE TABLE #art (base sysname, art varchar(50), unidades float, valorizado float, costo float);
 
-DECLARE @b sysname, @sql nvarchar(max), @tc nvarchar(20);
+DECLARE @b sysname, @sql nvarchar(max), @tc nvarchar(20), @resp bit;
 DECLARE cur CURSOR LOCAL FAST_FORWARD FOR
   SELECT d.name
     FROM sys.databases d
@@ -157,16 +160,19 @@ BEGIN
   IF OBJECT_ID(QUOTENAME(@b) + '.ZooLogic.COMB') IS NOT NULL
   BEGIN
     BEGIN TRY
+      -- lista de costo de la base (k) y respaldo LISTA9 (k9, solo FABRICA)
       SET @tc = CASE WHEN @b = 'DRAGONFISH_NOMED' THEN N'#costo9' ELSE N'#costo' END;
+      SET @resp = CASE WHEN @b = 'DRAGONFISH_FABRICA' THEN 1 ELSE 0 END;
       SET @sql = N'
         INSERT INTO #bases (base, unidades, valorizado, unidades_sin_costo, skus)
         SELECT @b,
                SUM(CAST(c.COCANT AS float)),
-               SUM(CAST(c.COCANT AS float) * ISNULL(k.costo, 0)),
-               SUM(CASE WHEN k.costo IS NULL THEN CAST(c.COCANT AS float) ELSE 0 END),
+               SUM(CAST(c.COCANT AS float) * ISNULL(COALESCE(k.costo, k9.costo), 0)),
+               SUM(CASE WHEN COALESCE(k.costo, k9.costo) IS NULL THEN CAST(c.COCANT AS float) ELSE 0 END),
                COUNT(*)
           FROM ' + QUOTENAME(@b) + N'.ZooLogic.COMB c
           LEFT JOIN ' + @tc + N' k ON k.art = LTRIM(RTRIM(c.COART))
+          LEFT JOIN #costo9 k9 ON k9.art = LTRIM(RTRIM(c.COART)) AND @resp = 1
          WHERE c.COCANT > 0
            AND NOT EXISTS (SELECT 1 FROM #sinprov s WHERE s.art = LTRIM(RTRIM(c.COART)));
 
@@ -174,14 +180,15 @@ BEGIN
         SELECT @b,
                LTRIM(RTRIM(c.COART)),
                SUM(CAST(c.COCANT AS float)),
-               SUM(CAST(c.COCANT AS float) * ISNULL(k.costo, 0)),
-               MAX(k.costo)
+               SUM(CAST(c.COCANT AS float) * ISNULL(COALESCE(k.costo, k9.costo), 0)),
+               MAX(COALESCE(k.costo, k9.costo))
           FROM ' + QUOTENAME(@b) + N'.ZooLogic.COMB c
           LEFT JOIN ' + @tc + N' k ON k.art = LTRIM(RTRIM(c.COART))
+          LEFT JOIN #costo9 k9 ON k9.art = LTRIM(RTRIM(c.COART)) AND @resp = 1
          WHERE c.COCANT > 0
            AND NOT EXISTS (SELECT 1 FROM #sinprov s WHERE s.art = LTRIM(RTRIM(c.COART)))
          GROUP BY LTRIM(RTRIM(c.COART));';
-      EXEC sp_executesql @sql, N'@b sysname', @b = @b;
+      EXEC sp_executesql @sql, N'@b sysname, @resp bit', @b = @b, @resp = @resp;
     END TRY
     BEGIN CATCH
       /* Una base caída, en recuperación o sin permisos no tumba el informe */
