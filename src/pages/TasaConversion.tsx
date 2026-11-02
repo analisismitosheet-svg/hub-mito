@@ -21,6 +21,8 @@ import { coloresUnicos } from '@/lib/coloresUnicos'
  * valida el usuario contra el hub (cada local ve solo lo suyo). El hub nunca recibe ni guarda imágenes.
  * Ventas: vista SQL configurada en config_app 'contador_vista_ventas'
  * (local, fecha, hora, tickets, total). Si no hay, se muestra solo el conteo.
+ * Conversión = tickets / clientes únicos (el reid reconoce a quien vuelve en el día: no infla el
+ * denominador). Sin reid (nuevos + reingresos = 0) se usan las entradas.
  * Grupos: clientes que entran juntos (≤ 4 s y cerca) = 1 grupo; conversión por grupo = tickets / grupos.
  */
 
@@ -59,6 +61,9 @@ const hoyIso = () => {
   const d = new Date()
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
 }
+/** Denominador de la conversión: clientes únicos; si la cámara no reconoce personas (sin reid), las entradas */
+const clientes = (m: { entradas: number; nuevos?: number; reingresos?: number }) =>
+  (m.nuevos ?? 0) + (m.reingresos ?? 0) > 0 ? m.nuevos ?? 0 : m.entradas
 const enLinea = (d: Dispositivo) =>
   d.activo && !!d.ultimo_latido && Date.now() - new Date(d.ultimo_latido).getTime() <= OFFLINE_MIN * 60000
 
@@ -193,6 +198,7 @@ export default function TasaConversion() {
     ventasActivas && entradas > 0 ? (100 * (tk ?? 0)) / entradas : null
 
   const totEntradas = locales.reduce((a, l) => a + metricasDe(l, horaSel).entradas, 0)
+  const totClientes = locales.reduce((a, l) => a + clientes(metricasDe(l, horaSel)), 0)
   const totGrupos = locales.reduce((a, l) => a + metricasDe(l, horaSel).grupos, 0)
   // Los grupos se cuentan desde el 02/11/2026: sin grupos (contador viejo) no se muestran las columnas
   const hayGrupos = locales.some((l) => (l.grupos ?? 0) > 0)
@@ -221,7 +227,7 @@ export default function TasaConversion() {
             {horaSel != null && <><strong className="text-emerald-400">{horaSel}h</strong> · </>}
             Total: <strong className="text-ink">{nf(totEntradas)}</strong> entradas
             {hayGrupos && <> · <strong className="text-ink">{nf(totGrupos)}</strong> grupos</>}
-            {totTickets != null && <> · <strong className="text-ink">{nf(totTickets)}</strong> tickets · <strong className="text-ink">{totEntradas ? ((100 * totTickets) / totEntradas).toFixed(1) : '—'}%</strong></>}
+            {totTickets != null && <> · <strong className="text-ink">{nf(totTickets)}</strong> tickets · <strong className="text-ink">{totClientes ? ((100 * totTickets) / totClientes).toFixed(1) : '—'}%</strong></>}
             {hayGrupos && tkConGrupos != null && totGrupos > 0 && <> (<strong className="text-ink">{((100 * tkConGrupos) / totGrupos).toFixed(1)}%</strong> por grupo)</>}
             {totTotal != null && <> · <strong className="text-ink">{nfMoneda(totTotal)}</strong></>}
           </span>
@@ -245,7 +251,7 @@ export default function TasaConversion() {
           <div className="flex flex-wrap gap-1.5">
             {locales.map((l) => {
               const m = metricasDe(l, horaSel)
-              const c = conv(m.entradas, ventasActivas?.tickets.get(l.local))
+              const c = conv(clientes(m), ventasActivas?.tickets.get(l.local))
               const activo = l.local === elegido?.local
               const online = l.dispositivos.some(enLinea)
               return (
@@ -311,7 +317,7 @@ export default function TasaConversion() {
                     const obj = objetivos.get(l.local)
                     const dif = obj != null ? tot - obj : null
                     const pctObj = obj && obj > 0 ? (100 * tot) / obj : 0
-                    const c = conv(m.entradas, tk)
+                    const c = conv(clientes(m), tk)
                     const cg = conv(m.grupos, tk)
                     const difColor = dif == null ? 'text-sub' : dif >= 0 ? 'text-emerald-400' : pctObj >= 80 ? 'text-amber-400' : 'text-red-400'
                     return (
@@ -365,7 +371,9 @@ function DetalleLocal({
   const [camIdx, setCamIdx] = useState(0)
   useEffect(() => setCamIdx(0), [l.local])
   const cam = camaras[Math.min(camIdx, Math.max(camaras.length - 1, 0))]
-  const c = hayVentas && metricas.entradas > 0 ? (100 * (tickets ?? 0)) / metricas.entradas : null
+  const unicos = clientes(metricas)
+  const sinReid = unicos === metricas.entradas && metricas.nuevos + metricas.reingresos === 0
+  const c = hayVentas && unicos > 0 ? (100 * (tickets ?? 0)) / unicos : null
   const cg = hayVentas && metricas.grupos > 0 ? (100 * (tickets ?? 0)) / metricas.grupos : null
   // Íconos de los datos sin colores repetidos en la pantalla (el primero es el del título, verde)
   const [colConv, colConvG, colEnt, colGru, colFps, colTra, colTot, colObj, colTk, colDif] = coloresUnicos([
@@ -415,7 +423,7 @@ function DetalleLocal({
           {/* 1. Conversión */}
           <Dato icono={<Percent size={15} style={{ color: colConv }} />} label={horaSel != null ? `Conversión (${horaSel}h)` : 'Conversión'}
             valor={c != null ? `${c.toFixed(1)}%` : '—'} grande
-            nota={hayVentas ? `${nf(tickets ?? 0)} tickets / ${nf(metricas.entradas)} personas` : 'faltan las ventas'} />
+            nota={hayVentas ? `${nf(tickets ?? 0)} tickets / ${nf(unicos)} ${sinReid ? 'personas' : 'clientes únicos'}` : 'faltan las ventas'} />
           {/* 2. Entradas (personas) */}
           <Dato icono={<LogIn size={15} style={{ color: colEnt }} />} label={`Entradas${sufijoHora}`} valor={nf(metricas.entradas)} grande
             nota={metricas.nuevos + metricas.reingresos > 0 ? `${nf(metricas.nuevos)} clientes únicos · ${nf(metricas.reingresos)} volvieron` : 'personas'} />
@@ -519,10 +527,11 @@ function DetalleLocal({
                   {locales.map((loc) => {
                     const hObj = loc.horas.find((x) => x.hora === horaSel)
                     const eHora = hObj?.entradas ?? 0
+                    const uHora = hObj ? clientes(hObj) : 0
                     const tkHora = ventasHoraPorLocal?.tickets.get(loc.local) ?? 0
                     const vHora = ventasHoraPorLocal?.totales.get(loc.local) ?? 0
                     const convHora = hayVentas
-                      ? (eHora > 0 ? `${((100 * tkHora) / eHora).toFixed(1)}%` : '—')
+                      ? (uHora > 0 ? `${((100 * tkHora) / uHora).toFixed(1)}%` : '—')
                       : (totHoraEntradas > 0 ? `${((100 * eHora) / totHoraEntradas).toFixed(1)}%` : '—')
                     return (
                       <tr key={loc.local} onClick={() => onSelectLocal(loc.local)}
