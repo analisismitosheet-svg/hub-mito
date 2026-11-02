@@ -106,14 +106,39 @@ SELECT art FROM (
 ) x
 WHERE art <> '';
 
+/* ---- 1d. Costo de DRAGONFISH_NOMED: lista LISTA9 de la propia NOMED ----
+   NOMED son insumos/avíos y no están en la lista Compra de INDO (valorizaba $0
+   entera). El 02/11/2026 el usuario pidió valorizar TODO lo de NOMED con la
+   LISTA9, tomada de DRAGONFISH_NOMED.ZooLogic.PRECIOAR (la de INDO no tiene esos
+   artículos). Mismo criterio que #costo: la FECHAVIG más nueva por artículo. */
+IF OBJECT_ID('tempdb..#costo9') IS NOT NULL DROP TABLE #costo9;
+CREATE TABLE #costo9 (art varchar(50) PRIMARY KEY, costo float, vigencia datetime);
+
+INSERT INTO #costo9 (art, costo, vigencia)
+SELECT art, costo, vigencia
+  FROM (
+    SELECT LTRIM(RTRIM(ARTICULO)) AS art,
+           CAST(PDIRECTO AS float) AS costo,
+           FECHAVIG AS vigencia,
+           ROW_NUMBER() OVER (
+             PARTITION BY LTRIM(RTRIM(ARTICULO))
+             ORDER BY FECHAVIG DESC, HMODIFW DESC
+           ) AS rn
+      FROM DRAGONFISH_NOMED.ZooLogic.PRECIOAR
+     WHERE LTRIM(RTRIM(LISTAPRE)) = 'LISTA9'
+       AND LTRIM(RTRIM(ISNULL(ARTICULO, ''))) <> ''
+  ) x
+ WHERE rn = 1;
+
 /* ---- 2. Una pasada por base ---- */
 IF OBJECT_ID('tempdb..#bases') IS NOT NULL DROP TABLE #bases;
 CREATE TABLE #bases (base sysname, unidades float, valorizado float, unidades_sin_costo float, skus int);
 
 IF OBJECT_ID('tempdb..#art') IS NOT NULL DROP TABLE #art;
-CREATE TABLE #art (base sysname, art varchar(50), unidades float, valorizado float);
+-- costo = el que se usó en ESA base (NOMED usa LISTA9, el resto LISTA0); NULL = sin costo
+CREATE TABLE #art (base sysname, art varchar(50), unidades float, valorizado float, costo float);
 
-DECLARE @b sysname, @sql nvarchar(max);
+DECLARE @b sysname, @sql nvarchar(max), @tc nvarchar(20);
 DECLARE cur CURSOR LOCAL FAST_FORWARD FOR
   SELECT d.name
     FROM sys.databases d
@@ -132,6 +157,7 @@ BEGIN
   IF OBJECT_ID(QUOTENAME(@b) + '.ZooLogic.COMB') IS NOT NULL
   BEGIN
     BEGIN TRY
+      SET @tc = CASE WHEN @b = 'DRAGONFISH_NOMED' THEN N'#costo9' ELSE N'#costo' END;
       SET @sql = N'
         INSERT INTO #bases (base, unidades, valorizado, unidades_sin_costo, skus)
         SELECT @b,
@@ -140,17 +166,18 @@ BEGIN
                SUM(CASE WHEN k.costo IS NULL THEN CAST(c.COCANT AS float) ELSE 0 END),
                COUNT(*)
           FROM ' + QUOTENAME(@b) + N'.ZooLogic.COMB c
-          LEFT JOIN #costo k ON k.art = LTRIM(RTRIM(c.COART))
+          LEFT JOIN ' + @tc + N' k ON k.art = LTRIM(RTRIM(c.COART))
          WHERE c.COCANT > 0
            AND NOT EXISTS (SELECT 1 FROM #sinprov s WHERE s.art = LTRIM(RTRIM(c.COART)));
 
-        INSERT INTO #art (base, art, unidades, valorizado)
+        INSERT INTO #art (base, art, unidades, valorizado, costo)
         SELECT @b,
                LTRIM(RTRIM(c.COART)),
                SUM(CAST(c.COCANT AS float)),
-               SUM(CAST(c.COCANT AS float) * ISNULL(k.costo, 0))
+               SUM(CAST(c.COCANT AS float) * ISNULL(k.costo, 0)),
+               MAX(k.costo)
           FROM ' + QUOTENAME(@b) + N'.ZooLogic.COMB c
-          LEFT JOIN #costo k ON k.art = LTRIM(RTRIM(c.COART))
+          LEFT JOIN ' + @tc + N' k ON k.art = LTRIM(RTRIM(c.COART))
          WHERE c.COCANT > 0
            AND NOT EXISTS (SELECT 1 FROM #sinprov s WHERE s.art = LTRIM(RTRIM(c.COART)))
          GROUP BY LTRIM(RTRIM(c.COART));';
@@ -182,9 +209,9 @@ SELECT a.art AS articulo,
        MAX(ISNULL(d.descripcion, '')) AS descripcion,
        SUM(a.unidades) AS unidades,
        SUM(a.valorizado) AS valorizado,
-       MAX(k.costo) AS costo
+       -- el de la lista Compra; si el artículo solo está en NOMED, el de su LISTA9
+       COALESCE(MAX(CASE WHEN a.base <> 'DRAGONFISH_NOMED' THEN a.costo END), MAX(a.costo)) AS costo
   FROM #art a
-  LEFT JOIN #costo k ON k.art = a.art
   LEFT JOIN #desc d ON d.art = a.art
  GROUP BY a.art
  ORDER BY SUM(a.valorizado) DESC;
@@ -194,8 +221,9 @@ SELECT COUNT(*) AS articulos_con_costo,
        MIN(vigencia) AS primera_vigencia
   FROM #costo;
 
-/* Artículos con stock y SIN costo cargado en la lista Compra: son los que
-   suman unidades y $0. Van todos (no hay TOP) para poder cargarles el costo.
+/* Artículos con stock y SIN costo cargado: son los que suman unidades y $0.
+   Van todos (no hay TOP) para poder cargarles el costo. Se mira el costo de
+   cada base (`a.costo`): en NOMED falta en la LISTA9, en el resto en la LISTA0.
 
    `unidades_val` son las que están en bases que SÍ valorizan algo; el resto
    (`unidades` - `unidades_val`) vive en las bases de insumos tipo NOMED, que la
@@ -208,10 +236,9 @@ SELECT a.art AS articulo,
        COUNT(DISTINCT a.base) AS sucursales,
        STRING_AGG(REPLACE(a.base, 'DRAGONFISH_', ''), ' · ') WITHIN GROUP (ORDER BY a.base) AS bases
   FROM #art a
-  LEFT JOIN #costo k ON k.art = a.art
   LEFT JOIN #desc d ON d.art = a.art
   LEFT JOIN (SELECT base FROM #bases WHERE ISNULL(valorizado, 0) > 0) v ON v.base = a.base
- WHERE k.costo IS NULL
+ WHERE a.costo IS NULL
  GROUP BY a.art
  ORDER BY SUM(CASE WHEN v.base IS NOT NULL THEN a.unidades ELSE 0 END) DESC, SUM(a.unidades) DESC;
 
@@ -225,7 +252,6 @@ SELECT a.art AS articulo,
        a.unidades,
        CASE WHEN v.base IS NOT NULL THEN 1 ELSE 0 END AS valoriza
   FROM #art a
-  LEFT JOIN #costo k ON k.art = a.art
   LEFT JOIN (SELECT base FROM #bases WHERE ISNULL(valorizado, 0) > 0) v ON v.base = a.base
- WHERE k.costo IS NULL
+ WHERE a.costo IS NULL
  ORDER BY a.art, a.unidades DESC;
