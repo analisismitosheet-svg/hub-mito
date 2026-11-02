@@ -58,6 +58,10 @@ export interface EnvioInforme {
   ok: boolean
   detalle: string | null
   origen: 'manual' | 'cron' | 'prueba'
+  /** Entrega según el webhook de Meta (sql/informes_envios_entrega.sql); null = sin aviso todavía */
+  estado?: 'sent' | 'delivered' | 'read' | 'failed' | null
+  estado_at?: string | null
+  error_entrega?: string | null
 }
 
 export const FUENTES: { id: FuenteInforme; label: string; desc: string }[] = [

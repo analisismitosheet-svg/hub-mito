@@ -10,6 +10,8 @@
  *   GET  /api/informe?evento=franquicias               -> manda los WhatsApp en cola de la reposición diaria
  *        automática de franquicias (pg_cron cada 5 min y el puente apenas la arma)
  *   POST /api/informe   { franquicias: id, todos? }    -> manda ya el WhatsApp de esa reposición (Franquicias)
+ *   GET/POST /api/informe?evento=whatsapp              -> webhook de Meta: verificación y estado de entrega
+ *        (sent/delivered/read/failed) de cada mensaje, guardado en informes_envios por wamid
  *
  * Antes eran dos funciones (informe-enviar e informe-cron); se unificaron para no
  * pasar el tope de 12 Serverless Functions del plan Hobby de Vercel. El método
@@ -34,6 +36,7 @@ type Res = {
   status(code: number): Res
   setHeader(name: string, value: string): Res
   json(body: unknown): void
+  send(body: string): void
 }
 
 const DIAS_ES = ['dom', 'lun', 'mar', 'mie', 'jue', 'vie', 'sab']
@@ -263,8 +266,62 @@ async function manual(req: Req, res: Res) {
   return res.status(200).json(resultado)
 }
 
+/* ------------------------------------------------------------------ */
+/*  Webhook de WhatsApp: estado de entrega de lo que mandamos           */
+/* ------------------------------------------------------------------ */
+
+/** Token de la verificación del webhook (el que se escribe en Meta al suscribirlo). No es la
+ *  credencial de envío: solo prueba que la suscripción la pidió quien conoce este valor. */
+const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || 'hub-mito-informes-entrega'
+
+/** Orden de los estados: uno viejo que llega tarde (sent después de read) no pisa al nuevo. */
+const ORDEN_ESTADO: Record<string, number> = { sent: 1, delivered: 2, read: 3, failed: 4 }
+
+type EstadoMeta = {
+  id?: string
+  status?: string
+  timestamp?: string
+  errors?: Array<{ code?: number; title?: string; message?: string; error_data?: { details?: string } }>
+}
+
+async function webhookWhatsapp(req: Req, res: Res) {
+  // Verificación al suscribir: Meta manda hub.mode=subscribe, hub.verify_token y hub.challenge
+  if (req.method === 'GET') {
+    const q = req.query ?? {}
+    if (q['hub.mode'] === 'subscribe' && q['hub.verify_token'] === VERIFY_TOKEN) {
+      return res.status(200).send(String(q['hub.challenge'] ?? ''))
+    }
+    return res.status(403).json({ error: 'Token de verificación inválido' })
+  }
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return res.status(500).json({ error: 'Falta la configuración de Supabase' })
+
+  // Solo actualiza filas que ya existen (por wamid): un aviso inventado no agrega nada.
+  const body = cuerpo(req) as { entry?: Array<{ changes?: Array<{ value?: { statuses?: EstadoMeta[] } }> }> }
+  const estados = (body.entry ?? []).flatMap((e) => (e.changes ?? []).flatMap((c) => c.value?.statuses ?? []))
+  for (const s of estados) {
+    if (!s.id || !s.status || !(s.status in ORDEN_ESTADO)) continue
+    const err = s.errors?.[0]
+    const errorTxt = err ? `${err.code ?? ''} ${err.title ?? err.message ?? ''}${err.error_data?.details ? ` — ${err.error_data.details}` : ''}`.trim() : null
+    // Estados que no deben pisar: los que van "después" del que llega
+    const peores = Object.keys(ORDEN_ESTADO).filter((k) => ORDEN_ESTADO[k] > ORDEN_ESTADO[s.status!])
+    const filtro = peores.length ? `&or=(estado.is.null,estado.not.in.(${peores.join(',')}))` : ''
+    await rest(`informes_envios?wamid=eq.${encodeURIComponent(s.id)}${filtro}`, {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        estado: s.status,
+        estado_at: s.timestamp ? new Date(Number(s.timestamp) * 1000).toISOString() : new Date().toISOString(),
+        ...(errorTxt ? { error_entrega: errorTxt.slice(0, 300) } : {}),
+      }),
+    }).catch(() => undefined)
+  }
+  // Meta reintenta si no recibe 200: se contesta siempre, aunque no haya nada nuestro
+  return res.status(200).json({ ok: true, estados: estados.length })
+}
+
 export default async function handler(req: Req, res: Res) {
   res.setHeader('Cache-Control', 'no-store')
+  if (req.query?.evento === 'whatsapp') return webhookWhatsapp(req, res)
   if (req.method === 'GET') return cron(req, res)
   if (req.method === 'POST') return manual(req, res)
   return res.status(405).json({ error: 'Método no permitido' })

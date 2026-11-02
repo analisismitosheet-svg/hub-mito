@@ -20,6 +20,14 @@ const inputCls =
   'w-full rounded-xl border border-line bg-surface2 px-3 py-2 text-sm text-ink outline-none transition duration-250 placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40'
 const labelCls = 'mb-1 block text-xs font-medium text-sub'
 
+/** Estado de entrega que avisa Meta por webhook (informes_envios.estado). */
+const ENTREGA: Record<string, { label: string; clase: string }> = {
+  sent: { label: 'enviado', clase: 'bg-line text-sub' },
+  delivered: { label: 'entregado', clase: 'bg-sky-500/15 text-sky-300' },
+  read: { label: 'leído', clase: 'bg-violet-500/15 text-violet-300' },
+  failed: { label: 'no llegó', clase: 'bg-red-500/15 text-red-300' },
+}
+
 /** POST a /api/informe con el JWT de la sesión. */
 async function apiInforme(payload: Record<string, unknown>): Promise<{ texto?: string; imagen?: string; detalle?: string; enviados?: number }> {
   if (!supabase) throw new Error('Supabase no está configurado.')
@@ -321,9 +329,21 @@ export default function Informes() {
                   <li key={e.id} className="rounded-xl border border-line bg-surface2/50 px-3 py-2 text-xs">
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-medium text-ink">{new Date(e.enviado_at).toLocaleString('es-AR')}</span>
-                      <span className={`rounded-full px-2 py-0.5 font-medium ${e.ok ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-300'}`}>{e.ok ? 'ok' : 'error'}</span>
+                      <span className="flex items-center gap-1">
+                        {/* Lo que avisó Meta después de aceptarlo (webhook): si de verdad llegó */}
+                        {e.ok && e.estado && (
+                          <span
+                            className={`rounded-full px-2 py-0.5 font-medium ${ENTREGA[e.estado]?.clase ?? 'bg-line text-sub'}`}
+                            title={e.estado_at ? new Date(e.estado_at).toLocaleString('es-AR') : undefined}
+                          >
+                            {ENTREGA[e.estado]?.label ?? e.estado}
+                          </span>
+                        )}
+                        <span className={`rounded-full px-2 py-0.5 font-medium ${e.ok ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-300'}`}>{e.ok ? 'ok' : 'error'}</span>
+                      </span>
                     </div>
                     <p className="mt-0.5 text-sub">{e.destino ?? '—'} · {e.origen}{e.detalle ? ` · ${e.detalle}` : ''}</p>
+                    {e.error_entrega && <p className="mt-0.5 text-red-300/90">⚠ No se entregó: {e.error_entrega}</p>}
                   </li>
                 ))}
               </ul>
