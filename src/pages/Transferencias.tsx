@@ -104,6 +104,9 @@ function fmtDuracion(desdeIso: string, hastaIso: string): string {
   return m ? `${h} h ${m} min` : `${h} h`
 }
 
+// Encabezados del Excel que no son locales aunque queden entre los datos del artículo y TOTAL.
+const NO_LOCAL = /^(TOTAL|STOCK|VENTAS?|PRIORIDAD|CURVA|PRECIO|COSTO|MARCA|RUBRO|TEMPORADA|PROVEEDOR|OBS)/
+
 function escHtml(s: string) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string))
 }
@@ -658,10 +661,14 @@ export default function Transferencias() {
         const idxTalle = up.indexOf('TALLE')
         const idxTipo = up.indexOf('TIPO')
         const idxTotal = up.indexOf('TOTAL')
-        const start = idxTipo >= 0 ? idxTipo + 1 : idxArt + 6
+        // Los locales destino arrancan después de la última columna de datos del artículo.
+        // La plantilla diaria trae 6 (… MATERIAL, TIPO) y la de cyber/MAT solo 4
+        // (ARTICULO, DESC, COLOR, TALLE): con un corrimiento fijo de 6 se perdían
+        // las 2 primeras columnas de locales (VCPD y WALMARTD).
+        const start = Math.max(idxArt, idxDesc, idxMaterial, idxColor, idxTalle, idxTipo) + 1
         const end = idxTotal >= 0 ? idxTotal : header.length
         const destCols: number[] = []
-        for (let j = start; j < end; j++) if (header[j]?.trim()) destCols.push(j)
+        for (let j = start; j < end; j++) if (header[j]?.trim() && !NO_LOCAL.test(up[j])) destCols.push(j)
         for (let i = hidx + 1; i < rows.length; i++) {
           const row = rows[i]
           const art = String(row[idxArt] ?? '').trim()
@@ -686,8 +693,19 @@ export default function Transferencias() {
           }
         }
       }
+      const origenesLeidos = [...new Set(nuevos.map((n) => n.origen))]
+      const destinosLeidos = [...new Set(nuevos.map((n) => n.destino))]
       if (!nuevos.length) {
         setError('No se detectaron transferencias en el Excel. Revisá que tenga una fila de encabezado con "ARTICULO" y columnas por local.')
+      } else if (
+        !window.confirm(
+          `Se van a cargar ${nuevos.length} renglones.\n\n` +
+            `Locales origen (${origenesLeidos.length}): ${origenesLeidos.join(', ')}\n\n` +
+            `Locales destino (${destinosLeidos.length}): ${destinosLeidos.join(', ')}\n\n` +
+            '¿Está bien? Si falta algún local, cancelá y revisá los encabezados del Excel.',
+        )
+      ) {
+        // cancelado: no se crea el lote
       } else {
         const { data: lote, error: e1 } = await supabase
           .from('transfer_lotes')
