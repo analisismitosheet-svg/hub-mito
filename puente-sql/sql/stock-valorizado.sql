@@ -91,6 +91,21 @@ SELECT art, MAX(descripcion)
  WHERE art <> ''
  GROUP BY art;
 
+/* ---- 1c. Artículos que NO van al informe: proveedor MKT (MARKETING) ----
+   Cuadros y material de marketing: los pidió sacar el usuario el 02/11/2026.
+   El proveedor es ART.ARTFAB; se toma de MITO y de INDO, igual que #desc.
+   Quedan afuera de todo: unidades, valorizado, por artículo y sin costo. */
+IF OBJECT_ID('tempdb..#sinprov') IS NOT NULL DROP TABLE #sinprov;
+CREATE TABLE #sinprov (art varchar(50) PRIMARY KEY);
+
+INSERT INTO #sinprov (art)
+SELECT art FROM (
+  SELECT LTRIM(RTRIM(ARTCOD)) AS art FROM DRAGONFISH_MITO.ZooLogic.ART WHERE LTRIM(RTRIM(ARTFAB)) IN ('MKT')
+  UNION
+  SELECT LTRIM(RTRIM(ARTCOD)) FROM DRAGONFISH_INDOD.ZooLogic.ART WHERE LTRIM(RTRIM(ARTFAB)) IN ('MKT')
+) x
+WHERE art <> '';
+
 /* ---- 2. Una pasada por base ---- */
 IF OBJECT_ID('tempdb..#bases') IS NOT NULL DROP TABLE #bases;
 CREATE TABLE #bases (base sysname, unidades float, valorizado float, unidades_sin_costo float, skus int);
@@ -126,7 +141,8 @@ BEGIN
                COUNT(*)
           FROM ' + QUOTENAME(@b) + N'.ZooLogic.COMB c
           LEFT JOIN #costo k ON k.art = LTRIM(RTRIM(c.COART))
-         WHERE c.COCANT > 0;
+         WHERE c.COCANT > 0
+           AND NOT EXISTS (SELECT 1 FROM #sinprov s WHERE s.art = LTRIM(RTRIM(c.COART)));
 
         INSERT INTO #art (base, art, unidades, valorizado)
         SELECT @b,
@@ -136,6 +152,7 @@ BEGIN
           FROM ' + QUOTENAME(@b) + N'.ZooLogic.COMB c
           LEFT JOIN #costo k ON k.art = LTRIM(RTRIM(c.COART))
          WHERE c.COCANT > 0
+           AND NOT EXISTS (SELECT 1 FROM #sinprov s WHERE s.art = LTRIM(RTRIM(c.COART)))
          GROUP BY LTRIM(RTRIM(c.COART));';
       EXEC sp_executesql @sql, N'@b sysname', @b = @b;
     END TRY
