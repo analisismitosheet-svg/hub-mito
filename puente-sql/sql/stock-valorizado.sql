@@ -51,7 +51,8 @@ INSERT INTO #fuera (base) VALUES
   -- 02/11/2026: también las pidió sacar el usuario
   ('DRAGONFISH_MITOD'),
   ('DRAGONFISH_NVOCED'),
-  ('DRAGONFISH_9DEJULIO');
+  ('DRAGONFISH_9DEJULIO'),
+  ('DRAGONFISH_CFW');
 
 /* ---- 1. Costo por artículo: lista "Compra" (LISTA0) de DRAGONFISH_INDOD ----
    La base de costos es INDO, no MITO (lo marcó el usuario el 28/10/2026): ahí
