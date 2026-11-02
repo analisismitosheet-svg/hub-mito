@@ -26,7 +26,8 @@ function sb() {
  *
  * Conversión: si en config_app hay una vista SQL en 'contador_vista_ventas'
  * (columnas local, fecha, tickets y total — agregada por local y día), se cruzan
- * tickets / entradas. Solo entran los tickets de los días en que la cámara MIDIÓ
+ * tickets / clientes únicos (los que el reid reconoce en el día; sin reid, las entradas:
+ * `porLocalDia.clientes`). Solo entran los tickets de los días en que la cámara MIDIÓ
  * entradas de ese local (`porLocalDia`): en los días sin conteo hay venta pero no
  * entradas, y sumarlos distorsiona el porcentaje.
  *
@@ -40,7 +41,7 @@ interface Resumen {
   porDia: { fecha: string; entradas: number; salidas: number; grupos?: number }[]
   porLocal: { local: string; entradas: number; salidas: number; transeuntes: number; empleados: number; nuevos: number; reingresos: number; grupos?: number }[]
   /** Días con entradas > 0 por local: los únicos que sirven para la conversión. */
-  porLocalDia: { local: string; fecha: string; entradas: number; grupos?: number }[]
+  porLocalDia: { local: string; fecha: string; entradas: number; grupos?: number; clientes?: number }[]
   ocupacion: { local: string; entradas: number; salidas: number; adentro: number }[]
 }
 
@@ -232,15 +233,27 @@ export default function ContadorClientes() {
   }, [ventas, enRango, mideElDia])
 
   const conversion = (entradas: number, tk: number | undefined) => (entradas > 0 && tk != null ? (tk / entradas) * 100 : null)
+  // Denominador de la conversión: clientes únicos de cada local y día (si la base todavía no
+  // los manda, las entradas). Quien sale y vuelve a entrar en el día no cuenta dos veces.
+  const clientes = useMemo(() => {
+    const porLocal = new Map<string, number>()
+    const porDia = new Map<string, number>()
+    for (const d of datos?.porLocalDia ?? []) {
+      const c = d.clientes ?? d.entradas
+      porLocal.set(d.local, (porLocal.get(d.local) ?? 0) + c)
+      porDia.set(d.fecha, (porDia.get(d.fecha) ?? 0) + c)
+    }
+    return { porLocal, porDia }
+  }, [datos])
+  const sonUnicos = (datos?.porLocalDia ?? []).some((d) => d.clientes != null && d.clientes !== d.entradas)
   const totalTickets = tickets ? [...tickets.values()].reduce((a, b) => a + b, 0) : null
   const diasConCamara = useMemo(() => new Set((datos?.porLocalDia ?? []).filter((d) => d.entradas > 0).map((d) => d.fecha)).size, [datos])
   // El KPI general es un cociente: solo se suman las entradas de los locales que TAMBIÉN
   // tienen ventas (los otros no tienen numerador y ensuciarían el denominador).
   const entradasComparables = useMemo(() => {
     if (!datos) return null
-    if (!ventas) return datos.totales.entradas
-    return datos.porLocal.reduce((a, l) => a + (conVentas.has(l.local) ? l.entradas : 0), 0)
-  }, [datos, ventas, conVentas])
+    return datos.porLocal.reduce((a, l) => a + (!ventas || conVentas.has(l.local) ? clientes.porLocal.get(l.local) ?? 0 : 0), 0)
+  }, [datos, ventas, conVentas, clientes])
   const convTotal = totalTickets != null && entradasComparables ? conversion(entradasComparables, totalTickets) : null
   // Grupos: el contador los cuenta desde el 02/11/2026; antes vale 0 y no hay conversión por grupo
   const grupos = datos?.totales.grupos ?? 0
@@ -276,10 +289,10 @@ export default function ContadorClientes() {
     }
     return datos.porDia.map((d) => ({
       ...d, name: d.fecha.slice(5).split('-').reverse().join('/'),
-      conversion: ventas ? conversion(d.entradas, tkDia.get(d.fecha) ?? 0) : null,
+      conversion: ventas ? conversion(clientes.porDia.get(d.fecha) ?? d.entradas, tkDia.get(d.fecha) ?? 0) : null,
       conversionGrupo: ventas && d.grupos ? conversion(d.grupos, tkDia.get(d.fecha) ?? 0) : null,
     }))
-  }, [datos, ventas, fLocal, mideElDia])
+  }, [datos, ventas, fLocal, mideElDia, clientes])
 
   const offline = dispositivos.filter((d) => d.activo && (!d.ultimo_latido || Date.now() - new Date(d.ultimo_latido).getTime() > OFFLINE_MIN * 60000))
 
@@ -349,7 +362,7 @@ export default function ContadorClientes() {
                 <Kpi icono={<Percent size={16} className="text-pink-500" />} label="Conversión"
                   valor={convTotal != null ? `${convTotal.toFixed(1)}%` : '—'}
                   nota={ventas
-                    ? `${nf(totalTickets ?? 0)} tickets / ${nf(entradasComparables ?? 0)} entradas${diasConCamara ? ` · ${diasConCamara} ${diasConCamara === 1 ? 'día' : 'días'} con cámara` : ''}${hayTotal ? ` · ${nfMoneda(totales.general)}` : ''}`
+                    ? `${nf(totalTickets ?? 0)} tickets / ${nf(entradasComparables ?? 0)} ${sonUnicos ? 'clientes únicos' : 'entradas'}${diasConCamara ? ` · ${diasConCamara} ${diasConCamara === 1 ? 'día' : 'días'} con cámara` : ''}${hayTotal ? ` · ${nfMoneda(totales.general)}` : ''}`
                     : 'configurá la vista de ventas en Cámaras'} />
               </div>
               {ventas && hayGrupos && (
@@ -414,7 +427,7 @@ export default function ContadorClientes() {
                         <tbody>
                           {datos.porLocal.map((l) => {
                             const tk = tickets?.get(l.local)
-                            const conv = conVentas.has(l.local) ? conversion(l.entradas, tk ?? 0) : null
+                            const conv = conVentas.has(l.local) ? conversion(clientes.porLocal.get(l.local) ?? l.entradas, tk ?? 0) : null
                             const convG = conVentas.has(l.local) && l.grupos ? conversion(l.grupos, ticketsGrupo?.get(l.local) ?? 0) : null
                             return (
                               <tr key={l.local} className="border-t border-line">

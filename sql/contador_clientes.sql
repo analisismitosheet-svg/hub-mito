@@ -137,9 +137,12 @@ BEGIN
     -- contra las ventas solo puede contar los tickets de esos días: en los demás hay
     -- venta pero no conteo de cámara, y mezclarlos infla/desinfla el porcentaje.
     -- Solo se mandan los días con entradas > 0 (los de 0 no aportan al cociente).
+    -- clientes = únicos del día (denominador de la conversión, 02/11/2026); si la cámara
+    -- no reconoce personas ese día (nuevos + reingresos = 0), las entradas.
     'porLocalDia', (SELECT coalesce(jsonb_agg(x ORDER BY x.local, x.fecha), '[]') FROM (
                   SELECT local, to_char(ts::date, 'YYYY-MM-DD') AS fecha, sum(entradas)::int AS entradas,
-                         sum(grupos)::int AS grupos
+                         sum(grupos)::int AS grupos,
+                         (CASE WHEN sum(nuevos) + sum(reingresos) > 0 THEN sum(nuevos) ELSE sum(entradas) END)::int AS clientes
                   FROM v GROUP BY 1, 2 HAVING sum(entradas) > 0) x),
     'porLocal', (SELECT coalesce(jsonb_agg(x ORDER BY x.entradas DESC), '[]') FROM (
                   SELECT local, sum(entradas)::int AS entradas, sum(salidas)::int AS salidas,
