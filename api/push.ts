@@ -1,10 +1,12 @@
 /**
- * Avisos push al celular (Web Push). Un solo endpoint para los tres avisos:
+ * Avisos push al celular (Web Push). Un solo endpoint para todos los avisos:
  *
  *   GET  /api/push?tipo=armado|pausa|faltantes  -> { publicKey } (clave VAPID pública)
  *   POST /api/push?tipo=armado                  -> avisa los armados pendientes del usuario
  *   POST /api/push?tipo=pausa                   -> avisa las pausas pendientes del usuario
  *   POST /api/push?tipo=faltantes { armado_id } -> avisa los faltantes de un armado cerrado
+ *   POST /api/push?tipo=transferencia { lote_id } -> avisa a los legajos de la ubicación (Depósito Indo)
+ *                                                    que el lote tiene renglones para ellos
  *
  * Antes eran tres funciones (push-armado / push-pausa / push-faltantes); se unificaron
  * para no pasar el tope de 12 Serverless Functions del plan Hobby de Vercel. El cliente
@@ -338,6 +340,79 @@ async function avisarFaltantes(req: Req, res: Res, token: string) {
   return res.status(200).json({ enviados, faltantes: faltantes.length, receptores: uids.length, suscripciones: subs.length, vencidas })
 }
 
+interface AvisoUbicacion {
+  usuario_id: string
+  ubicacion: string
+  articulos: number
+  unidades: number
+  salen: number
+  entran: number
+}
+
+const NOMBRE_UBICACION: Record<string, string> = { 'DEPOSITO INDO': 'Depósito Indo', 'DEPOSITO MAYORISTA': 'Depósito Mayorista' }
+
+/** Reposición/transferencia nueva: a los legajos de la ubicación que tiene renglones (sql/legajos_ubicacion.sql). */
+async function avisarTransferencia(req: Req, res: Res, token: string) {
+  let loteId = ''
+  try {
+    loteId = String(JSON.parse(req.body ?? '{}').lote_id ?? '')
+  } catch {
+    loteId = ''
+  }
+  if (!loteId) return res.status(400).json({ error: 'Falta lote_id' })
+  // Va pegado en filtros de PostgREST con service role: solo un UUID
+  if (!esUuid(loteId)) return res.status(400).json({ error: 'lote_id inválido' })
+  // Lo dispara quien carga las transferencias
+  if (!(await autorizado(token, ['transferencias.import']))) {
+    return res.status(403).json({ error: 'No autorizado' })
+  }
+
+  // Un solo aviso por lote: se reclama antes de mandar (dos llamadas no avisan dos veces)
+  const rL = await rest(`transfer_lotes?id=eq.${loteId}&push_ubicacion_at=is.null&select=id,nombre`, {
+    method: 'PATCH',
+    body: JSON.stringify({ push_ubicacion_at: new Date().toISOString() }),
+    headers: { Prefer: 'return=representation' },
+  })
+  if (!rL.ok) return res.status(502).json({ error: `No se pudo leer el lote (${rL.status})` })
+  const lote = ((await rL.json()) as { id: string; nombre: string }[])[0]
+  if (!lote) return res.status(200).json({ enviados: 0, yaAvisado: true })
+
+  const rA = await rest('rpc/transfer_avisos_ubicacion', { method: 'POST', body: JSON.stringify({ p_lote: loteId }) })
+  if (!rA.ok) return res.status(502).json({ error: `No se pudo calcular a quién avisar (${rA.status})` })
+  const avisos = (await rA.json()) as AvisoUbicacion[]
+  if (!avisos.length) return res.status(200).json({ enviados: 0, receptores: 0 })
+
+  const uids = [...new Set(avisos.map((a) => a.usuario_id))]
+  const rS = await rest(`push_suscripciones?select=endpoint,usuario_id,p256dh,auth&usuario_id=in.(${uids.join(',')})`)
+  if (!rS.ok) return res.status(502).json({ error: `No se pudieron leer las suscripciones (${rS.status})` })
+  const subs = (await rS.json()) as Suscripcion[]
+  if (!subs.length) return res.status(200).json({ enviados: 0, receptores: uids.length, suscripciones: 0 })
+
+  // Un aviso por ubicación (todos sus legajos reciben el mismo texto)
+  let enviados = 0
+  let vencidas = 0
+  const porUbicacion = new Map<string, AvisoUbicacion[]>()
+  for (const a of avisos) porUbicacion.set(a.ubicacion, [...(porUbicacion.get(a.ubicacion) ?? []), a])
+  for (const [ubicacion, lista] of porUbicacion) {
+    const a0 = lista[0]
+    const partes = [
+      a0.salen ? `salen ${a0.salen} u.` : '',
+      a0.entran ? `entran ${a0.entran} u.` : '',
+    ].filter(Boolean).join(' · ')
+    const payload = JSON.stringify({
+      title: `📦 Transferencia para ${NOMBRE_UBICACION[ubicacion] ?? ubicacion}`,
+      body: `${lote.nombre} · ${a0.articulos} artículo${a0.articulos === 1 ? '' : 's'}${partes ? ` · ${partes}` : ''}`,
+      url: '/mayorista/mi-repo',
+      urgente: false,
+    })
+    const ids = new Set(lista.map((x) => x.usuario_id))
+    const r = await entregar(payload, subs.filter((s) => ids.has(s.usuario_id)))
+    enviados += r.enviados
+    vencidas += r.vencidas
+  }
+  return res.status(200).json({ enviados, receptores: uids.length, suscripciones: subs.length, vencidas })
+}
+
 /** Corta la lista de artículos que faltan para el texto del aviso. */
 function resumir(faltantes: Faltante[]): string {
   if (faltantes.length === 0) return ''
@@ -372,5 +447,6 @@ export default async function handler(req: Req, res: Res) {
   const tipo = primerQuery(req.query?.tipo)
   if (tipo === 'pausa') return avisarPausa(req, res, uid)
   if (tipo === 'faltantes') return avisarFaltantes(req, res, token)
+  if (tipo === 'transferencia') return avisarTransferencia(req, res, token)
   return avisarArmado(req, res, uid)
 }

@@ -390,6 +390,17 @@ export default function CampanaNotificaciones() {
           }
         }
       }
+      // 7) Legajos con ubicación (sql/legajos_ubicacion.sql): lotes con renglones pendientes
+      // que salen de / van a su depósito. La RPC no devuelve nada si el legajo no tiene ubicación.
+      if (esLegajo) {
+        const { data } = await sb.rpc('transferencias_de_mi_ubicacion')
+        if (activo && data) {
+          for (const l of data as { lote_id: string; nombre: string; creado_at: string; articulos: number; salen: number; entran: number }[]) {
+            const partes = [l.salen ? `salen ${l.salen} u.` : '', l.entran ? `entran ${l.entran} u.` : ''].filter(Boolean).join(' · ')
+            notis.push({ id: `tu-${l.lote_id}`, tipo: 'transferencias', titulo: l.nombre, detalle: `${l.articulos} artículo${l.articulos === 1 ? '' : 's'} pendiente${l.articulos === 1 ? '' : 's'}${partes ? ` · ${partes}` : ''}`, ruta: can('transferencias.view') ? `/transferencias?abrir=${l.lote_id}` : '/mayorista/mi-repo', fecha: l.creado_at, destinoId: l.lote_id })
+          }
+        }
+      }
       // Ordenar de más viejo a más nuevo
       if (activo) {
         notis.sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
@@ -406,7 +417,7 @@ export default function CampanaNotificaciones() {
     const alVolver = () => { if (document.visibilityState === 'visible') void cargar() }
     document.addEventListener('visibilitychange', alVolver)
     return () => { activo = false; clearInterval(intervalo); document.removeEventListener('visibilitychange', alVolver) }
-  }, [isAdmin, esMayorista, esLocal, origenesUsuario, visible])
+  }, [isAdmin, esMayorista, esLocal, esLegajo, can, origenesUsuario, visible])
 
   if (!visible || !supabase) return null
 

@@ -12,7 +12,7 @@ import { supabase } from '@/lib/supabase'
 import { usePermisosArea } from '@/hooks/usePermisosArea'
 import { AutocompleteCampo } from '@/components/MultiselectFiltro'
 import MultiselectFiltro from '@/components/MultiselectFiltro'
-import { COLUMNAS, columnasDeEstado, camposDeEstado } from '@/config/columnasEmpleados'
+import { COLUMNAS, columnasDeEstado, camposDeEstado, UBICACIONES_LEGAJO } from '@/config/columnasEmpleados'
 import { leerListado, claveBaja, soloDigitos } from '@/lib/importarListado'
 
 interface Empleado {
@@ -21,6 +21,7 @@ interface Empleado {
   nombre: string
   activo: boolean | null
   lugar: string | null
+  ubicacion: string | null
   area_sector: string | null
   horas: number | null
   convenio: string | null
@@ -76,7 +77,7 @@ function estiloEstadoLegajo(s: string | null): string {
 }
 
 const CAMPOS =
-  'id,legajo,nombre,activo,lugar,area_sector,horas,convenio,categoria,puesto,comision,reingreso,fecha_ingreso,antiguedad_2025,dias_vacaciones_2025,cuil,dni,fecha_nacimiento,sexo,telefono,domicilio,email,codigo_os,prepaga,tipo_contrato,contacto_emergencia,parentesco,telefono_emergencia,estado_legajo,fecha_egreso,motivo_baja,plan,obra_social,fin_plan,entrega_remeras,cuenta_informes'
+  'id,legajo,nombre,activo,lugar,ubicacion,area_sector,horas,convenio,categoria,puesto,comision,reingreso,fecha_ingreso,antiguedad_2025,dias_vacaciones_2025,cuil,dni,fecha_nacimiento,sexo,telefono,domicilio,email,codigo_os,prepaga,tipo_contrato,contacto_emergencia,parentesco,telefono_emergencia,estado_legajo,fecha_egreso,motivo_baja,plan,obra_social,fin_plan,entrega_remeras,cuenta_informes'
 
 const inputCls = 'w-full rounded-xl border border-line bg-surface2 px-3 py-1.5 text-[13px] text-ink outline-none transition duration-250 placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40'
 const selectCls = inputCls + ' appearance-none'
@@ -709,6 +710,16 @@ function EmpleadoModal({ registro, estadoActual, opciones, onClose, onSaved }: {
         <Campo key={clave} label={def.label}>
           <select value={f.sexo} onChange={(e) => set('sexo', e.target.value)} className={selectCls}>
             <option value="">--</option><option value="F">F</option><option value="M">M</option>
+          </select>
+        </Campo>
+      )
+    }
+    if (clave === 'ubicacion') {
+      return (
+        <Campo key={clave} label={def.label}>
+          <select value={f.ubicacion} onChange={(e) => set('ubicacion', e.target.value)} className={selectCls}>
+            <option value="">--</option>
+            {UBICACIONES_LEGAJO.map((u) => <option key={u} value={u}>{u}</option>)}
           </select>
         </Campo>
       )

@@ -128,3 +128,21 @@ export async function avisarFaltantes(armadoId: string): Promise<void> {
     /* el aviso dentro de la app (campana) sigue andando */
   }
 }
+
+/** Después de grabar un lote de transferencias: avisa por push a los legajos de la
+ * ubicación que tiene renglones (hoy Depósito Indo). No rompe si falla. */
+export async function avisarTransferencia(loteId: string): Promise<void> {
+  try {
+    if (!supabase) return
+    const { data } = await supabase.auth.getSession()
+    const token = data.session?.access_token
+    if (!token) return
+    await fetch('/api/push?tipo=transferencia', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ lote_id: loteId }),
+    })
+  } catch {
+    /* el aviso dentro de la app (campana) sigue andando */
+  }
+}

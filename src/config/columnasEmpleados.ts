@@ -24,6 +24,7 @@ export const COLUMNAS: Record<string, ColDef> = {
   fecha_nacimiento: { label: 'Nacimiento', tipo: 'fecha', campo: 'fecha' },
   sexo: { label: 'Sexo', filtrable: true, campo: 'select' },
   lugar: { label: 'Lugar', filtrable: true, campo: 'autocomplete' },
+  ubicacion: { label: 'Ubicación', filtrable: true, campo: 'select' },
   area_sector: { label: 'Área / Sector', filtrable: true, campo: 'autocomplete' },
   categoria: { label: 'Categoría', filtrable: true, campo: 'autocomplete' },
   puesto: { label: 'Puesto', filtrable: true, campo: 'autocomplete' },
@@ -51,16 +52,23 @@ export const COLUMNAS: Record<string, ColDef> = {
   telefono_emergencia: { label: 'Tel. emerg.' },
 }
 
+/**
+ * Ubicación del legajo (sql/legajos_ubicacion.sql, con CHECK en la base).
+ * Los de Depósito Indo reciben el aviso cuando se carga una reposición o
+ * transferencia con renglones que salen de / van a INDO.
+ */
+export const UBICACIONES_LEGAJO = ['DEPOSITO MAYORISTA', 'DEPOSITO INDO']
+
 /** Columnas visibles por categoría, en el mismo orden que la hoja del Excel. */
 export const COLUMNAS_POR_ESTADO: Record<string, string[]> = {
   'NOMINA ACTIVA': [
-    'legajo', 'nombre', 'lugar', 'area_sector', 'horas', 'convenio', 'categoria', 'puesto',
+    'legajo', 'nombre', 'lugar', 'ubicacion', 'area_sector', 'horas', 'convenio', 'categoria', 'puesto',
     'comision', 'reingreso', 'fecha_ingreso', 'antiguedad', 'vacaciones', 'cuil', 'dni',
     'fecha_nacimiento', 'sexo', 'telefono', 'domicilio', 'email', 'codigo_os', 'prepaga',
     'tipo_contrato', 'contacto_emergencia', 'parentesco', 'telefono_emergencia',
   ],
   'PLANES ACTIVOS': [
-    'legajo', 'nombre', 'plan', 'lugar', 'horas', 'comision', 'fecha_ingreso', 'cuil', 'dni',
+    'legajo', 'nombre', 'plan', 'lugar', 'ubicacion', 'horas', 'comision', 'fecha_ingreso', 'cuil', 'dni',
     'fecha_nacimiento', 'sexo', 'obra_social', 'fin_plan', 'domicilio', 'entrega_remeras',
     'telefono', 'email', 'contacto_emergencia', 'parentesco', 'telefono_emergencia',
   ],

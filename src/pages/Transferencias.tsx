@@ -24,6 +24,7 @@ import { usePermisosArea } from '@/hooks/usePermisosArea'
 import { cargarVistaSalidas, leerVista } from '@/lib/sqlApi'
 import { PERIODOS, rangoDe, periodoGuardado, guardarPeriodo, textoPeriodo, type Periodo } from '@/lib/periodoSemanas'
 import { imprimirCuandoCarguen } from '@/lib/ventanaImpresion'
+import { avisarTransferencia } from '@/lib/push'
 
 /** Cuántos archivos se piden a la vez al cargar las líneas */
 const LOTES_EN_PARALELO = 6
@@ -772,6 +773,8 @@ export default function Transferencias() {
       const loteId = (lote as { id: string }).id
       const { error: e2 } = await supabase.from('transfer_items').insert(nuevos.map((n) => ({ ...n, lote_id: loteId })))
       if (e2) throw new Error(e2.message)
+      // Aviso a los legajos de Depósito Indo si el lote tiene renglones para ellos
+      void avisarTransferencia(loteId)
       const grabados: { origen: string; destino: string; cantidad: number }[] = []
       for (let desde = 0; ; desde += 1000) {
         const { data, error: e3 } = await supabase
