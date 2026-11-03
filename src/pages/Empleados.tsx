@@ -908,8 +908,8 @@ function NotaFlotante({ rect, children }: { rect: DOMRect; children: React.React
   const top = Math.max(8, Math.min(rect.top, window.innerHeight - 200))
   return (
     <div
-      style={{ position: 'fixed', left, top, width: ancho, zIndex: 60 }}
-      className="rounded-lg border border-amber-500/40 bg-surface px-3 py-2 text-[12px] text-ink shadow-xl"
+      style={{ left, top, width: ancho, zIndex: 60 }}
+      className="fixed rounded-lg border border-amber-500/40 bg-surface px-3 py-2 text-[12px] text-ink shadow-xl"
     >
       {children}
     </div>
