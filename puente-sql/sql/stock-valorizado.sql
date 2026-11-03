@@ -13,12 +13,14 @@
      2. Recorre cada base DRAGONFISH_* a la que el usuario del puente tiene
         acceso y que tiene la tabla ZooLogic.COMB (el stock por SKU: COART,
         COCOL, TALLE, COCANT) y suma unidades y unidades x costo.
-     3. Devuelve cinco resultados:
+     3. Devuelve siete resultados:
           - una fila por base (unidades, valorizado, unidades sin costo, SKUs)
           - todos los artículos con stock, por valorizado (antes era un top 200)
           - una fila de contexto del costo (artículos con costo, última vigencia)
           - TODOS los artículos con stock y sin costo cargado (los que valen $0)
-          - esos mismos, abiertos por sucursal (una fila por artículo y base).
+          - esos mismos, abiertos por sucursal (una fila por artículo y base)
+          - el cruce sucursal x proveedor x material (para los filtros)
+          - los nombres de esos proveedores y materiales.
 
    Los resultados se agregan al final y nunca se cambian de lugar: el puente los
    lee por posición, así que uno que todavía no conoce los últimos sigue
@@ -111,6 +113,57 @@ SELECT art FROM (
 ) x
 WHERE art <> '';
 
+/* ---- 1c-bis. Proveedor y material de cada artículo (filtros de la pantalla) ----
+   Proveedor = ART.ARTFAB (el mismo campo que usa #sinprov), material = ART.MAT.
+   Se toman de MITO y de INDO como #desc; el MAX() hace que, si en una base el
+   campo viene vacío y en la otra cargado, gane el cargado.
+   Los nombres salen de ZooLogic.PROV (CLCOD/CLNOM) y ZooLogic.MAT (MATCOD/MATDES)
+   y viajan en una tablita aparte, no pegados a cada artículo: son ~11.500 filas y
+   repetir ahí los nombres engordaba el JSON al pedo. */
+IF OBJECT_ID('tempdb..#clas') IS NOT NULL DROP TABLE #clas;
+CREATE TABLE #clas (art varchar(50) PRIMARY KEY, prov varchar(20), mat varchar(20));
+
+INSERT INTO #clas (art, prov, mat)
+SELECT art, MAX(prov), MAX(mat)
+  FROM (
+    SELECT LTRIM(RTRIM(ARTCOD)) AS art,
+           LTRIM(RTRIM(ISNULL(ARTFAB, ''))) AS prov,
+           LTRIM(RTRIM(ISNULL(MAT, ''))) AS mat
+      FROM DRAGONFISH_MITO.ZooLogic.ART
+    UNION ALL
+    SELECT LTRIM(RTRIM(ARTCOD)),
+           LTRIM(RTRIM(ISNULL(ARTFAB, ''))),
+           LTRIM(RTRIM(ISNULL(MAT, '')))
+      FROM DRAGONFISH_INDOD.ZooLogic.ART
+  ) x
+ WHERE art <> ''
+ GROUP BY art;
+
+/* Nombres de proveedores y materiales, los dos en la misma tabla con `tipo`.
+   Al final se mandan solo los que tienen algún artículo con stock. */
+IF OBJECT_ID('tempdb..#nomclas') IS NOT NULL DROP TABLE #nomclas;
+CREATE TABLE #nomclas (tipo varchar(4), codigo varchar(20), nombre varchar(120), PRIMARY KEY (tipo, codigo));
+
+INSERT INTO #nomclas (tipo, codigo, nombre)
+SELECT 'prov', codigo, MAX(nombre)
+  FROM (
+    SELECT LTRIM(RTRIM(CLCOD)) AS codigo, LTRIM(RTRIM(ISNULL(CLNOM, ''))) AS nombre FROM DRAGONFISH_INDOD.ZooLogic.PROV
+    UNION ALL
+    SELECT LTRIM(RTRIM(CLCOD)), LTRIM(RTRIM(ISNULL(CLNOM, ''))) FROM DRAGONFISH_MITO.ZooLogic.PROV
+  ) x
+ WHERE codigo <> ''
+ GROUP BY codigo;
+
+INSERT INTO #nomclas (tipo, codigo, nombre)
+SELECT 'mat', codigo, MAX(nombre)
+  FROM (
+    SELECT LTRIM(RTRIM(MATCOD)) AS codigo, LTRIM(RTRIM(ISNULL(MATDES, ''))) AS nombre FROM DRAGONFISH_INDOD.ZooLogic.MAT
+    UNION ALL
+    SELECT LTRIM(RTRIM(MATCOD)), LTRIM(RTRIM(ISNULL(MATDES, ''))) FROM DRAGONFISH_MITO.ZooLogic.MAT
+  ) x
+ WHERE codigo <> ''
+ GROUP BY codigo;
+
 /* ---- 1d. Costo de DRAGONFISH_NOMED: lista LISTA9 de la propia NOMED ----
    NOMED son insumos/avíos y no están en la lista Compra de INDO (valorizaba $0
    entera). El 02/11/2026 el usuario pidió valorizar TODO lo de NOMED con la
@@ -174,7 +227,9 @@ CREATE TABLE #bases (base sysname, unidades float, valorizado float, unidades_si
 
 IF OBJECT_ID('tempdb..#art') IS NOT NULL DROP TABLE #art;
 -- costo = el que se usó en ESA base (NOMED LISTA9, OUTLETD OUTLET, el resto LISTA0); NULL = sin costo
-CREATE TABLE #art (base sysname, art varchar(50), unidades float, valorizado float, costo float, transito float);
+-- transito_val y skus están para poder rearmar la fila de cada sucursal cuando se filtra por proveedor/material
+CREATE TABLE #art (base sysname, art varchar(50), unidades float, valorizado float, costo float,
+                   transito float, transito_val float, skus int);
 
 DECLARE @b sysname, @sql nvarchar(max), @tc nvarchar(20), @tr nvarchar(20), @resp bit;
 DECLARE cur CURSOR LOCAL FAST_FORWARD FOR
@@ -217,13 +272,15 @@ BEGIN
          WHERE (c.COCANT > 0 OR c.ENTRANSITO > 0)
            AND NOT EXISTS (SELECT 1 FROM #sinprov s WHERE s.art = LTRIM(RTRIM(c.COART)));
 
-        INSERT INTO #art (base, art, unidades, valorizado, costo, transito)
+        INSERT INTO #art (base, art, unidades, valorizado, costo, transito, transito_val, skus)
         SELECT @b,
                LTRIM(RTRIM(c.COART)),
                SUM(q.cant),
                SUM(q.cant * ISNULL(COALESCE(k.costo, k9.costo), 0)),
                MAX(COALESCE(k.costo, k9.costo)),
-               SUM(q.trans)
+               SUM(q.trans),
+               SUM(q.trans * ISNULL(COALESCE(k.costo, k9.costo), 0)),
+               COUNT(*)
           FROM ' + QUOTENAME(@b) + N'.ZooLogic.COMB c
           CROSS APPLY (SELECT CASE WHEN c.ENTRANSITO > 0 THEN CAST(c.ENTRANSITO AS float) ELSE 0 END AS trans) t
           CROSS APPLY (SELECT CASE WHEN c.COCANT > 0 THEN CAST(c.COCANT AS float) ELSE 0 END + t.trans AS cant, t.trans) q
@@ -242,6 +299,22 @@ BEGIN
 END
 CLOSE cur;
 DEALLOCATE cur;
+
+/* ---- 2b. Artículos de DESARROLLO ----
+   Todo lo que empieza con "DES" va bajo el proveedor DES / "DESARROLLO" (lo
+   pidió el usuario el 03/11/2026): son muestras y desarrollos que en Dragon
+   vienen sin proveedor o con cualquiera, y así se filtran de una.
+   Antes se completan los artículos que tienen stock y no están en ninguna ART
+   (si no, quedarían sin proveedor y la regla no los alcanzaría). */
+INSERT INTO #clas (art, prov, mat)
+SELECT DISTINCT a.art, '', ''
+  FROM #art a
+ WHERE NOT EXISTS (SELECT 1 FROM #clas c WHERE c.art = a.art);
+
+UPDATE #clas SET prov = 'DES' WHERE art LIKE 'DES%';
+
+DELETE FROM #nomclas WHERE tipo = 'prov' AND codigo = 'DES';
+INSERT INTO #nomclas (tipo, codigo, nombre) VALUES ('prov', 'DES', 'DESARROLLO');
 
 /* ---- 3. Resultados ---- */
 SELECT base,
@@ -264,9 +337,12 @@ SELECT a.art AS articulo,
        SUM(a.valorizado) AS valorizado,
        -- el de la lista Compra; si el artículo solo está en NOMED u OUTLETD, el de su lista
        COALESCE(MAX(CASE WHEN a.base NOT IN ('DRAGONFISH_NOMED', 'DRAGONFISH_OUTLETD') THEN a.costo END), MAX(a.costo)) AS costo,
-       SUM(a.transito) AS transito
+       SUM(a.transito) AS transito,
+       MAX(ISNULL(c.prov, '')) AS proveedor,
+       MAX(ISNULL(c.mat, '')) AS material
   FROM #art a
   LEFT JOIN #desc d ON d.art = a.art
+  LEFT JOIN #clas c ON c.art = a.art
  GROUP BY a.art
  ORDER BY SUM(a.valorizado) DESC;
 
@@ -288,9 +364,12 @@ SELECT a.art AS articulo,
        SUM(a.unidades) AS unidades,
        SUM(CASE WHEN v.base IS NOT NULL THEN a.unidades ELSE 0 END) AS unidades_val,
        COUNT(DISTINCT a.base) AS sucursales,
-       STRING_AGG(REPLACE(a.base, 'DRAGONFISH_', ''), ' · ') WITHIN GROUP (ORDER BY a.base) AS bases
+       STRING_AGG(REPLACE(a.base, 'DRAGONFISH_', ''), ' · ') WITHIN GROUP (ORDER BY a.base) AS bases,
+       MAX(ISNULL(c.prov, '')) AS proveedor,
+       MAX(ISNULL(c.mat, '')) AS material
   FROM #art a
   LEFT JOIN #desc d ON d.art = a.art
+  LEFT JOIN #clas c ON c.art = a.art
   LEFT JOIN (SELECT base FROM #bases WHERE ISNULL(valorizado, 0) > 0) v ON v.base = a.base
  WHERE a.costo IS NULL
  GROUP BY a.art
@@ -309,3 +388,31 @@ SELECT a.art AS articulo,
   LEFT JOIN (SELECT base FROM #bases WHERE ISNULL(valorizado, 0) > 0) v ON v.base = a.base
  WHERE a.costo IS NULL
  ORDER BY a.art, a.unidades DESC;
+
+/* Cruce sucursal x proveedor x material: lo que necesita la pantalla para que
+   las tarjetas, la tabla por sucursal y sus totales respondan a los filtros.
+   Mandar el detalle artículo x base serían decenas de miles de filas; agrupado
+   así son unos pocos miles y la cuenta da exactamente igual, porque cada
+   artículo cae en un solo proveedor y un solo material.
+   Sin filtros la pantalla sigue usando la primera consulta (la de #bases), así
+   que un puente que todavía no manda esto no cambia en nada. */
+SELECT a.base,
+       ISNULL(c.prov, '') AS proveedor,
+       ISNULL(c.mat, '') AS material,
+       SUM(a.unidades) AS unidades,
+       SUM(a.valorizado) AS valorizado,
+       SUM(CASE WHEN a.costo IS NULL THEN a.unidades ELSE 0 END) AS unidades_sin_costo,
+       SUM(a.skus) AS skus,
+       SUM(a.transito) AS transito,
+       SUM(a.transito_val) AS transito_val
+  FROM #art a
+  LEFT JOIN #clas c ON c.art = a.art
+ GROUP BY a.base, ISNULL(c.prov, ''), ISNULL(c.mat, '');
+
+/* Nombres para esos códigos, solo los que tienen algún artículo con stock
+   (la tabla de proveedores entera tiene miles y no hace falta mandarla). */
+SELECT n.tipo, n.codigo, n.nombre
+  FROM #nomclas n
+ WHERE (n.tipo = 'prov' AND EXISTS (SELECT 1 FROM #art a JOIN #clas c ON c.art = a.art WHERE c.prov = n.codigo))
+    OR (n.tipo = 'mat'  AND EXISTS (SELECT 1 FROM #art a JOIN #clas c ON c.art = a.art WHERE c.mat  = n.codigo))
+ ORDER BY n.tipo, n.nombre;

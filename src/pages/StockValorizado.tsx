@@ -1,9 +1,11 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
-import { Boxes, ChevronDown, Download, Layers, Loader2, RefreshCw, Search, TriangleAlert, Wallet } from 'lucide-react'
+import { Boxes, ChevronDown, Download, Layers, Loader2, RefreshCw, Search, TriangleAlert, Wallet, X } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
+import MultiselectFiltro, { type OpcionMulti } from '@/components/MultiselectFiltro'
 import { coloresUnicos } from '@/lib/coloresUnicos'
 import {
+  basesDesdeCruce,
   cargarStockValorizado,
   costoUnitario,
   nombreBase,
@@ -41,6 +43,9 @@ export default function StockValorizado() {
   const [solapa, setSolapa] = useState<'sucursal' | 'articulo'>('sucursal')
   /** Artículos sin costo con el detalle por sucursal desplegado. */
   const [abiertos, setAbiertos] = useState<string[]>([])
+  /** Filtros de proveedor y material (vacío = todos), al estilo de los de Excel. */
+  const [provSel, setProvSel] = useState<Set<string>>(new Set())
+  const [matSel, setMatSel] = useState<Set<string>>(new Set())
 
   const cargar = useCallback(async (forzar = false) => {
     setCargando(true)
@@ -58,14 +63,56 @@ export default function StockValorizado() {
     void cargar()
   }, [cargar])
 
-  const todas = datos?.bases ?? []
+  /* Filtros por proveedor y material: el puente manda el cruce
+     sucursal x proveedor x material y los nombres de esos códigos. Si todavía no
+     los manda (puente sin reiniciar), la barra de filtros no se dibuja y la
+     pantalla queda como antes. */
+  const cruce = useMemo(() => datos?.cruce ?? [], [datos])
+  const hayFiltros = cruce.length > 0
+  const filtrando = hayFiltros && (provSel.size > 0 || matSel.size > 0)
+
+  const nombreClas = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const c of datos?.clasificaciones ?? []) m.set(`${c.tipo}:${c.codigo}`, c.nombre)
+    return m
+  }, [datos])
+
+  /** Opciones de un filtro: los códigos que de verdad tienen stock, por nombre. */
+  const opcionesDe = useCallback(
+    (campo: 'proveedor' | 'material', tipo: string): OpcionMulti[] =>
+      [...new Set(cruce.map((f) => f[campo]))]
+        .map((id) => ({ id, label: id ? (nombreClas.get(`${tipo}:${id}`) || id) : '(sin cargar)' }))
+        .sort((a, b) => a.label.localeCompare(b.label, 'es')),
+    [cruce, nombreClas],
+  )
+  const opcionesProv = useMemo(() => opcionesDe('proveedor', 'prov'), [opcionesDe])
+  const opcionesMat = useMemo(() => opcionesDe('material', 'mat'), [opcionesDe])
+
+  const pasaFiltro = useCallback(
+    (a: { proveedor?: string; material?: string }) =>
+      (provSel.size === 0 || provSel.has(a.proveedor ?? '')) &&
+      (matSel.size === 0 || matSel.has(a.material ?? '')),
+    [provSel, matSel],
+  )
+
+  /* Con filtro puesto, la fila de cada sucursal se rehace sumando el cruce; sin
+     filtro se usa la que manda el SQL, que es la misma cuenta pero no depende de
+     que el puente ya mande el cruce. */
+  const todas = useMemo(
+    () => (filtrando ? basesDesdeCruce(cruce, provSel, matSel) : (datos?.bases ?? [])),
+    [datos, cruce, filtrando, provSel, matSel],
+  )
 
   /* Hay bases que no son de mercadería de venta (insumos, descartes) y no tienen
      ningún costo cargado: suman cientos de miles de unidades y $0, así que de
      entrada quedan afuera para que el total no engañe. Se ven con el botón. */
   const sinValor = useMemo(() => todas.filter((b) => b.valorizado <= 0), [todas])
+  /* Si NINGUNA valoriza se muestran todas igual: pasa al filtrar por algo que no
+     tiene costo cargado (DESARROLLO, por ejemplo), y si no la pantalla quedaba
+     vacía como si no hubiera stock, cuando lo que pasa es que vale $0. */
   const bases = useMemo(
-    () => (incluirSinValor ? todas : todas.filter((b) => b.valorizado > 0)),
+    () =>
+      incluirSinValor || todas.every((b) => b.valorizado <= 0) ? todas : todas.filter((b) => b.valorizado > 0),
     [todas, incluirSinValor],
   )
   const total = useMemo(() => totalDe(bases), [bases])
@@ -83,9 +130,10 @@ export default function StockValorizado() {
      los artículos que están en sucursales que valorizan (si no, el listado
      arranca con miles de avíos de NOMED). */
   const sinCosto = useMemo(() => {
-    const lista = datos?.sin_costo ?? []
+    let lista = datos?.sin_costo ?? []
+    if (filtrando) lista = lista.filter(pasaFiltro)
     return incluirSinValor ? lista : lista.filter((a) => a.unidades_val > 0)
-  }, [datos, incluirSinValor])
+  }, [datos, incluirSinValor, filtrando, pasaFiltro])
   const unidadesSinCosto = (a: { unidades: number; unidades_val: number }) =>
     incluirSinValor ? a.unidades : a.unidades_val
 
@@ -105,12 +153,17 @@ export default function StockValorizado() {
 
   /* Solapa "Por artículo": todo lo que hay en stock, sumando las sucursales.
      Viene ordenado por valorizado desde el SQL. */
-  const articulos = datos?.articulos ?? []
+  const articulos = useMemo(() => datos?.articulos ?? [], [datos])
+  /** Lo que dejan pasar los filtros, todavía sin el buscador: es lo que va al Excel general. */
+  const articulosFiltrados = useMemo(
+    () => (filtrando ? articulos.filter(pasaFiltro) : articulos),
+    [articulos, filtrando, pasaFiltro],
+  )
   const articulosVisibles = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
-    if (!q) return articulos
-    return articulos.filter((a) => `${a.articulo} ${a.descripcion}`.toLowerCase().includes(q))
-  }, [articulos, busqueda])
+    if (!q) return articulosFiltrados
+    return articulosFiltrados.filter((a) => `${a.articulo} ${a.descripcion}`.toLowerCase().includes(q))
+  }, [articulosFiltrados, busqueda])
   const totalArticulos = useMemo(
     () =>
       articulosVisibles.reduce(
@@ -147,18 +200,23 @@ export default function StockValorizado() {
       ),
       'Por sucursal',
     )
-    if (articulos.length > 0) {
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasPorArticulo(articulos)), 'Por artículo')
+    if (articulosFiltrados.length > 0) {
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasPorArticulo(articulosFiltrados)), 'Por artículo')
     }
     agregarHojasSinCosto(XLSX, wb)
     XLSX.writeFile(wb, `stock_valorizado_${new Date().toISOString().slice(0, 10)}.xlsx`)
   }
+
+  /** Nombre del proveedor o material de un artículo (el código si no tiene nombre). */
+  const nombreProv = (cod?: string) => (cod ? (nombreClas.get(`prov:${cod}`) || cod) : '')
+  const nombreMat = (cod?: string) => (cod ? (nombreClas.get(`mat:${cod}`) || cod) : '')
 
   /** Columnas de la solapa "Por artículo", en el mismo orden que la pantalla. */
   const filasPorArticulo = (lista: typeof articulos) =>
     lista.map((a) => ({
       Artículo: a.articulo,
       Descripción: a.descripcion,
+      ...(hayFiltros ? { Proveedor: nombreProv(a.proveedor), Material: nombreMat(a.material) } : {}),
       Stock: a.unidades,
       'Precio costo': a.costo ?? '',
       'Total valorizado': Math.round(a.valorizado),
@@ -190,6 +248,7 @@ export default function StockValorizado() {
         sinCosto.map((a) => ({
           Artículo: a.articulo,
           Descripción: a.descripcion,
+          ...(hayFiltros ? { Proveedor: nombreProv(a.proveedor), Material: nombreMat(a.material) } : {}),
           'Unidades (todas)': a.unidades,
           'Unidades en sucursales que valorizan': a.unidades_val,
           Sucursales: a.sucursales,
@@ -354,6 +413,24 @@ export default function StockValorizado() {
               className="h-10 w-full rounded-xl border border-line bg-surface pl-9 pr-3 text-sm text-ink placeholder:text-sub/60"
               />
             </div>
+            {hayFiltros && (
+              <>
+                <MultiselectFiltro label="Proveedor" opciones={opcionesProv} seleccionadas={provSel} onChange={setProvSel} />
+                <MultiselectFiltro label="Material" opciones={opcionesMat} seleccionadas={matSel} onChange={setMatSel} />
+                {filtrando && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProvSel(new Set())
+                      setMatSel(new Set())
+                    }}
+                    className="btn-press inline-flex items-center gap-1 rounded-lg border border-line bg-surface2 px-2 py-1.5 text-xs text-sub transition hover:bg-line hover:text-ink"
+                  >
+                    <X size={12} aria-hidden /> Limpiar ({numero(articulosFiltrados.length)} art.)
+                  </button>
+                )}
+              </>
+            )}
             {solapa === 'articulo' && (
               <button
                 type="button"
@@ -466,6 +543,7 @@ export default function StockValorizado() {
                   <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-sub">
                     <th className="px-3 py-2 font-medium">Artículo</th>
                     <th className="px-3 py-2 font-medium">Descripción</th>
+                    {hayFiltros && <th className="px-3 py-2 font-medium">Proveedor</th>}
                     <th className="px-3 py-2 text-right font-medium">Stock</th>
                     <th className="px-3 py-2 text-right font-medium">Precio costo</th>
                     <th className="px-3 py-2 text-right font-medium">Total valorizado</th>
@@ -476,6 +554,11 @@ export default function StockValorizado() {
                     <tr key={a.articulo} className="border-b border-line/60 last:border-0">
                       <td className="px-3 py-2 font-mono text-xs text-ink">{a.articulo}</td>
                       <td className="px-3 py-2 text-sub">{a.descripcion || '—'}</td>
+                      {hayFiltros && (
+                        <td className="px-3 py-2 text-xs text-sub/80" title={nombreMat(a.material) || undefined}>
+                          {nombreProv(a.proveedor) || '—'}
+                        </td>
+                      )}
                       <td className="px-3 py-2 text-right tabular-nums text-ink">{numero(a.unidades)}</td>
                       <td className={`px-3 py-2 text-right tabular-nums ${a.costo == null ? 'text-amber-500' : 'text-sub'}`}>
                         {a.costo == null ? 'sin costo' : pesos(a.costo)}
@@ -485,7 +568,7 @@ export default function StockValorizado() {
                   ))}
                   {articulosVisibles.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="px-3 py-6 text-center text-sm text-sub">
+                      <td colSpan={hayFiltros ? 6 : 5} className="px-3 py-6 text-center text-sm text-sub">
                         No hay artículos que coincidan.
                       </td>
                     </tr>
@@ -494,7 +577,7 @@ export default function StockValorizado() {
                 {articulosVisibles.length > 0 && (
                   <tfoot>
                     <tr className="border-t border-line bg-surface2/50 font-semibold text-ink">
-                      <td className="px-3 py-2" colSpan={2}>
+                      <td className="px-3 py-2" colSpan={hayFiltros ? 3 : 2}>
                         Total ({numero(articulosVisibles.length)} artículos)
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums">{numero(totalArticulos.unidades)}</td>

@@ -32,6 +32,9 @@ export interface ArticuloValorizado {
   costo: number | null
   /** de esas unidades, las que están en tránsito */
   transito?: number
+  /** código de proveedor (ART.ARTFAB) y de material (ART.MAT); faltan con un puente viejo */
+  proveedor?: string
+  material?: string
 }
 
 /** Artículo con stock que no tiene costo cargado en la lista Compra: vale $0. */
@@ -45,6 +48,8 @@ export interface ArticuloSinCosto {
   sucursales: number
   /** sucursales donde está, ya sin el prefijo DRAGONFISH_ */
   bases: string
+  proveedor?: string
+  material?: string
 }
 
 /** Una fila por artículo sin costo y sucursal: dónde están esas unidades. */
@@ -56,12 +61,39 @@ export interface SinCostoPorBase {
   valoriza: boolean
 }
 
+/**
+ * Sucursal x proveedor x material. Con esto la pantalla rearma las tarjetas y la
+ * tabla por sucursal al filtrar, sin volver a pedirle nada al puente: cada
+ * artículo cae en un solo proveedor y un solo material, así que sumar las filas
+ * que pasan el filtro da el mismo número que recorrer artículo por artículo.
+ */
+export interface CrucePorBase {
+  base: string
+  proveedor: string
+  material: string
+  unidades: number
+  valorizado: number
+  unidades_sin_costo: number
+  skus: number
+  transito: number
+  transito_val: number
+}
+
+/** Nombre de un código: `tipo` es 'prov' (proveedor) o 'mat' (material). */
+export interface NombreClasificacion {
+  tipo: string
+  codigo: string
+  nombre: string
+}
+
 export interface StockValorizado {
   servidor: string
   bases: BaseValorizada[]
   articulos: ArticuloValorizado[]
   sin_costo: ArticuloSinCosto[]
   sin_costo_detalle: SinCostoPorBase[]
+  cruce: CrucePorBase[]
+  clasificaciones: NombreClasificacion[]
   costo: { lista: string; lista_nombre: string; base: string; articulos_con_costo: number }
   calculado: string | null
   cacheado: boolean
@@ -86,6 +118,8 @@ export async function cargarStockValorizado(forzar = false): Promise<StockValori
     articulos: body.articulos ?? [],
     sin_costo: body.sin_costo ?? [],
     sin_costo_detalle: body.sin_costo_detalle ?? [],
+    cruce: body.cruce ?? [],
+    clasificaciones: body.clasificaciones ?? [],
     costo: body.costo ?? { lista: 'LISTA0', lista_nombre: 'Compra', base: 'INDO', articulos_con_costo: 0 },
     calculado: body.calculado ?? null,
     cacheado: body.cacheado === true,
@@ -169,6 +203,44 @@ export function totalDe(bases: BaseValorizada[]): TotalValorizado {
     }),
     { unidades: 0, valorizado: 0, unidades_sin_costo: 0, skus: 0, sucursales: 0, transito: 0, transito_val: 0 },
   )
+}
+
+/**
+ * Rehace la fila de cada sucursal con solo los proveedores y materiales
+ * elegidos. Un set vacío quiere decir "todos". Devuelve lo mismo que manda el
+ * SQL en la primera consulta (misma forma, mismo orden por plata, y sin las
+ * sucursales que quedan en cero), así la pantalla no distingue un caso del otro.
+ */
+export function basesDesdeCruce(
+  cruce: CrucePorBase[],
+  proveedores: Set<string>,
+  materiales: Set<string>,
+): BaseValorizada[] {
+  const porBase = new Map<string, BaseValorizada>()
+  for (const f of cruce) {
+    if (proveedores.size > 0 && !proveedores.has(f.proveedor)) continue
+    if (materiales.size > 0 && !materiales.has(f.material)) continue
+    const b = porBase.get(f.base)
+    if (b) {
+      b.unidades += f.unidades
+      b.valorizado += f.valorizado
+      b.unidades_sin_costo += f.unidades_sin_costo
+      b.skus += f.skus
+      b.transito = (b.transito ?? 0) + f.transito
+      b.transito_val = (b.transito_val ?? 0) + f.transito_val
+    } else {
+      porBase.set(f.base, {
+        base: f.base,
+        unidades: f.unidades,
+        valorizado: f.valorizado,
+        unidades_sin_costo: f.unidades_sin_costo,
+        skus: f.skus,
+        transito: f.transito,
+        transito_val: f.transito_val,
+      })
+    }
+  }
+  return [...porBase.values()].filter((b) => b.unidades !== 0).sort((a, b) => b.valorizado - a.valorizado)
 }
 
 /** Costo promedio por unidad (0 si no hay unidades). */

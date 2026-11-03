@@ -587,7 +587,8 @@ async function stockValorizado(forzar) {
     } finally {
       await pool.close().catch(() => {})
     }
-    const [bases = [], articulos = [], costo = [], sinCosto = [], sinCostoDetalle = []] = r.recordsets ?? []
+    const [bases = [], articulos = [], costo = [], sinCosto = [], sinCostoDetalle = [], cruce = [], nombresClas = []] =
+      r.recordsets ?? []
 
     const datos = {
       servidor: ALIAS_PRINCIPAL,
@@ -608,6 +609,8 @@ async function stockValorizado(forzar) {
         valorizado: Number(f.valorizado) || 0,
         costo: f.costo == null ? null : Number(f.costo),
         transito: Number(f.transito) || 0,
+        proveedor: String(f.proveedor ?? '').trim(),
+        material: String(f.material ?? '').trim(),
       })),
       costo: {
         lista: 'LISTA0',
@@ -624,6 +627,8 @@ async function stockValorizado(forzar) {
         unidades_val: Number(f.unidades_val) || 0,
         sucursales: Number(f.sucursales) || 0,
         bases: String(f.bases ?? '').trim(),
+        proveedor: String(f.proveedor ?? '').trim(),
+        material: String(f.material ?? '').trim(),
       })),
       // Esos mismos, abiertos por sucursal: una fila por artículo y base
       sin_costo_detalle: sinCostoDetalle.map((f) => ({
@@ -631,6 +636,25 @@ async function stockValorizado(forzar) {
         base: String(f.base ?? ''),
         unidades: Number(f.unidades) || 0,
         valoriza: Number(f.valoriza) === 1,
+      })),
+      // Sucursal x proveedor x material: con esto la pantalla rearma las tarjetas
+      // y la tabla por sucursal cuando se filtra, sin volver a pedirle nada al SQL
+      cruce: cruce.map((f) => ({
+        base: String(f.base ?? ''),
+        proveedor: String(f.proveedor ?? '').trim(),
+        material: String(f.material ?? '').trim(),
+        unidades: Number(f.unidades) || 0,
+        valorizado: Number(f.valorizado) || 0,
+        unidades_sin_costo: Number(f.unidades_sin_costo) || 0,
+        skus: Number(f.skus) || 0,
+        transito: Number(f.transito) || 0,
+        transito_val: Number(f.transito_val) || 0,
+      })),
+      // Nombres de esos códigos: { tipo: 'prov' | 'mat', codigo, nombre }
+      clasificaciones: nombresClas.map((f) => ({
+        tipo: String(f.tipo ?? ''),
+        codigo: String(f.codigo ?? '').trim(),
+        nombre: String(f.nombre ?? '').trim(),
       })),
       calculado: new Date().toISOString(),
       segundos: Math.round((Date.now() - t0) / 100) / 10,

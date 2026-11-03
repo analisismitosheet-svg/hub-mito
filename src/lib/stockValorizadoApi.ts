@@ -56,6 +56,9 @@ export interface ArticuloValorizado {
   costo: number | null
   /** de esas unidades, las que están en tránsito */
   transito?: number
+  /** código de proveedor (ART.ARTFAB) y de material (ART.MAT) */
+  proveedor?: string
+  material?: string
 }
 
 export interface ArticuloSinCosto {
@@ -67,6 +70,27 @@ export interface ArticuloSinCosto {
   unidades_val: number
   sucursales: number
   bases: string
+  proveedor?: string
+  material?: string
+}
+
+/** Sucursal x proveedor x material: lo que usa la pantalla para filtrar. */
+export interface CrucePorBase {
+  base: string
+  proveedor: string
+  material: string
+  unidades: number
+  valorizado: number
+  unidades_sin_costo: number
+  skus: number
+  transito: number
+  transito_val: number
+}
+
+export interface NombreClasificacion {
+  tipo: string
+  codigo: string
+  nombre: string
 }
 
 /** Una fila por artículo sin costo y sucursal: dónde están esas unidades. */
@@ -83,6 +107,8 @@ export interface StockValorizado {
   articulos: ArticuloValorizado[]
   sin_costo: ArticuloSinCosto[]
   sin_costo_detalle: SinCostoPorBase[]
+  cruce: CrucePorBase[]
+  clasificaciones: NombreClasificacion[]
   costo: { lista: string; lista_nombre: string; base: string; articulos_con_costo: number }
   calculado: string | null
   cacheado: boolean
@@ -173,6 +199,8 @@ export default async function handler(req: Req, res: Res) {
     articulos: Array.isArray(datos.articulos) ? datos.articulos : [],
     sin_costo: Array.isArray(datos.sin_costo) ? datos.sin_costo : [],
     sin_costo_detalle: Array.isArray(datos.sin_costo_detalle) ? datos.sin_costo_detalle : [],
+    cruce: Array.isArray(datos.cruce) ? datos.cruce : [],
+    clasificaciones: Array.isArray(datos.clasificaciones) ? datos.clasificaciones : [],
     costo: datos.costo ?? { lista: 'LISTA0', lista_nombre: 'Compra', base: 'INDO', articulos_con_costo: 0 },
     calculado: datos.calculado ?? null,
     cacheado: datos.cacheado === true,
