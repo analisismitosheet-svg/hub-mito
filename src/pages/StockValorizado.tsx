@@ -415,8 +415,22 @@ export default function StockValorizado() {
             </div>
             {hayFiltros && (
               <>
-                <MultiselectFiltro label="Proveedor" opciones={opcionesProv} seleccionadas={provSel} onChange={setProvSel} />
-                <MultiselectFiltro label="Material" opciones={opcionesMat} seleccionadas={matSel} onChange={setMatSel} />
+                {/* arrancaTodo: los dos filtros de esta pantalla arrancan con todo
+                    tildado y se destilda lo que se quiere sacar (pedido del usuario). */}
+                <MultiselectFiltro
+                  label="Proveedor"
+                  opciones={opcionesProv}
+                  seleccionadas={provSel}
+                  onChange={setProvSel}
+                  arrancaTodo
+                />
+                <MultiselectFiltro
+                  label="Material"
+                  opciones={opcionesMat}
+                  seleccionadas={matSel}
+                  onChange={setMatSel}
+                  arrancaTodo
+                />
                 {filtrando && (
                   <button
                     type="button"

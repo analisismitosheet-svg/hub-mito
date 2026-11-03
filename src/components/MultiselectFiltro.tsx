@@ -170,12 +170,20 @@ export default function MultiselectFiltro({
   seleccionadas,
   onChange,
   compacto = false,
+  arrancaTodo = false,
 }: {
   label: string
   opciones: OpcionMulti[]
   seleccionadas: Set<string>
   onChange: (s: Set<string>) => void
   compacto?: boolean
+  /**
+   * Arranca con TODO tildado y se destilda lo que se quiere sacar, en vez de
+   * arrancar en blanco y tildar lo que se quiere ver (lo pidió el usuario el
+   * 03/11/2026 para Stock valorizado). Por afuera no cambia nada: el conjunto
+   * vacío sigue queriendo decir "todas", solo que acá se dibuja tildado.
+   */
+  arrancaTodo?: boolean
 }) {
   const [abierto, setAbierto] = useState(false)
   const [busq, setBusq] = useState('')
@@ -188,7 +196,20 @@ export default function MultiselectFiltro({
     return opciones.filter((o) => o.label.toUpperCase().includes(t))
   }, [opciones, busq])
 
+  /* Con arrancaTodo, el vacío se ve como "todas tildadas": destildar la primera
+     equivale a elegir todas menos esa (se toman de `opciones`, no de las que
+     dejó ver el buscador, para no perder las que están fuera de la búsqueda). */
+  const tildada = (id: string) => (arrancaTodo && seleccionadas.size === 0 ? true : seleccionadas.has(id))
+
+  const fuera = opciones.length - seleccionadas.size
+  const insignia =
+    seleccionadas.size === 0 ? '' : arrancaTodo ? (fuera > 0 ? `(-${fuera})` : '') : `(${seleccionadas.size})`
+
   function toggle(id: string) {
+    if (arrancaTodo && seleccionadas.size === 0) {
+      onChange(new Set(opciones.map((o) => o.id).filter((x) => x !== id)))
+      return
+    }
     const nuevo = new Set(seleccionadas)
     if (nuevo.has(id)) nuevo.delete(id)
     else nuevo.add(id)
@@ -237,12 +258,20 @@ export default function MultiselectFiltro({
         ref={botonRef}
         type="button"
         onClick={abrir}
-        title={label + (seleccionadas.size > 0 ? ` (${seleccionadas.size} seleccionados)` : '')}
+        title={
+          label +
+          (seleccionadas.size === 0
+            ? ''
+            : arrancaTodo
+              ? ` (${fuera} sin tildar de ${opciones.length})`
+              : ` (${seleccionadas.size} seleccionados)`)
+        }
         className={'btn-press inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-line' + (compacto ? ' !px-1.5' : '')}
       >
         <Filter size={13} aria-hidden />
         {!compacto && label}
-        {seleccionadas.size > 0 ? <span className={compacto ? 'text-[10px] text-brand-400' : ''}>{seleccionadas.size > 0 ? `(${seleccionadas.size})` : ''}</span> : null}
+        {/* Con arrancaTodo se cuenta lo que quedó FUERA, que es lo que se destildó */}
+        {insignia ? <span className={compacto ? 'text-[10px] text-brand-400' : ''}>{insignia}</span> : null}
       </button>
       {abierto && pos && createPortal(
         <>
@@ -276,7 +305,7 @@ export default function MultiselectFiltro({
                   <label key={o.id} className="flex cursor-pointer items-center gap-1.5 rounded-lg px-1.5 py-1 text-xs text-ink hover:bg-line/40">
                     <input
                       type="checkbox"
-                      checked={seleccionadas.has(o.id)}
+                      checked={tildada(o.id)}
                       onChange={() => toggle(o.id)}
                       className="h-3.5 w-3.5 rounded border-line bg-surface2 accent-brand-600"
                     />
