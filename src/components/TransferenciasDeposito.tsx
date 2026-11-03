@@ -28,7 +28,8 @@ type Estado = 'pendiente' | 'hecho' | 'faltante'
  * últimos 7 días, por destino, con ✓ Hecho / Faltante por renglón o por destino.
  * Los marcados hoy quedan a la vista para poder deshacer.
  */
-export default function TransferenciasDeposito() {
+/** `mostrarVacio`: cuando es lo único que tiene Mi repo (rol deposito sin legajo), avisa que no hay nada. */
+export default function TransferenciasDeposito({ mostrarVacio = false }: { mostrarVacio?: boolean }) {
   const [renglones, setRenglones] = useState<Renglon[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -80,7 +81,16 @@ export default function TransferenciasDeposito() {
       </div>
     )
   }
-  if (!lotes.length && !error) return null
+  if (!lotes.length && !error) {
+    if (!mostrarVacio) return null
+    return (
+      <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-line2 bg-surface/50 px-4 py-14 text-center text-sub">
+        <ArrowRightLeft size={28} aria-hidden />
+        <p>No hay transferencias pendientes que salgan de Depósito Indo.</p>
+        <p className="text-xs">Cuando se cargue una, aparece acá.</p>
+      </div>
+    )
+  }
 
   return (
     <section className="mb-5 rounded-2xl border border-line bg-surface p-3 sm:p-4">

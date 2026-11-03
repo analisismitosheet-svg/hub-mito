@@ -133,6 +133,8 @@ export default function MiRepo() {
   const { perfil, soloPiso, isAdmin, esLegajo, veMiRepoDeposito } = useAuth()
   // El administrador (con su cuenta común) ve TODOS los repos, solo para consultar
   const modoAdmin = isAdmin && !esLegajo
+  // Rol deposito sin legajo: Mi repo es solo la lista de transferencias de Depósito Indo
+  const soloDeposito = veMiRepoDeposito && !esLegajo && !isAdmin && !String(perfil?.legajo ?? '').trim()
   // Desplegables del administrador: empleados abiertos y sus "Terminados" abiertos
   const [empAbiertos, setEmpAbiertos] = useState<Set<string>>(new Set())
   const [termAbiertos, setTermAbiertos] = useState<Set<string>>(new Set())
@@ -373,6 +375,10 @@ export default function MiRepo() {
     }
 
     const legajo = String(perfil?.legajo ?? '').trim()
+    if (!legajo && soloDeposito) {
+      setCargando(false)
+      return
+    }
     if (!legajo) {
       setAviso('Tu cuenta no tiene legajo cargado. Pedile al administrador que lo asigne en Usuarios.')
       setCargando(false)
@@ -464,7 +470,7 @@ export default function MiRepo() {
       setError(e instanceof Error ? e.message : 'No se pudieron cargar tus repos.')
       setCargando(false)
     }
-  }, [perfil?.id, perfil?.legajo, perfil?.nombre, enfocar, modoAdmin])
+  }, [perfil?.id, perfil?.legajo, perfil?.nombre, enfocar, modoAdmin, soloDeposito])
 
   useEffect(() => { void cargar() }, [cargar])
 
@@ -1058,17 +1064,17 @@ export default function MiRepo() {
           <div className="min-w-0">
             <h1 className="font-display text-xl font-bold text-ink sm:text-2xl">Mi repo</h1>
             <p className="truncate text-sm text-sub">
-              {empleadoNombre ?? 'Tus locales asignados'}
+              {soloDeposito ? 'Transferencias Depósito Indo' : empleadoNombre ?? 'Tus locales asignados'}
             </p>
           </div>
         </div>
       )}
 
       {/* Avisos push: que el celular suene aunque esté bloqueado */}
-      {!asignacionSel && <AvisosCelular />}
+      {!asignacionSel && !soloDeposito && <AvisosCelular />}
 
       {/* Rol deposito y legajos de Depósito Indo: los renglones que salen de Indo */}
-      {!asignacionSel && veMiRepoDeposito && <TransferenciasDeposito />}
+      {!asignacionSel && veMiRepoDeposito && <TransferenciasDeposito mostrarVacio={soloDeposito} />}
 
       {avisoArmado && (
         <p
@@ -1129,7 +1135,7 @@ export default function MiRepo() {
         </div>
       )}
 
-      {!aviso && !error && asignaciones.length === 0 && (
+      {!aviso && !error && !soloDeposito && asignaciones.length === 0 && (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-line2 bg-surface/50 px-4 py-14 text-center text-sub">
           <Store size={28} aria-hidden />
           <p>{modoAdmin ? 'No hay repos con responsables asignados.' : 'Todavía no te asignaron ningún local en un repo.'}</p>
