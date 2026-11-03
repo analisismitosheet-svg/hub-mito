@@ -17,7 +17,7 @@ export default function CarpetaArea({
   titulo?: string
   color?: string
 }) {
-  const { can, esLegajo, isAdmin } = useAuth()
+  const { can, esLegajo, isAdmin, veMiRepoDeposito } = useAuth()
   const [overrides, setOverrides] = useState<Record<string, string[]>>({})
 
   useEffect(() => {
@@ -27,7 +27,7 @@ export default function CarpetaArea({
   }, [])
 
   const apps = appsDeAreaConOverrides(carpetaId, overrides)
-    .filter((a) => (!a.permiso || can(a.permiso)) && (!a.soloLegajo || esLegajo || isAdmin))
+    .filter((a) => (!a.permiso || can(a.permiso)) && (!a.soloLegajo || esLegajo || isAdmin) && (!a.soloDeposito || veMiRepoDeposito))
     .sort((a, b) => a.title.localeCompare(b.title, 'es', { sensitivity: 'base' }))
 
   const colores = coloresUnicos(apps.map((a) => a.color))

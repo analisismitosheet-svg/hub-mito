@@ -122,3 +122,15 @@ REVOKE ALL ON FUNCTION public.transferencias_de_mi_ubicacion() FROM anon, public
 REVOKE ALL ON FUNCTION public.transfer_avisos_ubicacion(uuid) FROM anon, authenticated, public;
 GRANT EXECUTE ON FUNCTION public.transferencias_de_mi_ubicacion() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.transfer_avisos_ubicacion(uuid) TO service_role;
+
+-- Ubicación del legajo que inició sesión: el front la usa para mostrar
+-- Mi repo en el área Depósito (rol deposito o legajo de Depósito Indo).
+CREATE OR REPLACE FUNCTION public.mi_ubicacion()
+RETURNS text
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+  SELECT private.ubicacion_de_usuario(auth.uid())
+$$;
+REVOKE ALL ON FUNCTION public.mi_ubicacion() FROM anon, public;
+GRANT EXECUTE ON FUNCTION public.mi_ubicacion() TO authenticated;

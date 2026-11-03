@@ -222,7 +222,7 @@ export default function App() {
           <Route
             path="/mayorista/mi-repo"
             element={
-              <PermissionRoute permiso="mayorista.repos_piso" soloLegajo>
+              <PermissionRoute permiso="mayorista.repos_piso" soloLegajo oDeposito>
                 <MiRepo />
               </PermissionRoute>
             }

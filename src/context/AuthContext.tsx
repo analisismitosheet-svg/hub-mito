@@ -27,6 +27,8 @@ export interface Perfil {
   roles: string[]
   /** N° de legajo: liga esta cuenta con la fila de `empleados` (ingreso de piso). */
   legajo: string | null
+  /** Ubicación del legajo (sql/legajos_ubicacion.sql): 'DEPOSITO INDO', 'DEPOSITO MAYORISTA' o null. */
+  ubicacion: string | null
 }
 
 interface AuthState {
@@ -45,6 +47,8 @@ interface AuthState {
   soloPiso: boolean
   /** Cuenta de legajo: entró con legajo + clave (email sintético de empleado) */
   esLegajo: boolean
+  /** Ve Mi repo en el área Depósito: rol deposito o legajo de Depósito Indo (y admin) */
+  veMiRepoDeposito: boolean
   /** ¿El usuario tiene el permiso indicado? (admin siempre true) */
   can: (clave: string) => boolean
   refresh: () => Promise<void>
@@ -78,15 +82,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const cargarPerfil = useCallback(async () => {
     if (!supabase) return
     cargandoPerfil.current = true
-    const [{ data: perfilData }, { data: permisosData }] = await Promise.all([
+    const [{ data: perfilData }, { data: permisosData }, { data: ubicacionData }] = await Promise.all([
       supabase.rpc('mi_perfil'),
       supabase.rpc('mis_permisos'),
+      supabase.rpc('mi_ubicacion'),
     ])
     const p = Array.isArray(perfilData) ? (perfilData[0] as Perfil | undefined) : null
     setPerfil(
       p
         ? // `legajo` puede no existir si todavía no se corrió sql/empleados_piso.sql
-          { ...p, legajo: p.legajo ?? null, roles: p.roles ?? (p.rol ? [p.rol] : []) }
+          {
+            ...p,
+            legajo: p.legajo ?? null,
+            roles: p.roles ?? (p.rol ? [p.rol] : []),
+            ubicacion: typeof ubicacionData === 'string' ? ubicacionData : null,
+          }
         : null,
     )
     const claves = Array.isArray(permisosData)
@@ -152,6 +162,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       roles.every((r) => r === ROL_PISO) &&
       [...permisos].every((p) => PERMISOS_PISO.has(p))
     const esLegajo = !!session?.user?.email?.toLowerCase().endsWith(`@${DOMINIO_LOGIN_EMPLEADO}`)
+    const veMiRepoDeposito =
+      isAdmin || roles.includes('deposito') || (esLegajo && perfil?.ubicacion === 'DEPOSITO INDO')
     return {
       user: session?.user ?? null,
       session,
@@ -163,6 +175,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isApproved,
       soloPiso,
       esLegajo,
+      veMiRepoDeposito,
       can(clave) {
         if (!configured) return true
         if (isAdmin) return true

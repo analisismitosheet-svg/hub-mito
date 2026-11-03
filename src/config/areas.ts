@@ -99,6 +99,8 @@ export interface AppDef {
   grupo?: string
   /** solo la ven las cuentas de legajo (empleados de piso) y los administradores */
   soloLegajo?: boolean
+  /** solo rol deposito, legajos con ubicación Depósito Indo y administradores (AuthContext.veMiRepoDeposito) */
+  soloDeposito?: boolean
   /**
    * Acceso directo en el MENÚ PRINCIPAL (no se lista dentro de las áreas).
    * Sus áreas (areaId/areaIds o las tildadas en Roles → Ubicación de menús)
@@ -268,7 +270,6 @@ export const APPS: AppDef[] = [
   {
     id: 'mayorista-mi-repo',
     areaId: 'mayorista',
-    areaIds: ['mayorista', 'deposito'],
     title: 'Mi repo',
     description: 'Escaneo en piso: tus locales asignados, artículo por artículo.',
     icon: ScanLine,
@@ -277,6 +278,18 @@ export const APPS: AppDef[] = [
     color: '#d97706',
     permiso: 'mayorista.repos_piso',
     soloLegajo: true,
+  },
+  {
+    // La misma pantalla, en Depósito: solo rol deposito o legajos de Depósito Indo
+    id: 'deposito-mi-repo',
+    areaId: 'deposito',
+    title: 'Mi repo',
+    description: 'Escaneo en piso: tus locales asignados, artículo por artículo.',
+    icon: ScanLine,
+    kind: 'internal',
+    target: '/mayorista/mi-repo',
+    color: '#ea580c',
+    soloDeposito: true,
   },
   {
     id: 'mayorista-pausas',

@@ -11,14 +11,17 @@ import { useAuth } from '@/context/AuthContext'
 export default function PermissionRoute({
   permiso,
   soloLegajo = false,
+  oDeposito = false,
   children,
 }: {
   permiso: string
   /** además del permiso, solo cuentas de legajo (y administradores) */
   soloLegajo?: boolean
+  /** también entra quien ve Mi repo en Depósito (rol deposito o legajo de Depósito Indo) */
+  oDeposito?: boolean
   children: ReactNode
 }) {
-  const { loading, configured, user, isApproved, can, esLegajo, isAdmin } = useAuth()
+  const { loading, configured, user, isApproved, can, esLegajo, isAdmin, veMiRepoDeposito } = useAuth()
   if (loading)
     return (
       <div className="flex min-h-screen items-center justify-center gap-2 bg-paper text-sub">
@@ -27,6 +30,7 @@ export default function PermissionRoute({
     )
   if (configured && !user) return <Navigate to="/login" replace />
   if (configured && user && !isApproved) return <Navigate to="/acceso" replace />
+  if (configured && oDeposito && veMiRepoDeposito) return <>{children}</>
   if (!can(permiso)) return <Navigate to="/denegado" replace />
   if (configured && soloLegajo && !esLegajo && !isAdmin) return <Navigate to="/denegado" replace />
   return <>{children}</>
