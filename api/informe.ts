@@ -262,7 +262,14 @@ async function manual(req: Req, res: Res) {
   const informe = filas?.[0]
   if (!informe) return res.status(404).json({ error: 'Informe no encontrado' })
 
-  const resultado = await enviarInforme(informe, 'manual')
+  // Reenvío del informe de otro día (yyyy-mm-dd, hasta 31 días atrás): no cuenta como el envío de hoy
+  let fecha: string | undefined
+  if (datos.fecha !== undefined) {
+    fecha = String(datos.fecha)
+    const dias = (Date.parse(`${ahoraAr().fecha}T00:00:00Z`) - Date.parse(`${fecha}T00:00:00Z`)) / 86_400_000
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || !(dias >= 1 && dias <= 31)) return res.status(400).json({ error: 'Fecha inválida (de ayer a 31 días atrás)' })
+  }
+  const resultado = await enviarInforme(informe, 'manual', fecha)
   return res.status(200).json(resultado)
 }
 

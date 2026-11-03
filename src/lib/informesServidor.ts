@@ -567,9 +567,10 @@ function limpiarParaImagen(texto: string): string {
     .trim()
 }
 
-/** Arma el contenido de la imagen (título, subtítulo, bloques y pie). */
-async function construirReporteImagen(informe: Informe): Promise<{ reporte: ReporteImagen; caption: string }> {
-  const d = ahoraAr()
+/** Arma el contenido de la imagen (título, subtítulo, bloques y pie). `fecha` (yyyy-mm-dd) arma
+ *  los informes de la app de otro día (reenvío); si no viene, el de hoy. */
+async function construirReporteImagen(informe: Informe, fecha?: string): Promise<{ reporte: ReporteImagen; caption: string }> {
+  const d = fecha ? { ...ahoraAr(), fecha } : ahoraAr()
   const enc = informe.encabezado ? conVariables(informe.encabezado).trim() : ''
   const titulo = limpiarParaImagen(enc || informe.nombre || 'Informe')
   const subtitulo = `${d.fechaLarga} · ${d.hora}`
@@ -637,8 +638,8 @@ async function construirReporteImagen(informe: Informe): Promise<{ reporte: Repo
 }
 
 /** Genera el PNG del informe (lo usan la vista previa y el envío). */
-export async function generarImagenInforme(informe: Informe): Promise<{ png: Buffer; caption: string }> {
-  const { reporte, caption } = await construirReporteImagen(informe)
+export async function generarImagenInforme(informe: Informe, fecha?: string): Promise<{ png: Buffer; caption: string }> {
+  const { reporte, caption } = await construirReporteImagen(informe, fecha)
   const png = await renderReporteImagen(reporte)
   return { png, caption }
 }
@@ -826,7 +827,9 @@ export interface ResultadoEnvio {
   detalle: string
 }
 
-export async function enviarInforme(informe: Informe & { id?: string }, origen: 'manual' | 'cron' | 'prueba'): Promise<ResultadoEnvio> {
+/** `fecha` (yyyy-mm-dd): reenvío del informe de otro día. No toca `ultimo_envio`, así el envío
+ *  automático de hoy sigue saliendo a su hora. */
+export async function enviarInforme(informe: Informe & { id?: string }, origen: 'manual' | 'cron' | 'prueba', fecha?: string): Promise<ResultadoEnvio> {
   const destinos = (informe.destinatarios ?? []).filter((d: Destinatario) => d.telefono && normalizarTelefono(d.telefono))
   if (!destinos.length) {
     return { ok: false, texto: '', enviados: 0, detalle: 'El informe no tiene destinatarios' }
@@ -838,7 +841,7 @@ export async function enviarInforme(informe: Informe & { id?: string }, origen: 
   let notaImagen = ''
   if (formatoDe(informe) === 'imagen') {
     try {
-      const r = await generarImagenInforme(informe)
+      const r = await generarImagenInforme(informe, fecha)
       png = r.png
       texto = r.caption || '(imagen)'
     } catch (e) {
@@ -860,7 +863,7 @@ export async function enviarInforme(informe: Informe & { id?: string }, origen: 
 
   // Plantilla de Meta (opcional): {{1}} = primer nombre del destinatario, {{2}} = fecha de hoy
   const pm = plantillaMetaDe(informe)
-  const fechaHoy = corta(ahoraAr().fecha)
+  const fechaHoy = corta(fecha ?? ahoraAr().fecha)
   const plantillaPara = (d: Destinatario): PlantillaEnvio | undefined =>
     pm ? { ...pm, parametros: [(d.nombre || '').trim().split(/\s+/)[0] || 'equipo', fechaHoy] } : undefined
 
@@ -891,7 +894,7 @@ export async function enviarInforme(informe: Informe & { id?: string }, origen: 
   }
   const ok = enviados === destinos.length
   const detalle = detalles.join(' · ') + notaImagen
-  if (informe.id) {
+  if (informe.id && !fecha) {
     await rest(`informes?id=eq.${informe.id}`, {
       method: 'PATCH',
       headers: { Prefer: 'return=minimal' },
