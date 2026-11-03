@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Repos Depósito con transferencias</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{--paper:#050508;--surface:rgba(255,255,255,.04);--surface2:rgba(255,255,255,.07);--line:rgba(255,255,255,.08);--ink:#f8fafc;--sub:#94a3b8;
+    --emerald:#22c55e;--violet:#a78bfa;--amber:#f59e0b;--red:#f87171;--orange:#ea580c}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(900px 500px at 10% -10%,rgba(234,88,12,.12),transparent 60%),var(--paper);color:var(--ink);
+    font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:14px;padding:22px 16px 60px;min-height:100vh}
+  .wrap{max-width:1250px;margin:0 auto}
+  .badge{display:inline-block;padding:3px 10px;border-radius:999px;background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.35);font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+  .head{display:flex;gap:12px;align-items:center;margin:12px 0 18px}
+  .ico{border:1px solid #d9770640;background:#d9770624;color:#d97706;border-radius:12px;padding:10px;font-size:22px}
+  h1{font-size:24px;margin:0} .sub{color:var(--sub);font-size:13px}
+  .lote{border:1px solid var(--line);background:var(--surface);border-radius:16px;overflow:hidden;margin-bottom:12px}
+  .lote>.top{display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer}
+  .lote>.top:hover{background:var(--surface2)}
+  .chev{color:var(--sub);transition:transform .15s} .open .chev{transform:rotate(90deg)}
+  .t{flex:1;min-width:0} .t b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chip{font-size:10px;font-weight:800;border-radius:6px;padding:2px 7px;margin-left:6px;vertical-align:middle}
+  .tf{background:rgba(167,139,250,.15);color:var(--violet);border:1px solid rgba(167,139,250,.35)}
+  .xl{background:rgba(148,163,184,.12);color:var(--sub);border:1px solid var(--line)}
+  .barra{width:160px;height:8px;border-radius:99px;background:var(--line);overflow:hidden;display:flex}
+  .barra i{display:block;height:100%} .bar-ok{background:var(--emerald)} .bar-f{background:var(--red)}
+  .pct{font-size:12px;color:var(--sub);width:44px;text-align:right;font-variant-numeric:tabular-nums}
+  .body{border-top:1px solid var(--line);display:none} .open .body{display:block}
+  .sec{border-bottom:1px solid var(--line)}
+  .sec>.st{display:flex;align-items:center;gap:8px;padding:10px 16px;font-weight:700}
+  .sec>.st .r{margin-left:auto;font-size:12px;color:var(--emerald);font-weight:600;border-left:1px solid var(--line);padding-left:12px}
+  .pad{padding:4px 16px 14px;overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--sub);text-align:right;padding:6px;border-bottom:1px solid var(--line);vertical-align:bottom;white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  th .prom{display:block;color:var(--amber);font-size:13px;font-weight:800;letter-spacing:0;margin-bottom:2px;text-transform:none}
+  td{padding:7px 6px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .falt{color:var(--red);font-weight:700} .ok{color:var(--emerald);font-weight:700}
+  .curso{background:rgba(245,158,11,.15);color:var(--amber)} .fin{background:rgba(34,197,94,.15);color:var(--emerald)}
+  .kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin-bottom:12px}
+  @media(max-width:900px){.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+  .k{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:8px 10px}
+  .k .l{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--sub);font-weight:700}
+  .k .v{font-size:20px;font-weight:800;margin-top:2px;font-variant-numeric:tabular-nums}
+  h4{margin:12px 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--sub)}
+  .mat th,.mat td{text-align:center} .mat td:nth-child(-n+4),.mat th:nth-child(-n+4){text-align:left}
+  .mat td.cod{font-family:ui-monospace,monospace;font-size:11px} .mat td.desc{font-size:11px;max-width:260px;overflow:hidden;text-overflow:ellipsis}
+  .cel{display:inline-flex;align-items:center;gap:2px}
+  .cel span{min-width:12px} .cel.h span{color:var(--emerald);text-decoration:line-through} .cel.f span{color:var(--red);text-decoration:line-through}
+  .b{border:0;background:transparent;color:rgba(148,163,184,.4);cursor:pointer;border-radius:4px;padding:1px 3px;font-size:11px}
+  .cel.h .bh{background:rgba(34,197,94,.2);color:var(--emerald)} .cel.f .bf{background:rgba(239,68,68,.2);color:var(--red)}
+  .vacio{color:rgba(148,163,184,.25)}
+  .nota{border:1px dashed rgba(167,139,250,.4);background:rgba(167,139,250,.06);border-radius:12px;padding:10px 14px;color:#ddd6fe;font-size:12.5px;line-height:1.5;margin:0 0 16px}
+  .nota b{color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span class="badge">Maqueta · sin subir</span>
+  <div class="head">
+    <div class="ico">▦</div>
+    <div><h1>Depósito</h1><div class="sub">Gestión de depósito: preparar y marcar hecho o faltante.</div></div>
+  </div>
+
+  <div class="nota">
+    <b>Qué cambia:</b> en Repos Depósito aparecen también las <b>reposiciones / transferencias que salen de Indo</b> (las mismas de Mi repo), con un chip violeta.
+    Se marcan acá o en Mi repo y es lo mismo. Las <b>Estadísticas</b> funcionan como la Eficiencia mayorista:
+    horas del primer al último tilde, personas que marcaron, prendas por hora y una fila por persona.
+    Datos reales del lote de hoy; los tildes están simulados para que se vea.
+  </div>
+
+  <!-- Transferencia de Indo (nuevo) -->
+  <div class="lote open" id="tf">
+    <div class="top" onclick="this.parentNode.classList.toggle('open')">
+      <span class="chev">▶</span>
+      <div class="t">
+        <b>261103 - repo venta diaria 01 y 02-11 <span class="chip tf">⇄ Transferencia · sale de INDO</span></b>
+        <span class="sub">Cargado 03/11 14:09 · <span id="nDest"></span> locales · repo venta diaria</span>
+      </div>
+      <div class="barra"><i class="bar-ok" id="bOk"></i><i class="bar-f" id="bF"></i></div>
+      <span class="pct" id="pct"></span>
+    </div>
+    <div class="body">
+      <div class="sec">
+        <div class="st">▾ 📊 Estadísticas</div>
+        <div class="pad">
+          <div class="kpis" id="kpis"></div>
+          <h4>Por persona (como Eficiencia mayorista)</h4>
+          <table>
+            <thead><tr><th>Persona</th><th>Unidades</th><th>No mand.</th><th>Primer tilde</th><th>Último tilde</th><th><span class="prom">0,92</span>Horas</th><th><span class="prom">27,2</span>Prend/HS</th></tr></thead>
+            <tbody>
+              <tr><td>Gómez, Lucas <span class="sub">#412</span></td><td>16</td><td class="falt">1</td><td>14:32</td><td>15:21</td><td>0,82</td><td>19,5</td></tr>
+              <tr><td>Pereyra, Sofía <span class="sub">#388</span></td><td>11</td><td class="falt">0</td><td>14:40</td><td>15:41</td><td>1,02</td><td>10,8</td></tr>
+              <tr><td>deposito.mitosheet <span class="sub">(usuario)</span></td><td>4</td><td class="falt">1</td><td>15:50</td><td>15:58</td><td>0,13</td><td>30,0</td></tr>
+            </tbody>
+          </table>
+          <p class="sub" style="margin:8px 0 0;font-size:11.5px">Horas = del primer al último tilde de cada uno (cuenta solo L-V 9 a 17, igual que hoy en Repos Depósito). Prend/HS = unidades marcadas ÷ horas. El promedio va arriba en naranja.</p>
+        </div>
+      </div>
+      <div class="sec">
+        <div class="st">▾ ⇄ Reposición <span class="r">✓ Todo listo</span></div>
+        <div class="pad"><table class="mat" id="mat"></table></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Repo de siempre (Excel), sin cambios -->
+  <div class="lote">
+    <div class="top" onclick="this.parentNode.classList.toggle('open')">
+      <span class="chev">▶</span>
+      <div class="t"><b>REPO DEPÓSITO 31/10 <span class="chip xl">Excel</span></b><span class="sub">Cargado 31/10 10:12 · 9 locales · sin cambios</span></div>
+      <div class="barra"><i class="bar-ok" style="width:100%"></i></div><span class="pct">100%</span>
+    </div>
+    <div class="body"><div class="pad sub" style="padding:14px 16px">Igual que hoy.</div></div>
+  </div>
+</div>
+
+<script>
+// Renglones reales del lote (origen INDOD); el estado está simulado para la maqueta
+const R = [
+ ['47041222','ROCK GRIS ZAPATILLA 47 STREET','10','38','NVOCED',1,'h'],
+ ['BG155144','NEGRO SERPIENTE OVER TEE BILLABONG','02','L','NVOCED',1,'h'],
+ ['CF165905','MIND T-SHIRT CAPTAIN FIN','06','L','NVOCED',1,'h'],
+ ['CF245832','OTTIS T-SHIRT CAPTAIN FIN','F2','XL','GRALPAZ',1,'h'],
+ ['CF255712','SUNSET T-SHIRT CAPTAIN FIN','02','L','NVOCED',1,'h'],
+ ['CF255718','CONNECT T-SHIRT CAPTAIN FIN','01','M','CFR4',1,'h'],
+ ['CF255723','SEAGULLS T-SHIRT CAPTAIN FIN','02','M','9DEJULIO',1,'h'],
+ ['CF255723','SEAGULLS T-SHIRT CAPTAIN FIN','02','XXL','9DEJULIO',1,'f'],
+ ['CF255735','THE THRILL T-SHIRT CAPTAIN FIN','07','S','NVOCED',1,'h'],
+ ['CF255742','SOCIAL BEACH T-SHIRT CAPTAIN FIN','02','M','NVOCED',1,'h'],
+ ['CF255817','TRICIO T-SHIRT CAPTAIN FIN','02','M','9DEJULIO',1,'h'],
+ ['CF255903','RUDDER T-SHIRT CAPTAIN FIN','02','M','NVOCED',1,'h'],
+ ['CF255906','LEVEES T-SHIRT CAPTAIN FIN','02','M','RIVERAD',1,'h'],
+ ['CF275187','CAPTAIN V-NECK REM MC STANDARD','02','S','BUSTOD',1,'h'],
+ ['CF275187','CAPTAIN V-NECK REM MC STANDARD','GM','XL','CFR4',1,'h'],
+ ['CJ165701','SKY ON JR T-SHIRT CAPTAIN FIN','02','16','CFD',1,'h'],
+ ['CJ165704','RIPPLY JR T-SHIRT CAPTAIN FIN','02','10','NVOCED',1,'h'],
+ ['CJ245112','COMUNITY COLLEGE LOGO T-SHIRT JUNIOR','01','10','NVOCED',1,'h'],
+ ['LC040802','CORDON V-MAX BLANCO - S27','00','U','9DEJULIO',1,'h'],
+ ['LC040802','CORDON V-MAX BLANCO - S27','00','U','WALMARTD',1,'h'],
+ ['LC040803','CORDON V-MAX NEGRO - S27','00','U','DINOD',1,'h'],
+ ['LC040803','CORDON V-MAX NEGRO - S27','00','U','NVOCED',1,'h'],
+ ['LC040803','CORDON V-MAX NEGRO - S27','00','U','RIVERAD',2,'h'],
+ ['LC040803','CORDON V-MAX NEGRO - S27','00','U','VCPD',1,'h'],
+ ['LC040810','CORDON CHUNKY BLANCO 120 - S27','00','U','LIBERD',1,'h'],
+ ['VS031110','K SK8-MID REISSUE V NEGRO - S27','02','3','NVOCED',1,'f'],
+ ['VS031110','K SK8-MID REISSUE V NEGRO - S27','02','3','RIVERAD',1,'h'],
+ ['VS051101','K KNU SKOOL - S27','02','10.5','NVOCED',1,'h'],
+ ['VS081130','KIDS OLD SKOOL BLK WHT - S27','02','13.5','DINOD',1,'h'],
+ ['VS211401','BLACK/BLACK LA COSTA SLIDE VANS - S27','02','10','VCPD',1,'h'],
+ ['VS211401','BLACK/BLACK LA COSTA SLIDE VANS - S27','02','11','BUSTOD',1,'p'],
+ ['VS211401','BLACK/BLACK LA COSTA SLIDE VANS - S27','02','11','RIVERAD',1,'p'],
+ ['VS211401','BLACK/BLACK LA COSTA SLIDE VANS - S27','02','9','RIVERAD',1,'p'],
+ ['VS211404','BLACK LA COSTA SLIDE VANS - S27','02','7.5','LIBERD',1,'p'],
+ ['VS211404','BLACK LA COSTA SLIDE VANS - S27','02','9','RUTA9D2',1,'p'],
+ ['VS221401','LA COSTA SLIDE-ON CHECKEBOARD - S27','01','10','NVOCED',1,'p'],
+ ['VS221401','LA COSTA SLIDE-ON CHECKEBOARD - S27','01','3.5','ESPINOD',1,'p'],
+ ['VS221401','LA COSTA SLIDE-ON CHECKEBOARD - S27','01','7.5','RUTA9D2',1,'p'],
+ ['VS221401','LA COSTA SLIDE-ON CHECKEBOARD - S27','01','8','NVOCED',1,'p'],
+ ['VS221401','LA COSTA SLIDE-ON CHECKEBOARD - S27','01','9','NVOCED',1,'p'],
+];
+const dest = [...new Set(R.map(r=>r[4]))].sort();
+document.getElementById('nDest').textContent = dest.length;
+const tot = R.reduce((s,r)=>s+r[5],0), h = R.filter(r=>r[6]==='h').reduce((s,r)=>s+r[5],0), f = R.filter(r=>r[6]==='f').reduce((s,r)=>s+r[5],0);
+document.getElementById('bOk').style.width = (h/tot*100)+'%';
+document.getElementById('bF').style.width = (f/tot*100)+'%';
+document.getElementById('pct').textContent = Math.round((h+f)/tot*100)+'%';
+const k = [['Cant repo',tot],['No mand.',`<span class="falt">${f}</span>`],['Locales',dest.length],['HS total','1,43'],['Personas',3],['Prend/HS','21,7'],
+           ['Avance',`${Math.round((h+f)/tot*100)}%`],['Estado','<span class="chip curso" style="margin:0">En curso</span>']];
+document.getElementById('kpis').innerHTML = k.map(([l,v])=>`<div class="k"><div class="l">${l}</div><div class="v">${v}</div></div>`).join('');
+// Matriz artículo × destino, como la Reposición de Repos Depósito
+const filas = new Map();
+for (const r of R) { const key = r.slice(0,4).join('|'); if(!filas.has(key)) filas.set(key,{a:r.slice(0,4),d:{}}); filas.get(key).d[r[4]] = r; }
+let html = '<thead><tr><th>Código</th><th>Descripción</th><th>Color</th><th>Talle</th>' + dest.map(d=>`<th>${d}</th>`).join('') + '</tr></thead><tbody>';
+for (const {a,d} of filas.values()) {
+  html += `<tr><td class="cod">${a[0]}</td><td class="desc">${a[1]}</td><td>${a[2]}</td><td>${a[3]}</td>` + dest.map(x=>{
+    const r = d[x]; if(!r) return '<td class="vacio">—</td>';
+    return `<td><span class="cel ${r[6]==='p'?'':r[6]}"><span>${r[5]}</span><button class="b bh" onclick="t(this,'h')">✓</button><button class="b bf" onclick="t(this,'f')">✕</button></span></td>`;
+  }).join('') + '</tr>';
+}
+document.getElementById('mat').innerHTML = html + '</tbody>';
+function t(b,e){ const c=b.parentNode; const on=c.classList.contains(e); c.classList.remove('h','f'); if(!on) c.classList.add(e); }
+</script>
+</body>
+</html>
