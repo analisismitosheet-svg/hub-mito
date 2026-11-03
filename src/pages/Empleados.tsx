@@ -54,6 +54,8 @@ interface Empleado {
   entrega_remeras: string | null
   /** false = no sale en el informe de Eficiencia mayorista (sql/empleados_cuenta_informes.sql) */
   cuenta_informes: boolean | null
+  /** Notas por celda, como los comentarios de Excel: { clave_columna: texto } (sql/empleados_notas.sql) */
+  notas: Record<string, string> | null
 }
 
 const ESTADO_LEGAJO_OPCIONES = ['NOMINA ACTIVA', 'PLANES ACTIVOS', 'BAJAS MITO', 'BAJAS PLANES']
@@ -77,7 +79,7 @@ function estiloEstadoLegajo(s: string | null): string {
 }
 
 const CAMPOS =
-  'id,legajo,nombre,activo,lugar,ubicacion,area_sector,horas,convenio,categoria,puesto,comision,reingreso,fecha_ingreso,antiguedad_2025,dias_vacaciones_2025,cuil,dni,fecha_nacimiento,sexo,telefono,domicilio,email,codigo_os,prepaga,tipo_contrato,contacto_emergencia,parentesco,telefono_emergencia,estado_legajo,fecha_egreso,motivo_baja,plan,obra_social,fin_plan,entrega_remeras,cuenta_informes'
+  'id,legajo,nombre,activo,lugar,ubicacion,area_sector,horas,convenio,categoria,puesto,comision,reingreso,fecha_ingreso,antiguedad_2025,dias_vacaciones_2025,cuil,dni,fecha_nacimiento,sexo,telefono,domicilio,email,codigo_os,prepaga,tipo_contrato,contacto_emergencia,parentesco,telefono_emergencia,estado_legajo,fecha_egreso,motivo_baja,plan,obra_social,fin_plan,entrega_remeras,cuenta_informes,notas'
 
 const inputCls = 'w-full rounded-xl border border-line bg-surface2 px-3 py-1.5 text-[13px] text-ink outline-none transition duration-250 placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40'
 const selectCls = inputCls + ' appearance-none'
@@ -94,6 +96,9 @@ const CATEGORIAS = [
 
 /** Nómina activa incluye a los legajos sin estado cargado. */
 const FILTRO_NOMINA = 'estado_legajo.eq."NOMINA ACTIVA",estado_legajo.is.null'
+
+/** Columnas principales: no llevan nota. */
+const SIN_NOTA = new Set(['legajo', 'nombre'])
 
 const SLUG_ESTADO: Record<string, string> = Object.fromEntries(CATEGORIAS.map((c) => [c.slug, c.estado]))
 
@@ -166,6 +171,8 @@ export default function Empleados() {
   const [modal, setModal] = useState<'new' | 'edit' | null>(null)
   const [sel, setSel] = useState<Empleado | null>(null)
   const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
+  const [verNota, setVerNota] = useState<{ texto: string; rect: DOMRect } | null>(null)
+  const [editNota, setEditNota] = useState<{ emp: Empleado; clave: string; rect: DOMRect } | null>(null)
   const [importando, setImportando] = useState(false)
   const [importMsg, setImportMsg] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -339,6 +346,19 @@ export default function Empleados() {
     return out
   }, [empleados])
 
+  /** Guarda (o quita, si queda vacía) la nota de una celda. */
+  async function guardarNota(emp: Empleado, clave: string, texto: string): Promise<string | null> {
+    if (!supabase) return null
+    const notas = { ...(emp.notas ?? {}) }
+    const t = texto.trim()
+    if (t) notas[clave] = t
+    else delete notas[clave]
+    const { error } = await supabase.from('empleados').update({ notas }).eq('id', emp.id)
+    if (error) return error.message
+    setEmpleados((prev) => prev.map((x) => (x.id === emp.id ? { ...x, notas } : x)))
+    return null
+  }
+
   async function borrar(id: string) {
     if (!supabase) return
     const { error } = await supabase.from('empleados').delete().eq('id', id)
@@ -495,7 +515,10 @@ export default function Empleados() {
           <h1 className="font-display text-2xl font-semibold text-ink">
             Empleados <span className="text-lg font-normal text-sub">· {estado}</span>
           </h1>
-          <p className="mt-1 text-sm text-sub">{filtrados.length} de {empleados.length} legajos · alta, edición y baja.</p>
+          <p className="mt-1 text-sm text-sub">
+            {filtrados.length} de {empleados.length} legajos · alta, edición y baja.
+            {puedeEditar && <span className="text-sub/70"> Doble clic o clic derecho en una celda para dejarle una nota.</span>}
+          </p>
         </div>
         <button onClick={() => navigate('/rrhh/empleados')} className="btn-press rounded-lg border border-line bg-surface2 px-2.5 py-1.5 text-xs font-medium text-sub transition hover:text-ink">
           Cambiar categoría
@@ -577,16 +600,32 @@ export default function Empleados() {
                         </td>
                       )
                     }
-                    if (clave === 'estado_legajo') {
-                      return (
-                        <td key={clave} className={tdBaseWrap}>
+                    if (SIN_NOTA.has(clave)) return <td key={clave} className={cls + ' text-sub'}>{texto(e, clave)}</td>
+                    const nota = e.notas?.[clave] ?? ''
+                    const abrir = (ev: ReactMouseEvent<HTMLTableCellElement>) => {
+                      ev.preventDefault()
+                      setVerNota(null)
+                      setEditNota({ emp: e, clave, rect: ev.currentTarget.getBoundingClientRect() })
+                    }
+                    return (
+                      <td
+                        key={clave}
+                        className={(clave === 'estado_legajo' ? tdBaseWrap : cls) + ' relative'}
+                        onMouseEnter={nota ? (ev) => setVerNota({ texto: nota, rect: ev.currentTarget.getBoundingClientRect() }) : undefined}
+                        onMouseLeave={nota ? () => setVerNota(null) : undefined}
+                        onContextMenu={puedeEditar ? abrir : undefined}
+                        onDoubleClick={puedeEditar ? abrir : undefined}
+                      >
+                        {clave === 'estado_legajo' ? (
                           <span className={'inline-block whitespace-nowrap rounded-full border px-2 py-px text-[10px] font-medium ' + estiloEstadoLegajo(estadoEfectivo(e))}>
                             {estadoEfectivo(e)}
                           </span>
-                        </td>
-                      )
-                    }
-                    return <td key={clave} className={cls + (clave === 'legajo' ? ' text-sub' : '')}>{texto(e, clave)}</td>
+                        ) : texto(e, clave)}
+                        {nota && (
+                          <span aria-label="Tiene nota" className="pointer-events-none absolute right-0 top-0 h-0 w-0 border-l-[7px] border-t-[7px] border-l-transparent border-t-amber-500" />
+                        )}
+                      </td>
+                    )
                   })}
                   <td className={tdBase + ' text-right'}>
                     <div className="flex items-center justify-end gap-1">
@@ -608,6 +647,18 @@ export default function Empleados() {
           opciones={opcionesEmpleado}
           onClose={() => { setModal(null); setSel(null) }}
           onSaved={async () => { setModal(null); setSel(null); await cargar() }}
+        />
+      )}
+
+      {verNota && !editNota && <NotaFlotante rect={verNota.rect}><p className="whitespace-pre-wrap">{verNota.texto}</p></NotaFlotante>}
+      {editNota && (
+        <EditorNota
+          key={editNota.emp.id + editNota.clave}
+          rect={editNota.rect}
+          titulo={`${COLUMNAS[editNota.clave]?.label ?? editNota.clave} · ${editNota.emp.nombre}`}
+          inicial={editNota.emp.notas?.[editNota.clave] ?? ''}
+          onCerrar={() => setEditNota(null)}
+          onGuardar={(t) => guardarNota(editNota.emp, editNota.clave, t)}
         />
       )}
 
@@ -847,6 +898,74 @@ function Campo({ label, children, span2, span3 }: { label: string; children: Rea
       <span className="mb-1 block text-xs font-medium text-sub">{label}</span>
       {children}
     </label>
+  )
+}
+
+/** Cartelito pegado a la celda, como el comentario de Excel. */
+function NotaFlotante({ rect, children }: { rect: DOMRect; children: React.ReactNode }) {
+  const ancho = 260
+  const left = rect.right + 6 + ancho > window.innerWidth ? Math.max(8, rect.left - ancho - 6) : rect.right + 6
+  const top = Math.max(8, Math.min(rect.top, window.innerHeight - 200))
+  return (
+    <div
+      style={{ position: 'fixed', left, top, width: ancho, zIndex: 60 }}
+      className="rounded-lg border border-amber-500/40 bg-surface px-3 py-2 text-[12px] text-ink shadow-xl"
+    >
+      {children}
+    </div>
+  )
+}
+
+function EditorNota({ rect, titulo, inicial, onCerrar, onGuardar }: {
+  rect: DOMRect
+  titulo: string
+  inicial: string
+  onCerrar: () => void
+  onGuardar: (texto: string) => Promise<string | null>
+}) {
+  const [texto, setTexto] = useState(inicial)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function guardar(t: string) {
+    setBusy(true); setError(null)
+    const err = await onGuardar(t)
+    setBusy(false)
+    if (err) { setError(err); return }
+    onCerrar()
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 z-[55]" onClick={onCerrar} onContextMenu={(e) => { e.preventDefault(); onCerrar() }} />
+      <NotaFlotante rect={rect}>
+        <p className="mb-1.5 truncate text-[11px] font-medium text-sub" title={titulo}>Nota · {titulo}</p>
+        <textarea
+          autoFocus
+          rows={4}
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') onCerrar()
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) void guardar(texto)
+          }}
+          placeholder="Ej.: ALTA: 01/11/2026 PLAN 2600"
+          className={inputCls + ' resize-y'}
+        />
+        {error && <p role="alert" className="mt-1 text-[11px] text-brand-400">{error}</p>}
+        <div className="mt-2 flex items-center gap-1.5">
+          {inicial && (
+            <button type="button" disabled={busy} onClick={() => void guardar('')} className="btn-press rounded-md border border-line px-2 py-1 text-[11px] text-sub hover:text-ink disabled:opacity-50">
+              Quitar nota
+            </button>
+          )}
+          <button type="button" onClick={onCerrar} className="btn-press ml-auto rounded-md border border-line px-2 py-1 text-[11px] text-sub hover:text-ink">Cancelar</button>
+          <button type="button" disabled={busy} onClick={() => void guardar(texto)} className="btn-press rounded-md bg-brand-600 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-brand-700 disabled:opacity-50">
+            {busy ? 'Guardando…' : 'Guardar'}
+          </button>
+        </div>
+      </NotaFlotante>
+    </>
   )
 }
 
