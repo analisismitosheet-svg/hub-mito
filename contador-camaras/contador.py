@@ -577,6 +577,7 @@ class Camara(threading.Thread):
         self.mirando = 0   # conexiones abiertas al video en vivo (vista.py)
         self.pausada = False  # su PC está desactivada en el hub: no se detecta (no gasta placa)
         self.fps_fuente = 0.0  # cuadros por segundo que manda el DVR (techo real de esta cámara)
+        self.t_analisis = time.time()  # último cuadro analizado (para avisar si deja de analizar)
         self.vista_base: str | None = None  # URL pública del servidor de video (el hub pide pases ahí)
         self.local: str | None = None       # código del local en el hub (lo dice el hub al recibir los conteos)
         self.lector: Lector | None = None
@@ -689,6 +690,10 @@ class Camara(threading.Thread):
     def estado(self) -> dict:
         h = self.almacen.hoy(self.nombre)
         error = self.lector.error if self.lector else None
+        # Conectada y calibrada pero sin analizar hace más de 1 minuto: que el hub no la muestre "ok"
+        # con FPS viejos (pasó el 03/11 tras un error de memoria)
+        if error is None and self.modo and not self.pausada and time.time() - self.t_analisis > 60:
+            error = f"conectada pero no analiza hace {int((time.time() - self.t_analisis) / 60)} min"
         return {"nombre": self.nombre, "modo": self.modo, "ok": error is None, "error": error,
                 "fps": round(self.fps, 1), "entradas_hoy": h["entradas"], "salidas_hoy": h["salidas"],
                 "transeuntes_hoy": h["transeuntes"], "empleados_hoy": h["empleados"], "grupos_hoy": h["grupos"], "vista_base": self.vista_base,
@@ -736,45 +741,52 @@ class Camara(threading.Thread):
         t_fuente = time.time()
 
         while not self._detener:
-            t0 = time.time()
-            # cuadros por segundo a analizar: los de esta cámara (elegidos en el hub) o el general
-            # FPS fijos de esta cámara (elegidos en el hub) o "Auto": el tope que reparte regular_fps()
-            periodo = 1.0 / max(0.5, float(self.cam.get("fps") or Camara.fps_auto))
-            nro, cuadro = self.lector.ultimo()
-            if cuadro is None or nro == ultimo_nro:
-                time.sleep(0.05)
-                continue
-            if ultimo_nro >= 0 and nro > ultimo_nro:
-                dt = max(time.time() - t_fuente, 1e-3)
-                self.fps_fuente = 0.8 * self.fps_fuente + 0.2 * ((nro - ultimo_nro) / dt) if self.fps_fuente else (nro - ultimo_nro) / dt
-            t_fuente = time.time()
-            ultimo_nro = nro
-            cuadro = self.preparar(cuadro)
-            if (self.modo is None or self.pausada) and self.mirando == 0:
-                # Sin calibrar o desactivada en el hub, y nadie mirando: no gastar GPU
-                # (la foto para calibrar sale del lector igual)
-                self.fps = 0.0
-                time.sleep(0.5)
-                continue
+            # Todo el paso protegido: un error (también de memoria, p. ej. al estirar o recortar la
+            # imagen) no puede matar el hilo de la cámara; antes quedaba 'conectada' pero sin contar.
             try:
-                res = self.detectar(modelo, cuadro)
-                self.procesar(res, cuadro)
-                self.errores_gpu = 0
-            except Exception as e:  # noqa: BLE001 — un cuadro corrupto no debe tirar el contador
-                if gpu_en_error(e):
-                    self.errores_gpu += 1
-                    log.warning("[%s] error de GPU (%s de 10): %s", self.nombre, self.errores_gpu, e)
-                    if self.errores_gpu >= 10:
-                        log.error("[%s] la GPU quedo en error: se reinicia el contador para recuperarla", self.nombre)
-                        logging.shutdown()
-                        os._exit(3)  # iniciar.bat lo vuelve a levantar en 10 s, con la GPU limpia
-                else:
-                    log.warning("[%s] error procesando: %s", self.nombre, e)
-                continue
-            ahora = time.time()
-            self.fps = 0.9 * self.fps + 0.1 * (1.0 / max(ahora - t_prev, 1e-3))
-            t_prev = ahora
-            time.sleep(max(0.0, periodo - (ahora - t0)))
+                t0 = time.time()
+                # cuadros por segundo a analizar: los de esta cámara (elegidos en el hub) o el general
+                # FPS fijos de esta cámara (elegidos en el hub) o "Auto": el tope que reparte regular_fps()
+                periodo = 1.0 / max(0.5, float(self.cam.get("fps") or Camara.fps_auto))
+                nro, cuadro = self.lector.ultimo()
+                if cuadro is None or nro == ultimo_nro:
+                    time.sleep(0.05)
+                    continue
+                if ultimo_nro >= 0 and nro > ultimo_nro:
+                    dt = max(time.time() - t_fuente, 1e-3)
+                    self.fps_fuente = 0.8 * self.fps_fuente + 0.2 * ((nro - ultimo_nro) / dt) if self.fps_fuente else (nro - ultimo_nro) / dt
+                t_fuente = time.time()
+                ultimo_nro = nro
+                cuadro = self.preparar(cuadro)
+                if (self.modo is None or self.pausada) and self.mirando == 0:
+                    # Sin calibrar o desactivada en el hub, y nadie mirando: no gastar GPU
+                    # (la foto para calibrar sale del lector igual)
+                    self.fps = 0.0
+                    time.sleep(0.5)
+                    continue
+                try:
+                    res = self.detectar(modelo, cuadro)
+                    self.procesar(res, cuadro)
+                    self.errores_gpu = 0
+                except Exception as e:  # noqa: BLE001 — un cuadro corrupto no debe tirar el contador
+                    if gpu_en_error(e):
+                        self.errores_gpu += 1
+                        log.warning("[%s] error de GPU (%s de 10): %s", self.nombre, self.errores_gpu, e)
+                        if self.errores_gpu >= 10:
+                            log.error("[%s] la GPU quedo en error: se reinicia el contador para recuperarla", self.nombre)
+                            logging.shutdown()
+                            os._exit(3)  # iniciar.bat lo vuelve a levantar en 10 s, con la GPU limpia
+                    else:
+                        log.warning("[%s] error procesando: %s", self.nombre, e)
+                    continue
+                ahora = time.time()
+                self.t_analisis = ahora
+                self.fps = 0.9 * self.fps + 0.1 * (1.0 / max(ahora - t_prev, 1e-3))
+                t_prev = ahora
+                time.sleep(max(0.0, periodo - (ahora - t0)))
+            except Exception as e:  # noqa: BLE001
+                log.warning("[%s] error en el ciclo de la cámara (sigue andando): %r", self.nombre, e)
+                time.sleep(1)
 
     # -- lógica de conteo
     def procesar(self, res, cuadro) -> None:

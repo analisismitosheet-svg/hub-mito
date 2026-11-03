@@ -360,6 +360,41 @@ async function vistaChofer(req: Req, res: Res) {
   })
 }
 
+/**
+ * Ubicación mandada por la PWA de Transporte mientras el chofer escanea.
+ * Respaldo de Traccar: con poca batería Android corta Traccar en segundo plano
+ * (huecos de 1-2 h) aunque el GPS esté prendido. Se guarda en el vehículo del
+ * chofer (el que reportó último) y responde igual que GET vista=chofer.
+ */
+async function vistaChoferPunto(req: Req, res: Res) {
+  const id = await usuarioTransporte(req)
+  if (!id) return res.status(401).json({ error: 'Sesión de Transporte inválida' })
+  const body = (typeof req.body === 'string' ? safeJson(req.body) : req.body) as Record<string, unknown> | null
+  const lat = num(body?.lat)
+  const lng = num(body?.lng)
+  if (lat === null || lng === null || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+    return res.status(400).json({ error: 'Ubicación inválida' })
+  }
+  const h = hub()
+  const veh = await getJson<{ id: string }[]>(
+    `${h.url}/rest/v1/tracking_vehiculos?select=id&activo=eq.true&usuario_transporte_id=eq.${id}`, h.headers)
+  if (!veh.length) return res.status(200).json({ ok: true, configurado: false })
+  const desde = new Date(Date.now() - 2 * 86_400_000).toISOString()
+  const ult = await getJson<{ vehiculo_id: string }[]>(
+    `${h.url}/rest/v1/tracking_ubicaciones?select=vehiculo_id` +
+    `&vehiculo_id=in.(${veh.map((v) => v.id).join(',')})&recibido_at=gte.${desde}&order=recibido_at.desc&limit=1`, h.headers)
+  const vehiculoId = ult[0]?.vehiculo_id ?? veh[0].id
+  const precision = num(body?.precision_m)
+  const r = await fetch(`${h.url}/rest/v1/tracking_ubicaciones`, {
+    method: 'POST',
+    headers: { ...h.headers, Prefer: 'return=minimal' },
+    // `at` = hora del servidor: no se confía en el reloj del celular
+    body: JSON.stringify({ vehiculo_id: vehiculoId, at: new Date().toISOString(), lat, lng, precision_m: precision }),
+  })
+  if (!r.ok) return res.status(500).json({ error: `No se pudo guardar (${r.status})` })
+  return vistaChofer(req, res)
+}
+
 /** Guarda la suscripción a notificaciones del celular del chofer. */
 async function vistaPush(req: Req, res: Res) {
   const id = await usuarioTransporte(req)
@@ -465,6 +500,7 @@ export default async function handler(req: Req, res: Res) {
     if (vista === 'hub' && req.method === 'GET') return await vistaHub(req, res)
     if (vista === 'bultos' && req.method === 'GET') return await vistaBultos(req, res)
     if (vista === 'chofer' && req.method === 'GET') return await vistaChofer(req, res)
+    if (vista === 'chofer' && req.method === 'POST') return await vistaChoferPunto(req, res)
     if (vista === 'push' && req.method === 'POST') return await vistaPush(req, res)
     if (vista === 'alertas') return await vistaAlertas(res)
     if (req.method === 'POST' || req.method === 'GET') return await ingesta(req, res)
