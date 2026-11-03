@@ -268,6 +268,7 @@ export const APPS: AppDef[] = [
   {
     id: 'mayorista-mi-repo',
     areaId: 'mayorista',
+    areaIds: ['mayorista', 'deposito'],
     title: 'Mi repo',
     description: 'Escaneo en piso: tus locales asignados, artículo por artículo.',
     icon: ScanLine,
