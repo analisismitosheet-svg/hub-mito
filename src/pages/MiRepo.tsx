@@ -1071,7 +1071,13 @@ export default function MiRepo() {
       )}
 
       {/* Avisos push: que el celular suene aunque esté bloqueado */}
-      {!asignacionSel && !soloDeposito && <AvisosCelular />}
+      {!asignacionSel && (
+        <AvisosCelular
+          texto={soloDeposito
+            ? 'Activá los avisos para que suene cuando carguen una reposición de Depósito Indo, aunque el celular esté bloqueado.'
+            : undefined}
+        />
+      )}
 
       {/* Rol deposito y legajos de Depósito Indo: los renglones que salen de Indo */}
       {!asignacionSel && veMiRepoDeposito && <TransferenciasDeposito mostrarVacio={soloDeposito} />}

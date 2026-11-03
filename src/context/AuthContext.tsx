@@ -49,6 +49,8 @@ interface AuthState {
   esLegajo: boolean
   /** Ve Mi repo en el área Depósito: rol deposito o legajo de Depósito Indo (y admin) */
   veMiRepoDeposito: boolean
+  /** Le suenan las reposiciones/transferencias de Indo: rol deposito o legajo de Depósito Indo */
+  avisosIndo: boolean
   /** ¿El usuario tiene el permiso indicado? (admin siempre true) */
   can: (clave: string) => boolean
   refresh: () => Promise<void>
@@ -162,6 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       roles.every((r) => r === ROL_PISO) &&
       [...permisos].every((p) => PERMISOS_PISO.has(p))
     const esLegajo = !!session?.user?.email?.toLowerCase().endsWith(`@${DOMINIO_LOGIN_EMPLEADO}`)
+    const avisosIndo = roles.includes('deposito') || (esLegajo && perfil?.ubicacion === 'DEPOSITO INDO')
     const veMiRepoDeposito =
       isAdmin || roles.includes('deposito') || (esLegajo && perfil?.ubicacion === 'DEPOSITO INDO')
     return {
@@ -176,6 +179,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       soloPiso,
       esLegajo,
       veMiRepoDeposito,
+      avisosIndo,
       can(clave) {
         if (!configured) return true
         if (isAdmin) return true

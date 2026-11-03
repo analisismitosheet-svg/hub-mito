@@ -7,7 +7,12 @@ import { sonarArmado } from '@/lib/alarma'
  * Cartel de Mi repo para anotar este celular a los avisos push de armados
  * (suenan aunque el celular esté bloqueado). Si ya está activo queda un chip chico.
  */
-export default function AvisosCelular() {
+export default function AvisosCelular({
+  texto = 'Activá los avisos para que el celular suene cuando pidan un armado, aunque esté bloqueado.',
+}: {
+  /** qué avisa (armados en Mi repo, reposiciones de Indo en Depósito) */
+  texto?: string
+}) {
   const [estado, setEstado] = useState<EstadoAvisos | null>(null)
   const [trabajando, setTrabajando] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -42,7 +47,7 @@ export default function AvisosCelular() {
     <div className="mb-4 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4">
       <p className="flex items-start gap-2 text-sm font-semibold text-amber-400">
         <BellRing size={18} className="mt-0.5 shrink-0" aria-hidden />
-        Activá los avisos para que el celular suene cuando pidan un armado, aunque esté bloqueado.
+        {texto}
       </p>
       {estado === 'ios-instalar' ? (
         <p className="mt-2 text-xs text-sub">

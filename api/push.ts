@@ -191,11 +191,21 @@ async function avisarArmado(req: Req, res: Res, uid: string) {
   // Legajo de cada usuario suscripto: los armados asignados al responsable del local
   // (sql/armado_responsable.sql) le llegan solo a él; los sin asignar, a todos.
   const legajoDe = new Map<string, string>()
+  const esLegajo = new Set<string>()
   const uids = [...new Set(subs.map((x) => x.usuario_id))]
   if (uids.length) {
-    const rU = await rest(`usuarios?select=id,legajo&id=in.(${uids.join(',')})`)
-    if (rU.ok) for (const u of (await rU.json()) as { id: string; legajo: string | null }[]) legajoDe.set(u.id, String(u.legajo ?? '').trim())
+    const rU = await rest(`usuarios?select=id,legajo,email&id=in.(${uids.join(',')})`)
+    if (rU.ok) {
+      for (const u of (await rU.json()) as { id: string; legajo: string | null; email: string | null }[]) {
+        legajoDe.set(u.id, String(u.legajo ?? '').trim())
+        if (String(u.email ?? '').toLowerCase().endsWith('@empleados.hub-mito.app')) esLegajo.add(u.id)
+      }
+    }
   }
+  // Los armados son del piso: legajos y quien tenga mayorista.repos_piso. El rol deposito
+  // también anota el celular (avisos de transferencias de Indo) y no tiene que sonarle esto.
+  const piso = new Set([...esLegajo, ...(await conPermiso('mayorista.repos_piso'))])
+  const subsPiso = subs.filter((s) => piso.has(s.usuario_id))
   const grupos = new Map<string, Armado[]>() // '' = sin asignar
   for (const a of armados) {
     const k = String(a.asignado_legajo ?? '').trim()
@@ -227,7 +237,7 @@ async function avisarArmado(req: Req, res: Res, uid: string) {
   let vencidas = 0
   for (const [legajo, lista] of grupos) {
     const payload = aviso(lista)
-    const destinatarios = subs.filter((s) => !legajo || legajoDe.get(s.usuario_id) === legajo)
+    const destinatarios = subsPiso.filter((s) => !legajo || legajoDe.get(s.usuario_id) === legajo)
     const r = await entregar(payload, destinatarios)
     enviados += r.enviados
     vencidas += r.vencidas
@@ -400,10 +410,10 @@ async function avisarTransferencia(req: Req, res: Res, token: string) {
       a0.entran ? `entran ${a0.entran} u.` : '',
     ].filter(Boolean).join(' · ')
     const payload = JSON.stringify({
-      title: `📦 Transferencia para ${NOMBRE_UBICACION[ubicacion] ?? ubicacion}`,
+      title: `📦 Reposición para ${NOMBRE_UBICACION[ubicacion] ?? ubicacion}`,
       body: `${lote.nombre} · ${a0.articulos} artículo${a0.articulos === 1 ? '' : 's'}${partes ? ` · ${partes}` : ''}`,
       url: '/mayorista/mi-repo',
-      urgente: false,
+      urgente: true,
     })
     const ids = new Set(lista.map((x) => x.usuario_id))
     const r = await entregar(payload, subs.filter((s) => ids.has(s.usuario_id)))

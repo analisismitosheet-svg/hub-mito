@@ -11,6 +11,7 @@ import { imprimirCuandoCarguen } from '@/lib/ventanaImpresion'
 import { horasHabilesEntre } from '@/lib/horasHabiles'
 import { suscribirCambios } from '@/lib/realtime'
 import TransferenciaDepositoLote, { type RenglonTransfer } from '@/components/TransferenciaDepositoLote'
+import AvisosCelular from '@/components/AvisosCelular'
 
 type EstadoM = 'pendiente' | 'hecho' | 'faltante'
 interface Lote {
@@ -167,7 +168,7 @@ function Estadisticas({
 }
 
 export default function Deposito() {
-  const { can, perfil, isAdmin } = useAuth()
+  const { can, perfil, isAdmin, avisosIndo } = useAuth()
   const puedeImportar = can('deposito.import')
   const puedeMarcar = isAdmin || can('deposito.mark')
 
@@ -414,6 +415,9 @@ export default function Deposito() {
           </div>
         </div>
       </div>
+
+      {/* Rol deposito y legajos de Indo: que suene cuando carguen una reposición */}
+      {avisosIndo && <AvisosCelular texto="Activá los avisos para que suene cuando carguen una reposición de Depósito Indo, aunque la pantalla esté bloqueada o la app cerrada." />}
 
       {error && (
         <p role="alert" aria-live="polite" className="mb-4 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">

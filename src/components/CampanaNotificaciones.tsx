@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { COLUMNAS_ARMADO, PRIORIDADES, nroDePedido, ordenArmados, paraLegajo, type Armado, type PrioridadArmado } from '@/lib/armados'
-import { notificarArmado, prepararAudio, sonarArmado } from '@/lib/alarma'
+import { notificarArmado, prepararAudio, sonarArmado, vibrarArmado } from '@/lib/alarma'
 import { nombreMotivoPausa } from '@/components/MotivoPausa'
 import { suscribirCambios } from '@/lib/realtime'
 
@@ -85,6 +85,25 @@ const ICONO_TIPO: Record<Notificacion['tipo'], typeof Bell> = {
   franquicias: Building2,
 }
 
+/**
+ * Reposiciones de Indo ya avisadas en este dispositivo (localStorage), para que
+ * suene una sola vez por lote. Devuelve los lotes nuevos de las últimas 12 h;
+ * los más viejos se anotan sin sonar (ej. la primera vez que se abre la app).
+ */
+const CLAVE_INDO_AVISADOS = 'hub-avisos-indo'
+function reposicionesNuevas(lotes: { lote_id: string; creado_at: string }[]): string[] {
+  let vistos: string[] = []
+  try { vistos = JSON.parse(localStorage.getItem(CLAVE_INDO_AVISADOS) ?? '[]') as string[] } catch { vistos = [] }
+  const ya = new Set(vistos)
+  const limite = Date.now() - 12 * 3600_000
+  const nuevas = lotes.filter((l) => !ya.has(l.lote_id))
+  if (!nuevas.length) return []
+  try {
+    localStorage.setItem(CLAVE_INDO_AVISADOS, JSON.stringify([...vistos, ...nuevas.map((l) => l.lote_id)].slice(-200)))
+  } catch { /* sin almacenamiento: puede volver a sonar, no rompe */ }
+  return nuevas.filter((l) => new Date(l.creado_at).getTime() >= limite).map((l) => l.lote_id)
+}
+
 function fmtFecha(iso: string): string {
   try {
     return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(iso))
@@ -111,7 +130,7 @@ function esperaRepique(n: number): number {
  * - Rol mayorista: cada guía sin finalizar y cada registro de facturación sin fecha de envío.
  */
 export default function CampanaNotificaciones() {
-  const { isAdmin, perfil, soloPiso, esLegajo, can } = useAuth()
+  const { isAdmin, perfil, soloPiso, esLegajo, can, avisosIndo } = useAuth()
   const navigate = useNavigate()
   const [abierto, setAbierto] = useState(false)
   const [items, setItems] = useState<Notificacion[]>([])
@@ -126,7 +145,7 @@ export default function CampanaNotificaciones() {
   const verArmados = isAdmin || esMayorista || esPiso
   // Quien autoriza las pausas del piso (sql/pausas_autorizacion.sql): le llegan acá
   const puedeAutorizarPausas = can('mayorista.pausas.autorizar')
-  const visible = isAdmin || esMayorista || esLocal || verArmados || puedeAutorizarPausas
+  const visible = isAdmin || esMayorista || esLocal || verArmados || puedeAutorizarPausas || avisosIndo
 
   /**
    * Armados de pedidos (sql/mayorista_armados.sql): se miran en vivo con
@@ -136,7 +155,7 @@ export default function CampanaNotificaciones() {
    * 8 minutos) hasta que alguien lo acepte o el mayorista lo cierre.
    */
   // El audio del celular arranca trabado hasta el primer toque: se destraba ahí
-  useEffect(() => { if (verArmados) prepararAudio() }, [verArmados])
+  useEffect(() => { if (verArmados || avisosIndo) prepararAudio() }, [verArmados, avisosIndo])
 
   const [armados, setArmados] = useState<Armado[]>([])
   const [avisoArmados, setAvisoArmados] = useState(false)
@@ -390,14 +409,28 @@ export default function CampanaNotificaciones() {
           }
         }
       }
-      // 7) Legajos con ubicación (sql/legajos_ubicacion.sql): lotes con renglones pendientes
-      // que salen de / van a su depósito. La RPC no devuelve nada si el legajo no tiene ubicación.
-      if (esLegajo) {
+      // 7) Reposiciones de Indo (sql/legajos_ubicacion.sql, sql/avisos_deposito_indo.sql): rol deposito y
+      // legajos de Depósito Indo. Lotes con renglones pendientes; el primero que aparece suena y avisa.
+      if (avisosIndo) {
         const { data } = await sb.rpc('transferencias_de_mi_ubicacion')
         if (activo && data) {
-          for (const l of data as { lote_id: string; nombre: string; creado_at: string; articulos: number; salen: number; entran: number }[]) {
+          const lotesIndo = data as { lote_id: string; nombre: string; creado_at: string; articulos: number; salen: number; entran: number }[]
+          const ruta = (l: { lote_id: string }) =>
+            can('deposito.view') ? '/deposito' : can('transferencias.view') ? `/transferencias?abrir=${l.lote_id}` : '/mayorista/mi-repo'
+          for (const l of lotesIndo) {
             const partes = [l.salen ? `salen ${l.salen} u.` : '', l.entran ? `entran ${l.entran} u.` : ''].filter(Boolean).join(' · ')
-            notis.push({ id: `tu-${l.lote_id}`, tipo: 'transferencias', titulo: l.nombre, detalle: `${l.articulos} artículo${l.articulos === 1 ? '' : 's'} pendiente${l.articulos === 1 ? '' : 's'}${partes ? ` · ${partes}` : ''}`, ruta: can('transferencias.view') ? `/transferencias?abrir=${l.lote_id}` : '/mayorista/mi-repo', fecha: l.creado_at, destinoId: l.lote_id })
+            notis.push({ id: `tu-${l.lote_id}`, tipo: 'transferencias', titulo: l.nombre, detalle: `${l.articulos} artículo${l.articulos === 1 ? '' : 's'} pendiente${l.articulos === 1 ? '' : 's'}${partes ? ` · ${partes}` : ''}`, ruta: ruta(l), fecha: l.creado_at, destinoId: l.lote_id })
+          }
+          const nuevas = new Set(reposicionesNuevas(lotesIndo))
+          const primera = lotesIndo.find((l) => nuevas.has(l.lote_id))
+          if (primera) {
+            sonarArmado('urgente')
+            vibrarArmado('urgente')
+            notificarArmado(
+              nuevas.size === 1 ? '📦 Reposición nueva para Depósito Indo' : `📦 ${nuevas.size} reposiciones nuevas para Depósito Indo`,
+              `${primera.nombre} · ${primera.articulos} artículo${primera.articulos === 1 ? '' : 's'}`,
+              ruta(primera),
+            )
           }
         }
       }
@@ -417,7 +450,7 @@ export default function CampanaNotificaciones() {
     const alVolver = () => { if (document.visibilityState === 'visible') void cargar() }
     document.addEventListener('visibilitychange', alVolver)
     return () => { activo = false; clearInterval(intervalo); document.removeEventListener('visibilitychange', alVolver) }
-  }, [isAdmin, esMayorista, esLocal, esLegajo, can, origenesUsuario, visible])
+  }, [isAdmin, esMayorista, esLocal, avisosIndo, can, origenesUsuario, visible])
 
   if (!visible || !supabase) return null
 
