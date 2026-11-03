@@ -1204,11 +1204,11 @@ def regular_fps(sistema: Sistema) -> None:
 def enviar(sistema: Sistema) -> None:
     """Sube los tramos pendientes y trae la calibración del hub.
     Todos los locales de esta PC van en UN envío ({lotes: [...]}, cada uno con su token), cada
-    `envio_segundos` (15 por defecto). Si se aplicó algo del hub, se vuelve a enviar enseguida
+    `envio_segundos` (60 por defecto). Si se aplicó algo del hub, se vuelve a enviar enseguida
     para que el editor muestre "ya está contando" sin esperar al próximo ciclo."""
     cfg, almacen = sistema.cfg, sistema.almacen
     url = cfg["hub_url"].rstrip("/") + "/api/contador-ingesta"
-    cada = int(cfg.get("envio_segundos", 15))
+    cada = int(cfg.get("envio_segundos", 60))
     por_lote = True  # si el hub todavía no acepta lotes, se manda de a un local (modo viejo)
     while True:
         camaras = list(sistema.camaras)
