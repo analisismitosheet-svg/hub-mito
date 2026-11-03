@@ -98,9 +98,9 @@ SELECT art, MAX(descripcion)
  WHERE art <> ''
  GROUP BY art;
 
-/* ---- 1c. Artículos que NO van al informe: proveedor MKT (MARKETING) ----
-   Cuadros y material de marketing: los pidió sacar el usuario el 02/11/2026.
-   El proveedor es ART.ARTFAB; se toma de MITO y de INDO, igual que #desc.
+/* ---- 1c. Artículos que NO van al informe: proveedor MKT y códigos de prueba ----
+   Cuadros y material de marketing (proveedor MKT, 02/11/2026) y los artículos
+   de prueba ('PRUEBA' y 'ARTPRUEBA', 03/11/2026): los pidió sacar el usuario.
    Quedan afuera de todo: unidades, valorizado, por artículo y sin costo. */
 IF OBJECT_ID('tempdb..#sinprov') IS NOT NULL DROP TABLE #sinprov;
 CREATE TABLE #sinprov (art varchar(50) PRIMARY KEY);
@@ -110,6 +110,10 @@ SELECT art FROM (
   SELECT LTRIM(RTRIM(ARTCOD)) AS art FROM DRAGONFISH_MITO.ZooLogic.ART WHERE LTRIM(RTRIM(ARTFAB)) IN ('MKT')
   UNION
   SELECT LTRIM(RTRIM(ARTCOD)) FROM DRAGONFISH_INDOD.ZooLogic.ART WHERE LTRIM(RTRIM(ARTFAB)) IN ('MKT')
+  UNION
+  SELECT 'PRUEBA'
+  UNION
+  SELECT 'ARTPRUEBA'
 ) x
 WHERE art <> '';
 
