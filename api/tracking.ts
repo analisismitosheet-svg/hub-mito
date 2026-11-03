@@ -47,6 +47,8 @@ type Res = {
 
 /** Pasado este tiempo sin ubicación, la app Transporte bloquea el escaneo del chofer. */
 const MIN_SIN_UBICACION = 10
+/** false = ubicación NO obligatoria: no bloquea el escaneo ni manda avisos (pausa temporal). */
+const UBICACION_OBLIGATORIA = false
 /** Pasado este tiempo sin ubicación, al chofer le suena el aviso (y se repite cada 2 min). */
 const MIN_AVISO = 3
 
@@ -352,7 +354,7 @@ async function vistaChofer(req: Req, res: Res) {
     vehiculo: vehiculo.nombre,
     ultima,
     minutos,
-    habilitado: minutos !== null && minutos <= MIN_SIN_UBICACION,
+    habilitado: !UBICACION_OBLIGATORIA || (minutos !== null && minutos <= MIN_SIN_UBICACION),
     limite_min: MIN_SIN_UBICACION,
     vapid: env('VAPID_PUBLIC_KEY') ?? null,
   })
@@ -382,6 +384,7 @@ async function vistaPush(req: Req, res: Res) {
 // ---------- 4) Avisos que suenan cuando se corta la ubicación ----------
 
 async function vistaAlertas(res: Res) {
+  if (!UBICACION_OBLIGATORIA) return res.status(200).json({ ok: true, avisos: 0, motivo: 'ubicacion no obligatoria' })
   // Jornada: lunes a sábado de 6 a 21 h de Córdoba (UTC-3)
   const ar = new Date(Date.now() - 3 * 3600_000)
   const dia = ar.getUTCDay()
