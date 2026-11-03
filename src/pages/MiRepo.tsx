@@ -9,6 +9,7 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import ScannerCamara from '@/components/ScannerCamara'
 import ArmadoPedido from '@/components/ArmadoPedido'
 import AvisosCelular from '@/components/AvisosCelular'
+import TransferenciasDeposito from '@/components/TransferenciasDeposito'
 import MotivoPausaDialog, { nombreMotivoPausa, type MotivoPausa } from '@/components/MotivoPausa'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
@@ -129,7 +130,7 @@ function filaDe<T>(data: unknown): T | null {
 }
 
 export default function MiRepo() {
-  const { perfil, soloPiso, isAdmin, esLegajo } = useAuth()
+  const { perfil, soloPiso, isAdmin, esLegajo, veMiRepoDeposito } = useAuth()
   // El administrador (con su cuenta común) ve TODOS los repos, solo para consultar
   const modoAdmin = isAdmin && !esLegajo
   // Desplegables del administrador: empleados abiertos y sus "Terminados" abiertos
@@ -1065,6 +1066,9 @@ export default function MiRepo() {
 
       {/* Avisos push: que el celular suene aunque esté bloqueado */}
       {!asignacionSel && <AvisosCelular />}
+
+      {/* Rol deposito y legajos de Depósito Indo: los renglones que salen de Indo */}
+      {!asignacionSel && veMiRepoDeposito && <TransferenciasDeposito />}
 
       {avisoArmado && (
         <p
