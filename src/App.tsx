@@ -22,6 +22,7 @@ import EstadoPedidos from '@/pages/EstadoPedidos'
 import Cancelaciones from '@/pages/Cancelaciones'
 import PedidosHub from '@/pages/PedidosHub'
 import PedidosVenta from '@/pages/PedidosVenta'
+import SeguimientoPedidos from '@/pages/SeguimientoPedidos'
 import Mayorista from '@/pages/Mayorista'
 import MiRepo from '@/pages/MiRepo'
 import Deposito from '@/pages/Deposito'
@@ -205,6 +206,14 @@ export default function App() {
             element={
               <PermissionRoute permiso="pedidos_venta.view">
                 <PedidosVenta />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/mayorista/seguimiento-pedidos"
+            element={
+              <PermissionRoute permiso="pedidos_venta.view">
+                <SeguimientoPedidos />
               </PermissionRoute>
             }
           />

@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pedidos de venta · Cancelar</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{--paper:#050508;--surface:rgba(255,255,255,.04);--surface2:rgba(255,255,255,.07);--solid:#0d0d14;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.16);--ink:#f8fafc;--sub:#94a3b8;
+    --emerald:#22c55e;--amber:#f59e0b;--red:#f87171;--brand:#dc2626}
+  *{box-sizing:border-box}
+  html{color-scheme:dark}
+  .desp{position:relative}
+  .desp-btn{width:100%;height:44px;display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:12px;padding:0 12px;font:500 13px 'Plus Jakarta Sans',system-ui,sans-serif;cursor:pointer;text-align:left}
+  .desp-btn.vacio{color:var(--sub)} .desp-btn:hover{border-color:var(--line2)}
+  .desp-btn .flecha{color:var(--sub);font-size:12px}
+  .desp-lista{position:absolute;left:0;right:0;top:48px;z-index:5;background:#14141c;border:1px solid var(--line2);border-radius:12px;padding:4px;box-shadow:0 12px 32px rgba(0,0,0,.5)}
+  .desp-lista button{display:block;width:100%;text-align:left;border:0;background:none;color:var(--ink);border-radius:8px;padding:9px 10px;font:500 13px 'Plus Jakarta Sans',system-ui,sans-serif;cursor:pointer}
+  .desp-lista button:hover{background:rgba(255,255,255,.07)}
+  .desp-lista button.on{color:#fecaca;background:rgba(248,113,113,.14);font-weight:700}
+  select option{background:#14141c;color:#f8fafc}
+  body{margin:0;background:radial-gradient(900px 500px at 10% -10%,rgba(245,158,11,.10),transparent 60%),var(--paper);color:var(--ink);
+    font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:14px;padding:18px 16px 60px;min-height:100vh}
+  .wrap{max-width:1300px;margin:0 auto}
+  .badge{display:inline-block;padding:3px 10px;border-radius:999px;background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.35);font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+  header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:8px;margin:14px 0 12px}
+  h1{font-size:24px;margin:0;font-weight:600} .sub{color:var(--sub);font-size:13px}
+  .btn{display:inline-flex;align-items:center;gap:6px;height:40px;border-radius:12px;padding:0 14px;font-weight:600;font-size:13px;font-family:inherit;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--ink);white-space:nowrap}
+  .btn:hover{background:var(--surface2)} .btn:disabled{opacity:.4;cursor:not-allowed}
+  .btn.ambar{background:#d97706;border-color:#d97706;color:#fff}
+  .btn.marca{background:var(--brand);border-color:var(--brand);color:#fff}
+  .btn.cancel{border-color:rgba(248,113,113,.45);background:rgba(248,113,113,.12);color:#fca5a5}
+  .btn.cancel:hover{background:rgba(248,113,113,.22)}
+  .btn.cuad{width:40px;padding:0;justify-content:center}
+  .nuevo{position:relative} .nuevo::after{content:'NUEVO';position:absolute;top:-8px;right:-6px;font-size:9px;font-weight:800;background:#f59e0b;color:#000;border-radius:6px;padding:1px 5px}
+  .chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:10px;align-items:center}
+  .chips .lab{font-size:12px;color:var(--sub);flex-shrink:0}
+  .chip{flex-shrink:0;border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-weight:500;font-size:12px;font-family:inherit;color:var(--sub);background:none;cursor:pointer}
+  .chip.on{border-color:rgba(245,158,11,.5);background:rgba(245,158,11,.15);color:var(--amber)}
+  .grid{display:grid;gap:16px;grid-template-columns:20rem minmax(0,1fr)}
+  @media (max-width:1000px){.grid{grid-template-columns:1fr}}
+  input,select{background:var(--surface);border:1px solid var(--line);color:var(--ink);border-radius:12px;padding:0 12px;height:44px;font-family:inherit;font-size:13px;width:100%;outline:none}
+  .lista{border:1px solid var(--line);background:var(--surface);border-radius:16px;overflow:auto;max-height:calc(100vh - 15rem);margin-top:8px}
+  .lista ul{list-style:none;margin:0;padding:0} .lista li{border-bottom:1px solid rgba(255,255,255,.05)}
+  .item{display:flex;gap:12px;width:100%;text-align:left;padding:10px 12px;background:none;border:0;color:inherit;font-family:inherit;cursor:pointer}
+  .item:hover{background:var(--surface2)} .item.on{background:rgba(245,158,11,.15)}
+  .item .cli{font-size:15px;font-weight:700;line-height:1.2}
+  .item.on .cli{color:var(--amber)}
+  .item .num{display:block;font-size:12px;font-weight:600;color:var(--sub)}
+  .item .lin{display:flex;gap:6px;align-items:center;font-size:11px;color:var(--sub);margin-top:2px}
+  .t{min-width:0;flex:1}
+  .tag{border-radius:6px;padding:1px 6px;font-size:10px;font-weight:700;white-space:nowrap}
+  .barra{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:12px;justify-content:flex-end}
+  .card{border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:16px;margin-bottom:12px}
+  .cab{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}
+  .campos{flex:1;min-width:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 16px}
+  .campo small{display:block;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.05em;color:var(--sub)}
+  .campo div{font-size:14px;font-weight:600;margin-top:2px}
+  .s2{grid-column:span 2}
+  .letra{width:48px;height:48px;border:2px solid rgba(248,250,252,.8);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700}
+  .nro{text-align:right} .nro small{font-size:11px;color:var(--sub);text-transform:uppercase;letter-spacing:.05em;display:block} .nro b{font-family:ui-monospace,monospace;font-size:14px}
+  .nota{display:flex;gap:6px;align-items:flex-start;margin-top:10px;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600}
+  .nota a{color:inherit;text-decoration:underline;cursor:pointer}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  .tabla{border:1px solid var(--line);background:var(--surface);border-radius:16px;overflow:auto;margin-bottom:12px}
+  th{text-align:left;color:var(--sub);font-size:11px;text-transform:uppercase;letter-spacing:.05em;font-weight:600;padding:8px 12px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.04)}
+  td{padding:6px 12px;border-bottom:1px solid rgba(255,255,255,.05);font-variant-numeric:tabular-nums}
+  .r{text-align:right} tfoot td{font-weight:600;border-top:1px solid var(--line);border-bottom:0}
+  tr.canc td{color:var(--sub)} tr.canc td.art{text-decoration:line-through}
+  .xc{display:inline-block;margin-left:6px;font-size:10px;font-weight:800;color:var(--red);background:rgba(248,113,113,.12);border-radius:6px;padding:1px 6px}
+  .totales{margin-left:auto;max-width:320px}
+  .totales div{display:flex;justify-content:space-between;font-size:13px;margin:4px 0}
+  .muted{color:var(--sub)}
+  .velo{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;padding:16px;z-index:10}
+  .velo.on{display:flex}
+  .modal{background:var(--solid);border:1px solid var(--line);border-radius:18px;width:min(780px,100%);max-height:92vh;overflow:auto;padding:20px}
+  .modal h2{margin:0;font-size:18px;font-weight:600}
+  tr.marc td{background:rgba(248,113,113,.08)}
+  input.cant{width:70px;height:32px;text-align:right;padding:0 8px}
+  .fila{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+  .pie{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+  .aviso{border-radius:12px;padding:10px 12px;font-size:13px;margin-top:10px}
+  pre{background:#000;border:1px solid var(--line);border-radius:10px;padding:10px;font-size:11.5px;color:#a7f3d0;overflow:auto;max-height:200px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span class="badge">Maqueta — datos de ejemplo, no toca Dragon</span>
+  <span class="chips" style="display:inline-flex;margin:0 0 0 8px;vertical-align:middle"><span class="lab">Ver como:</span>
+    <button class="chip on" data-rol="admin">Admin</button><button class="chip" data-rol="may">Mayorista</button></span>
+  <header>
+    <div><h1>Pedidos de venta</h1><div class="sub">3 pedidos · actualizado 04/11/26 17:30</div></div>
+    <button class="btn ambar">⟳ Actualizar datos</button>
+  </header>
+  <div class="chips"><button class="chip">Hoy</button><button class="chip on">Esta semana</button><button class="chip">Semana anterior</button><button class="chip">Últimas 4 semanas</button><button class="chip">Todas</button></div>
+  <div class="grid">
+    <aside><input placeholder="Número, cliente, fecha, artículo…" /><div class="lista"><ul id="lista"></ul></div></aside>
+    <section id="detalle"></section>
+  </div>
+</div>
+<div class="velo" id="velo"><div class="modal" id="modal"></div></div>
+
+<script>
+const PEDIDOS=[
+  {codigo:'P10231',numero:10231,cli:'01068',nom:'Jemava S.A.S.',fecha:'2026-11-03',motivo:'Mayorista',vendedor:'—',obs:'',usuario:'CINDY',canc:[],lineas:[
+    {art:'CF265726',desc:'CAMPERA PUFFER',color:'02 NEGRO',talle:'M',ped:24,rem:12,stock:180,precio:89900},
+    {art:'ZH060018',desc:'BUZO HOODIE',color:'02 NEGRO',talle:'U',ped:36,rem:10,stock:0,precio:45900},
+    {art:'RM114502',desc:'REMERA BASICA',color:'01 NEGRO',talle:'S',ped:48,rem:0,stock:12,precio:9900}]},
+  {codigo:'P10244',numero:10244,cli:'01140',nom:'Argentina S.R.L.',fecha:'2026-11-02',motivo:'Franquicias',vendedor:'—',obs:'',usuario:'HUB',canc:[],lineas:[
+    {art:'ZH060018',desc:'BUZO HOODIE',color:'02 NEGRO',talle:'U',ped:30,rem:0,stock:0,precio:45900},
+    {art:'CF265726',desc:'CAMPERA PUFFER',color:'02 NEGRO',talle:'M',ped:18,rem:0,stock:180,precio:89900}]},
+  {codigo:'P10252',numero:10252,cli:'00877',nom:'Indumentaria del Sur',fecha:'2026-11-02',motivo:'Mayorista',vendedor:'—',obs:'',usuario:'CINDY',canc:[],lineas:[
+    {art:'RM114502',desc:'REMERA BASICA',color:'01 NEGRO',talle:'S',ped:60,rem:60,stock:12,precio:9900},
+    {art:'RM114502',desc:'REMERA BASICA',color:'01 NEGRO',talle:'M',ped:60,rem:60,stock:30,precio:9900}]},
+];
+PEDIDOS.forEach(p=>p.lineas.forEach(l=>l.can=0));
+const MOTIVOS=['Sin stock','Lo pidió el cliente','Pedido duplicado','Cliente con deuda','Fuera de temporada','Otro'];
+let sel='P10231', esAdmin=true, modal=null, nroCanc=2980;
+const plata=n=>n.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fc=f=>f.split('-').reverse().join('/');
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pend=l=>Math.max(0,l.ped-l.rem-l.can);
+const pendPed=p=>p.lineas.reduce((a,l)=>a+pend(l),0);
+const canPed=p=>p.lineas.reduce((a,l)=>a+l.can,0);
+const enCurso=p=>p.canc.some(c=>c.estado!=='ok');
+
+function tagPedido(p){
+  if(enCurso(p)) return '<span class="tag" style="color:#a78bfa;background:#a78bfa26">CANCELANDO…</span>';
+  if(canPed(p)&&pendPed(p)===0) return '<span class="tag" style="color:#f87171;background:#f8717126">CANCELADO</span>';
+  if(canPed(p)) return '<span class="tag" style="color:#f87171;background:#f8717126">CANCELADO PARCIAL</span>';
+  return '';
+}
+function render(){
+  document.getElementById('lista').innerHTML=PEDIDOS.map(p=>`<li><button class="item ${p.codigo===sel?'on':''}" data-sel="${p.codigo}">
+    <span class="t"><span style="display:flex;flex-wrap:wrap;gap:6px;align-items:center"><span class="cli">${esc(p.nom)}</span>${tagPedido(p)}</span>
+    <span class="num">N° ${p.numero}</span><span class="lin">${fc(p.fecha)} <span class="tag" style="color:#38bdf8;background:#38bdf81f">${p.motivo}</span></span></span>
+    <span style="font-size:12px;font-weight:600">$ ${plata(p.lineas.reduce((a,l)=>a+l.ped*l.precio,0)*1.21)}</span></button></li>`).join('');
+  detalle();
+}
+function detalle(){
+  const p=PEDIDOS.find(x=>x.codigo===sel), pe=pendPed(p);
+  const totCant=p.lineas.reduce((a,l)=>a+l.ped,0), neto=p.lineas.reduce((a,l)=>a+l.ped*l.precio,0);
+  const tituloBoton = pe===0 ? (canPed(p)?'Ya está cancelado':'Sin saldo para cancelar') : enCurso(p) ? 'Hay una cancelación en curso' : 'Cancela lo que falta remitir de este pedido';
+  document.getElementById('detalle').innerHTML=`
+  <div class="barra">
+    <button class="btn cuad">‹</button><button class="btn cuad">›</button>
+    <button class="btn">⬇ Excel</button><button class="btn">🖨 Imprimir</button>
+    <button class="btn marca">📦 Pedir armado</button>
+    <button class="btn cancel nuevo" id="btnCancelar" ${pe===0||enCurso(p)?'disabled':''} title="${tituloBoton}">⛔ Cancelar pedido</button>
+  </div>
+  <div class="card"><div class="cab">
+    <div class="campos">
+      <div class="campo s2"><small>Cliente</small><div><span style="color:var(--amber)">${p.cli}</span> <span style="font-weight:500">${esc(p.nom)}</span></div></div>
+      <div class="campo"><small>Motivo</small><div>${p.motivo}</div></div>
+      <div class="campo"><small>Vendedor</small><div>${p.vendedor}</div></div>
+      <div class="campo"><small>Observación</small><div>${esc(p.obs||'—')}</div></div>
+      <div class="campo"><small>Usuario</small><div>${p.usuario}</div></div>
+    </div>
+    <div style="display:flex;gap:12px;align-items:flex-start"><div class="letra">X</div>
+      <div class="nro"><small>Número</small><b>X 0001-${String(p.numero).padStart(8,'0')}</b><small style="margin-top:8px">Fecha</small><b style="font-family:inherit">${fc(p.fecha)}</b></div></div>
+  </div>
+  ${p.canc.map(c=>c.estado==='ok'
+    ? `<div class="nota" style="background:rgba(248,113,113,.12);color:#fca5a5">⛔ <span>Cancelación de venta <a>N° ${c.numero}</a> · ${c.uni} u. · ${c.motivo} · por ${c.usuario} el ${fc(c.fecha)}</span></div>`
+    : `<div class="nota" style="background:rgba(167,139,250,.14);color:#c4b5fd">${c.estado==='cola'?'⏳ Cancelación en cola · el puente la manda a Dragon en menos de 1 minuto':'↗ Enviando la cancelación a Dragon…'} (${c.uni} u.)</div>`).join('')}
+  </div>
+  <div class="tabla"><table>
+    <thead><tr><th>Artículo</th><th>Descripción</th><th>Color</th><th>Talle</th><th class="r">Cantidad</th><th class="r">Stock</th><th class="r">Precio</th><th class="r">Monto</th></tr></thead>
+    <tbody>${p.lineas.map(l=>`<tr class="${l.can&&l.can+l.rem>=l.ped?'canc':''}"><td class="art" style="font-weight:600">${l.art}</td><td>${l.desc}</td><td class="muted">${l.color}</td><td class="muted">${l.talle}</td>
+      <td class="r">${l.ped}${l.can?`<span class="xc">✕ ${l.can} cancel.</span>`:''}</td><td class="r" style="${l.stock===0?'color:var(--red);font-weight:600':''}">${l.stock}</td><td class="r">${plata(l.precio)}</td><td class="r" style="font-weight:600">${plata(l.ped*l.precio)}</td></tr>`).join('')}</tbody>
+    <tfoot><tr><td colspan="4" class="muted">Items: ${p.lineas.length}</td><td class="r">${totCant}</td><td></td><td></td><td class="r">${plata(neto)}</td></tr></tfoot>
+  </table></div>
+  <div class="card"><div class="totales">
+    <div><span class="muted">Subtotal</span><b>$ ${plata(neto)}</b></div><div><span class="muted">I.V.A.</span><b>$ ${plata(neto*.21)}</b></div>
+    <div style="border-top:1px solid var(--line);padding-top:8px;margin-top:8px"><span style="font-size:18px;font-weight:700">Total</span><b style="font-size:22px;color:var(--amber)">$ ${plata(neto*1.21)}</b></div>
+  </div></div>`;
+}
+
+// ---- Modal: cancelar este pedido ----
+function abrir(){const p=PEDIDOS.find(x=>x.codigo===sel);modal={p,cant:{},motivo:'',obs:''};p.lineas.forEach((l,k)=>modal.cant[k]=pend(l));pintar();document.getElementById('velo').classList.add('on')}
+function cerrar(){document.getElementById('velo').classList.remove('on');modal=null}
+function pintar(){
+  const m=modal,p=m.p, items=p.lineas.map((l,k)=>({l,k,c:m.cant[k]||0})), uni=items.reduce((a,x)=>a+x.c,0), todo=uni===pendPed(p);
+  const envio={Cliente:p.cli,Motivo:m.motivo||'(motivo)',Obs:`CANCELADO DESDE HUB${m.obs?' — '+m.obs:''}`,
+    CompAfec:[{NroItem:1,Afecta:p.codigo,Tipo:'Afectado',TipoComprobante:23,TipoCompCaracter:`Pedido De Venta X 0001-${String(p.numero).padStart(8,'0')}`,Letra:'X',PuntoDeVenta:1,Numero:p.numero}],
+    FacturaDetalle:items.filter(x=>x.c>0).map((x,i)=>({NroItem:i+1,Articulo:x.l.art,Color:x.l.color.split(' ')[0],Talle:x.l.talle,Cantidad:x.c,Afe_Saldo:x.c}))};
+  document.getElementById('modal').innerHTML=`<h2>Cancelar pedido N° ${p.numero}</h2><div class="sub">${esc(p.nom)} · ${p.cli}</div>
+    <p class="muted" style="font-size:13px;margin:12px 0 8px">Ya viene cargado todo lo que falta remitir. Si querés cancelar solo una parte, cambiá las cantidades.</p>
+    <div style="display:flex;gap:8px;margin-bottom:8px"><button class="btn" data-x="todo" style="height:32px">Todo el saldo</button><button class="btn" data-x="nada" style="height:32px">Nada</button></div>
+    <div class="tabla" style="margin:0"><table><thead><tr><th>Artículo</th><th>Color</th><th>Talle</th><th class="r">Pedido</th><th class="r">Remitido</th><th class="r">Ya cancelado</th><th class="r">Pendiente</th><th class="r">Cancelar</th></tr></thead>
+    <tbody>${items.map(x=>{const pe=pend(x.l);return `<tr class="${x.c?'marc':''}"><td style="font-weight:600">${x.l.art}<div class="muted" style="font-weight:400;font-size:11px">${x.l.desc}</div></td><td class="muted">${x.l.color}</td><td class="muted">${x.l.talle}</td>
+      <td class="r">${x.l.ped}</td><td class="r" style="color:var(--emerald)">${x.l.rem}</td><td class="r" style="color:var(--red)">${x.l.can||''}</td><td class="r" style="color:var(--amber);font-weight:700">${pe||'—'}</td>
+      <td class="r">${pe?`<input class="cant" type="number" min="0" max="${pe}" value="${x.c}" data-cant="${x.k}">`:'<span class="muted">—</span>'}</td></tr>`}).join('')}</tbody></table></div>
+    <div class="fila"><div class="desp">
+        <button class="desp-btn ${m.motivo?'':'vacio'}" data-desp="1">${m.motivo||'Motivo de la cancelación…'}<span class="flecha">${m.abierto?'▴':'▾'}</span></button>
+        ${m.abierto?`<div class="desp-lista">${MOTIVOS.map(o=>`<button class="${o===m.motivo?'on':''}" data-mot="${o}">${o===m.motivo?'✓ ':''}${o}</button>`).join('')}</div>`:''}
+      </div>
+      <input id="mobs" placeholder="Observación" value="${esc(m.obs)}" /></div>
+    <div class="aviso" style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);color:#fbbf24">${todo
+      ? `Se cancela <b>todo el saldo</b> del pedido (${uni} u.). Lo ya remitido no se toca.`
+      : `Se cancelan <b>${uni} de ${pendPed(p)} u.</b> pendientes. El resto del pedido sigue pendiente.`} Queda cargado en Dragon como una Cancelación de venta.</div>
+    ${esAdmin?`<details style="margin-top:10px"><summary class="muted" style="cursor:pointer;font-size:12px">Ver lo que se manda a Dragon <span class="tag" style="color:#f59e0b;background:#f59e0b1f">solo admin</span></summary><pre>POST /api.Dragonfish/Devolucion/\n${esc(JSON.stringify(envio,null,2))}</pre></details>`:''}
+    <div class="pie"><button class="btn" data-x="cerrar">Volver</button><button class="btn marca" data-x="confirmar" ${uni&&m.motivo?'':'disabled'}>⛔ Cancelar ${todo?'pedido':uni+' u.'}</button></div>`;
+  document.querySelectorAll('[data-mot]').forEach(x=>x.onclick=()=>{m.motivo=x.dataset.mot;m.abierto=false;pintar()});
+  document.querySelector('[data-desp]').onclick=()=>{m.abierto=!m.abierto;pintar()};
+  document.getElementById('mobs').onchange=e=>{m.obs=e.target.value;pintar()};
+  document.querySelectorAll('[data-cant]').forEach(i=>i.onchange=e=>{const k=+e.target.dataset.cant;m.cant[k]=Math.max(0,Math.min(pend(p.lineas[k]),+e.target.value||0));pintar()});
+}
+function confirmar(){
+  const m=modal,p=m.p, lineas=p.lineas.map((l,k)=>({l,c:m.cant[k]||0})).filter(x=>x.c>0);
+  const c={uni:lineas.reduce((a,x)=>a+x.c,0),motivo:m.motivo,usuario:'ADMIN',fecha:'2026-11-04',estado:'cola'};
+  p.canc.push(c); cerrar(); render();
+  setTimeout(()=>{c.estado='env';render()},1500);
+  setTimeout(()=>{c.estado='ok';c.numero=nroCanc++;lineas.forEach(x=>x.l.can+=x.c);render()},3500);
+}
+document.addEventListener('click',e=>{
+  const t=e.target.closest('button'); if(!t){if(e.target.id==='velo')cerrar();return}
+  if(t.dataset.rol){esAdmin=t.dataset.rol==='admin';document.querySelectorAll('[data-rol]').forEach(b=>b.classList.toggle('on',b===t));if(modal)pintar()}
+  else if(t.dataset.sel){sel=t.dataset.sel;render()}
+  else if(t.id==='btnCancelar') abrir();
+  else if(t.dataset.x==='todo'){modal.p.lineas.forEach((l,k)=>modal.cant[k]=pend(l));pintar()}
+  else if(t.dataset.x==='nada'){modal.cant={};pintar()}
+  else if(t.dataset.x==='cerrar') cerrar();
+  else if(t.dataset.x==='confirmar') confirmar();
+});
+render();
+</script>
+</body>
+</html>

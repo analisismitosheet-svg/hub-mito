@@ -9,6 +9,8 @@
   :root{--paper:#050508;--surface:rgba(255,255,255,.04);--surface2:rgba(255,255,255,.07);--line:rgba(255,255,255,.08);--ink:#f8fafc;--sub:#94a3b8;
     --emerald:#22c55e;--violet:#a78bfa;--amber:#f59e0b;--red:#f87171;--sky:#38bdf8;--orange:#ea580c;--pink:#f472b6}
   *{box-sizing:border-box}
+  html{color-scheme:dark}
+  select option{background:#14141c;color:#f8fafc}
   body{margin:0;background:radial-gradient(900px 500px at 10% -10%,rgba(248,113,113,.10),transparent 60%),var(--paper);color:var(--ink);
     font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:14px;padding:22px 16px 60px;min-height:100vh}
   .wrap{max-width:1250px;margin:0 auto}
@@ -98,7 +100,7 @@
     <div class="kpi"><small>Pedidos pendientes</small><b>10.309</b><span>con saldo sin remitir</span></div>
     <div class="kpi"><small>Unidades pendientes</small><b id="kUni">—</b><span>en los clientes de abajo</span></div>
     <div class="kpi"><small>Remitos pendientes</small><b>2.821</b><span>de 16.038</span></div>
-    <div class="kpi"><small>Cancelados en Dragon</small><b>286</b><span>pedidos enteros · 0 parciales</span></div>
+    <div class="kpi"><small>Cancelados en Dragon</small><b>286</b><span>pedidos anulados a mano</span></div>
     <div class="kpi"><small>Cancelaciones desde el hub</small><b id="kCola">0</b><span>en cola / enviadas</span></div>
   </div>
 
@@ -124,7 +126,7 @@
       <span class="paso">Hub · Cancelar</span><span class="flecha">→</span>
       <span class="paso">Cola <code>pedidos_cancelaciones</code></span><span class="flecha">→</span>
       <span class="paso">Puente · cada 1 min</span><span class="flecha">→</span>
-      <span class="paso">API Dragon · <code>DELETE /Pedido/{id}</code> (entero) · <code>PUT /Pedido/{id}</code> (por SKU)</span><span class="flecha">→</span>
+      <span class="paso">API Dragon · <code>POST /Devolucion/</code> (Cancelación de venta, afecta al pedido)</span><span class="flecha">→</span>
       <span class="paso">DRAGONFISH_MITO</span><span class="flecha">→</span>
       <span class="paso">Sync de pedidos lo trae de vuelta ✓</span>
     </div>
@@ -137,8 +139,8 @@
     <h2 id="mTit">Cancelar</h2>
     <div class="sub" id="mSub"></div>
     <div class="modo" id="modo">
-      <label data-m="lineas" class="on"><input type="radio" name="m" checked /><b>Solo el saldo de las líneas marcadas</b><small>Modifica el pedido en Dragon (PUT): baja la cantidad a lo ya remitido</small></label>
-      <label data-m="entero"><input type="radio" name="m" /><b>Pedido entero</b><small>Baja del pedido en Dragon (DELETE): queda ANULADO</small></label>
+      <label data-m="lineas" class="on"><input type="radio" name="m" checked /><b>Solo el saldo de las líneas marcadas</b><small>Se carga una cancelación de venta por esas líneas</small></label>
+      <label data-m="entero"><input type="radio" name="m" /><b>Todo el saldo del pedido</b><small>Cancela todo lo que falta remitir; lo remitido no se toca</small></label>
     </div>
     <table id="mTabla"></table>
     <div class="fila">
@@ -151,7 +153,7 @@
     <details style="margin-top:12px"><summary class="muted" style="cursor:pointer">Ver lo que se manda a Dragon</summary><pre id="mJson"></pre></details>
     <div class="pie">
       <button class="btn" id="mNo">Volver</button>
-      <button class="btn rojo" id="mSi" disabled>Mandar cancelación</button>
+      <button class="btn rojo" id="mSi" disabled>Cargar cancelación en Dragon</button>
     </div>
   </div>
 </div>
@@ -210,7 +212,7 @@ function tablaLineas(p){
 function bloquePedido(p){const n=p.lineas.filter(l=>marcadas.has(l.id)).length;
   return `<div class="ped"><div class="ph"><b>Pedido ${p.num}</b>${chipEstado(p)}<span class="muted" style="font-size:12px">del ${p.fecha} · entrega ${p.entrega}</span><span class="esp"></span>
     <button class="btn rojo" data-cancel="${p.codigo}" data-m="lineas" ${n?'':'disabled'}>Cancelar saldo de ${n||''} línea${n===1?'':'s'}</button>
-    <button class="btn" data-cancel="${p.codigo}" data-m="entero" ${p.anulado||sum(p,'rem')>0?'disabled title="Ya tiene remitos: solo se puede cancelar el saldo"':''}>Anular pedido</button></div>${tablaLineas(p)}</div>`}
+    <button class="btn" data-cancel="${p.codigo}" data-m="entero" ${p.anulado||sum(p,'ped')-sum(p,'rem')-sum(p,'can')<=0?'disabled':''}>Cancelar todo el saldo</button></div>${tablaLineas(p)}</div>`}
 
 function vistaCliente(){
   const ps=filtro(), por={};
@@ -246,7 +248,7 @@ function vistaCola(){
   if(!COLA.length) return '<div class="vacio">Todavía no se mandó ninguna cancelación desde el hub.<br>Marcá líneas en «Por cliente» o «Por SKU» y tocá «Cancelar saldo».</div>';
   const ch={cola:'<span class="chip c-pe">EN COLA</span>',env:'<span class="chip c-co">ENVIANDO A DRAGON…</span>',ok:'<span class="chip c-ok">✓ IMPACTÓ EN DRAGON</span>',err:'<span class="chip c-ca">ERROR</span>'};
   return `<div class="card"><table><tr><th>Cuándo</th><th>Pedido</th><th>Cliente</th><th>Tipo</th><th class="r">Unidades</th><th>Motivo</th><th>Quién</th><th>Estado</th></tr>
-  ${COLA.slice().reverse().map(c=>`<tr><td>${c.hora}</td><td><b>${c.num}</b></td><td>${esc(c.nom)}</td><td>${c.tipo==='entero'?'Anulación (DELETE)':'Saldo por SKU (PUT)'}</td><td class="r">${c.uni}</td><td>${esc(c.motivo)}</td><td>Admin</td><td>${ch[c.estado]}${c.estado==='ok'?` <span class="muted" style="font-size:11px">${c.resp}</span>`:''}</td></tr>`).join('')}</table></div>`}
+  ${COLA.slice().reverse().map(c=>`<tr><td>${c.hora}</td><td><b>${c.num}</b></td><td>${esc(c.nom)}</td><td>${c.tipo==='entero'?'Todo el saldo':'Saldo por SKU'}</td><td class="r">${c.uni}</td><td>${esc(c.motivo)}</td><td>Admin</td><td>${ch[c.estado]}${c.estado==='ok'?` <span class="muted" style="font-size:11px">${c.resp}</span>`:''}</td></tr>`).join('')}</table></div>`}
 
 function render(){
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.tab===tab));
@@ -261,34 +263,33 @@ function abrirModal(lista,m){ // lista: [{p,l}]
   modalCtx=lista; modo=m;
   document.querySelectorAll('#modo label').forEach(x=>x.classList.toggle('on',x.dataset.m===modo));
   const peds=[...new Set(lista.map(x=>x.p))];
-  const entOk=peds.length===1&&sum(peds[0],'rem')===0;
+  const entOk=peds.length===1;
   document.querySelector('#modo label[data-m=entero]').style.display=entOk?'':'none';
   document.getElementById('mTit').textContent=peds.length===1?`Cancelar en pedido ${peds[0].num}`:`Cancelar en ${peds.length} pedidos`;
   document.getElementById('mSub').textContent=[...new Set(peds.map(p=>p.nom))].join(' · ');
   document.getElementById('mMotivo').value='';document.getElementById('mObs').value='';
   pintarModal(); document.getElementById('velo').classList.add('on');
 }
-function itemsModal(){return modo==='entero'?modalCtx[0].p.lineas.map(l=>({p:modalCtx[0].p,l})):modalCtx}
+function itemsModal(){return modo==='entero'?modalCtx[0].p.lineas.filter(l=>pend(l)>0).map(l=>({p:modalCtx[0].p,l})):modalCtx}
 function pintarModal(){
   const it=itemsModal();
   document.getElementById('mTabla').innerHTML=`<tr><th>Pedido</th><th>SKU</th><th>Color/Talle</th><th class="r">Pedido</th><th class="r">Remitido</th><th class="r">Se cancela</th><th class="r">Queda en Dragon</th></tr>`+
-    it.map(({p,l})=>{const c=modo==='entero'?l.ped:pend(l);return `<tr><td>${p.num}</td><td><b>${l.sku}</b></td><td>${l.color}/${l.talle}</td><td class="r">${l.ped}</td><td class="r">${l.rem}</td><td class="r" style="color:var(--red);font-weight:800">${c}</td><td class="r">${l.ped-l.can-c}</td></tr>`}).join('');
+    it.map(({p,l})=>{const c=pend(l);return `<tr><td>${p.num}</td><td><b>${l.sku}</b></td><td>${l.color}/${l.talle}</td><td class="r">${l.ped}</td><td class="r">${l.rem}</td><td class="r" style="color:var(--red);font-weight:800">${c}</td><td class="r">${l.ped-l.can-c}</td></tr>`}).join('');
   const peds=[...new Set(it.map(x=>x.p))], motivo=document.getElementById('mMotivo').value, obs=document.getElementById('mObs').value;
-  const req=peds.map(p=>modo==='entero'
-    ? `DELETE /api.Dragonfish/Pedido/${p.codigo}/\nIdCliente: MITO\nAuthorization: ••••••`
-    : `PUT /api.Dragonfish/Pedido/${p.codigo}/\n`+JSON.stringify({Cliente:p.cli,Obs:`CANCELADO DESDE HUB: ${motivo||'(motivo)'}${obs?' — '+obs:''}`,
-        FacturaDetalle:p.lineas.map(l=>{const x=it.find(y=>y.l===l);return {Articulo:l.sku,Color:l.color,Talle:l.talle,Cantidad:l.ped-l.can-(x?pend(l):0)}})},null,2));
+  const req=peds.map(p=>`POST /api.Dragonfish/Devolucion/\n`+JSON.stringify({Cliente:p.cli,Motivo:motivo||'(motivo)',Obs:`CANCELADO DESDE HUB${obs?' — '+obs:''}`,
+        CompAfec:[{NroItem:1,Afecta:p.codigo,Tipo:'Afectado',TipoComprobante:23,TipoCompCaracter:`Pedido De Venta X ${p.num}`,Letra:'X',PuntoDeVenta:1,Numero:+p.num.split('-')[1]}],
+        FacturaDetalle:it.filter(x=>x.p===p).map((x,k)=>({NroItem:k+1,Articulo:x.l.sku,Color:x.l.color,Talle:x.l.talle,Cantidad:pend(x.l),Afe_Saldo:pend(x.l)}))},null,2));
   document.getElementById('mJson').textContent=req.join('\n\n');
   document.getElementById('mSi').disabled=!motivo;
 }
 function confirmar(){
   const it=itemsModal(), motivo=document.getElementById('mMotivo').value, peds=[...new Set(it.map(x=>x.p))];
   const hora=new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
-  peds.forEach(p=>{const mias=it.filter(x=>x.p===p),uni=mias.reduce((a,x)=>a+(modo==='entero'?x.l.ped:pend(x.l)),0);
+  peds.forEach(p=>{const mias=it.filter(x=>x.p===p),uni=mias.reduce((a,x)=>a+pend(x.l),0);
     const c={codigo:p.codigo,num:p.num,nom:p.nom,tipo:modo,uni,motivo,hora,estado:'cola',items:mias};COLA.push(c);
     setTimeout(()=>{c.estado='env';render()},1500);
-    setTimeout(()=>{c.estado='ok';c.resp=modo==='entero'?'pedido anulado':'pedido modificado';
-      if(modo==='entero') p.anulado=true; else c.items.forEach(x=>x.l.can+=pend(x.l));
+    setTimeout(()=>{c.estado='ok';c.resp='cancelación de venta cargada';
+      c.items.forEach(x=>x.l.can+=pend(x.l));
       c.items.forEach(x=>marcadas.delete(x.l.id)); render()},3500)});
   document.getElementById('velo').classList.remove('on'); render();
 }
