@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Seguimiento y cancelaciones de pedidos</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{--paper:#050508;--surface:rgba(255,255,255,.04);--surface2:rgba(255,255,255,.07);--line:rgba(255,255,255,.08);--ink:#f8fafc;--sub:#94a3b8;
+    --emerald:#22c55e;--violet:#a78bfa;--amber:#f59e0b;--red:#f87171;--sky:#38bdf8;--orange:#ea580c;--pink:#f472b6}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(900px 500px at 10% -10%,rgba(248,113,113,.10),transparent 60%),var(--paper);color:var(--ink);
+    font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:14px;padding:22px 16px 60px;min-height:100vh}
+  .wrap{max-width:1250px;margin:0 auto}
+  .badge{display:inline-block;padding:3px 10px;border-radius:999px;background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.35);font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+  .head{display:flex;gap:12px;align-items:center;margin:12px 0 18px}
+  .ico{border:1px solid #f8717140;background:#f8717124;color:var(--red);border-radius:12px;padding:10px;font-size:22px}
+  h1{font-size:24px;margin:0} .sub{color:var(--sub);font-size:13px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:16px}
+  .kpi{border:1px solid var(--line);background:var(--surface);border-radius:14px;padding:12px 14px}
+  .kpi small{color:var(--sub);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+  .kpi b{display:block;font-size:24px;margin-top:4px;font-variant-numeric:tabular-nums}
+  .kpi span{font-size:12px;color:var(--sub)}
+  .tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+  .tab{border:1px solid var(--line);background:var(--surface);color:var(--sub);border-radius:999px;padding:8px 14px;font-weight:700;cursor:pointer;font-family:inherit;font-size:13px}
+  .tab.on{background:rgba(248,113,113,.14);color:#fecaca;border-color:rgba(248,113,113,.4)}
+  .tab .n{font-size:11px;background:var(--surface2);border-radius:99px;padding:1px 7px;margin-left:6px}
+  .barbus{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+  input,select,textarea{background:var(--surface);border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:9px 12px;font-family:inherit;font-size:13px}
+  input.bus{flex:1;min-width:200px}
+  .card{border:1px solid var(--line);background:var(--surface);border-radius:16px;overflow:hidden;margin-bottom:10px}
+  .card>.top{display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer}
+  .card>.top:hover{background:var(--surface2)}
+  .chev{color:var(--sub);transition:transform .15s} .open>.top .chev{transform:rotate(90deg)}
+  .t{flex:1;min-width:0} .t b{display:block;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .t span{color:var(--sub);font-size:12px}
+  .nums{display:flex;gap:14px;font-size:12px;color:var(--sub);font-variant-numeric:tabular-nums}
+  .nums b{color:var(--ink);font-size:14px;display:block;text-align:right}
+  .barra{width:150px;height:8px;border-radius:99px;background:var(--line);overflow:hidden;display:flex;flex-shrink:0}
+  .barra i{display:block;height:100%} .b-ok{background:var(--emerald)} .b-pe{background:var(--amber)} .b-ca{background:var(--red)}
+  .body{border-top:1px solid var(--line);display:none;padding:10px 14px 14px} .open>.body{display:block}
+  .ped{border:1px solid var(--line);border-radius:12px;margin-top:10px;overflow:hidden}
+  .ped .ph{display:flex;gap:10px;align-items:center;padding:10px 12px;background:var(--surface);flex-wrap:wrap}
+  .ped .ph b{font-size:14px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;color:var(--sub);font-size:11px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;padding:7px 10px;border-bottom:1px solid var(--line)}
+  td{padding:7px 10px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+  td.r,th.r{text-align:right}
+  tr.sel td{background:rgba(248,113,113,.08)}
+  tr.cancelada td{color:var(--sub);text-decoration:line-through}
+  .chip{font-size:10px;font-weight:800;border-radius:6px;padding:2px 7px;white-space:nowrap}
+  .c-pe{background:rgba(245,158,11,.14);color:var(--amber);border:1px solid rgba(245,158,11,.35)}
+  .c-ok{background:rgba(34,197,94,.14);color:var(--emerald);border:1px solid rgba(34,197,94,.35)}
+  .c-ca{background:rgba(248,113,113,.14);color:var(--red);border:1px solid rgba(248,113,113,.35)}
+  .c-pa{background:rgba(167,139,250,.14);color:var(--violet);border:1px solid rgba(167,139,250,.35)}
+  .c-co{background:rgba(56,189,248,.14);color:var(--sky);border:1px solid rgba(56,189,248,.35)}
+  .btn{border:1px solid var(--line);background:var(--surface2);color:var(--ink);border-radius:10px;padding:7px 12px;font-weight:700;cursor:pointer;font-family:inherit;font-size:12px}
+  .btn:hover{background:rgba(255,255,255,.12)}
+  .btn.rojo{background:rgba(248,113,113,.16);border-color:rgba(248,113,113,.45);color:#fecaca}
+  .btn.rojo:hover{background:rgba(248,113,113,.28)}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .esp{flex:1}
+  .nota{border:1px dashed rgba(56,189,248,.4);background:rgba(56,189,248,.06);border-radius:14px;padding:12px 14px;color:#bae6fd;font-size:13px;margin:16px 0;line-height:1.5}
+  .nota b{color:#e0f2fe}
+  .flujo{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px}
+  .paso{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:6px 10px;font-size:12px;color:var(--ink)}
+  .flecha{color:var(--sub)}
+  /* modal */
+  .velo{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;padding:16px;z-index:10}
+  .velo.on{display:flex}
+  .modal{background:#0d0d14;border:1px solid var(--line);border-radius:18px;width:min(720px,100%);max-height:92vh;overflow:auto;padding:18px}
+  .modal h2{margin:0 0 4px;font-size:18px}
+  .modo{display:flex;gap:8px;margin:14px 0}
+  .modo label{flex:1;border:1px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer;background:var(--surface)}
+  .modo label.on{border-color:rgba(248,113,113,.5);background:rgba(248,113,113,.08)}
+  .modo small{display:block;color:var(--sub);font-size:12px;margin-top:2px}
+  .modo input{display:none}
+  pre{background:#000;border:1px solid var(--line);border-radius:10px;padding:10px;font-size:11.5px;color:#a7f3d0;overflow:auto;max-height:220px}
+  .fila{display:flex;gap:8px;margin-top:10px}
+  .fila>*{flex:1}
+  .pie{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+  .muted{color:var(--sub)}
+  .vacio{color:var(--sub);text-align:center;padding:24px}
+  @media (max-width:760px){.nums,.barra{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span class="badge">Maqueta — datos de ejemplo, no toca Dragon</span>
+  <div class="head">
+    <div class="ico">⛔</div>
+    <div>
+      <h1>Seguimiento y cancelación de pedidos</h1>
+      <div class="sub">Pedidos de venta de DRAGONFISH_MITO · cuánto se pidió, cuánto salió en remito y qué queda pendiente · cancelar va a Dragon por la API</div>
+    </div>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi"><small>Pedidos pendientes</small><b>10.309</b><span>con saldo sin remitir</span></div>
+    <div class="kpi"><small>Unidades pendientes</small><b id="kUni">—</b><span>en los clientes de abajo</span></div>
+    <div class="kpi"><small>Remitos pendientes</small><b>2.821</b><span>de 16.038</span></div>
+    <div class="kpi"><small>Cancelados en Dragon</small><b>286</b><span>pedidos enteros · 0 parciales</span></div>
+    <div class="kpi"><small>Cancelaciones desde el hub</small><b id="kCola">0</b><span>en cola / enviadas</span></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab on" data-tab="cli">Por cliente</button>
+    <button class="tab" data-tab="sku">Por SKU</button>
+    <button class="tab" data-tab="can">Cancelaciones <span class="n" id="nCan">0</span></button>
+  </div>
+
+  <div class="barbus">
+    <input class="bus" id="bus" placeholder="Buscar cliente, N° de pedido o SKU…" />
+    <select id="fEstado">
+      <option value="pend">Con saldo pendiente</option>
+      <option value="todos">Todos</option>
+    </select>
+  </div>
+
+  <div id="vista"></div>
+
+  <div class="nota">
+    <b>Cómo impactaría en Dragon.</b> El hub no escribe directo: deja la cancelación en una cola en Supabase y el puente (igual que franquicias, cada 1 min) la manda a la API REST de Dragon y guarda el resultado.
+    <div class="flujo">
+      <span class="paso">Hub · Cancelar</span><span class="flecha">→</span>
+      <span class="paso">Cola <code>pedidos_cancelaciones</code></span><span class="flecha">→</span>
+      <span class="paso">Puente · cada 1 min</span><span class="flecha">→</span>
+      <span class="paso">API Dragon · <code>DELETE /Pedido/{id}</code> (entero) · <code>PUT /Pedido/{id}</code> (por SKU)</span><span class="flecha">→</span>
+      <span class="paso">DRAGONFISH_MITO</span><span class="flecha">→</span>
+      <span class="paso">Sync de pedidos lo trae de vuelta ✓</span>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de cancelación -->
+<div class="velo" id="velo">
+  <div class="modal">
+    <h2 id="mTit">Cancelar</h2>
+    <div class="sub" id="mSub"></div>
+    <div class="modo" id="modo">
+      <label data-m="lineas" class="on"><input type="radio" name="m" checked /><b>Solo el saldo de las líneas marcadas</b><small>Modifica el pedido en Dragon (PUT): baja la cantidad a lo ya remitido</small></label>
+      <label data-m="entero"><input type="radio" name="m" /><b>Pedido entero</b><small>Baja del pedido en Dragon (DELETE): queda ANULADO</small></label>
+    </div>
+    <table id="mTabla"></table>
+    <div class="fila">
+      <select id="mMotivo">
+        <option value="">Motivo de la cancelación…</option>
+        <option>Sin stock</option><option>Lo pidió el cliente</option><option>Pedido duplicado</option><option>Cliente con deuda</option><option>Fuera de temporada</option><option>Otro</option>
+      </select>
+      <input id="mObs" placeholder="Observación (va a Obs del pedido)" />
+    </div>
+    <details style="margin-top:12px"><summary class="muted" style="cursor:pointer">Ver lo que se manda a Dragon</summary><pre id="mJson"></pre></details>
+    <div class="pie">
+      <button class="btn" id="mNo">Volver</button>
+      <button class="btn rojo" id="mSi" disabled>Mandar cancelación</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---- Datos de ejemplo ----
+const PEDIDOS = [
+  {num:'0001-00010231', codigo:'P10231', cli:'01068', nom:'Jemava S.A.S.', fecha:'2026-10-21', entrega:'2026-11-05', lineas:[
+    {sku:'CF265726', desc:'Campera puffer', color:'02', talle:'M', ped:24, rem:12, stock:180},
+    {sku:'CF265726', desc:'Campera puffer', color:'02', talle:'L', ped:24, rem:24, stock:96},
+    {sku:'ZH060018', desc:'Buzo hoodie', color:'02', talle:'U', ped:36, rem:10, stock:0},
+    {sku:'RM114502', desc:'Remera básica', color:'01', talle:'S', ped:48, rem:0, stock:12}]},
+  {num:'0001-00010198', codigo:'P10198', cli:'01068', nom:'Jemava S.A.S.', fecha:'2026-10-09', entrega:'2026-10-20', lineas:[
+    {sku:'JN330017', desc:'Jean mom', color:'05', talle:'38', ped:20, rem:20, stock:44},
+    {sku:'JN330017', desc:'Jean mom', color:'05', talle:'40', ped:20, rem:6, stock:0}]},
+  {num:'0001-00010244', codigo:'P10244', cli:'01140', nom:'Argentina S.R.L. (CF Ushuaia)', fecha:'2026-10-28', entrega:'2026-11-10', lineas:[
+    {sku:'ZH060018', desc:'Buzo hoodie', color:'02', talle:'U', ped:30, rem:0, stock:0},
+    {sku:'CF265726', desc:'Campera puffer', color:'02', talle:'M', ped:18, rem:0, stock:180}]},
+  {num:'0001-00010252', codigo:'P10252', cli:'00877', nom:'Indumentaria del Sur', fecha:'2026-10-30', entrega:'2026-11-12', lineas:[
+    {sku:'RM114502', desc:'Remera básica', color:'01', talle:'S', ped:60, rem:48, stock:12},
+    {sku:'RM114502', desc:'Remera básica', color:'01', talle:'M', ped:60, rem:60, stock:30},
+    {sku:'JN330017', desc:'Jean mom', color:'05', talle:'40', ped:24, rem:0, stock:0}]},
+  {num:'0001-00010260', codigo:'P10260', cli:'01212', nom:'Moda Norte', fecha:'2026-11-02', entrega:'2026-11-15', lineas:[
+    {sku:'CF265726', desc:'Campera puffer', color:'07', talle:'S', ped:12, rem:12, stock:8}]},
+];
+PEDIDOS.forEach(p=>p.lineas.forEach((l,i)=>{l.id=p.codigo+'-'+i; l.can=0}));
+let COLA = [];
+let tab='cli', abiertos=new Set(['01068']), marcadas=new Set(), modalCtx=null, modo='lineas';
+
+const fmt=n=>n.toLocaleString('es-AR');
+const pend=l=>Math.max(0,l.ped-l.rem-l.can);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function barra(ped,rem,can){const t=ped||1;return `<div class="barra"><i class="b-ok" style="width:${rem/t*100}%"></i><i class="b-ca" style="width:${can/t*100}%"></i><i class="b-pe" style="width:${Math.max(0,ped-rem-can)/t*100}%"></i></div>`}
+function chipEstado(p){const ped=sum(p,'ped'),rem=sum(p,'rem'),can=sum(p,'can');
+  if(p.anulado) return '<span class="chip c-ca">ANULADO</span>';
+  if(COLA.some(c=>c.codigo===p.codigo&&c.estado!=='ok')) return '<span class="chip c-co">CANCELACIÓN EN CURSO</span>';
+  if(ped-rem-can<=0) return can?'<span class="chip c-pa">CERRADO CON CANCELACIÓN</span>':'<span class="chip c-ok">COMPLETO</span>';
+  return rem?'<span class="chip c-pe">PARCIAL</span>':'<span class="chip c-pe">PENDIENTE</span>'}
+const sum=(p,k)=>p.lineas.reduce((a,l)=>a+l[k],0);
+
+function filtro(){const q=document.getElementById('bus').value.trim().toLowerCase(), soloPend=document.getElementById('fEstado').value==='pend';
+  return PEDIDOS.filter(p=>{
+    if(soloPend && (p.anulado || p.lineas.every(l=>pend(l)===0))) return false;
+    if(!q) return true;
+    return (p.nom+' '+p.cli+' '+p.num).toLowerCase().includes(q) || p.lineas.some(l=>(l.sku+' '+l.desc).toLowerCase().includes(q))})}
+
+function tablaLineas(p){
+  return `<table><tr><th style="width:28px"></th><th>SKU</th><th>Descripción</th><th>Color</th><th>Talle</th><th class="r">Pedido</th><th class="r">Remitido</th><th class="r">Cancelado</th><th class="r">Pendiente</th><th class="r">Stock</th></tr>`+
+  p.lineas.map(l=>{const pe=pend(l),dis=pe===0||p.anulado;
+    return `<tr class="${marcadas.has(l.id)?'sel':''} ${p.anulado?'cancelada':''}"><td><input type="checkbox" data-l="${l.id}" ${marcadas.has(l.id)?'checked':''} ${dis?'disabled':''}></td>
+    <td><b>${l.sku}</b></td><td>${esc(l.desc)}</td><td>${l.color}</td><td>${l.talle}</td>
+    <td class="r">${l.ped}</td><td class="r" style="color:var(--emerald)">${l.rem}</td><td class="r" style="color:var(--red)">${l.can||''}</td>
+    <td class="r" style="color:var(--amber);font-weight:800">${pe||'—'}</td><td class="r ${l.stock===0?'':'muted'}" style="${l.stock===0?'color:var(--red);font-weight:700':''}">${l.stock===0?'sin stock':l.stock}</td></tr>`}).join('')+`</table>`}
+
+function bloquePedido(p){const n=p.lineas.filter(l=>marcadas.has(l.id)).length;
+  return `<div class="ped"><div class="ph"><b>Pedido ${p.num}</b>${chipEstado(p)}<span class="muted" style="font-size:12px">del ${p.fecha} · entrega ${p.entrega}</span><span class="esp"></span>
+    <button class="btn rojo" data-cancel="${p.codigo}" data-m="lineas" ${n?'':'disabled'}>Cancelar saldo de ${n||''} línea${n===1?'':'s'}</button>
+    <button class="btn" data-cancel="${p.codigo}" data-m="entero" ${p.anulado||sum(p,'rem')>0?'disabled title="Ya tiene remitos: solo se puede cancelar el saldo"':''}>Anular pedido</button></div>${tablaLineas(p)}</div>`}
+
+function vistaCliente(){
+  const ps=filtro(), por={};
+  ps.forEach(p=>(por[p.cli]=por[p.cli]||{cli:p.cli,nom:p.nom,peds:[]}).peds.push(p));
+  const cs=Object.values(por);
+  if(!cs.length) return '<div class="vacio">Nada para mostrar</div>';
+  return cs.map(c=>{const L=c.peds.flatMap(p=>p.lineas),ped=L.reduce((a,l)=>a+l.ped,0),rem=L.reduce((a,l)=>a+l.rem,0),can=L.reduce((a,l)=>a+l.can,0),pe=L.reduce((a,l)=>a+pend(l),0);
+    return `<div class="card ${abiertos.has(c.cli)?'open':''}"><div class="top" data-abrir="${c.cli}"><span class="chev">▶</span>
+      <div class="t"><b>${esc(c.nom)}</b><span>Cliente ${c.cli} · ${c.peds.length} pedido${c.peds.length>1?'s':''}</span></div>
+      <div class="nums"><div><b>${ped}</b>pedido</div><div><b style="color:var(--emerald)">${rem}</b>remitido</div><div><b style="color:var(--red)">${can}</b>cancelado</div><div><b style="color:var(--amber)">${pe}</b>pendiente</div></div>
+      ${barra(ped,rem,can)}</div><div class="body">${c.peds.map(bloquePedido).join('')}</div></div>`}).join('')}
+
+function vistaSku(){
+  const ps=filtro(), por={};
+  ps.forEach(p=>p.lineas.forEach(l=>{const k=l.sku+'|'+l.color+'|'+l.talle;
+    (por[k]=por[k]||{k,sku:l.sku,desc:l.desc,color:l.color,talle:l.talle,stock:l.stock,items:[]}).items.push({p,l})}));
+  const ss=Object.values(por).sort((a,b)=>b.items.reduce((s,x)=>s+pend(x.l),0)-a.items.reduce((s,x)=>s+pend(x.l),0));
+  if(!ss.length) return '<div class="vacio">Nada para mostrar</div>';
+  return ss.map(s=>{const ped=s.items.reduce((a,x)=>a+x.l.ped,0),rem=s.items.reduce((a,x)=>a+x.l.rem,0),can=s.items.reduce((a,x)=>a+x.l.can,0),pe=s.items.reduce((a,x)=>a+pend(x.l),0);
+    const falta=Math.max(0,pe-s.stock);
+    return `<div class="card ${abiertos.has(s.k)?'open':''}"><div class="top" data-abrir="${s.k}"><span class="chev">▶</span>
+      <div class="t"><b>${s.sku} · ${s.color}/${s.talle}</b><span>${esc(s.desc)} · ${s.items.length} pedido${s.items.length>1?'s':''} · stock ${s.stock}${falta?` · <span style="color:var(--red);font-weight:700">faltan ${falta} para cumplir</span>`:''}</span></div>
+      <div class="nums"><div><b>${ped}</b>pedido</div><div><b style="color:var(--emerald)">${rem}</b>remitido</div><div><b style="color:var(--red)">${can}</b>cancelado</div><div><b style="color:var(--amber)">${pe}</b>pendiente</div></div>
+      ${barra(ped,rem,can)}</div><div class="body">
+      <table><tr><th style="width:28px"></th><th>Cliente</th><th>Pedido</th><th>Fecha</th><th class="r">Pedido</th><th class="r">Remitido</th><th class="r">Cancelado</th><th class="r">Pendiente</th></tr>
+      ${s.items.map(({p,l})=>{const pe=pend(l),dis=pe===0||p.anulado;return `<tr class="${marcadas.has(l.id)?'sel':''}"><td><input type="checkbox" data-l="${l.id}" ${marcadas.has(l.id)?'checked':''} ${dis?'disabled':''}></td>
+        <td><b>${esc(p.nom)}</b> <span class="muted">${p.cli}</span></td><td>${p.num} ${chipEstado(p)}</td><td>${p.fecha}</td>
+        <td class="r">${l.ped}</td><td class="r" style="color:var(--emerald)">${l.rem}</td><td class="r" style="color:var(--red)">${l.can||''}</td><td class="r" style="color:var(--amber);font-weight:800">${pe||'—'}</td></tr>`}).join('')}</table>
+      <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn rojo" data-cancelsku="${s.k}" ${s.items.some(x=>marcadas.has(x.l.id))?'':'disabled'}>Cancelar saldo en los pedidos marcados</button></div>
+      </div></div>`}).join('')}
+
+function vistaCola(){
+  if(!COLA.length) return '<div class="vacio">Todavía no se mandó ninguna cancelación desde el hub.<br>Marcá líneas en «Por cliente» o «Por SKU» y tocá «Cancelar saldo».</div>';
+  const ch={cola:'<span class="chip c-pe">EN COLA</span>',env:'<span class="chip c-co">ENVIANDO A DRAGON…</span>',ok:'<span class="chip c-ok">✓ IMPACTÓ EN DRAGON</span>',err:'<span class="chip c-ca">ERROR</span>'};
+  return `<div class="card"><table><tr><th>Cuándo</th><th>Pedido</th><th>Cliente</th><th>Tipo</th><th class="r">Unidades</th><th>Motivo</th><th>Quién</th><th>Estado</th></tr>
+  ${COLA.slice().reverse().map(c=>`<tr><td>${c.hora}</td><td><b>${c.num}</b></td><td>${esc(c.nom)}</td><td>${c.tipo==='entero'?'Anulación (DELETE)':'Saldo por SKU (PUT)'}</td><td class="r">${c.uni}</td><td>${esc(c.motivo)}</td><td>Admin</td><td>${ch[c.estado]}${c.estado==='ok'?` <span class="muted" style="font-size:11px">${c.resp}</span>`:''}</td></tr>`).join('')}</table></div>`}
+
+function render(){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.tab===tab));
+  document.getElementById('vista').innerHTML= tab==='cli'?vistaCliente(): tab==='sku'?vistaSku(): vistaCola();
+  document.getElementById('kUni').textContent=fmt(PEDIDOS.filter(p=>!p.anulado).flatMap(p=>p.lineas).reduce((a,l)=>a+pend(l),0));
+  document.getElementById('kCola').textContent=COLA.length;
+  document.getElementById('nCan').textContent=COLA.length;
+}
+
+// ---- Modal ----
+function abrirModal(lista,m){ // lista: [{p,l}]
+  modalCtx=lista; modo=m;
+  document.querySelectorAll('#modo label').forEach(x=>x.classList.toggle('on',x.dataset.m===modo));
+  const peds=[...new Set(lista.map(x=>x.p))];
+  const entOk=peds.length===1&&sum(peds[0],'rem')===0;
+  document.querySelector('#modo label[data-m=entero]').style.display=entOk?'':'none';
+  document.getElementById('mTit').textContent=peds.length===1?`Cancelar en pedido ${peds[0].num}`:`Cancelar en ${peds.length} pedidos`;
+  document.getElementById('mSub').textContent=[...new Set(peds.map(p=>p.nom))].join(' · ');
+  document.getElementById('mMotivo').value='';document.getElementById('mObs').value='';
+  pintarModal(); document.getElementById('velo').classList.add('on');
+}
+function itemsModal(){return modo==='entero'?modalCtx[0].p.lineas.map(l=>({p:modalCtx[0].p,l})):modalCtx}
+function pintarModal(){
+  const it=itemsModal();
+  document.getElementById('mTabla').innerHTML=`<tr><th>Pedido</th><th>SKU</th><th>Color/Talle</th><th class="r">Pedido</th><th class="r">Remitido</th><th class="r">Se cancela</th><th class="r">Queda en Dragon</th></tr>`+
+    it.map(({p,l})=>{const c=modo==='entero'?l.ped:pend(l);return `<tr><td>${p.num}</td><td><b>${l.sku}</b></td><td>${l.color}/${l.talle}</td><td class="r">${l.ped}</td><td class="r">${l.rem}</td><td class="r" style="color:var(--red);font-weight:800">${c}</td><td class="r">${l.ped-l.can-c}</td></tr>`}).join('');
+  const peds=[...new Set(it.map(x=>x.p))], motivo=document.getElementById('mMotivo').value, obs=document.getElementById('mObs').value;
+  const req=peds.map(p=>modo==='entero'
+    ? `DELETE /api.Dragonfish/Pedido/${p.codigo}/\nIdCliente: MITO\nAuthorization: ••••••`
+    : `PUT /api.Dragonfish/Pedido/${p.codigo}/\n`+JSON.stringify({Cliente:p.cli,Obs:`CANCELADO DESDE HUB: ${motivo||'(motivo)'}${obs?' — '+obs:''}`,
+        FacturaDetalle:p.lineas.map(l=>{const x=it.find(y=>y.l===l);return {Articulo:l.sku,Color:l.color,Talle:l.talle,Cantidad:l.ped-l.can-(x?pend(l):0)}})},null,2));
+  document.getElementById('mJson').textContent=req.join('\n\n');
+  document.getElementById('mSi').disabled=!motivo;
+}
+function confirmar(){
+  const it=itemsModal(), motivo=document.getElementById('mMotivo').value, peds=[...new Set(it.map(x=>x.p))];
+  const hora=new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+  peds.forEach(p=>{const mias=it.filter(x=>x.p===p),uni=mias.reduce((a,x)=>a+(modo==='entero'?x.l.ped:pend(x.l)),0);
+    const c={codigo:p.codigo,num:p.num,nom:p.nom,tipo:modo,uni,motivo,hora,estado:'cola',items:mias};COLA.push(c);
+    setTimeout(()=>{c.estado='env';render()},1500);
+    setTimeout(()=>{c.estado='ok';c.resp=modo==='entero'?'pedido anulado':'pedido modificado';
+      if(modo==='entero') p.anulado=true; else c.items.forEach(x=>x.l.can+=pend(x.l));
+      c.items.forEach(x=>marcadas.delete(x.l.id)); render()},3500)});
+  document.getElementById('velo').classList.remove('on'); render();
+}
+
+// ---- Eventos ----
+document.addEventListener('click',e=>{
+  const t=e.target;
+  if(t.dataset.tab){tab=t.dataset.tab;render();return}
+  const ab=t.closest('[data-abrir]'); if(ab&&!t.closest('input')){const k=ab.dataset.abrir;abiertos.has(k)?abiertos.delete(k):abiertos.add(k);render();return}
+  if(t.dataset.cancel){const p=PEDIDOS.find(x=>x.codigo===t.dataset.cancel);
+    abrirModal(t.dataset.m==='entero'?p.lineas.map(l=>({p,l})):p.lineas.filter(l=>marcadas.has(l.id)).map(l=>({p,l})),t.dataset.m);return}
+  if(t.dataset.cancelsku){const its=PEDIDOS.flatMap(p=>p.lineas.filter(l=>marcadas.has(l.id)&&(l.sku+'|'+l.color+'|'+l.talle)===t.dataset.cancelsku).map(l=>({p,l})));abrirModal(its,'lineas');return}
+  const lab=t.closest('#modo label'); if(lab&&lab.style.display!=='none'){modo=lab.dataset.m;document.querySelectorAll('#modo label').forEach(x=>x.classList.toggle('on',x===lab));pintarModal();return}
+  if(t.id==='mNo'||t.id==='velo'){document.getElementById('velo').classList.remove('on');return}
+  if(t.id==='mSi'){confirmar();return}
+});
+document.addEventListener('change',e=>{const id=e.target.dataset.l;if(id){e.target.checked?marcadas.add(id):marcadas.delete(id);render()}
+  if(e.target.id==='mMotivo')pintarModal(); if(e.target.id==='fEstado')render()});
+document.getElementById('mObs').addEventListener('input',pintarModal);
+document.getElementById('bus').addEventListener('input',render);
+render();
+</script>
+</body>
+</html>
