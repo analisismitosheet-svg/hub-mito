@@ -52,6 +52,9 @@ export default function RequerimientoNuevo() {
   const { rubros: RUBROS, rubroDef } = useRubros()
   const { perfil, isAdmin } = useAuth()
   const local = perfil?.local ?? ''
+  // Local del pedido nuevo: el de la cuenta; el admin lo elige (requerimiento_crear lo acepta solo de él)
+  const [localElegido, setLocalElegido] = useState('')
+  const localForm = isAdmin ? (localElegido || local) : local
   // El admin ve los pedidos de todos los locales (filtro opcional); el resto, solo los de su local
   const [filtroLocal, setFiltroLocal] = useState('')
   const verLocal = isAdmin ? filtroLocal : local
@@ -97,12 +100,12 @@ export default function RequerimientoNuevo() {
 
   // Primero la gente de este local, después el resto de la nómina activa
   const opciones = useMemo(() => {
-    const sectores = new Set((SECTORES_DEL_LOCAL[local] ?? [nombreLocal(local)]).map(norm))
+    const sectores = new Set((SECTORES_DEL_LOCAL[localForm] ?? [nombreLocal(localForm)]).map(norm))
     const delLocal = (p: Persona) => sectores.has(norm(p.sector ?? ''))
     return [...personas]
       .sort((a, b) => Number(delLocal(b)) - Number(delLocal(a)) || a.nombre.localeCompare(b.nombre))
       .map((p) => ({ id: p.legajo, nombre: p.nombre, legajo: p.legajo }))
-  }, [personas, local, locales])
+  }, [personas, localForm, locales])
 
   const cargarUltimos = useCallback(async () => {
     if (!supabase || !veLista) { setAbiertos([]); setTerminados([]); setParaConfirmar([]); return }
@@ -125,7 +128,7 @@ export default function RequerimientoNuevo() {
   useEffect(() => { void cargarUltimos() }, [cargarUltimos])
   useEffect(() => suscribirCambios(['requerimientos'], () => void cargarUltimos()), [cargarUltimos])
 
-  const falta = !local ? 'Tu usuario no tiene un local asignado' : !solicitante ? 'Elegí quién lo solicita' : !rubro ? 'Elegí el rubro'
+  const falta = !localForm ? (isAdmin ? 'Elegí el local' : 'Tu usuario no tiene un local asignado') : !solicitante ? 'Elegí quién lo solicita' : !rubro ? 'Elegí el rubro'
     : !prioridad ? 'Elegí la prioridad' : descripcion.trim().length < 3 ? 'Contá qué pasa' : null
 
   async function enviar(e: FormEvent) {
@@ -134,10 +137,11 @@ export default function RequerimientoNuevo() {
     setEnviando(true)
     setError(null)
     try {
-      const rutas = await subirFotos(fotos, local)
+      const rutas = await subirFotos(fotos, localForm)
       const { data, error: err } = await supabase.rpc('requerimiento_crear', {
         p_rubro: rubro, p_prioridad: prioridad, p_solicitante_legajo: solicitante,
         p_descripcion: descripcion.trim(), p_fotos: rutas, p_ya_resuelto: yaResuelto,
+        p_local: isAdmin ? localForm : null,
       })
       if (err) throw new Error(err.message)
       setListo(data as number)
@@ -249,9 +253,17 @@ export default function RequerimientoNuevo() {
         <div className={`${caja} grid gap-3 sm:grid-cols-2`}>
           <div>
             <p className={titulo}>Local</p>
-            <p className="flex h-10 items-center rounded-xl border border-line bg-surface2 px-3 text-sm font-semibold text-ink">
-              {local ? nombreLocal(local) : 'Tu usuario no tiene local asignado'}
-            </p>
+            {isAdmin ? (
+              <select value={localForm} onChange={(e) => { setLocalElegido(e.target.value); setSolicitante(null) }} aria-label="Local"
+                className="h-10 w-full rounded-xl border border-line bg-surface2 px-3 text-sm font-semibold text-ink">
+                <option value="">Elegí el local…</option>
+                {locales.map((l) => <option key={l.codigo} value={l.codigo}>{l.nombre}</option>)}
+              </select>
+            ) : (
+              <p className="flex h-10 items-center rounded-xl border border-line bg-surface2 px-3 text-sm font-semibold text-ink">
+                {local ? nombreLocal(local) : 'Tu usuario no tiene local asignado'}
+              </p>
+            )}
           </div>
           <div>
             <p className={titulo}>¿Quién lo solicita?</p>

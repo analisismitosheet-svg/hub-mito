@@ -265,10 +265,12 @@ end $$;
 
 -- ---------- Crear (local) ----------
 -- El local es siempre el de la cuenta (usuarios.local), también para Arquitectura.
+-- Solo el admin elige el local (p_local); a cualquier otro se le ignora.
 drop function if exists public.requerimiento_crear(text, text, text, text, text, text[], boolean);
+drop function if exists public.requerimiento_crear(text, text, text, text, text[], boolean);
 create or replace function public.requerimiento_crear(
   p_rubro text, p_prioridad text, p_solicitante_legajo text,
-  p_descripcion text, p_fotos text[] default '{}', p_ya_resuelto boolean default false
+  p_descripcion text, p_fotos text[] default '{}', p_ya_resuelto boolean default false, p_local text default null
 ) returns bigint language plpgsql security definer set search_path = public as $$
 declare
   v_local text := private.mi_local();
@@ -277,6 +279,10 @@ declare
 begin
   if not private.tengo_permiso('requerimientos.cargar') then
     raise exception 'Sin permiso para cargar requerimientos' using errcode = '42501';
+  end if;
+  if private.es_admin() and nullif(trim(coalesce(p_local, '')), '') is not null then
+    v_local := upper(trim(p_local));
+    if not exists (select 1 from public.locales where codigo = v_local) then raise exception 'Local desconocido: %', v_local; end if;
   end if;
   if v_local is null then raise exception 'Tu usuario no tiene un local asignado'; end if;
 
@@ -422,7 +428,7 @@ begin
 end $$;
 
 revoke all on function public.requerimientos_personas(text) from public, anon;
-revoke all on function public.requerimiento_crear(text, text, text, text, text[], boolean) from public, anon;
+revoke all on function public.requerimiento_crear(text, text, text, text, text[], boolean, text) from public, anon;
 revoke all on function public.requerimiento_programar(bigint, timestamptz, text[], text) from public, anon;
 revoke all on function public.requerimiento_iniciar(bigint) from public, anon;
 revoke all on function public.requerimiento_terminar(bigint, text, text[]) from public, anon;
@@ -431,7 +437,7 @@ revoke all on function public.requerimiento_no_quedo(bigint, text) from public, 
 revoke all on function public.requerimiento_descartar(bigint, text) from public, anon;
 revoke all on function public.requerimiento_reabrir(bigint) from public, anon;
 grant execute on function public.requerimientos_personas(text) to authenticated;
-grant execute on function public.requerimiento_crear(text, text, text, text, text[], boolean) to authenticated;
+grant execute on function public.requerimiento_crear(text, text, text, text, text[], boolean, text) to authenticated;
 grant execute on function public.requerimiento_programar(bigint, timestamptz, text[], text) to authenticated;
 grant execute on function public.requerimiento_iniciar(bigint) to authenticated;
 grant execute on function public.requerimiento_terminar(bigint, text, text[]) to authenticated;
