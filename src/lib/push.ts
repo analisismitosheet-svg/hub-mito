@@ -146,3 +146,21 @@ export async function avisarTransferencia(loteId: string): Promise<void> {
     /* el aviso dentro de la app (campana) sigue andando */
   }
 }
+
+/** Después de programar un requerimiento: avisa por push al local que lo pidió qué
+ * arreglo es, qué día y horario va mantenimiento y quién (no rompe si falla). */
+export async function avisarRequerimiento(id: number): Promise<void> {
+  try {
+    if (!supabase) return
+    const { data } = await supabase.auth.getSession()
+    const token = data.session?.access_token
+    if (!token) return
+    await fetch('/api/push?tipo=requerimiento', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ id }),
+    })
+  } catch {
+    /* el aviso dentro de la app (campana) sigue andando */
+  }
+}

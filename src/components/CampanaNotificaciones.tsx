@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Bell, UserCheck, ClipboardList, Truck, CalendarX, FileText, ArrowRightLeft, PackageCheck, X, Pause,
-  ChevronRight, Building2,
+  ChevronRight, Building2, Wrench,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
@@ -23,6 +23,7 @@ interface Notificacion {
     | 'armados'
     | 'pausas'
     | 'franquicias'
+    | 'requerimientos'
   titulo: string
   detalle: string
   ruta: string
@@ -59,6 +60,7 @@ const GRUPOS: Record<string, { area: string; seccion: string; color: string; ico
   pedidos: { area: 'Mayorista', seccion: 'Pedidos', color: 'bg-red-500/15 text-red-400', icono: PackageCheck },
   franquicias: { area: 'Mayorista', seccion: 'Pedidos de franquicias', color: 'bg-teal-500/15 text-teal-400', icono: Building2 },
   transferencias: { area: 'Locales', seccion: 'Reposiciones / Transferencias', color: 'bg-violet-500/15 text-violet-400', icono: ArrowRightLeft },
+  requerimientos: { area: 'Locales', seccion: 'Arreglos (requerimientos)', color: 'bg-lime-500/15 text-lime-400', icono: Wrench },
 }
 const GRUPO_DE_TIPO: Record<Notificacion['tipo'], keyof typeof GRUPOS> = {
   usuarios: 'usuarios',
@@ -70,6 +72,7 @@ const GRUPO_DE_TIPO: Record<Notificacion['tipo'], keyof typeof GRUPOS> = {
   armados: 'pedidos',
   pausas: 'pausas',
   franquicias: 'franquicias',
+  requerimientos: 'requerimientos',
 }
 
 /** Ícono de cada aviso dentro del grupo (ej. en Facturación: sin fecha vs sin enviar). */
@@ -83,6 +86,7 @@ const ICONO_TIPO: Record<Notificacion['tipo'], typeof Bell> = {
   armados: PackageCheck,
   pausas: Pause,
   franquicias: Building2,
+  requerimientos: Wrench,
 }
 
 /**
@@ -409,6 +413,25 @@ export default function CampanaNotificaciones() {
           }
         }
       }
+      // 6b) Requerimientos del local (sql/requerimientos.sql): los arreglos programados con día y
+      // horario, y los que mantenimiento terminó y esperan que el local confirme
+      if (esLocal && perfil?.local) {
+        const { data } = await sb.from('requerimientos')
+          .select('id,rubro,descripcion,estado,programado_para,asignados_nombres,terminado_at')
+          .eq('local', perfil.local).in('estado', ['programado', 'en_curso', 'a_confirmar'])
+        if (activo && data) {
+          const hora = (iso: string) => new Date(iso).toLocaleString('es-AR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
+          for (const r of data as { id: number; rubro: string; descripcion: string; estado: string; programado_para: string | null; asignados_nombres: string[]; terminado_at: string | null }[]) {
+            const tarea = r.descripcion.length > 60 ? `${r.descripcion.slice(0, 57)}…` : r.descripcion
+            if (r.estado === 'a_confirmar') {
+              notis.push({ id: `rq-${r.id}`, tipo: 'requerimientos', titulo: `Confirmá el arreglo: ${r.rubro}`, detalle: `N° ${r.id} · ${tarea}`, ruta: '/arquitectura/requerimientos/nuevo', fecha: r.terminado_at ?? r.programado_para ?? new Date().toISOString(), destinoId: String(r.id) })
+            } else if (r.programado_para) {
+              const quien = r.asignados_nombres?.length ? ` · va ${r.asignados_nombres.join(' y ')}` : ''
+              notis.push({ id: `rq-${r.id}`, tipo: 'requerimientos', titulo: `${r.rubro}: ${hora(r.programado_para)}`, detalle: `N° ${r.id} · ${tarea}${quien}`, ruta: '/arquitectura/requerimientos/nuevo', fecha: r.programado_para, destinoId: String(r.id) })
+            }
+          }
+        }
+      }
       // 7) Reposiciones de Indo (sql/legajos_ubicacion.sql, sql/avisos_deposito_indo.sql): rol deposito y
       // legajos de Depósito Indo. Lotes con renglones pendientes; el primero que aparece suena y avisa.
       if (avisosIndo) {
@@ -450,7 +473,7 @@ export default function CampanaNotificaciones() {
     const alVolver = () => { if (document.visibilityState === 'visible') void cargar() }
     document.addEventListener('visibilitychange', alVolver)
     return () => { activo = false; clearInterval(intervalo); document.removeEventListener('visibilitychange', alVolver) }
-  }, [isAdmin, esMayorista, esLocal, avisosIndo, can, origenesUsuario, visible])
+  }, [isAdmin, esMayorista, esLocal, avisosIndo, can, origenesUsuario, visible, perfil?.local])
 
   if (!visible || !supabase) return null
 

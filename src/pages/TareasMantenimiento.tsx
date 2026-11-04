@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { suscribirCambios } from '@/lib/realtime'
 import {
-  CAMPOS_REQ, rubroDef, prioridadDef, subirFotos, quienesVan, type Requerimiento,
+  CAMPOS_REQ, useRubros, prioridadDef, subirFotos, quienesVan, type Requerimiento,
 } from '@/lib/requerimientos'
 
 /* ------------------------------------------------------------------ */
@@ -34,6 +34,7 @@ const nombreDia = (clave: string) => {
 const hora = (iso: string) => new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false })
 
 export default function TareasMantenimiento() {
+  const { rubroDef } = useRubros()
   const { perfil } = useAuth()
   const miLegajo = perfil?.legajo ?? null
   const [tareas, setTareas] = useState<Requerimiento[]>([])

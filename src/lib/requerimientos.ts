@@ -1,11 +1,15 @@
 /* ------------------------------------------------------------------ */
 /*  Arquitectura → Requerimientos (sql/requerimientos.sql).            */
-/*  Tipos, rubros, prioridades y estados comunes a las tres pantallas: */
+/*  Tipos, rubros (tabla requerimientos_rubros), prioridades y estados */
+/*  comunes a las pantallas:                                           */
 /*  Nuevo requerimiento (locales), Bandeja (Arquitectura) y Tareas de  */
 /*  mantenimiento.                                                     */
 /* ------------------------------------------------------------------ */
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Zap, BrickWall, Droplets, Flame, PaintRoller, KeyRound, Blinds, Hammer, Axe, Store, Wrench,
+  Lightbulb, Fan, Snowflake, Plug, Monitor, Cctv, Wifi, Sparkles, Bug, DoorOpen, Lock, Truck, Paintbrush,
+  Thermometer, Sofa, Ruler, Drill, Trash2,
   type LucideIcon,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -49,21 +53,45 @@ export interface Requerimiento {
 
 export interface Persona { legajo: string; nombre: string; lugar: string | null; sector: string | null }
 
-/** Los mismos rubros (y en el mismo orden) que el formulario viejo, más GAS. */
-export const RUBROS: { id: string; icon: LucideIcon; color: string }[] = [
-  { id: 'ELECTRICIDAD', icon: Zap, color: '#eab308' },
-  { id: 'DURLOCK', icon: BrickWall, color: '#a8a29e' },
-  { id: 'PLOMERÍA', icon: Droplets, color: '#0ea5e9' },
-  { id: 'GAS', icon: Flame, color: '#f97316' },
-  { id: 'PINTURA', icon: PaintRoller, color: '#d946ef' },
-  { id: 'CERRAJERÍA', icon: KeyRound, color: '#f59e0b' },
-  { id: 'PERSIANA - PORTONES', icon: Blinds, color: '#64748b' },
-  { id: 'HERRERÍA', icon: Hammer, color: '#ef4444' },
-  { id: 'CARPINTERÍA', icon: Axe, color: '#b45309' },
-  { id: 'VIDRIERA', icon: Store, color: '#14b8a6' },
-  { id: 'GENERAL', icon: Wrench, color: '#6366f1' },
-]
-export const rubroDef = (r: string) => RUBROS.find((x) => x.id === r) ?? RUBROS[RUBROS.length - 1]
+/**
+ * Íconos que se pueden elegir para un rubro (Arquitectura → Requerimientos → Rubros).
+ * La tabla requerimientos_rubros guarda la clave; una clave desconocida cae en Wrench.
+ */
+export const ICONOS_RUBRO: Record<string, LucideIcon> = {
+  Zap, Lightbulb, Plug, BrickWall, Droplets, Flame, Thermometer, Snowflake, Fan, PaintRoller, Paintbrush,
+  KeyRound, Lock, DoorOpen, Blinds, Hammer, Drill, Axe, Ruler, Store, Sofa, Monitor, Cctv, Wifi,
+  Sparkles, Bug, Trash2, Truck, Wrench,
+}
+
+export interface Rubro { id: number; nombre: string; icono: string; color: string; orden: number; activo: boolean }
+export interface RubroDef { id: string; icon: LucideIcon; color: string }
+
+const SIN_RUBRO: RubroDef = { id: 'GENERAL', icon: Wrench, color: '#6366f1' }
+const aDef = (r: Rubro): RubroDef => ({ id: r.nombre, icon: ICONOS_RUBRO[r.icono] ?? Wrench, color: r.color })
+
+/**
+ * Rubros de la tabla requerimientos_rubros. `rubros` = los activos (formulario),
+ * `todos` = también los ocultos (filtros e historial), `rubroDef` = ícono y color de un nombre.
+ */
+export function useRubros() {
+  const [lista, setLista] = useState<Rubro[]>([])
+  const recargar = useCallback(async () => {
+    if (!supabase) return
+    const { data } = await supabase.from('requerimientos_rubros').select('id,nombre,icono,color,orden,activo').order('orden').order('nombre')
+    setLista((data as Rubro[] | null) ?? [])
+  }, [])
+  useEffect(() => { void recargar() }, [recargar])
+  return useMemo(() => {
+    const porNombre = new Map(lista.map((r) => [r.nombre, aDef(r)]))
+    return {
+      lista,
+      recargar,
+      rubros: lista.filter((r) => r.activo).map(aDef),
+      todos: lista.map(aDef),
+      rubroDef: (nombre: string): RubroDef => porNombre.get(nombre) ?? { ...SIN_RUBRO, id: nombre },
+    }
+  }, [lista, recargar])
+}
 
 export const PRIORIDADES: { id: Prioridad; label: string; clase: string }[] = [
   { id: 'alta', label: 'Alta', clase: 'border-red-500/40 bg-red-500/10 text-red-500' },

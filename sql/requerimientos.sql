@@ -20,6 +20,8 @@
 --   requerimientos.gestionar  rol arquitecto  (bandeja, programar, descartar)
 --   requerimientos.tareas     rol mantenimiento (Mis tareas: empezar / terminar)
 -- Fotos: bucket privado `requerimientos` (se muestran con createSignedUrl).
+-- Avisos: al programar, la bandeja llama a /api/push?tipo=requerimiento y le llega al
+-- celular del local (los locales pueden anotarlo: push_suscribir en avisos_deposito_indo.sql).
 -- Los pedidos importados de la planilla vieja tienen origen = 'planilla' y
 -- sus fotos son links de Drive.
 -- Idempotente.
@@ -51,8 +53,7 @@ create table if not exists public.requerimientos (
   origen text not null default 'hub' check (origen in ('hub', 'planilla')),
   local text,                     -- código de public.locales
   local_original text,            -- como venía escrito en la planilla vieja
-  rubro text not null check (rubro in ('ELECTRICIDAD', 'DURLOCK', 'PLOMERÍA', 'GAS', 'PINTURA', 'CERRAJERÍA',
-                                        'PERSIANA - PORTONES', 'HERRERÍA', 'CARPINTERÍA', 'VIDRIERA', 'GENERAL')),
+  rubro text not null,            -- nombre en public.requerimientos_rubros
   prioridad text not null check (prioridad in ('alta', 'media', 'baja')),
   solicitante_legajo text,
   solicitante_nombre text,
@@ -94,7 +95,9 @@ alter table public.requerimientos
   add column if not exists terminado_comentario text,
   add column if not exists terminado_fotos text[] not null default '{}',
   add column if not exists rechazo_motivo text,
-  add column if not exists rechazos integer not null default 0;
+  add column if not exists rechazos integer not null default 0,
+  -- Aviso push al local con el día y horario (api/push.ts?tipo=requerimiento); se limpia al reprogramar
+  add column if not exists push_local_at timestamptz;
 do $$
 begin
   if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'requerimientos' and column_name = 'asignado_legajo') then
@@ -133,6 +136,101 @@ begin
     alter publication supabase_realtime add table public.requerimientos;
   end if;
 end $$;
+
+-- =====================================================
+-- RUBROS EDITABLES (Arquitectura → Requerimientos → Rubros)
+-- requerimientos.rubros (rol arquitecto): crear, editar (nombre, ícono, color) y borrar.
+-- Borrar un rubro que ya tiene pedidos lo OCULTA (activo = false): sale del formulario
+-- pero el historial lo conserva. Renombrar actualiza los pedidos que lo usan.
+-- `icono` es el nombre de un ícono de la lista fija del front (ICONOS_RUBRO).
+-- =====================================================
+insert into public.permisos (clave, modulo, accion, label, orden) values
+  ('requerimientos.rubros', 'requerimientos', 'edit', 'Rubros de requerimientos: crear, editar y borrar', 903)
+on conflict (clave) do update set label = excluded.label;
+insert into public.rol_permisos (rol, permiso_clave) values ('arquitecto', 'requerimientos.rubros')
+on conflict do nothing;
+
+create table if not exists public.requerimientos_rubros (
+  id bigint generated always as identity primary key,
+  nombre text not null unique,
+  icono text not null default 'Wrench',
+  color text not null default '#6366f1' check (color ~ '^#[0-9a-fA-F]{6}$'),
+  orden integer not null default 100,
+  activo boolean not null default true,
+  created_at timestamptz not null default now()
+);
+insert into public.requerimientos_rubros (nombre, icono, color, orden) values
+  ('ELECTRICIDAD', 'Zap', '#eab308', 10), ('DURLOCK', 'BrickWall', '#a8a29e', 20), ('PLOMERÍA', 'Droplets', '#0ea5e9', 30),
+  ('GAS', 'Flame', '#f97316', 40), ('PINTURA', 'PaintRoller', '#d946ef', 50), ('CERRAJERÍA', 'KeyRound', '#f59e0b', 60),
+  ('PERSIANA - PORTONES', 'Blinds', '#64748b', 70), ('HERRERÍA', 'Hammer', '#ef4444', 80), ('CARPINTERÍA', 'Axe', '#b45309', 90),
+  ('VIDRIERA', 'Store', '#14b8a6', 100), ('GENERAL', 'Wrench', '#6366f1', 110)
+on conflict (nombre) do nothing;
+
+-- El rubro del pedido ya no es una lista fija: lo valida requerimiento_crear contra la tabla
+alter table public.requerimientos drop constraint if exists requerimientos_rubro_check;
+
+alter table public.requerimientos_rubros enable row level security;
+drop policy if exists requerimientos_rubros_ver on public.requerimientos_rubros;
+create policy requerimientos_rubros_ver on public.requerimientos_rubros for select to authenticated
+  using (private.tengo_permiso('requerimientos.cargar') or private.tengo_permiso('requerimientos.gestionar')
+         or private.tengo_permiso('requerimientos.tareas') or private.tengo_permiso('requerimientos.rubros'));
+
+create or replace function public.requerimiento_rubro_guardar(
+  p_id bigint, p_nombre text, p_icono text, p_color text, p_activo boolean default true
+) returns bigint language plpgsql security definer set search_path = public as $$
+declare
+  v_nombre text := upper(trim(coalesce(p_nombre, '')));
+  v_viejo text;
+  v_id bigint;
+begin
+  if not private.tengo_permiso('requerimientos.rubros') then
+    raise exception 'Sin permiso para editar rubros' using errcode = '42501';
+  end if;
+  if length(v_nombre) < 2 then raise exception 'Escribí el nombre del rubro'; end if;
+  if exists (select 1 from public.requerimientos_rubros where nombre = v_nombre and id is distinct from p_id) then
+    raise exception 'Ya existe el rubro %', v_nombre;
+  end if;
+  if p_id is null then
+    insert into public.requerimientos_rubros (nombre, icono, color, orden, activo)
+    values (v_nombre, coalesce(nullif(p_icono, ''), 'Wrench'), coalesce(nullif(p_color, ''), '#6366f1'),
+            coalesce((select max(orden) from public.requerimientos_rubros), 0) + 10, coalesce(p_activo, true))
+    returning id into v_id;
+  else
+    select nombre into v_viejo from public.requerimientos_rubros where id = p_id;
+    if v_viejo is null then raise exception 'Ese rubro no existe'; end if;
+    update public.requerimientos_rubros
+       set nombre = v_nombre, icono = coalesce(nullif(p_icono, ''), icono), color = coalesce(nullif(p_color, ''), color),
+           activo = coalesce(p_activo, activo)
+     where id = p_id returning id into v_id;
+    if v_viejo <> v_nombre then
+      update public.requerimientos set rubro = v_nombre, updated_at = now() where rubro = v_viejo;
+    end if;
+  end if;
+  return v_id;
+end $$;
+
+-- 'borrado' si nadie lo usaba; 'ocultado' si ya tiene pedidos (queda inactivo)
+create or replace function public.requerimiento_rubro_borrar(p_id bigint)
+returns text language plpgsql security definer set search_path = public as $$
+declare v_nombre text;
+begin
+  if not private.tengo_permiso('requerimientos.rubros') then
+    raise exception 'Sin permiso para editar rubros' using errcode = '42501';
+  end if;
+  select nombre into v_nombre from public.requerimientos_rubros where id = p_id;
+  if v_nombre is null then raise exception 'Ese rubro no existe'; end if;
+  if exists (select 1 from public.requerimientos where rubro = v_nombre) then
+    update public.requerimientos_rubros set activo = false where id = p_id;
+    return 'ocultado';
+  end if;
+  delete from public.requerimientos_rubros where id = p_id;
+  return 'borrado';
+end $$;
+
+revoke all on function public.requerimiento_rubro_guardar(bigint, text, text, text, boolean) from public, anon;
+revoke all on function public.requerimiento_rubro_borrar(bigint) from public, anon;
+grant execute on function public.requerimiento_rubro_guardar(bigint, text, text, text, boolean) to authenticated;
+grant execute on function public.requerimiento_rubro_borrar(bigint) to authenticated;
 
 -- ---------- Helpers ----------
 -- Nombre de quien opera: el legajo de la cuenta o el nombre del usuario.
@@ -184,6 +282,9 @@ begin
    where e.legajo = p_solicitante_legajo and e.estado_legajo = 'NOMINA ACTIVA';
   if v_nombre is null then raise exception 'Elegí quién lo solicita'; end if;
   if length(trim(coalesce(p_descripcion, ''))) < 3 then raise exception 'Contá qué pasa'; end if;
+  if not exists (select 1 from public.requerimientos_rubros where nombre = upper(p_rubro) and activo) then
+    raise exception 'Elegí un rubro de la lista';
+  end if;
 
   insert into public.requerimientos (local, rubro, prioridad, solicitante_legajo, solicitante_nombre, descripcion, fotos, cargado_email,
                                      estado, resuelto_at, resuelto_por, resuelto_comentario)
@@ -217,7 +318,7 @@ begin
      set estado = case when estado = 'en_curso' then 'en_curso' else 'programado' end,
          programado_para = p_cuando, asignados_legajos = v_legajos, asignados_nombres = v_nombres,
          programado_nota = nullif(trim(coalesce(p_nota, '')), ''), programado_por = private.req_quien(),
-         programado_at = now(), updated_at = now()
+         programado_at = now(), push_local_at = null, updated_at = now()
    where id = p_id and estado in ('pendiente', 'programado', 'en_curso');
   if not found then raise exception 'Ese requerimiento ya no se puede programar'; end if;
 end $$;

@@ -49,6 +49,7 @@ import Cumpleanios from '@/pages/Cumpleanios'
 import FeriadosRrhh from '@/pages/FeriadosRrhh'
 import RequerimientoNuevo from '@/pages/RequerimientoNuevo'
 import RequerimientosBandeja from '@/pages/RequerimientosBandeja'
+import RequerimientosRubros from '@/pages/RequerimientosRubros'
 import TareasMantenimiento from '@/pages/TareasMantenimiento'
 import ProveedoresPacho from '@/pages/ProveedoresPacho'
 import GuiaPacho from '@/pages/GuiaPacho'
@@ -616,6 +617,14 @@ export default function App() {
             element={
               <PermissionRoute permiso="requerimientos.gestionar">
                 <RequerimientosBandeja />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/arquitectura/requerimientos/rubros"
+            element={
+              <PermissionRoute permiso="requerimientos.rubros">
+                <RequerimientosRubros />
               </PermissionRoute>
             }
           />

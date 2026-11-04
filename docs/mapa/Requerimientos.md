@@ -17,7 +17,17 @@ Estados: `pendiente → programado → en_curso → a_confirmar → resuelto` (o
 - Permisos: `requerimientos.cargar` (rol `locales`, `arquitecto`), `requerimientos.gestionar` (rol `arquitecto`), `requerimientos.tareas` (rol nuevo `mantenimiento`, con `area_mantenimiento.view`; lo tiene `mantenimiento.mito@gmail.com`).
 - Importados los 1.941 pedidos de la planilla (`origen = 'planilla'`): 1.823 resueltos, 118 pendientes; 110 filas venían dañadas; 573 resueltos sin fecha de ejecución (no muestran días).
 
+## Avisos al local (04/11/2026)
+- Al programar, la bandeja llama `avisarRequerimiento(id)` → `/api/push?tipo=requerimiento` (permiso `requerimientos.gestionar`): push a las cuentas del local (`usuarios.local`) con rubro, día y hora (zona Córdoba), N°, tarea, quién va y la nota. Una vez por programación: `push_local_at` (se limpia al reprogramar).
+- Los locales pueden anotar el celular: `push_suscribir` acepta `requerimientos.cargar` / `.tareas` (definición en `sql/avisos_deposito_indo.sql`). Cartel «Activar avisos» arriba del formulario.
+- Campana del local (`CampanaNotificaciones.tsx`, grupo «Locales · Arreglos»): los programados/en curso con día y hora, y los «a confirmar».
+
+## Rubros editables (04/11/2026)
+- Tabla `requerimientos_rubros` (nombre, ícono, color, orden, activo); pantalla `RequerimientosRubros.tsx` (`/arquitectura/requerimientos/rubros`), permiso `requerimientos.rubros` (rol `arquitecto`).
+- RPC `requerimiento_rubro_guardar` (renombrar actualiza los pedidos) y `requerimiento_rubro_borrar` (si tiene pedidos lo oculta, `activo = false`; si no, lo borra). `requerimiento_crear` valida contra los activos.
+- Front: `useRubros()` en `src/lib/requerimientos.ts`; íconos elegibles en `ICONOS_RUBRO`.
+
 ## Pendiente
-- Push al celular de mantenimiento cuando le programan una tarea, y al local cuando le asignan día/horario.
+- Push al celular de mantenimiento cuando le programan una tarea.
 
 Ver [[Permisos y usuarios]], [[Arquitectura]].

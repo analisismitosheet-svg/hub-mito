@@ -5,8 +5,9 @@ import BackButton from '@/components/BackButton'
 import { FotosVer } from '@/components/FotosRequerimiento'
 import { supabase } from '@/lib/supabase'
 import { suscribirCambios } from '@/lib/realtime'
+import { avisarRequerimiento } from '@/lib/push'
 import {
-  RUBROS, PRIORIDADES, ESTADOS, CAMPOS_REQ, rubroDef, prioridadDef, fechaCorta, fechaHora, diasAbierto, quienesVan,
+  useRubros, PRIORIDADES, ESTADOS, CAMPOS_REQ, prioridadDef, fechaCorta, fechaHora, diasAbierto, quienesVan,
   type EstadoReq, type Persona, type Requerimiento,
 } from '@/lib/requerimientos'
 
@@ -32,6 +33,7 @@ const TOPE_CERRADOS = 300
 const hoyIso = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)
 
 export default function RequerimientosBandeja() {
+  const { todos: RUBROS, rubroDef } = useRubros()
   const [pestana, setPestana] = useState<Pestana>('pendiente')
   const [orden, setOrden] = useState<'desc' | 'asc'>('desc')
   const [abiertos, setAbiertos] = useState<Requerimiento[]>([])
@@ -124,6 +126,8 @@ export default function RequerimientosBandeja() {
       : await supabase.rpc('requerimiento_descartar', { p_id: panel.id, p_motivo: nota })
     setGuardando(false)
     if (err) { setError(err.message); return }
+    // Al local le llega al celular qué arreglo es, el día, el horario y quién va
+    if (panel.tipo === 'programar') void avisarRequerimiento(panel.id)
     setPanel(null)
     void cargar()
   }

@@ -7,6 +7,8 @@
  *   POST /api/push?tipo=faltantes { armado_id } -> avisa los faltantes de un armado cerrado
  *   POST /api/push?tipo=transferencia { lote_id } -> avisa a los legajos de la ubicación (Depósito Indo)
  *                                                    que el lote tiene renglones para ellos
+ *   POST /api/push?tipo=requerimiento { id }       -> avisa al local qué arreglo le programaron, el día,
+ *                                                    el horario y quién va (sql/requerimientos.sql)
  *
  * Antes eran tres funciones (push-armado / push-pausa / push-faltantes); se unificaron
  * para no pasar el tope de 12 Serverless Functions del plan Hobby de Vercel. El cliente
@@ -423,6 +425,69 @@ async function avisarTransferencia(req: Req, res: Res, token: string) {
   return res.status(200).json({ enviados, receptores: uids.length, suscripciones: subs.length, vencidas })
 }
 
+interface Requerimiento {
+  id: number
+  local: string | null
+  rubro: string
+  descripcion: string
+  programado_para: string | null
+  asignados_nombres: string[] | null
+  programado_nota: string | null
+}
+
+/** Requerimiento programado: al local que lo pidió, con la tarea, el día y el horario. */
+async function avisarRequerimiento(req: Req, res: Res, token: string) {
+  let id = ''
+  try {
+    id = String(JSON.parse(req.body ?? '{}').id ?? '')
+  } catch {
+    id = ''
+  }
+  // Va pegado en filtros de PostgREST con service role: solo un número
+  if (!/^\d{1,12}$/.test(id)) return res.status(400).json({ error: 'id inválido' })
+  // Lo dispara Arquitectura al programar desde la bandeja
+  if (!(await autorizado(token, ['requerimientos.gestionar']))) {
+    return res.status(403).json({ error: 'No autorizado' })
+  }
+
+  // Un aviso por programación: se reclama antes de mandar (requerimiento_programar limpia push_local_at)
+  const rR = await rest(
+    `requerimientos?id=eq.${id}&push_local_at=is.null&estado=in.(programado,en_curso)` +
+      `&select=id,local,rubro,descripcion,programado_para,asignados_nombres,programado_nota`,
+    { method: 'PATCH', body: JSON.stringify({ push_local_at: new Date().toISOString() }), headers: { Prefer: 'return=representation' } },
+  )
+  if (!rR.ok) return res.status(502).json({ error: `No se pudo leer el requerimiento (${rR.status})` })
+  const r = ((await rR.json()) as Requerimiento[])[0]
+  if (!r || !r.local || !r.programado_para) return res.status(200).json({ enviados: 0, yaAvisado: true })
+
+  // Las cuentas del local (usuarios.local); el código no lleva comillas ni comas
+  const local = r.local.replace(/[^A-Za-z0-9_-]/g, '')
+  const rU = await rest(`usuarios?select=id&local=eq.${local}`)
+  if (!rU.ok) return res.status(502).json({ error: `No se pudieron leer los usuarios del local (${rU.status})` })
+  const uids = ((await rU.json()) as { id: string }[]).map((u) => u.id)
+  if (!uids.length) return res.status(200).json({ enviados: 0, receptores: 0 })
+
+  const rS = await rest(`push_suscripciones?select=endpoint,usuario_id,p256dh,auth&usuario_id=in.(${uids.join(',')})`)
+  if (!rS.ok) return res.status(502).json({ error: `No se pudieron leer las suscripciones (${rS.status})` })
+  const subs = (await rS.json()) as Suscripcion[]
+  if (!subs.length) return res.status(200).json({ enviados: 0, receptores: uids.length, suscripciones: 0 })
+
+  const cuando = new Date(r.programado_para).toLocaleString('es-AR', {
+    timeZone: 'America/Argentina/Cordoba', weekday: 'long', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+  })
+  const nombres = (r.asignados_nombres ?? []).filter(Boolean)
+  const quien = nombres.length ? ` · Va ${nombres.join(' y ')}` : ''
+  const tarea = r.descripcion.length > 90 ? `${r.descripcion.slice(0, 87)}…` : r.descripcion
+  const payload = JSON.stringify({
+    title: `🔧 ${r.rubro}: arreglo programado para el ${cuando}`,
+    body: `N° ${r.id} · ${tarea}${quien}${r.programado_nota ? ` · ${r.programado_nota}` : ''}`,
+    url: '/arquitectura/requerimientos/nuevo',
+    urgente: false,
+  })
+  const { enviados, vencidas } = await entregar(payload, subs)
+  return res.status(200).json({ enviados, receptores: uids.length, suscripciones: subs.length, vencidas })
+}
+
 /** Corta la lista de artículos que faltan para el texto del aviso. */
 function resumir(faltantes: Faltante[]): string {
   if (faltantes.length === 0) return ''
@@ -458,5 +523,6 @@ export default async function handler(req: Req, res: Res) {
   if (tipo === 'pausa') return avisarPausa(req, res, uid)
   if (tipo === 'faltantes') return avisarFaltantes(req, res, token)
   if (tipo === 'transferencia') return avisarTransferencia(req, res, token)
+  if (tipo === 'requerimiento') return avisarRequerimiento(req, res, token)
   return avisarArmado(req, res, uid)
 }

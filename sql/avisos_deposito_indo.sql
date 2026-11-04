@@ -103,6 +103,9 @@ BEGIN
   IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Sin sesión'; END IF;
   IF NOT (private.tengo_permiso('mayorista.repos_piso')
           OR private.recibe_avisos_indo(auth.uid())
+          -- Requerimientos (sql/requerimientos.sql): el local recibe el día y horario del arreglo
+          OR private.tengo_permiso('requerimientos.cargar')
+          OR private.tengo_permiso('requerimientos.tareas')
           OR coalesce((SELECT u.email FROM public.usuarios u WHERE u.id = auth.uid()), '') ILIKE '%@empleados.hub-mito.app') THEN
     RAISE EXCEPTION 'Sin permiso para recibir avisos';
   END IF;

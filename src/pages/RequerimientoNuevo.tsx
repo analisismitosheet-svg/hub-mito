@@ -3,12 +3,13 @@ import { ClipboardList, Loader2, Send, CalendarClock, CircleCheck, ThumbsUp, Thu
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import SelectorEmpleado from '@/components/SelectorEmpleado'
+import AvisosCelular from '@/components/AvisosCelular'
 import { FotosElegir, FotosVer } from '@/components/FotosRequerimiento'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { suscribirCambios } from '@/lib/realtime'
 import {
-  RUBROS, PRIORIDADES, ESTADOS, CAMPOS_REQ, rubroDef, prioridadDef, subirFotos, fechaCorta, fechaHora, quienesVan,
+  useRubros, PRIORIDADES, ESTADOS, CAMPOS_REQ, prioridadDef, subirFotos, fechaCorta, fechaHora, quienesVan,
   type Persona, type Prioridad, type Requerimiento,
 } from '@/lib/requerimientos'
 
@@ -45,6 +46,7 @@ const SECTORES_DEL_LOCAL: Record<string, string[]> = {
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '')
 
 export default function RequerimientoNuevo() {
+  const { rubros: RUBROS, rubroDef } = useRubros()
   const { perfil } = useAuth()
   const local = perfil?.local ?? ''
   const [locales, setLocales] = useState<{ codigo: string; nombre: string }[]>([])
@@ -157,6 +159,8 @@ export default function RequerimientoNuevo() {
         </h1>
         <p className="mt-1 text-sm text-sub">Contale a Arquitectura qué hay que arreglar en el local. Te avisamos el día y horario en que va mantenimiento.</p>
       </header>
+
+      <AvisosCelular texto="Activá los avisos para que te llegue al celular qué día y a qué hora va mantenimiento." />
 
       {listo != null && (
         <p role="status" className="mb-4 flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-500">

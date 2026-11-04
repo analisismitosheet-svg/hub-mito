@@ -55,6 +55,7 @@ import {
   type LucideIcon,
   CalendarOff,
   Inbox,
+  Tags,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
@@ -840,6 +841,17 @@ export const APPS: AppDef[] = [
     target: '/arquitectura/requerimientos/bandeja',
     color: '#0284c7',
     permiso: 'requerimientos.gestionar',
+  },
+  {
+    id: 'requerimientos-rubros',
+    areaId: 'arquitectura-requerimientos',
+    title: 'Rubros',
+    description: 'Crear, editar y borrar los rubros del formulario.',
+    icon: Tags,
+    kind: 'internal',
+    target: '/arquitectura/requerimientos/rubros',
+    color: '#c026d3',
+    permiso: 'requerimientos.rubros',
   },
   {
     id: 'mantenimiento-tareas',

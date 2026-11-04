@@ -37,6 +37,7 @@ import {
   CalendarOff,
   Inbox,
   Wrench,
+  Tags,
 } from 'lucide-react'
 
 /**
@@ -303,6 +304,10 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
   {
     id: 'requerimientos-bandeja', areaId: 'arquitectura', titulo: 'Bandeja de requerimientos', descripcion: 'Programar día, horario y quién va; cerrar o descartar',
     icon: Inbox, color: '#0284c7', acciones: { ver: 'requerimientos.gestionar' }, etiquetas: { ver: 'Gestionar' },
+  },
+  {
+    id: 'requerimientos-rubros', areaId: 'arquitectura', titulo: 'Rubros de requerimientos', descripcion: 'Crear, editar y borrar rubros',
+    icon: Tags, color: '#c026d3', acciones: { editar: 'requerimientos.rubros' }, etiquetas: { editar: 'Crear, editar y borrar' },
   },
   {
     id: 'mantenimiento-tareas', areaId: 'mantenimiento', titulo: 'Mis tareas', descripcion: 'Tareas programadas: empezar y terminar',
