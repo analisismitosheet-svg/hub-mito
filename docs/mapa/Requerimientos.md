@@ -28,6 +28,10 @@ Estados: `pendiente → programado → en_curso → a_confirmar → resuelto` (o
 - RPC `requerimiento_rubro_guardar` (renombrar actualiza los pedidos) y `requerimiento_rubro_borrar` (si tiene pedidos lo oculta, `activo = false`; si no, lo borra). `requerimiento_crear` valida contra los activos.
 - Front: `useRubros()` en `src/lib/requerimientos.ts`; íconos elegibles en `ICONOS_RUBRO`.
 
+## Manual de uso (04/11/2026)
+- Tarjeta **Manual de uso** en el área Arquitectura (`/arquitectura/manual`, `ManualRequerimientos.tsx`, permiso `requerimientos.gestionar`): recorrido de estados clickeable, 9 pasos con captura (`?paso=N`, flechas del teclado) y preguntas rápidas.
+- Capturas en `public/manual/requerimientos/*.webp` (800×552, sacadas de la vista previa con pedidos «EJEMPLO DEL MANUAL» N° 1946-1947, ya cerrados y sin local). WebP a propósito: el precache del SW solo toma png/svg, así no lo baja todo el mundo. Si cambian las pantallas, rehacer las capturas.
+
 ## Pendiente
 - Push al celular de mantenimiento cuando le programan una tarea.
 

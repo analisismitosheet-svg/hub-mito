@@ -820,6 +820,17 @@ export const APPS: AppDef[] = [
     target: '/arquitectura/reportes',
     color: '#0891b2',
   },
+  {
+    id: 'arquitectura-manual',
+    areaId: 'arquitectura',
+    title: 'Manual de uso',
+    description: 'Paso a paso con capturas: cómo programar, cerrar y manejar los requerimientos.',
+    icon: BookOpen,
+    kind: 'internal',
+    target: '/arquitectura/manual',
+    color: '#f59e0b',
+    permiso: 'requerimientos.gestionar',
+  },
   // ===== Arquitectura: carpeta Requerimientos (pedidos de arreglos de los locales) =====
   {
     id: 'arquitectura-requerimientos',
