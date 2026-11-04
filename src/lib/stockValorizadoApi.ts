@@ -3,7 +3,10 @@
  *
  *   GET /api/sql/stock-valorizado[?forzar=1]
  *     -> { servidor, bases: [...], articulos: [...], sin_costo: [...],
- *          sin_costo_detalle: [...], costo, calculado, cacheado }
+ *          sin_costo_detalle: [...], cruce: [...], clasificaciones: [...],
+ *          costo, calculado, cacheado }
+ *   GET /api/sql/stock-valorizado?base=DRAGONFISH_X
+ *     -> { base, articulos: [...], calculado }  (el desplegable de una sucursal)
  *
  * No sale de una vista: es una acción propia del Puente SQL
  * (`POST / {accion:'stock_valorizado'}` → puente-sql/sql/stock-valorizado.sql),
@@ -161,11 +164,19 @@ export default async function handler(req: Req, res: Res) {
 
   const forzar = /^(1|true|si|sí)$/i.test(primero(req.query.forzar))
 
+  /* Con ?base= se piden los artículos de ESA sucursal (el desplegable de la
+     tabla por sucursal). Sale del cache del puente, de la misma corrida que la
+     fila que se abre; no es otra consulta al SQL. Va por acá y no por una ruta
+     propia para no gastar una de las 12 Serverless Functions del plan Hobby. */
+  const base = primero(req.query.base).trim()
+
   const r0 = await postAlPuente(
     destino,
     {
       headers: { 'Content-Type': 'application/json', 'X-Puente-Token': tokenPuente },
-      body: JSON.stringify({ accion: 'stock_valorizado', forzar }),
+      body: base
+        ? JSON.stringify({ accion: 'stock_valorizado_base', base })
+        : JSON.stringify({ accion: 'stock_valorizado', forzar }),
     },
     // La consulta recorre ~40 bases: con el cache frío tarda unos 12 s.
     { timeoutMs: 55_000, intentos: 2 },
@@ -188,6 +199,12 @@ export default async function handler(req: Req, res: Res) {
       detalle += ' — Puente SQL desactualizado: actualizá puente-sql (acción "stock_valorizado").'
     }
     return res.status(502).json({ error: `Puente SQL: ${detalle}` })
+  }
+
+  if (base) {
+    const d = (cuerpo ?? {}) as { base?: string; articulos?: unknown; calculado?: string | null }
+    if (!Array.isArray(d.articulos)) return res.status(502).json({ error: 'Respuesta inesperada del Puente SQL' })
+    return res.status(200).json({ base: d.base ?? base, articulos: d.articulos, calculado: d.calculado ?? null })
   }
 
   const datos = (cuerpo ?? {}) as Partial<StockValorizado>

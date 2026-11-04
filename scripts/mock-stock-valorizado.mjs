@@ -31,20 +31,25 @@ function tokenPuente() {
   return ''
 }
 
-async function traer(token, forzar) {
+/** Con `base` pide los artículos de esa sucursal (el desplegable de la tabla). */
+async function traer(token, forzar, base) {
   let res
   try {
     res = await fetch(PUENTE, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Puente-Token': token },
-      body: JSON.stringify({ accion: 'stock_valorizado', forzar }),
+      body: base
+        ? JSON.stringify({ accion: 'stock_valorizado_base', base })
+        : JSON.stringify({ accion: 'stock_valorizado', forzar }),
     })
   } catch {
     throw new Error(`No se pudo contactar el Puente SQL (${PUENTE})`)
   }
   const cuerpo = await res.json().catch(() => null)
   if (!res.ok) throw new Error(`Puente SQL: ${cuerpo?.error ?? res.status}`)
-  if (!Array.isArray(cuerpo?.bases)) throw new Error('Respuesta inesperada del Puente SQL')
+  if (base ? !Array.isArray(cuerpo?.articulos) : !Array.isArray(cuerpo?.bases)) {
+    throw new Error('Respuesta inesperada del Puente SQL')
+  }
   return cuerpo
 }
 
@@ -65,7 +70,8 @@ const servidor = http.createServer(async (req, res) => {
   }
   try {
     const forzar = /[?&]forzar=1/.test(req.url ?? '')
-    res.writeHead(200).end(JSON.stringify(await traer(token, forzar)))
+    const base = decodeURIComponent((req.url ?? '').match(/[?&]base=([^&]*)/)?.[1] ?? '')
+    res.writeHead(200).end(JSON.stringify(await traer(token, forzar, base)))
   } catch (e) {
     res.writeHead(502).end(JSON.stringify({ error: e.message }))
   }

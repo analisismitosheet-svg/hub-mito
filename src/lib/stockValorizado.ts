@@ -127,6 +127,37 @@ export async function cargarStockValorizado(forzar = false): Promise<StockValori
   }
 }
 
+/** Un artículo dentro de una sucursal (lo que despliega cada fila de la tabla). */
+export interface ArticuloDeBase {
+  articulo: string
+  unidades: number
+  valorizado: number
+  costo: number | null
+  transito: number
+}
+
+/**
+ * Los artículos de UNA sucursal, para el desplegable de la tabla por sucursal.
+ *
+ * No viajan con el resto: son 50.000 filas (5,6 MB) y la respuesta se iba a
+ * 8,4 MB, muy arriba del tope de ~4,5 MB de Vercel. El puente las guarda de la
+ * corrida completa y devuelve solo la base que se abre, así que es instantáneo
+ * y es la misma foto que la fila que se está abriendo.
+ */
+export async function cargarArticulosDeBase(base: string): Promise<ArticuloDeBase[]> {
+  if (!supabase) throw new Error('Supabase no está configurado.')
+  const { data } = await supabase.auth.getSession()
+  const token = data.session?.access_token
+  if (!token) throw new Error('Sin sesión activa.')
+
+  const res = await fetch(`/api/sql/stock-valorizado?base=${encodeURIComponent(base)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const body = (await res.json().catch(() => null)) as { articulos?: ArticuloDeBase[]; error?: string } | null
+  if (!res.ok || !body) throw new Error(body?.error ?? `Error ${res.status} buscando los artículos de la sucursal`)
+  return body.articulos ?? []
+}
+
 /**
  * Nombres de las bases que aparecen acá y no están en la tabla de `replicas.ts`
  * (esa usa los códigos del Replicador, que no siempre son el nombre de la base:

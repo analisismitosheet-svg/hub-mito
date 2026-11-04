@@ -420,3 +420,16 @@ SELECT n.tipo, n.codigo, n.nombre
  WHERE (n.tipo = 'prov' AND EXISTS (SELECT 1 FROM #art a JOIN #clas c ON c.art = a.art WHERE c.prov = n.codigo))
     OR (n.tipo = 'mat'  AND EXISTS (SELECT 1 FROM #art a JOIN #clas c ON c.art = a.art WHERE c.mat  = n.codigo))
  ORDER BY n.tipo, n.nombre;
+
+/* Artículo por artículo DENTRO de cada base: es lo que se despliega al abrir una
+   fila de la tabla por sucursal. No repite descripción, proveedor ni material
+   (eso ya viaja una vez en el listado por artículo): solo la base, el código y
+   los números, que es lo que cambia de una sucursal a otra. */
+SELECT a.base,
+       a.art AS articulo,
+       a.unidades,
+       a.valorizado,
+       a.costo,
+       a.transito
+  FROM #art a
+ ORDER BY a.base, a.valorizado DESC, a.unidades DESC;

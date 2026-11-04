@@ -561,7 +561,14 @@ async function conexionLarga() {
   return pool.connect()
 }
 
-let cacheStockValorizado = { en: 0, datos: null }
+/**
+ * `datos` es lo que viaja al hub; `porBase` es el artículo por artículo dentro
+ * de cada base, que se calcula en la misma corrida pero NO se manda: son 50.000
+ * filas (5,6 MB) y la respuesta se iba a 8,4 MB, muy arriba del tope de ~4,5 MB
+ * de Vercel. Queda acá y la pantalla pide la base que abre
+ * (`accion: 'stock_valorizado_base'`), que sale del cache sin tocar el SQL.
+ */
+let cacheStockValorizado = { en: 0, datos: null, porBase: null }
 let stockValorizadoEnCurso = null
 
 async function stockValorizado(forzar) {
@@ -587,8 +594,16 @@ async function stockValorizado(forzar) {
     } finally {
       await pool.close().catch(() => {})
     }
-    const [bases = [], articulos = [], costo = [], sinCosto = [], sinCostoDetalle = [], cruce = [], nombresClas = []] =
-      r.recordsets ?? []
+    const [
+      bases = [],
+      articulos = [],
+      costo = [],
+      sinCosto = [],
+      sinCostoDetalle = [],
+      cruce = [],
+      nombresClas = [],
+      artPorBase = [],
+    ] = r.recordsets ?? []
 
     const datos = {
       servidor: ALIAS_PRINCIPAL,
@@ -659,7 +674,26 @@ async function stockValorizado(forzar) {
       calculado: new Date().toISOString(),
       segundos: Math.round((Date.now() - t0) / 100) / 10,
     }
-    cacheStockValorizado = { en: Date.now(), datos }
+    /* El detalle por base se agrupa una vez acá y queda a mano para
+       `stock_valorizado_base`: así abrir una sucursal es instantáneo y sale
+       siempre de la misma corrida que la fila que se está abriendo (los
+       números no pueden discrepar). */
+    const porBase = new Map()
+    for (const f of artPorBase) {
+      const base = String(f.base ?? '')
+      const fila = {
+        articulo: String(f.articulo ?? '').trim(),
+        unidades: Number(f.unidades) || 0,
+        valorizado: Number(f.valorizado) || 0,
+        costo: f.costo == null ? null : Number(f.costo),
+        transito: Number(f.transito) || 0,
+      }
+      const lista = porBase.get(base)
+      if (lista) lista.push(fila)
+      else porBase.set(base, [fila])
+    }
+
+    cacheStockValorizado = { en: Date.now(), datos, porBase }
     return { ...datos, cacheado: false }
   })().finally(() => {
     stockValorizadoEnCurso = null
@@ -673,6 +707,24 @@ async function stockValorizado(forzar) {
   }
 
   return stockValorizadoEnCurso
+}
+
+/**
+ * Los artículos de UNA base, para el desplegable de la tabla por sucursal.
+ * Sale del cache de la corrida completa: no vuelve a tocar el SQL y es la misma
+ * foto que la fila que se está abriendo. Si todavía no hay cache (el puente
+ * recién arrancó), calcula primero.
+ */
+async function stockValorizadoDeBase(base) {
+  const pedida = String(base ?? '').trim()
+  if (!pedida) throw new Error('Falta la base')
+  if (!cacheStockValorizado.porBase) await stockValorizado(false)
+  const porBase = cacheStockValorizado.porBase
+  return {
+    base: pedida,
+    articulos: porBase?.get(pedida) ?? [],
+    calculado: cacheStockValorizado.datos?.calculado ?? null,
+  }
 }
 
 
@@ -778,6 +830,11 @@ const server = http.createServer(async (req, res) => {
     // Stock valorizado a costo por sucursal (Administradores > Stock valorizado)
     if (body?.accion === 'stock_valorizado') {
       return enviar(res, 200, await stockValorizado(body?.forzar === true))
+    }
+
+    // Los artículos de una sola base (el desplegable de la tabla por sucursal)
+    if (body?.accion === 'stock_valorizado_base') {
+      return enviar(res, 200, await stockValorizadoDeBase(body?.base))
     }
 
     vista = String(body?.vista ?? '')

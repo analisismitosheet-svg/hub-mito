@@ -6,6 +6,7 @@ import MultiselectFiltro, { type OpcionMulti } from '@/components/MultiselectFil
 import { coloresUnicos } from '@/lib/coloresUnicos'
 import {
   basesDesdeCruce,
+  cargarArticulosDeBase,
   cargarStockValorizado,
   costoUnitario,
   nombreBase,
@@ -13,6 +14,7 @@ import {
   pesos,
   pesosCorto,
   totalDe,
+  type ArticuloDeBase,
   type StockValorizado as Datos,
 } from '@/lib/stockValorizado'
 
@@ -43,17 +45,26 @@ export default function StockValorizado() {
   const [solapa, setSolapa] = useState<'sucursal' | 'articulo'>('sucursal')
   /** Artículos sin costo con el detalle por sucursal desplegado. */
   const [abiertos, setAbiertos] = useState<string[]>([])
-  /** Bases con el listado de artículos sin costo desplegado en la tabla Por sucursal. */
-  const [basesAbiertas, setBasesAbiertas] = useState<string[]>([])
   /** Filtros de proveedor y material (vacío = todos), al estilo de los de Excel. */
   const [provSel, setProvSel] = useState<Set<string>>(new Set())
   const [matSel, setMatSel] = useState<Set<string>>(new Set())
+  /* Sucursal con los artículos desplegados (de a una). `soloSinCosto` es la
+     misma lista acotada a los que valen $0: es por dónde se entra al apretar la
+     columna ámbar, en vez de abrir un segundo panel distinto. */
+  const [baseAbierta, setBaseAbierta] = useState<string | null>(null)
+  const [soloSinCosto, setSoloSinCosto] = useState(false)
+  const [artsDeBase, setArtsDeBase] = useState<Record<string, ArticuloDeBase[]>>({})
+  const [cargandoBase, setCargandoBase] = useState<string | null>(null)
+  const [errorBase, setErrorBase] = useState<string | null>(null)
 
   const cargar = useCallback(async (forzar = false) => {
     setCargando(true)
     try {
       setDatos(await cargarStockValorizado(forzar))
       setError(null)
+      // Los desplegables que estaban abiertos quedarían con la foto vieja
+      setArtsDeBase({})
+      setBaseAbierta(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -197,11 +208,67 @@ export default function StockValorizado() {
     [articulosVisibles],
   )
 
+  /* Desplegable de la tabla por sucursal: los artículos de esa base. No vienen
+     con el resto (son 50.000 filas en total, 5,6 MB) sino que se piden al abrir
+     la fila; el puente los tiene del mismo cálculo, así que es instantáneo. */
+  const infoArticulo = useMemo(() => new Map(articulos.map((a) => [a.articulo, a])), [articulos])
+
+  const abrirBase = useCallback(
+    async (base: string, soloSin = false) => {
+      setErrorBase(null)
+      // Misma base y mismo modo: se cierra. Si cambia el modo, se queda abierta.
+      if (baseAbierta === base && soloSinCosto === soloSin) {
+        setBaseAbierta(null)
+        return
+      }
+      setBaseAbierta(base)
+      setSoloSinCosto(soloSin)
+      if (artsDeBase[base]) return
+      setCargandoBase(base)
+      try {
+        const filas = await cargarArticulosDeBase(base)
+        setArtsDeBase((d) => ({ ...d, [base]: filas }))
+      } catch (e) {
+        setErrorBase(e instanceof Error ? e.message : String(e))
+      } finally {
+        setCargandoBase(null)
+      }
+    },
+    [baseAbierta, soloSinCosto, artsDeBase],
+  )
+
+  /** Lo desplegado, con los mismos filtros que el resto de la pantalla. */
+  const detalleVisible = useMemo(() => {
+    if (!baseAbierta) return []
+    let filas = artsDeBase[baseAbierta] ?? []
+    if (soloSinCosto) filas = filas.filter((f) => f.costo == null)
+    if (!filtrando) return filas
+    return filas.filter((f) => {
+      const a = infoArticulo.get(f.articulo)
+      return a ? pasaFiltro(a) : false
+    })
+  }, [baseAbierta, artsDeBase, soloSinCosto, filtrando, pasaFiltro, infoArticulo])
+
+  /* Respaldo para un puente sin reiniciar, que todavía no conoce la acción de
+     traer una base: ahí se muestran los sin costo, que sí vienen con el resto
+     (es lo que hacía la pantalla antes de este desplegable). */
+  const detalleRespaldo = useMemo(
+    () => (baseAbierta && errorBase ? (sinCostoPorBase.get(baseAbierta) ?? []) : []),
+    [baseAbierta, errorBase, sinCostoPorBase],
+  )
+
+  const totalDetalle = useMemo(
+    () =>
+      detalleVisible.reduce(
+        (t, f) => ({ unidades: t.unidades + f.unidades, valorizado: t.valorizado + f.valorizado }),
+        { unidades: 0, valorizado: 0 },
+      ),
+    [detalleVisible],
+  )
+
   const hayDetalle = (datos?.sin_costo_detalle ?? []).length > 0
   const alternar = (articulo: string) =>
     setAbiertos((a) => (a.includes(articulo) ? a.filter((x) => x !== articulo) : [...a, articulo]))
-  const alternarBase = (base: string) =>
-    setBasesAbiertas((a) => (a.includes(base) ? a.filter((x) => x !== base) : [...a, base]))
 
   // Íconos de las tarjetas: sin tonos repetidos en la pantalla
   const [cEmerald, cBlue, cViolet, cAmber] = coloresUnicos(['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b'])
@@ -301,6 +368,37 @@ export default function StockValorizado() {
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detalle), 'Sin costo x sucursal')
     }
     return sinCosto.length
+  }
+
+  /**
+   * Los artículos de la sucursal abierta, en su propio archivo. Va aparte del
+   * Excel general a propósito: ese tendría que pedir las 26 bases (50.000 filas)
+   * y el desplegable es justamente para mirar una.
+   */
+  async function exportarBase() {
+    if (!baseAbierta || detalleVisible.length === 0) return
+    const XLSX = await import('xlsx')
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.json_to_sheet(
+        detalleVisible.map((f) => {
+          const a = infoArticulo.get(f.articulo)
+          return {
+            Artículo: f.articulo,
+            Descripción: a?.descripcion ?? '',
+            ...(hayFiltros ? { Proveedor: nombreProv(a?.proveedor), Material: nombreMat(a?.material) } : {}),
+            Stock: f.unidades,
+            'Precio costo': f.costo ?? '',
+            'Total valorizado': Math.round(f.valorizado),
+            ...(hayTransito ? { 'En tránsito': f.transito } : {}),
+          }
+        }),
+      ),
+      'Artículos',
+    )
+    const nombre = nombreBase(baseAbierta).toLowerCase().replace(/[^a-z0-9]+/g, '_')
+    XLSX.writeFile(wb, `stock_${nombre}_${new Date().toISOString().slice(0, 10)}.xlsx`)
   }
 
   /** Solo los artículos sin costo, en su propio archivo. */
@@ -517,41 +615,26 @@ export default function StockValorizado() {
                 <tbody>
                   {visibles.map((b) => {
                     const parte = total.valorizado > 0 ? (b.valorizado / total.valorizado) * 100 : 0
-                    const detalleBase = sinCostoPorBase.get(b.base) ?? []
-                    const puedeAbrir = b.unidades_sin_costo > 0 && detalleBase.length > 0
-                    const abierta = puedeAbrir && basesAbiertas.includes(b.base)
+                    const abierta = baseAbierta === b.base
                     return (
                       <Fragment key={b.base}>
                         <tr
-                          onClick={puedeAbrir ? () => alternarBase(b.base) : undefined}
-                          className={`border-b border-line/60 last:border-0 ${puedeAbrir ? 'cursor-pointer hover:bg-surface2/40' : ''}`}
+                          onClick={() => void abrirBase(b.base)}
+                          className={`cursor-pointer border-b border-line/60 transition last:border-0 hover:bg-surface2/40 ${
+                            abierta ? 'bg-surface2/40' : ''
+                          }`}
                         >
                           <td className="px-3 py-2">
-                            {puedeAbrir ? (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  alternarBase(b.base)
-                                }}
-                                aria-expanded={abierta}
-                                className="inline-flex items-center gap-1.5 text-left"
-                              >
-                                <ChevronDown
-                                  size={14}
-                                  style={{ color: cAmber }}
-                                  className={`shrink-0 transition ${abierta ? '' : '-rotate-90'}`}
-                                  aria-hidden
-                                />
-                                <span className="font-medium text-ink">{nombreBase(b.base)}</span>
-                                <span className="ml-1 font-mono text-[11px] text-sub/70">{b.base}</span>
-                              </button>
-                            ) : (
-                              <>
-                                <span className={`${hayDetalle ? 'pl-5 ' : ''}font-medium text-ink`}>{nombreBase(b.base)}</span>
-                                <span className="ml-2 font-mono text-[11px] text-sub/70">{b.base}</span>
-                              </>
-                            )}
+                            <span className="inline-flex items-center gap-1.5">
+                              <ChevronDown
+                                size={14}
+                                style={{ color: cViolet }}
+                                className={`shrink-0 transition ${abierta && !soloSinCosto ? '' : '-rotate-90'}`}
+                                aria-hidden
+                              />
+                              <span className="font-medium text-ink">{nombreBase(b.base)}</span>
+                              <span className="ml-1 font-mono text-[11px] text-sub/70">{b.base}</span>
+                            </span>
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums text-ink">{numero(b.unidades)}</td>
                           {hayTransito && (
@@ -569,60 +652,138 @@ export default function StockValorizado() {
                               <span className="tabular-nums text-xs text-sub">{parte.toFixed(1)} %</span>
                             </div>
                           </td>
+                          {/* La misma lista, acotada a los que valen $0 */}
                           <td className="px-3 py-2 text-right tabular-nums text-xs text-amber-500">
-                            {puedeAbrir ? (
+                            {b.unidades_sin_costo > 0 ? (
                               <button
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  alternarBase(b.base)
+                                  void abrirBase(b.base, true)
                                 }}
-                                aria-expanded={abierta}
+                                aria-expanded={abierta && soloSinCosto}
                                 className={`btn-press inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-amber-500 transition ${
-                                  abierta ? 'bg-amber-500/15 hover:bg-amber-500/20' : 'hover:bg-amber-500/10'
+                                  abierta && soloSinCosto ? 'bg-amber-500/15 hover:bg-amber-500/20' : 'hover:bg-amber-500/10'
                                 }`}
                               >
                                 <ChevronDown
                                   size={13}
-                                  className={`shrink-0 transition ${abierta ? '' : '-rotate-90'}`}
+                                  className={`shrink-0 transition ${abierta && soloSinCosto ? '' : '-rotate-90'}`}
                                   aria-hidden
                                 />
                                 {numero(b.unidades_sin_costo)}
                               </button>
-                            ) : b.unidades_sin_costo > 0 ? (
-                              numero(b.unidades_sin_costo)
                             ) : (
                               '—'
                             )}
                           </td>
                         </tr>
                         {abierta && (
-                          <tr className="border-b border-amber-500/20">
-                            <td colSpan={hayTransito ? 7 : 6} className="bg-amber-500/5 px-4 pb-3 pt-2">
-                              <div className="mb-1.5 flex items-center justify-between text-xs">
-                                <span className="font-medium text-amber-500">
-                                  Artículos con costo $0 en {nombreBase(b.base)} ({b.base}) — {numero(detalleBase.length)}{' '}
-                                  {detalleBase.length === 1 ? 'artículo' : 'artículos'} · {numero(b.unidades_sin_costo)} unidades
+                          <tr className={`border-b ${soloSinCosto ? 'border-amber-500/20' : 'border-line'}`}>
+                            <td
+                              colSpan={hayTransito ? 7 : 6}
+                              className={`px-4 pb-3 pt-2 ${soloSinCosto ? 'bg-amber-500/5' : 'bg-surface2/30'}`}
+                            >
+                              <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                                <span className={`font-medium ${soloSinCosto ? 'text-amber-500' : 'text-ink'}`}>
+                                  {soloSinCosto ? 'Artículos con costo $0 en ' : 'Artículos en '}
+                                  {nombreBase(b.base)}
                                 </span>
-                              </div>
-                              <ul className="ml-1 grid gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
-                                {detalleBase.slice(0, TOPE_TABLA).map((a) => (
-                                  <li
-                                    key={a.articulo}
-                                    className="flex items-baseline justify-between gap-3 border-b border-amber-500/10 py-1 text-xs last:border-0"
-                                  >
-                                    <span className="min-w-0 truncate" title={a.descripcion || a.articulo}>
-                                      <span className="font-mono text-ink">{a.articulo}</span>
-                                      {a.descripcion && <span className="ml-1.5 text-sub">{a.descripcion}</span>}
+                                {cargandoBase === b.base ? (
+                                  <span className="inline-flex items-center gap-1.5 text-sub">
+                                    <Loader2 size={13} className="animate-spin" aria-hidden /> buscando…
+                                  </span>
+                                ) : (
+                                  <>
+                                    <span className="text-sub">
+                                      {numero(detalleVisible.length)} {detalleVisible.length === 1 ? 'artículo' : 'artículos'}
+                                      {' · '}
+                                      {numero(totalDetalle.unidades)} u. · {pesos(totalDetalle.valorizado)}
                                     </span>
-                                    <span className="shrink-0 tabular-nums font-medium text-amber-500">{numero(a.unidades)} u.</span>
-                                  </li>
-                                ))}
-                              </ul>
-                              {detalleBase.length > TOPE_TABLA && (
-                                <p className="mt-1.5 text-[11px] text-sub/70">
-                                  Se muestran los {numero(TOPE_TABLA)} de más unidades de los {numero(detalleBase.length)} de esta base.
-                                </p>
+                                    {detalleVisible.length > 0 && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          void exportarBase()
+                                        }}
+                                        className="btn-press ml-auto inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-2 py-0.5 text-[11px] text-sub transition hover:bg-surface2 hover:text-ink"
+                                      >
+                                        <Download size={12} aria-hidden /> Excel
+                                      </button>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+
+                              {errorBase ? (
+                                <>
+                                  <p className="mb-2 text-[11px] text-amber-500">
+                                    No se pudieron traer todos los artículos de esta sucursal ({errorBase}). Mientras tanto,
+                                    estos son los que valen $0, que vienen con el resto de la pantalla.
+                                  </p>
+                                  <ul className="ml-1 grid gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
+                                    {detalleRespaldo.slice(0, TOPE_TABLA).map((a) => (
+                                      <li
+                                        key={a.articulo}
+                                        className="flex items-baseline justify-between gap-3 border-b border-amber-500/10 py-1 text-xs last:border-0"
+                                      >
+                                        <span className="min-w-0 truncate" title={a.descripcion || a.articulo}>
+                                          <span className="font-mono text-ink">{a.articulo}</span>
+                                          {a.descripcion && <span className="ml-1.5 text-sub">{a.descripcion}</span>}
+                                        </span>
+                                        <span className="shrink-0 tabular-nums font-medium text-amber-500">
+                                          {numero(a.unidades)} u.
+                                        </span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </>
+                              ) : cargandoBase === b.base ? null : detalleVisible.length === 0 ? (
+                                <p className="text-xs text-sub">No hay artículos que coincidan con los filtros.</p>
+                              ) : (
+                                <>
+                                  <div className="overflow-x-auto rounded-xl border border-line bg-surface">
+                                    <table className="w-full min-w-[560px] text-xs">
+                                      <thead>
+                                        <tr className="border-b border-line text-left uppercase tracking-wide text-sub">
+                                          <th className="px-2.5 py-1.5 font-medium">Artículo</th>
+                                          <th className="px-2.5 py-1.5 font-medium">Descripción</th>
+                                          <th className="px-2.5 py-1.5 text-right font-medium">Stock</th>
+                                          <th className="px-2.5 py-1.5 text-right font-medium">Precio costo</th>
+                                          <th className="px-2.5 py-1.5 text-right font-medium">Total valorizado</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {detalleVisible.slice(0, TOPE_TABLA).map((f) => (
+                                          <tr key={f.articulo} className="border-b border-line/50 last:border-0">
+                                            <td className="px-2.5 py-1.5 font-mono text-ink">{f.articulo}</td>
+                                            <td className="px-2.5 py-1.5 text-sub">
+                                              {infoArticulo.get(f.articulo)?.descripcion || '—'}
+                                            </td>
+                                            <td className="px-2.5 py-1.5 text-right tabular-nums text-ink">{numero(f.unidades)}</td>
+                                            <td
+                                              className={`px-2.5 py-1.5 text-right tabular-nums ${
+                                                f.costo == null ? 'text-amber-500' : 'text-sub'
+                                              }`}
+                                            >
+                                              {f.costo == null ? 'sin costo' : pesos(f.costo)}
+                                            </td>
+                                            <td className="px-2.5 py-1.5 text-right tabular-nums font-semibold text-ink">
+                                              {pesos(f.valorizado)}
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                  {detalleVisible.length > TOPE_TABLA && (
+                                    <p className="mt-1.5 text-[11px] text-sub/70">
+                                      Se dibujan los {numero(TOPE_TABLA)} de más plata. El total de arriba y el Excel llevan
+                                      los {numero(detalleVisible.length)}.
+                                    </p>
+                                  )}
+                                </>
                               )}
                             </td>
                           </tr>

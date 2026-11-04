@@ -6,6 +6,7 @@
  *   GET /api/sql/status                        -> estado de la conexión (Configuraciones > Conexión SQL)
  *   GET /api/sql/catalogo?...                  -> explorador de bases/objetos (solo admins)
  *   GET /api/sql/stock-valorizado[?forzar=1]   -> stock valorizado a costo por sucursal (Administradores)
+ *   GET /api/sql/stock-valorizado?base=...     -> los artículos de esa sucursal (el desplegable)
  *   GET /api/sql/pedido-venta-items?codigo=    -> renglones de un pedido de venta viejo, en vivo de Dragonfish
  *   GET /api/sql/<vista>[?where=&value=&limit=] -> filas de una vista habilitada
  *
