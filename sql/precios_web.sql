@@ -68,13 +68,17 @@ CREATE POLICY precios_web_sync_ver ON public.precios_web_sync FOR SELECT TO auth
 -- ---- Vista ----
 -- security_invoker: respeta la RLS de precios_web (articulos se lee libre).
 -- Un código puede estar en varios id_art: una fila por id_art.
+-- OJO con el largo del patrón de Vans: con {6,10} el código se cortaba en 13
+-- caracteres y 572 artículos quedaban con un código que no existe en la web
+-- (VN000TBZYB2CASA se consultaba como VN000TBZYB2CA y, sin el sufijo CA, como
+-- VN000TBZYB2: ninguno de los dos existe; el entero sí). Por eso va {6,20}.
 -- Cada marca define su patrón de código sobre la descripción y qué descripciones
 -- son suyas (busca; word es un filtro extra de marca). Una marca entra a la vista
 -- aunque su web todavía no devuelva nada, porque el cruce es contra precios_web.
 CREATE OR REPLACE VIEW public.vw_comparativa_precios WITH (security_invoker = true) AS
 WITH marcas AS (
   SELECT * FROM (VALUES
-    ('vans',     '(?i)VN0[A-Za-z0-9]{6,10}', '%VN0%',      NULL::text),
+    ('vans',     '(?i)VN0[A-Za-z0-9]{6,20}', '%VN0%',      NULL::text),
     ('converse', '([0-9]{6}B)',              '%B%',        '%CONVERSE%')
   ) AS m(marca, patron, busca, word)
 ), a AS (
@@ -124,7 +128,7 @@ DECLARE
 BEGIN
   IF NOT private.precios_sync_ok(p_token) THEN RAISE EXCEPTION 'No autorizado'; END IF;
   SELECT (CASE p_marca
-            WHEN 'vans'     THEN '(?i)VN0[A-Za-z0-9]{6,10}'
+            WHEN 'vans'     THEN '(?i)VN0[A-Za-z0-9]{6,20}'
             WHEN 'converse' THEN '([0-9]{6}B)'
           END),
          (CASE p_marca WHEN 'vans' THEN '%VN0%' WHEN 'converse' THEN '%B%' END),
