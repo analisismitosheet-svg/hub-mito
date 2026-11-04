@@ -43,6 +43,9 @@ const SECTORES_DEL_LOCAL: Record<string, string[]> = {
   CFR4: ['CF RIO IV', 'CF RIO 4'],
 }
 /** "NVO. CENTRO" = "Nvo Centro" = "NVOCENTRO" */
+/** Terminados que se traen por vez (Ver más suma otra tanda) */
+const TANDA = 50
+
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '')
 
 export default function RequerimientoNuevo() {
@@ -60,7 +63,12 @@ export default function RequerimientoNuevo() {
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [listo, setListo] = useState<number | null>(null)
-  const [ultimos, setUltimos] = useState<Requerimiento[]>([])
+  // Lista del local: abiertos (todos) o terminados (de a TANDA, con «Ver más»)
+  const [vista, setVista] = useState<'abiertos' | 'terminados'>('abiertos')
+  const [abiertos, setAbiertos] = useState<Requerimiento[]>([])
+  const [terminados, setTerminados] = useState<Requerimiento[]>([])
+  const [totalTerminados, setTotalTerminados] = useState(0)
+  const [tope, setTope] = useState(TANDA)
   const [paraConfirmar, setParaConfirmar] = useState<Requerimiento[]>([])
   const [devolviendo, setDevolviendo] = useState<number | null>(null)
   const [motivo, setMotivo] = useState('')
@@ -90,14 +98,20 @@ export default function RequerimientoNuevo() {
   }, [personas, local, locales])
 
   const cargarUltimos = useCallback(async () => {
-    if (!supabase || !local) { setUltimos([]); setParaConfirmar([]); return }
-    const [u, c] = await Promise.all([
-      supabase.from('requerimientos').select(CAMPOS_REQ).eq('local', local).order('created_at', { ascending: false }).limit(30),
-      supabase.from('requerimientos').select(CAMPOS_REQ).eq('local', local).eq('estado', 'a_confirmar').order('terminado_at'),
+    if (!supabase || !local) { setAbiertos([]); setTerminados([]); setParaConfirmar([]); return }
+    const [a, t] = await Promise.all([
+      supabase.from('requerimientos').select(CAMPOS_REQ).eq('local', local)
+        .in('estado', ['pendiente', 'programado', 'en_curso', 'a_confirmar']).order('created_at', { ascending: false }).limit(500),
+      supabase.from('requerimientos').select(CAMPOS_REQ, { count: 'exact' }).eq('local', local)
+        .in('estado', ['resuelto', 'no_corresponde'])
+        .order('resuelto_at', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false }).limit(tope),
     ])
-    setUltimos((u.data as unknown as Requerimiento[] | null) ?? [])
-    setParaConfirmar((c.data as unknown as Requerimiento[] | null) ?? [])
-  }, [local])
+    const lista = (a.data as unknown as Requerimiento[] | null) ?? []
+    setAbiertos(lista)
+    setParaConfirmar(lista.filter((r) => r.estado === 'a_confirmar'))
+    setTerminados((t.data as unknown as Requerimiento[] | null) ?? [])
+    setTotalTerminados(t.count ?? 0)
+  }, [local, tope])
   useEffect(() => { void cargarUltimos() }, [cargarUltimos])
   useEffect(() => suscribirCambios(['requerimientos'], () => void cargarUltimos()), [cargarUltimos])
 
@@ -285,12 +299,22 @@ export default function RequerimientoNuevo() {
 
       {local && (
         <section className="mt-8">
-          <h2 className="mb-2 font-display text-lg font-semibold text-ink">Últimos de {nombreLocal(local)}</h2>
-          {ultimos.length === 0 ? (
-            <p className="rounded-xl border border-line bg-surface p-4 text-sm text-sub">Todavía no hay requerimientos cargados.</p>
+          <h2 className="mb-2 font-display text-lg font-semibold text-ink">Requerimientos de {nombreLocal(local)}</h2>
+          <div className="mb-3 flex gap-2">
+            {([['abiertos', 'Abiertos', abiertos.length], ['terminados', 'Terminados', totalTerminados]] as const).map(([id, label, n]) => (
+              <button key={id} type="button" onClick={() => setVista(id)} aria-pressed={vista === id}
+                className={`btn-press inline-flex h-9 items-center gap-2 rounded-xl border px-3 text-sm font-semibold ${vista === id ? 'border-teal-500 bg-teal-500/15 text-ink' : 'border-line bg-surface text-sub hover:text-ink'}`}>
+                {label}<span className="rounded-full bg-surface2 px-1.5 text-xs tabular-nums">{n}</span>
+              </button>
+            ))}
+          </div>
+          {(vista === 'abiertos' ? abiertos : terminados).length === 0 ? (
+            <p className="rounded-xl border border-line bg-surface p-4 text-sm text-sub">
+              {vista === 'abiertos' ? 'No hay requerimientos abiertos.' : 'Todavía no hay requerimientos terminados.'}
+            </p>
           ) : (
             <ul className="space-y-2">
-              {ultimos.map((r) => {
+              {(vista === 'abiertos' ? abiertos : terminados).map((r) => {
                 const rd = rubroDef(r.rubro)
                 return (
                   <li key={r.id} className="rounded-2xl border border-line bg-surface p-3">
@@ -301,6 +325,8 @@ export default function RequerimientoNuevo() {
                       <span className={`rounded-full border px-2 py-0.5 ${ESTADOS[r.estado].clase}`}>{ESTADOS[r.estado].label}</span>
                     </div>
                     <p className="mt-1 text-sm text-ink">{r.descripcion}</p>
+                    {r.solicitante_nombre && <p className="mt-0.5 text-xs text-sub">Lo pidió {r.solicitante_nombre}</p>}
+                    <FotosVer fotos={r.fotos} />
                     {r.programado_para && (r.estado === 'programado' || r.estado === 'en_curso') && (
                       <p className="mt-1 flex items-center gap-1.5 text-xs text-sky-500">
                         <CalendarClock size={13} aria-hidden /> Va {quienesVan(r) || 'mantenimiento'} el {fechaHora(r.programado_para)}
@@ -309,16 +335,38 @@ export default function RequerimientoNuevo() {
                     {r.estado === 'pendiente' && r.rechazo_motivo && (
                       <p className="mt-1 text-xs text-brand-400">Lo devolvieron: {r.rechazo_motivo}</p>
                     )}
-                    {r.resuelto_at && (
-                      <p className="mt-1 text-xs text-sub">
-                        {r.estado === 'resuelto' ? 'Resuelto' : 'Cerrado'} el {fechaCorta(r.resuelto_at)}{r.resuelto_comentario ? ` · ${r.resuelto_comentario}` : ''}
+                    {r.terminado_at && r.estado !== 'pendiente' && (
+                      <div className="mt-2 rounded-lg bg-surface2 p-2 text-xs text-sub">
+                        <p className="flex items-center gap-1.5">
+                          <Wrench size={12} aria-hidden /> Lo hizo {r.terminado_por ?? 'mantenimiento'} el {fechaHora(r.terminado_at)}
+                        </p>
+                        {r.terminado_comentario && <p className="mt-0.5 text-ink">{r.terminado_comentario}</p>}
+                        <FotosVer fotos={r.terminado_fotos} />
+                      </div>
+                    )}
+                    {r.estado === 'resuelto' && (
+                      <p className="mt-1 flex items-center gap-1.5 text-xs text-emerald-500">
+                        <CircleCheck size={13} aria-hidden />
+                        {r.origen === 'planilla'
+                          ? `Resuelto${r.resuelto_at ? ` el ${fechaCorta(r.resuelto_at)}` : ''} (planilla anterior)`
+                          : `Confirmado el ${r.resuelto_at ? fechaCorta(r.resuelto_at) : ''}${r.resuelto_por ? ` · ${r.resuelto_por}` : ''}${r.resuelto_comentario ? ` · ${r.resuelto_comentario}` : ''}`}
                       </p>
                     )}
-                    <FotosVer fotos={r.fotos} />
+                    {r.estado === 'no_corresponde' && (
+                      <p className="mt-1 text-xs text-sub">
+                        No corresponde{r.resuelto_at ? ` (${fechaCorta(r.resuelto_at)})` : ''}{r.resuelto_comentario ? `: ${r.resuelto_comentario}` : ''}
+                      </p>
+                    )}
                   </li>
                 )
               })}
             </ul>
+          )}
+          {vista === 'terminados' && terminados.length < totalTerminados && (
+            <button type="button" onClick={() => setTope((t) => t + TANDA)}
+              className="btn-press mt-3 h-10 w-full rounded-xl border border-line bg-surface text-sm font-semibold text-sub hover:text-ink">
+              Ver más ({totalTerminados - terminados.length} restantes)
+            </button>
           )}
         </section>
       )}
