@@ -77,6 +77,9 @@ export default function RequerimientoNuevo() {
   const [devolviendo, setDevolviendo] = useState<number | null>(null)
   const [motivo, setMotivo] = useState('')
   const [ocupado, setOcupado] = useState<number | null>(null)
+  // Botón Terminado de la lista: el local cierra algo que seguía abierto
+  const [cerrando, setCerrando] = useState<number | null>(null)
+  const [comentarioCierre, setComentarioCierre] = useState('')
 
   useEffect(() => {
     if (!supabase) return
@@ -147,14 +150,16 @@ export default function RequerimientoNuevo() {
     }
   }
 
-  async function confirmar(id: number) {
+  /** Quedó listo (a confirmar) o Terminado desde la lista (algo que seguía abierto) */
+  async function confirmar(id: number, comentario?: string) {
     if (!supabase) return
     setOcupado(id)
     setError(null)
-    const { error: err } = await supabase.rpc('requerimiento_confirmar', { p_id: id })
+    const { error: err } = await supabase.rpc('requerimiento_confirmar', { p_id: id, p_comentario: comentario ?? null })
     setOcupado(null)
-    if (err) setError(err.message)
-    else void cargarUltimos()
+    if (err) { setError(err.message); return }
+    setCerrando(null); setComentarioCierre('')
+    void cargarUltimos()
   }
 
   async function noQuedo(id: number) {
@@ -377,6 +382,48 @@ export default function RequerimientoNuevo() {
                         No corresponde{r.resuelto_at ? ` (${fechaCorta(r.resuelto_at)})` : ''}{r.resuelto_comentario ? `: ${r.resuelto_comentario}` : ''}
                       </p>
                     )}
+                    {vista === 'abiertos' && (cerrando === r.id ? (
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <input autoFocus value={comentarioCierre} onChange={(e) => setComentarioCierre(e.target.value)}
+                          placeholder="¿Cómo se resolvió? (opcional)"
+                          className="h-10 min-w-0 flex-1 rounded-xl border border-line bg-surface2 px-3 text-sm text-ink" />
+                        <button type="button" onClick={() => void confirmar(r.id, comentarioCierre)} disabled={ocupado === r.id}
+                          className="btn-press inline-flex h-10 items-center gap-1.5 rounded-xl bg-emerald-600 px-3 text-sm font-semibold text-white disabled:opacity-60">
+                          {ocupado === r.id ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <CircleCheck size={15} aria-hidden />} Confirmar
+                        </button>
+                        <button type="button" onClick={() => setCerrando(null)} className="btn-press h-10 rounded-xl border border-line bg-surface2 px-3 text-sm text-ink">Cancelar</button>
+                      </div>
+                    ) : r.estado === 'a_confirmar' ? (
+                      devolviendo === r.id ? (
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                          <input autoFocus value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="¿Qué quedó mal?"
+                            className="h-10 min-w-0 flex-1 rounded-xl border border-line bg-surface2 px-3 text-sm text-ink" />
+                          <button type="button" onClick={() => void noQuedo(r.id)} disabled={ocupado === r.id}
+                            className="btn-press inline-flex h-10 items-center gap-1.5 rounded-xl bg-brand-600 px-3 text-sm font-semibold text-white disabled:opacity-60">
+                            {ocupado === r.id ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <ThumbsDown size={15} aria-hidden />} Devolver
+                          </button>
+                          <button type="button" onClick={() => setDevolviendo(null)} className="btn-press h-10 rounded-xl border border-line bg-surface2 px-3 text-sm text-ink">Cancelar</button>
+                        </div>
+                      ) : (
+                        <div className="mt-3 flex gap-2">
+                          <button type="button" onClick={() => void confirmar(r.id)} disabled={ocupado === r.id}
+                            className="btn-press inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-semibold text-white disabled:opacity-60">
+                            {ocupado === r.id ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <ThumbsUp size={15} aria-hidden />} Quedó listo
+                          </button>
+                          <button type="button" onClick={() => { setDevolviendo(r.id); setMotivo('') }}
+                            className="btn-press inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-brand-600/40 bg-brand-600/10 text-sm font-semibold text-brand-400">
+                            <ThumbsDown size={15} aria-hidden /> No quedó bien
+                          </button>
+                        </div>
+                      )
+                    ) : (
+                      <div className="mt-3">
+                        <button type="button" onClick={() => { setCerrando(r.id); setComentarioCierre('') }}
+                          className="btn-press inline-flex h-10 items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 text-sm font-semibold text-emerald-500">
+                          <CircleCheck size={15} aria-hidden /> Terminado
+                        </button>
+                      </div>
+                    ))}
                   </li>
                 )
               })}

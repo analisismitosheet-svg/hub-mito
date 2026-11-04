@@ -362,16 +362,20 @@ returns boolean language sql stable security definer set search_path = public as
     and exists (select 1 from public.requerimientos r where r.id = p_id and r.local = private.mi_local()))
 $$;
 
-create or replace function public.requerimiento_confirmar(p_id bigint)
+-- El local da el OK: lo que mantenimiento terminó (a_confirmar) o, con el botón Terminado
+-- de su lista, algo que todavía estaba abierto (lo resolvió el local o ya vino alguien).
+drop function if exists public.requerimiento_confirmar(bigint);
+create or replace function public.requerimiento_confirmar(p_id bigint, p_comentario text default null)
 returns void language plpgsql security definer set search_path = public as $$
 begin
   if not private.req_es_de_mi_local(p_id) then
     raise exception 'Solo el local que lo pidió puede darlo por terminado' using errcode = '42501';
   end if;
   update public.requerimientos
-     set estado = 'resuelto', resuelto_at = now(), resuelto_por = private.req_quien(), updated_at = now()
-   where id = p_id and estado = 'a_confirmar';
-  if not found then raise exception 'Ese arreglo no está esperando confirmación'; end if;
+     set estado = 'resuelto', resuelto_at = now(), resuelto_por = private.req_quien(),
+         resuelto_comentario = coalesce(nullif(trim(coalesce(p_comentario, '')), ''), resuelto_comentario), updated_at = now()
+   where id = p_id and estado in ('pendiente', 'programado', 'en_curso', 'a_confirmar');
+  if not found then raise exception 'Ese requerimiento ya está cerrado'; end if;
 end $$;
 
 create or replace function public.requerimiento_no_quedo(p_id bigint, p_motivo text)
@@ -420,7 +424,7 @@ revoke all on function public.requerimiento_crear(text, text, text, text, text[]
 revoke all on function public.requerimiento_programar(bigint, timestamptz, text[], text) from public, anon;
 revoke all on function public.requerimiento_iniciar(bigint) from public, anon;
 revoke all on function public.requerimiento_terminar(bigint, text, text[]) from public, anon;
-revoke all on function public.requerimiento_confirmar(bigint) from public, anon;
+revoke all on function public.requerimiento_confirmar(bigint, text) from public, anon;
 revoke all on function public.requerimiento_no_quedo(bigint, text) from public, anon;
 revoke all on function public.requerimiento_descartar(bigint, text) from public, anon;
 revoke all on function public.requerimiento_reabrir(bigint) from public, anon;
@@ -429,7 +433,7 @@ grant execute on function public.requerimiento_crear(text, text, text, text, tex
 grant execute on function public.requerimiento_programar(bigint, timestamptz, text[], text) to authenticated;
 grant execute on function public.requerimiento_iniciar(bigint) to authenticated;
 grant execute on function public.requerimiento_terminar(bigint, text, text[]) to authenticated;
-grant execute on function public.requerimiento_confirmar(bigint) to authenticated;
+grant execute on function public.requerimiento_confirmar(bigint, text) to authenticated;
 grant execute on function public.requerimiento_no_quedo(bigint, text) to authenticated;
 grant execute on function public.requerimiento_descartar(bigint, text) to authenticated;
 grant execute on function public.requerimiento_reabrir(bigint) to authenticated;
