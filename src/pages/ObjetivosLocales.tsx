@@ -13,8 +13,9 @@ import { useAuth } from '@/context/AuthContext'
 /*  CFR4 sale de CFR9: el domingo de cada semana se reparte entre       */
 /*  lunes y sábado según lo que vendió cada día (domingo cerrado).      */
 /*  El admin ve todos los locales, el detalle, el comparativo, el IPC y */
-/*  los feriados; el resto ve solo el calendario de su local (lo filtra */
-/*  la RPC con usuarios.local).                                          */
+/*  los feriados; con objetivos.ver_todo (supervisores) ve todos los    */
+/*  locales, el detalle y el comparativo; el resto ve solo el calendario*/
+/*  de su local (lo filtra la RPC con usuarios.local).                   */
 /*  Datos: sql/objetivos_locales.sql (RPC objetivos_locales_dia), venta */
 /*  diaria que sube puente-sql/scripts/sync-ventas-locales.js.          */
 /*  WEB → Objetivos usa esta misma pantalla con soloLocal="WEB": pide   */
@@ -63,6 +64,8 @@ const TEXTO = { ok: 'text-emerald-400', medio: 'text-amber-400', mal: 'text-red-
 export default function ObjetivosLocales({ soloLocal }: { soloLocal?: string } = {}) {
   const auth = useAuth()
   const isAdmin = auth.isAdmin && !soloLocal
+  // supervisores (objetivos.ver_todo): todos los locales, detalle y comparativo; IPC y feriados solo el admin
+  const verTodo = isAdmin || (!soloLocal && auth.can('objetivos.ver_todo'))
   const miLocal = soloLocal ?? auth.perfil?.local ?? null
   const inicial = periodoDe(hoyIso())
   const [periodo, setPeriodo] = useState(inicial)
@@ -101,11 +104,11 @@ export default function ObjetivosLocales({ soloLocal }: { soloLocal?: string } =
   useEffect(() => { void cargar() }, [cargar])
 
   const cargarDetalle = useCallback(async () => {
-    if (!supabase || !isAdmin || !desde || !hasta || hasta < desde) return
+    if (!supabase || !verTodo || !desde || !hasta || hasta < desde) return
     const { data, error: e } = await supabase.rpc('objetivos_locales_dia', { p_desde: desde, p_hasta: hasta })
     if (e) { setError(e.message); return }
     setDetalle(((data as FilaObj[] | null) ?? []).map(numerico))
-  }, [isAdmin, desde, hasta])
+  }, [verTodo, desde, hasta])
   useEffect(() => { void cargarDetalle() }, [cargarDetalle])
 
   const locales = useMemo(() => {
@@ -116,7 +119,7 @@ export default function ObjetivosLocales({ soloLocal }: { soloLocal?: string } =
   const nom = useCallback((l: string) => nombres[l] || l, [nombres])
 
   // El que no es admin recibe solo su local; el admin elige (vacío = todos)
-  const verLocal = isAdmin ? localSel : (locales[0] ?? miLocal ?? '')
+  const verLocal = verTodo ? localSel : (locales[0] ?? miLocal ?? '')
   const dias = useMemo<Dia[]>(() => {
     const hoy = hoyIso()
     const m = new Map<string, Dia>()
@@ -142,7 +145,7 @@ export default function ObjetivosLocales({ soloLocal }: { soloLocal?: string } =
 
   const pestañas = isAdmin
     ? ([['dias', 'Objetivos por día'], ['comparativo', 'Comparativo por local'], ['ipc', 'IPC mensual'], ['feriados', 'Feriados']] as const)
-    : null
+    : verTodo ? ([['dias', 'Objetivos por día'], ['comparativo', 'Comparativo por local']] as const) : null
 
   return (
     <Layout>
@@ -174,7 +177,7 @@ export default function ObjetivosLocales({ soloLocal }: { soloLocal?: string } =
           <button onClick={() => mover(-1)} aria-label="Mes anterior" className="btn-press grid h-8 w-8 place-items-center rounded-lg border border-line bg-surface2 text-ink hover:bg-line"><ChevronLeft size={16} aria-hidden /></button>
           <span className="text-base font-semibold text-ink">{nombreMes} <span className="text-xs font-normal text-sub">{ddmm(rango.desde)} al {ddmm(rango.hasta)}</span></span>
           <button onClick={() => mover(1)} aria-label="Mes siguiente" className="btn-press grid h-8 w-8 place-items-center rounded-lg border border-line bg-surface2 text-ink hover:bg-line"><ChevronRight size={16} aria-hidden /></button>
-          {vista === 'dias' && (isAdmin ? (
+          {vista === 'dias' && (verTodo ? (
             <select value={localSel} onChange={(e) => setLocalSel(e.target.value)} aria-label="Local"
               className="h-8 rounded-lg border border-line bg-surface2 px-2 text-xs text-ink">
               <option value="">Todos los locales</option>
@@ -183,7 +186,7 @@ export default function ObjetivosLocales({ soloLocal }: { soloLocal?: string } =
           ) : verLocal ? (
             <span className="inline-flex h-8 items-center gap-1 rounded-lg border border-line bg-surface2 px-2.5 text-xs text-ink"><MapPin size={13} aria-hidden /> {nom(verLocal)}</span>
           ) : null)}
-          {vista === 'dias' && isAdmin && (
+          {vista === 'dias' && verTodo && (
             <div className="flex flex-wrap items-center gap-2 text-xs text-sub">
               <label className="flex items-center gap-1">Desde <input id="obj-desde" type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className="h-8 rounded-lg border border-line bg-surface2 px-2 text-xs text-ink" /></label>
               <label className="flex items-center gap-1">Hasta <input id="obj-hasta" type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className="h-8 rounded-lg border border-line bg-surface2 px-2 text-xs text-ink" /></label>
@@ -206,9 +209,9 @@ export default function ObjetivosLocales({ soloLocal }: { soloLocal?: string } =
         )
       )}
 
-      {vista === 'dias' && isAdmin && <DetalleObjetivos filas={detalle} desde={desde} hasta={hasta} nom={nom} />}
+      {vista === 'dias' && verTodo && <DetalleObjetivos filas={detalle} desde={desde} hasta={hasta} nom={nom} />}
 
-      {vista === 'comparativo' && isAdmin && <Comparativo filas={filas} locales={locales} nom={nom} />}
+      {vista === 'comparativo' && verTodo && <Comparativo filas={filas} locales={locales} nom={nom} />}
       {vista === 'ipc' && isAdmin && <IpcMensual onCambio={() => void cargar()} />}
       {vista === 'feriados' && isAdmin && <Feriados locales={locales} nom={nom} onCambio={() => { void cargar(); void cargarDetalle() }} />}
     </Layout>

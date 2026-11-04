@@ -27,12 +27,17 @@
 insert into public.permisos (clave, modulo, accion, label, orden) values
   ('objetivos.view', 'locales', 'view', 'Ver objetivos de los locales', 864),
   ('objetivos.edit', 'locales', 'edit', 'Cargar el IPC de los objetivos', 865),
-  ('web_objetivos.view', 'area_web', 'view', 'Ver objetivos del local WEB', 866)
+  ('web_objetivos.view', 'area_web', 'view', 'Ver objetivos del local WEB', 866),
+  ('objetivos.ver_todo', 'locales', 'ver_todo', 'Ver los objetivos de todos los locales', 867)
 on conflict (clave) do nothing;
 -- El rol Locales ve los objetivos (cada usuario, solo los de su local: usuarios.local)
 insert into public.rol_permisos (rol, permiso_clave) values ('locales', 'objetivos.view') on conflict do nothing;
 -- WEB → Objetivos (04/11/2026): el rol Web ve solo los objetivos del local WEB (pide p_local = 'WEB')
 insert into public.rol_permisos (rol, permiso_clave) values ('web', 'web_objetivos.view') on conflict do nothing;
+-- Supervisores (04/11/2026): ven los objetivos de todos los locales (no cargan IPC ni feriados)
+insert into public.rol_permisos (rol, permiso_clave) values
+  ('supervisor', 'objetivos.view'), ('supervisor', 'objetivos.ver_todo')
+on conflict do nothing;
 
 -- Venta diaria por local (la escribe solo el puente)
 create table if not exists public.ventas_locales_dia (
@@ -144,7 +149,7 @@ create policy objetivos_cargados_editar on public.objetivos_cargados for all to 
 --   feriado    = cargado en objetivos_feriados: sin objetivo
 --   manual     = el objetivo viene de objetivos_cargados, no del cálculo
 --   venta      = venta real del día (tickets netos)
--- p_local: solo el admin puede pedir cualquier local (null = todos); con web_objetivos.view se
+-- p_local: el admin y objetivos.ver_todo pueden pedir cualquier local (null = todos); con web_objetivos.view se
 -- puede pedir 'WEB'; el resto ve el suyo.
 -- ---------------------------------------------------------------------------
 drop function if exists public.objetivos_locales_dia(date, date);
@@ -155,7 +160,8 @@ returns table (local text, fecha date, fecha_base date, venta_base numeric, ipc 
 language plpgsql stable security definer set search_path = public as $$
 declare v_local text;
 begin
-  if auth.role() = 'service_role' or private.es_admin() or private.tengo_permiso('contador.ver_todo') then
+  if auth.role() = 'service_role' or private.es_admin() or private.tengo_permiso('contador.ver_todo')
+     or private.tengo_permiso('objetivos.ver_todo') then
     v_local := nullif(upper(btrim(p_local)), '');
   elsif upper(btrim(p_local)) = 'WEB' and private.tengo_permiso('web_objetivos.view') then
     v_local := 'WEB';

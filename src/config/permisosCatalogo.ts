@@ -231,6 +231,7 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
     id: 'objetivos', areaId: 'locales', titulo: 'Objetivos', descripcion: 'Objetivo por local con el IPC del mes',
     icon: Target, color: '#84cc16', acciones: { ver: 'objetivos.view', editar: 'objetivos.edit' },
     etiquetas: { editar: 'Cargar IPC' },
+    especiales: [{ clave: 'objetivos.ver_todo', label: 'Ver todos los locales' }],
   },
   {
     id: 'sectores', areaId: 'locales', titulo: 'Sectores y QR', descripcion: 'Sectores de los locales y sus QR',
