@@ -47,6 +47,9 @@ import LocalesPage from '@/pages/Locales'
 import EmpleadosPage from '@/pages/Empleados'
 import Cumpleanios from '@/pages/Cumpleanios'
 import FeriadosRrhh from '@/pages/FeriadosRrhh'
+import RequerimientoNuevo from '@/pages/RequerimientoNuevo'
+import RequerimientosBandeja from '@/pages/RequerimientosBandeja'
+import TareasMantenimiento from '@/pages/TareasMantenimiento'
 import ProveedoresPacho from '@/pages/ProveedoresPacho'
 import GuiaPacho from '@/pages/GuiaPacho'
 import Transportes from '@/pages/Transportes'
@@ -590,6 +593,38 @@ export default function App() {
               <AdminRoute>
                 <SqlConexion />
               </AdminRoute>
+            }
+          />
+          <Route
+            path="/arquitectura/requerimientos"
+            element={
+              <ProtectedRoute>
+                <CarpetaArea carpetaId="arquitectura-requerimientos" titulo="Requerimientos" color="#14b8a6" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/arquitectura/requerimientos/nuevo"
+            element={
+              <PermissionRoute permiso="requerimientos.cargar">
+                <RequerimientoNuevo />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/arquitectura/requerimientos/bandeja"
+            element={
+              <PermissionRoute permiso="requerimientos.gestionar">
+                <RequerimientosBandeja />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/mantenimiento/tareas"
+            element={
+              <PermissionRoute permiso="requerimientos.tareas">
+                <TareasMantenimiento />
+              </PermissionRoute>
             }
           />
           <Route

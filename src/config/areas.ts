@@ -54,6 +54,7 @@ import {
   Globe,
   type LucideIcon,
   CalendarOff,
+  Inbox,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
@@ -178,14 +179,17 @@ export const APPS: AppDef[] = [
     color: '#f97316',
   },
   {
+    // Antes era el Google Form «CARGA DE REQUERIMIENTO»; ahora es Arquitectura → Requerimientos.
     id: 'carga-requerimientos',
     areaId: 'locales',
-    title: 'Carga requerimientos',
-    description: 'Formulario para cargar requerimientos.',
+    areaIds: ['arquitectura-requerimientos'],
+    title: 'Nuevo requerimiento',
+    description: 'Pedí un arreglo para el local (electricidad, plomería, cerrajería…).',
     icon: ClipboardList,
-    kind: 'external',
-    target: 'https://docs.google.com/forms/d/e/1FAIpQLSfYBY4jL-YkZuAkMAvmqzDlhQWwP1DbdVhcV66jdbBi3jenpQ/viewform',
-    color: '#3b82f6',
+    kind: 'internal',
+    target: '/arquitectura/requerimientos/nuevo',
+    color: '#0d9488',
+    permiso: 'requerimientos.cargar',
   },
   {
     id: 'control-vidrieras',
@@ -814,6 +818,40 @@ export const APPS: AppDef[] = [
     kind: 'internal',
     target: '/arquitectura/reportes',
     color: '#0891b2',
+  },
+  // ===== Arquitectura: carpeta Requerimientos (pedidos de arreglos de los locales) =====
+  {
+    id: 'arquitectura-requerimientos',
+    areaId: 'arquitectura',
+    title: 'Requerimientos',
+    description: 'Arreglos que piden los locales: bandeja, programación y tareas.',
+    icon: FolderOpen,
+    kind: 'internal',
+    target: '/arquitectura/requerimientos',
+    color: '#14b8a6',
+  },
+  {
+    id: 'requerimientos-bandeja',
+    areaId: 'arquitectura-requerimientos',
+    title: 'Bandeja de requerimientos',
+    description: 'Lo que cargan los locales: asigná día, horario y quién va.',
+    icon: Inbox,
+    kind: 'internal',
+    target: '/arquitectura/requerimientos/bandeja',
+    color: '#0284c7',
+    permiso: 'requerimientos.gestionar',
+  },
+  {
+    id: 'mantenimiento-tareas',
+    areaId: 'mantenimiento',
+    areaIds: ['arquitectura-requerimientos'],
+    title: 'Mis tareas',
+    description: 'Arreglos programados en los locales: empezar y terminar.',
+    icon: Wrench,
+    kind: 'internal',
+    target: '/mantenimiento/tareas',
+    color: '#64748b',
+    permiso: 'requerimientos.tareas',
   },
 ]
 

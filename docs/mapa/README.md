@@ -24,6 +24,7 @@ El detalle largo y la historia de cada módulo siguen en `CONTEXTO.md` (raíz de
 - [[Tracking de transporte]]: área Administradores, GPS de los choferes (Traccar), puntos de control
 - [[Stock valorizado]]: área Administradores, unidades y plata a costo por sucursal
 - [[Ventas web (Tiendanube)]]: área WEB (rol `web`), pedidos de la tienda online (sync cada 20 min)
+- [[Requerimientos]]: arreglos que piden los locales; Arquitectura programa, mantenimiento hace, el local confirma
 - [[Otros módulos]]: RRHH, RMA, contador de clientes, encuestas, QR, réplicas
 - [[UI y estilo]]
 - [[Reglas y decisiones]]: lo que no hay que romper

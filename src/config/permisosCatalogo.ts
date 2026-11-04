@@ -35,6 +35,8 @@ import {
   Wallet,
   type LucideIcon,
   CalendarOff,
+  Inbox,
+  Wrench,
 } from 'lucide-react'
 
 /**
@@ -291,6 +293,20 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
   {
     id: 'web-objetivos', areaId: 'web', titulo: 'Objetivos', descripcion: 'Objetivos del local WEB',
     icon: Target, color: '#84cc16', acciones: { ver: 'web_objetivos.view' },
+  },
+
+  // ===== Arquitectura / Mantenimiento: requerimientos de los locales =====
+  {
+    id: 'requerimientos-nuevo', areaId: 'arquitectura', titulo: 'Nuevo requerimiento', descripcion: 'Cargar arreglos del propio local',
+    icon: ClipboardList, color: '#0d9488', acciones: { ver: 'requerimientos.cargar' }, etiquetas: { ver: 'Cargar' },
+  },
+  {
+    id: 'requerimientos-bandeja', areaId: 'arquitectura', titulo: 'Bandeja de requerimientos', descripcion: 'Programar día, horario y quién va; cerrar o descartar',
+    icon: Inbox, color: '#0284c7', acciones: { ver: 'requerimientos.gestionar' }, etiquetas: { ver: 'Gestionar' },
+  },
+  {
+    id: 'mantenimiento-tareas', areaId: 'mantenimiento', titulo: 'Mis tareas', descripcion: 'Tareas programadas: empezar y terminar',
+    icon: Wrench, color: '#64748b', acciones: { ver: 'requerimientos.tareas' },
   },
 
   // ===== Configuración =====
