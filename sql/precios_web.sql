@@ -11,8 +11,10 @@
 -- filtros de descripción por marca). Vans es la única activa: converse y topper están
 -- documentadas abajo (converse: patrón NNNNNNB, pero su web no publica precios).
 --
--- La comparación es MI PRECIO PÚBLICO contra el PRECIO DE LISTA de la marca (antes de
--- la oferta). El precio vigente y el % OFF se muestran como dato.
+-- La comparación es MI PRECIO PÚBLICO contra el precio de la marca: el de LISTA, salvo que
+-- la marca lo tenga en oferta (precio vigente menor al de lista): ahí se compara contra el
+-- precio CON DESCUENTO, que es lo que paga el cliente hoy (desde 04/11/2026). precio_ref =
+-- el precio usado; con_descuento = true si fue el de oferta.
 --
 -- Escritura: solo por las RPC de abajo, que aceptan un admin logueado o la clave de
 -- sync 'precios' (private.sync_claves, hash sha256), así no hace falta service role.
@@ -93,21 +95,25 @@ WITH marcas AS (
 ), c AS (
   SELECT a.*, p.precio, p.precio_lista, p.desc_pct, p.con_stock, p.url,
          p.nombre_web, p.leido_at,
-         a.mi_precio - p.precio_lista AS dif
+         CASE WHEN p.precio > 0 AND p.precio < p.precio_lista THEN p.precio ELSE p.precio_lista END AS precio_ref
   FROM a JOIN public.precios_web p ON p.marca = a.marca AND p.cod = a.cod AND p.encontrado
+), d AS (
+  SELECT c.*, c.mi_precio - c.precio_ref AS dif FROM c
 )
 SELECT c.cod AS codigo, c.id_art, c.descripcion, c.familia, c.anio, c.publicado, c.marca,
        c.mi_precio, c.precio, c.precio_lista, c.desc_pct, c.con_stock, c.url, c.nombre_web, c.leido_at,
        c.dif,
-       CASE WHEN c.precio_lista > 0 THEN round(c.dif / c.precio_lista, 4) END AS dif_pct,
+       CASE WHEN c.precio_ref > 0 THEN round(c.dif / c.precio_ref, 4) END AS dif_pct,
        CASE
          WHEN coalesce(c.mi_precio, 0) = 0 THEN 'sin_precio'
          WHEN c.mi_precio < 10000 OR c.precio_lista < 10000 OR c.precio < 10000 THEN 'revisar'
-         WHEN abs(c.dif / c.precio_lista) <= 0.02 THEN 'igual'
+         WHEN abs(c.dif / c.precio_ref) <= 0.02 THEN 'igual'
          WHEN c.dif > 0 THEN 'mas_caro'
          ELSE 'mas_barato'
-       END AS estado
-FROM c;
+       END AS estado,
+       c.precio_ref,
+       c.precio_ref < c.precio_lista AS con_descuento
+FROM d AS c;
 GRANT SELECT ON public.vw_comparativa_precios TO authenticated;
 REVOKE ALL ON public.vw_comparativa_precios FROM anon;
 

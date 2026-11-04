@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowDown, ArrowUp, ExternalLink, Loader2, RefreshCw, Search } from 'lucide-react'
+import { ArrowDown, ArrowUp, BadgePercent, ExternalLink, Loader2, RefreshCw, Search } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
@@ -9,7 +9,8 @@ import { useAuth } from '@/context/AuthContext'
 /* ------------------------------------------------------------------ */
 /*  Compras > Comparativa de precios                                    */
 /*                                                                      */
-/*  Mi precio público (articulos) contra el PRECIO DE LISTA de la web   */
+/*  Mi precio público (articulos) contra el precio de la web: el de     */
+/*  LISTA o, si la marca lo tiene en oferta, el precio CON descuento.   */
 /*  de la marca (precios_web, lo carga /api/precios-sync). La           */
 /*  diferencia y el estado salen de public.vw_comparativa_precios; el   */
 /*  precio vigente y el % OFF se muestran como dato.                    */
@@ -33,6 +34,8 @@ interface Fila {
   dif: number | null
   dif_pct: number | null
   estado: Estado
+  /** la marca lo tiene en oferta: la diferencia es contra el precio CON descuento */
+  con_descuento: boolean | null
 }
 
 interface Sync {
@@ -82,6 +85,8 @@ export default function ComparativaPrecios() {
   const [stock, setStock] = useState<Stock>('si')
   const [busqueda, setBusqueda] = useState('')
   const [soloPublicados, setSoloPublicados] = useState(false)
+  // Solo lo que la marca tiene con descuento; se combina con las tarjetas (ej. en oferta + más caro)
+  const [soloDescuento, setSoloDescuento] = useState(false)
   const [kpi, setKpi] = useState<Kpi>('todos')
   const [orden, setOrden] = useState<{ col: Col; asc: boolean }>({ col: 'dif_pct', asc: false })
   const [mostrar, setMostrar] = useState(POR_PAGINA)
@@ -97,7 +102,7 @@ export default function ComparativaPrecios() {
     for (let desde = 0; desde < 20000; desde += 1000) {
       const { data, error: e } = await supabase
         .from('vw_comparativa_precios')
-        .select('codigo,id_art,descripcion,familia,anio,publicado,mi_precio,precio,precio_lista,desc_pct,url,nombre_web,dif,dif_pct,estado')
+        .select('codigo,id_art,descripcion,familia,anio,publicado,mi_precio,precio,precio_lista,desc_pct,url,nombre_web,dif,dif_pct,estado,con_descuento')
         .eq('marca', marca)
         .order('codigo')
         .order('id_art')
@@ -173,10 +178,11 @@ export default function ComparativaPrecios() {
       return (
         stockOk &&
         (!soloPublicados || f.publicado === true) &&
+        (!soloDescuento || (f.desc_pct ?? 0) > 0) &&
         (!t || f.codigo.includes(t) || f.id_art.toUpperCase().includes(t) || f.descripcion.toUpperCase().includes(t))
       )
     })
-  }, [filas, stock, busqueda, soloPublicados, stockData])
+  }, [filas, stock, busqueda, soloPublicados, soloDescuento, stockData])
 
   const contadores = useMemo(() => {
     const prom = (xs: Fila[]) => (xs.length ? xs.reduce((s, f) => s + (f.dif_pct ?? 0), 0) / xs.length : null)
@@ -222,7 +228,7 @@ export default function ComparativaPrecios() {
     if (stockEstado === 'error' && stock !== 'todos') setStock('todos')
   }, [stockEstado, stock])
 
-  useEffect(() => { setMostrar(POR_PAGINA) }, [stock, busqueda, soloPublicados, kpi, orden])
+  useEffect(() => { setMostrar(POR_PAGINA) }, [stock, busqueda, soloPublicados, soloDescuento, kpi, orden])
 
   const ordenarPor = (col: Col) =>
     setOrden((o) => (o.col === col ? { col, asc: !o.asc } : { col, asc: col === 'descripcion' || col === 'estado' }))
@@ -285,7 +291,7 @@ export default function ComparativaPrecios() {
       <header className="mb-4 mt-2 flex flex-wrap items-end justify-between gap-2">
         <div>
           <h1 className="font-display text-2xl font-semibold text-ink">Comparativa de precios</h1>
-          <p className="text-sm text-sub">Tu precio público contra el precio de lista que publica la marca en su web.</p>
+          <p className="text-sm text-sub">Tu precio público contra el precio de la marca en su web: el de lista o, si está en oferta, el precio con descuento.</p>
         </div>
         {isAdmin && (
           <button
@@ -362,6 +368,17 @@ export default function ComparativaPrecios() {
             </button>
           ))}
         </div>
+        <button
+          type="button"
+          onClick={() => setSoloDescuento((v) => !v)}
+          aria-pressed={soloDescuento}
+          title="Solo los artículos que la marca tiene con descuento (se combina con Más caro / Más barato)"
+          className={`inline-flex h-[38px] items-center gap-1.5 rounded-xl border px-3 text-sm font-medium transition ${
+            soloDescuento ? 'border-brand-600 bg-brand-600 text-white' : 'border-line bg-surface text-sub hover:text-ink'
+          }`}
+        >
+          <BadgePercent size={15} aria-hidden /> Con descuento
+        </button>
         <label className="flex h-[38px] min-w-0 flex-[1_1_220px] items-center gap-2 rounded-xl border border-line bg-surface px-3">
           <Search size={15} className="shrink-0 text-sub" aria-hidden />
           <input
@@ -405,9 +422,10 @@ export default function ComparativaPrecios() {
                     </td>
                     <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-ink">{plata(f.mi_precio)}</td>
                     <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">
-                      <span className="block text-ink">{plata(f.precio_lista)}</span>
+                      {/* Con oferta se compara contra el precio de hoy: la lista queda tachada como dato */}
+                      <span className={`block ${f.con_descuento ? 'text-xs text-sub line-through' : 'text-ink'}`}>{plata(f.precio_lista)}</span>
                       {oferta && (
-                        <span className="mt-0.5 block text-xs text-sub">
+                        <span className={`mt-0.5 block ${f.con_descuento ? 'font-semibold text-ink' : 'text-xs text-sub'}`}>
                           hoy {plata(f.precio)}
                           <span className="ml-1.5 rounded-md bg-brand-600 px-1.5 py-px text-[11px] font-bold text-white">{f.desc_pct}% OFF</span>
                         </span>
@@ -415,7 +433,10 @@ export default function ComparativaPrecios() {
                     </td>
                     <td className="whitespace-nowrap px-3 py-2 text-right">
                       <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums ${e.clase}`}>{pct(f.dif_pct)}</span>
-                      <span className="mt-0.5 block text-xs tabular-nums text-sub">{f.dif == null ? '' : `${f.dif > 0 ? '+' : ''}${plata(f.dif)}`}</span>
+                      <span className="mt-0.5 block text-xs tabular-nums text-sub">
+                        {f.dif == null ? '' : `${f.dif > 0 ? '+' : ''}${plata(f.dif)}`}
+                        {f.con_descuento && <span className="ml-1">vs. oferta</span>}
+                      </span>
                     </td>
                     <td className="whitespace-nowrap px-3 py-2">
                       <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${e.clase}`}>{e.label}</span>
@@ -459,8 +480,8 @@ export default function ComparativaPrecios() {
       </div>
 
       <p className="mt-3 max-w-3xl text-xs leading-relaxed text-sub">
-        La diferencia es tu precio público contra el precio de lista de la marca (antes de la oferta). Igual = hasta ±2%.
-        Si la marca tiene el artículo en oferta, se muestra debajo el precio de hoy y el % OFF. El precio de la marca no
+        La diferencia es tu precio público contra el precio de la marca: el de lista o, si la marca lo tiene en oferta,
+        el precio con descuento (la lista queda tachada y la diferencia dice "vs. oferta"). Igual = hasta ±2%. El precio de la marca no
         incluye promociones bancarias, y cuando la web no tiene stock suele quedar el último precio de liquidación.
         "Revisar" = algún precio menor a $10.000. La columna Stock es tu stock total en MITO (el mismo número que F12
         Consulta artículos), no el de la web de la marca.
