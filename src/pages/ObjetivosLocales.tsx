@@ -17,6 +17,9 @@ import { useAuth } from '@/context/AuthContext'
 /*  la RPC con usuarios.local).                                          */
 /*  Datos: sql/objetivos_locales.sql (RPC objetivos_locales_dia), venta */
 /*  diaria que sube puente-sql/scripts/sync-ventas-locales.js.          */
+/*  WEB → Objetivos usa esta misma pantalla con soloLocal="WEB": pide   */
+/*  ese local a la RPC (permiso web_objetivos.view) y nunca muestra     */
+/*  las vistas del admin, ni siquiera al admin.                          */
 /* ------------------------------------------------------------------ */
 
 interface FilaObj {
@@ -57,9 +60,10 @@ const tono = (p: number) => (p >= 100 ? 'ok' : p >= 80 ? 'medio' : 'mal')
 const BORDE = { ok: 'border-l-emerald-500', medio: 'border-l-amber-500', mal: 'border-l-red-500' } as const
 const TEXTO = { ok: 'text-emerald-400', medio: 'text-amber-400', mal: 'text-red-400' } as const
 
-export default function ObjetivosLocales() {
-  const { isAdmin, perfil } = useAuth()
-  const miLocal = perfil?.local ?? null
+export default function ObjetivosLocales({ soloLocal }: { soloLocal?: string } = {}) {
+  const auth = useAuth()
+  const isAdmin = auth.isAdmin && !soloLocal
+  const miLocal = soloLocal ?? auth.perfil?.local ?? null
   const inicial = periodoDe(hoyIso())
   const [periodo, setPeriodo] = useState(inicial)
   const rango = useMemo(() => rangoPeriodo(periodo.anio, periodo.mes), [periodo])
@@ -89,11 +93,11 @@ export default function ObjetivosLocales() {
     if (!supabase) return
     setCargando(true)
     setError(null)
-    const { data, error: e } = await supabase.rpc('objetivos_locales_dia', { p_desde: rango.desde, p_hasta: rango.hasta })
+    const { data, error: e } = await supabase.rpc('objetivos_locales_dia', { p_desde: rango.desde, p_hasta: rango.hasta, p_local: soloLocal ?? null })
     setCargando(false)
     if (e) { setError(e.message); setFilas([]); return }
     setFilas(((data as FilaObj[] | null) ?? []).map(numerico))
-  }, [rango])
+  }, [rango, soloLocal])
   useEffect(() => { void cargar() }, [cargar])
 
   const cargarDetalle = useCallback(async () => {

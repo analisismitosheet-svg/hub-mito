@@ -29,6 +29,7 @@
 - `contador.view` → contador de clientes ([[Otros módulos]]).
 - `tracking.view` / `tracking.gestionar` → [[Tracking de transporte]] (área Administradores, `area_administradores.view`).
 - `area_web.view` + `tiendanube.view` → área WEB y [[Ventas web (Tiendanube)]]; los trae el rol `web`.
+- `web_objetivos.view` → WEB → Objetivos (`/web/objetivos`): la pantalla de Objetivos fija en el local WEB (la RPC `objetivos_locales_dia` acepta `p_local = 'WEB'` con este permiso). Lo trae el rol `web` (04/11/2026).
 - `compras_precios.view` → [[Comparativa de precios]] (asignado a administrador y compras).
 
 ## Pruebas de RLS

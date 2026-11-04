@@ -281,6 +281,10 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
     id: 'ventas-web', areaId: 'web', titulo: 'Ventas web', descripcion: 'Pedidos y facturación de la tienda Tiendanube',
     icon: ShoppingBag, color: '#a855f7', acciones: { ver: 'tiendanube.view' },
   },
+  {
+    id: 'web-objetivos', areaId: 'web', titulo: 'Objetivos', descripcion: 'Objetivos del local WEB',
+    icon: Target, color: '#84cc16', acciones: { ver: 'web_objetivos.view' },
+  },
 
   // ===== Configuración =====
   {

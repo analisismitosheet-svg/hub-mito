@@ -476,6 +476,14 @@ export default function App() {
             }
           />
           <Route
+            path="/web/objetivos"
+            element={
+              <PermissionRoute permiso="web_objetivos.view">
+                <ObjetivosLocales soloLocal="WEB" />
+              </PermissionRoute>
+            }
+          />
+          <Route
             path="/web/ventas"
             element={
               <PermissionRoute permiso="tiendanube.view">

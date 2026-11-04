@@ -256,6 +256,17 @@ export const APPS: AppDef[] = [
     permiso: 'tiendanube.view',
   },
   {
+    id: 'web-objetivos',
+    areaId: 'web',
+    title: 'Objetivos',
+    description: 'Objetivo de venta del local WEB por día: la venta 2025 del mismo día de la semana actualizada por el IPC del mes.',
+    icon: Target,
+    kind: 'internal',
+    target: '/web/objetivos',
+    color: '#84cc16',
+    permiso: 'web_objetivos.view',
+  },
+  {
     id: 'mayorista-repo',
     areaId: 'mayorista',
     title: 'Repos Mayorista',
