@@ -50,8 +50,12 @@ const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCa
 
 export default function RequerimientoNuevo() {
   const { rubros: RUBROS, rubroDef } = useRubros()
-  const { perfil } = useAuth()
+  const { perfil, isAdmin } = useAuth()
   const local = perfil?.local ?? ''
+  // El admin ve los pedidos de todos los locales (filtro opcional); el resto, solo los de su local
+  const [filtroLocal, setFiltroLocal] = useState('')
+  const verLocal = isAdmin ? filtroLocal : local
+  const veLista = isAdmin || Boolean(local)
   const [locales, setLocales] = useState<{ codigo: string; nombre: string }[]>([])
   const [personas, setPersonas] = useState<Persona[]>([])
   const [solicitante, setSolicitante] = useState<string | null>(null)
@@ -98,20 +102,23 @@ export default function RequerimientoNuevo() {
   }, [personas, local, locales])
 
   const cargarUltimos = useCallback(async () => {
-    if (!supabase || !local) { setAbiertos([]); setTerminados([]); setParaConfirmar([]); return }
+    if (!supabase || !veLista) { setAbiertos([]); setTerminados([]); setParaConfirmar([]); return }
+    let qa = supabase.from('requerimientos').select(CAMPOS_REQ)
+      .in('estado', ['pendiente', 'programado', 'en_curso', 'a_confirmar'])
+    let qt = supabase.from('requerimientos').select(CAMPOS_REQ, { count: 'exact' })
+      .in('estado', ['resuelto', 'no_corresponde'])
+    // '' (admin sin filtro) = todos los locales
+    if (verLocal) { qa = qa.eq('local', verLocal); qt = qt.eq('local', verLocal) }
     const [a, t] = await Promise.all([
-      supabase.from('requerimientos').select(CAMPOS_REQ).eq('local', local)
-        .in('estado', ['pendiente', 'programado', 'en_curso', 'a_confirmar']).order('created_at', { ascending: false }).limit(500),
-      supabase.from('requerimientos').select(CAMPOS_REQ, { count: 'exact' }).eq('local', local)
-        .in('estado', ['resuelto', 'no_corresponde'])
-        .order('resuelto_at', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false }).limit(tope),
+      qa.order('created_at', { ascending: false }).limit(500),
+      qt.order('resuelto_at', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false }).limit(tope),
     ])
     const lista = (a.data as unknown as Requerimiento[] | null) ?? []
     setAbiertos(lista)
     setParaConfirmar(lista.filter((r) => r.estado === 'a_confirmar'))
     setTerminados((t.data as unknown as Requerimiento[] | null) ?? [])
     setTotalTerminados(t.count ?? 0)
-  }, [local, tope])
+  }, [veLista, verLocal, tope])
   useEffect(() => { void cargarUltimos() }, [cargarUltimos])
   useEffect(() => suscribirCambios(['requerimientos'], () => void cargarUltimos()), [cargarUltimos])
 
@@ -194,6 +201,7 @@ export default function RequerimientoNuevo() {
               return (
                 <li key={r.id} className="rounded-xl border border-line bg-surface p-3">
                   <p className="flex flex-wrap items-center gap-2 text-xs">
+                    {isAdmin && <span className="font-semibold text-ink">{nombreLocal(r.local) || r.local_original || 'Sin local'}</span>}
                     <span className="font-semibold text-sub">N° {r.id} · {fechaCorta(r.created_at)}</span>
                     <span className="inline-flex items-center gap-1 text-ink"><rd.icon size={13} style={{ color: rd.color }} aria-hidden />{r.rubro}</span>
                   </p>
@@ -297,9 +305,20 @@ export default function RequerimientoNuevo() {
         </button>
       </form>
 
-      {local && (
+      {veLista && (
         <section className="mt-8">
-          <h2 className="mb-2 font-display text-lg font-semibold text-ink">Requerimientos de {nombreLocal(local)}</h2>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-display text-lg font-semibold text-ink">
+              Requerimientos {verLocal ? `de ${nombreLocal(verLocal)}` : 'de todos los locales'}
+            </h2>
+            {isAdmin && (
+              <select value={filtroLocal} onChange={(e) => { setFiltroLocal(e.target.value); setTope(TANDA) }} aria-label="Local"
+                className="h-9 rounded-lg border border-line bg-surface2 px-2 text-sm text-ink">
+                <option value="">Todos los locales</option>
+                {locales.map((l) => <option key={l.codigo} value={l.codigo}>{l.nombre}</option>)}
+              </select>
+            )}
+          </div>
           <div className="mb-3 flex gap-2">
             {([['abiertos', 'Abiertos', abiertos.length], ['terminados', 'Terminados', totalTerminados]] as const).map(([id, label, n]) => (
               <button key={id} type="button" onClick={() => setVista(id)} aria-pressed={vista === id}
@@ -319,6 +338,7 @@ export default function RequerimientoNuevo() {
                 return (
                   <li key={r.id} className="rounded-2xl border border-line bg-surface p-3">
                     <div className="flex flex-wrap items-center gap-2 text-xs">
+                      {isAdmin && !verLocal && <span className="font-semibold text-ink">{nombreLocal(r.local) || r.local_original || 'Sin local'}</span>}
                       <span className="font-semibold text-sub">N° {r.id} · {fechaCorta(r.created_at)}</span>
                       <span className="inline-flex items-center gap-1 text-ink"><rd.icon size={13} style={{ color: rd.color }} aria-hidden />{r.rubro}</span>
                       <span className={`rounded-full border px-2 py-0.5 ${prioridadDef(r.prioridad).clase}`}>{prioridadDef(r.prioridad).label}</span>

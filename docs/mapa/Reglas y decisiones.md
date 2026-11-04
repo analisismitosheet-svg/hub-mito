@@ -15,3 +15,4 @@
 - Vistas para Datos SQL: respuesta < 4,5 MB ([[Arquitectura]]).
 - Pausas del piso: las autoriza el puesto, no arrancan solas ([[Repos Mayorista y Mi repo]]). Faltantes al finalizar: la línea se cierra sola y el aviso sale solo ([[Armado de pedidos]]).
 - Un pedido completo (todo en verde) no se vuelve a pedir a armar salvo el admin ([[Pedidos compra, venta y cancelaciones]]).
+- **El admin ve todo** (04/11/2026): en pantallas que filtran por local o usuario, el admin ve todos los registros (selector «Todos los locales» y el local en cada fila). Ej.: [[Requerimientos]].
