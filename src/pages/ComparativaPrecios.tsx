@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowDown, ArrowUp, BadgePercent, ExternalLink, Loader2, RefreshCw, Search } from 'lucide-react'
+import { ArrowDown, ArrowUp, BadgePercent, Download, ExternalLink, Loader2, RefreshCw, Search } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
@@ -230,6 +230,48 @@ export default function ComparativaPrecios() {
 
   useEffect(() => { setMostrar(POR_PAGINA) }, [stock, busqueda, soloPublicados, soloDescuento, kpi, orden])
 
+  /** Exporta a Excel exactamente lo filtrado (todas las páginas, mismo orden), con los precios como números. */
+  async function exportarExcel() {
+    if (!visibles.length) return
+    const XLSX = await import('xlsx')
+    const datos = visibles.map((f) => ({
+      'Código': f.codigo,
+      'ID artículo': f.id_art,
+      'Descripción': f.descripcion,
+      'Precio público': f.mi_precio,
+      'Precio marca (lista)': f.precio_lista,
+      'Precio marca hoy': (f.desc_pct ?? 0) > 0 ? f.precio : null,
+      '% OFF': (f.desc_pct ?? 0) > 0 ? f.desc_pct : null,
+      'Diferencia %': f.dif_pct,
+      'Diferencia $': f.dif,
+      'Comparado contra': f.con_descuento ? 'Oferta' : 'Lista',
+      'Estado': ESTADOS[f.estado].label,
+      'Stock': stockDe(stockData, f.id_art),
+      'Web': f.url ?? '',
+    }))
+    const ws = XLSX.utils.json_to_sheet(datos)
+    // Formato de número (el valor queda numérico para poder sumar en Excel)
+    const formatos: Record<string, string> = { D: '#,##0', E: '#,##0', F: '#,##0', H: '0.0%', I: '#,##0', L: '#,##0' }
+    for (let r = 2; r <= datos.length + 1; r++) {
+      for (const [col, z] of Object.entries(formatos)) {
+        const celda = ws[`${col}${r}`]
+        if (celda && celda.t === 'n') celda.z = z
+      }
+    }
+    ws['!cols'] = [14, 12, 48, 14, 18, 16, 8, 13, 13, 16, 12, 8, 40].map((wch) => ({ wch }))
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Comparativa')
+    const filtro = [
+      kpi === 'todos' ? 'todos' : kpi,
+      soloDescuento && 'con_descuento',
+      stock === 'si' ? 'con_stock' : stock === 'no' ? 'sin_stock' : null,
+      soloPublicados && 'publicados',
+      busqueda.trim() && `busqueda_${busqueda.trim().replace(/[^\w-]+/g, '_')}`,
+    ].filter(Boolean).join('_')
+    const hoy = new Date().toLocaleDateString('sv-SE') // AAAA-MM-DD en hora local
+    XLSX.writeFile(wb, `comparativa_precios_${marca}_${filtro}_${hoy}.xlsx`)
+  }
+
   const ordenarPor = (col: Col) =>
     setOrden((o) => (o.col === col ? { col, asc: !o.asc } : { col, asc: col === 'descripcion' || col === 'estado' }))
 
@@ -293,17 +335,28 @@ export default function ComparativaPrecios() {
           <h1 className="font-display text-2xl font-semibold text-ink">Comparativa de precios</h1>
           <p className="text-sm text-sub">Tu precio público contra el precio de la marca en su web: el de lista o, si está en oferta, el precio con descuento.</p>
         </div>
-        {isAdmin && (
+        <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={() => void actualizarAhora()}
-            disabled={!!leyendo}
-            className="btn-press inline-flex h-10 items-center gap-1.5 rounded-xl bg-cyan-600 px-4 text-sm font-semibold text-white shadow-soft transition hover:bg-cyan-700 disabled:opacity-60"
-            title="Vuelve a leer los precios de la web (tarda unos minutos)"
+            type="button"
+            onClick={() => void exportarExcel()}
+            disabled={!visibles.length}
+            className="btn-press inline-flex h-10 items-center gap-1.5 rounded-xl border border-line bg-surface px-4 text-sm font-semibold text-ink shadow-soft transition hover:bg-surface2 disabled:opacity-50"
+            title="Descarga a Excel exactamente los artículos filtrados"
           >
-            <RefreshCw size={15} aria-hidden className={leyendo ? 'animate-spin' : ''} />
-            {leyendo ? 'Actualizando…' : 'Actualizar ahora'}
+            <Download size={15} aria-hidden /> Exportar a Excel
           </button>
-        )}
+          {isAdmin && (
+            <button
+              onClick={() => void actualizarAhora()}
+              disabled={!!leyendo}
+              className="btn-press inline-flex h-10 items-center gap-1.5 rounded-xl bg-cyan-600 px-4 text-sm font-semibold text-white shadow-soft transition hover:bg-cyan-700 disabled:opacity-60"
+              title="Vuelve a leer los precios de la web (tarda unos minutos)"
+            >
+              <RefreshCw size={15} aria-hidden className={leyendo ? 'animate-spin' : ''} />
+              {leyendo ? 'Actualizando…' : 'Actualizar ahora'}
+            </button>
+          )}
+        </div>
       </header>
 
       {/* Marca + última lectura */}
