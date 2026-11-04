@@ -46,6 +46,7 @@ import Roles from '@/pages/Roles'
 import LocalesPage from '@/pages/Locales'
 import EmpleadosPage from '@/pages/Empleados'
 import Cumpleanios from '@/pages/Cumpleanios'
+import FeriadosRrhh from '@/pages/FeriadosRrhh'
 import ProveedoresPacho from '@/pages/ProveedoresPacho'
 import GuiaPacho from '@/pages/GuiaPacho'
 import Transportes from '@/pages/Transportes'
@@ -708,6 +709,14 @@ export default function App() {
             element={
               <PermissionRoute permiso="rrhh.empleados.view">
                 <EmpleadosPage />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/rrhh/feriados"
+            element={
+              <PermissionRoute permiso="rrhh.feriados.view">
+                <FeriadosRrhh />
               </PermissionRoute>
             }
           />

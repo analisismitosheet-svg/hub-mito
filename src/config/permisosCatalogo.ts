@@ -34,6 +34,7 @@ import {
   ShoppingBag,
   Wallet,
   type LucideIcon,
+  CalendarOff,
 } from 'lucide-react'
 
 /**
@@ -188,6 +189,11 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
     id: 'rrhh-empleados', areaId: 'rrhh', titulo: 'Empleados y cumpleaños', descripcion: 'Legajos de empleados',
     icon: Cake, color: '#ec4899',
     acciones: { ver: 'rrhh.empleados.view', crear: 'rrhh.empleados.create', editar: 'rrhh.empleados.edit', borrar: 'rrhh.empleados.delete' },
+  },
+  {
+    id: 'rrhh-feriados', areaId: 'rrhh', titulo: 'Feriados', descripcion: 'Días que un local no abre (sin objetivo)',
+    icon: CalendarOff, color: '#f97316', acciones: { ver: 'rrhh.feriados.view', editar: 'rrhh.feriados.edit' },
+    etiquetas: { editar: 'Cargar y quitar' },
   },
 
   // ===== Tesorería =====

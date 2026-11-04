@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
-import { CheckCircle2, ChevronLeft, ChevronRight, Loader2, MapPin, RefreshCw, Target, Trash2, TriangleAlert } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { CheckCircle2, ChevronLeft, ChevronRight, Loader2, MapPin, RefreshCw, Target, TriangleAlert } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
@@ -12,10 +12,12 @@ import { useAuth } from '@/context/AuthContext'
 /*  (va del 26 al 25: del 26/10 al 25/11 son los objetivos de noviembre). */
 /*  CFR4 sale de CFR9: el domingo de cada semana se reparte entre       */
 /*  lunes y sábado según lo que vendió cada día (domingo cerrado).      */
-/*  El admin ve todos los locales, el detalle, el comparativo, el IPC y */
-/*  los feriados; con objetivos.ver_todo (supervisores) ve todos los    */
-/*  locales, el detalle y el comparativo; el resto ve solo el calendario*/
-/*  de su local (lo filtra la RPC con usuarios.local).                   */
+/*  El admin ve todos los locales, el detalle, el comparativo y el IPC; */
+/*  con objetivos.ver_todo (supervisores) ve todos los locales, el      */
+/*  detalle y el comparativo; el resto ve solo el calendario de su      */
+/*  local (lo filtra la RPC con usuarios.local). Los feriados los carga */
+/*  RR. HH. (FeriadosRrhh.tsx); un día con algún local cerrado va       */
+/*  celeste y nombra los locales.                                        */
 /*  Datos: sql/objetivos_locales.sql (RPC objetivos_locales_dia), venta */
 /*  diaria que sube puente-sql/scripts/sync-ventas-locales.js.          */
 /*  WEB → Objetivos usa esta misma pantalla con soloLocal="WEB": pide   */
@@ -29,13 +31,12 @@ interface FilaObj {
 }
 interface Ipc { anio: number; mes: number; pct: number | null; interanual: number | null }
 interface Feriado { id: number; fecha: string; local: string | null; motivo: string | null }
-interface Dia { fecha: string; objetivo: number; venta: number | null; feriado: boolean; opera: boolean; sinVenta: boolean }
+interface Dia { fecha: string; objetivo: number; venta: number | null; feriado: boolean; opera: boolean; sinVenta: boolean; cerrados: string[] }
 /** día que ya pasó y el local no vendió nada: no se le calcula objetivo */
 const sinVentaPasada = (f: FilaObj, hoy: string) => f.fecha < hoy && !f.venta
 
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
-const DIAS_NOMBRE = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 const plata = (n: number) => `$ ${n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const pct = (n: number, dec = 1) => `${n.toLocaleString('es-AR', { minimumFractionDigits: dec, maximumFractionDigits: dec })} %`
 const dow = (iso: string) => new Date(`${iso}T12:00:00Z`).getUTCDay()
@@ -75,7 +76,7 @@ export default function ObjetivosLocales({ soloLocal }: { soloLocal?: string } =
   const [localSel, setLocalSel] = useState<string>('')
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [vista, setVista] = useState<'dias' | 'comparativo' | 'ipc' | 'feriados'>('dias')
+  const [vista, setVista] = useState<'dias' | 'comparativo' | 'ipc'>('dias')
 
   // Detalle (admin): rango libre, por defecto el período hasta ayer
   const ayer = sumarDias(hoyIso(), -1)
@@ -103,6 +104,13 @@ export default function ObjetivosLocales({ soloLocal }: { soloLocal?: string } =
   }, [rango, soloLocal])
   useEffect(() => { void cargar() }, [cargar])
 
+  // Feriados del período (los carga RR. HH.): para nombrar los locales cerrados de cada día
+  const [feriados, setFeriados] = useState<Feriado[]>([])
+  useEffect(() => {
+    if (supabase) void supabase.from('objetivos_feriados').select('id,fecha,local,motivo').gte('fecha', rango.desde).lte('fecha', rango.hasta)
+      .then(({ data }) => setFeriados((data as Feriado[] | null) ?? []))
+  }, [rango])
+
   const cargarDetalle = useCallback(async () => {
     if (!supabase || !verTodo || !desde || !hasta || hasta < desde) return
     const { data, error: e } = await supabase.rpc('objetivos_locales_dia', { p_desde: desde, p_hasta: hasta })
@@ -125,17 +133,21 @@ export default function ObjetivosLocales({ soloLocal }: { soloLocal?: string } =
     const m = new Map<string, Dia>()
     for (const f of filas) {
       if (verLocal && f.local !== verLocal) continue
-      const d = m.get(f.fecha) ?? { fecha: f.fecha, objetivo: 0, venta: null, feriado: true, opera: false, sinVenta: true }
+      const d = m.get(f.fecha) ?? { fecha: f.fecha, objetivo: 0, venta: null, feriado: true, opera: false, sinVenta: true, cerrados: [] }
       const sinVenta = sinVentaPasada(f, hoy)
       d.objetivo += sinVenta ? 0 : f.objetivo ?? 0
       if (f.venta != null) d.venta = (d.venta ?? 0) + f.venta
       d.feriado = d.feriado && f.feriado
       d.opera = d.opera || f.opera
       d.sinVenta = d.sinVenta && sinVenta
+      if (f.feriado) {
+        const fer = feriados.find((x) => x.fecha === f.fecha && (x.local == null || x.local.toUpperCase() === f.local))
+        d.cerrados.push(fer?.motivo ? `${nom(f.local)} · ${fer.motivo}` : nom(f.local))
+      }
       m.set(f.fecha, d)
     }
     return [...m.values()].sort((a, b) => a.fecha.localeCompare(b.fecha))
-  }, [filas, verLocal])
+  }, [filas, verLocal, feriados, nom])
 
   const nombreMes = `${MESES[periodo.mes - 1][0].toUpperCase()}${MESES[periodo.mes - 1].slice(1)} ${periodo.anio}`
   const mover = (n: number) => setPeriodo((p) => {
@@ -144,7 +156,7 @@ export default function ObjetivosLocales({ soloLocal }: { soloLocal?: string } =
   })
 
   const pestañas = isAdmin
-    ? ([['dias', 'Objetivos por día'], ['comparativo', 'Comparativo por local'], ['ipc', 'IPC mensual'], ['feriados', 'Feriados']] as const)
+    ? ([['dias', 'Objetivos por día'], ['comparativo', 'Comparativo por local'], ['ipc', 'IPC mensual']] as const)
     : verTodo ? ([['dias', 'Objetivos por día'], ['comparativo', 'Comparativo por local']] as const) : null
 
   return (
@@ -213,7 +225,6 @@ export default function ObjetivosLocales({ soloLocal }: { soloLocal?: string } =
 
       {vista === 'comparativo' && verTodo && <Comparativo filas={filas} locales={locales} nom={nom} />}
       {vista === 'ipc' && isAdmin && <IpcMensual onCambio={() => void cargar()} />}
-      {vista === 'feriados' && isAdmin && <Feriados locales={locales} nom={nom} onCambio={() => { void cargar(); void cargarDetalle() }} />}
     </Layout>
   )
 }
@@ -273,6 +284,7 @@ function Calendario({ dias }: { dias: Dia[] }) {
         <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-amber-500" />80% a 99%</span>
         <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-red-500" />menos de 80%</span>
         <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-slate-500" />feriado, no abre o no vendió: sin objetivo</span>
+        <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-sky-500" />algún local no abre ese día (feriado cargado por RR. HH.)</span>
         <span>El % y la diferencia cuentan solo los días que ya pasaron.</span>
       </p>
     </>
@@ -296,13 +308,17 @@ function CeldaDia({ d, hoy }: { d: Dia | null; hoy: string }) {
       </div>
     )
   }
+  // Feriado de algunos locales (no de todos): el día queda celeste y dice cuáles no abren
+  const cerrados = d.feriado ? [] : d.cerrados
   return (
-    <div className={`rounded-lg border border-line border-l-4 bg-paper px-2 py-1.5 ${p != null ? BORDE[tono(p)] : ''} ${d.fecha === hoy ? 'ring-2 ring-amber-400' : ''}`}>
-      <p className="mb-1 text-[11px] text-sub">{ddmm(d.fecha)}</p>
+    <div className={`rounded-lg border border-l-4 px-2 py-1.5 ${cerrados.length ? 'border-sky-500/50 bg-sky-500/10' : 'border-line bg-paper'} ${p != null ? BORDE[tono(p)] : ''} ${d.fecha === hoy ? 'ring-2 ring-amber-400' : ''}`}>
+      <p className="mb-1 flex items-center justify-between text-[11px] text-sub">{ddmm(d.fecha)}
+        {cerrados.length > 0 && <span className="rounded-full bg-sky-500/20 px-1.5 text-[10px] font-medium text-sky-300">{cerrados.length === 1 ? '1 local cerrado' : `${cerrados.length} locales cerrados`}</span>}</p>
       <Fila t="Venta" v={d.venta != null ? plata(d.venta) : '—'} />
       <Fila t="Objetivo" v={plata(d.objetivo)} />
       <Fila t="Dif." v={p != null ? plata((d.venta ?? 0) - d.objetivo) : '—'} />
       <Fila t="%" v={p != null ? <span className={`font-bold ${TEXTO[tono(p)]}`}>{pct(p)}</span> : '—'} />
+      {cerrados.map((c) => <p key={c} className="mt-0.5 truncate text-[10px] text-sky-300" title={c}>{c}</p>)}
     </div>
   )
 }
@@ -622,89 +638,6 @@ function IpcMensual({ onCambio }: { onCambio: () => void }) {
           )
         })}
       </div>
-    </div>
-  )
-}
-
-/* ------------------------------------------------------------------ */
-/*  Feriados sin objetivo (admin)                                       */
-/* ------------------------------------------------------------------ */
-function Feriados({ locales, nom, onCambio }: { locales: string[]; nom: (l: string) => string; onCambio: () => void }) {
-  const [lista, setLista] = useState<Feriado[]>([])
-  const [fecha, setFecha] = useState('')
-  const [local, setLocal] = useState('')
-  const [motivo, setMotivo] = useState('')
-  const [ocupado, setOcupado] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const cargarLista = useCallback(async () => {
-    if (!supabase) return
-    const { data, error: e } = await supabase.from('objetivos_feriados').select('id,fecha,local,motivo').order('fecha', { ascending: false })
-    if (e) setError(e.message)
-    setLista((data as Feriado[] | null) ?? [])
-  }, [])
-  useEffect(() => { void cargarLista() }, [cargarLista])
-
-  async function agregar(e: FormEvent) {
-    e.preventDefault()
-    if (!supabase || !fecha) return
-    setOcupado(true)
-    setError(null)
-    const { error: err } = await supabase.from('objetivos_feriados').insert({ fecha, local: local || null, motivo: motivo.trim() || null })
-    setOcupado(false)
-    if (err) { setError(err.code === '23505' ? 'Ese feriado ya está cargado.' : err.message); return }
-    setFecha(''); setMotivo('')
-    await cargarLista()
-    onCambio()
-  }
-
-  async function quitar(id: number) {
-    if (!supabase) return
-    const { error: err } = await supabase.from('objetivos_feriados').delete().eq('id', id)
-    if (err) { setError(err.message); return }
-    await cargarLista()
-    onCambio()
-  }
-
-  return (
-    <div className="rounded-2xl border border-line bg-surface p-4">
-      <p className="mb-3 text-sm text-sub">Ese día el local no lleva objetivo: no suma al objetivo de la semana ni del mes.</p>
-      <form onSubmit={(e) => void agregar(e)} className="mb-4 flex flex-wrap items-center gap-2">
-        <input id="fer-fecha" type="date" required value={fecha} onChange={(e) => setFecha(e.target.value)} aria-label="Fecha"
-          className="h-9 rounded-lg border border-line bg-surface2 px-2 text-sm text-ink" />
-        <select id="fer-local" value={local} onChange={(e) => setLocal(e.target.value)} aria-label="Local" className="h-9 rounded-lg border border-line bg-surface2 px-2 text-sm text-ink">
-          <option value="">Todos los locales</option>
-          {[...locales].sort((a, b) => nom(a).localeCompare(nom(b))).map((l) => <option key={l} value={l}>{nom(l)}</option>)}
-        </select>
-        <input id="fer-motivo" value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Motivo (opcional)" aria-label="Motivo"
-          className="h-9 min-w-0 flex-1 rounded-lg border border-line bg-surface2 px-2 text-sm text-ink" />
-        <button type="submit" disabled={ocupado || !fecha} className="btn-press h-9 rounded-lg bg-lime-500 px-3 text-sm font-semibold text-black disabled:opacity-50">
-          {ocupado ? 'Guardando…' : 'Agregar feriado'}
-        </button>
-      </form>
-      {error && <p role="alert" className="mb-3 text-sm text-brand-400">{error}</p>}
-      {lista.length ? (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-left text-[11px] uppercase tracking-wider text-sub/70">
-              <tr><th className="py-1.5 pr-3">Fecha</th><th className="py-1.5 pr-3">Día</th><th className="py-1.5 pr-3">Local</th><th className="py-1.5 pr-3">Motivo</th><th /></tr>
-            </thead>
-            <tbody>
-              {lista.map((f) => (
-                <tr key={f.id} className="border-t border-line">
-                  <td className="py-1.5 pr-3 tabular-nums text-ink">{ddmmaaaa(f.fecha)}</td>
-                  <td className="py-1.5 pr-3 text-sub">{DIAS_NOMBRE[dow(f.fecha)]}</td>
-                  <td className="py-1.5 pr-3 text-ink">{f.local ? nom(f.local) : 'Todos los locales'}</td>
-                  <td className="py-1.5 pr-3 text-sub">{f.motivo ?? ''}</td>
-                  <td className="py-1.5 text-right">
-                    <button onClick={() => void quitar(f.id)} className="inline-flex items-center gap-1 text-xs text-red-400 hover:underline"><Trash2 size={13} aria-hidden /> Quitar</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : <p className="text-sm text-sub">No hay feriados cargados.</p>}
     </div>
   )
 }

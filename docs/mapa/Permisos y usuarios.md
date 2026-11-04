@@ -29,7 +29,8 @@
 - `contador.view` → contador de clientes ([[Otros módulos]]).
 - `tracking.view` / `tracking.gestionar` → [[Tracking de transporte]] (área Administradores, `area_administradores.view`).
 - `area_web.view` + `tiendanube.view` → área WEB y [[Ventas web (Tiendanube)]]; los trae el rol `web`.
-- `objetivos.view` / `objetivos.ver_todo` → Locales → Objetivos: con `.ver_todo` (rol `supervisor`, 04/11/2026) se ven todos los locales, el detalle y el comparativo; IPC y feriados solo admin.
+- `objetivos.view` / `objetivos.ver_todo` → Locales → Objetivos: con `.ver_todo` (rol `supervisor`, 04/11/2026) se ven todos los locales, el detalle y el comparativo; IPC solo admin.
+- `rrhh.feriados.view` / `rrhh.feriados.edit` → RR. HH. → Feriados (`/rrhh/feriados`): carga y quita los feriados que dejan a un local sin objetivo. Rol `rr_hh` (04/11/2026); el admin también.
 - `web_objetivos.view` → WEB → Objetivos (`/web/objetivos`): la pantalla de Objetivos fija en el local WEB (la RPC `objetivos_locales_dia` acepta `p_local = 'WEB'` con este permiso). Lo trae el rol `web` (04/11/2026).
 - `compras_precios.view` → [[Comparativa de precios]] (asignado a administrador y compras).
 

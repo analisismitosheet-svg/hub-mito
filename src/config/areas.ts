@@ -53,6 +53,7 @@ import {
   ShoppingBag,
   Globe,
   type LucideIcon,
+  CalendarOff,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
@@ -522,6 +523,17 @@ export const APPS: AppDef[] = [
     target: '/rrhh/cumpleanios',
     color: '#ec4899',
     permiso: 'rrhh.empleados.view',
+  },
+  {
+    id: 'rrhh-feriados',
+    areaId: 'rrhh',
+    title: 'Feriados',
+    description: 'Días que un local (o todos) no abre: ese día no lleva objetivo.',
+    icon: CalendarOff,
+    kind: 'internal',
+    target: '/rrhh/feriados',
+    color: '#f97316',
+    permiso: 'rrhh.feriados.view',
   },
   {
     id: 'polo52-facturacion',

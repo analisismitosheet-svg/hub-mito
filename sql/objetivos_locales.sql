@@ -77,7 +77,8 @@ drop policy if exists ipc_mensual_editar on public.ipc_mensual;
 create policy ipc_mensual_editar on public.ipc_mensual for all to authenticated
   using (private.es_admin()) with check (private.es_admin());
 
--- Feriados sin objetivo (local null = todos los locales). Los carga el admin.
+-- Feriados sin objetivo (local null = todos los locales). Los carga RR. HH. (rrhh.feriados.edit,
+-- pantalla RR. HH. → Feriados) o el admin; los ven objetivos.view y rrhh.feriados.view.
 create table if not exists public.objetivos_feriados (
   id bigint generated always as identity primary key,
   fecha date not null,
@@ -88,12 +89,20 @@ create table if not exists public.objetivos_feriados (
 );
 create unique index if not exists objetivos_feriados_uq on public.objetivos_feriados (fecha, coalesce(local, '*'));
 alter table public.objetivos_feriados enable row level security;
+insert into public.permisos (clave, modulo, accion, label, orden) values
+  ('rrhh.feriados.view', 'rrhh', 'view', 'Ver feriados de los locales', 868),
+  ('rrhh.feriados.edit', 'rrhh', 'edit', 'Cargar y quitar feriados de los locales', 869)
+on conflict (clave) do nothing;
+insert into public.rol_permisos (rol, permiso_clave) values
+  ('rr_hh', 'rrhh.feriados.view'), ('rr_hh', 'rrhh.feriados.edit')
+on conflict do nothing;
 drop policy if exists objetivos_feriados_ver on public.objetivos_feriados;
 create policy objetivos_feriados_ver on public.objetivos_feriados for select to authenticated
-  using (private.tengo_permiso('objetivos.view'));
+  using (private.tengo_permiso('objetivos.view') or private.tengo_permiso('rrhh.feriados.view'));
 drop policy if exists objetivos_feriados_editar on public.objetivos_feriados;
 create policy objetivos_feriados_editar on public.objetivos_feriados for all to authenticated
-  using (private.es_admin()) with check (private.es_admin());
+  using (private.es_admin() or private.tengo_permiso('rrhh.feriados.edit'))
+  with check (private.es_admin() or private.tengo_permiso('rrhh.feriados.edit'));
 
 -- ---------------------------------------------------------------------------
 -- Puente: sube/actualiza la venta diaria. p_filas: [{local, fecha, total, tickets}]
