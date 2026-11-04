@@ -14,8 +14,8 @@ import {
 /* ------------------------------------------------------------------ */
 /*  Arquitectura → Requerimientos → Bandeja (requerimientos.gestionar) */
 /*  Lo que cargan los locales: se le asigna día, horario y una o más   */
-/*  personas de mantenimiento (les aparece en Mis tareas) o se         */
-/*  descarta. El cierre lo da el local que lo pidió (A confirmar →     */
+/*  personas de mantenimiento (les aparece en Mis tareas), se marca    */
+/*  Terminado o se descarta. El cierre lo da el local (A confirmar →   */
 /*  Quedó listo); si dice que no quedó bien, vuelve a Sin programar.   */
 /* ------------------------------------------------------------------ */
 
@@ -46,8 +46,8 @@ export default function RequerimientosBandeja() {
   const [fRubro, setFRubro] = useState('')
   const [fPrioridad, setFPrioridad] = useState('')
   const [texto, setTexto] = useState('')
-  // Panel abierto en una tarjeta: programar / descartar
-  const [panel, setPanel] = useState<{ id: number; tipo: 'programar' | 'descartar' } | null>(null)
+  // Panel abierto en una tarjeta: programar / terminar / descartar
+  const [panel, setPanel] = useState<{ id: number; tipo: 'programar' | 'descartar' | 'terminar' } | null>(null)
   const [dia, setDia] = useState(hoyIso())
   const [hora, setHora] = useState('09:00')
   const [asignados, setAsignados] = useState<string[]>([])
@@ -103,7 +103,7 @@ export default function RequerimientosBandeja() {
   }, [abiertos, cerrados, filtrar, orden])
   const lista = porPestana[pestana]
 
-  function abrir(r: Requerimiento, tipo: 'programar' | 'descartar') {
+  function abrir(r: Requerimiento, tipo: 'programar' | 'descartar' | 'terminar') {
     setPanel({ id: r.id, tipo })
     setNota('')
     if (tipo === 'programar') {
@@ -123,7 +123,10 @@ export default function RequerimientosBandeja() {
     setError(null)
     const { error: err } = panel.tipo === 'programar'
       ? await supabase.rpc('requerimiento_programar', { p_id: panel.id, p_cuando: new Date(`${dia}T${hora}:00`).toISOString(), p_legajos: asignados, p_nota: nota })
-      : await supabase.rpc('requerimiento_descartar', { p_id: panel.id, p_motivo: nota })
+      : panel.tipo === 'terminar'
+        // Queda «a confirmar»: el OK final lo da el local
+        ? await supabase.rpc('requerimiento_terminar', { p_id: panel.id, p_comentario: nota, p_fotos: [] })
+        : await supabase.rpc('requerimiento_descartar', { p_id: panel.id, p_motivo: nota })
     setGuardando(false)
     if (err) { setError(err.message); return }
     // Al local le llega al celular qué arreglo es, el día, el horario y quién va
@@ -276,7 +279,7 @@ export default function RequerimientosBandeja() {
                     )}
                     <div className="flex flex-wrap items-center gap-2">
                       <input autoFocus value={nota} onChange={(e) => setNota(e.target.value)}
-                        placeholder={panel.tipo === 'programar' ? 'Nota para mantenimiento (opcional)' : 'Motivo'}
+                        placeholder={panel.tipo === 'programar' ? 'Nota para mantenimiento (opcional)' : panel.tipo === 'terminar' ? 'Qué se hizo (opcional)' : 'Motivo'}
                         className="h-9 min-w-0 flex-1 rounded-lg border border-line bg-surface px-2 text-sm text-ink" />
                       <button type="button" onClick={() => void confirmar()} disabled={guardando || (panel.tipo === 'programar' && asignados.length === 0)}
                         className={`${btn} bg-teal-600 text-white hover:bg-teal-700`}>
@@ -290,6 +293,12 @@ export default function RequerimientosBandeja() {
                     {programable && (
                       <button type="button" onClick={() => abrir(r, 'programar')} className={`${btn} bg-teal-600 text-white hover:bg-teal-700`}>
                         <CalendarClock size={15} aria-hidden /> {r.programado_para ? 'Reprogramar' : 'Programar'}
+                      </button>
+                    )}
+                    {programable && (
+                      <button type="button" onClick={() => abrir(r, 'terminar')} title="Queda a confirmar por el local"
+                        className={`${btn} border border-emerald-500/40 bg-emerald-500/10 text-emerald-500`}>
+                        <CircleCheck size={15} aria-hidden /> Terminado
                       </button>
                     )}
                     {abierto && (

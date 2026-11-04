@@ -337,6 +337,8 @@ begin
 end $$;
 
 -- Terminar no cierra: queda «a confirmar» hasta que el local dé la conformidad.
+-- Mantenimiento termina lo programado o en curso; Arquitectura (botón Terminado de la
+-- bandeja) también lo que está sin programar.
 drop function if exists public.requerimiento_resolver(bigint, text, text[]);
 create or replace function public.requerimiento_terminar(p_id bigint, p_comentario text default null, p_fotos text[] default '{}')
 returns void language plpgsql security definer set search_path = public as $$
@@ -348,8 +350,9 @@ begin
      set estado = 'a_confirmar', terminado_at = now(), terminado_por = private.req_quien(),
          terminado_comentario = nullif(trim(coalesce(p_comentario, '')), ''), terminado_fotos = coalesce(p_fotos, '{}'),
          iniciado_at = coalesce(iniciado_at, now()), updated_at = now()
-   where id = p_id and estado in ('programado', 'en_curso');
-  if not found then raise exception 'Esa tarea no está programada ni en curso'; end if;
+   where id = p_id and (estado in ('programado', 'en_curso')
+                        or (estado = 'pendiente' and private.tengo_permiso('requerimientos.gestionar')));
+  if not found then raise exception 'Ese requerimiento no se puede dar por terminado'; end if;
 end $$;
 
 -- ---------- Conformidad del local ----------

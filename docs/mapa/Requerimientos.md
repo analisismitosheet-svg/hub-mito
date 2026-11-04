@@ -4,7 +4,7 @@ Reemplaza el Google Form «CARGA DE REQUERIMIENTO» (04/11/2026). Área Arquitec
 
 ## Circuito
 1. **Local** carga (`RequerimientoNuevo.tsx`, `/arquitectura/requerimientos/nuevo`): local **siempre** el de la cuenta (`usuarios.local`), quién lo solicita = nómina activa de RR. HH. (`empleados.estado_legajo = 'NOMINA ACTIVA'`; en locales el local está en `area_sector`, `lugar` dice LOCALES), rubro (11), prioridad alta/media/baja, descripción, hasta 3 fotos, «ya está resuelto, solo dejo constancia».
-2. **Arquitectura** programa (`RequerimientosBandeja.tsx`, `/arquitectura/requerimientos/bandeja`): día, horario y **una o más** personas de mantenimiento (`area_sector = 'MANTENIMIENTO'`), nota. Pestañas por estado, orden por fecha asc/desc, filtros. No puede dar por resuelto: solo «No corresponde» o reabrir.
+2. **Arquitectura** programa (`RequerimientosBandeja.tsx`, `/arquitectura/requerimientos/bandeja`): día, horario y **una o más** personas de mantenimiento (`area_sector = 'MANTENIMIENTO'`), nota. Pestañas por estado, orden por fecha asc/desc, filtros. Botón **Terminado** (también desde Sin programar): lo deja «a confirmar» igual que mantenimiento; el cierre lo sigue dando el local. Además «No corresponde» y reabrir.
 3. **Mantenimiento** (`TareasMantenimiento.tsx`, `/mantenimiento/tareas`, estilo Mi repo): Empezar → Terminar con comentario y foto → queda `a_confirmar`.
 4. **El local que lo pidió** da la conformidad arriba del formulario: «Quedó listo» (→ `resuelto`) o «No quedó bien» con motivo (→ vuelve a `pendiente`, `rechazo_motivo`, `rechazos + 1`).
 
