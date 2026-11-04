@@ -4,7 +4,7 @@ Reemplaza el Google Form «CARGA DE REQUERIMIENTO» (04/11/2026). Área Arquitec
 
 ## Circuito
 1. **Local** carga (`RequerimientoNuevo.tsx`, `/arquitectura/requerimientos/nuevo`): local **siempre** el de la cuenta (`usuarios.local`), quién lo solicita = nómina activa de RR. HH. (`empleados.estado_legajo = 'NOMINA ACTIVA'`; en locales el local está en `area_sector`, `lugar` dice LOCALES), rubro (11), prioridad alta/media/baja, descripción, hasta 3 fotos, «ya está resuelto, solo dejo constancia».
-2. **Arquitectura** programa (`RequerimientosBandeja.tsx`, `/arquitectura/requerimientos/bandeja`): día, horario y **una o más** personas de mantenimiento (`area_sector = 'MANTENIMIENTO'`), nota. Pestañas por estado, orden por fecha asc/desc, filtros. Botón **Terminado** (también desde Sin programar): lo deja «a confirmar» igual que mantenimiento; el cierre lo sigue dando el local. Además «No corresponde» y reabrir.
+2. **Arquitectura** programa (`RequerimientosBandeja.tsx`, `/arquitectura/requerimientos/bandeja`): día, horario y **una o más** personas de mantenimiento: nómina activa con `empleados.ubicacion = 'MANTENIMIENTO'` (la carga RR. HH. en Empleados; hoy 752 Blat y 1077 Fernández), nota. Pestañas por estado, orden por fecha asc/desc, filtros. Botón **Terminado** (también desde Sin programar): lo deja «a confirmar» igual que mantenimiento; el cierre lo sigue dando el local. Además «No corresponde» y reabrir.
 3. **Mantenimiento** (`TareasMantenimiento.tsx`, `/mantenimiento/tareas`, estilo Mi repo): Empezar → Terminar con comentario y foto → queda `a_confirmar`.
    Abajo del formulario el local ve sus pedidos en pestañas **Abiertos** / **Terminados** (de a 50 con «Ver más»): quién lo hizo, qué se hizo, fotos del arreglo y cuándo dio el OK. El **admin** ve todos los locales (selector) y puede confirmar cualquiera. En Abiertos cada pedido tiene botones: «a confirmar» → Quedó listo / No quedó bien; el resto → **Terminado** (el local lo cierra directo como resuelto, con comentario opcional; `requerimiento_confirmar(p_id, p_comentario)`).
 4. **El local que lo pidió** da la conformidad arriba del formulario: «Quedó listo» (→ `resuelto`) o «No quedó bien» con motivo (→ vuelve a `pendiente`, `rechazo_motivo`, `rechazos + 1`).
@@ -13,7 +13,7 @@ Estados: `pendiente → programado → en_curso → a_confirmar → resuelto` (o
 
 ## Base (`sql/requerimientos.sql`)
 - Tabla `requerimientos` (RLS: gestionar/tareas ven todo; cargar solo `local = private.mi_local()`), sin escrituras directas. Realtime publicado.
-- RPC: `requerimientos_personas(p_sector)`, `requerimiento_crear`, `_programar(p_legajos text[])`, `_iniciar`, `_terminar`, `_confirmar`, `_no_quedo`, `_descartar`, `_reabrir`.
+- RPC: `requerimientos_personas(p_ubicacion)`, `requerimiento_crear`, `_programar(p_legajos text[])`, `_iniciar`, `_terminar`, `_confirmar`, `_no_quedo`, `_descartar`, `_reabrir`.
 - Fotos: bucket privado `requerimientos` (`createSignedUrl`); las de la planilla vieja son links de Drive.
 - Permisos: `requerimientos.cargar` (rol `locales`, `arquitecto`), `requerimientos.gestionar` (rol `arquitecto`), `requerimientos.tareas` (rol nuevo `mantenimiento`, con `area_mantenimiento.view`; lo tiene `mantenimiento.mito@gmail.com`).
 - Importados los 1.941 pedidos de la planilla (`origen = 'planilla'`): 1.823 resueltos, 118 pendientes; 110 filas venían dañadas; 573 resueltos sin fecha de ejecución (no muestran días).

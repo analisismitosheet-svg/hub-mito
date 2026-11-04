@@ -57,7 +57,7 @@ export const COLUMNAS: Record<string, ColDef> = {
  * Los de Depósito Indo reciben el aviso cuando se carga una reposición o
  * transferencia con renglones que salen de / van a INDO.
  */
-export const UBICACIONES_LEGAJO = ['DEPOSITO MAYORISTA', 'DEPOSITO INDO']
+export const UBICACIONES_LEGAJO = ['DEPOSITO MAYORISTA', 'DEPOSITO INDO', 'MANTENIMIENTO']
 
 /** Columnas visibles por categoría, en el mismo orden que la hoja del Excel. */
 export const COLUMNAS_POR_ESTADO: Record<string, string[]> = {

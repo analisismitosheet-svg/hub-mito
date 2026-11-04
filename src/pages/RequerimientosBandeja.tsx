@@ -60,7 +60,7 @@ export default function RequerimientosBandeja() {
       setLocales(((data as { codigo: string; nombre: string | null }[] | null) ?? [])
         .map((l) => ({ codigo: l.codigo, nombre: l.nombre || l.codigo }))
         .sort((a, b) => a.nombre.localeCompare(b.nombre))))
-    void supabase.rpc('requerimientos_personas', { p_sector: 'MANTENIMIENTO' }).then(({ data }) =>
+    void supabase.rpc('requerimientos_personas', { p_ubicacion: 'MANTENIMIENTO' }).then(({ data }) =>
       setMantenimiento((data as Persona[] | null) ?? []))
   }, [])
   const nombreLocal = useCallback((r: Requerimiento) =>

@@ -243,10 +243,12 @@ returns text language sql stable security definer set search_path = public as $$
 $$;
 
 -- ---------- Personas de la nómina activa ----------
--- p_sector null = toda la nómina activa (quién lo solicita);
--- 'MANTENIMIENTO' = a quién se le asigna la tarea. En los locales, `lugar` dice LOCALES
--- y el local va en `area_sector` (VCP, NVO. CENTRO, CF RUTA 9…).
-create or replace function public.requerimientos_personas(p_sector text default null)
+-- p_ubicacion null = toda la nómina activa (quién lo solicita);
+-- 'MANTENIMIENTO' = a quién se le asigna la tarea (empleados.ubicacion, la carga RR. HH. en
+-- Empleados; sql/legajos_ubicacion.sql). En los locales, `lugar` dice LOCALES y el local va
+-- en `area_sector` (VCP, NVO. CENTRO, CF RUTA 9…): el formulario ordena por eso.
+drop function if exists public.requerimientos_personas(text);
+create or replace function public.requerimientos_personas(p_ubicacion text default null)
 returns jsonb language plpgsql stable security definer set search_path = public as $$
 begin
   if not (private.tengo_permiso('requerimientos.cargar') or private.tengo_permiso('requerimientos.gestionar')
@@ -257,7 +259,7 @@ begin
     select jsonb_agg(jsonb_build_object('legajo', e.legajo, 'nombre', e.nombre, 'lugar', e.lugar, 'sector', e.area_sector) order by e.nombre)
       from public.empleados e
      where e.estado_legajo = 'NOMINA ACTIVA' and e.legajo is not null
-       and (p_sector is null or upper(coalesce(e.area_sector, '')) = upper(p_sector))
+       and (p_ubicacion is null or upper(coalesce(e.ubicacion, '')) = upper(p_ubicacion))
   ), '[]'::jsonb);
 end $$;
 

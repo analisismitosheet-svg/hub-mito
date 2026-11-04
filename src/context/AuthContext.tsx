@@ -27,7 +27,7 @@ export interface Perfil {
   roles: string[]
   /** N° de legajo: liga esta cuenta con la fila de `empleados` (ingreso de piso). */
   legajo: string | null
-  /** Ubicación del legajo (sql/legajos_ubicacion.sql): 'DEPOSITO INDO', 'DEPOSITO MAYORISTA' o null. */
+  /** Ubicación del legajo (sql/legajos_ubicacion.sql): 'DEPOSITO INDO', 'DEPOSITO MAYORISTA', 'MANTENIMIENTO' o null. */
   ubicacion: string | null
 }
 

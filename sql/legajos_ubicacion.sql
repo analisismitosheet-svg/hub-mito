@@ -14,13 +14,15 @@
 -- transfer_lotes.push_ubicacion_at  marca de "ya se avisó por push".
 --
 -- Depósito Mayorista todavía no tiene locales asignados: no recibe avisos.
+-- MANTENIMIENTO (04/11/2026): los de la nómina activa con esta ubicación son a quienes
+-- Arquitectura asigna los requerimientos (sql/requerimientos.sql); no tiene locales.
 -- Idempotente.
 -- ============================================================================
 
 ALTER TABLE public.empleados ADD COLUMN IF NOT EXISTS ubicacion text;
 ALTER TABLE public.empleados DROP CONSTRAINT IF EXISTS empleados_ubicacion_valida;
 ALTER TABLE public.empleados ADD CONSTRAINT empleados_ubicacion_valida
-  CHECK (ubicacion IS NULL OR ubicacion IN ('DEPOSITO MAYORISTA', 'DEPOSITO INDO'));
+  CHECK (ubicacion IS NULL OR ubicacion IN ('DEPOSITO MAYORISTA', 'DEPOSITO INDO', 'MANTENIMIENTO'));
 
 ALTER TABLE public.transfer_lotes ADD COLUMN IF NOT EXISTS push_ubicacion_at timestamptz;
 
