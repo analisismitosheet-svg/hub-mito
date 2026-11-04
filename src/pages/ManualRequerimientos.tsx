@@ -228,9 +228,10 @@ export default function ManualRequerimientos() {
             ))}
           </ul>
           <a href={paso.img} target="_blank" rel="noreferrer" title="Ver la imagen en grande"
-            className="mt-4 block overflow-hidden rounded-xl border border-line">
+            className="mx-auto mt-4 block max-w-[520px] overflow-hidden rounded-xl border border-line">
             <img src={paso.img} alt={paso.alt} width={800} height={552} className="h-auto w-full" />
           </a>
+          <p className="mt-1 text-center text-[11px] text-sub/70">Tocá la imagen para verla en grande</p>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
             <button type="button" onClick={() => ir(n - 1)} disabled={n === 1} className={`${btn} border border-line bg-surface2 text-ink`}>
               <ChevronLeft size={16} aria-hidden /> Anterior
