@@ -4,11 +4,14 @@ import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
+import { ZONAS, nombreZona } from '@/config/zonas'
 
 interface Local {
   codigo: string
   nombre: string | null
+  zona: string | null
 }
+
 
 export default function Locales() {
   const [locales, setLocales] = useState<Local[]>([])
@@ -21,7 +24,7 @@ export default function Locales() {
 
   const cargar = useCallback(async () => {
     if (!supabase) { setCargando(false); return }
-    const { data } = await supabase.from('locales').select('codigo,nombre').order('codigo')
+    const { data } = await supabase.from('locales').select('codigo,nombre,zona').order('codigo')
     setLocales((data as Local[]) ?? [])
     setCargando(false)
   }, [])
@@ -40,6 +43,14 @@ export default function Locales() {
     setCodigo(''); setNombre(''); await cargar()
   }
 
+  async function cambiarZona(cod: string, zona: string) {
+    if (!supabase) return
+    setError(null)
+    const { error } = await supabase.from('locales').update({ zona: zona || null }).eq('codigo', cod)
+    if (error) { setError(error.message); return }
+    setLocales((ls) => ls.map((l) => (l.codigo === cod ? { ...l, zona: zona || null } : l)))
+  }
+
   async function borrar(cod: string) {
     if (!supabase) return
     const { error } = await supabase.from('locales').delete().eq('codigo', cod)
@@ -52,7 +63,7 @@ export default function Locales() {
       <BackButton />
       <header className="mb-5 mt-2">
         <h1 className="font-display text-2xl font-semibold text-ink">Locales</h1>
-        <p className="mt-1 text-sm text-sub">ABM de locales/sucursales del sistema.</p>
+        <p className="mt-1 text-sm text-sub">ABM de locales/sucursales del sistema. La zona de cada local se usa en los filtros de Requerimientos.</p>
       </header>
 
       {error && <p role="alert" className="mb-4 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
@@ -83,6 +94,12 @@ export default function Locales() {
             <span key={l.codigo} className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface2 py-1 pl-3 pr-1.5 text-sm text-ink">
               <span className="font-medium">{l.codigo}</span>
               {l.nombre && <span className="text-xs text-sub">· {l.nombre}</span>}
+              <select value={l.zona ?? ''} onChange={(e) => void cambiarZona(l.codigo, e.target.value)} aria-label={`Zona de ${l.codigo}`}
+                title="Zona (filtros de Requerimientos)"
+                className="ml-1 rounded-md border border-line bg-surface px-1 py-0.5 text-[11px] text-sub">
+                <option value="">Sin zona</option>
+                {ZONAS.map((z) => <option key={z} value={z}>{nombreZona(z)}</option>)}
+              </select>
               <button onClick={() => setConfirm({ message: `¿Borrar el local ${l.codigo}? Los usuarios que lo tengan quedarán sin local asignado.`, onConfirm: () => void borrar(l.codigo) })} aria-label={`Borrar ${l.codigo}`} className="rounded-full p-0.5 text-sub hover:bg-brand-600/20 hover:text-brand-400">
                 <Trash2 size={13} aria-hidden />
               </button>

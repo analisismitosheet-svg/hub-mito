@@ -5,6 +5,8 @@ import BackButton from '@/components/BackButton'
 import { FotosVer } from '@/components/FotosRequerimiento'
 import { supabase } from '@/lib/supabase'
 import { suscribirCambios } from '@/lib/realtime'
+import MultiselectFiltro from '@/components/MultiselectFiltro'
+import { ZONAS, nombreZona } from '@/config/zonas'
 import { avisarRequerimiento } from '@/lib/push'
 import {
   useRubros, PRIORIDADES, ESTADOS, CAMPOS_REQ, prioridadDef, fechaCorta, fechaHora, diasAbierto, quienesVan,
@@ -40,9 +42,11 @@ export default function RequerimientosBandeja() {
   const [cerrados, setCerrados] = useState<Requerimiento[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [locales, setLocales] = useState<{ codigo: string; nombre: string }[]>([])
+  const [locales, setLocales] = useState<{ codigo: string; nombre: string; zona: string | null }[]>([])
   const [mantenimiento, setMantenimiento] = useState<Persona[]>([])
-  const [fLocal, setFLocal] = useState('')
+  const [fZona, setFZona] = useState('')
+  // Varios locales tildados a la vez (vacío = todos)
+  const [fLocales, setFLocales] = useState<Set<string>>(new Set())
   const [fRubro, setFRubro] = useState('')
   const [fPrioridad, setFPrioridad] = useState('')
   const [texto, setTexto] = useState('')
@@ -56,9 +60,9 @@ export default function RequerimientosBandeja() {
 
   useEffect(() => {
     if (!supabase) return
-    void supabase.from('locales').select('codigo,nombre').then(({ data }) =>
-      setLocales(((data as { codigo: string; nombre: string | null }[] | null) ?? [])
-        .map((l) => ({ codigo: l.codigo, nombre: l.nombre || l.codigo }))
+    void supabase.from('locales').select('codigo,nombre,zona').then(({ data }) =>
+      setLocales(((data as { codigo: string; nombre: string | null; zona: string | null }[] | null) ?? [])
+        .map((l) => ({ codigo: l.codigo, nombre: l.nombre || l.codigo, zona: l.zona }))
         .sort((a, b) => a.nombre.localeCompare(b.nombre))))
     void supabase.rpc('requerimientos_personas', { p_ubicacion: 'MANTENIMIENTO' }).then(({ data }) =>
       setMantenimiento((data as Persona[] | null) ?? []))
@@ -81,12 +85,23 @@ export default function RequerimientosBandeja() {
   useEffect(() => { void cargar() }, [cargar])
   useEffect(() => suscribirCambios(['requerimientos'], () => void cargar()), [cargar])
 
+  const zonaDe = useMemo(() => new Map(locales.map((l) => [l.codigo, l.zona])), [locales])
+  // En el filtro de locales, solo los de la zona elegida
+  const opcionesLocal = useMemo(() => locales.filter((l) => !fZona || l.zona === fZona).map((l) => ({ id: l.codigo, label: l.nombre })), [locales, fZona])
+  function elegirZona(z: string) {
+    setFZona(z)
+    // Los locales tildados que no son de la zona nueva se destildan
+    if (z) setFLocales((sel) => new Set([...sel].filter((c) => zonaDe.get(c) === z)))
+  }
+
   const filtrar = useCallback((lista: Requerimiento[]) => {
     const t = texto.trim().toLowerCase()
     return lista.filter((r) =>
-      (!fLocal || r.local === fLocal) && (!fRubro || r.rubro === fRubro) && (!fPrioridad || r.prioridad === fPrioridad) &&
+      (!fZona || (r.local != null && zonaDe.get(r.local) === fZona)) &&
+      (fLocales.size === 0 || (r.local != null && fLocales.has(r.local))) &&
+      (!fRubro || r.rubro === fRubro) && (!fPrioridad || r.prioridad === fPrioridad) &&
       (!t || `${r.id} ${r.descripcion} ${r.solicitante_nombre ?? ''} ${r.asignados_nombres.join(' ')}`.toLowerCase().includes(t)))
-  }, [fLocal, fRubro, fPrioridad, texto])
+  }, [fZona, zonaDe, fLocales, fRubro, fPrioridad, texto])
 
   // Todas las pestañas por fecha de carga, en el orden elegido
   const porPestana = useMemo(() => {
@@ -174,10 +189,11 @@ export default function RequerimientosBandeja() {
           {orden === 'desc' ? <ArrowDownWideNarrow size={15} aria-hidden /> : <ArrowUpNarrowWide size={15} aria-hidden />}
           Fecha: {orden === 'desc' ? 'más nuevos primero' : 'más viejos primero'}
         </button>
-        <select value={fLocal} onChange={(e) => setFLocal(e.target.value)} aria-label="Local" className={sel}>
-          <option value="">Todos los locales</option>
-          {locales.map((l) => <option key={l.codigo} value={l.codigo}>{l.nombre}</option>)}
+        <select value={fZona} onChange={(e) => elegirZona(e.target.value)} aria-label="Zona" className={sel}>
+          <option value="">Todas las zonas</option>
+          {ZONAS.map((z) => <option key={z} value={z}>Zona {nombreZona(z).toLowerCase()}</option>)}
         </select>
+        <MultiselectFiltro label="Locales" opciones={opcionesLocal} seleccionadas={fLocales} onChange={setFLocales} />
         <select value={fRubro} onChange={(e) => setFRubro(e.target.value)} aria-label="Rubro" className={sel}>
           <option value="">Todos los rubros</option>
           {RUBROS.map((r) => <option key={r.id} value={r.id}>{r.id}</option>)}
@@ -186,7 +202,7 @@ export default function RequerimientosBandeja() {
           <option value="">Toda prioridad</option>
           {PRIORIDADES.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
         </select>
-        <label className="relative min-w-0 flex-1">
+        <label className="relative min-w-[12rem] flex-1">
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sub/70" aria-hidden />
           <input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Buscar N°, texto o persona…" aria-label="Buscar"
             className="h-9 w-full rounded-lg border border-line bg-surface2 pl-8 pr-2 text-sm text-ink" />
