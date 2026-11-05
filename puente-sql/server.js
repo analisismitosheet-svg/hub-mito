@@ -278,7 +278,7 @@ async function dragonVariantes(base, articulo) {
   const b = String(base ?? '').trim().toUpperCase()
   const art = String(articulo ?? '').trim().toUpperCase()
   if (!BASES_DRAGON.includes(b)) throw new Error(`Base no habilitada: ${b}`)
-  if (!/^[A-Z0-9._-]{1,40}$/.test(art)) throw new Error('Artículo inválido')
+  if (!ARTICULO_DRAGON.test(art)) throw new Error('Artículo inválido')
   const srv = SERVIDORES.get(ALIAS_PRINCIPAL.toUpperCase())
   await asegurarConexion(srv)
   const db = `[DRAGONFISH_${b}].[ZooLogic]`
@@ -290,13 +290,67 @@ async function dragonVariantes(base, articulo) {
          FROM ${db}.[COMB] C LEFT JOIN ${db}.[COL] L ON RTRIM(L.COLCOD) = RTRIM(C.COCOL)
         WHERE C.COART = @a`,
     )
-  const filas = r.recordset ?? []
+  return armarVariantes(r.recordset ?? [])
+}
+
+const ARTICULO_DRAGON = /^[A-Z0-9._/-]{1,40}$/
+
+function armarVariantes(filas) {
   const colores = [...new Map(filas.filter((f) => f.color).map((f) => [f.color, { codigo: f.color, nombre: f.nombre }])).values()]
     .sort((x, y) => x.codigo.localeCompare(y.codigo))
   const orden = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', 'U']
   const pos = (t) => (/^\d+$/.test(t) ? Number(t) : 1000 + (orden.indexOf(t) < 0 ? 99 : orden.indexOf(t)))
   const talles = [...new Set(filas.map((f) => f.talle).filter(Boolean))].sort((x, y) => pos(x) - pos(y) || x.localeCompare(y))
   return { colores, talles }
+}
+
+/** Buscador de artículos en vivo sobre ZooLogic.ART de la base elegida: cada palabra tiene que estar en el código o la descripción. */
+async function dragonBuscarArticulos(base, texto) {
+  const b = String(base ?? '').trim().toUpperCase()
+  if (!BASES_DRAGON.includes(b)) throw new Error(`Base no habilitada: ${b}`)
+  const palabras = String(texto ?? '').trim().split(/\s+/).filter(Boolean).slice(0, 4)
+  if (!palabras.length) return []
+  const srv = SERVIDORES.get(ALIAS_PRINCIPAL.toUpperCase())
+  await asegurarConexion(srv)
+  const like = (w) => `%${w.replace(/[\\%_[]/g, '\\$&')}%`
+  const pedido = srv.pool.request()
+  palabras.forEach((w, i) => pedido.input(`w${i}`, srv.sql.VarChar(80), like(w)))
+  pedido.input('inicio', srv.sql.VarChar(80), `${palabras[0].replace(/[\\%_[]/g, '\\$&')}%`)
+  const r = await pedido.query(
+    `SELECT TOP 30 LTRIM(RTRIM(ARTCOD)) AS articulo, RTRIM(ISNULL(ARTDES, '')) AS descripcion, RTRIM(ISNULL(ARTFAB, '')) AS proveedor
+       FROM [DRAGONFISH_${b}].[ZooLogic].[ART]
+      WHERE ${palabras.map((_, i) => `(ARTCOD LIKE @w${i} ESCAPE '\\' OR ARTDES LIKE @w${i} ESCAPE '\\')`).join(' AND ')}
+      ORDER BY CASE WHEN LTRIM(ARTCOD) LIKE @inicio ESCAPE '\\' THEN 0 ELSE 1 END, ARTCOD DESC`,
+  )
+  return r.recordset ?? []
+}
+
+/** Descripción, colores y talles de varios artículos juntos (importar el txt de la OC). Solo vuelven los que existen en la base. */
+async function dragonDatosArticulos(base, codigos) {
+  const b = String(base ?? '').trim().toUpperCase()
+  if (!BASES_DRAGON.includes(b)) throw new Error(`Base no habilitada: ${b}`)
+  const lista = [...new Set((Array.isArray(codigos) ? codigos : []).map((c) => String(c).trim().toUpperCase()))]
+  if (!lista.length) return []
+  if (lista.length > 100) throw new Error('Máximo 100 artículos por pedido')
+  if (lista.some((c) => !ARTICULO_DRAGON.test(c))) throw new Error('Artículo inválido')
+  const srv = SERVIDORES.get(ALIAS_PRINCIPAL.toUpperCase())
+  await asegurarConexion(srv)
+  const db = `[DRAGONFISH_${b}].[ZooLogic]`
+  const cargar = (p) => { lista.forEach((c, i) => p.input(`a${i}`, srv.sql.VarChar(40), c)); return p }
+  const params = lista.map((_, i) => `@a${i}`).join(',')
+  const arts = await cargar(srv.pool.request()).query(
+    `SELECT LTRIM(RTRIM(ARTCOD)) AS articulo, RTRIM(ISNULL(ARTDES, '')) AS descripcion, RTRIM(ISNULL(ARTFAB, '')) AS proveedor
+       FROM ${db}.[ART] WHERE ARTCOD IN (${params})`,
+  )
+  const combs = await cargar(srv.pool.request()).query(
+    `SELECT DISTINCT RTRIM(C.COART) AS articulo, RTRIM(C.COCOL) AS color, RTRIM(ISNULL(L.COLDES, '')) AS nombre, RTRIM(C.TALLE) AS talle
+       FROM ${db}.[COMB] C LEFT JOIN ${db}.[COL] L ON RTRIM(L.COLCOD) = RTRIM(C.COCOL)
+      WHERE C.COART IN (${params})`,
+  )
+  return (arts.recordset ?? []).map((a) => ({
+    ...a,
+    ...armarVariantes((combs.recordset ?? []).filter((f) => f.articulo.toUpperCase() === a.articulo.toUpperCase())),
+  }))
 }
 
 /** Servidor por alias (sin alias = el principal). null si no existe. */
@@ -819,6 +873,9 @@ const server = http.createServer(async (req, res) => {
     // Órdenes de compras: colores y talles de un artículo en Dragon (COMB/COL de DRAGONFISH_<base>)
     if (body?.accion === 'dragon_variantes') {
       return enviar(res, 200, await dragonVariantes(body?.base, body?.articulo))
+    }
+    if (body?.accion === 'dragon_articulos') {
+      return enviar(res, 200, body?.codigos ? await dragonDatosArticulos(body?.base, body.codigos) : await dragonBuscarArticulos(body?.base, body?.texto))
     }
 
     // Servidores configurados (para elegir en el explorador del hub)

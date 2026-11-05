@@ -288,22 +288,69 @@ export interface ArticuloBusqueda {
   descripcion: string
   proveedor: string | null
 }
-/** Maestro de artículos del hub (public.articulos, ~93 mil): por código o descripción, cada palabra tiene que estar. */
-export async function buscarArticulos(texto: string): Promise<ArticuloBusqueda[]> {
-  const palabras = texto.replace(/[,()*%\\]/g, ' ').trim().split(/\s+/).filter(Boolean).slice(0, 4)
-  if (!palabras.length) return []
-  let q = sb().from('articulos').select('id_art,descripcion,id_prov')
-  for (const w of palabras) q = q.or(`id_art.ilike.%${w}%,descripcion.ilike.%${w}%`)
-  const { data, error } = await q.order('id_art', { ascending: false }).limit(30)
-  if (error) throw new Error(error.message)
-  return ((data ?? []) as Array<{ id_art: string; descripcion: string | null; id_prov: string | null }>).map((a) => ({
-    articulo: a.id_art, descripcion: a.descripcion ?? '', proveedor: a.id_prov,
-  }))
+async function pedirArticulosDragon<T>(base: string, parametro: string): Promise<T[]> {
+  const { data } = await sb().auth.getSession()
+  const r = await fetch(`/api/sql/dragon-articulos?base=${encodeURIComponent(base)}&${parametro}`, {
+    headers: { Authorization: `Bearer ${data.session?.access_token ?? ''}` },
+  })
+  const j = (await r.json().catch(() => null)) as T[] | { error?: string } | null
+  if (!r.ok || !Array.isArray(j)) throw new Error((j as { error?: string } | null)?.error ?? 'No se pudo consultar Dragon')
+  return j
+}
+
+/** Artículos en vivo de la base de Dragon elegida: por código o descripción, cada palabra tiene que estar. */
+export function buscarArticulos(texto: string, base = 'INDOD'): Promise<ArticuloBusqueda[]> {
+  return pedirArticulosDragon<ArticuloBusqueda>(base, `q=${encodeURIComponent(texto.trim())}`)
 }
 
 export interface Variantes {
   colores: Array<{ codigo: string; nombre: string }>
   talles: string[]
+}
+
+export type ArticuloDragon = ArticuloBusqueda & Variantes
+
+/** Descripción, colores y talles de muchos artículos en vivo (de a 100). Solo vuelven los que existen en esa base. */
+export async function datosArticulosDragon(codigos: string[], base = 'INDOD'): Promise<ArticuloDragon[]> {
+  const unicos = [...new Set(codigos)]
+  const tandas: string[][] = []
+  for (let i = 0; i < unicos.length; i += 100) tandas.push(unicos.slice(i, i + 100))
+  const res = await Promise.all(tandas.map((t) => pedirArticulosDragon<ArticuloDragon>(base, `codigos=${encodeURIComponent(t.join(','))}`)))
+  return res.flat()
+}
+
+export interface LineaTxt {
+  linea: number
+  texto: string
+  cantidad: number
+  articulo: string
+  /** Lo que viene después del %: color + talle pegados (02XXL). */
+  variante: string
+}
+/** Lee el txt de artículos: una línea por SKU, `CANTIDAD+ARTICULO%COLORTALLE` (24+zh000200%02xxl). Sin `N+` es 1 unidad. */
+export function leerTxtArticulos(contenido: string): { lineas: LineaTxt[]; malas: Array<{ linea: number; texto: string }> } {
+  const lineas: LineaTxt[] = []
+  const malas: Array<{ linea: number; texto: string }> = []
+  contenido.split(/\r?\n/).forEach((cruda, i) => {
+    const texto = cruda.replace(/\s/g, '').replace(/^﻿/, '').toUpperCase()
+    if (!texto) return
+    const m = /^(?:(\d+)\+)?([^+%]+)%([^+%]+)$/.exec(texto)
+    const cantidad = m ? Number(m[1] ?? 1) : 0
+    if (!m || cantidad < 1) { malas.push({ linea: i + 1, texto: cruda.trim() }); return }
+    lineas.push({ linea: i + 1, texto: cruda.trim(), cantidad, articulo: m[2], variante: m[3] })
+  })
+  return { lineas, malas }
+}
+
+/** Separa color y talle con lo que existe en Dragon (el color no siempre tiene 2 caracteres). null si esa combinación no existe. */
+export function separarVariante(variante: string, v: Variantes): { color: string; talle: string } | null {
+  for (const c of v.colores) {
+    const color = c.codigo.toUpperCase()
+    if (variante.startsWith(color) && v.talles.some((t) => t.toUpperCase() === variante.slice(color.length))) {
+      return { color: c.codigo, talle: v.talles.find((t) => t.toUpperCase() === variante.slice(color.length)) as string }
+    }
+  }
+  return null
 }
 /** Colores y talles del artículo en Dragon (en vivo por el puente). null si el puente no lo tiene todavía. */
 export async function variantesArticulo(articulo: string, base = 'INDOD'): Promise<Variantes | null> {

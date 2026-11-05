@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Loader2, Paperclip, Plus, Trash2, X } from 'lucide-react'
+import { FileText, Loader2, Paperclip, Plus, Trash2, X } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import {
   AREAS, BASES_DRAGON, CONDICIONES_DRAGON, IVA, LISTAS_DRAGON, MOTIVOS_DRAGON, PLAZOS, PLAZO_A_CONDICION, TIPOS,
-  buscarArticulos, buscarProveedoresDragon, buscarProveedoresOc, guardarOrden, mandarADragon, pedirAutorizacion, pesos,
-  subirArchivo, totalItems, variantesArticulo,
+  buscarArticulos, buscarProveedoresDragon, buscarProveedoresOc, datosArticulosDragon, guardarOrden, leerTxtArticulos, mandarADragon, pedirAutorizacion, pesos,
+  separarVariante, subirArchivo, totalItems, variantesArticulo,
   type ArticuloBusqueda, type ItemDragon, type OrdenCompra, type ProveedorDragon, type Variantes,
 } from '@/lib/ordenesCompra'
 
@@ -22,14 +22,16 @@ function Buscador<T>({ valor, onTexto, buscar, onElegir, placeholder, className 
   const [abierto, setAbierto] = useState(false)
   const [act, setAct] = useState(0)
   const [cargando, setCargando] = useState(false)
+  const [fallo, setFallo] = useState<string | null>(null)
   const ultimo = useRef('')
   useEffect(() => {
     const t = valor.trim()
     if (!abierto || t.length < 2) { setRes([]); return }
     ultimo.current = t
     setCargando(true)
+    setFallo(null)
     const h = setTimeout(() => {
-      void buscar(t).then((r) => { if (ultimo.current === t) { setRes(r); setAct(0) } }).catch(() => setRes([])).finally(() => setCargando(false))
+      void buscar(t).then((r) => { if (ultimo.current === t) { setRes(r); setAct(0) } }).catch((e: Error) => { setRes([]); setFallo(e.message) }).finally(() => setCargando(false))
     }, 250)
     return () => clearTimeout(h)
   }, [valor, abierto, buscar])
@@ -49,7 +51,8 @@ function Buscador<T>({ valor, onTexto, buscar, onElegir, placeholder, className 
       {abierto && valor.trim().length >= 2 && (
         <div className="absolute left-0 top-full z-30 mt-1 max-h-72 w-max min-w-full max-w-[min(560px,85vw)] overflow-auto rounded-xl border border-line bg-[#14141b] shadow-2xl">
           {cargando && !res.length && <p className="p-2.5 text-xs text-sub">Buscando…</p>}
-          {!cargando && !res.length && <p className="p-2.5 text-xs text-sub">Sin coincidencias</p>}
+          {!cargando && fallo && <p className="p-2.5 text-xs text-red-300">{fallo}</p>}
+          {!cargando && !fallo && !res.length && <p className="p-2.5 text-xs text-sub">Sin coincidencias</p>}
           {res.map((o, i) => (
             <button type="button" key={o.clave} onMouseDown={(e) => { e.preventDefault(); elegir(o) }}
               className={`block w-full px-3 py-2 text-left text-xs hover:bg-teal-500/10 ${i === act ? 'bg-teal-500/10' : ''}`}>{o.render}</button>
@@ -102,6 +105,8 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
   const [guardando, setGuardando] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [verJson, setVerJson] = useState(false)
+  const [importando, setImportando] = useState(false)
+  const [importe, setImporte] = useState<{ agregadas: number; rechazadas: Array<{ linea: number; texto: string; motivo: string }> } | null>(null)
   const boxDragon = useRef<HTMLDivElement>(null)
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }))
   const bloqueadoDragon = oc?.dragon_estado === 'ok' || oc?.dragon_estado === 'enviando' || oc?.dragon_estado === 'pendiente'
@@ -129,10 +134,10 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
     clave: p.codigo, valor: p,
     render: <span><b className="mr-2 text-teal-300">{p.codigo}</b>{p.nombre}</span>,
   })), [])
-  const buscarArt = useMemo(() => async (t: string) => (await buscarArticulos(t)).map((a) => ({
+  const buscarArt = useMemo(() => async (t: string) => (await buscarArticulos(t, f.dragon_base)).map((a) => ({
     clave: a.articulo, valor: a,
     render: <span className="grid grid-cols-[90px_1fr_auto] gap-2"><b className="text-teal-300">{a.articulo}</b><span>{a.descripcion}</span><span className="text-sub">{a.proveedor}</span></span>,
-  })), [])
+  })), [f.dragon_base])
 
   const setItem = (i: number, cambio: Partial<ItemDragon>) => setItems((l) => l.map((x, j) => (j === i ? { ...x, ...cambio } : x)))
   const elegirArticulo = (i: number, a: ArticuloBusqueda) => {
@@ -148,6 +153,42 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
     if (!v) return
     const faltan = v.talles.filter((t) => !items.some((x) => x.articulo === it.articulo && x.color === it.color && x.talle === t))
     setItems((l) => [...l.slice(0, i + 1), ...faltan.map((t) => ({ ...it, talle: t, cantidad: 0 })), ...l.slice(i + 1)])
+  }
+
+  /** Txt `CANTIDAD+ARTICULO%COLORTALLE`: valida contra Dragon, suma los repetidos y deja afuera (a la vista) lo que no existe. */
+  const importarTxt = async (archivo: File | undefined) => {
+    if (!archivo) return
+    setImportando(true)
+    setImporte(null)
+    setError(null)
+    try {
+      const { lineas, malas } = leerTxtArticulos(await archivo.text())
+      const rechazadas = malas.map((m) => ({ ...m, motivo: 'No tiene el formato 24+ARTICULO%02XXL' }))
+      const datos = new Map((await datosArticulosDragon(lineas.map((l) => l.articulo), f.dragon_base)).map((a) => [a.articulo.toUpperCase(), a]))
+      const nuevos: ItemDragon[] = []
+      for (const l of lineas) {
+        const a = datos.get(l.articulo)
+        if (!a) { rechazadas.push({ linea: l.linea, texto: l.texto, motivo: `El artículo no existe en ${f.dragon_base}` }); continue }
+        const sku = separarVariante(l.variante, a)
+        if (!sku) { rechazadas.push({ linea: l.linea, texto: l.texto, motivo: 'Ese color y talle no existen para el artículo' }); continue }
+        nuevos.push({ articulo: a.articulo, descripcion: a.descripcion, color: sku.color, talle: sku.talle, cantidad: l.cantidad, precio: 0 })
+      }
+      setVariantes((v) => ({ ...v, ...Object.fromEntries([...datos.values()].map((a) => [a.articulo, { colores: a.colores, talles: a.talles }])) }))
+      setItems((actuales) => {
+        const lista = actuales.filter((i) => i.articulo)
+        for (const n of nuevos) {
+          const igual = lista.findIndex((x) => x.articulo === n.articulo && x.color === n.color && x.talle === n.talle)
+          if (igual >= 0) lista[igual] = { ...lista[igual], cantidad: lista[igual].cantidad + n.cantidad }
+          else lista.push(n)
+        }
+        return lista.length ? lista : actuales
+      })
+      setImporte({ agregadas: nuevos.length, rechazadas: rechazadas.sort((x, y) => x.linea - y.linea) })
+    } catch (e) {
+      setError(`No se pudo importar el txt: ${(e as Error).message}`)
+    } finally {
+      setImportando(false)
+    }
   }
 
   const payload = () => ({
@@ -348,6 +389,14 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
                   <button type="button" onClick={() => setItems((l) => [...l, { articulo: '', color: '', talle: '', cantidad: 1, precio: l[l.length - 1]?.precio ?? 0 }])}
                     className="inline-flex items-center gap-1 rounded-lg border border-line px-2.5 py-1.5 text-xs text-ink hover:bg-surface2"><Plus size={13} /> Agregar artículo</button>
                 )}
+                {!bloqueadoDragon && (
+                  <label title="Una línea por artículo: 24+ZH000200%02XXL (cantidad + artículo % color y talle)"
+                    className={`inline-flex items-center gap-1 rounded-lg border border-line px-2.5 py-1.5 text-xs text-ink hover:bg-surface2 ${importando ? 'pointer-events-none opacity-60' : 'cursor-pointer'}`}>
+                    {importando ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />} Importar txt
+                    <input type="file" accept=".txt,text/plain" className="hidden" disabled={importando}
+                      onChange={(e) => { void importarTxt(e.target.files?.[0]); e.target.value = '' }} />
+                  </label>
+                )}
                 {isAdmin && <button type="button" onClick={() => setVerJson((x) => !x)} className="rounded-lg border border-line px-2.5 py-1.5 text-xs text-sub">Ver JSON</button>}
                 <div className="ml-auto grid grid-cols-[auto_auto] gap-x-4 text-right text-xs text-sub">
                   <span>Subtotal</span><b className="text-ink">{pesos(subtotal)}</b>
@@ -355,6 +404,19 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
                   <span className="text-sm">Total Dragon</span><b className="text-sm text-ink">{pesos(totalDragon)}</b>
                 </div>
               </div>
+              {importe && (
+                <div className={`rounded-xl border p-2.5 text-xs ${importe.rechazadas.length ? 'border-amber-500/40 bg-amber-500/10 text-amber-200' : 'border-teal-500/30 bg-teal-500/10 text-teal-200'}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <p>{importe.agregadas} {importe.agregadas === 1 ? 'línea importada' : 'líneas importadas'}{importe.agregadas > 0 && ', con precio en 0: falta cargar los precios'}.{importe.rechazadas.length > 0 && ` ${importe.rechazadas.length} sin importar:`}</p>
+                    <button type="button" onClick={() => setImporte(null)} className="shrink-0 opacity-70 hover:opacity-100" aria-label="Cerrar aviso"><X size={13} /></button>
+                  </div>
+                  {importe.rechazadas.length > 0 && (
+                    <ul className="mt-1.5 max-h-40 space-y-0.5 overflow-auto">
+                      {importe.rechazadas.map((r) => <li key={r.linea}>Línea {r.linea}: <b>{r.texto}</b> — {r.motivo}</li>)}
+                    </ul>
+                  )}
+                </div>
+              )}
               {verJson && (
                 <pre className="max-h-60 overflow-auto rounded-xl border border-line bg-black/40 p-2.5 text-[11px] text-cyan-200">
                   {`// BaseDeDatos: ${f.dragon_base}\n` + JSON.stringify({
