@@ -11,7 +11,8 @@
  * desde el SQL Server de ESTA PC (servidor vinculado MITO) con el usuario de Windows (sqlcmd -E).
  * Solo lectura. Si algo falla a mitad de camino no se borra nada.
  *
- * Al terminar copia también las cancelaciones de venta (scripts/sync-cancelaciones-venta.js).
+ * Al terminar copia también las cancelaciones de venta (scripts/sync-cancelaciones-venta.js)
+ * y el estado de los pedidos con saldo (scripts/sync-estado-pedidos.js).
  *
  * Configuración (puente-sql/.env), todo opcional salvo PUENTE_TOKEN:
  *   PEDIDOS_SQL_SERVER     default localhost
@@ -278,6 +279,12 @@ async function main() {
     await require('./sync-cancelaciones-venta').sincronizarCancelacionesVenta({ completa: COMPLETA })
   } catch (err) {
     anotar(`Cancelaciones de venta: ERROR ${err instanceof Error ? err.message : String(err)} (ver data/sync-cancelaciones-venta.log)`)
+  }
+  // Y el estado de los pedidos con saldo (solo sube los que cambiaron)
+  try {
+    await require('./sync-estado-pedidos').sincronizarEstadoPedidos()
+  } catch (err) {
+    anotar(`Estado de pedidos: ERROR ${err instanceof Error ? err.message : String(err)} (ver data/sync-estado-pedidos.log)`)
   }
 }
 

@@ -1,5 +1,6 @@
 import {
   Ban,
+  Scale,
   Briefcase,
   Wallet,
   Users,
@@ -395,6 +396,17 @@ export const APPS: AppDef[] = [
     kind: 'internal',
     target: '/mayorista/cancelaciones-venta',
     color: '#be123c',
+    permiso: 'pedidos_venta.view',
+  },
+  {
+    id: 'mayorista-estado-pedidos',
+    areaId: 'mayorista',
+    title: 'Estado de pedidos',
+    description: 'Saldo pendiente de cada cliente: pedido, remitido, facturado, cancelado y pendiente por artículo.',
+    icon: Scale,
+    kind: 'internal',
+    target: '/mayorista/estado-pedidos',
+    color: '#0891b2',
     permiso: 'pedidos_venta.view',
   },
   {

@@ -26,7 +26,7 @@
 | MITO - Sync equivalencias | sync-equivalencias.js | diario 07:00 | equivalencias |
 | MITO - Sync articulos | sync-articulos.js | diario 07:15 | `articulos` (de `DWH.vw_DIM_ARTICULO`) |
 | MITO - Sync pedidos compra | sync-pedidos-compra.js | cada hora | `pedidos_compra` (+items) |
-| MITO - Sync pedidos venta | sync-pedidos-venta.js | cada 15 min, últimos 7 días | `pedidos_venta` (+items, motivo); al final `sync-cancelaciones-venta.js` → `cancelaciones_venta` (+items) (2 días; 120 con `--todo`) |
+| MITO - Sync pedidos venta | sync-pedidos-venta.js | cada 15 min, últimos 7 días | `pedidos_venta` (+items, motivo); al final `sync-cancelaciones-venta.js` → `cancelaciones_venta` (+items) (2 días; 120 con `--todo`) y `sync-estado-pedidos.js` → `estado_pedidos` (+items, solo los que cambiaron) |
 | MITO - Sync pedidos venta completo | sync-pedidos-venta.js | diario 06:30 | idem, todo |
 | MITO - Sync Tiendanube | sync-tiendanube.js | cada 20 min, modificados desde la última corrida | `tn_pedidos` (+items) desde la API de Tiendanube, ver [[Ventas web (Tiendanube)]] |
 | (cancelaciones) | sync-cancelaciones.js | ver instalar-tarea.ps1 | `cancelaciones`, `cancelaciones_items` |

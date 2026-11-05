@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Loader2, Search, ChevronLeft, ChevronRight, RefreshCw, Download, Ban, ArrowLeft, ExternalLink, Undo2 } from 'lucide-react'
+import { Loader2, Search, ChevronLeft, ChevronRight, RefreshCw, Download, Ban, ArrowLeft, ExternalLink } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
-import { useAuth } from '@/context/AuthContext'
 
 /* ------------------------------------------------------------------ */
 /*  Cancelaciones de venta (Mayorista)                                 */
@@ -12,8 +11,8 @@ import { useAuth } from '@/context/AuthContext'
 /*  (sql/cancelaciones_venta.sql) con los pedidos y remitos que afecta */
 /*  cada una. La actualiza puente-sql/scripts/sync-cancelaciones-venta */
 /*  .js al final de la copia de pedidos de venta (cada 15 minutos;     */
-/*  120 días). Mismo diseño que Pedidos de venta. Solo lectura: anular */
-/*  en Dragon espera que la API lo permita (DELETE /Devolucion/ da 400) */
+/*  120 días). Mismo diseño que Pedidos de venta. Solo lectura: las    */
+/*  cancelaciones se cargan y anulan en Dragon.                        */
 /* ------------------------------------------------------------------ */
 
 interface Afectado {
@@ -97,7 +96,6 @@ const numerosDe = (c: Cancelacion, tipo: number) => c.afecta.filter((a) => a.tip
 const PAGINA = 1000 // filas por consulta a Supabase (su tope)
 
 export default function CancelacionesVenta() {
-  const { isAdmin } = useAuth()
   const [params, setParams] = useSearchParams()
   const [lista, setLista] = useState<Cancelacion[]>([])
   const [cargando, setCargando] = useState(true)
@@ -217,6 +215,37 @@ export default function CancelacionesVenta() {
   }, [delPeriodo, usuarios])
 
   const q = busqueda.trim().toLowerCase()
+
+  // Búsqueda por artículo: los renglones no vienen en la lista, se buscan en la tabla de ítems
+  // (código o descripción) y se marcan las cancelaciones que los tienen
+  const [conArticulo, setConArticulo] = useState<Set<string> | null>(null)
+  const [buscandoArticulo, setBuscandoArticulo] = useState(false)
+  useEffect(() => {
+    const limpio = q.replace(/[,()*%\\]/g, ' ').trim()
+    if (!supabase || limpio.length < 3) {
+      setConArticulo(null)
+      return
+    }
+    let vivo = true
+    const t = setTimeout(() => {
+      setBuscandoArticulo(true)
+      void supabase!
+        .from('cancelaciones_venta_items')
+        .select('codigo')
+        .or(`articulo.ilike.%${limpio}%,descripcion.ilike.%${limpio}%`)
+        .limit(5000)
+        .then(({ data }) => {
+          if (!vivo) return
+          setConArticulo(new Set((data ?? []).map((r) => (r as { codigo: string }).codigo)))
+          setBuscandoArticulo(false)
+        })
+    }, 300)
+    return () => {
+      vivo = false
+      clearTimeout(t)
+    }
+  }, [q])
+
   const visibles = useMemo(
     () =>
       delPeriodo.filter((c) => {
@@ -224,12 +253,16 @@ export default function CancelacionesVenta() {
         if (filtro === CON_REMITO && !numerosDe(c, REMITO).length) return false
         if (filtro && filtro[0] !== '_' && (c.usuario || '—') !== filtro) return false
         if (!q) return true
-        return [c.cliente, c.cliente_nombre, c.numero, c.usuario, c.observacion, fechaCorta(c.fecha), ...c.afecta.map((a) => a.numero)]
+        if (conArticulo?.has(c.codigo)) return true
+        return [
+          c.cliente, c.cliente_nombre, c.numero, c.usuario, c.observacion, c.motivo, c.motivo_nombre, c.hora, fechaCorta(c.fecha),
+          ...c.afecta.flatMap((a) => [a.numero, a.comprobante]),
+        ]
           .join(' ')
           .toLowerCase()
           .includes(q)
       }),
-    [delPeriodo, filtro, q],
+    [delPeriodo, filtro, q, conArticulo],
   )
 
   const canc = lista.find((c) => c.codigo === sel) ?? null
@@ -336,10 +369,13 @@ export default function CancelacionesVenta() {
         <aside className={`${sel ? 'hidden lg:block' : ''} min-w-0`}>
           <div className="relative mb-2">
             <Search size={16} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sub" />
+            {buscandoArticulo && (
+              <Loader2 size={15} aria-label="Buscando en los artículos" className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-sub" />
+            )}
             <input
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
-              placeholder="Número, cliente, pedido, remito…"
+              placeholder="Artículo, cliente, N° de pedido, remito, usuario…"
               aria-label="Buscar cancelación"
               className="h-11 w-full rounded-xl border border-line bg-surface pl-9 pr-3 text-sm text-ink outline-none transition placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40"
             />
@@ -413,16 +449,6 @@ export default function CancelacionesVenta() {
                     className="btn-press inline-flex h-10 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-sm font-medium text-ink transition hover:bg-surface2 disabled:opacity-50">
                     <Download size={15} aria-hidden /> Excel
                   </button>
-                  {/* Solo admin. Desactivado hasta que la API de Dragon permita anular (DELETE /Devolucion/ responde 400) */}
-                  {isAdmin && (
-                    <button
-                      disabled
-                      title="Todavía no se puede: la API de Dragon no deja anular cancelaciones (lo tiene que habilitar Zoo Logic). Se anula desde Dragon."
-                      className="inline-flex h-10 cursor-not-allowed items-center gap-1.5 rounded-xl border border-brand-600/40 bg-brand-600/10 px-3 text-sm font-semibold text-brand-400 opacity-50"
-                    >
-                      <Undo2 size={15} aria-hidden /> Anular en Dragon
-                    </button>
-                  )}
                 </div>
               </div>
 
