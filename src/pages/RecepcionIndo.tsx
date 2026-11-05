@@ -10,7 +10,7 @@ import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import NuevaRecepcionIndo from '@/components/NuevaRecepcionIndo'
 import SelectorOc from '@/components/SelectorOc'
-import { SelectBuscar } from '@/components/MultiselectFiltro'
+import MultiselectFiltro, { SelectBuscar } from '@/components/MultiselectFiltro'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { leerRecepcionIndo, normalizar } from '@/lib/recepcionIndo'
@@ -59,6 +59,8 @@ interface Fila {
   controlado_por: string | null
   /** Problemas detectados por private.recepcion_indo_errores (faltan datos, OC inexistente, etc.) */
   errores: string[] | null
+  /** Suma del IVA de todas las filas que pasan los filtros (no solo la página) */
+  iva_filtrado?: number | null
 }
 
 interface Resumen {
@@ -90,6 +92,11 @@ const n2 = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFra
 const pesos = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })
 
 const hoy = () => new Date().toLocaleDateString('sv-SE') // "YYYY-MM-DD" en la zona del navegador
+
+const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+/** Meses del año vigente hasta el actual (el filtro es solo del año en curso). */
+const ANIO_VIGENTE = new Date().getFullYear()
+const OPCIONES_MES = MESES.slice(0, new Date().getMonth() + 1).map((m, i) => ({ id: String(i + 1), label: `${m} ${ANIO_VIGENTE}` }))
 
 /**
  * PostgREST contesta "Could not find the function ... in the schema cache" tanto si la
@@ -625,6 +632,9 @@ export default function RecepcionIndo() {
   const [control, setControl] = useState('pendientes')
   const [busqueda, setBusqueda] = useState('')
   const [busca, setBusca] = useState('') // con debounce
+  // Meses del año vigente (vacío = sin filtro de mes)
+  const [meses, setMeses] = useState<Set<string>>(new Set())
+  const [ivaFiltrado, setIvaFiltrado] = useState<number | null>(null)
 
   const archivoRef = useRef<HTMLInputElement>(null)
   const [importando, setImportando] = useState<string | null>(null)
@@ -642,10 +652,12 @@ export default function RecepcionIndo() {
     if (!supabase) return
     setCargando(true)
     limpiarErrores()
-    const args = {
+    const args: Record<string, unknown> = {
       p_deposito: deposito, p_proveedor: proveedor, p_transporte: transporte, p_estado: estado,
       p_control: control, p_busqueda: busca, p_desde: pagina * POR_PAGINA, p_limite: POR_PAGINA,
     }
+    // Solo se manda si hay meses elegidos (sql/recepcion_indo_meses.sql)
+    if (meses.size) args.p_meses = [...meses].map(Number).sort((a, b) => a - b)
     const [rFilas, rResumen] = await Promise.all([
       supabase.rpc('recepcion_indo_filas', args),
       supabase.rpc('recepcion_indo_resumen', { p_deposito: deposito }),
@@ -655,11 +667,13 @@ export default function RecepcionIndo() {
       const datos = (rFilas.data as Fila[] | null) ?? []
       setFilas(datos.map((f) => ({ ...f, bultos: Number(f.bultos) })))
       setTotal(Number(datos[0]?.total ?? 0))
+      // Sin filas la suma es 0; si la base todavía no devuelve iva_filtrado, queda null
+      setIvaFiltrado(datos.length === 0 ? 0 : datos[0].iva_filtrado != null ? Number(datos[0].iva_filtrado) : null)
     }
     if (rResumen.error) agregarError(aclarar(rResumen.error.message, 'recepcion_indo_resumen'))
     else setResumen((rResumen.data as Resumen[] | null)?.[0] ?? VACIO)
     setCargando(false)
-  }, [deposito, proveedor, transporte, estado, control, busca, pagina, agregarError, limpiarErrores])
+  }, [deposito, proveedor, transporte, estado, control, busca, meses, pagina, agregarError, limpiarErrores])
 
   // Opciones de los desplegables: no dependen de los filtros, así que se piden una sola
   // vez (son 106 proveedores) y no en cada cambio de filtro.
@@ -901,7 +915,7 @@ export default function RecepcionIndo() {
   const hasta = Math.min(total, (pagina + 1) * POR_PAGINA)
   const pctControl = resumen.filas ? Math.round((resumen.controladas / resumen.filas) * 100) : 0
 
-  const hayFiltros = deposito || proveedor || transporte || estado || control || busca
+  const hayFiltros = deposito || proveedor || transporte || estado || control || busca || meses.size > 0
 
   return (
     <Layout>
@@ -997,8 +1011,13 @@ export default function RecepcionIndo() {
         />
         <Kpi
           icono={<Building2 size={15} />} color="#0d9488"
-          label="IVA pendiente" valor={pesos.format(Number(resumen.iva_pendiente ?? 0))}
-          pie={resumen.mas_viejo_pendiente ? `la más vieja del ${fmtFecha(resumen.mas_viejo_pendiente)}` : undefined}
+          label={ivaFiltrado != null ? 'IVA (filtrado)' : 'IVA pendiente'}
+          valor={pesos.format(ivaFiltrado ?? Number(resumen.iva_pendiente ?? 0))}
+          pie={
+            ivaFiltrado != null
+              ? `${n0.format(total)} recepciones con estos filtros`
+              : resumen.mas_viejo_pendiente ? `la más vieja del ${fmtFecha(resumen.mas_viejo_pendiente)}` : undefined
+          }
         />
       </div>
 
@@ -1035,6 +1054,7 @@ export default function RecepcionIndo() {
             </button>
           )}
         </label>
+        <MultiselectFiltro label="Mes" opciones={OPCIONES_MES} seleccionadas={meses} onChange={cambiarFiltro(setMeses)} />
         <SelectBuscar label="Depósito" className="w-36" valor={deposito} onChange={cambiarFiltro(setDeposito)}
           opciones={(opciones.depositos ?? []).map((d) => ({ id: d, label: d }))} />
         <SelectBuscar label="Proveedor" className="w-44" valor={proveedor} onChange={cambiarFiltro(setProveedor)}
@@ -1054,7 +1074,7 @@ export default function RecepcionIndo() {
         {hayFiltros && (
           <button
             onClick={() => {
-              setDeposito(''); setProveedor(''); setTransporte(''); setEstado(''); setControl(''); setBusqueda(''); setPagina(0)
+              setDeposito(''); setProveedor(''); setTransporte(''); setEstado(''); setControl(''); setBusqueda(''); setMeses(new Set()); setPagina(0)
             }}
             className="btn-press rounded-lg border border-line px-2 py-1.5 text-xs text-sub hover:text-ink"
           >
