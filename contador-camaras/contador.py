@@ -186,7 +186,7 @@ class Lector(threading.Thread):
 
     def run(self) -> None:
         espera = 2
-        while True:
+        while not self._fin:
             cap = cv2.VideoCapture(self.url, cv2.CAP_FFMPEG)
             if not cap.isOpened():
                 self.error = "no conecta al DVR"
@@ -575,7 +575,8 @@ class Camara(threading.Thread):
         self.reloj = time.time  # evaluar.py lo cambia por el tiempo del video
         self.vista = None  # último cuadro anotado (con --ver o mientras alguien mira el video en vivo)
         self.mirando = 0   # conexiones abiertas al video en vivo (vista.py)
-        self.pausada = False  # su PC está desactivada en el hub: no se detecta (no gasta placa)
+        self.pausada = False  # su PC está desactivada en el hub: se corta el video y no se detecta (no gasta nada)
+        self.hub_respondio = False  # hasta saber si está activa en el hub no se conecta al DVR
         self.fps_fuente = 0.0  # cuadros por segundo que manda el DVR (techo real de esta cámara)
         self.t_analisis = time.time()  # último cuadro analizado (para avisar si deja de analizar)
         self.vista_base: str | None = None  # URL pública del servidor de video (el hub pide pases ahí)
@@ -689,7 +690,7 @@ class Camara(threading.Thread):
 
     def estado(self) -> dict:
         h = self.almacen.hoy(self.nombre)
-        error = self.lector.error if self.lector else None
+        error = self.lector.error if self.lector else ("desactivada en el hub" if self.pausada else "conectando")
         # Conectada y calibrada pero sin analizar hace más de 1 minuto: que el hub no la muestre "ok"
         # con FPS viejos (pasó el 03/11 tras un error de memoria)
         if error is None and self.modo and not self.pausada and time.time() - self.t_analisis > 60:
@@ -728,8 +729,7 @@ class Camara(threading.Thread):
                             imgsz=self.tamano_deteccion(), device=self.dispositivo,
                             tracker="bytetrack.yaml", verbose=False)[0]
 
-    def run(self) -> None:
-        modelo = self.cargar_modelo()
+    def abrir_lector(self) -> None:
         if self.cam.get("sdk"):
             # Librería oficial de Dahua (como SmartPSS): puerto 37777/UPnP o P2P, sin depender del RTSP
             from dahua import LectorDahua
@@ -737,14 +737,40 @@ class Camara(threading.Thread):
         else:
             self.lector = Lector(self.nombre, url_rtsp(self.cfg, self.cam))
         self.lector.start()
+
+    def cerrar_lector(self) -> None:
+        """Corta el video del DVR (cámara desactivada en el hub): no baja internet, no decodifica,
+        no ocupa memoria. Se vuelve a abrir si la activan o si alguien abre su video para calibrar."""
+        if self.lector is not None:
+            self.lector.detener()
+            self.lector = None
+        self.fps, self.fps_fuente, self.vista, self.ultima_deteccion = 0.0, 0.0, None, None
+        self.pistas.clear()
+
+    def run(self) -> None:
+        modelo = None  # se carga recién cuando hay que detectar (las desactivadas no ocupan la placa)
         ultimo_nro, t_prev = -1, time.time()
         t_fuente = time.time()
+        t_inicio = time.time()
 
         while not self._detener:
             # Todo el paso protegido: un error (también de memoria, p. ej. al estirar o recortar la
             # imagen) no puede matar el hilo de la cámara; antes quedaba 'conectada' pero sin contar.
             try:
                 t0 = time.time()
+                # Desactivada en el hub y nadie mirando: sin conexión al DVR (ni internet ni placa)
+                esperando_hub = not self.hub_respondio and time.time() - t_inicio < 60
+                if (self.pausada or esperando_hub) and self.mirando == 0:
+                    if self.lector is not None:
+                        log.info("[%s] desactivada en el hub: se corta el video", self.nombre)
+                        self.cerrar_lector()
+                    time.sleep(1)
+                    continue
+                if self.lector is None:
+                    self.abrir_lector()
+                    ultimo_nro, t_fuente = -1, time.time()
+                if modelo is None:
+                    modelo = self.cargar_modelo()
                 # cuadros por segundo a analizar: los de esta cámara (elegidos en el hub) o el general
                 # FPS fijos de esta cámara (elegidos en el hub) o "Auto": el tope que reparte regular_fps()
                 periodo = 1.0 / max(0.5, float(self.cam.get("fps") or Camara.fps_auto))
@@ -1249,17 +1275,15 @@ def enviar(sistema: Sistema) -> None:
             if respuesta.get("status", 200) != 200 or respuesta.get("error"):
                 error = str(respuesta.get("error") or "")
                 if "inactivo" in error.lower() or "no registrado" in error.lower():
-                    for c in suyas:  # PC desactivada en el hub: dejar de detectar (libera placa)
-                        if not c.pausada:
-                            log.info("[%s] desactivada en el hub: deja de detectar", c.nombre)
-                        c.pausada = True
+                    for c in suyas:  # PC desactivada en el hub: corta el video y deja de detectar
+                        c.pausada = c.hub_respondio = True
                 else:
                     log.error("el hub rechazó el envío de %s: %s", quienes, error)
                 return False
             for c in suyas:
                 if c.pausada:
-                    log.info("[%s] activada en el hub: vuelve a detectar", c.nombre)
-                c.pausada = False
+                    log.info("[%s] activada en el hub: se conecta y vuelve a detectar", c.nombre)
+                c.pausada, c.hub_respondio = False, True
             almacen.marcar_enviados(filas)
             for c in suyas:  # el hub dice de qué local es este token (para autorizar el video)
                 c.local = respuesta.get("local") or c.local

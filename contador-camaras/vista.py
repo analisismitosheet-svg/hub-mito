@@ -357,7 +357,8 @@ class ServidorVista:
                             time.sleep(0.1)
                         img = servidor.jpeg(cam, limpia, completa)
                         return self.responder(200 if img else 503, img or b"sin imagen", "image/jpeg" if img else "text/plain")
-                    for _ in range(50):  # hasta 5 s para el primer cuadro; si no hay, avisar y no quedar colgado
+                    # hasta 5 s para el primer cuadro (20 s si estaba desactivada: recién ahora se conecta al DVR)
+                    for _ in range(200 if cam.lector is None else 50):
                         if cam.vista is not None:
                             break
                         time.sleep(0.1)

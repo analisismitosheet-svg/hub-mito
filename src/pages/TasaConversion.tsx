@@ -77,6 +77,8 @@ export default function TasaConversion() {
   const [datos, setDatos] = useState<LocalHoy[] | null>(null)
   const [ventas, setVentas] = useState<Venta[] | null>(null)
   const [objetivos, setObjetivos] = useState<Map<string, number>>(new Map())
+  /** Venta del día de todos los locales (ventas_locales_dia, la de Objetivos) para los que no están en la vista de tickets */
+  const [ventaObj, setVentaObj] = useState<Map<string, number>>(new Map())
   const [nombres, setNombres] = useState<Record<string, string>>({})
   const [horaSel, setHoraSel] = useState<number | null>(null)
   const [cargando, setCargando] = useState(false)
@@ -96,12 +98,15 @@ export default function TasaConversion() {
     }
     if (!objRes.error && Array.isArray(objRes.data)) {
       const m = new Map<string, number>()
-      for (const f of objRes.data as { local: string; objetivo: number | null }[]) {
-        if (f.local && f.objetivo != null && Number.isFinite(Number(f.objetivo))) {
-          m.set(String(f.local).trim().toUpperCase(), Number(f.objetivo))
-        }
+      const v = new Map<string, number>()
+      for (const f of objRes.data as { local: string; objetivo: number | null; venta: number | null }[]) {
+        const local = String(f.local ?? '').trim().toUpperCase()
+        if (!local) continue
+        if (f.objetivo != null && Number.isFinite(Number(f.objetivo))) m.set(local, Number(f.objetivo))
+        if (f.venta != null && Number.isFinite(Number(f.venta))) v.set(local, Number(f.venta))
       }
       setObjetivos(m)
+      setVentaObj(v)
     }
     setCargando(false)
   }, [])
@@ -146,8 +151,17 @@ export default function TasaConversion() {
       totales.set(v.local, (totales.get(v.local) ?? 0) + t)
       generalTotal += t
     }
+    // Locales que la vista de tickets no trae (sin cámara o desactivados): su venta del día igual
+    // se ve, con la de Objetivos (sin tickets ni detalle por hora)
+    const enVista = new Set(ventas.map((v) => v.local))
+    for (const { local } of datos ?? []) {
+      const t = ventaObj.get(local)
+      if (t == null || enVista.has(local)) continue
+      totales.set(local, t)
+      generalTotal += t
+    }
     return { tickets, totales, generalTickets, generalTotal }
-  }, [ventas])
+  }, [ventas, ventaObj, datos])
 
   // Ventas filtradas(al elegir una hora o del día entero si horaSel === null)
   const ventasActivas = useMemo(() => {
