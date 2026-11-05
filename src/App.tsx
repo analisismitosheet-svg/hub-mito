@@ -89,6 +89,7 @@ const ComparativaPrecios = lazy(() => import('@/pages/ComparativaPrecios'))
 const TrackingTransporte = lazy(() => import('@/pages/TrackingTransporte'))
 const TrackingKm = lazy(() => import('@/pages/TrackingKm'))
 const OrdenesCompra = lazy(() => import('@/pages/OrdenesCompra'))
+const ReposicionEscaneo = lazy(() => import('@/pages/ReposicionEscaneo'))
 const StockValorizado = lazy(() => import('@/pages/StockValorizado'))
 const VentasWeb = lazy(() => import('@/pages/VentasWeb'))
 
@@ -463,6 +464,16 @@ export default function App() {
               <PermissionRoute permiso="ordenes_compra.view">
                 <Suspense fallback={null}>
                   <OrdenesCompra />
+                </Suspense>
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/deposito/reposicion-escaneo"
+            element={
+              <PermissionRoute permiso="repo_escaneo.view">
+                <Suspense fallback={null}>
+                  <ReposicionEscaneo />
                 </Suspense>
               </PermissionRoute>
             }

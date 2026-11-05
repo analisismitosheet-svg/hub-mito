@@ -610,6 +610,17 @@ export const APPS: AppDef[] = [
     permiso: 'picking.view',
   },
   {
+    id: 'deposito-repo-escaneo',
+    areaId: 'deposito',
+    title: 'Reposición por escaneo',
+    description: 'Cargá el Excel y escaneá: te dice en voz alta en qué caja (local) va cada prenda.',
+    icon: ScanLine,
+    kind: 'internal',
+    target: '/deposito/reposicion-escaneo',
+    color: '#0284c7',
+    permiso: 'repo_escaneo.view',
+  },
+  {
     id: 'deposito-recepcion-indo',
     areaId: 'deposito',
     areaIds: ['deposito', 'administracion'],

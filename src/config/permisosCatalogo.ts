@@ -165,6 +165,12 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
     id: 'deposito-picking', areaId: 'deposito', titulo: 'Picking', descripcion: 'Ver, registrar y anular el ingreso de pedidos de compra',
     icon: PackageCheck, color: '#0d9488', acciones: { ver: 'picking.view' },
   },
+  {
+    id: 'deposito-repo-escaneo', areaId: 'deposito', titulo: 'Reposición por escaneo', descripcion: 'Escanear prendas y ver en qué caja va cada una',
+    icon: ScanLine, color: '#0284c7',
+    acciones: { ver: 'repo_escaneo.view', crear: 'repo_escaneo.cargar' },
+    etiquetas: { ver: 'Ver y escanear', crear: 'Cargar el Excel y cerrar' },
+  },
 
   // ===== Compras =====
   {

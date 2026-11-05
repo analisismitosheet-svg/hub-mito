@@ -17,6 +17,7 @@ El detalle largo y la historia de cada módulo siguen en `CONTEXTO.md` (raíz de
 - [[Órdenes de compras]]: alta de OC, autorización por WhatsApp, Flexxus y alta en Dragon (reemplaza la planilla)
 - [[Armado de pedidos]]: Mayorista pide, el piso arma en Mi repo
 - [[Repos Mayorista y Mi repo]]
+- [[Reposición por escaneo]]: cargás el Excel, escaneás y te dice en voz alta en qué caja (local) va cada prenda
 - [[Franquicias]]: reposición diaria, propuesta, materiales; configuración en Sistemas
 - [[Mapeo depósito]]
 - [[Transferencias]]: reposiciones y estadísticas
@@ -36,6 +37,7 @@ El detalle largo y la historia de cada módulo siguen en `CONTEXTO.md` (raíz de
 | `/deposito/picking?oc=&prov=` | Picking.tsx | [[Picking]] |
 | `/deposito/recepcion-indo` | RecepcionIndo.tsx | [[Recepción INDO]] |
 | `/deposito/rma` (+proveedores, guia) | Rma.tsx, ProveedoresPacho.tsx, GuiaPacho.tsx | [[Otros módulos]] |
+| `/deposito/reposicion-escaneo` | ReposicionEscaneo.tsx | [[Reposición por escaneo]] |
 | `/compras/ordenes?n=` | OrdenesCompra.tsx | [[Órdenes de compras]] |
 | `/compras/pedidos` | PedidosHub.tsx | [[Pedidos compra, venta y cancelaciones]] |
 | `/compras/pedidos-compra?numero=` | PedidosCompra.tsx | idem |
