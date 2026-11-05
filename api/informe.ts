@@ -181,7 +181,7 @@ async function cron(req: Req, res: Res) {
     // Plantilla todavía sin aprobar en Meta (#132001) para todos: no le llegó a nadie, así que se
     // libera y se reintenta en 5 min (hasta la medianoche) en vez de esperar al día siguiente.
     const partes = r.detalle.split(' · ')
-    if (!r.ok && partes.length === (i.destinatarios?.length ?? 0) && partes.every((p) => p.includes('(#132001)'))) {
+    if (!r.ok && partes.length > 0 && partes.every((p) => p.includes('(#132001)'))) {
       await rest(`informes?id=eq.${i.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ ultimo_envio: null }) }).catch(() => undefined)
     }
   }

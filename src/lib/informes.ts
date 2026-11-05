@@ -12,6 +12,17 @@ export type FormatoInforme = 'texto' | 'imagen'
 export interface Destinatario {
   nombre: string
   telefono: string
+  /** contacto de la agenda (informes_contactos): al enviar se usan su nombre y número actuales */
+  contacto_id?: string
+}
+
+/** Agenda de contactos de WhatsApp para asignar a los informes. */
+export interface ContactoInforme {
+  id: string
+  nombre: string
+  telefono: string
+  nota: string | null
+  activo: boolean
 }
 
 /** Fuentes "de la app" (datos ya calculados por Supabase). */

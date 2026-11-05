@@ -827,10 +827,33 @@ export interface ResultadoEnvio {
   detalle: string
 }
 
+/**
+ * Destinatarios elegidos de la agenda (informes_contactos): se usa el nombre y el número
+ * actuales del contacto y se saltean los desactivados. Si el contacto se borró o no se
+ * puede leer la agenda, queda lo que se guardó en el informe.
+ */
+async function conContactosActuales(dests: Destinatario[]): Promise<Destinatario[]> {
+  const ids = [...new Set(dests.map((d) => d.contacto_id).filter((x): x is string => !!x))]
+  if (!ids.length) return dests
+  let agenda: { id: string; nombre: string; telefono: string; activo: boolean }[]
+  try {
+    agenda = await jsonDe(`informes_contactos?select=id,nombre,telefono,activo&id=in.(${ids.join(',')})`)
+  } catch {
+    return dests
+  }
+  const porId = new Map(agenda.map((c) => [c.id, c]))
+  return dests.flatMap((d) => {
+    const c = d.contacto_id ? porId.get(d.contacto_id) : undefined
+    if (!c) return [d]
+    return c.activo ? [{ nombre: c.nombre, telefono: c.telefono, contacto_id: c.id }] : []
+  })
+}
+
 /** `fecha` (yyyy-mm-dd): reenvío del informe de otro día. No toca `ultimo_envio`, así el envío
  *  automático de hoy sigue saliendo a su hora. */
 export async function enviarInforme(informe: Informe & { id?: string }, origen: 'manual' | 'cron' | 'prueba', fecha?: string): Promise<ResultadoEnvio> {
-  const destinos = (informe.destinatarios ?? []).filter((d: Destinatario) => d.telefono && normalizarTelefono(d.telefono))
+  const destinos = (await conContactosActuales(informe.destinatarios ?? []))
+    .filter((d: Destinatario) => d.telefono && normalizarTelefono(d.telefono))
   if (!destinos.length) {
     return { ok: false, texto: '', enviados: 0, detalle: 'El informe no tiene destinatarios' }
   }

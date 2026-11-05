@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import {
-  AlertTriangle, Check, Clock, Eye, FileText, Image as ImageIcon, Loader2, Pencil, Plus,
-  RefreshCw, Send, Trash2, X,
+  Check, Clock, Eye, FileText, Image as ImageIcon, Loader2, Pencil, Plus,
+  RefreshCw, Send, Trash2, Users, X,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -9,10 +9,11 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { usePermisosArea } from '@/hooks/usePermisosArea'
 import { COLUMNAS_BUSQUEDA, cargarVistas, type VistaDef } from '@/lib/sqlApi'
+import InformesContactos, { cargarContactos, crearContacto } from '@/pages/InformesContactos'
 import {
   DIAS, FORMATOS, FUENTES, TIPOS_APP, cuandoLabel, formatoDe, fuenteLabel, normalizarTelefono,
   resumenInforme, telefonoValido, ultimoLabel,
-  type ConfigApp, type ConfigTexto, type ConfigVista, type Destinatario, type EnvioInforme,
+  type ConfigApp, type ConfigTexto, type ConfigVista, type ContactoInforme, type Destinatario, type EnvioInforme,
   type FormatoInforme, type FuenteInforme, type Informe, type ModoInforme,
 } from '@/lib/informes'
 
@@ -77,7 +78,7 @@ export default function Informes() {
   const [todos, setTodos] = useState<Informe[]>([])
   const [envios, setEnvios] = useState<EnvioInforme[]>([])
   const [cargando, setCargando] = useState(true)
-  const [vista, setVista] = useState<'lista' | 'form'>('lista')
+  const [vista, setVista] = useState<'lista' | 'form' | 'contactos'>('lista')
   const [editando, setEditando] = useState<Informe | null>(null)
   const [enviando, setEnviando] = useState<string | null>(null)
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
@@ -195,7 +196,11 @@ export default function Informes() {
           <button onClick={() => void cargar()} className="btn-press inline-flex items-center gap-1.5 rounded-xl border border-line bg-surface2 px-3 py-1.5 text-sm font-medium text-ink hover:bg-line" title="Actualizar">
             <RefreshCw size={15} className={cargando ? 'animate-spin' : ''} aria-hidden /> Actualizar
           </button>
-          {puedeCrear && (
+          <button onClick={() => setVista(vista === 'contactos' ? 'lista' : 'contactos')}
+            className={`btn-press inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-sm font-medium ${vista === 'contactos' ? 'border-violet-500/40 bg-violet-500/15 text-violet-200' : 'border-line bg-surface2 text-ink hover:bg-line'}`}>
+            <Users size={15} className="text-violet-400" aria-hidden /> {vista === 'contactos' ? 'Ver informes' : 'Contactos'}
+          </button>
+          {puedeCrear && vista === 'lista' && (
             <button onClick={abrirNuevo} className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500">
               <Plus size={15} aria-hidden /> Nuevo informe
             </button>
@@ -240,7 +245,10 @@ export default function Informes() {
         </p>
       )}
 
-      {cargando ? (
+      {vista === 'contactos' ? (
+        <InformesContactos informes={todos} puedeCrear={puedeCrear || puedeEditar} puedeEditar={puedeEditar} puedeBorrar={puedeBorrar}
+          onCambioInformes={cargar} onMensaje={mostrarToast} />
+      ) : cargando ? (
         <div className="flex items-center gap-2 py-10 text-sub"><Loader2 size={18} className="animate-spin" aria-hidden /> Cargando…</div>
       ) : todos.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-line bg-surface/50 p-8 text-center">
@@ -268,7 +276,9 @@ export default function Informes() {
                     </div>
                     <p className="mt-1 truncate text-sm text-sub">{resumenInforme(i)}</p>
                     <p className="mt-1 text-xs text-sub/80">
-                      {i.destinatarios?.length || 0} destinatario(s) ·{' '}
+                      <span title={(i.destinatarios ?? []).map((d) => d.nombre || d.telefono).join(', ')}>
+                        {i.destinatarios?.length ? (i.destinatarios ?? []).map((d) => d.nombre || `+${d.telefono}`).join(', ') : 'Sin destinatarios'}
+                      </span>{' · '}
                       <span className={i.ultimo_envio && !i.ultimo_ok ? 'text-red-300' : ''}>{ultimoLabel(i)}</span>
                     </p>
                     {i.ultimo_detalle && !i.ultimo_ok && (
@@ -454,14 +464,30 @@ function InformeForm({
     }
   }
 
-  function agregarDest() {
-    setDests((d) => [...d, { nombre: '', telefono: '' }])
+  // Agenda de contactos: los destinatarios se eligen de ahí (se puede sumar uno nuevo sin salir)
+  const [contactos, setContactos] = useState<ContactoInforme[] | null>(null)
+  const [nuevoNombre, setNuevoNombre] = useState('')
+  const [nuevoTel, setNuevoTel] = useState('')
+  const [creandoContacto, setCreandoContacto] = useState(false)
+  useEffect(() => { void cargarContactos().then(setContactos) }, [])
+  const elegido = (c: ContactoInforme) =>
+    dests.some((d) => d.contacto_id === c.id || (!d.contacto_id && normalizarTelefono(d.telefono) === c.telefono))
+  function alternarContacto(c: ContactoInforme) {
+    setDests((d) => elegido(c)
+      ? d.filter((x) => !(x.contacto_id === c.id || (!x.contacto_id && normalizarTelefono(x.telefono) === c.telefono)))
+      : [...d, { nombre: c.nombre, telefono: c.telefono, contacto_id: c.id }])
   }
-  function setDest(idx: number, campo: keyof Destinatario, valor: string) {
-    setDests((d) => d.map((x, i) => (i === idx ? { ...x, [campo]: valor } : x)))
-  }
-  function quitarDest(idx: number) {
-    setDests((d) => d.filter((_, i) => i !== idx))
+  /** Destinatarios cargados a mano antes de la agenda (sin contacto): se muestran para poder sacarlos */
+  const sueltos = dests.filter((d) => !d.contacto_id && !contactos?.some((c) => c.telefono === normalizarTelefono(d.telefono)))
+  async function agregarContactoNuevo() {
+    setCreandoContacto(true)
+    const r = await crearContacto(nuevoNombre, nuevoTel)
+    setCreandoContacto(false)
+    if (r.error || !r.contacto) { onError(r.error ?? 'No se pudo agregar el contacto.'); return }
+    const c = r.contacto
+    setContactos((l) => [...(l ?? []), c].sort((a, b) => a.nombre.localeCompare(b.nombre)))
+    setDests((d) => [...d, { nombre: c.nombre, telefono: c.telefono, contacto_id: c.id }])
+    setNuevoNombre(''); setNuevoTel('')
   }
 
   async function guardar(e: FormEvent) {
@@ -637,28 +663,50 @@ function InformeForm({
           </div>
         </section>
 
-        {/* Destinatarios */}
+        {/* Destinatarios: de la agenda de contactos */}
         <section className="rounded-2xl border border-line bg-surface p-4 shadow-soft">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="font-display text-sm font-semibold text-ink">Destinatarios de WhatsApp</h2>
-            <button type="button" onClick={agregarDest} className="btn-press inline-flex items-center gap-1 rounded-lg border border-line bg-surface2 px-2.5 py-1 text-xs font-medium text-ink hover:bg-line">
-              <Plus size={13} aria-hidden /> Agregar
+          <h2 className="mb-1 flex items-center gap-2 font-display text-sm font-semibold text-ink">
+            <Users size={15} className="text-violet-400" aria-hidden /> Destinatarios de WhatsApp
+          </h2>
+          <p className="mb-2 text-xs text-sub">Tocá los contactos que reciben este informe. La agenda se maneja desde «Contactos».</p>
+          {contactos === null ? (
+            <div className="flex items-center gap-2 text-xs text-sub"><Loader2 size={13} className="animate-spin" aria-hidden /> Cargando contactos…</div>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {contactos.length === 0 && <span className="text-xs text-sub">Todavía no hay contactos: agregá el primero acá abajo.</span>}
+              {contactos.map((c) => {
+                const si = elegido(c)
+                return (
+                  <button key={c.id} type="button" onClick={() => alternarContacto(c)} title={`+${c.telefono}${c.activo ? '' : ' · pausado: no recibe informes'}`}
+                    className={`btn-press inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition ${si
+                      ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300'
+                      : 'border-line bg-surface2 text-sub hover:text-ink'} ${c.activo ? '' : 'opacity-60'}`}>
+                    {si ? <Check size={11} aria-hidden /> : <Plus size={11} aria-hidden />} {c.nombre}
+                    <span className="font-normal text-sub/80">+{c.telefono}</span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+          {sueltos.length > 0 && (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-sub">
+              Cargados a mano:
+              {sueltos.map((d) => (
+                <span key={d.telefono} className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-amber-300">
+                  {d.nombre || d.telefono} +{normalizarTelefono(d.telefono)}
+                  <button type="button" onClick={() => setDests((l) => l.filter((x) => x !== d))} className="rounded p-0.5 hover:bg-amber-500/20" title="Sacar"><X size={11} aria-hidden /></button>
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="mt-3 grid gap-2 border-t border-line/60 pt-3 sm:grid-cols-[1fr_1fr_auto]">
+            <input value={nuevoNombre} onChange={(e) => setNuevoNombre(e.target.value)} className={inputCls} placeholder="Contacto nuevo: nombre" aria-label="Nombre del contacto nuevo" />
+            <input value={nuevoTel} onChange={(e) => setNuevoTel(e.target.value)} className={inputCls} placeholder="WhatsApp" inputMode="tel" aria-label="WhatsApp del contacto nuevo" />
+            <button type="button" onClick={() => void agregarContactoNuevo()} disabled={creandoContacto || !nuevoNombre.trim() || !nuevoTel.trim()}
+              className="btn-press inline-flex items-center justify-center gap-1 rounded-xl border border-line bg-surface2 px-3 py-2 text-sm font-medium text-ink hover:bg-line disabled:opacity-50">
+              {creandoContacto ? <Loader2 size={13} className="animate-spin" aria-hidden /> : <Plus size={13} aria-hidden />} Agregar y asignar
             </button>
           </div>
-          {dests.length === 0 && <p className="text-xs text-sub">Agregá al menos un número. Se guarda en formato internacional (ej. 5491122334455).</p>}
-          <div className="flex flex-col gap-2">
-            {dests.map((d, idx) => (
-              <div key={idx} className="flex items-center gap-2">
-                <input value={d.nombre} onChange={(e) => setDest(idx, 'nombre', e.target.value)} className={`${inputCls} sm:max-w-[40%]`} placeholder="Nombre (opcional)" />
-                <input value={d.telefono} onChange={(e) => setDest(idx, 'telefono', e.target.value)} className={inputCls} placeholder="Teléfono" inputMode="tel" />
-                <span className="hidden shrink-0 text-[11px] text-sub sm:block" title="Se enviará a este número">{d.telefono ? normalizarTelefono(d.telefono) : ''}</span>
-                <button type="button" onClick={() => quitarDest(idx)} className="shrink-0 rounded-lg p-1.5 text-red-300 hover:bg-red-500/10"><X size={14} aria-hidden /></button>
-              </div>
-            ))}
-          </div>
-          {dests.some((d) => d.telefono && !telefonoValido(d.telefono)) && (
-            <p className="mt-2 inline-flex items-center gap-1 text-[11px] text-amber-300"><AlertTriangle size={12} aria-hidden /> Hay teléfonos que no parecen válidos; igual se van a intentar normalizar.</p>
-          )}
         </section>
 
         {/* Programación */}
