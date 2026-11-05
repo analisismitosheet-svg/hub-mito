@@ -20,7 +20,7 @@ Estados: `pendiente → programado → en_curso → a_confirmar → resuelto` (o
 
 ## Zonas de los locales (05/11/2026)
 - `locales.zona` (`sql/locales_zona.sql`): CENTRO | NORTE | SUR | ESTE | OESTE | INTERIOR. Valores iniciales calculados con la ubicación de `tracking_bases` respecto de Plaza San Martín; la edita el admin en Configuración → Locales (`/locales`). Lista en `src/config/zonas.ts`.
-- Agrupado Zona → Rubro → Local → pedidos: maqueta aprobada en charla, pendiente de pasar a la pantalla (la maqueta no se sube: tenía datos reales).
+- Lista del formulario (Abiertos/Terminados) agrupada: admin «Zona | Local | Sin agrupar» (Zona → Rubro → Local → pedidos; Local = separador de zona → local → rubro), local «Rubro | Sin agrupar». Zonas en orden fijo, locales alfabéticos, rubros por cantidad; los grupos se dibujan al abrirse (`armarArbol` en `RequerimientoNuevo.tsx`). En Terminados agrupa lo cargado (de a 50 con «Ver más»).
 
 ## Avisos al local (04/11/2026)
 - Al programar, la bandeja llama `avisarRequerimiento(id)` → `/api/push?tipo=requerimiento` (permiso `requerimientos.gestionar`): push a las cuentas del local (`usuarios.local`) con rubro, día y hora (zona Córdoba), N°, tarea, quién va y la nota. Una vez por programación: `push_local_at` (se limpia al reprogramar).

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
-import { ClipboardList, Loader2, Send, CalendarClock, CircleCheck, ThumbsUp, ThumbsDown, Wrench } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { ClipboardList, Loader2, Send, CalendarClock, CircleCheck, ThumbsUp, ThumbsDown, Wrench, ChevronRight, MapPin, Building2 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import SelectorEmpleado from '@/components/SelectorEmpleado'
@@ -8,6 +8,7 @@ import { FotosElegir, FotosVer } from '@/components/FotosRequerimiento'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { suscribirCambios } from '@/lib/realtime'
+import { ZONAS, nombreZona } from '@/config/zonas'
 import {
   useRubros, PRIORIDADES, ESTADOS, CAMPOS_REQ, prioridadDef, subirFotos, fechaCorta, fechaHora, quienesVan,
   type Persona, type Prioridad, type Requerimiento,
@@ -48,6 +49,55 @@ const TANDA = 50
 
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '')
 
+type Modo = 'zona' | 'local' | 'rubro' | 'nada'
+const MODOS_ADMIN: [Modo, string][] = [['zona', 'Zona'], ['local', 'Local'], ['nada', 'Sin agrupar']]
+const MODOS_LOCAL: [Modo, string][] = [['rubro', 'Rubro'], ['nada', 'Sin agrupar']]
+const SIN_ZONA = 'SIN ZONA'
+type EstadoLista = keyof typeof ESTADOS
+
+/** Un desplegable: zona, rubro o local; las hojas tienen los pedidos (`hijos` vacío). */
+interface Nodo { clave: string; tipo: 'zona' | 'rubro' | 'local'; nombre: string; zona: string; filas: Requerimiento[]; hijos: Nodo[] }
+
+const pesoZona = (z: string) => { const i = (ZONAS as readonly string[]).indexOf(z); return i < 0 ? 99 : i }
+
+function contarEstados(filas: Requerimiento[]): Partial<Record<EstadoLista, number>> {
+  const c: Partial<Record<EstadoLista, number>> = {}
+  for (const r of filas) c[r.estado] = (c[r.estado] ?? 0) + 1
+  return c
+}
+
+/**
+ * Agrupa por una clave. Zonas en su orden fijo (Centro, Norte, Sur, Este, Oeste, Interior),
+ * locales en orden alfabético y rubros de mayor a menor cantidad.
+ */
+function agruparPor(filas: Requerimiento[], clave: (r: Requerimiento) => string, tipo: Nodo['tipo']): [string, Requerimiento[]][] {
+  const m = new Map<string, Requerimiento[]>()
+  for (const r of filas) { const k = clave(r); m.set(k, [...(m.get(k) ?? []), r]) }
+  return [...m.entries()].sort((a, b) =>
+    tipo === 'zona' ? pesoZona(a[0]) - pesoZona(b[0])
+      : tipo === 'local' ? a[0].localeCompare(b[0], 'es', { sensitivity: 'base' })
+        : b[1].length - a[1].length || a[0].localeCompare(b[0], 'es'))
+}
+
+/** Zona → Rubro → Local · Local (por zona) → Rubro · Rubro. */
+function armarArbol(modo: Modo, filas: Requerimiento[], zonaDe: (r: Requerimiento) => string, localDe: (r: Requerimiento) => string): Nodo[] {
+  const hoja = (pre: string, tipo: Nodo['tipo'], nombre: string, fs: Requerimiento[], hijos: Nodo[] = []): Nodo =>
+    ({ clave: `${pre}${tipo}:${nombre}`, tipo, nombre, zona: fs[0] ? zonaDe(fs[0]) : SIN_ZONA, filas: fs, hijos })
+  if (modo === 'zona') {
+    return agruparPor(filas, zonaDe, 'zona').map(([z, fz]) => hoja('', 'zona', z, fz,
+      agruparPor(fz, (r) => r.rubro, 'rubro').map(([ru, fr]) => hoja(`zona:${z}/`, 'rubro', ru, fr,
+        agruparPor(fr, localDe, 'local').map(([lo, fl]) => hoja(`zona:${z}/rubro:${ru}/`, 'local', lo, fl))))))
+  }
+  if (modo === 'local') {
+    return agruparPor(filas, localDe, 'local')
+      .sort((a, b) => pesoZona(zonaDe(a[1][0])) - pesoZona(zonaDe(b[1][0])))
+      .map(([lo, fl]) => hoja('', 'local', lo, fl,
+        agruparPor(fl, (r) => r.rubro, 'rubro').map(([ru, fr]) => hoja(`local:${lo}/`, 'rubro', ru, fr))))
+  }
+  if (modo === 'rubro') return agruparPor(filas, (r) => r.rubro, 'rubro').map(([ru, fr]) => hoja('', 'rubro', ru, fr))
+  return []
+}
+
 export default function RequerimientoNuevo() {
   const { rubros: RUBROS, rubroDef } = useRubros()
   const { perfil, isAdmin } = useAuth()
@@ -59,7 +109,7 @@ export default function RequerimientoNuevo() {
   const [filtroLocal, setFiltroLocal] = useState('')
   const verLocal = isAdmin ? filtroLocal : local
   const veLista = isAdmin || Boolean(local)
-  const [locales, setLocales] = useState<{ codigo: string; nombre: string }[]>([])
+  const [locales, setLocales] = useState<{ codigo: string; nombre: string; zona: string | null }[]>([])
   const [personas, setPersonas] = useState<Persona[]>([])
   const [solicitante, setSolicitante] = useState<string | null>(null)
   const [rubro, setRubro] = useState('')
@@ -72,6 +122,10 @@ export default function RequerimientoNuevo() {
   const [listo, setListo] = useState<number | null>(null)
   // Lista del local: abiertos (todos) o terminados (de a TANDA, con «Ver más»)
   const [vista, setVista] = useState<'abiertos' | 'terminados'>('abiertos')
+  // Agrupado de la lista: el admin por Zona → Rubro → Local o por Local; el local, por Rubro
+  const [modo, setModo] = useState<Modo>(isAdmin ? 'zona' : 'nada')
+  const [abiertosG, setAbiertosG] = useState<Set<string>>(new Set())
+  const caminoInicial = useRef('')
   const [abiertos, setAbiertos] = useState<Requerimiento[]>([])
   const [terminados, setTerminados] = useState<Requerimiento[]>([])
   const [totalTerminados, setTotalTerminados] = useState(0)
@@ -86,9 +140,9 @@ export default function RequerimientoNuevo() {
 
   useEffect(() => {
     if (!supabase) return
-    void supabase.from('locales').select('codigo,nombre').eq('activo', true).then(({ data }) =>
-      setLocales(((data as { codigo: string; nombre: string | null }[] | null) ?? [])
-        .map((l) => ({ codigo: l.codigo, nombre: l.nombre || l.codigo }))
+    void supabase.from('locales').select('codigo,nombre,zona').eq('activo', true).then(({ data }) =>
+      setLocales(((data as { codigo: string; nombre: string | null; zona: string | null }[] | null) ?? [])
+        .map((l) => ({ codigo: l.codigo, nombre: l.nombre || l.codigo, zona: l.zona }))
         .sort((a, b) => a.nombre.localeCompare(b.nombre))))
     void supabase.rpc('requerimientos_personas').then(({ data, error: e }) => {
       if (e) setError(e.message)
@@ -175,6 +229,164 @@ export default function RequerimientoNuevo() {
     if (err) { setError(err.message); return }
     setDevolviendo(null); setMotivo('')
     void cargarUltimos()
+  }
+
+  // Una tarjeta de pedido: la usan la lista plana y las hojas de los grupos
+  const tarjeta = (r: Requerimiento) => {
+    const rd = rubroDef(r.rubro)
+    return (
+      <li key={r.id} className="rounded-2xl border border-line bg-surface p-3">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          {isAdmin && !verLocal && modo === 'nada' && <span className="font-semibold text-ink">{nombreLocal(r.local) || r.local_original || 'Sin local'}</span>}
+          <span className="font-semibold text-sub">N° {r.id} · {fechaCorta(r.created_at)}</span>
+          <span className="inline-flex items-center gap-1 text-ink"><rd.icon size={13} style={{ color: rd.color }} aria-hidden />{r.rubro}</span>
+          <span className={`rounded-full border px-2 py-0.5 ${prioridadDef(r.prioridad).clase}`}>{prioridadDef(r.prioridad).label}</span>
+          <span className={`rounded-full border px-2 py-0.5 ${ESTADOS[r.estado].clase}`}>{ESTADOS[r.estado].label}</span>
+        </div>
+        <p className="mt-1 text-sm text-ink">{r.descripcion}</p>
+        {r.solicitante_nombre && <p className="mt-0.5 text-xs text-sub">Lo pidió {r.solicitante_nombre}</p>}
+        <FotosVer fotos={r.fotos} />
+        {r.programado_para && (r.estado === 'programado' || r.estado === 'en_curso') && (
+          <p className="mt-1 flex items-center gap-1.5 text-xs text-sky-500">
+            <CalendarClock size={13} aria-hidden /> Va {quienesVan(r) || 'mantenimiento'} el {fechaHora(r.programado_para)}
+          </p>
+        )}
+        {r.estado === 'pendiente' && r.rechazo_motivo && (
+          <p className="mt-1 text-xs text-brand-400">Lo devolvieron: {r.rechazo_motivo}</p>
+        )}
+        {r.terminado_at && r.estado !== 'pendiente' && (
+          <div className="mt-2 rounded-lg bg-surface2 p-2 text-xs text-sub">
+            <p className="flex items-center gap-1.5">
+              <Wrench size={12} aria-hidden /> Lo hizo {r.terminado_por ?? 'mantenimiento'} el {fechaHora(r.terminado_at)}
+            </p>
+            {r.terminado_comentario && <p className="mt-0.5 text-ink">{r.terminado_comentario}</p>}
+            <FotosVer fotos={r.terminado_fotos} />
+          </div>
+        )}
+        {r.estado === 'resuelto' && (
+          <p className="mt-1 flex items-center gap-1.5 text-xs text-emerald-500">
+            <CircleCheck size={13} aria-hidden />
+            {r.origen === 'planilla'
+              ? `Resuelto${r.resuelto_at ? ` el ${fechaCorta(r.resuelto_at)}` : ''} (planilla anterior)`
+              : `Confirmado el ${r.resuelto_at ? fechaCorta(r.resuelto_at) : ''}${r.resuelto_por ? ` · ${r.resuelto_por}` : ''}${r.resuelto_comentario ? ` · ${r.resuelto_comentario}` : ''}`}
+          </p>
+        )}
+        {r.estado === 'no_corresponde' && (
+          <p className="mt-1 text-xs text-sub">
+            No corresponde{r.resuelto_at ? ` (${fechaCorta(r.resuelto_at)})` : ''}{r.resuelto_comentario ? `: ${r.resuelto_comentario}` : ''}
+          </p>
+        )}
+        {vista === 'abiertos' && (cerrando === r.id ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <input autoFocus value={comentarioCierre} onChange={(e) => setComentarioCierre(e.target.value)}
+              placeholder="¿Cómo se resolvió? (opcional)"
+              className="h-10 min-w-0 flex-1 rounded-xl border border-line bg-surface2 px-3 text-sm text-ink" />
+            <button type="button" onClick={() => void confirmar(r.id, comentarioCierre)} disabled={ocupado === r.id}
+              className="btn-press inline-flex h-10 items-center gap-1.5 rounded-xl bg-emerald-600 px-3 text-sm font-semibold text-white disabled:opacity-60">
+              {ocupado === r.id ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <CircleCheck size={15} aria-hidden />} Confirmar
+            </button>
+            <button type="button" onClick={() => setCerrando(null)} className="btn-press h-10 rounded-xl border border-line bg-surface2 px-3 text-sm text-ink">Cancelar</button>
+          </div>
+        ) : r.estado === 'a_confirmar' ? (
+          devolviendo === r.id ? (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <input autoFocus value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="¿Qué quedó mal?"
+                className="h-10 min-w-0 flex-1 rounded-xl border border-line bg-surface2 px-3 text-sm text-ink" />
+              <button type="button" onClick={() => void noQuedo(r.id)} disabled={ocupado === r.id}
+                className="btn-press inline-flex h-10 items-center gap-1.5 rounded-xl bg-brand-600 px-3 text-sm font-semibold text-white disabled:opacity-60">
+                {ocupado === r.id ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <ThumbsDown size={15} aria-hidden />} Devolver
+              </button>
+              <button type="button" onClick={() => setDevolviendo(null)} className="btn-press h-10 rounded-xl border border-line bg-surface2 px-3 text-sm text-ink">Cancelar</button>
+            </div>
+          ) : (
+            <div className="mt-3 flex gap-2">
+              <button type="button" onClick={() => void confirmar(r.id)} disabled={ocupado === r.id}
+                className="btn-press inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-semibold text-white disabled:opacity-60">
+                {ocupado === r.id ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <ThumbsUp size={15} aria-hidden />} Quedó listo
+              </button>
+              <button type="button" onClick={() => { setDevolviendo(r.id); setMotivo('') }}
+                className="btn-press inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-brand-600/40 bg-brand-600/10 text-sm font-semibold text-brand-400">
+                <ThumbsDown size={15} aria-hidden /> No quedó bien
+              </button>
+            </div>
+          )
+        ) : (
+          <div className="mt-3">
+            <button type="button" onClick={() => { setCerrando(r.id); setComentarioCierre('') }}
+              className="btn-press inline-flex h-10 items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 text-sm font-semibold text-emerald-500">
+              <CircleCheck size={15} aria-hidden /> Terminado
+            </button>
+          </div>
+        ))}
+      </li>
+    )
+  }
+
+  const zonaDeLocal = useMemo(() => new Map(locales.map((l) => [l.codigo, l.zona ?? SIN_ZONA])), [locales])
+  const listaVista = vista === 'abiertos' ? abiertos : terminados
+  const arbol = useMemo(
+    () => armarArbol(modo, listaVista, (r) => zonaDeLocal.get(r.local ?? '') ?? SIN_ZONA, (r) => nombreLocal(r.local) || r.local_original || 'Sin local'),
+    [modo, listaVista, zonaDeLocal, locales], // nombreLocal sale de `locales`
+  )
+  // Al cambiar de modo, pestaña o local, abre el primer camino para que se vea cómo baja
+  useEffect(() => {
+    const clave = `${modo}|${vista}|${verLocal}`
+    if (!arbol.length || caminoInicial.current === clave) return
+    caminoInicial.current = clave
+    const primero = new Set<string>()
+    let n: Nodo | undefined = arbol[0]
+    while (n) { primero.add(n.clave); n = n.hijos[0] }
+    setAbiertosG(primero)
+  }, [arbol, modo, vista, verLocal])
+  const alternar = (k: string) => setAbiertosG((a) => { const b = new Set(a); if (b.has(k)) b.delete(k); else b.add(k); return b })
+  const todasLasClaves = () => { const t = new Set<string>(); const rec = (ns: Nodo[]) => ns.forEach((n) => { t.add(n.clave); rec(n.hijos) }); rec(arbol); return t }
+
+  function iconoNodo(n: Nodo) {
+    if (n.tipo === 'zona') return <MapPin size={16} className="text-teal-500" aria-hidden />
+    if (n.tipo === 'local') return <Building2 size={16} className="text-sky-500" aria-hidden />
+    const rd = rubroDef(n.nombre)
+    return <rd.icon size={16} style={{ color: rd.color }} aria-hidden />
+  }
+
+  function pintarNodos(nodos: Nodo[], nivel: number): ReactNode {
+    let zonaPrev = ''
+    return nodos.map((n) => {
+      // Por local: un separador cada vez que cambia la zona
+      const sep = modo === 'local' && nivel === 0 && n.zona !== zonaPrev
+        ? (zonaPrev = n.zona, (
+          <p key={`sep-${n.zona}`} className="mb-1 mt-4 flex items-baseline gap-2 text-xs font-bold uppercase tracking-wider text-teal-500">
+            {n.zona === SIN_ZONA ? 'Sin zona' : `Zona ${nombreZona(n.zona).toLowerCase()}`}
+            <span className="font-normal normal-case tracking-normal text-sub">{nodos.filter((x) => x.zona === n.zona).reduce((t, x) => t + x.filas.length, 0)} pedidos</span>
+          </p>))
+        : null
+      const abierto = abiertosG.has(n.clave)
+      return (
+        <div key={n.clave}>
+          {sep}
+          <div className={`rounded-2xl border ${nivel === 0 ? 'bg-surface' : 'bg-surface2/40'} ${n.tipo === 'zona' ? 'border-teal-500/30' : 'border-line'}`}>
+            <button type="button" onClick={() => alternar(n.clave)} aria-expanded={abierto}
+              className="flex w-full items-center gap-2 px-3 py-2.5 text-left">
+              {iconoNodo(n)}
+              <span className={`min-w-0 flex-1 truncate font-semibold ${n.tipo === 'zona' ? 'text-xs uppercase tracking-wider text-teal-500' : nivel === 0 ? 'text-sm text-ink' : 'text-[13px] text-ink'}`}>
+                {n.tipo === 'zona' ? (n.nombre === SIN_ZONA ? 'Sin zona' : `Zona ${nombreZona(n.nombre).toLowerCase()}`) : n.nombre}
+              </span>
+              <span className="hidden flex-wrap justify-end gap-1 sm:flex">
+                {Object.entries(contarEstados(n.filas)).map(([e, c]) => (
+                  <span key={e} className={`rounded-full border px-1.5 text-[10px] font-semibold ${ESTADOS[e as EstadoLista].clase}`}>{ESTADOS[e as EstadoLista].label} {c}</span>
+                ))}
+              </span>
+              <span className="rounded-full bg-surface2 px-2 text-xs font-bold tabular-nums text-ink">{n.filas.length}</span>
+              <ChevronRight size={15} className={`shrink-0 text-sub transition ${abierto ? 'rotate-90' : ''}`} aria-hidden />
+            </button>
+            {abierto && (
+              <div className="space-y-2 px-2 pb-2">
+                {n.hijos.length ? pintarNodos(n.hijos, nivel + 1) : <ul className="space-y-2">{n.filas.map(tarjeta)}</ul>}
+              </div>
+            )}
+          </div>
+        </div>
+      )
+    })
   }
 
   const caja = 'rounded-2xl border border-line bg-surface p-4'
@@ -344,102 +556,29 @@ export default function RequerimientoNuevo() {
               </button>
             ))}
           </div>
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="text-xs text-sub">Agrupar por:</span>
+            <div className="inline-flex rounded-xl border border-line bg-surface p-0.5">
+              {(isAdmin ? MODOS_ADMIN : MODOS_LOCAL).map(([id, label]) => (
+                <button key={id} type="button" onClick={() => setModo(id)} aria-pressed={modo === id}
+                  className={`rounded-lg px-3 py-1 text-sm font-semibold ${modo === id ? 'bg-teal-600 text-white' : 'text-sub hover:text-ink'}`}>{label}</button>
+              ))}
+            </div>
+            {modo !== 'nada' && (
+              <span className="ml-auto flex gap-1">
+                <button type="button" onClick={() => setAbiertosG(todasLasClaves())} className="px-1.5 text-xs font-semibold text-teal-500 hover:underline">Abrir todo</button>
+                <button type="button" onClick={() => setAbiertosG(new Set())} className="px-1.5 text-xs font-semibold text-teal-500 hover:underline">Cerrar todo</button>
+              </span>
+            )}
+          </div>
           {(vista === 'abiertos' ? abiertos : terminados).length === 0 ? (
             <p className="rounded-xl border border-line bg-surface p-4 text-sm text-sub">
               {vista === 'abiertos' ? 'No hay requerimientos abiertos.' : 'Todavía no hay requerimientos terminados.'}
             </p>
           ) : (
-            <ul className="space-y-2">
-              {(vista === 'abiertos' ? abiertos : terminados).map((r) => {
-                const rd = rubroDef(r.rubro)
-                return (
-                  <li key={r.id} className="rounded-2xl border border-line bg-surface p-3">
-                    <div className="flex flex-wrap items-center gap-2 text-xs">
-                      {isAdmin && !verLocal && <span className="font-semibold text-ink">{nombreLocal(r.local) || r.local_original || 'Sin local'}</span>}
-                      <span className="font-semibold text-sub">N° {r.id} · {fechaCorta(r.created_at)}</span>
-                      <span className="inline-flex items-center gap-1 text-ink"><rd.icon size={13} style={{ color: rd.color }} aria-hidden />{r.rubro}</span>
-                      <span className={`rounded-full border px-2 py-0.5 ${prioridadDef(r.prioridad).clase}`}>{prioridadDef(r.prioridad).label}</span>
-                      <span className={`rounded-full border px-2 py-0.5 ${ESTADOS[r.estado].clase}`}>{ESTADOS[r.estado].label}</span>
-                    </div>
-                    <p className="mt-1 text-sm text-ink">{r.descripcion}</p>
-                    {r.solicitante_nombre && <p className="mt-0.5 text-xs text-sub">Lo pidió {r.solicitante_nombre}</p>}
-                    <FotosVer fotos={r.fotos} />
-                    {r.programado_para && (r.estado === 'programado' || r.estado === 'en_curso') && (
-                      <p className="mt-1 flex items-center gap-1.5 text-xs text-sky-500">
-                        <CalendarClock size={13} aria-hidden /> Va {quienesVan(r) || 'mantenimiento'} el {fechaHora(r.programado_para)}
-                      </p>
-                    )}
-                    {r.estado === 'pendiente' && r.rechazo_motivo && (
-                      <p className="mt-1 text-xs text-brand-400">Lo devolvieron: {r.rechazo_motivo}</p>
-                    )}
-                    {r.terminado_at && r.estado !== 'pendiente' && (
-                      <div className="mt-2 rounded-lg bg-surface2 p-2 text-xs text-sub">
-                        <p className="flex items-center gap-1.5">
-                          <Wrench size={12} aria-hidden /> Lo hizo {r.terminado_por ?? 'mantenimiento'} el {fechaHora(r.terminado_at)}
-                        </p>
-                        {r.terminado_comentario && <p className="mt-0.5 text-ink">{r.terminado_comentario}</p>}
-                        <FotosVer fotos={r.terminado_fotos} />
-                      </div>
-                    )}
-                    {r.estado === 'resuelto' && (
-                      <p className="mt-1 flex items-center gap-1.5 text-xs text-emerald-500">
-                        <CircleCheck size={13} aria-hidden />
-                        {r.origen === 'planilla'
-                          ? `Resuelto${r.resuelto_at ? ` el ${fechaCorta(r.resuelto_at)}` : ''} (planilla anterior)`
-                          : `Confirmado el ${r.resuelto_at ? fechaCorta(r.resuelto_at) : ''}${r.resuelto_por ? ` · ${r.resuelto_por}` : ''}${r.resuelto_comentario ? ` · ${r.resuelto_comentario}` : ''}`}
-                      </p>
-                    )}
-                    {r.estado === 'no_corresponde' && (
-                      <p className="mt-1 text-xs text-sub">
-                        No corresponde{r.resuelto_at ? ` (${fechaCorta(r.resuelto_at)})` : ''}{r.resuelto_comentario ? `: ${r.resuelto_comentario}` : ''}
-                      </p>
-                    )}
-                    {vista === 'abiertos' && (cerrando === r.id ? (
-                      <div className="mt-3 flex flex-wrap items-center gap-2">
-                        <input autoFocus value={comentarioCierre} onChange={(e) => setComentarioCierre(e.target.value)}
-                          placeholder="¿Cómo se resolvió? (opcional)"
-                          className="h-10 min-w-0 flex-1 rounded-xl border border-line bg-surface2 px-3 text-sm text-ink" />
-                        <button type="button" onClick={() => void confirmar(r.id, comentarioCierre)} disabled={ocupado === r.id}
-                          className="btn-press inline-flex h-10 items-center gap-1.5 rounded-xl bg-emerald-600 px-3 text-sm font-semibold text-white disabled:opacity-60">
-                          {ocupado === r.id ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <CircleCheck size={15} aria-hidden />} Confirmar
-                        </button>
-                        <button type="button" onClick={() => setCerrando(null)} className="btn-press h-10 rounded-xl border border-line bg-surface2 px-3 text-sm text-ink">Cancelar</button>
-                      </div>
-                    ) : r.estado === 'a_confirmar' ? (
-                      devolviendo === r.id ? (
-                        <div className="mt-3 flex flex-wrap items-center gap-2">
-                          <input autoFocus value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="¿Qué quedó mal?"
-                            className="h-10 min-w-0 flex-1 rounded-xl border border-line bg-surface2 px-3 text-sm text-ink" />
-                          <button type="button" onClick={() => void noQuedo(r.id)} disabled={ocupado === r.id}
-                            className="btn-press inline-flex h-10 items-center gap-1.5 rounded-xl bg-brand-600 px-3 text-sm font-semibold text-white disabled:opacity-60">
-                            {ocupado === r.id ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <ThumbsDown size={15} aria-hidden />} Devolver
-                          </button>
-                          <button type="button" onClick={() => setDevolviendo(null)} className="btn-press h-10 rounded-xl border border-line bg-surface2 px-3 text-sm text-ink">Cancelar</button>
-                        </div>
-                      ) : (
-                        <div className="mt-3 flex gap-2">
-                          <button type="button" onClick={() => void confirmar(r.id)} disabled={ocupado === r.id}
-                            className="btn-press inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-semibold text-white disabled:opacity-60">
-                            {ocupado === r.id ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <ThumbsUp size={15} aria-hidden />} Quedó listo
-                          </button>
-                          <button type="button" onClick={() => { setDevolviendo(r.id); setMotivo('') }}
-                            className="btn-press inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-brand-600/40 bg-brand-600/10 text-sm font-semibold text-brand-400">
-                            <ThumbsDown size={15} aria-hidden /> No quedó bien
-                          </button>
-                        </div>
-                      )
-                    ) : (
-                      <div className="mt-3">
-                        <button type="button" onClick={() => { setCerrando(r.id); setComentarioCierre('') }}
-                          className="btn-press inline-flex h-10 items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 text-sm font-semibold text-emerald-500">
-                          <CircleCheck size={15} aria-hidden /> Terminado
-                        </button>
-                      </div>
-                    ))}
-                  </li>
-                )
-              })}
-            </ul>
+            modo === 'nada'
+              ? <ul className="space-y-2">{listaVista.map(tarjeta)}</ul>
+              : <div className="space-y-2">{pintarNodos(arbol, 0)}</div>
           )}
           {vista === 'terminados' && terminados.length < totalTerminados && (
             <button type="button" onClick={() => setTope((t) => t + TANDA)}
