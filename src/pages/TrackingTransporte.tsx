@@ -162,15 +162,25 @@ function metros(a: { lat: number; lng: number }, b: { lat: number; lng: number }
  * solo puntos precisos (≤ 50 m), sin saltos imposibles (> 150 km/h) y sin el temblequeo
  * del GPS cuando está quieto (tramos < 20 m se acumulan hasta superar esa distancia).
  * Mide en línea recta entre puntos (cada ~30 s): en curvas da apenas un poco menos.
+ * Puntos imprecisos (51 a 1000 m, celular sin GPS que manda por antena/wifi): cuentan solo
+ * si el salto es más de 3 veces el error, así se estima algo en vez de dar 0 (05/11/2026,
+ * Master). Mientras no se aleje, un punto más preciso reemplaza al ancla impreciso.
+ * Misma cuenta que tracking_km en sql/tracking_km.sql.
  */
 function kmDelDia(us: Ubic[]): number {
   let total = 0
   let ancla: Ubic | null = null
   for (const u of us) {
-    if ((u.precision_m ?? 0) > 50) continue
+    const p = u.precision_m ?? 0
+    if (p > 1000) continue
     if (!ancla) { ancla = u; continue }
+    const pa = ancla.precision_m ?? 0
+    const peor = Math.max(p, pa)
     const d = metros(ancla, u)
-    if (d < 20) continue
+    if (d < (peor > 50 ? 3 * peor : 20)) {
+      if (pa > 50 && p < pa) ancla = u
+      continue
+    }
     const seg = (new Date(u.at).getTime() - new Date(ancla.at).getTime()) / 1000
     if (seg > 0 && (d / seg) * 3.6 <= 150) total += d
     ancla = u
