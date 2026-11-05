@@ -269,6 +269,36 @@ async function itemsPedidoVenta(codigo) {
   }))
 }
 
+/**
+ * Órdenes de compras: colores y talles de un artículo en DRAGONFISH_<base> (COMB + COL).
+ * Solo lectura, parametrizado. Bases permitidas: las de PUENTE_BASES_DRAGON (por defecto INDOD).
+ */
+const BASES_DRAGON = (process.env.PUENTE_BASES_DRAGON || 'INDOD').split(',').map((b) => b.trim().toUpperCase()).filter(Boolean)
+async function dragonVariantes(base, articulo) {
+  const b = String(base ?? '').trim().toUpperCase()
+  const art = String(articulo ?? '').trim().toUpperCase()
+  if (!BASES_DRAGON.includes(b)) throw new Error(`Base no habilitada: ${b}`)
+  if (!/^[A-Z0-9._-]{1,40}$/.test(art)) throw new Error('Artículo inválido')
+  const srv = SERVIDORES.get(ALIAS_PRINCIPAL.toUpperCase())
+  await asegurarConexion(srv)
+  const db = `[DRAGONFISH_${b}].[ZooLogic]`
+  const r = await srv.pool
+    .request()
+    .input('a', srv.sql.NVarChar(40), art)
+    .query(
+      `SELECT DISTINCT RTRIM(C.COCOL) AS color, RTRIM(ISNULL(L.COLDES, '')) AS nombre, RTRIM(C.TALLE) AS talle
+         FROM ${db}.[COMB] C LEFT JOIN ${db}.[COL] L ON RTRIM(L.COLCOD) = RTRIM(C.COCOL)
+        WHERE C.COART = @a`,
+    )
+  const filas = r.recordset ?? []
+  const colores = [...new Map(filas.filter((f) => f.color).map((f) => [f.color, { codigo: f.color, nombre: f.nombre }])).values()]
+    .sort((x, y) => x.codigo.localeCompare(y.codigo))
+  const orden = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', 'U']
+  const pos = (t) => (/^\d+$/.test(t) ? Number(t) : 1000 + (orden.indexOf(t) < 0 ? 99 : orden.indexOf(t)))
+  const talles = [...new Set(filas.map((f) => f.talle).filter(Boolean))].sort((x, y) => pos(x) - pos(y) || x.localeCompare(y))
+  return { colores, talles }
+}
+
 /** Servidor por alias (sin alias = el principal). null si no existe. */
 function servidorDe(alias) {
   if (!alias) return SERVIDORES.get(ALIAS_PRINCIPAL.toUpperCase())
@@ -784,6 +814,11 @@ const server = http.createServer(async (req, res) => {
     // los pedidos más viejos se abren desde acá. Lee por el servidor local (linked server MITO).
     if (body?.accion === 'items_pedido_venta') {
       return enviar(res, 200, await itemsPedidoVenta(body?.codigo))
+    }
+
+    // Órdenes de compras: colores y talles de un artículo en Dragon (COMB/COL de DRAGONFISH_<base>)
+    if (body?.accion === 'dragon_variantes') {
+      return enviar(res, 200, await dragonVariantes(body?.base, body?.articulo))
     }
 
     // Servidores configurados (para elegir en el explorador del hub)

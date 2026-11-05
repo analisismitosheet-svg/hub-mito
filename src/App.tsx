@@ -88,6 +88,7 @@ import PropuestaFranquicia from '@/pages/PropuestaFranquicia'
 const ComparativaPrecios = lazy(() => import('@/pages/ComparativaPrecios'))
 const TrackingTransporte = lazy(() => import('@/pages/TrackingTransporte'))
 const TrackingKm = lazy(() => import('@/pages/TrackingKm'))
+const OrdenesCompra = lazy(() => import('@/pages/OrdenesCompra'))
 const StockValorizado = lazy(() => import('@/pages/StockValorizado'))
 const VentasWeb = lazy(() => import('@/pages/VentasWeb'))
 
@@ -453,6 +454,16 @@ export default function App() {
             element={
               <PermissionRoute permiso="picking.view">
                 <Picking />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/compras/ordenes"
+            element={
+              <PermissionRoute permiso="ordenes_compra.view">
+                <Suspense fallback={null}>
+                  <OrdenesCompra />
+                </Suspense>
               </PermissionRoute>
             }
           />

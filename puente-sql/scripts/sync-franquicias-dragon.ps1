@@ -10,6 +10,9 @@ if (-not $node) { $node = Join-Path $env:ProgramFiles 'nodejs\node.exe' }
 $codigo = $LASTEXITCODE
 & $node (Join-Path $raiz 'scripts\reposicion-franquicias-auto.js')
 if ($codigo -eq 0) { $codigo = $LASTEXITCODE }
+# Ordenes de compras del hub que se mandaron a Dragon (pedido de compra en DRAGONFISH_INDOD)
+& $node (Join-Path $raiz 'scripts\sync-oc-dragon.js')
+if ($codigo -eq 0) { $codigo = $LASTEXITCODE }
 # Venta diaria de los locales para Locales -> Objetivos (corre de verdad una vez por hora)
 & $node (Join-Path $raiz 'scripts\sync-ventas-locales.js')
 if ($codigo -eq 0) { $codigo = $LASTEXITCODE }

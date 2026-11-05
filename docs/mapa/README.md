@@ -14,6 +14,7 @@ El detalle largo y la historia de cada módulo siguen en `CONTEXTO.md` (raíz de
 - [[Picking]]: pickings por registro, cancelaciones, Excel
 - [[Recepción INDO]]
 - [[Pedidos compra, venta y cancelaciones]]
+- [[Órdenes de compras]]: alta de OC, autorización por WhatsApp, Flexxus y alta en Dragon (reemplaza la planilla)
 - [[Armado de pedidos]]: Mayorista pide, el piso arma en Mi repo
 - [[Repos Mayorista y Mi repo]]
 - [[Franquicias]]: reposición diaria, propuesta, materiales; configuración en Sistemas
@@ -35,6 +36,7 @@ El detalle largo y la historia de cada módulo siguen en `CONTEXTO.md` (raíz de
 | `/deposito/picking?oc=&prov=` | Picking.tsx | [[Picking]] |
 | `/deposito/recepcion-indo` | RecepcionIndo.tsx | [[Recepción INDO]] |
 | `/deposito/rma` (+proveedores, guia) | Rma.tsx, ProveedoresPacho.tsx, GuiaPacho.tsx | [[Otros módulos]] |
+| `/compras/ordenes?n=` | OrdenesCompra.tsx | [[Órdenes de compras]] |
 | `/compras/pedidos` | PedidosHub.tsx | [[Pedidos compra, venta y cancelaciones]] |
 | `/compras/pedidos-compra?numero=` | PedidosCompra.tsx | idem |
 | `/compras/cancelaciones` | Cancelaciones.tsx | idem |

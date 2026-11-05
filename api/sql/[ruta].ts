@@ -8,6 +8,7 @@
  *   GET /api/sql/stock-valorizado[?forzar=1]   -> stock valorizado a costo por sucursal (Administradores)
  *   GET /api/sql/stock-valorizado?base=...     -> los artículos de esa sucursal (el desplegable)
  *   GET /api/sql/pedido-venta-items?codigo=    -> renglones de un pedido de venta viejo, en vivo de Dragonfish
+ *   GET /api/sql/dragon-variantes?base=&articulo= -> colores y talles de un artículo en Dragon (Órdenes de compras)
  *   GET /api/sql/<vista>[?where=&value=&limit=] -> filas de una vista habilitada
  *
  * Antes eran tres funciones (sql/[view], sql/status, sql/catalogo); se unificaron para
@@ -27,6 +28,7 @@ import status from '../../src/lib/sqlStatus.js'
 import catalogo from '../../src/lib/sqlCatalogo.js'
 import stockValorizado from '../../src/lib/stockValorizadoApi.js'
 import pedidoVentaItems from '../../src/lib/pedidoVentaItemsApi.js'
+import dragonVariantes from '../../src/lib/dragonVariantesApi.js'
 
 type Req = {
   method?: string
@@ -87,6 +89,7 @@ export default async function handler(req: Req, res: Res) {
   if (ruta === 'catalogo') return catalogo(req, res)
   if (ruta === 'stock-valorizado') return stockValorizado(req, res)
   if (ruta === 'pedido-venta-items') return pedidoVentaItems(req, res)
+  if (ruta === 'dragon-variantes') return dragonVariantes(req, res)
 
   // Cualquier otro nombre es una vista: se la pasa como ?view= a la lógica de siempre,
   // pero con el MISMO req (jamás un spread: se perdería req.headers y crashearía).

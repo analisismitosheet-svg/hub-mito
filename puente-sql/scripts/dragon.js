@@ -58,7 +58,53 @@ async function crearPedido({ cliente, lista = 'LISTA2', obs = '', items, fecha }
   }
 }
 
-module.exports = { crearPedido }
+/**
+ * Alta de un pedido de compra (Órdenes de compras del hub) en DRAGONFISH_<base>.
+ * Se manda el mismo N° de la OC (Letra X, punto de venta 164, como las OC de INDOD).
+ * items: [{ articulo, color, talle, cantidad, precio }]. Probado 05/11/2026 con X-0164-99001.
+ */
+async function crearPedidoCompra({ base = 'INDOD', numero, proveedor, motivo, condicion, lista = 'LISTA0', fecha, fechaEntrega, obs = '', items }) {
+  if (!ID || !TOKEN) throw new Error('Faltan DRAGON_API_IDCLIENTE / DRAGON_API_TOKEN en puente-sql/.env')
+  const cuerpo = {
+    Letra: 'X',
+    PuntoDeVenta: 164,
+    Numero: Number(numero),
+    Proveedor: String(proveedor).trim(),
+    ListaDePrecios: lista,
+    CondicionPagoPreferente: condicion || '',
+    Motivo: motivo,
+    Fecha: fechaWcf(fecha),
+    FechaEntrega: fechaWcf(fechaEntrega || fecha),
+    Obs: obs.slice(0, 250),
+    FacturaDetalle: items.map((i, n) => ({
+      NroItem: n + 1,
+      Articulo: String(i.articulo).trim().toUpperCase(),
+      Color: String(i.color || '').trim().toUpperCase(),
+      Talle: String(i.talle || '').trim().toUpperCase(),
+      Cantidad: Number(i.cantidad),
+      Precio: Number(i.precio) || 0,
+    })),
+  }
+  const r = await fetch(`${URL_API}/Pedidodecompra/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', IdCliente: ID, Authorization: TOKEN, BaseDeDatos: String(base).toUpperCase() },
+    // WCF exige las fechas escapadas: "\/Date(...)\/"
+    body: JSON.stringify(cuerpo).replace(/"\/Date\(([^)]*)\)\/"/g, '"\\/Date($1)\\/"'),
+  })
+  const texto = await r.text()
+  let j = null
+  try { j = JSON.parse(texto) } catch { /* texto plano */ }
+  const info = r.headers.get('InformacionAdicional') || ''
+  return {
+    ok: r.ok,
+    status: r.status,
+    numero: j?.Numero ?? null,
+    codigo: j?.Codigo ?? null,
+    detalle: r.ok ? `Pedido de compra N° ${j?.Numero ?? '?'}` : `${r.status} ${r.statusText} ${info} ${texto.slice(0, 300)}`.trim(),
+  }
+}
+
+module.exports = { crearPedido, crearPedidoCompra }
 
 // Prueba manual: node scripts/dragon.js --prueba
 if (require.main === module && process.argv.includes('--prueba')) {

@@ -11,7 +11,11 @@
  *        automática de franquicias (pg_cron cada 5 min y el puente apenas la arma)
  *   POST /api/informe   { franquicias: id, todos? }    -> manda ya el WhatsApp de esa reposición (Franquicias)
  *   GET/POST /api/informe?evento=whatsapp              -> webhook de Meta: verificación y estado de entrega
- *        (sent/delivered/read/failed) de cada mensaje, guardado en informes_envios por wamid
+ *        (sent/delivered/read/failed) de cada mensaje, guardado en informes_envios por wamid; y las
+ *        respuestas a los botones «Autorizado / No autorizado» de las órdenes de compra
+ *   POST /api/informe   { ocPedir: numero }            -> Órdenes de compras: «Pedir autorización» por WhatsApp
+ *   POST /api/informe   { ocPlantilla: 'estado'|'crear' } -> plantilla oc_para_autorizar en Meta (solo admin)
+ *   (?evento=diarios además amplía los avisos de OC que nadie respondió en N horas)
  *
  * Antes eran dos funciones (informe-enviar e informe-cron); se unificaron para no
  * pasar el tope de 12 Serverless Functions del plan Hobby de Vercel. El método
@@ -24,6 +28,7 @@ import { armarCuerpo, enviarInforme, estadoWhatsapp, generarImagenInforme, repoC
 import { formatoDe, type Informe } from '../src/lib/informes.js'
 import { mismoSecreto } from '../src/lib/apiAuth.js'
 import { enviarPendientesFranquicias, reenviarPropuesta } from '../src/lib/franquiciasWhatsapp.js'
+import { ampliarAvisosOc, crearPlantillaOc, estadoPlantillaOc, pedirAutorizacionOc, responderBotonOc } from '../src/lib/ordenesCompraWhatsapp.js'
 
 type Req = {
   method?: string
@@ -153,6 +158,9 @@ async function cron(req: Req, res: Res) {
     if (!autorizado) return res.status(401).json({ error: 'No autorizado' })
   }
 
+  // Órdenes de compras: avisos de autorización que nadie respondió en N horas → a los demás autorizadores
+  const ocAmpliadas = await ampliarAvisosOc().catch((e: Error) => ({ error: e.message }))
+
   const rI = await rest('informes?select=*&activo=eq.true&modo=eq.diario')
   if (!rI.ok) return res.status(502).json({ error: `No se pudieron leer los informes (${rI.status})` })
   const informes = (await rI.json()) as Informe[]
@@ -186,7 +194,7 @@ async function cron(req: Req, res: Res) {
     }
   }
 
-  return res.status(200).json({ fecha, hora, dia, informes: informes.length, procesados: enviados.length, enviados })
+  return res.status(200).json({ fecha, hora, dia, informes: informes.length, procesados: enviados.length, enviados, ocAmpliadas })
 }
 
 /* ------------------------------------------------------------------ */
@@ -222,6 +230,27 @@ async function manual(req: Req, res: Res) {
     if (!/^[0-9a-f-]{36}$/i.test(datos.franquicias)) return res.status(400).json({ error: 'Propuesta inválida' })
     try {
       return res.status(200).json(await reenviarPropuesta(datos.franquicias, datos.todos === true))
+    } catch (e) {
+      return res.status(502).json({ error: (e as Error).message })
+    }
+  }
+
+  // --- Órdenes de compras: pedir autorización por WhatsApp (la RPC valida quién puede) ---
+  if (datos.ocPedir !== undefined) {
+    const numero = Number(datos.ocPedir)
+    if (!Number.isInteger(numero) || numero <= 0) return res.status(400).json({ error: 'N° de OC inválido' })
+    if (!(await tienePermiso(token, ['ordenes_compra.view']))) return res.status(403).json({ error: 'No tenés permiso para esta acción' })
+    try {
+      return res.status(200).json(await pedirAutorizacionOc(token, numero))
+    } catch (e) {
+      return res.status(400).json({ error: (e as Error).message })
+    }
+  }
+  // --- Órdenes de compras: plantilla de WhatsApp (solo admin) ---
+  if (datos.ocPlantilla === 'estado' || datos.ocPlantilla === 'crear') {
+    if (!(await tienePermiso(token, ['__solo_admin__']))) return res.status(403).json({ error: 'Solo el administrador' })
+    try {
+      return res.status(200).json(datos.ocPlantilla === 'crear' ? await crearPlantillaOc() : await estadoPlantillaOc())
     } catch (e) {
       return res.status(502).json({ error: (e as Error).message })
     }
@@ -291,6 +320,13 @@ type EstadoMeta = {
   errors?: Array<{ code?: number; title?: string; message?: string; error_data?: { details?: string } }>
 }
 
+type MensajeMeta = {
+  from?: string
+  type?: string
+  button?: { payload?: string; text?: string }
+  interactive?: { button_reply?: { id?: string; title?: string } }
+}
+
 async function webhookWhatsapp(req: Req, res: Res) {
   // Verificación al suscribir: Meta manda hub.mode=subscribe, hub.verify_token y hub.challenge
   if (req.method === 'GET') {
@@ -307,8 +343,14 @@ async function webhookWhatsapp(req: Req, res: Res) {
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return res.status(500).json({ error: 'Falta la configuración de Supabase' })
 
   // Solo actualiza filas que ya existen (por wamid): un aviso inventado no agrega nada.
-  const body = cuerpo(req) as { entry?: Array<{ changes?: Array<{ value?: { statuses?: EstadoMeta[] } }> }> }
+  const body = cuerpo(req) as { entry?: Array<{ changes?: Array<{ value?: { statuses?: EstadoMeta[]; messages?: MensajeMeta[] } }> }> }
   const estados = (body.entry ?? []).flatMap((e) => (e.changes ?? []).flatMap((c) => c.value?.statuses ?? []))
+  // Respuestas a los botones de las órdenes de compra («Autorizado» / «No autorizado»)
+  const mensajes = (body.entry ?? []).flatMap((e) => (e.changes ?? []).flatMap((c) => c.value?.messages ?? []))
+  for (const m of mensajes) {
+    const payload = m.button?.payload ?? m.interactive?.button_reply?.id ?? ''
+    if (m.from && payload.startsWith('OC|')) await responderBotonOc(m.from, payload).catch(() => undefined)
+  }
   for (const s of estados) {
     if (!s.id || !s.status || !(s.status in ORDEN_ESTADO)) continue
     const err = s.errors?.[0]

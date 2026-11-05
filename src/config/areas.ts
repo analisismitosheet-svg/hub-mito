@@ -58,6 +58,7 @@ import {
   CalendarOff,
   Inbox,
   Tags,
+  ReceiptText,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
@@ -643,6 +644,18 @@ export const APPS: AppDef[] = [
     target: '/compras/pedidos',
     color: '#65a30d',
     permiso: 'pedidos_compra.view',
+  },
+  {
+    id: 'ordenes-compras',
+    areaId: 'compras',
+    areaIds: ['compras', 'deposito', 'diseno', 'arquitectura', 'administracion'],
+    title: 'Órdenes de compras',
+    description: 'Alta de OC, autorización por WhatsApp, Flexxus y alta en Dragon.',
+    icon: ReceiptText,
+    kind: 'internal',
+    target: '/compras/ordenes',
+    color: '#84cc16',
+    permiso: 'ordenes_compra.view',
   },
   {
     id: 'comparativa-precios',

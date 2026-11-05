@@ -38,6 +38,7 @@ import {
   Inbox,
   Wrench,
   Tags,
+  ReceiptText,
 } from 'lucide-react'
 
 /**
@@ -176,6 +177,17 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
   {
     id: 'pedidos-compra', areaId: 'compras', titulo: 'Pedidos de compra', descripcion: 'Órdenes de compra, cancelaciones y estado',
     icon: ClipboardList, color: '#65a30d', acciones: { ver: 'pedidos_compra.view' },
+  },
+  {
+    id: 'ordenes-compras', areaId: 'compras', titulo: 'Órdenes de compras', descripcion: 'Alta de OC y su recorrido (autorización, proveedor, Flexxus, Dragon)',
+    icon: ReceiptText, color: '#84cc16',
+    acciones: { ver: 'ordenes_compra.view', editar: 'ordenes_compra.compras' },
+    etiquetas: { ver: 'Ver y cargar', editar: 'Compras: validar, enviar, cancelar, Dragon' },
+    especiales: [
+      { clave: 'ordenes_compra.ver_todas', label: 'Ver todas las OC (no solo las propias y las de su área)' },
+      { clave: 'ordenes_compra.flexxus', label: 'Tildar OC / remito / factura en Flexxus' },
+      { clave: 'ordenes_compra.autorizar', label: 'Autorizar desde el hub' },
+    ],
   },
   {
     id: 'comparativa-precios', areaId: 'compras', titulo: 'Comparativa de precios', descripcion: 'Precios contra la competencia',
