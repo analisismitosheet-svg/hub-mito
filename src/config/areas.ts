@@ -611,6 +611,7 @@ export const APPS: AppDef[] = [
   {
     id: 'deposito-recepcion-indo',
     areaId: 'deposito',
+    areaIds: ['deposito', 'administracion'],
     title: 'Recepción INDO',
     description: 'Recepción de mercadería: subí el Excel y marcá qué ya se controló.',
     icon: Package,
