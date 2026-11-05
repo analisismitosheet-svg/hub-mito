@@ -9,6 +9,12 @@ Todo es copia de Dragonfish sincronizada por el puente ([[Puente SQL y syncs]]).
 ## Cancelaciones
 - `Cancelaciones.tsx`. Tablas `cancelaciones`, `cancelaciones_items` (por `codigo_pedido`). Se cruzan con la OC en [[Picking]] (`picking_cancelaciones`); lo cancelado resta de lo a recibir y sugiere OC nueva.
 
+## Cancelaciones de venta (`/mayorista/cancelaciones-venta`)
+- `CancelacionesVenta.tsx`, permiso `pedidos_venta.view`, en el menú de Mayorista. Mismo diseño que Pedidos de venta: lista (cliente, N°, «Cancela pedido N° …» / «Afecta remito N° …», fecha, usuario) + comprobante (cliente, usuario, comprobantes que afecta con link al pedido, observación, número, fecha, **hora** y **motivo**). Filtros: período y «Hecha por» (usuario de Dragon) + «Con remito» / «Sin vínculo». Excel por cancelación.
+- Tablas `cancelaciones_venta` (cabecera + `afecta` jsonb) y `cancelaciones_venta_items` (`sql/cancelaciones_venta.sql`). Las llena `puente-sql/scripts/sync-cancelaciones-venta.js`, que corre al final de `sync-pedidos-venta.js`: últimos 2 días cada 15 min, 120 días a las 6:30 (borra lo anterior). «Actualizar datos» usa el mismo `api/pedidos-sync?tipo=venta`.
+- En Dragon es la «Cancelación de venta» (`COMPROBANTEV` FACTTIPO 12). Bien hecha queda atada **por línea** al pedido (`COMPROBANTEVDET.AFE_COD`/`AFENROITEM`, `COMPAFE` en los dos sentidos) y baja el `AFESALDO` del pedido; también puede afectar **remitos** (tipo 11). Sin vínculo no cancela nada y puede mover stock (la usa también RMA para devoluciones).
+- **Anular en Dragon** (solo admin) está desactivado: por la API `DELETE /Devolucion/{id}` da 400 y la entidad Pedido no se puede leer (400/404), así que tampoco se puede generar una cancelación «en base a» un pedido. Pendiente de Zoo Logic. Maquetas: `mockups/cancelaciones-venta.html`, `mockups/pedidos-venta-cancelar.html`.
+
 ## Venta (`/mayorista/pedidos-venta`)
 - `PedidosVenta.tsx`. Tablas `pedidos_venta` + items, con **motivo** (de `vw_comprobantes_PEDIDO_VENTA`, `sql/pedidos_venta_motivo.sql`): la lista se separa por motivo.
 - Buscador también por artículo código/descripción: RPC `pedidos_venta_por_articulo` (devuelve `text[]` por el límite de 1000, `sql/pedidos_venta_buscar_articulo.sql`).

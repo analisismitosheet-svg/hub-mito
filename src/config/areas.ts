@@ -1,4 +1,5 @@
 import {
+  Ban,
   Briefcase,
   Wallet,
   Users,
@@ -383,6 +384,17 @@ export const APPS: AppDef[] = [
     kind: 'internal',
     target: '/mayorista/pedidos-venta',
     color: '#65a30d',
+    permiso: 'pedidos_venta.view',
+  },
+  {
+    id: 'mayorista-cancelaciones-venta',
+    areaId: 'mayorista',
+    title: 'Cancelaciones de venta',
+    description: 'Cancelaciones de venta de Dragonfish: qué pedido o remito cancelan, quién, cuándo y por qué.',
+    icon: Ban,
+    kind: 'internal',
+    target: '/mayorista/cancelaciones-venta',
+    color: '#be123c',
     permiso: 'pedidos_venta.view',
   },
   {

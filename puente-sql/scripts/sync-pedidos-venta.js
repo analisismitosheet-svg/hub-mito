@@ -11,6 +11,8 @@
  * desde el SQL Server de ESTA PC (servidor vinculado MITO) con el usuario de Windows (sqlcmd -E).
  * Solo lectura. Si algo falla a mitad de camino no se borra nada.
  *
+ * Al terminar copia también las cancelaciones de venta (scripts/sync-cancelaciones-venta.js).
+ *
  * Configuración (puente-sql/.env), todo opcional salvo PUENTE_TOKEN:
  *   PEDIDOS_SQL_SERVER     default localhost
  *   PEDIDOS_VENTA_BASE     default MITO.DRAGONFISH_MITO.ZooLogic   (servidor.base.esquema de Dragonfish)
@@ -270,6 +272,13 @@ async function main() {
     p_completa: COMPLETA,
   })
   anotar(`OK: ${lista.length} pedidos (${filas.length} ítems, ${alcance}) en Supabase, ${borrados} viejos borrados (${Math.round((Date.now() - t0) / 1000)} s)`)
+
+  // Después de los pedidos, las cancelaciones de venta (si fallan no marcan error en los pedidos)
+  try {
+    await require('./sync-cancelaciones-venta').sincronizarCancelacionesVenta({ completa: COMPLETA })
+  } catch (err) {
+    anotar(`Cancelaciones de venta: ERROR ${err instanceof Error ? err.message : String(err)} (ver data/sync-cancelaciones-venta.log)`)
+  }
 }
 
 main().catch((err) => {
