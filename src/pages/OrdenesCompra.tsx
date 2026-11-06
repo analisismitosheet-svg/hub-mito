@@ -408,7 +408,7 @@ function DetalleOc({ oc, onCerrar, onCambio, onBorrada, onEditar }: {
                   <div className="min-w-0">
                     <p className="text-[13px] font-semibold text-ink">{p.titulo}</p>
                     <p className="text-[11.5px] text-sub">
-                      {h ? <>✓ Tildó <b className="text-ink">{h.por}</b> · {h.via === 'planilla' ? 'planilla' : fechaHora(h.at)}{h.via === 'whatsapp' && ' · por WhatsApp'}</>
+                      {h ? <>✓ Tildó <b className="text-ink">{h.por}</b> · {h.via === 'planilla' ? 'planilla' : fechaHora(h.at)}{h.via === 'whatsapp' && ' · por WhatsApp'}{h.via === 'telegram' && ' · por Telegram'}</>
                         : p.k === 'autor' && !oc.cancelada_at ? <AvisoAutorizacion oc={oc} sug={sug} />
                           : toca ? `Le toca a: ${QUIEN_TXT[p.quien]}` : ''}
                     </p>

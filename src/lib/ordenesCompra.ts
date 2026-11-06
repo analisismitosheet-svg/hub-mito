@@ -10,7 +10,7 @@ export interface PasoHecho {
   por: string
   uid?: string | null
   at: string
-  via?: 'hub' | 'whatsapp' | 'planilla'
+  via?: 'hub' | 'whatsapp' | 'telegram' | 'planilla'
 }
 
 export interface ItemDragon {

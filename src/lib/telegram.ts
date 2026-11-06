@@ -30,7 +30,7 @@ function rest(ruta: string, init: RequestInit = {}): Promise<Response> {
 }
 
 /** El token va en la URL: los errores nunca muestran la URL, solo lo que contesta Telegram. */
-async function llamar<T>(metodo: string, cuerpo?: BodyInit | Record<string, unknown>): Promise<{ ok: boolean; result?: T; description?: string }> {
+export async function llamar<T>(metodo: string, cuerpo?: BodyInit | Record<string, unknown>): Promise<{ ok: boolean; result?: T; description?: string }> {
   const esForm = cuerpo instanceof FormData
   const r = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/${metodo}`, {
     method: cuerpo ? 'POST' : 'GET',
@@ -42,15 +42,17 @@ async function llamar<T>(metodo: string, cuerpo?: BodyInit | Record<string, unkn
   return { ok: Boolean(j?.ok), result: j?.result, description: j?.description ?? `Telegram respondió ${r.status}` }
 }
 
-async function chatDe(telefono: string): Promise<number | null> {
+export async function chatDe(telefono: string): Promise<number | null> {
   const r = await rest(`telegram_vinculos?select=chat_id&telefono=eq.${claveTelefono(telefono)}`)
   if (!r.ok) throw new Error(`No se pudieron leer los vínculos (${r.status})`)
   const filas = (await r.json()) as Array<{ chat_id: number }>
   return filas[0]?.chat_id ?? null
 }
 
-/** Manda texto, o una imagen con ese texto debajo. */
-export async function enviarTelegram(telefono: string, texto: string, png?: Buffer | null): Promise<ResultadoTelegram> {
+export type BotonTelegram = { text: string; callback_data?: string; url?: string }
+
+/** Manda texto, o una imagen con ese texto debajo. Los botones van solo con texto. */
+export async function enviarTelegram(telefono: string, texto: string, png?: Buffer | null, botones?: BotonTelegram[][]): Promise<ResultadoTelegram> {
   try {
     const chat = await chatDe(telefono)
     if (!chat) return { ok: false, sinVinculo: true, via: 'sin_telegram', detalle: 'Todavía no vinculó Telegram' }
@@ -62,7 +64,7 @@ export async function enviarTelegram(telefono: string, texto: string, png?: Buff
       form.append('photo', new Blob([new Uint8Array(png)], { type: 'image/png' }), 'informe.png')
       res = await llamar('sendPhoto', form)
     } else {
-      res = await llamar('sendMessage', { chat_id: chat, text: texto.slice(0, 4096) })
+      res = await llamar('sendMessage', { chat_id: chat, text: texto.slice(0, 4096), ...(botones ? { reply_markup: { inline_keyboard: botones } } : {}) })
     }
     return res.ok ? { ok: true, via: 'telegram', detalle: 'Enviado por Telegram' } : { ok: false, via: 'telegram', detalle: res.description ?? 'Telegram rechazó el mensaje' }
   } catch (e) {
@@ -125,9 +127,11 @@ export interface EstadoTelegram {
 export async function estadoTelegram(hubUrl: string): Promise<EstadoTelegram> {
   if (!telegramActivo()) return { configurado: false }
   try {
-    const [yo, hook] = await Promise.all([llamar<{ username?: string }>('getMe'), llamar<{ url?: string }>('getWebhookInfo')])
+    const [yo, hook] = await Promise.all([llamar<{ username?: string }>('getMe'), llamar<{ url?: string; allowed_updates?: string[] }>('getWebhookInfo')])
     if (!yo.ok) return { configurado: true, error: yo.description }
-    return { configurado: true, usuario: yo.result?.username, conectado: hook.result?.url === urlWebhook(hubUrl) }
+    // Sin callback_query, Telegram no avisa cuando alguien toca un botón
+    const conectado = hook.result?.url === urlWebhook(hubUrl) && Boolean(hook.result?.allowed_updates?.includes('callback_query'))
+    return { configurado: true, usuario: yo.result?.username, conectado }
   } catch (e) {
     return { configurado: true, error: `No se pudo contactar Telegram: ${(e as Error).name}` }
   }
@@ -138,6 +142,6 @@ const urlWebhook = (hubUrl: string) => `${hubUrl.replace(/\/$/, '')}/api/informe
 /** Le dice a Telegram adónde mandar lo que le escriben al bot. */
 export async function conectarBotTelegram(hubUrl: string): Promise<{ ok: boolean; error?: string }> {
   if (!telegramActivo()) return { ok: false, error: 'Falta TELEGRAM_BOT_TOKEN en Vercel' }
-  const r = await llamar('setWebhook', { url: urlWebhook(hubUrl), secret_token: secretoWebhookTelegram(), allowed_updates: ['message'] })
+  const r = await llamar('setWebhook', { url: urlWebhook(hubUrl), secret_token: secretoWebhookTelegram(), allowed_updates: ['message', 'callback_query'] })
   return r.ok ? { ok: true } : { ok: false, error: r.description }
 }

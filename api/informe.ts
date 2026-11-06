@@ -30,7 +30,7 @@ import { activarAvisosWhatsapp, armarCuerpo, descartarRespaldo, enviarInforme, e
 import { formatoDe, type Informe } from '../src/lib/informes.js'
 import { mismoSecreto } from '../src/lib/apiAuth.js'
 import { enviarPendientesFranquicias, reenviarPropuesta } from '../src/lib/franquiciasWhatsapp.js'
-import { ampliarAvisosOc, crearPlantillaOc, estadoPlantillaOc, pedirAutorizacionOc } from '../src/lib/ordenesCompraWhatsapp.js'
+import { ampliarAvisosOc, crearPlantillaOc, estadoPlantillaOc, pedirAutorizacionOc, procesarBotonOc, type BotonPulsado } from '../src/lib/ordenesCompraWhatsapp.js'
 import { conectarBotTelegram, estadoTelegram, procesarUpdateTelegram, secretoWebhookTelegram, telegramActivo } from '../src/lib/telegram.js'
 
 const HUB_URL = () => process.env.HUB_URL || 'https://hub-mito.vercel.app'
@@ -426,7 +426,9 @@ async function webhookTelegram(req: Req, res: Res) {
     return res.status(401).json({ error: 'No autorizado' })
   }
   // Telegram reintenta si no recibe 200: una falla acá no tiene que repetirse sin fin
-  await procesarUpdateTelegram(cuerpo(req)).catch((e: Error) => console.log(`[telegram] error: ${e.name}`))
+  const update = cuerpo(req) as { callback_query?: BotonPulsado }
+  await (update.callback_query ? procesarBotonOc(update.callback_query) : procesarUpdateTelegram(update))
+    .catch((e: Error) => console.log(`[telegram] error: ${e.name}`))
   return res.status(200).json({ ok: true })
 }
 

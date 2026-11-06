@@ -10,7 +10,7 @@
  * - Plantilla «oc_autorizar_link» (es_AR): estado y alta en Meta desde Autorizadores (admin).
  */
 import { enviarConVentana } from './informesServidor.js'
-import { enviarTelegram, telegramActivo } from './telegram.js'
+import { chatDe, enviarTelegram, llamar, telegramActivo, type BotonTelegram } from './telegram.js'
 
 export const PLANTILLA_OC = 'oc_autorizar_link'
 const IDIOMA = 'es_AR'
@@ -80,7 +80,8 @@ async function mandarPlantilla(envio: EnvioCola, oc: DatosOc): Promise<{ ok: boo
       .reduce((t, valor, i) => t.replace(`{{${i + 1}}}`, () => valor), CUERPO)
       .replace('Tocá el botón para verla y responder.', `Entrá para verla y responder:\n${URL_OC}${link}`)
     if (telegramActivo()) {
-      const t = await enviarTelegram(envio.telefono, texto)
+      const cuerpo = texto.replace(/Entrá para verla y responder:[\s\S]*$/, 'Respondé con los botones.')
+      const t = await enviarTelegram(envio.telefono, cuerpo, null, botonesOc(envio.id, link))
       return t.ok ? { ok: true, detalle: 'enviado por Telegram' } : { ok: false, detalle: t.detalle }
     }
     const r = await enviarConVentana(
@@ -102,6 +103,69 @@ async function mandarPlantilla(envio: EnvioCola, oc: DatosOc): Promise<{ ok: boo
   } catch (e) {
     return { ok: false, detalle: `No se pudo contactar WhatsApp: ${(e as Error).message}` }
   }
+}
+
+/* ---------------- Botones de Telegram ---------------- */
+const botonesOc = (id: number, token: string): BotonTelegram[][] => [
+  [{ text: 'Autorizar', callback_data: `oc:a:${id}` }, { text: 'No autorizar', callback_data: `oc:n:${id}` }],
+  [{ text: 'Ver detalle', url: `${URL_OC}${token}` }],
+]
+
+export interface BotonPulsado {
+  id?: string
+  data?: string
+  from?: { id?: number }
+  message?: { message_id?: number; text?: string; chat?: { id?: number } }
+}
+
+/**
+ * Alguien tocó un botón. Primero pide confirmar, para evitar un toque sin querer. Sin clave: el botón
+ * solo vale desde el chat vinculado al teléfono de ese envío, y la respuesta queda a nombre de esa persona.
+ */
+export async function procesarBotonOc(b: BotonPulsado): Promise<void> {
+  const responder = (text?: string) => llamar('answerCallbackQuery', { callback_query_id: b.id, ...(text ? { text, show_alert: true } : {}) })
+  const m = /^oc:(a|n|A|N|v):(\d+)$/.exec(b.data ?? '')
+  const chat = b.message?.chat?.id
+  const mensaje = b.message?.message_id
+  if (!m || !chat || !mensaje) return void (await responder())
+  const [, accion, id] = m
+
+  const r = await rest(`ordenes_compra_whatsapp?id=eq.${id}&select=numero,nombre,telefono,token`)
+  const envio = (r.ok ? ((await r.json().catch(() => [])) as Array<{ numero: number; nombre: string; telefono: string; token: string }>) : [])[0]
+  const dueno = envio ? await chatDe(envio.telefono) : null
+  if (!envio || !dueno || dueno !== chat || b.from?.id !== chat) return void (await responder('Este pedido no es para vos.'))
+
+  const teclado = (inline_keyboard: BotonTelegram[][]) =>
+    llamar('editMessageReplyMarkup', { chat_id: chat, message_id: mensaje, reply_markup: { inline_keyboard } })
+
+  if (accion === 'a' || accion === 'n') {
+    await teclado([
+      [{ text: accion === 'a' ? 'Sí, autorizar' : 'Sí, no autorizar', callback_data: `oc:${accion.toUpperCase()}:${id}` }],
+      [{ text: 'Volver', callback_data: `oc:v:${id}` }],
+    ])
+    return void (await responder())
+  }
+  if (accion === 'v') {
+    await teclado(botonesOc(Number(id), envio.token))
+    return void (await responder())
+  }
+
+  let resultado: { oc?: { autorizada_por?: string | null; cancelada_por?: string | null; no_autorizada?: boolean } | null; error?: string }
+  try {
+    resultado = await rpcServicio('oc_telegram_responder', { p_envio: Number(id), p_autoriza: accion === 'A' })
+  } catch {
+    return void (await responder('No se pudo registrar la respuesta. Probá de nuevo.'))
+  }
+  const oc = resultado.oc
+  if (!oc) return void (await responder('No se encontró la orden.'))
+  const estado = oc.autorizada_por
+    ? `Autorizada por ${oc.autorizada_por}.`
+    : oc.no_autorizada
+      ? `No autorizada por ${oc.cancelada_por ?? '—'}.`
+      : `Cancelada por ${oc.cancelada_por ?? '—'}.`
+  const base = (b.message?.text ?? `OC N° ${envio.numero}`).replace(/\n*Respondé con los botones\.$/, '')
+  await llamar('editMessageText', { chat_id: chat, message_id: mensaje, text: `${base}\n\n${estado}`.slice(0, 4096) })
+  await responder()
 }
 
 async function mandarLote(l: Lote): Promise<{ enviados: number; errores: string[]; destinatarios: string[] }> {
