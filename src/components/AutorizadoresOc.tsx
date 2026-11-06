@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Loader2, X } from 'lucide-react'
 import {
-  apiInforme, cargarConfig, contactosAgenda, guardarConfig, repartoActual, type ConfigOc,
+  apiInforme, cargarConfig, clavesEstado, contactosAgenda, desbloquearClave, guardarClave, guardarConfig, repartoActual, type ConfigOc,
 } from '@/lib/ordenesCompra'
 
 /* Órdenes de compras · Autorizadores (solo admin): a quién le llega el WhatsApp para autorizar
@@ -18,8 +18,15 @@ export default function AutorizadoresOc({ onCerrar }: { onCerrar: () => void }) 
   const [plantilla, setPlantilla] = useState<EstadoPlantilla | null>(null)
   const [ocupado, setOcupado] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  /** Contacto → bloqueada. Si no está, todavía no tiene clave. */
+  const [claves, setClaves] = useState<Record<string, boolean>>({})
+  const [editandoClave, setEditandoClave] = useState<string | null>(null)
+  const [claveNueva, setClaveNueva] = useState('')
+
+  const cargarClaves = () => clavesEstado().then((l) => setClaves(Object.fromEntries(l.map((c) => [c.contacto_id, c.bloqueada]))))
 
   useEffect(() => {
+    void cargarClaves().catch((e: Error) => setError(e.message))
     void cargarConfig().then(setCfg)
     void contactosAgenda().then(setContactos).catch((e: Error) => setError(e.message))
     void repartoActual().then(setReparto).catch(() => setReparto(null))
@@ -33,6 +40,32 @@ export default function AutorizadoresOc({ onCerrar }: { onCerrar: () => void }) 
     try {
       await guardarConfig(cfg)
       onCerrar()
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setOcupado(null)
+    }
+  }
+  const cargarClave = async (contacto: string) => {
+    setOcupado('clave')
+    setError(null)
+    try {
+      await guardarClave(contacto, claveNueva)
+      await cargarClaves()
+      setEditandoClave(null)
+      setClaveNueva('')
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setOcupado(null)
+    }
+  }
+  const desbloquear = async (contacto: string) => {
+    setOcupado('clave')
+    setError(null)
+    try {
+      await desbloquearClave(contacto)
+      await cargarClaves()
     } catch (e) {
       setError((e as Error).message)
     } finally {
@@ -73,12 +106,34 @@ export default function AutorizadoresOc({ onCerrar }: { onCerrar: () => void }) 
           {!cfg ? <Loader2 size={16} className="animate-spin text-sub" /> : (
             <div className="flex flex-col gap-1.5">
               {contactos.map((c) => (
-                <label key={c.id} className={`flex items-center gap-2.5 rounded-xl border border-line bg-surface2 px-3 py-2 ${c.activo ? 'cursor-pointer' : 'opacity-50'}`}>
-                  <input type="checkbox" disabled={!c.activo} checked={cfg.autorizadores.includes(c.id)} className="h-4 w-4 accent-lime-500"
-                    onChange={(e) => setCfg({ ...cfg, autorizadores: e.target.checked ? [...cfg.autorizadores, c.id] : cfg.autorizadores.filter((x) => x !== c.id) })} />
-                  <b className="text-ink">{c.nombre}</b>
-                  <span className="ml-auto text-xs text-sub">💬 ···· {c.fin}{!c.activo && ' · pausado'}</span>
-                </label>
+                <div key={c.id} className={`rounded-xl border border-line bg-surface2 px-3 py-2 ${c.activo ? '' : 'opacity-50'}`}>
+                  <div className="flex items-center gap-2.5">
+                    <label className={`flex min-w-0 flex-1 items-center gap-2.5 ${c.activo ? 'cursor-pointer' : ''}`}>
+                      <input type="checkbox" disabled={!c.activo} checked={cfg.autorizadores.includes(c.id)} className="h-4 w-4 accent-lime-500"
+                        onChange={(e) => setCfg({ ...cfg, autorizadores: e.target.checked ? [...cfg.autorizadores, c.id] : cfg.autorizadores.filter((x) => x !== c.id) })} />
+                      <b className="text-ink">{c.nombre}</b>
+                      <span className="ml-auto text-xs text-sub">💬 ···· {c.fin}{!c.activo && ' · pausado'}</span>
+                    </label>
+                    {claves[c.id] && (
+                      <button type="button" disabled={ocupado === 'clave'} onClick={() => void desbloquear(c.id)} title="Clave bloqueada por 5 intentos errados. Sigue valiendo la misma."
+                        className="rounded-lg border border-red-500/50 px-2 py-1 text-xs text-red-300 hover:bg-red-500/10 disabled:opacity-50">Desbloquear</button>
+                    )}
+                    <button type="button" onClick={() => { setEditandoClave(editandoClave === c.id ? null : c.id); setClaveNueva('') }}
+                      className={`rounded-lg border px-2 py-1 text-xs ${!(c.id in claves) && cfg.autorizadores.includes(c.id) ? 'border-amber-500/50 text-amber-300' : 'border-line text-sub'}`}>
+                      {c.id in claves ? 'Cambiar clave' : 'Sin clave'}
+                    </button>
+                  </div>
+                  {editandoClave === c.id && (
+                    <div className="mt-2 flex items-center gap-2 border-t border-line pt-2">
+                      <input type="password" inputMode="numeric" autoComplete="new-password" maxLength={6} value={claveNueva} placeholder="4 a 6 números" aria-label={`Clave nueva de ${c.nombre}`}
+                        onChange={(e) => setClaveNueva(e.target.value.replace(/\D/g, ''))}
+                        className="h-8 w-32 rounded-lg border border-line bg-[#0c0c11] px-2 text-xs text-ink outline-none" />
+                      <button type="button" disabled={claveNueva.length < 4 || ocupado === 'clave'} onClick={() => void cargarClave(c.id)}
+                        className="h-8 rounded-lg bg-lime-600 px-3 text-xs font-semibold text-white disabled:opacity-50">Guardar clave</button>
+                      <span className="text-[11px] text-sub">Se guarda encriptada: no se puede volver a ver.</span>
+                    </div>
+                  )}
+                </div>
               ))}
               <Link to="/informes" className="text-xs text-sky-400 hover:underline">＋ Agregar o editar contactos en Envío informes y reportes</Link>
             </div>
@@ -110,7 +165,7 @@ export default function AutorizadoresOc({ onCerrar }: { onCerrar: () => void }) 
           )}
 
           <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-3 text-xs text-sub">
-            <p className="mb-1 font-semibold text-emerald-200">Plantilla de WhatsApp «oc_para_autorizar»</p>
+            <p className="mb-1 font-semibold text-emerald-200">Plantilla de WhatsApp «oc_autorizar_link»</p>
             {!plantilla ? <Loader2 size={14} className="animate-spin" /> : plantilla.existe ? (
               <p>Estado en Meta: <b className="text-ink">{plantilla.estado}</b>{plantilla.motivo && ` — ${plantilla.motivo}`}. {plantilla.estado !== 'APPROVED' && 'Hasta que Meta la apruebe, los pedidos de autorización no llegan.'}</p>
             ) : (
@@ -121,7 +176,7 @@ export default function AutorizadoresOc({ onCerrar }: { onCerrar: () => void }) 
                 </button>
               </div>
             )}
-            <p className="mt-1.5">Trae N° de OC, tipo, proveedor, monto, qué es y quién la cargó, con dos botones: <b className="text-ink">Autorizado</b> / <b className="text-ink">No autorizado</b>.</p>
+            <p className="mt-1.5">Trae N° de OC, tipo, proveedor, monto, qué es y quién la cargó, con un botón al link donde se autoriza o no.</p>
           </div>
           {error && <p className="rounded-xl border border-red-500/30 bg-red-500/10 p-2.5 text-xs text-red-300">{error}</p>}
         </div>

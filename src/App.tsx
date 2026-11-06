@@ -82,6 +82,7 @@ import MayoristaFranquiciasPropuestas from '@/pages/MayoristaFranquiciasPropuest
 import MayoristaFranquiciasMateriales from '@/pages/MayoristaFranquiciasMateriales'
 import SistemasFranquicias from '@/pages/SistemasFranquicias'
 import PropuestaFranquicia from '@/pages/PropuestaFranquicia'
+import AutorizarOc from '@/pages/AutorizarOc'
 
 // Pantallas nuevas: se cargan bajo demanda para no agrandar el bundle principal
 // (el service worker no precachea archivos de más de 2 MB y la build falla).
@@ -108,6 +109,8 @@ export default function App() {
           <Route path="/opinar/qr/:token" element={<Opinar />} />
           {/* Propuesta de reposición para una franquicia: link público por token (sin usuario) */}
           <Route path="/p/:token" element={<PropuestaFranquicia />} />
+          {/* Autorizar una orden de compra desde el WhatsApp: link público por token (sin usuario) */}
+          <Route path="/oc/:token" element={<AutorizarOc />} />
           {/* Pantalla para autenticados no aprobados (pendiente/rechazado/desactivado) */}
           <Route path="/acceso" element={<Acceso />} />
 

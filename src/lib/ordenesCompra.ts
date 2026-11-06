@@ -230,6 +230,10 @@ export async function cargarConfig(): Promise<ConfigOc | null> {
 export const guardarConfig = (c: ConfigOc) =>
   rpc('oc_config_guardar', { p_autorizadores: c.autorizadores, p_reparto_auto: c.reparto_auto, p_horas: c.horas_espera })
 export const contactosAgenda = () => rpc<Array<{ id: string; nombre: string; fin: string; activo: boolean }>>('oc_contactos', {})
+/** Claves del link de autorización (solo admin): quién tiene y quién está bloqueado; el valor nunca vuelve. */
+export const clavesEstado = () => rpc<Array<{ contacto_id: string; bloqueada: boolean }>>('oc_claves_estado', {})
+export const guardarClave = (contacto: string, clave: string) => rpc('oc_clave_guardar', { p_contacto: contacto, p_clave: clave })
+export const desbloquearClave = (contacto: string) => rpc('oc_clave_desbloquear', { p_contacto: contacto })
 export const repartoActual = () =>
   rpc<{ tipo: Record<string, { quien: string; n: number; de: number }>; gastos_responsable: Record<string, { quien: string; n: number; de: number }> }>('oc_reparto', {})
 
