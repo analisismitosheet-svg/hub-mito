@@ -364,6 +364,7 @@ export default function Informes() {
                             {ENTREGA[e.estado]?.label ?? e.estado}
                           </span>
                         )}
+                        {e.via === 'telegram' && e.ok && <span className="rounded-full bg-sky-500/15 px-2 py-0.5 font-medium text-sky-300">Telegram</span>}
                         {e.ok && e.via === 'servicio' && (
                           <span className="rounded-full bg-amber-500/15 px-2 py-0.5 font-medium text-amber-300" title="Salió dentro de las 24 h después de que el contacto escribió: no usa plantilla">gratis</span>
                         )}

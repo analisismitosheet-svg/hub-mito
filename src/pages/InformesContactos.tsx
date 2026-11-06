@@ -7,6 +7,26 @@ import { claveTelefono, CUPO_GRATIS_MES, normalizarTelefono, telefonoValido, ven
 const inputCls =
   'w-full rounded-xl border border-line bg-surface2 px-3 py-2 text-sm text-ink outline-none transition duration-250 placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40'
 
+interface EstadoTelegram {
+  configurado: boolean
+  usuario?: string
+  conectado?: boolean
+  error?: string
+}
+
+async function apiTelegram(accion: 'estado' | 'conectar'): Promise<EstadoTelegram & { ok?: boolean }> {
+  if (!supabase) throw new Error('Supabase no está configurado.')
+  const { data } = await supabase.auth.getSession()
+  const res = await fetch('/api/informe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${data.session?.access_token ?? ''}` },
+    body: JSON.stringify({ telegram: accion }),
+  })
+  const body = (await res.json().catch(() => null)) as (EstadoTelegram & { ok?: boolean }) | null
+  if (!res.ok || !body) throw new Error(body?.error ?? `Error ${res.status}`)
+  return body
+}
+
 /** Agenda de contactos de WhatsApp (informes_contactos), compartida por todos los informes. */
 export async function cargarContactos(): Promise<ContactoInforme[]> {
   if (!supabase) return []
@@ -56,18 +76,25 @@ export default function InformesContactos({
   // Ventana de 24 h de cada teléfono y mensajes gratis del mes (sql/whatsapp_ventana.sql)
   const [ventanas, setVentanas] = useState<Map<string, string>>(new Map())
   const [gratisMes, setGratisMes] = useState<number | null>(null)
+  // Telegram: con el bot configurado reemplaza a WhatsApp (sql/telegram_vinculos.sql)
+  const [telegram, setTelegram] = useState<EstadoTelegram | null>(null)
+  const [vinculados, setVinculados] = useState<Set<string>>(new Set())
 
   const recargar = useCallback(async () => {
     setContactos(await cargarContactos())
     if (!supabase) return
     const hoy = new Date()
-    const [{ data }, { count }] = await Promise.all([
+    const [{ data }, { count }, { data: vin }, estado] = await Promise.all([
       supabase.from('whatsapp_ventana').select('telefono,ultimo_mensaje_at'),
       supabase.from('whatsapp_servicio_envios').select('id', { count: 'exact', head: true })
         .gte('creado_at', new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString()),
+      supabase.from('telegram_vinculos').select('telefono'),
+      apiTelegram('estado').catch(() => null),
     ])
     setVentanas(new Map(((data ?? []) as { telefono: string; ultimo_mensaje_at: string }[]).map((v) => [v.telefono, v.ultimo_mensaje_at])))
     setGratisMes(count ?? 0)
+    setVinculados(new Set(((vin ?? []) as { telefono: string }[]).map((v) => v.telefono)))
+    setTelegram(estado)
   }, [])
   useEffect(() => { void recargar() }, [recargar])
 
@@ -169,7 +196,33 @@ export default function InformesContactos({
         </form>
       )}
 
-      {gratisMes !== null && (
+      {telegram?.configurado && (
+        <div className="rounded-2xl border border-line bg-surface p-3 text-xs text-sub shadow-soft">
+          {telegram.error ? (
+            <span className="text-red-300">Telegram con error: {telegram.error}</span>
+          ) : telegram.conectado ? (
+            <>
+              Los avisos salen por <b className="text-ink">Telegram</b>. Cada persona abre{' '}
+              <a href={`https://t.me/${telegram.usuario}`} target="_blank" rel="noreferrer" className="font-medium text-ink underline underline-offset-2">t.me/{telegram.usuario}</a>
+              {' '}y toca «Compartir mi número», una sola vez. A quien no se vincule no le llega nada.
+            </>
+          ) : (
+            <>
+              El bot <b className="text-ink">@{telegram.usuario}</b> está cargado pero falta conectarlo.{' '}
+              <button
+                onClick={() => void apiTelegram('conectar')
+                  .then((r) => { if (r.ok) onMensaje('Bot de Telegram conectado'); else onMensaje(r.error ?? 'No se pudo conectar', false); return recargar() })
+                  .catch((e: Error) => onMensaje(e.message, false))}
+                className="font-medium text-ink underline underline-offset-2"
+              >
+                Conectar bot
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {gratisMes !== null && !telegram?.configurado && (
         <p className="rounded-2xl border border-line bg-surface p-3 text-xs text-sub shadow-soft">
           <b className="text-ink">{gratisMes.toLocaleString('es-AR')} de {CUPO_GRATIS_MES.toLocaleString('es-AR')}</b> mensajes gratis usados este mes.
           {' '}Para recibir gratis, cada contacto tiene que escribirle al número del hub una vez por día; si no, le llega igual con plantilla paga.
@@ -208,7 +261,11 @@ export default function InformesContactos({
                       <h3 className="font-display text-sm font-semibold text-ink">{c.nombre}</h3>
                       <span className="text-sm tabular-nums text-sub">+{c.telefono}</span>
                       {!c.activo && <span className="rounded-full border border-line px-2 py-0.5 text-[11px] text-sub">No recibe informes</span>}
-                      {(() => {
+                      {telegram?.configurado ? (
+                        vinculados.has(claveTelefono(c.telefono))
+                          ? <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-[11px] font-medium text-sky-300">Telegram vinculado</span>
+                          : <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[11px] font-medium text-red-300">Sin Telegram: no recibe</span>
+                      ) : (() => {
                         const hasta = ventanaHasta(ventanas.get(claveTelefono(c.telefono)))
                         return hasta
                           ? <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-300">Gratis hasta {hasta.toLocaleString('es-AR', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}</span>

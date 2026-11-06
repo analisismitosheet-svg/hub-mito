@@ -13,6 +13,7 @@
  *   SQL_LOGICAPP_URL / SQL_BRIDGE_TOKEN / SQL_VIEWS / SQL_MAX_ROWS (para la fuente "vista")
  */
 import { postAlPuente } from './puenteRetry.js'
+import { enviarTelegram, telegramActivo, type ResultadoTelegram } from './telegram.js'
 import { renderReporteImagen, type BloqueImagen, type ReporteImagen } from './informesImagen.js'
 import { bloquesEficiencia, corta, porcentajes, type AvanceVtd, type FilaPiso, type FilaVtd } from './informeEficiencia.js'
 import { bloquesConversion, type DatosConversion } from './informeConversion.js'
@@ -1020,12 +1021,15 @@ export async function enviarInforme(informe: Informe & { id?: string }, origen: 
   const detalles: string[] = []
   for (const d of destinos) {
     const p = plantillaPara(d)
-    const r = png
-      ? await enviarWhatsappImagen(d.telefono, png, texto, p)
-      : p
-        ? await enviarWhatsappPlantilla(d.telefono, p, texto)
-        : await enviarWhatsapp(d.telefono, texto)
-    if (r.ok) enviados++
+    const r: ResultadoWhatsapp | ResultadoTelegram = telegramActivo()
+      ? await enviarTelegram(d.telefono, png ? `${texto} · ${fechaHoy}` : texto, png)
+      : png
+        ? await enviarWhatsappImagen(d.telefono, png, texto, p)
+        : p
+          ? await enviarWhatsappPlantilla(d.telefono, p, texto)
+          : await enviarWhatsapp(d.telefono, texto)
+    // Quien no se vinculó no es una falla: reintentar le repetiría el informe a los demás
+    if (r.ok || ('sinVinculo' in r && r.sinVinculo)) enviados++
     detalles.push(`${d.nombre || d.telefono}: ${r.ok ? 'OK' : r.detalle}`)
     if (informe.id) {
       await rest('informes_envios', {

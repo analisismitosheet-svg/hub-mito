@@ -13,7 +13,9 @@
  *   GET/POST /api/informe?evento=whatsapp              -> webhook de Meta: verificación, estado de entrega
  *        (sent/delivered/read/failed) de cada mensaje, guardado en informes_envios por wamid, y mensajes
  *        entrantes, que abren la ventana de 24 h para mandar gratis (whatsapp_ventana)
- *   POST /api/informe   { ocPedir: numero }            -> Órdenes de compras: «Pedir autorización» por WhatsApp
+ *   POST /api/informe?evento=telegram                  -> webhook del bot de Telegram (vincula a cada persona)
+ *   POST /api/informe   { telegram: 'estado'|'conectar' } -> estado del bot y conexión del webhook (conectar: solo admin)
+ *   POST /api/informe   { ocPedir: numero }           -> Órdenes de compras: «Pedir autorización» por WhatsApp
  *   POST /api/informe   { ocPlantilla: 'estado'|'crear' } -> plantilla oc_autorizar_link en Meta (solo admin)
  *   (?evento=diarios además amplía los avisos de OC que nadie respondió en N horas)
  *
@@ -29,10 +31,13 @@ import { formatoDe, type Informe } from '../src/lib/informes.js'
 import { mismoSecreto } from '../src/lib/apiAuth.js'
 import { enviarPendientesFranquicias, reenviarPropuesta } from '../src/lib/franquiciasWhatsapp.js'
 import { ampliarAvisosOc, crearPlantillaOc, estadoPlantillaOc, pedirAutorizacionOc } from '../src/lib/ordenesCompraWhatsapp.js'
+import { conectarBotTelegram, estadoTelegram, procesarUpdateTelegram, secretoWebhookTelegram, telegramActivo } from '../src/lib/telegram.js'
+
+const HUB_URL = () => process.env.HUB_URL || 'https://hub-mito.vercel.app'
 
 type Req = {
   method?: string
-  headers: { authorization?: string }
+  headers: { authorization?: string; 'x-telegram-bot-api-secret-token'?: string | string[] }
   body?: unknown
   query?: Record<string, string | string[] | undefined>
 }
@@ -256,6 +261,16 @@ async function manual(req: Req, res: Res) {
     }
   }
 
+  // --- Telegram: estado del bot (pantalla de contactos) y conectar el webhook (solo admin) ---
+  if (datos.telegram === 'estado') {
+    if (!(await tienePermiso(token, ['sistemas.informes.view']))) return res.status(403).json({ error: 'No tenés permiso para esta acción' })
+    return res.status(200).json(await estadoTelegram(HUB_URL()))
+  }
+  if (datos.telegram === 'conectar') {
+    if (!(await tienePermiso(token, ['__solo_admin__']))) return res.status(403).json({ error: 'Solo el administrador' })
+    return res.status(200).json(await conectarBotTelegram(HUB_URL()))
+  }
+
   // --- Vincular la app a la cuenta de WhatsApp para recibir avisos en el webhook (solo admin) ---
   if (datos.activarAvisos === true) {
     if (!(await tienePermiso(token, ['__solo_admin__']))) return res.status(403).json({ error: 'Solo el administrador' })
@@ -403,8 +418,21 @@ async function webhookWhatsapp(req: Req, res: Res) {
   return res.status(200).json({ ok: true, estados: estados.length, entrantes: entrantes.length })
 }
 
+/** Webhook del bot: solo acepta lo que trae el secreto que se le dio a Telegram al conectarlo. */
+async function webhookTelegram(req: Req, res: Res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' })
+  const secreto = req.headers['x-telegram-bot-api-secret-token']
+  if (!telegramActivo() || typeof secreto !== 'string' || !mismoSecreto(secreto, secretoWebhookTelegram())) {
+    return res.status(401).json({ error: 'No autorizado' })
+  }
+  // Telegram reintenta si no recibe 200: una falla acá no tiene que repetirse sin fin
+  await procesarUpdateTelegram(cuerpo(req)).catch((e: Error) => console.log(`[telegram] error: ${e.name}`))
+  return res.status(200).json({ ok: true })
+}
+
 export default async function handler(req: Req, res: Res) {
   res.setHeader('Cache-Control', 'no-store')
+  if (req.query?.evento === 'telegram') return webhookTelegram(req, res)
   if (req.query?.evento === 'whatsapp') return webhookWhatsapp(req, res)
   if (req.method === 'GET') return cron(req, res)
   if (req.method === 'POST') return manual(req, res)

@@ -12,6 +12,7 @@
  * Datos: sql/franquicias_reposicion_auto.sql.
  */
 import { enviarWhatsappPlantilla } from './informesServidor.js'
+import { enviarTelegram, telegramActivo } from './telegram.js'
 
 /** Reintentos de un envío que falla (plantilla en revisión, Meta caído…): cada 5 min → ~1 h. */
 const MAX_INTENTOS = 12
@@ -97,16 +98,19 @@ export async function enviarPendientesFranquicias(propuestaId?: string): Promise
     if (!t) { t = await totalesDe(e.propuesta_id); totales.set(e.propuesta_id, t) }
     const cliente = p.cliente_nombre || p.franquicia_nombre
     const link = `${hubUrl()}/p/${e.token}`
-    const res = await enviarWhatsappPlantilla(
-      e.telefono,
-      {
-        nombre: plantilla,
-        idioma,
-        parametros: [cliente, p.numero, ventaDe(p), String(t.articulos), String(t.unidades), link],
-      },
-      // Sin costo si el cliente escribió en las últimas 24 h
-      `Hola ${cliente}, te armamos la reposición ${p.numero} según la venta del ${ventaDe(p)}: ${t.articulos} artículos, ${t.unidades} unidades.\n\nMirala y confirmala acá:\n${link}`,
-    )
+    const texto = `Hola ${cliente}, te armamos la reposición ${p.numero} según la venta del ${ventaDe(p)}: ${t.articulos} artículos, ${t.unidades} unidades.\n\nMirala y confirmala acá:\n${link}`
+    const res = telegramActivo()
+      ? await enviarTelegram(e.telefono, texto)
+      : await enviarWhatsappPlantilla(
+          e.telefono,
+          {
+            nombre: plantilla,
+            idioma,
+            parametros: [cliente, p.numero, ventaDe(p), String(t.articulos), String(t.unidades), link],
+          },
+          // Sin costo si el cliente escribió en las últimas 24 h
+          texto,
+        )
     const ahora = new Date().toISOString()
     await rest(`franquicias_propuesta_envios?id=eq.${e.id}`, {
       method: 'PATCH',

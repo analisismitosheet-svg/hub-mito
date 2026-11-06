@@ -10,6 +10,7 @@
  * - Plantilla «oc_autorizar_link» (es_AR): estado y alta en Meta desde Autorizadores (admin).
  */
 import { enviarConVentana } from './informesServidor.js'
+import { enviarTelegram, telegramActivo } from './telegram.js'
 
 export const PLANTILLA_OC = 'oc_autorizar_link'
 const IDIOMA = 'es_AR'
@@ -78,6 +79,10 @@ async function mandarPlantilla(envio: EnvioCola, oc: DatosOc): Promise<{ ok: boo
     const texto = parametros
       .reduce((t, valor, i) => t.replace(`{{${i + 1}}}`, () => valor), CUERPO)
       .replace('Tocá el botón para verla y responder.', `Entrá para verla y responder:\n${URL_OC}${link}`)
+    if (telegramActivo()) {
+      const t = await enviarTelegram(envio.telefono, texto)
+      return t.ok ? { ok: true, detalle: 'enviado por Telegram' } : { ok: false, detalle: t.detalle }
+    }
     const r = await enviarConVentana(
       envio.telefono,
       { type: 'text', text: { preview_url: true, body: texto } },

@@ -74,7 +74,7 @@ export interface EnvioInforme {
   estado_at?: string | null
   error_entrega?: string | null
   /** 'servicio' = gratis dentro de la ventana de 24 h; 'plantilla' = paga (sql/whatsapp_ventana.sql) */
-  via?: 'servicio' | 'plantilla' | null
+  via?: 'servicio' | 'plantilla' | 'telegram' | 'sin_telegram' | null
 }
 
 export const FUENTES: { id: FuenteInforme; label: string; desc: string }[] = [
