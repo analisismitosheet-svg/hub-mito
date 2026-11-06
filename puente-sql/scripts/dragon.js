@@ -61,9 +61,10 @@ async function crearPedido({ cliente, lista = 'LISTA2', obs = '', items, fecha }
 /**
  * Alta de un pedido de compra (Órdenes de compras del hub) en DRAGONFISH_<base>.
  * Se manda el mismo N° de la OC (Letra X, punto de venta 164, como las OC de INDOD).
- * items: [{ articulo, color, talle, cantidad, precio }]. Probado 05/11/2026 con X-0164-99001.
+ * items: [{ articulo, color, talle, cantidad, precio, descuento }] (descuento = % del renglón -> Descuento);
+ * descuento = % general del pedido (PorcentajeDescuento). Probado 05/11/2026 con X-0164-99001.
  */
-async function crearPedidoCompra({ base = 'INDOD', numero, proveedor, motivo, condicion, lista = 'LISTA0', fecha, fechaEntrega, obs = '', items }) {
+async function crearPedidoCompra({ base = 'INDOD', numero, proveedor, motivo, condicion, lista = 'LISTA0', fecha, fechaEntrega, obs = '', items, descuento = 0 }) {
   if (!ID || !TOKEN) throw new Error('Faltan DRAGON_API_IDCLIENTE / DRAGON_API_TOKEN en puente-sql/.env')
   const cuerpo = {
     Letra: 'X',
@@ -76,6 +77,7 @@ async function crearPedidoCompra({ base = 'INDOD', numero, proveedor, motivo, co
     Fecha: fechaWcf(fecha),
     FechaEntrega: fechaWcf(fechaEntrega || fecha),
     Obs: obs.slice(0, 250),
+    ...(Number(descuento) > 0 ? { PorcentajeDescuento: Number(descuento) } : {}),
     FacturaDetalle: items.map((i, n) => ({
       NroItem: n + 1,
       Articulo: String(i.articulo).trim().toUpperCase(),
@@ -83,6 +85,7 @@ async function crearPedidoCompra({ base = 'INDOD', numero, proveedor, motivo, co
       Talle: String(i.talle || '').trim().toUpperCase(),
       Cantidad: Number(i.cantidad),
       Precio: Number(i.precio) || 0,
+      ...(Number(i.descuento) > 0 ? { Descuento: Number(i.descuento) } : {}),
     })),
   }
   const r = await fetch(`${URL_API}/Pedidodecompra/`, {

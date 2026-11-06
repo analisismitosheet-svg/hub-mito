@@ -4,7 +4,7 @@ import { useAuth } from '@/context/AuthContext'
 import {
   AREAS, BASES_DRAGON, CONDICIONES_DRAGON, IVA, LISTAS_DRAGON, MOTIVOS_DRAGON, PLAZOS, PLAZO_A_CONDICION, TIPOS,
   buscarArticulos, buscarProveedoresDragon, buscarProveedoresOc, datosArticulosDragon, datosProveedorDragon, datosProveedorHistorial, datosProveedorPorCodigo, guardarOrden, leerTxtArticulos, mandarADragon, pedirAutorizacion, pesos,
-  cargarSubtipos, separarVariante, subirArchivo, totalItems, variantesArticulo, type SubtipoOc,
+  cargarSubtipos, netoItem, separarVariante, subirArchivo, totalItems, variantesArticulo, type SubtipoOc,
   type ArticuloBusqueda, type DatosProveedor, type ItemDragon, type OrdenCompra, type ProveedorDragon, type Variantes,
 } from '@/lib/ordenesCompra'
 
@@ -102,6 +102,7 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
     dragon_motivo: oc?.dragon_motivo ?? '',
     dragon_condicion: oc?.dragon_condicion ?? (PLAZO_A_CONDICION[oc?.plazo ?? ''] || 'PCF3'),
     dragon_lista: oc?.dragon_lista ?? 'LISTA0',
+    dragon_descuento: Number(oc?.dragon_descuento ?? 0),
   }))
   const [items, setItems] = useState<ItemDragon[]>(oc?.dragon_items?.length ? oc.dragon_items : [{ articulo: '', color: '', talle: '', cantidad: 1, precio: 0 }])
   const [variantes, setVariantes] = useState<Record<string, Variantes | null>>({})
@@ -132,8 +133,11 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
     }
   }, [items, variantes, f.dragon_base])
 
+  // Como Dragon: neto de cada renglón con su % de descuento, después el % general del pedido y el IVA
   const subtotal = totalItems(items)
-  const totalDragon = Math.round(subtotal * (1 + IVA) * 100) / 100
+  const descGeneral = Math.min(Math.max(Number(f.dragon_descuento) || 0, 0), 100)
+  const montoDescGeneral = subtotal * descGeneral / 100
+  const totalDragon = Math.round((subtotal - montoDescGeneral) * (1 + IVA) * 100) / 100
   const montoMostrado = f.dragon ? String(totalDragon) : f.monto_bruto
 
   const buscarProvOc = useMemo(() => async (t: string) => (await buscarProveedoresOc(t)).map((p) => ({
@@ -245,7 +249,8 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
     ...(oc ? { numero: oc.numero } : {}),
     ...f,
     monto_bruto: montoMostrado,
-    dragon_items: f.dragon ? items.filter((i) => i.articulo && Number(i.cantidad) > 0).map((i) => ({ ...i, cantidad: Number(i.cantidad), precio: Number(i.precio) })) : [],
+    dragon_items: f.dragon ? items.filter((i) => i.articulo && Number(i.cantidad) > 0).map((i) => ({ ...i, cantidad: Number(i.cantidad), precio: Number(i.precio), descuento: Number(i.descuento) || 0 })) : [],
+    dragon_descuento: f.dragon ? descGeneral : 0,
   })
 
   const guardar = async (despues?: 'pedir' | 'dragon') => {
@@ -404,6 +409,10 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
                   <select value={f.dragon_lista} disabled={bloqueadoDragon} onChange={(e) => set('dragon_lista', e.target.value)} className={campoCls}>
                     {LISTAS_DRAGON.map(([c, d]) => <option key={c} value={c}>{c} · {d}</option>)}
                   </select></div>
+                <div><span className={lbl}>% Descuento general</span>
+                  <input value={f.dragon_descuento || ''} disabled={bloqueadoDragon} inputMode="decimal" placeholder="0"
+                    onChange={(e) => set('dragon_descuento', Math.min(Math.max(Number(e.target.value.replace(',', '.')) || 0, 0), 100))} className={campoCls} />
+                  <p className="mt-1 text-xs text-sub">Sobre el total del pedido. Cada artículo puede tener además su «% Desc.».</p></div>
                 <div className="sm:col-span-2"><span className={lbl}>Proveedor en Dragon</span>
                   <Buscador<ProveedorDragon> valor={provDragonTxt} buscar={buscarProvDragon} placeholder="Buscá por código o nombre…"
                     onTexto={(t) => { setProvDragonTxt(t); setF((x) => ({ ...x, dragon_proveedor: '', dragon_proveedor_nombre: '' })) }}
@@ -424,7 +433,7 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
                 <table className="w-full min-w-[680px] text-xs">
                   <thead><tr className="text-left text-[10px] uppercase tracking-wide text-sub">
                     <th className="p-1.5">Artículo</th><th className="p-1.5">Descripción</th><th className="w-[110px] p-1.5">Color</th><th className="w-[80px] p-1.5">Talle</th>
-                    <th className="w-[80px] p-1.5">Cantidad</th><th className="w-[100px] p-1.5">Precio</th><th className="w-[100px] p-1.5 text-right">Monto</th><th className="w-[90px]" />
+                    <th className="w-[80px] p-1.5">Cantidad</th><th className="w-[100px] p-1.5">Precio</th><th className="w-[70px] p-1.5">% Desc.</th><th className="w-[100px] p-1.5 text-right">Monto</th><th className="w-[90px]" />
                   </tr></thead>
                   <tbody>
                     {items.map((it, i) => {
@@ -455,7 +464,8 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
                           </td>
                           <td className="p-1"><input value={it.cantidad} disabled={bloqueadoDragon} inputMode="numeric" onChange={(e) => setItem(i, { cantidad: Number(e.target.value) || 0 })} className="h-8 w-full rounded-lg border border-line bg-surface2 px-2 text-xs text-ink" /></td>
                           <td className="p-1"><input value={it.precio} disabled={bloqueadoDragon} inputMode="decimal" onChange={(e) => setItem(i, { precio: Number(e.target.value.replace(',', '.')) || 0 })} className="h-8 w-full rounded-lg border border-line bg-surface2 px-2 text-xs text-ink" /></td>
-                          <td className="p-1.5 text-right tabular-nums">{pesos(it.cantidad * it.precio)}</td>
+                          <td className="p-1"><input value={it.descuento || ''} disabled={bloqueadoDragon} inputMode="decimal" placeholder="0" onChange={(e) => setItem(i, { descuento: Math.min(Math.max(Number(e.target.value.replace(',', '.')) || 0, 0), 100) })} className="h-8 w-full rounded-lg border border-line bg-surface2 px-2 text-xs text-ink" /></td>
+                          <td className="p-1.5 text-right tabular-nums">{pesos(netoItem(it))}</td>
                           <td className="p-1 text-right">
                             {!bloqueadoDragon && (
                               <span className="inline-flex gap-1">
@@ -491,7 +501,8 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
                 {isAdmin && <button type="button" onClick={() => setVerJson((x) => !x)} className="rounded-lg border border-line px-2.5 py-1.5 text-xs text-sub">Ver JSON</button>}
                 <div className="ml-auto grid grid-cols-[auto_auto] gap-x-4 text-right text-xs text-sub">
                   <span>Subtotal</span><b className="text-ink">{pesos(subtotal)}</b>
-                  <span>IVA 21 %</span><b className="text-ink">{pesos(subtotal * IVA)}</b>
+                  {descGeneral > 0 && <><span>Descuento {descGeneral} %</span><b className="text-ink">−{pesos(montoDescGeneral)}</b></>}
+                  <span>IVA 21 %</span><b className="text-ink">{pesos((subtotal - montoDescGeneral) * IVA)}</b>
                   <span className="text-sm">Total Dragon</span><b className="text-sm text-ink">{pesos(totalDragon)}</b>
                 </div>
               </div>
@@ -513,7 +524,8 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
                   {`// BaseDeDatos: ${f.dragon_base}\n` + JSON.stringify({
                     Letra: 'X', PuntoDeVenta: 164, Numero: oc?.numero ?? '(nuevo)', Proveedor: f.dragon_proveedor, ListaDePrecios: f.dragon_lista,
                     CondicionPagoPreferente: f.dragon_condicion, Motivo: f.dragon_motivo, Fecha: f.fecha_compra, FechaEntrega: f.fecha_entrega || f.fecha_compra,
-                    Obs: f.observacion, FacturaDetalle: items.filter((x) => x.articulo && x.cantidad > 0).map((x, n) => ({ NroItem: n + 1, Articulo: x.articulo, Color: x.color, Talle: x.talle, Cantidad: x.cantidad, Precio: x.precio })),
+                    Obs: f.observacion, ...(descGeneral > 0 ? { PorcentajeDescuento: descGeneral } : {}),
+                    FacturaDetalle: items.filter((x) => x.articulo && x.cantidad > 0).map((x, n) => ({ NroItem: n + 1, Articulo: x.articulo, Color: x.color, Talle: x.talle, Cantidad: x.cantidad, Precio: x.precio, ...(x.descuento ? { Descuento: x.descuento } : {}) })),
                   }, null, 2)}
                 </pre>
               )}

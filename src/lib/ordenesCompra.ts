@@ -20,6 +20,8 @@ export interface ItemDragon {
   talle: string
   cantidad: number
   precio: number
+  /** % de descuento del renglón (Dragon: FacturaDetalle[].Descuento) */
+  descuento?: number
 }
 
 export interface OrdenCompra {
@@ -61,6 +63,8 @@ export interface OrdenCompra {
   dragon_motivo: string | null
   dragon_condicion: string | null
   dragon_lista: string | null
+  /** % de descuento general del pedido de compra (Dragon: PorcentajeDescuento) */
+  dragon_descuento?: number | null
   dragon_items: ItemDragon[]
   dragon_estado: 'pendiente' | 'enviando' | 'ok' | 'error' | null
   dragon_error: string | null
@@ -155,7 +159,9 @@ export const fechaHora = (iso: string | null | undefined) =>
   iso ? new Date(iso).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'
 export const nombreCorto = (n: string | null | undefined) =>
   (n ?? '').split(' ').filter(Boolean).slice(0, 2).map((p) => p[0] + p.slice(1).toLowerCase()).join(' ') || '—'
-export const totalItems = (items: ItemDragon[]) => items.reduce((s, i) => s + (Number(i.cantidad) || 0) * (Number(i.precio) || 0), 0)
+/** Neto de un renglón: cantidad × precio menos su % de descuento */
+export const netoItem = (i: ItemDragon) => (Number(i.cantidad) || 0) * (Number(i.precio) || 0) * (1 - Math.min(Math.max(Number(i.descuento) || 0, 0), 100) / 100)
+export const totalItems = (items: ItemDragon[]) => items.reduce((s, i) => s + netoItem(i), 0)
 
 export interface Etapa {
   clave: PasoClave | 'ok' | 'canc'

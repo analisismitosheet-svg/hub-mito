@@ -69,7 +69,7 @@ async function main() {
       const obs = `OC ${o.numero}${o.observacion ? ` - ${o.observacion}` : ''}${o.por ? ` (hub: ${o.por})` : ''}`
       const r = await crearPedidoCompra({
         base: o.base, numero: o.numero, proveedor: o.proveedor, motivo: o.motivo, condicion: o.condicion,
-        lista: o.lista, fecha: o.fecha, fechaEntrega: o.fecha_entrega, obs, items,
+        lista: o.lista, fecha: o.fecha, fechaEntrega: o.fecha_entrega, obs, items, descuento: o.descuento,
       })
       if (r.ok) codigo = String(r.codigo ?? r.numero)
       else error = r.detalle
