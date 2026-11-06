@@ -5,11 +5,11 @@ import {
   apiInforme, cargarConfig, clavesEstado, contactosAgenda, desbloquearClave, guardarClave, guardarArbol, guardarConfig, cargarSubtipos, repartoActual, TIPOS, type ConfigOc, type NodoArbol,
 } from '@/lib/ordenesCompra'
 
-/* Órdenes de compras · Autorizadores (solo admin): a quién le llega el WhatsApp para autorizar
-   (de los contactos de «Envío informes y reportes»), el árbol de quién autoriza cada tipo y subtipo (sql/ordenes_compra_arbol.sql) y la plantilla de Meta. */
+/* Órdenes de compras · Autorizadores (solo admin): a quién le llega el Telegram para autorizar
+   (de los contactos de «Envío informes y reportes»), el árbol de quién autoriza cada tipo y subtipo (sql/ordenes_compra_arbol.sql) y el estado del bot de Telegram (@informes_mito_bot). */
 
 type Reparto = Awaited<ReturnType<typeof repartoActual>>
-interface EstadoPlantilla { existe: boolean; estado?: string; motivo?: string; error?: string }
+interface EstadoTelegram { configurado: boolean; usuario?: string; conectado?: boolean; error?: string }
 
 export default function AutorizadoresOc({ onCerrar }: { onCerrar: () => void }) {
   const [cfg, setCfg] = useState<ConfigOc | null>(null)
@@ -19,7 +19,7 @@ export default function AutorizadoresOc({ onCerrar }: { onCerrar: () => void }) 
   const [arbol, setArbol] = useState<NodoArbol[] | null>(null)
   const [cerrados, setCerrados] = useState<string[]>([])
   const [nuevoSub, setNuevoSub] = useState<Record<string, string>>({})
-  const [plantilla, setPlantilla] = useState<EstadoPlantilla | null>(null)
+  const [telegram, setTelegram] = useState<EstadoTelegram | null>(null)
   const [ocupado, setOcupado] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   /** Contacto → bloqueada. Si no está, todavía no tiene clave. */
@@ -41,7 +41,7 @@ export default function AutorizadoresOc({ onCerrar }: { onCerrar: () => void }) 
     }).catch((e: Error) => setError(e.message))
     void contactosAgenda().then(setContactos).catch((e: Error) => setError(e.message))
     void repartoActual().then(setReparto).catch(() => setReparto(null))
-    void apiInforme<EstadoPlantilla>({ ocPlantilla: 'estado' }).then(setPlantilla).catch((e: Error) => setPlantilla({ existe: false, error: e.message }))
+    void apiInforme<EstadoTelegram>({ telegram: 'estado' }).then(setTelegram).catch((e: Error) => setTelegram({ configurado: true, error: e.message }))
   }, [])
 
   const guardar = async () => {
@@ -84,12 +84,14 @@ export default function AutorizadoresOc({ onCerrar }: { onCerrar: () => void }) 
       setOcupado(null)
     }
   }
-  const crearPlantilla = async () => {
-    setOcupado('plantilla')
+  /** Le dice a Telegram adónde mandar los toques de los botones (webhook del bot). */
+  const conectarTelegram = async () => {
+    setOcupado('telegram')
     try {
-      setPlantilla(await apiInforme<EstadoPlantilla>({ ocPlantilla: 'crear' }))
+      const r = await apiInforme<{ ok: boolean; error?: string }>({ telegram: 'conectar' })
+      setTelegram(r.ok ? await apiInforme<EstadoTelegram>({ telegram: 'estado' }) : { configurado: true, error: r.error })
     } catch (e) {
-      setPlantilla({ existe: false, error: (e as Error).message })
+      setTelegram({ configurado: true, error: (e as Error).message })
     } finally {
       setOcupado(null)
     }
@@ -239,19 +241,24 @@ export default function AutorizadoresOc({ onCerrar }: { onCerrar: () => void }) 
             </div>
           )}
 
-          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-3 text-xs text-sub">
-            <p className="mb-1 font-semibold text-emerald-200">Plantilla de WhatsApp «oc_autorizar_link»</p>
-            {!plantilla ? <Loader2 size={14} className="animate-spin" /> : plantilla.existe ? (
-              <p>Estado en Meta: <b className="text-ink">{plantilla.estado}</b>{plantilla.motivo && ` — ${plantilla.motivo}`}. {plantilla.estado !== 'APPROVED' && 'Hasta que Meta la apruebe, los pedidos de autorización no llegan.'}</p>
+          <div className="rounded-2xl border border-sky-500/30 bg-sky-500/5 p-3 text-xs text-sub">
+            <p className="mb-1 font-semibold text-sky-200">Bot de Telegram{telegram?.usuario && <> «@{telegram.usuario}»</>}</p>
+            {!telegram ? <Loader2 size={14} className="animate-spin" /> : !telegram.configurado ? (
+              <p className="text-amber-300">Falta TELEGRAM_BOT_TOKEN en Vercel: los pedidos de autorización no salen.</p>
+            ) : telegram.error ? (
+              <p className="text-red-300">{telegram.error}</p>
+            ) : telegram.conectado ? (
+              <p>✓ Conectado: los botones Autorizar / No autorizar del chat responden.</p>
             ) : (
               <div className="flex flex-col gap-2">
-                <p>{plantilla.error ?? 'Todavía no está creada en Meta.'}</p>
-                <button disabled={ocupado === 'plantilla'} onClick={() => void crearPlantilla()} className="self-start rounded-lg bg-emerald-600 px-3 py-1.5 font-semibold text-white hover:bg-emerald-700 disabled:opacity-60">
-                  {ocupado === 'plantilla' ? 'Creando…' : 'Crear plantilla en WhatsApp'}
+                <p className="text-amber-300">El bot no está conectado: los botones del chat no van a responder.</p>
+                <button disabled={ocupado === 'telegram'} onClick={() => void conectarTelegram()} className="self-start rounded-lg bg-sky-600 px-3 py-1.5 font-semibold text-white hover:bg-sky-700 disabled:opacity-60">
+                  {ocupado === 'telegram' ? 'Conectando…' : 'Conectar el bot'}
                 </button>
               </div>
             )}
-            <p className="mt-1.5">Trae N° de OC, tipo, proveedor, monto, qué es y quién la cargó, con un botón al link donde se autoriza o no.</p>
+            <p className="mt-1.5">Le llega a cada autorizador por Telegram con N° de OC, tipo, proveedor, monto, qué es y quién la cargó, y botones para autorizar o no.
+              Cada persona tiene que vincular su Telegram al bot desde <Link to="/informes" className="text-sky-400 hover:underline">Envío informes y reportes</Link>.</p>
           </div>
           {error && <p className="rounded-xl border border-red-500/30 bg-red-500/10 p-2.5 text-xs text-red-300">{error}</p>}
         </div>
