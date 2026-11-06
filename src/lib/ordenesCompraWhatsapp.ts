@@ -153,28 +153,6 @@ export async function procesarBotonOc(b: BotonPulsado): Promise<void> {
   await responder()
 }
 
-/** Prueba de los botones (solo admin): solo con una OC ya resuelta, así responder no le cambia nada. */
-export async function probarBotonesOc(numero: number, contactoId: string): Promise<{ ok: boolean; detalle: string; envio?: number }> {
-  const rO = await rest(`ordenes_compra?numero=eq.${numero}&select=numero,tipo,proveedor,monto_bruto,observacion,creada_por_nombre,responsable,pasos,cancelada_at`)
-  const o = (rO.ok ? ((await rO.json()) as Array<{ numero: number; tipo: string; proveedor: string; monto_bruto: number | null; observacion: string | null; creada_por_nombre: string | null; responsable: string | null; pasos: Record<string, unknown>; cancelada_at: string | null }>) : [])[0]
-  if (!o) return { ok: false, detalle: 'No existe la OC' }
-  if (!o.pasos?.autor && !o.cancelada_at) return { ok: false, detalle: 'Para probar hace falta una OC ya autorizada o cancelada' }
-  const rC = await rest(`informes_contactos?id=eq.${contactoId}&select=nombre,telefono`)
-  const c = (rC.ok ? ((await rC.json()) as Array<{ nombre: string; telefono: string }>) : [])[0]
-  if (!c) return { ok: false, detalle: 'No existe el contacto' }
-  const rI = await rest('ordenes_compra_whatsapp', {
-    method: 'POST',
-    headers: { Prefer: 'return=representation' },
-    body: JSON.stringify({ numero, contacto_id: contactoId, nombre: c.nombre, telefono: c.telefono, motivo: 'pedido' }),
-  })
-  const fila = (rI.ok ? ((await rI.json()) as Array<{ id: number }>) : [])[0]
-  if (!fila) return { ok: false, detalle: `No se pudo crear el envío (${rI.status})` }
-  const r = await mandarPlantilla({ id: fila.id, nombre: c.nombre, telefono: c.telefono }, {
-    numero: o.numero, tipo: o.tipo, proveedor: o.proveedor, monto: o.monto_bruto, observacion: o.observacion, cargo: o.creada_por_nombre ?? o.responsable,
-  })
-  return { ok: r.ok, detalle: r.detalle, envio: fila.id }
-}
-
 async function mandarLote(l: Lote): Promise<{ enviados: number; errores: string[]; destinatarios: string[] }> {
   const out = { enviados: 0, errores: [] as string[], destinatarios: [] as string[] }
   for (const e of l.envios ?? []) {

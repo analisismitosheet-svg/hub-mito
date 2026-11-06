@@ -30,7 +30,7 @@ import { activarAvisosWhatsapp, armarCuerpo, descartarRespaldo, enviarInforme, e
 import { formatoDe, type Informe } from '../src/lib/informes.js'
 import { mismoSecreto } from '../src/lib/apiAuth.js'
 import { enviarPendientesFranquicias, reenviarPropuesta } from '../src/lib/franquiciasWhatsapp.js'
-import { ampliarAvisosOc, crearPlantillaOc, estadoPlantillaOc, pedirAutorizacionOc, probarBotonesOc, procesarBotonOc, type BotonPulsado } from '../src/lib/ordenesCompraWhatsapp.js'
+import { ampliarAvisosOc, crearPlantillaOc, estadoPlantillaOc, pedirAutorizacionOc, procesarBotonOc, type BotonPulsado } from '../src/lib/ordenesCompraWhatsapp.js'
 import { conectarBotTelegram, estadoTelegram, procesarUpdateTelegram, secretoWebhookTelegram, telegramActivo } from '../src/lib/telegram.js'
 
 const HUB_URL = () => process.env.HUB_URL || 'https://hub-mito.vercel.app'
@@ -250,13 +250,6 @@ async function manual(req: Req, res: Res) {
     } catch (e) {
       return res.status(400).json({ error: (e as Error).message })
     }
-  }
-  // --- Órdenes de compras: probar los botones con una OC ya resuelta (solo admin) ---
-  if (datos.ocPrueba !== undefined) {
-    if (!(await tienePermiso(token, ['__solo_admin__']))) return res.status(403).json({ error: 'Solo el administrador' })
-    const contacto = String(datos.contacto ?? '')
-    if (!Number.isInteger(Number(datos.ocPrueba)) || !/^[0-9a-f-]{36}$/i.test(contacto)) return res.status(400).json({ error: 'Datos inválidos' })
-    return res.status(200).json(await probarBotonesOc(Number(datos.ocPrueba), contacto))
   }
   // --- Órdenes de compras: plantilla de WhatsApp (solo admin) ---
   if (datos.ocPlantilla === 'estado' || datos.ocPlantilla === 'crear') {
