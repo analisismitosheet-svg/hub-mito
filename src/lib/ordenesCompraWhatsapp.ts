@@ -119,12 +119,12 @@ export interface BotonPulsado {
 }
 
 /**
- * Alguien tocó un botón. Primero pide confirmar, para evitar un toque sin querer. Sin clave: el botón
+ * Alguien tocó un botón: un solo toque responde, sin clave ni confirmación (decisión del usuario). El botón
  * solo vale desde el chat vinculado al teléfono de ese envío, y la respuesta queda a nombre de esa persona.
  */
 export async function procesarBotonOc(b: BotonPulsado): Promise<void> {
   const responder = (text?: string) => llamar('answerCallbackQuery', { callback_query_id: b.id, ...(text ? { text, show_alert: true } : {}) })
-  const m = /^oc:(a|n|A|N|v):(\d+)$/.exec(b.data ?? '')
+  const m = /^oc:(a|n):(\d+)$/.exec(b.data ?? '')
   const chat = b.message?.chat?.id
   const mensaje = b.message?.message_id
   if (!m || !chat || !mensaje) return void (await responder())
@@ -135,24 +135,9 @@ export async function procesarBotonOc(b: BotonPulsado): Promise<void> {
   const dueno = envio ? await chatDe(envio.telefono) : null
   if (!envio || !dueno || dueno !== chat || b.from?.id !== chat) return void (await responder('Este pedido no es para vos.'))
 
-  const teclado = (inline_keyboard: BotonTelegram[][]) =>
-    llamar('editMessageReplyMarkup', { chat_id: chat, message_id: mensaje, reply_markup: { inline_keyboard } })
-
-  if (accion === 'a' || accion === 'n') {
-    await teclado([
-      [{ text: accion === 'a' ? 'Sí, autorizar' : 'Sí, no autorizar', callback_data: `oc:${accion.toUpperCase()}:${id}` }],
-      [{ text: 'Volver', callback_data: `oc:v:${id}` }],
-    ])
-    return void (await responder())
-  }
-  if (accion === 'v') {
-    await teclado(botonesOc(Number(id), envio.token))
-    return void (await responder())
-  }
-
   let resultado: { oc?: { autorizada_por?: string | null; cancelada_por?: string | null; no_autorizada?: boolean } | null; error?: string }
   try {
-    resultado = await rpcServicio('oc_telegram_responder', { p_envio: Number(id), p_autoriza: accion === 'A' })
+    resultado = await rpcServicio('oc_telegram_responder', { p_envio: Number(id), p_autoriza: accion === 'a' })
   } catch {
     return void (await responder('No se pudo registrar la respuesta. Probá de nuevo.'))
   }
