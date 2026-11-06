@@ -135,6 +135,10 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
 
   // Como Dragon: neto de cada renglón con su % de descuento, después el % general del pedido y el IVA
   const subtotal = totalItems(items)
+  /** Totalizador de la grilla: renglones con artículo, artículos distintos y unidades */
+  const cargados = items.filter((x) => x.articulo)
+  const totArticulos = new Set(cargados.map((x) => x.articulo.toUpperCase())).size
+  const totUnidades = cargados.reduce((a, x) => a + (Number(x.cantidad) || 0), 0)
   const descGeneral = Math.min(Math.max(Number(f.dragon_descuento) || 0, 0), 100)
   const montoDescGeneral = subtotal * descGeneral / 100
   const totalDragon = Math.round((subtotal - montoDescGeneral) * (1 + IVA) * 100) / 100
@@ -478,6 +482,15 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
                       )
                     })}
                   </tbody>
+                  {cargados.length > 0 && (
+                    <tfoot><tr className="border-t border-line text-sub">
+                      <td colSpan={4} className="p-1.5 font-semibold text-ink">Total · {totArticulos} {totArticulos === 1 ? 'artículo' : 'artículos'} · {cargados.length} {cargados.length === 1 ? 'renglón' : 'renglones'}</td>
+                      <td className="p-1.5 font-bold tabular-nums text-ink">{totUnidades.toLocaleString('es-AR')} u.</td>
+                      <td colSpan={2} />
+                      <td className="p-1.5 text-right font-bold tabular-nums text-ink">{pesos(subtotal)}</td>
+                      <td />
+                    </tr></tfoot>
+                  )}
                 </table>
               </div>
               <div className="flex flex-wrap items-start gap-3">
@@ -500,6 +513,7 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
                 )}
                 {isAdmin && <button type="button" onClick={() => setVerJson((x) => !x)} className="rounded-lg border border-line px-2.5 py-1.5 text-xs text-sub">Ver JSON</button>}
                 <div className="ml-auto grid grid-cols-[auto_auto] gap-x-4 text-right text-xs text-sub">
+                  <span>Unidades</span><b className="text-ink">{totUnidades.toLocaleString('es-AR')} ({totArticulos} art.)</b>
                   <span>Subtotal</span><b className="text-ink">{pesos(subtotal)}</b>
                   {descGeneral > 0 && <><span>Descuento {descGeneral} %</span><b className="text-ink">−{pesos(montoDescGeneral)}</b></>}
                   <span>IVA 21 %</span><b className="text-ink">{pesos((subtotal - montoDescGeneral) * IVA)}</b>
