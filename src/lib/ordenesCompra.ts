@@ -354,7 +354,9 @@ export async function buscarProveedoresOc(texto: string): Promise<DatosProveedor
     if (!vistos.has(k)) vistos.set(k, { proveedor: f.proveedor, proveedor_cuit: f.proveedor_cuit, contacto: f.contacto, telefono: f.telefono, mail: f.mail })
   }
   const lista = [...vistos.values()].slice(0, 12)
-  for (const p of dragon) if (!vistos.has(normalizar(p.nombre))) lista.push(deDragon(p))
+  // Los de Dragon con datos primero (hay nombres repetidos con códigos vacíos, ej. 3 «HAVAIANAS»)
+  const cuantos = (p: FilaProvDragon) => [p.cuit, p.contacto, p.telefono, p.mail].filter(Boolean).length
+  for (const p of [...dragon].sort((a, b) => cuantos(b) - cuantos(a))) if (!vistos.has(normalizar(p.nombre))) lista.push(deDragon(p))
   return lista
 }
 

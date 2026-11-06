@@ -150,8 +150,9 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
   const elegirProveedor = (p: DatosProveedor) => {
     setF((x) => ({ ...x, proveedor: p.proveedor }))
     completarContacto(p)
-    // Elegido de una OC vieja (las importadas no traen datos): se busca en el maestro de Dragon
-    if (!p.dragon && !(p.proveedor_cuit && p.contacto && p.telefono && p.mail)) {
+    // Elegido de una OC vieja (las importadas no traen datos) o de un código de Dragon sin datos:
+    // se busca por nombre en el maestro de Dragon
+    if (!(p.proveedor_cuit && p.contacto && p.telefono && p.mail)) {
       void datosProveedorDragon(p.proveedor, p.proveedor_cuit).then((d) => completarContacto(d, p.proveedor)).catch(() => {})
     }
   }
