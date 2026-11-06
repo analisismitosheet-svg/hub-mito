@@ -19,7 +19,7 @@ import AutorizadoresOc from '@/components/AutorizadoresOc'
 /*  Órdenes de compras (Compras · Depósito · Diseño · Arquitectura ·    */
 /*  Administración). Reemplaza la planilla «Alta Órdenes de Compras».  */
 /*  Base y reglas: sql/ordenes_compra.sql. La autorización se pide por  */
-/*  WhatsApp con «Pedir autorización» (nunca sola).                    */
+/*  Telegram con «Pedir autorización» (nunca sola).                    */
 /* ------------------------------------------------------------------ */
 
 const PAGINA = 100
@@ -43,6 +43,9 @@ const enKpi = (o: OrdenCompra, k: string) => {
   const e = etapaDe(o).clave
   return k === 'flex' ? ['f_oc', 'f_rem', 'f_fac'].includes(e) : e === k
 }
+
+/** Los eventos viejos dicen «por WhatsApp»: el aviso sale por Telegram (no se usa WhatsApp). */
+const sinWhatsapp = (t: string) => t.replace(/link de WhatsApp/gi, 'link').replace(/por WhatsApp/gi, 'por Telegram')
 
 export default function OrdenesCompra() {
   const { isAdmin, can, perfil, user } = useAuth()
@@ -434,7 +437,7 @@ function DetalleOc({ oc, onCerrar, onCambio, onBorrada, onEditar }: {
                   <div className="min-w-0">
                     <p className="text-[13px] font-semibold text-ink">{p.titulo}</p>
                     <p className="text-[11.5px] text-sub">
-                      {h ? <>✓ Tildó <b className="text-ink">{h.por}</b> · {h.via === 'planilla' ? 'planilla' : fechaHora(h.at)}{h.via === 'whatsapp' && ' · por WhatsApp'}{h.via === 'telegram' && ' · por Telegram'}</>
+                      {h ? <>✓ Tildó <b className="text-ink">{h.por}</b> · {h.via === 'planilla' ? 'planilla' : fechaHora(h.at)}{h.via === 'whatsapp' && ' · por el link'}{h.via === 'telegram' && ' · por Telegram'}</>
                         : p.k === 'autor' && !oc.cancelada_at ? <AvisoAutorizacion oc={oc} sug={sug} />
                           : toca ? `Le toca a: ${QUIEN_TXT[p.quien]}` : ''}
                     </p>
@@ -491,7 +494,7 @@ function DetalleOc({ oc, onCerrar, onCambio, onBorrada, onEditar }: {
           <p className="mb-1.5 text-[10.5px] font-bold uppercase tracking-wide text-sub">Historial</p>
           <ul className="flex flex-col gap-1 text-xs text-sub">
             {oc.importada && <li>Importada de la planilla «Alta Órdenes de Compras Mito» (los tildes de la planilla no dicen quién ni a qué hora).</li>}
-            {eventos.map((e) => <li key={e.id}><b className="text-ink">{nombreCorto(e.por)}</b> {e.texto} · {fechaHora(e.at)}</li>)}
+            {eventos.map((e) => <li key={e.id}><b className="text-ink">{nombreCorto(e.por)}</b> {sinWhatsapp(e.texto)} · {fechaHora(e.at)}</li>)}
           </ul>
         </div>
 
@@ -525,7 +528,7 @@ function AvisoAutorizacion({ oc, sug }: { oc: OrdenCompra; sug: { nombres: strin
   if (oc.pedida_at) {
     return (
       <>
-        🔔 Pedida por <b className="text-ink">{nombreCorto(oc.pedida_por)}</b> · {fechaHora(oc.pedida_at)}. Le llegó por WhatsApp a <b className="text-ink">{oc.pedida_a?.join(', ')}</b>
+        🔔 Pedida por <b className="text-ink">{nombreCorto(oc.pedida_por)}</b> · {fechaHora(oc.pedida_at)}. Le llegó por Telegram a <b className="text-ink">{oc.pedida_a?.join(', ')}</b>
         {oc.ampliada_at ? <> · después también a los demás autorizadores</> : sug?.resto.length ? <><br />Si no responde en {sug.horas} h, le llega también a {sug.resto.join(', ')}.</> : null}
       </>
     )
