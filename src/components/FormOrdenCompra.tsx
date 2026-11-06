@@ -3,7 +3,7 @@ import { FileText, Loader2, Paperclip, Plus, Trash2, X } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import {
   AREAS, BASES_DRAGON, CONDICIONES_DRAGON, IVA, LISTAS_DRAGON, MOTIVOS_DRAGON, PLAZOS, PLAZO_A_CONDICION, TIPOS,
-  buscarArticulos, buscarProveedoresDragon, buscarProveedoresOc, datosArticulosDragon, datosProveedorDragon, datosProveedorPorCodigo, guardarOrden, leerTxtArticulos, mandarADragon, pedirAutorizacion, pesos,
+  buscarArticulos, buscarProveedoresDragon, buscarProveedoresOc, datosArticulosDragon, datosProveedorDragon, datosProveedorHistorial, datosProveedorPorCodigo, guardarOrden, leerTxtArticulos, mandarADragon, pedirAutorizacion, pesos,
   cargarSubtipos, separarVariante, subirArchivo, totalItems, variantesArticulo, type SubtipoOc,
   type ArticuloBusqueda, type DatosProveedor, type ItemDragon, type OrdenCompra, type ProveedorDragon, type Variantes,
 } from '@/lib/ordenesCompra'
@@ -155,10 +155,13 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
   const elegirProveedor = (p: DatosProveedor) => {
     setF((x) => ({ ...x, proveedor: p.proveedor }))
     completarContacto(p)
-    // Elegido de una OC vieja (las importadas no traen datos) o de un código de Dragon sin datos:
-    // se busca por nombre en el maestro de Dragon
+    // Si falta algún dato: primero el historial de OC (por CUIT o nombre), después el maestro de Dragon.
+    // completarContacto solo llena lo vacío, así que el historial tiene prioridad.
     if (!(p.proveedor_cuit && p.contacto && p.telefono && p.mail)) {
-      void datosProveedorDragon(p.proveedor, p.proveedor_cuit).then((d) => completarContacto(d, p.proveedor)).catch(() => {})
+      void (async () => {
+        completarContacto(await datosProveedorHistorial(p.proveedor, p.proveedor_cuit).catch(() => null), p.proveedor)
+        completarContacto(await datosProveedorDragon(p.proveedor, p.proveedor_cuit).catch(() => null), p.proveedor)
+      })()
     }
   }
   const buscarProvDragon = useMemo(() => async (t: string) => (await buscarProveedoresDragon(t)).map((p) => ({

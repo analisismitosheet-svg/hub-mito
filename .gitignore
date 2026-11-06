@@ -29,3 +29,6 @@ manuales/
 
 # cache de typescript (lo genera tsc --noEmit)
 *.tsbuildinfo
+
+# Contactos de proveedores sacados de la planilla (se regenera con scripts/importar-contactos-oc.py)
+sql/ordenes_compra_import_contactos.sql

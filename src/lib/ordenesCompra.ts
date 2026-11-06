@@ -363,6 +363,43 @@ export async function datosProveedorDragon(nombre: string, cuit?: string | null)
   return null
 }
 
+/** Datos de contacto del proveedor en el historial de OC (las importadas traen contacto/teléfono/mail de la planilla).
+    Busca por CUIT o por nombre («REEF - NEW ARRECIFE» encuentra «NEW ARRECIFE S.A.»: las palabras de uno están en el otro)
+    y arma cada dato con la OC más reciente que lo tenga. Si el nombre coincide con proveedores distintos, no adivina. */
+export async function datosProveedorHistorial(nombre: string, cuit?: string | null): Promise<DatosProveedor | null> {
+  const palabras = palabrasProveedor(nombre)
+  const c = cuit ? cuitConGuiones(cuit) : null
+  if (!palabras.length && !c) return null
+  const larga = [...palabras].sort((a, b) => b.length - a.length)[0]
+  const filtros = [c && `proveedor_cuit.eq.${c}`, larga && `proveedor.ilike.%${larga}%`].filter(Boolean).join(',')
+  const { data, error } = await sb().from('ordenes_compra').select('numero,proveedor,proveedor_cuit,contacto,telefono,mail')
+    .or(filtros)
+    .order('numero', { ascending: false }).limit(200)
+  if (error || !data?.length) return null
+  type Fila = Pick<OrdenCompra, 'numero' | 'proveedor' | 'proveedor_cuit' | 'contacto' | 'telefono' | 'mail'>
+  const filas = (data as Fila[]).filter((f) => f.contacto || f.telefono || f.mail || f.proveedor_cuit)
+  const propias = new Set(palabras)
+  /** Cuántas palabras comparten si las de uno están todas en el otro (0 = no es el mismo proveedor) */
+  const parecido = (otro: string) => {
+    const ws = palabrasProveedor(otro)
+    const comunes = ws.filter((w) => propias.has(w)).length
+    const menor = Math.min(ws.length, propias.size)
+    return menor > 0 && comunes === menor && (menor >= 2 || ws.length === propias.size) ? comunes : 0
+  }
+  let elegidas = c ? filas.filter((f) => f.proveedor_cuit === c) : []
+  if (!elegidas.length) {
+    const puntaje = new Map<string, number>()
+    for (const f of filas) { const k = normalizar(f.proveedor); if (!puntaje.has(k)) puntaje.set(k, parecido(f.proveedor)) }
+    const mejor = Math.max(0, ...puntaje.values())
+    const ganadores = [...puntaje].filter(([, v]) => v === mejor && v > 0).map(([k]) => k)
+    if (ganadores.length !== 1) return null
+    elegidas = filas.filter((f) => normalizar(f.proveedor) === ganadores[0])
+  }
+  if (!elegidas.length) return null
+  const primero = (k: 'proveedor_cuit' | 'contacto' | 'telefono' | 'mail') => elegidas.find((f) => f[k]?.trim())?.[k] ?? null
+  return { proveedor: elegidas[0].proveedor, proveedor_cuit: primero('proveedor_cuit'), contacto: primero('contacto'), telefono: primero('telefono'), mail: primero('mail') }
+}
+
 /** Datos de un proveedor de Dragon por código (al elegirlo en la sección Dragon). */
 export async function datosProveedorPorCodigo(codigo: string): Promise<DatosProveedor | null> {
   const { data } = await sb().from('ordenes_compra_proveedores').select(COLS_PROV).eq('codigo', codigo.trim()).maybeSingle()
@@ -382,7 +419,15 @@ export async function buscarProveedoresOc(texto: string): Promise<DatosProveedor
   const vistos = new Map<string, DatosProveedor>()
   for (const f of (oc.data ?? []) as OrdenCompra[]) {
     const k = normalizar(f.proveedor)
-    if (!vistos.has(k)) vistos.set(k, { proveedor: f.proveedor, proveedor_cuit: f.proveedor_cuit, contacto: f.contacto, telefono: f.telefono, mail: f.mail })
+    const v = vistos.get(k)
+    if (!v) vistos.set(k, { proveedor: f.proveedor, proveedor_cuit: f.proveedor_cuit, contacto: f.contacto, telefono: f.telefono, mail: f.mail })
+    else {
+      // La última OC puede venir sin algún dato: se completa con la más reciente que lo tenga
+      v.proveedor_cuit ||= f.proveedor_cuit
+      v.contacto ||= f.contacto
+      v.telefono ||= f.telefono
+      v.mail ||= f.mail
+    }
   }
   const lista = [...vistos.values()].slice(0, 12)
   // Los de Dragon con datos primero (hay nombres repetidos con códigos vacíos, ej. 3 «HAVAIANAS»)
