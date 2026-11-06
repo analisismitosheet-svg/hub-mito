@@ -1,13 +1,13 @@
 -- Órdenes de compras: el admin elige a mano quién autoriza cada categoría (pedido del 06/11/2026).
 -- Autorizadores → cuadro «Quién autoriza cada categoría»: una fila por tipo (Producto, Servicios,
--- Talleres, Gastos el resto) y una por cada responsable de Gastos; en cada una se tildan uno o varios
--- autorizadores. Se guarda en ordenes_compra_config.reglas:
+-- Talleres, Gastos el resto) y una por cada responsable de Gastos; en cada una se eligen una o varias
+-- personas de la agenda de «Envío informes y reportes» (cualquiera activa, esté tildada arriba o no; 06/11). Se guarda en ordenes_compra_config.reglas:
 --   { "tipo:Producto": [uuid…], "tipo:Gastos": [uuid…], "gastos:TOMAS ROCA": [uuid…] }
 -- A quién va el aviso (oc_destinatarios), en orden:
 --   1. Gastos: la elección para ese responsable   2. si reparto_auto, el historial de ese responsable
 --   3. la elección para el tipo                    4. si reparto_auto, el historial del tipo
 --   5. todos los autorizadores tildados
--- Solo cuentan los elegidos que siguen tildados y activos. Si nadie responde en horas_espera,
+-- Los elegidos a mano cuentan si siguen activos en la agenda; el historial y el «a todos» usan los tildados. Si nadie responde en horas_espera,
 -- oc_ampliar_avisos les manda a los demás (sin cambios).
 -- Idempotente. Ejecutar:
 --   node scripts/supabase-sql.mjs qwlugajzxrrwckrqlrjp sql/ordenes_compra_reglas.sql
@@ -51,6 +51,7 @@ declare
   resp text;
   motivo text;
   todos jsonb;
+  agenda jsonb;
   elegido jsonb;
 begin
   select * into o from public.ordenes_compra where numero = p_numero;
@@ -58,12 +59,15 @@ begin
   select coalesce(jsonb_agg(jsonb_build_object('id', c.id, 'nombre', c.nombre, 'telefono', c.telefono) order by c.nombre), '[]')
     into todos
     from public.informes_contactos c where c.id = any (cfg.autorizadores) and c.activo;
+  select coalesce(jsonb_agg(jsonb_build_object('id', c.id, 'nombre', c.nombre, 'telefono', c.telefono) order by c.nombre), '[]')
+    into agenda
+    from public.informes_contactos c where c.activo;
   resp := upper(trim(coalesce(o.responsable, '')));
   if cfg.reparto_auto then rep := public.oc_reparto(); end if;
 
   -- 1. Elegidos a mano para los Gastos de ese responsable
   if o.tipo = 'Gastos' and resp <> '' and cfg.reglas ? ('gastos:' || resp) then
-    select coalesce(jsonb_agg(x), '[]') into elegido from jsonb_array_elements(todos) x
+    select coalesce(jsonb_agg(x), '[]') into elegido from jsonb_array_elements(agenda) x
      where cfg.reglas -> ('gastos:' || resp) ? (x ->> 'id');
     motivo := format('elegido por el admin para los Gastos de %s', initcap(lower(o.responsable)));
   end if;
@@ -78,7 +82,7 @@ begin
   end if;
   -- 3. Elegidos a mano para el tipo
   if coalesce(jsonb_array_length(elegido), 0) = 0 and cfg.reglas ? ('tipo:' || o.tipo) then
-    select coalesce(jsonb_agg(x), '[]') into elegido from jsonb_array_elements(todos) x
+    select coalesce(jsonb_agg(x), '[]') into elegido from jsonb_array_elements(agenda) x
      where cfg.reglas -> ('tipo:' || o.tipo) ? (x ->> 'id');
     motivo := format('elegido por el admin para %s', case when o.tipo = 'Gastos' then 'Gastos (el resto)' else o.tipo end);
   end if;

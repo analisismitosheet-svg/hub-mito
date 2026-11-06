@@ -90,7 +90,8 @@ export default function AutorizadoresOc({ onCerrar }: { onCerrar: () => void }) 
     }
   }
 
-  const tildados = cfg ? contactos.filter((c) => c.activo && cfg.autorizadores.includes(c.id)) : []
+  /** Elegibles por categoría: cualquier contacto activo de la agenda (esté tildado arriba o no). */
+  const agenda = contactos.filter((c) => c.activo)
   const gastosEnFilas = [...new Set([
     ...Object.keys(reparto?.gastos_responsable ?? {}),
     ...Object.keys(cfg?.reglas ?? {}).filter((k) => k.startsWith('gastos:')).map((k) => k.slice(7)),
@@ -122,7 +123,7 @@ export default function AutorizadoresOc({ onCerrar }: { onCerrar: () => void }) 
         </div>
         <div className="flex flex-col gap-4 px-5 py-4 text-sm">
           <p className="text-xs text-sub">
-            Tildá a quién le llega el WhatsApp para autorizar. La lista sale de los <b className="text-ink">Contactos de «Envío informes y reportes»</b>:
+            Tildados = autorizadores de respaldo: les llega cuando la categoría no tiene a nadie elegido abajo y cuando nadie responde a tiempo. La lista sale de los <b className="text-ink">Contactos de «Envío informes y reportes»</b>:
             el nombre y el número se cargan y se cambian ahí.
           </p>
           {!cfg ? <Loader2 size={16} className="animate-spin text-sub" /> : (
@@ -164,29 +165,42 @@ export default function AutorizadoresOc({ onCerrar }: { onCerrar: () => void }) 
           {cfg && (
             <div className="flex flex-col gap-2 rounded-2xl border border-teal-500/30 bg-teal-500/5 p-3">
               <p className="font-semibold text-teal-200">Quién autoriza cada categoría</p>
-              <p className="text-xs text-sub">Tildá uno o varios por fila: el aviso les llega juntos y vale la primera respuesta. Si una fila no tiene a nadie tildado, va según el historial.</p>
-              {tildados.length === 0 ? <p className="text-xs text-amber-300">Primero tildá arriba a los autorizadores.</p> : (
+              <p className="text-xs text-sub">Elegí en cada fila quién la autoriza: cualquier contacto de la agenda, uno o varios (les llega a todos juntos y vale la primera respuesta). Si una fila queda vacía, va según el historial.</p>
+              {agenda.length === 0 ? <p className="text-xs text-amber-300">No hay contactos activos en «Envío informes y reportes».</p> : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs text-sub">
                     <thead><tr className="text-left text-[10.5px] uppercase tracking-wide">
                       <th className="py-1 pr-3 font-bold">Categoría</th>
-                      {tildados.map((c) => <th key={c.id} className="px-1.5 py-1 text-center font-bold">{c.nombre}</th>)}
+                      <th className="py-1 pr-3 font-bold">Autoriza</th>
                       <th className="py-1 pl-2 font-bold">Historial (90 días)</th>
                     </tr></thead>
                     <tbody>
                       {filas.map((r) => {
-                        const elegidos = (cfg.reglas?.[r.clave] ?? []).filter((id) => tildados.some((c) => c.id === id))
+                        const elegidos = (cfg.reglas?.[r.clave] ?? []).map((id) => agenda.find((c) => c.id === id)).filter((c): c is (typeof agenda)[number] => !!c)
+                        const libres = agenda.filter((c) => !elegidos.some((e) => e.id === c.id))
                         return (
-                          <tr key={r.clave} className="border-t border-line/60">
+                          <tr key={r.clave} className="border-t border-line/60 align-middle">
                             <td className="py-1.5 pr-3 text-ink">{r.titulo}</td>
-                            {tildados.map((c) => (
-                              <td key={c.id} className="px-1.5 py-1.5 text-center">
-                                <input type="checkbox" aria-label={`${c.nombre} autoriza ${r.titulo}`} checked={elegidos.includes(c.id)} onChange={() => tildarRegla(r.clave, c.id)} className="h-4 w-4 accent-teal-500" />
-                              </td>
-                            ))}
+                            <td className="min-w-[240px] py-1.5 pr-3">
+                              <div className="flex flex-wrap items-center gap-1">
+                                {elegidos.map((c) => (
+                                  <span key={c.id} className="inline-flex items-center gap-1 rounded-lg border border-teal-500/50 bg-teal-500/15 py-0.5 pl-2 pr-1 font-semibold text-teal-100">
+                                    {c.nombre}
+                                    <button type="button" onClick={() => tildarRegla(r.clave, c.id)} aria-label={`Sacar a ${c.nombre} de ${r.titulo}`} className="rounded p-0.5 opacity-70 hover:bg-teal-500/20 hover:opacity-100"><X size={11} /></button>
+                                  </span>
+                                ))}
+                                {libres.length > 0 && (
+                                  <select value="" onChange={(e) => e.target.value && tildarRegla(r.clave, e.target.value)} aria-label={`Elegir quién autoriza ${r.titulo}`}
+                                    className="h-7 rounded-lg border border-line bg-surface2 px-1.5 text-xs text-sub">
+                                    <option value="">{elegidos.length ? '＋' : 'Elegir…'}</option>
+                                    {libres.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                                  </select>
+                                )}
+                              </div>
+                            </td>
                             <td className={`py-1.5 pl-2 ${elegidos.length ? 'opacity-50' : ''}`}>
                               {r.hist ? <><b className="capitalize text-ink">{r.hist.quien}</b> {r.hist.n} de {r.hist.de} ({Math.round((r.hist.n / r.hist.de) * 100)} %)</> : '—'}
-                              {!elegidos.length && <span className="ml-1 text-[10.5px] text-teal-300">{r.hist && cfg.reparto_auto ? '← va a este' : (r.clave.startsWith('gastos:') ? '← como «Gastos, el resto»' : '← a todos')}</span>}
+                              {!elegidos.length && <span className="ml-1 text-[10.5px] text-teal-300">{r.hist && cfg.reparto_auto ? '← va a este' : (r.clave.startsWith('gastos:') ? '← como «Gastos, el resto»' : '← a todos los tildados')}</span>}
                             </td>
                           </tr>
                         )
@@ -195,7 +209,7 @@ export default function AutorizadoresOc({ onCerrar }: { onCerrar: () => void }) 
                   </table>
                 </div>
               )}
-              {tildados.length > 0 && faltan.length > 0 && (
+              {agenda.length > 0 && faltan.length > 0 && (
                 <select value="" onChange={(e) => e.target.value && setExtras((x) => [...x, e.target.value])} aria-label="Agregar persona de Gastos"
                   className="self-start rounded-lg border border-line bg-surface2 px-2 py-1 text-xs text-sky-300">
                   <option value="">＋ Agregar persona (Gastos de…)</option>
