@@ -440,6 +440,8 @@ export interface ArticuloBusqueda {
   articulo: string
   descripcion: string
   proveedor: string | null
+  /** Precio vigente (sin IVA) en la lista de precios pedida; null si no tiene o no se pidió lista */
+  precio?: number | null
 }
 async function pedirArticulosDragon<T>(base: string, parametro: string): Promise<T[]> {
   const { data } = await sb().auth.getSession()
@@ -452,8 +454,8 @@ async function pedirArticulosDragon<T>(base: string, parametro: string): Promise
 }
 
 /** Artículos en vivo de la base de Dragon elegida: por código o descripción, cada palabra tiene que estar. */
-export function buscarArticulos(texto: string, base = 'INDOD'): Promise<ArticuloBusqueda[]> {
-  return pedirArticulosDragon<ArticuloBusqueda>(base, `q=${encodeURIComponent(texto.trim())}`)
+export function buscarArticulos(texto: string, base = 'INDOD', lista = ''): Promise<ArticuloBusqueda[]> {
+  return pedirArticulosDragon<ArticuloBusqueda>(base, `q=${encodeURIComponent(texto.trim())}${lista ? `&lista=${encodeURIComponent(lista)}` : ''}`)
 }
 
 export interface Variantes {
@@ -464,11 +466,11 @@ export interface Variantes {
 export type ArticuloDragon = ArticuloBusqueda & Variantes
 
 /** Descripción, colores y talles de muchos artículos en vivo (de a 100). Solo vuelven los que existen en esa base. */
-export async function datosArticulosDragon(codigos: string[], base = 'INDOD'): Promise<ArticuloDragon[]> {
+export async function datosArticulosDragon(codigos: string[], base = 'INDOD', lista = ''): Promise<ArticuloDragon[]> {
   const unicos = [...new Set(codigos)]
   const tandas: string[][] = []
   for (let i = 0; i < unicos.length; i += 100) tandas.push(unicos.slice(i, i + 100))
-  const res = await Promise.all(tandas.map((t) => pedirArticulosDragon<ArticuloDragon>(base, `codigos=${encodeURIComponent(t.join(','))}`)))
+  const res = await Promise.all(tandas.map((t) => pedirArticulosDragon<ArticuloDragon>(base, `codigos=${encodeURIComponent(t.join(','))}${lista ? `&lista=${encodeURIComponent(lista)}` : ''}`)))
   return res.flat()
 }
 

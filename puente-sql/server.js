@@ -304,8 +304,32 @@ function armarVariantes(filas) {
   return { colores, talles }
 }
 
-/** Buscador de artículos en vivo sobre ZooLogic.ART de la base elegida: cada palabra tiene que estar en el código o la descripción. */
-async function dragonBuscarArticulos(base, texto) {
+/**
+ * Precio vigente de cada artículo en una lista de Dragon (ZooLogic.PRECIOAR, PDIRECTO): el de FECHAVIG más nueva
+ * que ya rige (hay FECHAVIG con años a futuro, ej. 2319, que no cuentan). Va por artículo (CCOLOR/TALLE casi
+ * siempre vacíos). Es el precio sin IVA, el mismo que queda en los pedidos de compra. Sin lista -> {}.
+ */
+const LISTA_DRAGON = /^[A-Z0-9_]{1,20}$/
+async function preciosLista(srv, db, listaPrecios, codigos) {
+  const l = String(listaPrecios ?? '').trim().toUpperCase()
+  if (!LISTA_DRAGON.test(l) || !codigos.length) return {}
+  const p = srv.pool.request().input('lista', srv.sql.VarChar(20), l)
+  codigos.forEach((c, i) => p.input(`p${i}`, srv.sql.VarChar(40), c))
+  const r = await p.query(
+    `SELECT articulo, precio FROM (
+       SELECT LTRIM(RTRIM(ARTICULO)) AS articulo, PDIRECTO AS precio,
+              ROW_NUMBER() OVER (PARTITION BY LTRIM(RTRIM(ARTICULO)) ORDER BY FECHAVIG DESC, HMODIFW DESC) AS n
+         FROM ${db}.[PRECIOAR]
+        WHERE LTRIM(RTRIM(LISTAPRE)) = @lista AND FECHAVIG <= GETDATE()
+          AND LTRIM(RTRIM(ARTICULO)) IN (${codigos.map((_, i) => `@p${i}`).join(',')})
+     ) x WHERE n = 1`,
+  )
+  return Object.fromEntries((r.recordset ?? []).map((f) => [String(f.articulo).toUpperCase(), Number(f.precio) || 0]))
+}
+
+/** Buscador de artículos en vivo sobre ZooLogic.ART de la base elegida: cada palabra tiene que estar en el código o la descripción.
+    Con listaPrecios trae también el precio vigente de esa lista. */
+async function dragonBuscarArticulos(base, texto, listaPrecios) {
   const b = String(base ?? '').trim().toUpperCase()
   if (!BASES_DRAGON.includes(b)) throw new Error(`Base no habilitada: ${b}`)
   const palabras = String(texto ?? '').trim().split(/\s+/).filter(Boolean).slice(0, 4)
@@ -322,11 +346,13 @@ async function dragonBuscarArticulos(base, texto) {
       WHERE ${palabras.map((_, i) => `(ARTCOD LIKE @w${i} ESCAPE '\\' OR ARTDES LIKE @w${i} ESCAPE '\\')`).join(' AND ')}
       ORDER BY CASE WHEN LTRIM(ARTCOD) LIKE @inicio ESCAPE '\\' THEN 0 ELSE 1 END, ARTCOD DESC`,
   )
-  return r.recordset ?? []
+  const arts = r.recordset ?? []
+  const precios = await preciosLista(srv, `[DRAGONFISH_${b}].[ZooLogic]`, listaPrecios, arts.map((a) => a.articulo.toUpperCase()))
+  return arts.map((a) => ({ ...a, precio: precios[a.articulo.toUpperCase()] ?? null }))
 }
 
 /** Descripción, colores y talles de varios artículos juntos (importar el txt de la OC). Solo vuelven los que existen en la base. */
-async function dragonDatosArticulos(base, codigos) {
+async function dragonDatosArticulos(base, codigos, listaPrecios) {
   const b = String(base ?? '').trim().toUpperCase()
   if (!BASES_DRAGON.includes(b)) throw new Error(`Base no habilitada: ${b}`)
   const lista = [...new Set((Array.isArray(codigos) ? codigos : []).map((c) => String(c).trim().toUpperCase()))]
@@ -347,8 +373,10 @@ async function dragonDatosArticulos(base, codigos) {
        FROM ${db}.[COMB] C LEFT JOIN ${db}.[COL] L ON RTRIM(L.COLCOD) = RTRIM(C.COCOL)
       WHERE C.COART IN (${params})`,
   )
+  const precios = await preciosLista(srv, db, listaPrecios, lista)
   return (arts.recordset ?? []).map((a) => ({
     ...a,
+    precio: precios[a.articulo.toUpperCase()] ?? null,
     ...armarVariantes((combs.recordset ?? []).filter((f) => f.articulo.toUpperCase() === a.articulo.toUpperCase())),
   }))
 }
@@ -875,7 +903,7 @@ const server = http.createServer(async (req, res) => {
       return enviar(res, 200, await dragonVariantes(body?.base, body?.articulo))
     }
     if (body?.accion === 'dragon_articulos') {
-      return enviar(res, 200, body?.codigos ? await dragonDatosArticulos(body?.base, body.codigos) : await dragonBuscarArticulos(body?.base, body?.texto))
+      return enviar(res, 200, body?.codigos ? await dragonDatosArticulos(body?.base, body.codigos, body?.lista) : await dragonBuscarArticulos(body?.base, body?.texto, body?.lista))
     }
 
     // Servidores configurados (para elegir en el explorador del hub)

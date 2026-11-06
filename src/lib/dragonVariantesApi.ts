@@ -55,13 +55,16 @@ export async function dragonArticulos(req: Req, res: Res) {
   if (codigos.length > 100) return res.status(400).json({ error: 'Máximo 100 artículos por pedido' })
   if (codigos.some((c) => !/^[A-Z0-9._/-]{1,40}$/.test(c))) return res.status(400).json({ error: 'Artículo inválido' })
   if (!codigos.length && texto.length < 2) return res.status(400).json({ error: 'Escribí al menos 2 letras' })
+  // Lista de precios de Dragon (LISTA0…): el puente devuelve el precio vigente de cada artículo
+  const lista = primero(req.query.lista).trim().toUpperCase()
+  if (lista && !/^[A-Z0-9_]{1,20}$/.test(lista)) return res.status(400).json({ error: 'Lista inválida' })
 
   const destino = await urlDestino()
   const tokenPuente = process.env.SQL_BRIDGE_TOKEN ?? ''
   if (!destino || !tokenPuente) return res.status(500).json({ error: 'Falta configurar el Puente SQL' })
   const r0 = await postAlPuente(
     destino,
-    { headers: { 'Content-Type': 'application/json', 'X-Puente-Token': tokenPuente }, body: JSON.stringify({ accion: 'dragon_articulos', base, ...(codigos.length ? { codigos } : { texto }) }) },
+    { headers: { 'Content-Type': 'application/json', 'X-Puente-Token': tokenPuente }, body: JSON.stringify({ accion: 'dragon_articulos', base, ...(lista ? { lista } : {}), ...(codigos.length ? { codigos } : { texto }) }) },
     { timeoutMs: 20_000, intentos: 2 },
   )
   if (!r0.ok) return res.status(502).json({ error: 'No se pudo contactar la PC del SQL' })

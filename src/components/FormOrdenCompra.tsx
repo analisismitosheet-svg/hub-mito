@@ -110,7 +110,7 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
   const [error, setError] = useState<string | null>(null)
   const [verJson, setVerJson] = useState(false)
   const [importando, setImportando] = useState(false)
-  const [importe, setImporte] = useState<{ agregadas: number; rechazadas: Array<{ linea: number; texto: string; motivo: string }> } | null>(null)
+  const [importe, setImporte] = useState<{ agregadas: number; sinPrecio: number; rechazadas: Array<{ linea: number; texto: string; motivo: string }> } | null>(null)
   const boxDragon = useRef<HTMLDivElement>(null)
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }))
   const bloqueadoDragon = oc?.dragon_estado === 'ok' || oc?.dragon_estado === 'enviando' || oc?.dragon_estado === 'pendiente'
@@ -168,14 +168,30 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
     clave: p.codigo, valor: p,
     render: <span><b className="mr-2 text-teal-300">{p.codigo}</b>{p.nombre}</span>,
   })), [])
-  const buscarArt = useMemo(() => async (t: string) => (await buscarArticulos(t, f.dragon_base)).map((a) => ({
+  const buscarArt = useMemo(() => async (t: string) => (await buscarArticulos(t, f.dragon_base, f.dragon_lista)).map((a) => ({
     clave: a.articulo, valor: a,
     render: <span className="grid grid-cols-[90px_1fr_auto] gap-2"><b className="text-teal-300">{a.articulo}</b><span>{a.descripcion}</span><span className="text-sub">{a.proveedor}</span></span>,
-  })), [f.dragon_base])
+  })), [f.dragon_base, f.dragon_lista])
 
   const setItem = (i: number, cambio: Partial<ItemDragon>) => setItems((l) => l.map((x, j) => (j === i ? { ...x, ...cambio } : x)))
+  /** Completa con la lista de precios elegida los renglones que tienen precio 0 (los cargados a mano no se tocan) */
+  const [trayendoPrecios, setTrayendoPrecios] = useState<string | null>(null)
+  const traerPrecios = async () => {
+    const codigos = [...new Set(items.filter((x) => x.articulo && !x.precio).map((x) => x.articulo))]
+    if (!codigos.length) { setTrayendoPrecios('No hay renglones con precio 0'); return }
+    setTrayendoPrecios('Buscando…')
+    try {
+      const precios = new Map((await datosArticulosDragon(codigos, f.dragon_base, f.dragon_lista)).map((a) => [a.articulo.toUpperCase(), a.precio ?? 0]))
+      const faltan = codigos.filter((c) => !precios.get(c.toUpperCase())).length
+      setItems((l) => l.map((x) => (x.articulo && !x.precio && precios.get(x.articulo.toUpperCase()) ? { ...x, precio: precios.get(x.articulo.toUpperCase()) ?? 0 } : x)))
+      setTrayendoPrecios(faltan ? `${faltan} ${faltan === 1 ? 'artículo no tiene' : 'artículos no tienen'} precio en ${f.dragon_lista}` : null)
+    } catch (e) {
+      setTrayendoPrecios(e instanceof Error ? e.message : 'No se pudo consultar Dragon')
+    }
+  }
   const elegirArticulo = (i: number, a: ArticuloBusqueda) => {
-    setItem(i, { articulo: a.articulo, descripcion: a.descripcion, color: '', talle: '' })
+    // El precio viene de la lista de precios elegida (PRECIOAR de Dragon); si no tiene, queda el que estaba
+    setItem(i, { articulo: a.articulo, descripcion: a.descripcion, color: '', talle: '', ...(a.precio ? { precio: a.precio } : {}) })
     void variantesArticulo(a.articulo, f.dragon_base).then((r) => {
       setVariantes((v) => ({ ...v, [a.articulo]: r }))
       if (r) setItem(i, { color: r.colores[0]?.codigo ?? '', talle: r.talles[0] ?? '' })
@@ -198,14 +214,14 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
     try {
       const { lineas, malas } = leerTxtArticulos(await archivo.text())
       const rechazadas = malas.map((m) => ({ ...m, motivo: 'No tiene el formato 24+ARTICULO%02XXL' }))
-      const datos = new Map((await datosArticulosDragon(lineas.map((l) => l.articulo), f.dragon_base)).map((a) => [a.articulo.toUpperCase(), a]))
+      const datos = new Map((await datosArticulosDragon(lineas.map((l) => l.articulo), f.dragon_base, f.dragon_lista)).map((a) => [a.articulo.toUpperCase(), a]))
       const nuevos: ItemDragon[] = []
       for (const l of lineas) {
         const a = datos.get(l.articulo)
         if (!a) { rechazadas.push({ linea: l.linea, texto: l.texto, motivo: `El artículo no existe en ${f.dragon_base}` }); continue }
         const sku = separarVariante(l.variante, a)
         if (!sku) { rechazadas.push({ linea: l.linea, texto: l.texto, motivo: 'Ese color y talle no existen para el artículo' }); continue }
-        nuevos.push({ articulo: a.articulo, descripcion: a.descripcion, color: sku.color, talle: sku.talle, cantidad: l.cantidad, precio: 0 })
+        nuevos.push({ articulo: a.articulo, descripcion: a.descripcion, color: sku.color, talle: sku.talle, cantidad: l.cantidad, precio: a.precio ?? 0 })
       }
       setVariantes((v) => ({ ...v, ...Object.fromEntries([...datos.values()].map((a) => [a.articulo, { colores: a.colores, talles: a.talles }])) }))
       setItems((actuales) => {
@@ -217,7 +233,7 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
         }
         return lista.length ? lista : actuales
       })
-      setImporte({ agregadas: nuevos.length, rechazadas: rechazadas.sort((x, y) => x.linea - y.linea) })
+      setImporte({ agregadas: nuevos.length, sinPrecio: nuevos.filter((n) => !n.precio).length, rechazadas: rechazadas.sort((x, y) => x.linea - y.linea) })
     } catch (e) {
       setError(`No se pudo importar el txt: ${(e as Error).message}`)
     } finally {
@@ -455,6 +471,11 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
                   <button type="button" onClick={() => setItems((l) => [...l, { articulo: '', color: '', talle: '', cantidad: 1, precio: l[l.length - 1]?.precio ?? 0 }])}
                     className="inline-flex items-center gap-1 rounded-lg border border-line px-2.5 py-1.5 text-xs text-ink hover:bg-surface2"><Plus size={13} /> Agregar artículo</button>
                 )}
+                {!bloqueadoDragon && items.some((x) => x.articulo && !x.precio) && (
+                  <button type="button" onClick={() => void traerPrecios()} title={`Completa los renglones con precio 0 con la lista ${f.dragon_lista} de Dragon`}
+                    className="inline-flex items-center gap-1 rounded-lg border border-line px-2.5 py-1.5 text-xs text-ink hover:bg-surface2">$ Traer precios de {f.dragon_lista}</button>
+                )}
+                {trayendoPrecios && <span className="self-center text-xs text-amber-300">{trayendoPrecios}</span>}
                 {!bloqueadoDragon && (
                   <label title="Una línea por artículo: 24+ZH000200%02XXL (cantidad + artículo % color y talle)"
                     className={`inline-flex items-center gap-1 rounded-lg border border-line px-2.5 py-1.5 text-xs text-ink hover:bg-surface2 ${importando ? 'pointer-events-none opacity-60' : 'cursor-pointer'}`}>
@@ -473,7 +494,7 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
               {importe && (
                 <div className={`rounded-xl border p-2.5 text-xs ${importe.rechazadas.length ? 'border-amber-500/40 bg-amber-500/10 text-amber-200' : 'border-teal-500/30 bg-teal-500/10 text-teal-200'}`}>
                   <div className="flex items-start justify-between gap-2">
-                    <p>{importe.agregadas} {importe.agregadas === 1 ? 'línea importada' : 'líneas importadas'}{importe.agregadas > 0 && ', con precio en 0: falta cargar los precios'}.{importe.rechazadas.length > 0 && ` ${importe.rechazadas.length} sin importar:`}</p>
+                    <p>{importe.agregadas} {importe.agregadas === 1 ? 'línea importada' : 'líneas importadas'}{importe.sinPrecio > 0 && `, ${importe.sinPrecio} sin precio en ${f.dragon_lista}: falta cargarlos`}.{importe.rechazadas.length > 0 && ` ${importe.rechazadas.length} sin importar:`}</p>
                     <button type="button" onClick={() => setImporte(null)} className="shrink-0 opacity-70 hover:opacity-100" aria-label="Cerrar aviso"><X size={13} /></button>
                   </div>
                   {importe.rechazadas.length > 0 && (
