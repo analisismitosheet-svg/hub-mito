@@ -308,7 +308,7 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-3 backdrop-blur-sm" onMouseDown={(e) => e.target === e.currentTarget && onCerrar()}>
-      <div className="max-h-[calc(100vh-24px)] w-full max-w-4xl overflow-auto rounded-3xl border border-line bg-[#0c0c11] shadow-2xl">
+      <div className="max-h-[calc(100vh-24px)] w-full overflow-auto rounded-3xl border border-line bg-[#0c0c11] shadow-2xl">
         <div className="flex items-center justify-between border-b border-line px-5 py-4">
           <h2 className="font-display text-lg font-bold text-ink">
             {oc ? `Editar OC N° ${oc.numero}` : 'Nueva orden de compra'}
