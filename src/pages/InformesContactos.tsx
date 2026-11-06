@@ -181,7 +181,7 @@ export default function InformesContactos({
           </h2>
           <div className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto]">
             <input value={nombre} onChange={(e) => setNombre(e.target.value)} className={inputCls} placeholder="Nombre" aria-label="Nombre" />
-            <input value={telefono} onChange={(e) => setTelefono(e.target.value)} className={inputCls} placeholder="WhatsApp (ej. 351 123-4567)" inputMode="tel" aria-label="Número de WhatsApp" />
+            <input value={telefono} onChange={(e) => setTelefono(e.target.value)} className={inputCls} placeholder={telegram?.configurado ? 'Número de Telegram (ej. 351 123-4567)' : 'WhatsApp (ej. 351 123-4567)'} inputMode="tel" aria-label="Número de teléfono" />
             <input value={nota} onChange={(e) => setNota(e.target.value)} className={inputCls} placeholder="Nota (opcional: puesto, área…)" aria-label="Nota" />
             <button type="submit" disabled={guardando} className="btn-press inline-flex items-center justify-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-50">
               {guardando ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Plus size={14} aria-hidden />} Agregar

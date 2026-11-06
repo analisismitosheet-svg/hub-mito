@@ -284,7 +284,7 @@ async function manual(req: Req, res: Res) {
   // --- Estado de la conexión con WhatsApp (Meta) ---
   if (datos.estado === true) {
     if (!(await tienePermiso(token, ['sistemas.informes.view']))) return res.status(403).json({ error: 'No tenés permiso para esta acción' })
-    return res.status(200).json(await estadoWhatsapp())
+    return res.status(200).json({ ...(await estadoWhatsapp()), telegram: telegramActivo() })
   }
 
   const permitido = await tienePermiso(token, preview ? ['sistemas.informes.view'] : ['sistemas.informes.edit'])

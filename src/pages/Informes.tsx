@@ -57,6 +57,8 @@ interface EstadoWhatsapp {
   calidad?: string
   error?: string
   avisos?: boolean
+  /** Con el bot configurado, todo sale por Telegram y WhatsApp no se usa */
+  telegram?: boolean
 }
 
 async function consultarWhatsapp(): Promise<EstadoWhatsapp> {
@@ -191,7 +193,7 @@ export default function Informes() {
           <h1 className="flex items-center gap-2 font-display text-xl font-semibold text-ink">
             <FileText size={20} className="text-cyan-500" aria-hidden /> Envío informes y reportes
           </h1>
-          <p className="mt-1 text-sm text-sub">Se mandan por WhatsApp: a mano, o solos todos los días a la hora que elijas.</p>
+          <p className="mt-1 text-sm text-sub">Se mandan por {whatsapp?.telegram ? 'Telegram' : 'WhatsApp'}: a mano, o solos todos los días a la hora que elijas.</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => void cargar()} className="btn-press inline-flex items-center gap-1.5 rounded-xl border border-line bg-surface2 px-3 py-1.5 text-sm font-medium text-ink hover:bg-line" title="Actualizar">
@@ -209,9 +211,15 @@ export default function Informes() {
         </div>
       </div>
 
+      {whatsapp?.telegram && (
+        <div className="mb-3 rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-sm text-sky-300">
+          <b>Telegram activo</b>: los avisos salen por el bot y WhatsApp no se usa. Quién está vinculado se ve en Contactos.
+        </div>
+      )}
+
       {/* Conexión con WhatsApp (Meta) */}
       <div
-        className={`mb-3 flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 text-sm ${
+        className={`mb-3 ${whatsapp?.telegram ? 'hidden' : 'flex'} flex-wrap items-center gap-2 rounded-xl border px-3 py-2 text-sm ${
           whatsapp === null
             ? 'border-line bg-surface2 text-sub'
             : whatsapp.ok
