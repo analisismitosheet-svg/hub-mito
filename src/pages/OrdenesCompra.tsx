@@ -9,7 +9,7 @@ import { useAuth } from '@/context/AuthContext'
 import { coloresUnicos } from '@/lib/coloresUnicos'
 import {
   PASOS, QUIEN_TXT, cancelarOrden, borrarOrden, cargarEventos, cargarOrden, cargarOrdenes, etapaDe, fechaCorta, fechaHora,
-  guardarObsPropias, mandarADragon, nombreCorto, pedirAutorizacion, pesos, sugeridoDe, tildarPaso, urlArchivo, vencida,
+  guardarObsPropias, mandarADragon, nombreCorto, nombresSubtipos, pedirAutorizacion, pesos, sugeridoDe, tildarPaso, urlArchivo, vencida,
   type EventoOc, type OrdenCompra, type PasoClave,
 } from '@/lib/ordenesCompra'
 import FormOrdenCompra from '@/components/FormOrdenCompra'
@@ -48,6 +48,9 @@ export default function OrdenesCompra() {
   const { isAdmin, can, perfil, user } = useAuth()
   const [params, setParams] = useSearchParams()
   const [lista, setLista] = useState<OrdenCompra[] | null>(null)
+  /** id → nombre de los subtipos (también los borrados) para mostrar «Gastos · Alquiler». */
+  const [subNombres, setSubNombres] = useState<Record<number, string>>({})
+  useEffect(() => { void nombresSubtipos().then(setSubNombres) }, [])
   const [error, setError] = useState<string | null>(null)
   const [q, setQ] = useState('')
   const [fTipo, setFTipo] = useState('')
@@ -218,6 +221,7 @@ export default function OrdenesCompra() {
                       <td className="px-3 py-2"><div className="font-semibold text-ink">{o.proveedor}</div>{o.proveedor_cuit && <div className="text-xs text-sub">{o.proveedor_cuit}</div>}</td>
                       <td className="px-3 py-2">
                         <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${CHIP_TIPO[o.tipo] ?? ''}`}>{o.tipo}</span>
+                        {o.subtipo_id != null && subNombres[o.subtipo_id] && <div className="mt-1 text-[11.5px] font-semibold text-ink">{subNombres[o.subtipo_id]}</div>}
                         <div className="mt-1 text-[11px] text-sub">{o.planificable ? 'Planificable' : 'No planif.'} · {o.metodo.toLowerCase()}</div>
                       </td>
                       <td className="max-w-[260px] px-3 py-2 text-sub"><span className="line-clamp-2">{o.observacion}</span></td>

@@ -4,7 +4,7 @@ import { useAuth } from '@/context/AuthContext'
 import {
   AREAS, BASES_DRAGON, CONDICIONES_DRAGON, IVA, LISTAS_DRAGON, MOTIVOS_DRAGON, PLAZOS, PLAZO_A_CONDICION, TIPOS,
   buscarArticulos, buscarProveedoresDragon, buscarProveedoresOc, datosArticulosDragon, datosProveedorDragon, datosProveedorPorCodigo, guardarOrden, leerTxtArticulos, mandarADragon, pedirAutorizacion, pesos,
-  separarVariante, subirArchivo, totalItems, variantesArticulo,
+  cargarSubtipos, separarVariante, subirArchivo, totalItems, variantesArticulo, type SubtipoOc,
   type ArticuloBusqueda, type DatosProveedor, type ItemDragon, type OrdenCompra, type ProveedorDragon, type Variantes,
 } from '@/lib/ordenesCompra'
 
@@ -77,6 +77,7 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
   const responsableInicial = isAdmin ? '' : nombreUsuario.trim().toUpperCase()
   const [f, setF] = useState(() => ({
     tipo: oc?.tipo ?? 'Producto',
+    subtipo_id: oc?.subtipo_id ?? null as number | null,
     planificable: oc?.planificable ?? true,
     metodo: oc?.metodo ?? 'Sin anticipo',
     area: oc?.area ?? '',
@@ -116,6 +117,10 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
 
   // Si el perfil terminó de cargar después de abrir el formulario, el responsable se completa igual (si sigue vacío)
   useEffect(() => { if (!oc && responsableInicial) setF((x) => (x.responsable.trim() ? x : { ...x, responsable: responsableInicial })) }, [oc, responsableInicial])
+  /** Subtipos del árbol de autorizadores (Autorizadores → «Quién autoriza cada tipo»). */
+  const [subtipos, setSubtipos] = useState<SubtipoOc[]>([])
+  useEffect(() => { void cargarSubtipos().then(setSubtipos).catch(() => setSubtipos([])) }, [])
+  const subsDelTipo = subtipos.filter((x) => x.tipo === f.tipo)
   useEffect(() => { if (enfocarDragon) setTimeout(() => boxDragon.current?.scrollIntoView({ block: 'center' }), 100) }, [enfocarDragon])
   // Colores y talles de los artículos ya cargados
   useEffect(() => {
@@ -225,6 +230,7 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
   })
 
   const guardar = async (despues?: 'pedir' | 'dragon') => {
+    if (subsDelTipo.length > 0 && f.subtipo_id == null) { setError(`Elegí el subtipo de ${f.tipo}: define a quién le llega la autorización.`); return }
     setGuardando(despues ?? 'guardar')
     setError(null)
     try {
@@ -295,7 +301,17 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
         <div className="grid gap-x-4 gap-y-3 px-5 py-4 sm:grid-cols-2">
           <p className="text-[10.5px] font-bold uppercase tracking-wide text-lime-400 sm:col-span-2">Qué se compra</p>
           <div className="sm:col-span-2"><span className={lbl}>Tipo de compra</span>
-            {seg([...TIPOS], f.tipo, (v) => setF((x) => ({ ...x, tipo: v as typeof x.tipo, ...(v === 'Servicios' || v === 'Talleres' ? { planificable: true, metodo: 'Sin anticipo' as const } : {}) })))}</div>
+            {seg([...TIPOS], f.tipo, (v) => setF((x) => ({ ...x, tipo: v as typeof x.tipo, subtipo_id: v === x.tipo ? x.subtipo_id : null, ...(v === 'Servicios' || v === 'Talleres' ? { planificable: true, metodo: 'Sin anticipo' as const } : {}) })))}</div>
+          {(subsDelTipo.length > 0 || f.subtipo_id != null) && (
+            <div className="sm:col-span-2"><span className={lbl}>Subtipo{subsDelTipo.length > 0 && ' *'}</span>
+              <select value={f.subtipo_id ?? ''} onChange={(e) => set('subtipo_id', e.target.value ? Number(e.target.value) : null)} aria-label="Subtipo"
+                className={`${campoCls} ${subsDelTipo.length > 0 && f.subtipo_id == null ? 'border-amber-500/60' : ''}`}>
+                <option value="">— Elegí el subtipo —</option>
+                {subsDelTipo.map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}
+                {f.subtipo_id != null && !subsDelTipo.some((x) => x.id === f.subtipo_id) && <option value={f.subtipo_id}>Subtipo anterior (ya no está en la lista)</option>}
+              </select>
+              <p className="mt-1 text-xs text-sub">Define a quién le llega el pedido de autorización.</p></div>
+          )}
           <div><span className={lbl}>Planificable</span>
             {seg(['Sí', 'No'], f.planificable ? 'Sí' : 'No', (v) => set('planificable', v === 'Sí'), f.tipo === 'Servicios' || f.tipo === 'Talleres')}
             <p className={`mt-1 text-xs ${f.planificable ? 'text-lime-300' : 'text-sub'}`}>{f.planificable ? 'Se envía OC formal al proveedor.' : 'No se envía OC formal.'}</p></div>

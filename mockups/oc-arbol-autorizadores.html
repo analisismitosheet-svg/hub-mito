@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maqueta · Árbol de autorizadores de OC</title>
+<style>
+  :root { --bg:#08080c; --panel:#0c0c11; --s2:#16161e; --line:#26262f; --ink:#ececf1; --sub:#9a9aa8; --teal:#2dd4bf; --teal2:#134e4a; --lime:#65a30d; --amber:#fbbf24; --sky:#38bdf8; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; padding:24px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .nota { color:var(--sub); font-size:12.5px; max-width:900px; margin:0 0 18px; }
+  .grid { display:grid; grid-template-columns: minmax(0,1.35fr) minmax(0,1fr); gap:18px; align-items:start; }
+  @media (max-width: 980px) { .grid { grid-template-columns:1fr; } }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:22px; overflow:hidden; }
+  .card h2 { font-size:16px; margin:0; padding:14px 18px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:8px; }
+  .card .body { padding:14px 18px; }
+  .tag { font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--sub); }
+  .arbol { display:flex; flex-direction:column; gap:10px; }
+  .tipo { border:1px solid rgba(45,212,191,.3); background:rgba(45,212,191,.05); border-radius:16px; padding:10px 12px; }
+  .fila { display:grid; grid-template-columns: 26px minmax(130px,190px) 1fr; align-items:center; gap:8px; min-height:34px; }
+  .fila .nombre { font-weight:700; }
+  .sub { margin-left:22px; border-left:2px solid var(--line); padding-left:10px; }
+  .sub .fila { grid-template-columns: 14px minmax(120px,176px) 1fr; }
+  .sub .nombre { font-weight:500; }
+  .toggle { background:none; border:0; color:var(--sub); cursor:pointer; font-size:13px; padding:0; width:22px; }
+  .chips { display:flex; flex-wrap:wrap; gap:5px; align-items:center; }
+  .chip { display:inline-flex; align-items:center; gap:4px; border:1px solid rgba(45,212,191,.5); background:rgba(45,212,191,.15); color:#ccfbf1; border-radius:9px; padding:2px 4px 2px 9px; font-size:12px; font-weight:600; }
+  .chip button { background:none; border:0; color:inherit; opacity:.7; cursor:pointer; font-size:12px; padding:0 3px; }
+  .hereda { font-size:11.5px; color:var(--sub); font-style:italic; }
+  .hereda b { color:#a7f3d0; font-style:normal; }
+  select, input { background:var(--s2); border:1px solid var(--line); color:var(--sub); border-radius:9px; height:28px; padding:0 6px; font-size:12px; }
+  input { color:var(--ink); }
+  .agregar { background:none; border:1px dashed var(--line); color:var(--sky); border-radius:9px; padding:4px 9px; font-size:12px; cursor:pointer; margin-top:6px; margin-left:22px; }
+  .borrar { background:none; border:0; color:#f87171; opacity:.55; cursor:pointer; font-size:12px; margin-left:4px; }
+  .borrar:hover { opacity:1; }
+  .pie { display:flex; justify-content:flex-end; gap:8px; padding:12px 18px; border-top:1px solid var(--line); }
+  .btn { height:36px; border-radius:12px; padding:0 16px; font-weight:600; font-size:14px; border:1px solid var(--line); background:none; color:var(--ink); }
+  .btn.ok { background:var(--lime); border-color:var(--lime); color:#fff; }
+  .campo { display:flex; flex-direction:column; gap:4px; margin-bottom:12px; }
+  .seg { display:flex; flex-wrap:wrap; gap:6px; }
+  .seg button { height:34px; border-radius:12px; border:1px solid var(--line); background:var(--s2); color:var(--sub); padding:0 12px; font-weight:600; cursor:pointer; }
+  .seg button.on { border-color:#84cc16; background:rgba(132,204,22,.15); color:#d9f99d; }
+  .resultado { border:1px solid rgba(16,185,129,.35); background:rgba(16,185,129,.07); border-radius:14px; padding:10px 12px; font-size:13px; }
+  .resultado b { color:#a7f3d0; }
+  .leyenda { font-size:12px; color:var(--sub); margin-top:10px; }
+  .marca { display:inline-block; background:rgba(251,191,36,.12); color:var(--amber); border:1px solid rgba(251,191,36,.35); border-radius:8px; padding:1px 7px; font-size:11px; font-weight:700; margin-left:6px; }
+</style>
+</head>
+<body>
+  <h1>Maqueta · Árbol de quién autoriza las OC <span class="marca">MAQUETA, NO ESTÁ SUBIDO</span></h1>
+  <p class="nota">
+    Tipos principales = los 4 tipos reales de las OC. Los subtipos son <b>ejemplos</b> sacados de lo que más se carga en cada tipo
+    (consignación, reposición, procesos, limpieza, alquiler, honorarios, envíos, vidrieras, confección…): el admin los arma, renombra y borra a su gusto.
+    En cada nodo se eligen una o varias personas de la agenda de «Envío informes y reportes». <b>Un subtipo sin nadie elegido hereda del tipo principal.</b>
+    Probá: tocá las × , elegí personas, agregá subtipos y mirá a la derecha a quién le llegaría el aviso.
+  </p>
+
+  <div class="grid">
+    <div class="card">
+      <h2>🔔 Autorizadores · Quién autoriza cada tipo</h2>
+      <div class="body">
+        <div class="arbol" id="arbol"></div>
+        <p class="leyenda">Si un tipo principal queda vacío, va según el historial de ese tipo (últimos 90 días) y, si no hay, a los autorizadores de respaldo.
+          Si nadie responde en 4 horas, el aviso les llega también a los de respaldo.</p>
+      </div>
+      <div class="pie"><button class="btn">Cancelar</button><button class="btn ok">Guardar</button></div>
+    </div>
+
+    <div class="card">
+      <h2>📝 En la OC (alta / edición)</h2>
+      <div class="body">
+        <div class="campo"><span class="tag">Tipo de compra</span><div class="seg" id="segTipo"></div></div>
+        <div class="campo"><span class="tag">Subtipo</span><select id="selSub" style="height:36px;font-size:13.5px;color:var(--ink)"></select></div>
+        <div class="resultado" id="resultado"></div>
+        <p class="leyenda">El subtipo es obligatorio solo si el tipo tiene subtipos. Queda guardado en la OC, se ve en la lista y sirve para filtrar.</p>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const AGENDA = ['Alejandro', 'Cecilia Giavedoni', 'Diego', 'Esteban', 'Facundo']
+  const HIST = { Producto: 'Esteban', Servicios: 'Diego', Talleres: 'Diego', Gastos: 'Diego' }
+  const arbol = [
+    { nombre: 'Producto', quienes: ['Esteban'], abierto: true, subs: [
+      { nombre: 'Consignación', quienes: [] },
+      { nombre: 'Reposición', quienes: [] },
+      { nombre: 'Alquiler', quienes: ['Diego'] },
+    ] },
+    { nombre: 'Gastos', quienes: ['Diego'], abierto: true, subs: [
+      { nombre: 'Procesos de producción', quienes: ['Esteban'] },
+      { nombre: 'Limpieza', quienes: [] },
+      { nombre: 'Alquiler', quienes: ['Diego', 'Esteban'] },
+      { nombre: 'Honorarios', quienes: [] },
+      { nombre: 'Envíos (OCA, Epick)', quienes: ['Facundo'] },
+      { nombre: 'Mantenimiento y lámparas', quienes: [] },
+    ] },
+    { nombre: 'Servicios', quienes: [], abierto: true, subs: [
+      { nombre: 'Vidrieras', quienes: [] },
+      { nombre: 'Reparaciones', quienes: [] },
+    ] },
+    { nombre: 'Talleres', quienes: ['Diego'], abierto: false, subs: [
+      { nombre: 'Confección', quienes: [] },
+      { nombre: 'Terminado y planchado', quienes: [] },
+      { nombre: 'Muestras', quienes: [] },
+    ] },
+  ]
+  let tipoOc = 'Gastos', subOc = 'Alquiler'
+
+  const el = (h) => { const t = document.createElement('template'); t.innerHTML = h.trim(); return t.content.firstChild }
+  const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+
+  function chips(nodo, heredaDe) {
+    const cont = el('<div class="chips"></div>')
+    nodo.quienes.forEach((q) => {
+      const c = el(`<span class="chip">${esc(q)}<button title="Sacar">×</button></span>`)
+      c.querySelector('button').onclick = () => { nodo.quienes = nodo.quienes.filter((x) => x !== q); pintar() }
+      cont.appendChild(c)
+    })
+    const libres = AGENDA.filter((a) => !nodo.quienes.includes(a))
+    if (libres.length) {
+      const s = el(`<select><option value="">${nodo.quienes.length ? '＋' : 'Elegir…'}</option>${libres.map((a) => `<option>${esc(a)}</option>`).join('')}</select>`)
+      s.onchange = () => { if (s.value) { nodo.quienes.push(s.value); pintar() } }
+      cont.appendChild(s)
+    }
+    if (!nodo.quienes.length) {
+      cont.appendChild(el(heredaDe
+        ? `<span class="hereda">hereda de ${esc(heredaDe.nombre)}: <b>${esc(efectivoTipo(heredaDe).join(', '))}</b></span>`
+        : `<span class="hereda">vacío → historial: <b>${esc(HIST[nodo.nombre] || 'respaldo')}</b></span>`))
+    }
+    return cont
+  }
+  const efectivoTipo = (t) => t.quienes.length ? t.quienes : [HIST[t.nombre] || 'respaldo']
+
+  function pintar() {
+    const raiz = document.getElementById('arbol'); raiz.innerHTML = ''
+    arbol.forEach((t) => {
+      const caja = el('<div class="tipo"></div>')
+      const f = el(`<div class="fila"><button class="toggle">${t.abierto ? '▾' : '▸'}</button><span class="nombre">${esc(t.nombre)} <span class="hereda" style="font-style:normal">· ${t.subs.length} subtipos</span></span></div>`)
+      f.querySelector('.toggle').onclick = () => { t.abierto = !t.abierto; pintar() }
+      f.appendChild(chips(t, null)); caja.appendChild(f)
+      if (t.abierto) {
+        const sub = el('<div class="sub"></div>')
+        t.subs.forEach((s) => {
+          const fs = el(`<div class="fila"><span style="color:var(--line)">└</span><span class="nombre">${esc(s.nombre)}<button class="borrar" title="Borrar subtipo">🗑</button></span></div>`)
+          fs.querySelector('.borrar').onclick = () => { t.subs = t.subs.filter((x) => x !== s); pintar() }
+          fs.appendChild(chips(s, t)); sub.appendChild(fs)
+        })
+        caja.appendChild(sub)
+        const ag = el('<button class="agregar">＋ Agregar subtipo</button>')
+        ag.onclick = () => { const n = prompt(`Nuevo subtipo de ${t.nombre}:`); if (n && n.trim()) { t.subs.push({ nombre: n.trim(), quienes: [] }); pintar() } }
+        caja.appendChild(ag)
+      }
+      raiz.appendChild(caja)
+    })
+    pintarOc()
+  }
+
+  function pintarOc() {
+    const seg = document.getElementById('segTipo'); seg.innerHTML = ''
+    arbol.forEach((t) => {
+      const b = el(`<button class="${t.nombre === tipoOc ? 'on' : ''}">${esc(t.nombre)}</button>`)
+      b.onclick = () => { tipoOc = t.nombre; subOc = ''; pintarOc() }
+      seg.appendChild(b)
+    })
+    const t = arbol.find((x) => x.nombre === tipoOc)
+    const sel = document.getElementById('selSub')
+    sel.innerHTML = `<option value="">— Elegí el subtipo —</option>` + t.subs.map((s) => `<option ${s.nombre === subOc ? 'selected' : ''}>${esc(s.nombre)}</option>`).join('')
+    sel.onchange = () => { subOc = sel.value; pintarOc() }
+    const s = t.subs.find((x) => x.nombre === subOc)
+    let quien, por
+    if (s && s.quienes.length) { quien = s.quienes; por = `elegido para ${t.nombre} › ${s.nombre}` }
+    else if (t.quienes.length) { quien = t.quienes; por = s ? `${s.nombre} no tiene a nadie: hereda de ${t.nombre}` : `elegido para ${t.nombre}` }
+    else { quien = [HIST[t.nombre] || 'respaldo']; por = `${t.nombre} está vacío: va según el historial` }
+    document.getElementById('resultado').innerHTML = `💬 El aviso le llegaría a <b>${esc(quien.join(' y '))}</b><br><span style="color:var(--sub);font-size:12px">${esc(por)}</span>`
+  }
+  pintar()
+</script>
+</body>
+</html>

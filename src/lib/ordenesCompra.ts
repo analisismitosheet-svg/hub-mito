@@ -25,6 +25,8 @@ export interface ItemDragon {
 export interface OrdenCompra {
   numero: number
   tipo: 'Producto' | 'Gastos' | 'Servicios' | 'Talleres'
+  /** Subtipo del árbol de autorizadores (`ordenes_compra_subtipos`). */
+  subtipo_id: number | null
   planificable: boolean
   metodo: 'Sin anticipo' | 'Con anticipo' | 'Compra directa'
   area: string | null
@@ -230,9 +232,34 @@ export async function cargarConfig(): Promise<ConfigOc | null> {
   return (data as ConfigOc | null) ?? null
 }
 export const guardarConfig = (c: ConfigOc) =>
-  rpc('oc_config_guardar', { p_autorizadores: c.autorizadores, p_reparto_auto: c.reparto_auto, p_horas: c.horas_espera, p_reglas: c.reglas ?? {} })
-/** Responsables con OC de Gastos (para sumar filas al cuadro de autorizadores; solo admin). */
-export const responsablesGastos = () => rpc<string[]>('oc_responsables_gastos', {})
+  rpc('oc_config_guardar', { p_autorizadores: c.autorizadores, p_reparto_auto: c.reparto_auto, p_horas: c.horas_espera, p_reglas: null })
+
+/* ---------------- Árbol de autorizadores (tipo → subtipos) ---------------- */
+export interface SubtipoOc {
+  id: number
+  tipo: OrdenCompra['tipo']
+  nombre: string
+  autorizadores: string[]
+  orden: number
+}
+/** Subtipos activos (los ve cualquiera con la pantalla: el formulario los usa). */
+export async function cargarSubtipos(): Promise<SubtipoOc[]> {
+  const { data, error } = await sb().from('ordenes_compra_subtipos').select('id,tipo,nombre,autorizadores,orden').eq('activo', true).order('orden')
+  if (error) throw new Error(error.message)
+  return (data ?? []) as SubtipoOc[]
+}
+/** Todos los subtipos, también los borrados (para mostrar el de una OC vieja). */
+export async function nombresSubtipos(): Promise<Record<number, string>> {
+  const { data } = await sb().from('ordenes_compra_subtipos').select('id,nombre')
+  return Object.fromEntries((data ?? []).map((s: { id: number; nombre: string }) => [s.id, s.nombre]))
+}
+export interface NodoArbol {
+  tipo: OrdenCompra['tipo']
+  autorizadores: string[]
+  subs: Array<{ id?: number; nombre: string; autorizadores: string[] }>
+}
+/** Guarda el árbol entero (solo admin): quién autoriza cada tipo y sus subtipos; los subtipos que faltan se desactivan. */
+export const guardarArbol = (arbol: NodoArbol[]) => rpc('oc_arbol_guardar', { p: arbol })
 export const contactosAgenda = () => rpc<Array<{ id: string; nombre: string; fin: string; activo: boolean }>>('oc_contactos', {})
 /** Claves del link de autorización (solo admin): quién tiene y quién está bloqueado; el valor nunca vuelve. */
 export const clavesEstado = () => rpc<Array<{ contacto_id: string; bloqueada: boolean }>>('oc_claves_estado', {})
