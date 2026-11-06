@@ -323,12 +323,16 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
             {seg([...TIPOS], f.tipo, (v) => setF((x) => ({ ...x, tipo: v as typeof x.tipo, subtipo_id: v === x.tipo ? x.subtipo_id : null, ...(v === 'Servicios' || v === 'Talleres' ? { planificable: true, metodo: 'Sin anticipo' as const } : {}) })))}</div>
           {(subsDelTipo.length > 0 || f.subtipo_id != null) && (
             <div className="sm:col-span-2"><span className={lbl}>Subtipo{subsDelTipo.length > 0 && ' *'}</span>
-              <select value={f.subtipo_id ?? ''} onChange={(e) => set('subtipo_id', e.target.value ? Number(e.target.value) : null)} aria-label="Subtipo"
-                className={`${campoCls} ${subsDelTipo.length > 0 && f.subtipo_id == null ? 'border-amber-500/60' : ''}`}>
-                <option value="">— Elegí el subtipo —</option>
-                {subsDelTipo.map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}
-                {f.subtipo_id != null && !subsDelTipo.some((x) => x.id === f.subtipo_id) && <option value={f.subtipo_id}>Subtipo anterior (ya no está en la lista)</option>}
-              </select>
+              {/* Botones en vez de <select>: la lista nativa del navegador se veía sin letra (06/11/2026) */}
+              <div className={`flex flex-wrap gap-1.5 rounded-xl ${subsDelTipo.length > 0 && f.subtipo_id == null ? 'ring-1 ring-amber-500/60 p-1' : ''}`} role="radiogroup" aria-label="Subtipo">
+                {subsDelTipo.map((x) => (
+                  <button type="button" key={x.id} role="radio" aria-checked={f.subtipo_id === x.id} onClick={() => set('subtipo_id', x.id)}
+                    className={`h-9 rounded-xl border px-3 text-sm font-semibold transition ${f.subtipo_id === x.id ? 'border-lime-500 bg-lime-500/15 text-lime-200' : 'border-line bg-surface2 text-sub hover:text-ink'}`}>{x.nombre}</button>
+                ))}
+                {f.subtipo_id != null && !subsDelTipo.some((x) => x.id === f.subtipo_id) && (
+                  <span className="inline-flex h-9 items-center rounded-xl border border-lime-500 bg-lime-500/15 px-3 text-sm font-semibold text-lime-200">Subtipo anterior (ya no está en la lista)</span>
+                )}
+              </div>
               <p className="mt-1 text-xs text-sub">Define a quién le llega el pedido de autorización.</p></div>
           )}
           <div><span className={lbl}>Planificable</span>
