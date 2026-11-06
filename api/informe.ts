@@ -10,8 +10,9 @@
  *   GET  /api/informe?evento=franquicias               -> manda los WhatsApp en cola de la reposición diaria
  *        automática de franquicias (pg_cron cada 5 min y el puente apenas la arma)
  *   POST /api/informe   { franquicias: id, todos? }    -> manda ya el WhatsApp de esa reposición (Franquicias)
- *   GET/POST /api/informe?evento=whatsapp              -> webhook de Meta: verificación y estado de entrega
- *        (sent/delivered/read/failed) de cada mensaje, guardado en informes_envios por wamid
+ *   GET/POST /api/informe?evento=whatsapp              -> webhook de Meta: verificación, estado de entrega
+ *        (sent/delivered/read/failed) de cada mensaje, guardado en informes_envios por wamid, y mensajes
+ *        entrantes, que abren la ventana de 24 h para mandar gratis (whatsapp_ventana)
  *   POST /api/informe   { ocPedir: numero }            -> Órdenes de compras: «Pedir autorización» por WhatsApp
  *   POST /api/informe   { ocPlantilla: 'estado'|'crear' } -> plantilla oc_autorizar_link en Meta (solo admin)
  *   (?evento=diarios además amplía los avisos de OC que nadie respondió en N horas)
@@ -23,7 +24,7 @@
  * Variables de entorno en Vercel (sin prefijo VITE_): CRON_SECRET, SUPABASE_URL,
  * SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, WHATSAPP_TOKEN, WHATSAPP_PHONE_ID.
  */
-import { armarCuerpo, enviarInforme, estadoWhatsapp, generarImagenInforme, repoCompleta, tienePermiso, usuarioDe } from '../src/lib/informesServidor.js'
+import { armarCuerpo, descartarRespaldo, enviarInforme, estadoWhatsapp, generarImagenInforme, reenviarConPlantilla, registrarMensajeEntrante, repoCompleta, tienePermiso, usuarioDe } from '../src/lib/informesServidor.js'
 import { formatoDe, type Informe } from '../src/lib/informes.js'
 import { mismoSecreto } from '../src/lib/apiAuth.js'
 import { enviarPendientesFranquicias, reenviarPropuesta } from '../src/lib/franquiciasWhatsapp.js'
@@ -319,6 +320,14 @@ type EstadoMeta = {
   errors?: Array<{ code?: number; title?: string; message?: string; error_data?: { details?: string } }>
 }
 
+type MensajeMeta = { from?: string; timestamp?: string; type?: string }
+
+/** Avisos que llegan como mensaje pero no son el contacto escribiendo. */
+const NO_ABREN_VENTANA = new Set(['system', 'reaction', 'unsupported'])
+
+/** Error de Meta: mensaje sin plantilla fuera de la ventana de 24 h. */
+const VENTANA_VENCIDA = 131047
+
 async function webhookWhatsapp(req: Req, res: Res) {
   // Verificación al suscribir: Meta manda hub.mode=subscribe, hub.verify_token y hub.challenge
   if (req.method === 'GET') {
@@ -335,11 +344,34 @@ async function webhookWhatsapp(req: Req, res: Res) {
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return res.status(500).json({ error: 'Falta la configuración de Supabase' })
 
   // Solo actualiza filas que ya existen (por wamid): un aviso inventado no agrega nada.
-  const body = cuerpo(req) as { entry?: Array<{ changes?: Array<{ value?: { statuses?: EstadoMeta[] } }> }> }
-  const estados = (body.entry ?? []).flatMap((e) => (e.changes ?? []).flatMap((c) => c.value?.statuses ?? []))
+  const body = cuerpo(req) as {
+    entry?: Array<{ changes?: Array<{ value?: {
+      metadata?: { phone_number_id?: string }
+      statuses?: EstadoMeta[]
+      messages?: MensajeMeta[]
+    } }> }>
+  }
+  const valores = (body.entry ?? []).flatMap((e) => (e.changes ?? []).flatMap((c) => (c.value ? [c.value] : [])))
+
+  // Un contacto escribió: se abre su ventana de 24 h para mandarle gratis. Solo si el aviso es de
+  // nuestro número; un aviso inventado abriría una ventana falsa (que igual cae en la plantilla).
+  const miNumero = process.env.WHATSAPP_PHONE_ID
+  const entrantes = valores
+    .filter((v) => miNumero && v.metadata?.phone_number_id === miNumero)
+    .flatMap((v) => v.messages ?? [])
+    .filter((m) => m.from && !NO_ABREN_VENTANA.has(m.type ?? ''))
+  for (const m of entrantes) {
+    const at = Math.min(Number(m.timestamp) * 1000 || Date.now(), Date.now())
+    await registrarMensajeEntrante(m.from!, new Date(at)).catch(() => undefined)
+  }
+
+  const estados = valores.flatMap((v) => v.statuses ?? [])
   for (const s of estados) {
     if (!s.id || !s.status || !(s.status in ORDEN_ESTADO)) continue
     const err = s.errors?.[0]
+    // La ventana había vencido: sale la plantilla de respaldo y este aviso ya no cuenta como «no llegó»
+    if (s.status === 'failed' && err?.code === VENTANA_VENCIDA && (await reenviarConPlantilla(s.id).catch(() => false))) continue
+    if (s.status === 'delivered' || s.status === 'read') await descartarRespaldo(s.id).catch(() => undefined)
     const errorTxt = err ? `${err.code ?? ''} ${err.title ?? err.message ?? ''}${err.error_data?.details ? ` — ${err.error_data.details}` : ''}`.trim() : null
     // Estados que no deben pisar: los que van "después" del que llega
     const peores = Object.keys(ORDEN_ESTADO).filter((k) => ORDEN_ESTADO[k] > ORDEN_ESTADO[s.status!])
@@ -355,7 +387,7 @@ async function webhookWhatsapp(req: Req, res: Res) {
     }).catch(() => undefined)
   }
   // Meta reintenta si no recibe 200: se contesta siempre, aunque no haya nada nuestro
-  return res.status(200).json({ ok: true, estados: estados.length })
+  return res.status(200).json({ ok: true, estados: estados.length, entrantes: entrantes.length })
 }
 
 export default async function handler(req: Req, res: Res) {

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Check, Loader2, Pencil, Plus, Trash2, Users, X } from 'lucide-react'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
-import { normalizarTelefono, telefonoValido, type ContactoInforme, type Destinatario, type Informe } from '@/lib/informes'
+import { claveTelefono, CUPO_GRATIS_MES, normalizarTelefono, telefonoValido, ventanaHasta, type ContactoInforme, type Destinatario, type Informe } from '@/lib/informes'
 
 const inputCls =
   'w-full rounded-xl border border-line bg-surface2 px-3 py-2 text-sm text-ink outline-none transition duration-250 placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40'
@@ -53,7 +53,22 @@ export default function InformesContactos({
   const [ocupado, setOcupado] = useState<string | null>(null)
   const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
 
-  const recargar = useCallback(async () => setContactos(await cargarContactos()), [])
+  // Ventana de 24 h de cada teléfono y mensajes gratis del mes (sql/whatsapp_ventana.sql)
+  const [ventanas, setVentanas] = useState<Map<string, string>>(new Map())
+  const [gratisMes, setGratisMes] = useState<number | null>(null)
+
+  const recargar = useCallback(async () => {
+    setContactos(await cargarContactos())
+    if (!supabase) return
+    const hoy = new Date()
+    const [{ data }, { count }] = await Promise.all([
+      supabase.from('whatsapp_ventana').select('telefono,ultimo_mensaje_at'),
+      supabase.from('whatsapp_servicio_envios').select('id', { count: 'exact', head: true })
+        .gte('creado_at', new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString()),
+    ])
+    setVentanas(new Map(((data ?? []) as { telefono: string; ultimo_mensaje_at: string }[]).map((v) => [v.telefono, v.ultimo_mensaje_at])))
+    setGratisMes(count ?? 0)
+  }, [])
   useEffect(() => { void recargar() }, [recargar])
 
   async function agregar(e: FormEvent) {
@@ -154,6 +169,13 @@ export default function InformesContactos({
         </form>
       )}
 
+      {gratisMes !== null && (
+        <p className="rounded-2xl border border-line bg-surface p-3 text-xs text-sub shadow-soft">
+          <b className="text-ink">{gratisMes.toLocaleString('es-AR')} de {CUPO_GRATIS_MES.toLocaleString('es-AR')}</b> mensajes gratis usados este mes.
+          {' '}Para recibir gratis, cada contacto tiene que escribirle al número del hub una vez por día; si no, le llega igual con plantilla paga.
+        </p>
+      )}
+
       {contactos === null ? (
         <div className="flex items-center gap-2 py-10 text-sub"><Loader2 size={18} className="animate-spin" aria-hidden /> Cargando…</div>
       ) : contactos.length === 0 ? (
@@ -186,6 +208,12 @@ export default function InformesContactos({
                       <h3 className="font-display text-sm font-semibold text-ink">{c.nombre}</h3>
                       <span className="text-sm tabular-nums text-sub">+{c.telefono}</span>
                       {!c.activo && <span className="rounded-full border border-line px-2 py-0.5 text-[11px] text-sub">No recibe informes</span>}
+                      {(() => {
+                        const hasta = ventanaHasta(ventanas.get(claveTelefono(c.telefono)))
+                        return hasta
+                          ? <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-300">Gratis hasta {hasta.toLocaleString('es-AR', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                          : <span className="rounded-full border border-line px-2 py-0.5 text-[11px] text-sub">Con plantilla paga</span>
+                      })()}
                     </div>
                     {c.nota && <p className="mt-0.5 text-xs text-sub/80">{c.nota}</p>}
                     <div className="mt-2 flex flex-wrap gap-1.5">

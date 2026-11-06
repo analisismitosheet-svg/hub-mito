@@ -95,18 +95,18 @@ export async function enviarPendientesFranquicias(propuestaId?: string): Promise
 
     let t = totales.get(e.propuesta_id)
     if (!t) { t = await totalesDe(e.propuesta_id); totales.set(e.propuesta_id, t) }
-    const res = await enviarWhatsappPlantilla(e.telefono, {
-      nombre: plantilla,
-      idioma,
-      parametros: [
-        p.cliente_nombre || p.franquicia_nombre,
-        p.numero,
-        ventaDe(p),
-        String(t.articulos),
-        String(t.unidades),
-        `${hubUrl()}/p/${e.token}`,
-      ],
-    })
+    const cliente = p.cliente_nombre || p.franquicia_nombre
+    const link = `${hubUrl()}/p/${e.token}`
+    const res = await enviarWhatsappPlantilla(
+      e.telefono,
+      {
+        nombre: plantilla,
+        idioma,
+        parametros: [cliente, p.numero, ventaDe(p), String(t.articulos), String(t.unidades), link],
+      },
+      // Sin costo si el cliente escribió en las últimas 24 h
+      `Hola ${cliente}, te armamos la reposición ${p.numero} según la venta del ${ventaDe(p)}: ${t.articulos} artículos, ${t.unidades} unidades.\n\nMirala y confirmala acá:\n${link}`,
+    )
     const ahora = new Date().toISOString()
     await rest(`franquicias_propuesta_envios?id=eq.${e.id}`, {
       method: 'PATCH',

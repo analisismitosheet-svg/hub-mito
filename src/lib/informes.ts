@@ -73,6 +73,8 @@ export interface EnvioInforme {
   estado?: 'sent' | 'delivered' | 'read' | 'failed' | null
   estado_at?: string | null
   error_entrega?: string | null
+  /** 'servicio' = gratis dentro de la ventana de 24 h; 'plantilla' = paga (sql/whatsapp_ventana.sql) */
+  via?: 'servicio' | 'plantilla' | null
 }
 
 export const FUENTES: { id: FuenteInforme; label: string; desc: string }[] = [
@@ -145,6 +147,24 @@ export function normalizarTelefono(tel: string): string {
   if (d.length === 10) return `549${d}` // móvil argentino sin 0 ni 15
   if (d.length === 11) return `54${d}` // con característica
   return d
+}
+
+/** Clave para comparar teléfonos: en Argentina el mismo móvil puede venir con o sin el 9 después del 54. */
+export function claveTelefono(tel: string): string {
+  const d = normalizarTelefono(tel)
+  return /^549\d{10}$/.test(d) ? `54${d.slice(3)}` : d
+}
+
+/** Mensajes gratis (de servicio) que da Meta por mes y por número. */
+export const CUPO_GRATIS_MES = 1000
+
+/** Meta da 24 h desde el último mensaje del contacto; se usan 23:30 para que no venza en pleno envío. */
+const VENTANA_MS = 23.5 * 3600_000
+
+/** Hasta cuándo se puede mandar gratis a quien escribió en `ultimoMensaje` (null si ya venció). */
+export function ventanaHasta(ultimoMensaje: string | null | undefined, ahora = Date.now()): Date | null {
+  const t = ultimoMensaje ? Date.parse(ultimoMensaje) : NaN
+  return Number.isFinite(t) && t + VENTANA_MS > ahora ? new Date(t + VENTANA_MS) : null
 }
 
 /** ¿Quedó un teléfono plausible? (internacional, 8 a 15 dígitos) */

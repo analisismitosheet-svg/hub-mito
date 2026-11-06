@@ -18,9 +18,11 @@ import { bloquesEficiencia, corta, porcentajes, type AvanceVtd, type FilaPiso, t
 import { bloquesConversion, type DatosConversion } from './informeConversion.js'
 import { bloquesKm,type FilaKmInforme, type FilaLocalesInforme, type FilaParadaInforme, type VehiculoInforme } from './informeKmTransporte.js'
 import {
+  claveTelefono,
   formatoDe,
   normalizarTelefono,
   plantillaMetaDe,
+  ventanaHasta,
   type ConfigApp,
   type ConfigTexto,
   type ConfigVista,
@@ -685,7 +687,7 @@ export async function estadoWhatsapp(): Promise<{
   }
 }
 
-export async function enviarWhatsapp(telefono: string, texto: string): Promise<{ ok: boolean; detalle: string }> {
+export async function enviarWhatsapp(telefono: string, texto: string): Promise<ResultadoWhatsapp> {
   const token = process.env.WHATSAPP_TOKEN
   const phoneId = process.env.WHATSAPP_PHONE_ID
   if (!token || !phoneId) {
@@ -733,34 +735,140 @@ function componentesPlantilla(p: PlantillaEnvio, imagenId?: string) {
   return comps
 }
 
-/** Manda una plantilla aprobada (sin imagen): llega aunque no haya ventana de 24 h. */
-export async function enviarWhatsappPlantilla(telefono: string, p: PlantillaEnvio): Promise<{ ok: boolean; detalle: string }> {
+export interface ResultadoWhatsapp {
+  ok: boolean
+  detalle: string
+  wamid?: string
+  /** 'servicio' = gratis dentro de la ventana de 24 h; 'plantilla' = paga */
+  via?: 'servicio' | 'plantilla'
+}
+
+/** Mensaje de WhatsApp sin `messaging_product` ni `to` (los agrega postMensaje). */
+type Mensaje = Record<string, unknown>
+
+async function postMensaje(destino: string, mensaje: Mensaje): Promise<ResultadoWhatsapp> {
   const token = process.env.WHATSAPP_TOKEN
   const phoneId = process.env.WHATSAPP_PHONE_ID
   if (!token || !phoneId) return { ok: false, detalle: 'WhatsApp no configurado: faltan WHATSAPP_TOKEN y/o WHATSAPP_PHONE_ID en Vercel' }
   const version = process.env.WHATSAPP_VERSION || 'v23.0'
-  const destino = normalizarTelefono(telefono)
-  if (!destino) return { ok: false, detalle: 'Teléfono vacío o inválido' }
   try {
     const r = await fetch(`https://graph.facebook.com/${version}/${phoneId}/messages`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        to: destino,
-        type: 'template',
-        template: { name: p.nombre, language: { code: p.idioma }, components: componentesPlantilla(p) },
-      }),
+      body: JSON.stringify({ messaging_product: 'whatsapp', to: destino, ...mensaje }),
     })
-    const body = (await r.json().catch(() => null)) as { messages?: Array<{ id?: string }>; error?: { message?: string } } | null
-    if (!r.ok) return { ok: false, detalle: body?.error?.message || `WhatsApp respondió ${r.status}` }
-    return { ok: true, detalle: body?.messages?.[0]?.id ? `id ${body.messages[0].id}` : 'enviado' }
+    const body = (await r.json().catch(() => null)) as { messages?: Array<{ id?: string }>; error?: { message?: string; code?: number } } | null
+    if (!r.ok) {
+      const msg = body?.error?.message || `WhatsApp respondió ${r.status}`
+      const code = body?.error?.code
+      return { ok: false, detalle: code && !msg.includes(`#${code}`) ? `${msg} (#${code})` : msg }
+    }
+    const wamid = body?.messages?.[0]?.id
+    return { ok: true, detalle: wamid ? `id ${wamid}` : 'enviado', wamid }
   } catch (e) {
     return { ok: false, detalle: `No se pudo contactar WhatsApp: ${(e as Error).message}` }
   }
 }
 
-export async function enviarWhatsappImagen(telefono: string, png: Buffer, caption?: string, plantilla?: PlantillaEnvio): Promise<{ ok: boolean; detalle: string }> {
+/** Si no se puede leer la ventana se toma como cerrada: sale con plantilla, que siempre llega. */
+async function ventanaAbierta(destino: string): Promise<boolean> {
+  try {
+    const r = await rest(`whatsapp_ventana?select=ultimo_mensaje_at&telefono=eq.${claveTelefono(destino)}`)
+    if (!r.ok) return false
+    const filas = (await r.json()) as Array<{ ultimo_mensaje_at?: string }>
+    return ventanaHasta(filas[0]?.ultimo_mensaje_at) !== null
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Manda gratis si el contacto escribió hace menos de 24 h; si no, o si Meta lo rechaza, con la
+ * plantilla (paga). Lo gratis se anota para contar el cupo del mes, con la plantilla de respaldo
+ * por si Meta avisa después que la ventana ya había vencido (ver reenviarConPlantilla).
+ */
+export async function enviarConVentana(telefono: string, gratis: Mensaje, plantilla: Mensaje): Promise<ResultadoWhatsapp> {
+  const destino = normalizarTelefono(telefono)
+  if (!destino) return { ok: false, detalle: 'Teléfono vacío o inválido' }
+  if (await ventanaAbierta(destino)) {
+    const r = await postMensaje(destino, gratis)
+    if (r.ok) {
+      if (r.wamid) {
+        await rest('whatsapp_servicio_envios', {
+          method: 'POST',
+          headers: { Prefer: 'return=minimal' },
+          body: JSON.stringify({ wamid: r.wamid, telefono: claveTelefono(destino), respaldo: { to: destino, mensaje: plantilla } }),
+        }).catch(() => undefined)
+        // Para el cupo alcanza con el mes en curso
+        await rest(`whatsapp_servicio_envios?creado_at=lt.${new Date(Date.now() - 62 * 86_400_000).toISOString()}`, { method: 'DELETE' }).catch(() => undefined)
+      }
+      return { ...r, via: 'servicio' }
+    }
+  }
+  return { ...(await postMensaje(destino, plantilla)), via: 'plantilla' }
+}
+
+/** Webhook: el contacto escribió, así que se abre (o renueva) su ventana de 24 h. */
+export async function registrarMensajeEntrante(telefono: string, at: Date): Promise<void> {
+  await rest('whatsapp_ventana?on_conflict=telefono', {
+    method: 'POST',
+    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify({ telefono: claveTelefono(telefono), ultimo_mensaje_at: at.toISOString() }),
+  })
+}
+
+/** Webhook: el mensaje gratis se entregó; ya no hace falta guardar su plantilla de respaldo. */
+export async function descartarRespaldo(wamid: string): Promise<void> {
+  await rest(`whatsapp_servicio_envios?wamid=eq.${encodeURIComponent(wamid)}&respaldo=not.is.null`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({ respaldo: null }),
+  })
+}
+
+/**
+ * Webhook: Meta avisó que un mensaje gratis no salió porque la ventana había vencido (#131047).
+ * Manda la plantilla de respaldo y deja los registros apuntando al mensaje nuevo. Borrar la fila
+ * hace de reclamo (si Meta repite el aviso no se duplica) y además no cuenta para el cupo.
+ * Devuelve true si salió el reemplazo.
+ */
+export async function reenviarConPlantilla(wamid: string): Promise<boolean> {
+  const id = encodeURIComponent(wamid)
+  const r = await rest(`whatsapp_servicio_envios?wamid=eq.${id}&respaldo=not.is.null`, { method: 'DELETE', headers: { Prefer: 'return=representation' } })
+  if (!r.ok) return false
+  const filas = (await r.json()) as Array<{ telefono: string; respaldo: { to: string; mensaje: Mensaje } }>
+  const fila = filas[0]
+  if (!fila) return false
+  await rest(`whatsapp_ventana?telefono=eq.${fila.telefono}`, { method: 'DELETE' }).catch(() => undefined)
+  const nuevo = await postMensaje(fila.respaldo.to, fila.respaldo.mensaje)
+  if (!nuevo.ok || !nuevo.wamid) return false
+  const patch = (ruta: string, cambios: Record<string, unknown>) =>
+    rest(ruta, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(cambios) }).catch(() => undefined)
+  await Promise.all([
+    patch(`informes_envios?wamid=eq.${id}`, { detalle: nuevo.detalle, via: 'plantilla', estado: null, estado_at: null, error_entrega: null }),
+    patch(`ordenes_compra_whatsapp?wamid=eq.${id}`, { wamid: nuevo.wamid }),
+    patch(`franquicias_propuesta_envios?detalle=eq.${encodeURIComponent(`id ${wamid}`)}`, { detalle: nuevo.detalle }),
+  ])
+  return true
+}
+
+const mensajePlantilla = (p: PlantillaEnvio, imagenId?: string): Mensaje => ({
+  type: 'template',
+  template: { name: p.nombre, language: { code: p.idioma }, components: componentesPlantilla(p, imagenId) },
+})
+
+/**
+ * Manda una plantilla aprobada (sin imagen): llega aunque no haya ventana de 24 h.
+ * Con `textoGratis`, ese texto sale sin costo si la ventana del contacto está abierta.
+ */
+export async function enviarWhatsappPlantilla(telefono: string, p: PlantillaEnvio, textoGratis?: string): Promise<ResultadoWhatsapp> {
+  if (textoGratis) return enviarConVentana(telefono, { type: 'text', text: { preview_url: true, body: textoGratis.slice(0, 4096) } }, mensajePlantilla(p))
+  const destino = normalizarTelefono(telefono)
+  if (!destino) return { ok: false, detalle: 'Teléfono vacío o inválido' }
+  return { ...(await postMensaje(destino, mensajePlantilla(p))), via: 'plantilla' }
+}
+
+export async function enviarWhatsappImagen(telefono: string, png: Buffer, caption?: string, plantilla?: PlantillaEnvio): Promise<ResultadoWhatsapp> {
   const token = process.env.WHATSAPP_TOKEN
   const phoneId = process.env.WHATSAPP_PHONE_ID
   if (!token || !phoneId) {
@@ -785,32 +893,10 @@ export async function enviarWhatsappImagen(telefono: string, png: Buffer, captio
       return { ok: false, detalle: sub?.error?.message || `No se pudo subir la imagen (${rSub.status})` }
     }
 
-    // 2) Mandar el mensaje con la imagen.
-    const r = await fetch(`https://graph.facebook.com/${version}/${phoneId}/messages`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      // Con plantilla: la imagen va en el encabezado y llega siempre (fuera de la ventana de 24 h).
-      body: JSON.stringify(
-        plantilla
-          ? {
-              messaging_product: 'whatsapp',
-              to: destino,
-              type: 'template',
-              template: { name: plantilla.nombre, language: { code: plantilla.idioma }, components: componentesPlantilla(plantilla, sub.id) },
-            }
-          : {
-              messaging_product: 'whatsapp',
-              to: destino,
-              type: 'image',
-              image: { id: sub.id, ...(caption ? { caption: caption.slice(0, 1000) } : {}) },
-            },
-      ),
-    })
-    const body = (await r.json().catch(() => null)) as
-      | { messages?: Array<{ id?: string }>; error?: { message?: string } }
-      | null
-    if (!r.ok) return { ok: false, detalle: body?.error?.message || `WhatsApp respondió ${r.status}` }
-    return { ok: true, detalle: body?.messages?.[0]?.id ? `id ${body.messages[0].id}` : 'enviado' }
+    // 2) Mandar el mensaje con la imagen. Con plantilla, la imagen va en el encabezado y llega
+    // siempre; sin costo si el contacto tiene la ventana de 24 h abierta.
+    const imagen: Mensaje = { type: 'image', image: { id: sub.id, ...(caption ? { caption: caption.slice(0, 1000) } : {}) } }
+    return plantilla ? await enviarConVentana(destino, imagen, mensajePlantilla(plantilla, sub.id)) : await postMensaje(destino, imagen)
   } catch (e) {
     return { ok: false, detalle: `No se pudo contactar WhatsApp: ${(e as Error).message}` }
   }
@@ -897,7 +983,7 @@ export async function enviarInforme(informe: Informe & { id?: string }, origen: 
     const r = png
       ? await enviarWhatsappImagen(d.telefono, png, texto, p)
       : p
-        ? await enviarWhatsappPlantilla(d.telefono, p)
+        ? await enviarWhatsappPlantilla(d.telefono, p, texto)
         : await enviarWhatsapp(d.telefono, texto)
     if (r.ok) enviados++
     detalles.push(`${d.nombre || d.telefono}: ${r.ok ? 'OK' : r.detalle}`)
@@ -911,6 +997,7 @@ export async function enviarInforme(informe: Informe & { id?: string }, origen: 
           ok: r.ok,
           detalle: r.detalle,
           origen,
+          via: r.via ?? null,
         }),
       }).catch(() => undefined)
     }

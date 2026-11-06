@@ -349,6 +349,9 @@ export default function Informes() {
                             {ENTREGA[e.estado]?.label ?? e.estado}
                           </span>
                         )}
+                        {e.ok && e.via === 'servicio' && (
+                          <span className="rounded-full bg-amber-500/15 px-2 py-0.5 font-medium text-amber-300" title="Salió dentro de las 24 h después de que el contacto escribió: no usa plantilla">gratis</span>
+                        )}
                         <span className={`rounded-full px-2 py-0.5 font-medium ${e.ok ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-300'}`}>{e.ok ? 'ok' : 'error'}</span>
                       </span>
                     </div>

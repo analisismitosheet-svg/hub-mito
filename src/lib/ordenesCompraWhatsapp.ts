@@ -9,10 +9,11 @@
  * - La respuesta se da en /oc/:token (src/pages/AutorizarOc.tsx, sql/ordenes_compra_link.sql).
  * - Plantilla «oc_autorizar_link» (es_AR): estado y alta en Meta desde Autorizadores (admin).
  */
-import { normalizarTelefono } from './informes.js'
+import { enviarConVentana } from './informesServidor.js'
 
 export const PLANTILLA_OC = 'oc_autorizar_link'
 const IDIOMA = 'es_AR'
+const URL_OC = 'https://hub-mito.vercel.app/oc/'
 /** Cuenta de WhatsApp Business (WABA) de «hub mito informes». */
 const WABA_ID = process.env.WHATSAPP_WABA_ID || '3764563940363184'
 const version = () => process.env.WHATSAPP_VERSION || 'v23.0'
@@ -67,23 +68,20 @@ async function tokenDelEnvio(id: number): Promise<string | null> {
 }
 
 async function mandarPlantilla(envio: EnvioCola, oc: DatosOc): Promise<{ ok: boolean; detalle: string; wamid?: string }> {
-  const token = process.env.WHATSAPP_TOKEN
-  const phoneId = process.env.WHATSAPP_PHONE_ID
-  if (!token || !phoneId) return { ok: false, detalle: 'WhatsApp no configurado (WHATSAPP_TOKEN / WHATSAPP_PHONE_ID)' }
-  const destino = normalizarTelefono(envio.telefono)
-  if (!destino) return { ok: false, detalle: 'Teléfono inválido' }
   const parametros = [
     envio.nombre, String(oc.numero), oc.tipo, corto(oc.proveedor, 80), pesos(oc.monto), corto(oc.observacion, 200), corto(oc.cargo, 60),
   ]
   try {
     const link = await tokenDelEnvio(envio.id)
     if (!link) return { ok: false, detalle: 'No se pudo generar el link del envío' }
-    const r = await fetch(`https://graph.facebook.com/${version()}/${phoneId}/messages`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        to: destino,
+    // Con la ventana de 24 h abierta sale gratis: el mismo texto, con el link en lugar del botón
+    const texto = parametros
+      .reduce((t, valor, i) => t.replace(`{{${i + 1}}}`, () => valor), CUERPO)
+      .replace('Tocá el botón para verla y responder.', `Entrá para verla y responder:\n${URL_OC}${link}`)
+    const r = await enviarConVentana(
+      envio.telefono,
+      { type: 'text', text: { preview_url: true, body: texto } },
+      {
         type: 'template',
         template: {
           name: PLANTILLA_OC,
@@ -93,11 +91,9 @@ async function mandarPlantilla(envio: EnvioCola, oc: DatosOc): Promise<{ ok: boo
             { type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: link }] },
           ],
         },
-      }),
-    })
-    const body = (await r.json().catch(() => null)) as { messages?: Array<{ id?: string }>; error?: { message?: string; code?: number } } | null
-    if (!r.ok) return { ok: false, detalle: `${body?.error?.message ?? `WhatsApp respondió ${r.status}`}${body?.error?.code ? ` (#${body.error.code})` : ''}` }
-    return { ok: true, detalle: 'enviado', wamid: body?.messages?.[0]?.id }
+      },
+    )
+    return r.ok ? { ok: true, detalle: 'enviado', wamid: r.wamid } : { ok: false, detalle: r.detalle }
   } catch (e) {
     return { ok: false, detalle: `No se pudo contactar WhatsApp: ${(e as Error).message}` }
   }
@@ -163,7 +159,7 @@ export async function crearPlantillaOc(): Promise<{ existe: boolean; estado?: st
       category: 'UTILITY',
       components: [
         { type: 'BODY', text: CUERPO, example: { body_text: [EJEMPLO] } },
-        { type: 'BUTTONS', buttons: [{ type: 'URL', text: 'Ver y responder', url: 'https://hub-mito.vercel.app/oc/{{1}}', example: ['https://hub-mito.vercel.app/oc/ejemplo'] }] },
+        { type: 'BUTTONS', buttons: [{ type: 'URL', text: 'Ver y responder', url: `${URL_OC}{{1}}`, example: [`${URL_OC}ejemplo`] }] },
       ],
     }),
   })
