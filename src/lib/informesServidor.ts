@@ -700,9 +700,17 @@ async function avisosWhatsapp(): Promise<boolean | undefined> {
     headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` },
     signal: AbortSignal.timeout(10_000),
   })
-  if (!r.ok) return undefined
-  const j = (await r.json().catch(() => null)) as { data?: unknown[] } | null
-  return (j?.data?.length ?? 0) > 0
+  const j = (await r.json().catch(() => null)) as {
+    data?: Array<{ whatsapp_business_api_data?: { id?: string } }>
+    error?: { message?: string }
+  } | null
+  if (!r.ok) {
+    console.log(`[whatsapp] no se pudo leer el vinculo: ${j?.error?.message ?? r.status}`)
+    return undefined
+  }
+  const apps = (j?.data ?? []).map((a) => a.whatsapp_business_api_data?.id)
+  console.log(`[whatsapp] apps vinculadas a la cuenta: ${apps.join(',') || 'ninguna'}`)
+  return apps.includes(process.env.WHATSAPP_APP_ID || '2618170611979830')
 }
 
 /** Vincula la app del token a la cuenta de WhatsApp para que Meta mande los avisos al webhook. */
