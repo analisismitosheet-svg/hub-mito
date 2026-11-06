@@ -665,6 +665,8 @@ export async function estadoWhatsapp(): Promise<{
   nombre?: string
   calidad?: string
   error?: string
+  /** false: la app no está vinculada a la cuenta de WhatsApp y Meta no manda avisos al webhook */
+  avisos?: boolean
 }> {
   const token = process.env.WHATSAPP_TOKEN
   const phoneId = process.env.WHATSAPP_PHONE_ID
@@ -681,10 +683,40 @@ export async function estadoWhatsapp(): Promise<{
       | { display_phone_number?: string; verified_name?: string; quality_rating?: string; error?: { message?: string } }
       | null
     if (!r.ok) return { configurado: true, ok: false, error: j?.error?.message ?? `Meta respondió ${r.status}` }
-    return { configurado: true, ok: true, numero: j?.display_phone_number, nombre: j?.verified_name, calidad: j?.quality_rating }
+    const avisos = await avisosWhatsapp().catch(() => undefined)
+    return { configurado: true, ok: true, numero: j?.display_phone_number, nombre: j?.verified_name, calidad: j?.quality_rating, avisos }
   } catch (e) {
     return { configurado: true, ok: false, error: `No se pudo contactar a Meta: ${(e as Error).message}` }
   }
+}
+
+/** Cuenta de WhatsApp Business (WABA) de «hub mito informes». */
+const WABA_ID = () => process.env.WHATSAPP_WABA_ID || '3764563940363184'
+
+/** ¿La app está vinculada a la cuenta de WhatsApp? Sin esto Meta no manda avisos al webhook, aunque esté suscripto. */
+async function avisosWhatsapp(): Promise<boolean | undefined> {
+  const version = process.env.WHATSAPP_VERSION || 'v23.0'
+  const r = await fetch(`https://graph.facebook.com/${version}/${WABA_ID()}/subscribed_apps`, {
+    headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` },
+    signal: AbortSignal.timeout(10_000),
+  })
+  if (!r.ok) return undefined
+  const j = (await r.json().catch(() => null)) as { data?: unknown[] } | null
+  return (j?.data?.length ?? 0) > 0
+}
+
+/** Vincula la app del token a la cuenta de WhatsApp para que Meta mande los avisos al webhook. */
+export async function activarAvisosWhatsapp(): Promise<{ ok: boolean; error?: string }> {
+  const token = process.env.WHATSAPP_TOKEN
+  if (!token) return { ok: false, error: 'Falta WHATSAPP_TOKEN en Vercel' }
+  const version = process.env.WHATSAPP_VERSION || 'v23.0'
+  const r = await fetch(`https://graph.facebook.com/${version}/${WABA_ID()}/subscribed_apps`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(10_000),
+  })
+  const j = (await r.json().catch(() => null)) as { success?: boolean; error?: { message?: string } } | null
+  return r.ok && j?.success !== false ? { ok: true } : { ok: false, error: j?.error?.message ?? `Meta respondió ${r.status}` }
 }
 
 export async function enviarWhatsapp(telefono: string, texto: string): Promise<ResultadoWhatsapp> {

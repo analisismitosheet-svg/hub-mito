@@ -56,6 +56,7 @@ interface EstadoWhatsapp {
   nombre?: string
   calidad?: string
   error?: string
+  avisos?: boolean
 }
 
 async function consultarWhatsapp(): Promise<EstadoWhatsapp> {
@@ -226,6 +227,20 @@ export default function Informes() {
           <span>
             <b>WhatsApp conectado</b>: {whatsapp.numero ?? '—'}{whatsapp.nombre ? ` (${whatsapp.nombre})` : ''}
             {whatsapp.calidad ? ` · calidad ${whatsapp.calidad}` : ''}
+            {whatsapp.avisos === false && (
+              <>
+                {' · '}
+                <button
+                  onClick={() => void apiInforme({ activarAvisos: true })
+                    .then(() => { mostrarToast('Avisos de WhatsApp activados'); return revisarWhatsapp() })
+                    .catch((e: Error) => mostrarToast(e.message, false))}
+                  className="font-medium underline underline-offset-2"
+                  title="Sin esto Meta no le avisa al hub quién escribió ni qué mensajes se entregaron"
+                >
+                  Activar avisos
+                </button>
+              </>
+            )}
           </span>
         ) : whatsapp.configurado ? (
           <span><b>WhatsApp con error</b>: {whatsapp.error}</span>

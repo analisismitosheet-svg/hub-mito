@@ -24,7 +24,7 @@
  * Variables de entorno en Vercel (sin prefijo VITE_): CRON_SECRET, SUPABASE_URL,
  * SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, WHATSAPP_TOKEN, WHATSAPP_PHONE_ID.
  */
-import { armarCuerpo, descartarRespaldo, enviarInforme, estadoWhatsapp, generarImagenInforme, reenviarConPlantilla, registrarMensajeEntrante, repoCompleta, tienePermiso, usuarioDe } from '../src/lib/informesServidor.js'
+import { activarAvisosWhatsapp, armarCuerpo, descartarRespaldo, enviarInforme, estadoWhatsapp, generarImagenInforme, reenviarConPlantilla, registrarMensajeEntrante, repoCompleta, tienePermiso, usuarioDe } from '../src/lib/informesServidor.js'
 import { formatoDe, type Informe } from '../src/lib/informes.js'
 import { mismoSecreto } from '../src/lib/apiAuth.js'
 import { enviarPendientesFranquicias, reenviarPropuesta } from '../src/lib/franquiciasWhatsapp.js'
@@ -256,6 +256,16 @@ async function manual(req: Req, res: Res) {
     }
   }
 
+  // --- Vincular la app a la cuenta de WhatsApp para recibir avisos en el webhook (solo admin) ---
+  if (datos.activarAvisos === true) {
+    if (!(await tienePermiso(token, ['__solo_admin__']))) return res.status(403).json({ error: 'Solo el administrador' })
+    try {
+      return res.status(200).json(await activarAvisosWhatsapp())
+    } catch (e) {
+      return res.status(502).json({ ok: false, error: (e as Error).message })
+    }
+  }
+
   // --- Estado de la conexión con WhatsApp (Meta) ---
   if (datos.estado === true) {
     if (!(await tienePermiso(token, ['sistemas.informes.view']))) return res.status(403).json({ error: 'No tenés permiso para esta acción' })
@@ -366,6 +376,9 @@ async function webhookWhatsapp(req: Req, res: Res) {
   }
 
   const estados = valores.flatMap((v) => v.statuses ?? [])
+  // Sin datos personales: alcanza para saber si Meta está mandando avisos y si se aceptan
+  const recibidos = valores.reduce((n, v) => n + (v.messages?.length ?? 0), 0)
+  console.log(`[whatsapp] estados=${estados.length} mensajes=${recibidos} aceptados=${entrantes.length} numeroOk=${valores.every((v) => v.metadata?.phone_number_id === miNumero)}`)
   for (const s of estados) {
     if (!s.id || !s.status || !(s.status in ORDEN_ESTADO)) continue
     const err = s.errors?.[0]
