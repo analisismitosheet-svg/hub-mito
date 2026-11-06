@@ -72,12 +72,15 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
   const { can, isAdmin } = useAuth()
   const esCompras = can('ordenes_compra.compras')
   const hoy = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10)
+  /* Responsable de una OC nueva: el usuario que la crea. La cuenta del admin (se llama «admin») no es una persona:
+     ahí queda vacío para que se escriba quién es el responsable. */
+  const responsableInicial = isAdmin ? '' : nombreUsuario.trim().toUpperCase()
   const [f, setF] = useState(() => ({
     tipo: oc?.tipo ?? 'Producto',
     planificable: oc?.planificable ?? true,
     metodo: oc?.metodo ?? 'Sin anticipo',
     area: oc?.area ?? '',
-    responsable: oc?.responsable ?? nombreUsuario.toUpperCase(),
+    responsable: oc ? oc.responsable ?? '' : responsableInicial,
     proveedor: oc?.proveedor ?? '',
     proveedor_cuit: oc?.proveedor_cuit ?? '',
     contacto: oc?.contacto ?? '',
@@ -111,6 +114,8 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }))
   const bloqueadoDragon = oc?.dragon_estado === 'ok' || oc?.dragon_estado === 'enviando' || oc?.dragon_estado === 'pendiente'
 
+  // Si el perfil terminó de cargar después de abrir el formulario, el responsable se completa igual (si sigue vacío)
+  useEffect(() => { if (!oc && responsableInicial) setF((x) => (x.responsable.trim() ? x : { ...x, responsable: responsableInicial })) }, [oc, responsableInicial])
   useEffect(() => { if (enfocarDragon) setTimeout(() => boxDragon.current?.scrollIntoView({ block: 'center' }), 100) }, [enfocarDragon])
   // Colores y talles de los artículos ya cargados
   useEffect(() => {
