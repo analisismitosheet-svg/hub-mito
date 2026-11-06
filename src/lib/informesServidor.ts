@@ -976,6 +976,15 @@ async function conContactosActuales(dests: Destinatario[]): Promise<Destinatario
   })
 }
 
+/** «Hola Alejandro, este es el informe de tasa de conversión del 06/11/2026.» Si es de texto, sigue el contenido. */
+export function mensajePersonal(nombre: string | undefined, informe: string, fecha: string, cuerpo?: string | null): string {
+  const primerNombre = (nombre ?? '').trim().split(/\s+/)[0]
+  const titulo = informe.trim()
+  const deQue = titulo ? `el informe de ${titulo.charAt(0).toLowerCase()}${titulo.slice(1)}` : 'tu informe'
+  const saludo = `Hola${primerNombre ? ` ${primerNombre}` : ''}, este es ${deQue} del ${fecha}.`
+  return cuerpo ? `${saludo}\n\n${cuerpo}` : saludo
+}
+
 /** `fecha` (yyyy-mm-dd): reenvío del informe de otro día. No toca `ultimo_envio`, así el envío
  *  automático de hoy sigue saliendo a su hora. */
 export async function enviarInforme(informe: Informe & { id?: string }, origen: 'manual' | 'cron' | 'prueba', fecha?: string): Promise<ResultadoEnvio> {
@@ -1022,7 +1031,7 @@ export async function enviarInforme(informe: Informe & { id?: string }, origen: 
   for (const d of destinos) {
     const p = plantillaPara(d)
     const r: ResultadoWhatsapp | ResultadoTelegram = telegramActivo()
-      ? await enviarTelegram(d.telefono, png ? `${texto} · ${fechaHoy}` : texto, png)
+      ? await enviarTelegram(d.telefono, mensajePersonal(d.nombre, informe.nombre, fechaHoy, png ? null : texto), png)
       : png
         ? await enviarWhatsappImagen(d.telefono, png, texto, p)
         : p
