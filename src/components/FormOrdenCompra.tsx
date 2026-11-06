@@ -3,9 +3,9 @@ import { FileText, Loader2, Paperclip, Plus, Trash2, X } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import {
   AREAS, BASES_DRAGON, CONDICIONES_DRAGON, IVA, LISTAS_DRAGON, MOTIVOS_DRAGON, PLAZOS, PLAZO_A_CONDICION, TIPOS,
-  buscarArticulos, buscarProveedoresDragon, buscarProveedoresOc, datosArticulosDragon, guardarOrden, leerTxtArticulos, mandarADragon, pedirAutorizacion, pesos,
+  buscarArticulos, buscarProveedoresDragon, buscarProveedoresOc, datosArticulosDragon, datosProveedorDragon, datosProveedorPorCodigo, guardarOrden, leerTxtArticulos, mandarADragon, pedirAutorizacion, pesos,
   separarVariante, subirArchivo, totalItems, variantesArticulo,
-  type ArticuloBusqueda, type ItemDragon, type OrdenCompra, type ProveedorDragon, type Variantes,
+  type ArticuloBusqueda, type DatosProveedor, type ItemDragon, type OrdenCompra, type ProveedorDragon, type Variantes,
 } from '@/lib/ordenesCompra'
 
 /* Alta / edición de una OC. Con «Esta OC va a Dragon» se habilita el pedido de compra
@@ -127,9 +127,29 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
   const montoMostrado = f.dragon ? String(totalDragon) : f.monto_bruto
 
   const buscarProvOc = useMemo(() => async (t: string) => (await buscarProveedoresOc(t)).map((p) => ({
-    clave: p.proveedor, valor: p,
-    render: <span><b className="text-ink">{p.proveedor}</b>{p.proveedor_cuit && <span className="ml-2 text-sub">{p.proveedor_cuit}</span>}</span>,
+    clave: p.dragon ? `dragon:${p.dragon}` : `oc:${p.proveedor}`, valor: p,
+    render: <span><b className="text-ink">{p.proveedor}</b>{p.proveedor_cuit && <span className="ml-2 text-sub">{p.proveedor_cuit}</span>}
+      {p.dragon && <span className="ml-2 rounded bg-teal-500/15 px-1.5 py-0.5 text-[10px] font-bold text-teal-300">Dragon {p.dragon}</span>}</span>,
   })), [])
+  /** Completa CUIT, contacto, teléfono y mail que estén vacíos (lo que ya se cargó a mano no se pisa) */
+  const completarContacto = (d: Partial<DatosProveedor> | null, soloSi?: string) => {
+    if (!d) return
+    setF((x) => soloSi !== undefined && x.proveedor !== soloSi ? x : ({
+      ...x,
+      proveedor_cuit: x.proveedor_cuit.trim() || d.proveedor_cuit || '',
+      contacto: x.contacto.trim() || d.contacto || '',
+      telefono: x.telefono.trim() || d.telefono || '',
+      mail: x.mail.trim() || d.mail || '',
+    }))
+  }
+  const elegirProveedor = (p: DatosProveedor) => {
+    setF((x) => ({ ...x, proveedor: p.proveedor }))
+    completarContacto(p)
+    // Elegido de una OC vieja (las importadas no traen datos): se busca en el maestro de Dragon
+    if (!p.dragon && !(p.proveedor_cuit && p.contacto && p.telefono && p.mail)) {
+      void datosProveedorDragon(p.proveedor, p.proveedor_cuit).then((d) => completarContacto(d, p.proveedor)).catch(() => {})
+    }
+  }
   const buscarProvDragon = useMemo(() => async (t: string) => (await buscarProveedoresDragon(t)).map((p) => ({
     clave: p.codigo, valor: p,
     render: <span><b className="mr-2 text-teal-300">{p.codigo}</b>{p.nombre}</span>,
@@ -287,8 +307,8 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
 
           <p className="mt-2 border-t border-line pt-3 text-[10.5px] font-bold uppercase tracking-wide text-lime-400 sm:col-span-2">Proveedor</p>
           <div className="sm:col-span-2"><span className={lbl}>Razón social</span>
-            <Buscador valor={f.proveedor} onTexto={(t) => set('proveedor', t)} buscar={buscarProvOc} placeholder="Escribí el nombre (trae CUIT y contacto de la última OC)"
-              onElegir={(p) => setF((x) => ({ ...x, proveedor: p.proveedor, proveedor_cuit: p.proveedor_cuit ?? x.proveedor_cuit, contacto: p.contacto ?? x.contacto, telefono: p.telefono ?? x.telefono, mail: p.mail ?? x.mail }))} /></div>
+            <Buscador valor={f.proveedor} onTexto={(t) => set('proveedor', t)} buscar={buscarProvOc} placeholder="Escribí el nombre (completa CUIT y contacto de Dragon o de la última OC)"
+              onElegir={elegirProveedor} /></div>
           <div><span className={lbl}>CUIT</span><input value={f.proveedor_cuit} onChange={(e) => set('proveedor_cuit', e.target.value)} className={campoCls} /></div>
           <div><span className={lbl}>Contacto</span><input value={f.contacto} onChange={(e) => set('contacto', e.target.value)} className={campoCls} /></div>
           <div><span className={lbl}>Teléfono</span><input value={f.telefono} onChange={(e) => set('telefono', e.target.value)} className={campoCls} /></div>
@@ -342,7 +362,7 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
                 <div className="sm:col-span-2"><span className={lbl}>Proveedor en Dragon</span>
                   <Buscador<ProveedorDragon> valor={provDragonTxt} buscar={buscarProvDragon} placeholder="Buscá por código o nombre…"
                     onTexto={(t) => { setProvDragonTxt(t); setF((x) => ({ ...x, dragon_proveedor: '', dragon_proveedor_nombre: '' })) }}
-                    onElegir={(p) => { setProvDragonTxt(`${p.codigo} — ${p.nombre}`); setF((x) => ({ ...x, dragon_proveedor: p.codigo, dragon_proveedor_nombre: p.nombre })) }} />
+                    onElegir={(p) => { setProvDragonTxt(`${p.codigo} — ${p.nombre}`); setF((x) => ({ ...x, dragon_proveedor: p.codigo, dragon_proveedor_nombre: p.nombre })); void datosProveedorPorCodigo(p.codigo).then((d) => completarContacto(d)).catch(() => {}) }} />
                   {!f.dragon_proveedor && provDragonTxt && <p className="mt-1 text-xs text-amber-300">Elegilo de la lista</p>}</div>
                 <div><span className={lbl}>Motivo *</span>
                   <select value={f.dragon_motivo} disabled={bloqueadoDragon} onChange={(e) => set('dragon_motivo', e.target.value)} className={`${campoCls} ${!f.dragon_motivo ? 'border-amber-500/60' : ''}`}>

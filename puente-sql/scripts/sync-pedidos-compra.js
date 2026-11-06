@@ -131,9 +131,44 @@ function esProveedorMito(codigo, nombre) {
 }
 const num = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v))
 
+/** Formato de CUIT: 30708434295 -> 30-70843429-5 (si no son 11 dígitos queda como está) */
+function cuitLindo(v) {
+  const d = txt(v).replace(/\D/g, '')
+  return d.length === 11 ? `${d.slice(0, 2)}-${d.slice(2, 10)}-${d.slice(10)}` : txt(v)
+}
+
+/** Datos de contacto de los proveedores (Órdenes de compras: al elegir la razón social se completan
+ *  CUIT, contacto, teléfono y mail). ZooLogic.PROV + el primer contacto de ZooLogic.CONTPROVDET. */
+async function syncProveedoresOc(token) {
+  const prov = objetoSql(PROV, 'PEDIDOS_PROV')
+  const contactos = prov.replace(/\[PROV\]$/, '[CONTPROVDET]')
+  const filas = leerJson(
+    `SELECT p.CLCOD, p.CLNOM, p.CLCUIT, p.CLTLF, p.TLFM, p.CLEMAIL, c.CONNOM, c.CONTEL, c.CONMAIL
+     FROM ${prov} p
+     OUTER APPLY (SELECT TOP 1 d.CONNOM, d.CONTEL, d.CONMAIL FROM ${contactos} d
+                   WHERE d.CONCOD = p.CLCOD ORDER BY d.NROITEM) c
+     WHERE p.INACTIVOFW = 0
+     FOR JSON PATH, INCLUDE_NULL_VALUES`,
+  )
+  const lista = filas
+    .map((f) => ({
+      codigo: txt(f.CLCOD),
+      nombre: txt(f.CLNOM),
+      cuit: cuitLindo(f.CLCUIT),
+      contacto: txt(f.CONNOM),
+      telefono: txt(f.CLTLF) || txt(f.TLFM) || txt(f.CONTEL),
+      mail: (txt(f.CLEMAIL) || txt(f.CONMAIL)).toLowerCase(),
+    }))
+    .filter((p) => p.codigo && p.nombre)
+  const n = await rpc('ordenes_compra_proveedores_sync', { p_token: token, p_filas: lista })
+  anotar(`Proveedores para Órdenes de compras: ${lista.length} leídos de ${PROV}, ${n} nuevos o cambiados`)
+}
+
 async function main() {
   if (!cfg('PUENTE_TOKEN')) throw new Error('Falta PUENTE_TOKEN en puente-sql/.env')
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error('Falta SUPABASE_URL / SUPABASE_ANON_KEY')
+  // node scripts/sync-pedidos-compra.js --solo-proveedores -> solo el catálogo de proveedores de OC
+  if (process.argv.includes('--solo-proveedores')) return syncProveedoresOc(cfg('PUENTE_TOKEN'))
 
   const t0 = Date.now()
   const filas = leerJson(
@@ -259,6 +294,12 @@ async function main() {
     anotar(`Catálogo de proveedores INDO: ${filasProv.length} leídos, ${n} nuevos o con nombre cambiado`)
   } catch (err) {
     anotar(`Catálogo de proveedores INDO: ERROR ${err instanceof Error ? err.message : String(err)}`)
+  }
+
+  try {
+    await syncProveedoresOc(token)
+  } catch (err) {
+    anotar(`Proveedores para Órdenes de compras: ERROR ${err instanceof Error ? err.message : String(err)}`)
   }
 
   // Después, las cancelaciones (DWH.dbo.vw_FACT_CANCELADOS): si fallan, los pedidos ya quedaron copiados

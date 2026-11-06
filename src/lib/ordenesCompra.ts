@@ -268,23 +268,94 @@ export async function buscarProveedoresDragon(texto: string): Promise<ProveedorD
   return ((data ?? []) as ProveedorDragon[]).map((p) => ({ codigo: p.codigo.trim(), nombre: p.nombre.trim() }))
 }
 
-/** Proveedores ya usados en OC (para el alta: razón social + CUIT/contacto de la última OC). */
-export async function buscarProveedoresOc(texto: string): Promise<Array<Pick<OrdenCompra, 'proveedor' | 'proveedor_cuit' | 'contacto' | 'telefono' | 'mail'>>> {
+/* Datos de contacto de los proveedores: tabla ordenes_compra_proveedores (maestro de Dragon,
+   ZooLogic.PROV + primer contacto de CONTPROVDET; la llena el puente cada 1 hora). */
+export interface DatosProveedor {
+  proveedor: string
+  proveedor_cuit: string | null
+  contacto: string | null
+  telefono: string | null
+  mail: string | null
+  /** Código del proveedor en Dragon cuando el dato sale del maestro */
+  dragon?: string
+}
+interface FilaProvDragon { codigo: string; nombre: string; cuit: string | null; contacto: string | null; telefono: string | null; mail: string | null }
+const deDragon = (p: FilaProvDragon): DatosProveedor => ({
+  proveedor: p.nombre, proveedor_cuit: p.cuit, contacto: p.contacto, telefono: p.telefono, mail: p.mail, dragon: p.codigo,
+})
+const COLS_PROV = 'codigo,nombre,cuit,contacto,telefono,mail'
+/** Palabras que no sirven para reconocer a un proveedor (forma societaria, artículos) */
+const PALABRAS_VACIAS = new Set(['SA', 'SRL', 'SAS', 'SACI', 'SAIC', 'SAIYC', 'SH', 'SC', 'SOC', 'CO', 'LTD', 'LTDA', 'INC', 'DE', 'DEL', 'LA', 'EL', 'LOS', 'LAS', 'Y', 'E'])
+const normalizar = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim()
+/** "NEW ARRECIFE S.A." -> [NEW, ARRECIFE] (las letras sueltas de S.A. / S.R.L. quedan afuera) */
+function palabrasProveedor(t: string): string[] {
+  const n = normalizar(t)
+  return [...new Set(n.split(' ').filter((w) => w.length >= 2 && !PALABRAS_VACIAS.has(w)))]
+}
+const cuitConGuiones = (v: string) => { const d = v.replace(/\D/g, ''); return d.length === 11 ? `${d.slice(0, 2)}-${d.slice(2, 10)}-${d.slice(10)}` : null }
+const tieneDatos = (p: { cuit?: string | null; proveedor_cuit?: string | null; contacto: string | null; telefono: string | null; mail: string | null }) =>
+  Boolean((p.cuit ?? p.proveedor_cuit) || p.contacto || p.telefono || p.mail)
+
+async function provDragonPorPalabras(palabras: string[], limite: number): Promise<FilaProvDragon[]> {
+  if (!palabras.length) return []
+  let q = sb().from('ordenes_compra_proveedores').select(COLS_PROV)
+  for (const w of palabras.slice(0, 5)) q = q.ilike('nombre', `%${w}%`)
+  const { data, error } = await q.order('nombre').limit(limite)
+  if (error) throw new Error(error.message)
+  return (data ?? []) as FilaProvDragon[]
+}
+
+/** Busca en el maestro de Dragon los datos de un proveedor elegido por razón social (o por CUIT).
+    Si el nombre coincide con más de un proveedor distinto, no adivina: devuelve null. */
+export async function datosProveedorDragon(nombre: string, cuit?: string | null): Promise<DatosProveedor | null> {
+  const c = cuit ? cuitConGuiones(cuit) : null
+  if (c) {
+    const { data } = await sb().from('ordenes_compra_proveedores').select(COLS_PROV).eq('cuit', c).limit(5)
+    const conDatos = ((data ?? []) as FilaProvDragon[]).filter(tieneDatos)
+    if (conDatos.length) return deDragon(conDatos.find((p) => p.contacto || p.telefono || p.mail) ?? conDatos[0])
+  }
+  const palabras = palabrasProveedor(nombre)
+  if (!palabras.length) return null
+  // Cada palabra del nombre tiene que estar entera en el nombre de Dragon («ARRECIFE» no es «ARRECIFES»)
+  const cand = (await provDragonPorPalabras(palabras, 30)).filter((p) => {
+    const ws = new Set(normalizar(p.nombre).split(' '))
+    return palabras.every((w) => ws.has(w))
+  }).filter(tieneDatos)
+  if (!cand.length) return null
+  if (cand.length === 1) return deDragon(cand[0])
+  const clave = palabras.join(' ')
+  const exacto = cand.filter((p) => palabrasProveedor(p.nombre).join(' ') === clave)
+  if (exacto.length === 1) return deDragon(exacto[0])
+  // Varios códigos del mismo proveedor (ej. 47 STREET): vale si es el mismo CUIT
+  const cuits = new Set(cand.map((p) => p.cuit).filter(Boolean))
+  if (cuits.size === 1) return deDragon(cand.find((p) => p.contacto || p.telefono || p.mail) ?? cand[0])
+  return null
+}
+
+/** Datos de un proveedor de Dragon por código (al elegirlo en la sección Dragon). */
+export async function datosProveedorPorCodigo(codigo: string): Promise<DatosProveedor | null> {
+  const { data } = await sb().from('ordenes_compra_proveedores').select(COLS_PROV).eq('codigo', codigo.trim()).maybeSingle()
+  return data ? deDragon(data as FilaProvDragon) : null
+}
+
+/** Buscador de razón social del alta: proveedores ya usados en OC (la última de cada uno) + el maestro de Dragon. */
+export async function buscarProveedoresOc(texto: string): Promise<DatosProveedor[]> {
   const w = texto.replace(/[,()*%\\]/g, ' ').trim()
   if (w.length < 2) return []
-  const { data, error } = await sb()
-    .from('ordenes_compra')
-    .select('proveedor,proveedor_cuit,contacto,telefono,mail,numero')
-    .ilike('proveedor', `%${w}%`)
-    .order('numero', { ascending: false })
-    .limit(80)
-  if (error) throw new Error(error.message)
-  const vistos = new Map<string, Pick<OrdenCompra, 'proveedor' | 'proveedor_cuit' | 'contacto' | 'telefono' | 'mail'>>()
-  for (const f of (data ?? []) as OrdenCompra[]) {
-    const k = f.proveedor.trim().toUpperCase()
-    if (!vistos.has(k)) vistos.set(k, f)
+  const [oc, dragon] = await Promise.all([
+    sb().from('ordenes_compra').select('proveedor,proveedor_cuit,contacto,telefono,mail,numero')
+      .ilike('proveedor', `%${w}%`).order('numero', { ascending: false }).limit(80),
+    provDragonPorPalabras(normalizar(w).split(' ').filter(Boolean), 12).catch(() => [] as FilaProvDragon[]),
+  ])
+  if (oc.error) throw new Error(oc.error.message)
+  const vistos = new Map<string, DatosProveedor>()
+  for (const f of (oc.data ?? []) as OrdenCompra[]) {
+    const k = normalizar(f.proveedor)
+    if (!vistos.has(k)) vistos.set(k, { proveedor: f.proveedor, proveedor_cuit: f.proveedor_cuit, contacto: f.contacto, telefono: f.telefono, mail: f.mail })
   }
-  return [...vistos.values()].slice(0, 15)
+  const lista = [...vistos.values()].slice(0, 12)
+  for (const p of dragon) if (!vistos.has(normalizar(p.nombre))) lista.push(deDragon(p))
+  return lista
 }
 
 export interface ArticuloBusqueda {
