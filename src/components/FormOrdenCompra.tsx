@@ -213,6 +213,27 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
     }
   }
 
+  /* Un solo botón principal según el estado de la OC (antes eran tres):
+     sin autorizar → pide la autorización (al autorizarla se crea sola en Dragon, ver sql/ordenes_compra_dragon_auto.sql);
+     autorizada y con Dragon → la crea en Dragon (Compras); si no, guarda. «Solo guardar» queda como acción secundaria. */
+  const pie = ((): { accion: 'guardar' | 'pedir' | 'dragon'; texto: string; ayuda: string } => {
+    const enDragon = f.dragon ? ' Cuando la autoricen, se crea sola en Dragon.' : ''
+    if (oc?.cancelada_at) return { accion: 'guardar', texto: 'Guardar OC', ayuda: 'La OC está cancelada. Los cambios quedan en el historial.' }
+    if (oc?.pasos?.autor) {
+      if (f.dragon && esCompras && !bloqueadoDragon) {
+        return {
+          accion: 'dragon', texto: oc.dragon_estado === 'error' ? 'Guardar y reintentar en Dragon' : 'Guardar y crear en Dragon',
+          ayuda: `Autorizada por ${oc.pasos.autor.por ?? '—'}. Se manda a Dragon por el puente en menos de 1 minuto.`,
+        }
+      }
+      return { accion: 'guardar', texto: 'Guardar OC', ayuda: oc.dragon_estado === 'ok' ? 'Ya está creada en Dragon. Los cambios quedan en el historial.' : 'Ya está autorizada. Los cambios quedan en el historial.' }
+    }
+    if (oc?.pedida_at) {
+      return { accion: 'guardar', texto: 'Guardar OC', ayuda: `Autorización pedida${oc.pedida_a?.length ? ` a ${oc.pedida_a.join(', ')}` : ''}.${enDragon}` }
+    }
+    return { accion: 'pedir', texto: 'Guardar y pedir autorización', ayuda: `Le avisa al autorizador por Telegram.${enDragon} «Solo guardar» la deja sin avisar.` }
+  })()
+
   const subir = async (archivo: File | undefined) => {
     if (!archivo) return
     setGuardando('archivo')
@@ -433,21 +454,17 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
 
         {error && <p className="mx-5 mb-2 rounded-xl border border-red-500/30 bg-red-500/10 p-2.5 text-sm text-red-300">{error}</p>}
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-5 py-3.5">
-          <span className="text-xs text-sub">{oc ? 'Los cambios quedan en el historial.' : 'Queda pendiente de validación de Compras. El aviso al autorizador sale solo con «pedir autorización».'}</span>
-          <div className="flex flex-wrap gap-2">
+          <span className="max-w-md text-xs text-sub">{pie.ayuda}</span>
+          <div className="flex flex-wrap items-center gap-2">
             <button onClick={onCerrar} className="h-9 rounded-xl border border-line px-4 text-sm text-ink hover:bg-surface2">Cancelar</button>
-            {f.dragon && esCompras && !bloqueadoDragon && (
-              <button disabled={!!guardando} onClick={() => void guardar('dragon')} className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-teal-600 px-4 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
-                {guardando === 'dragon' && <Loader2 size={14} className="animate-spin" />} Guardar y crear OC en Dragon
+            {pie.accion !== 'guardar' && (
+              <button disabled={!!guardando} onClick={() => void guardar()} className="inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-sm text-sub underline-offset-2 hover:text-ink hover:underline disabled:opacity-60">
+                {guardando === 'guardar' && <Loader2 size={14} className="animate-spin" />} Solo guardar
               </button>
             )}
-            {!oc?.pasos?.autor && !oc?.pedida_at && (
-              <button disabled={!!guardando} onClick={() => void guardar('pedir')} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-emerald-500/50 px-4 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-60">
-                {guardando === 'pedir' ? <Loader2 size={14} className="animate-spin" /> : '💬'} Guardar y pedir autorización
-              </button>
-            )}
-            <button disabled={!!guardando} onClick={() => void guardar()} className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-lime-600 px-4 text-sm font-semibold text-white hover:bg-lime-700 disabled:opacity-60">
-              {guardando === 'guardar' && <Loader2 size={14} className="animate-spin" />} Guardar OC
+            <button disabled={!!guardando} onClick={() => void guardar(pie.accion === 'guardar' ? undefined : pie.accion)}
+              className={`inline-flex h-9 items-center gap-1.5 rounded-xl px-4 text-sm font-semibold text-white disabled:opacity-60 ${pie.accion === 'dragon' ? 'bg-teal-600 hover:bg-teal-700' : pie.accion === 'pedir' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-lime-600 hover:bg-lime-700'}`}>
+              {guardando === pie.accion ? <Loader2 size={14} className="animate-spin" /> : pie.accion === 'pedir' ? '💬' : null} {pie.texto}
             </button>
           </div>
         </div>

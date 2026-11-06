@@ -437,14 +437,14 @@ function DetalleOc({ oc, onCerrar, onCambio, onBorrada, onEditar }: {
                     {oc.dragon_estado === 'ok' ? <>✓ Pedido de compra X-0164-{oc.numero} en DRAGONFISH_{oc.dragon_base} · mandada por <b className="text-ink">{oc.dragon_por}</b> · {fechaHora(oc.dragon_at)}</>
                       : oc.importada && oc.dragon ? 'Tildada en la planilla'
                         : oc.dragon_estado === 'pendiente' || oc.dragon_estado === 'enviando' ? `⏳ En cola: el puente la manda a DRAGONFISH_${oc.dragon_base} en menos de 1 minuto`
-                          : oc.dragon_estado === 'error' ? <span className="text-red-300">Dragon la rechazó: {oc.dragon_error}</span>
-                            : oc.dragon ? 'Lista para mandar' : 'No está marcada para Dragon'}
+                          : oc.dragon_estado === 'error' ? <span className="text-red-300">{oc.dragon_error?.startsWith('No se mandó sola') ? oc.dragon_error : `Dragon la rechazó: ${oc.dragon_error}`}</span>
+                            : oc.dragon ? (oc.pasos?.autor ? 'Lista para mandar' : 'Se crea sola cuando la autoricen') : 'No está marcada para Dragon'}
                   </p>
                 </div>
                 <div>
                   {esCompras && !oc.cancelada_at && oc.dragon_estado !== 'ok' && oc.dragon_estado !== 'enviando' && oc.dragon_estado !== 'pendiente' && !(oc.importada && oc.dragon) && (
                     oc.dragon
-                      ? <button disabled={!!ocupado} onClick={() => void hacer('dragon', () => mandarADragon(oc.numero))}
+                      ? oc.pasos?.autor && <button disabled={!!ocupado} onClick={() => void hacer('dragon', () => mandarADragon(oc.numero))}
                         className="rounded-lg bg-teal-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-teal-700">{oc.dragon_estado === 'error' ? 'Reintentar' : 'Crear OC en Dragon'}</button>
                       : <button onClick={() => onEditar(true)} className="rounded-lg border border-teal-500/50 px-2.5 py-1 text-xs text-teal-300 hover:bg-teal-500/10">Cargar para Dragon</button>
                   )}

@@ -17,6 +17,16 @@ Reemplaza la planilla «Alta Órdenes de Compras Mito» (Google Sheets). Alta: 0
 | `ordenes_compra.autorizar` | autorizar desde el hub | (por persona) |
 Admin todo; borrar y Autorizadores solo admin. Área del usuario = sus permisos `area_*.view` (`private.oc_mis_areas`). Las importadas no tienen área: solo las ven quienes tienen `ver_todas`.
 
+## Botón del formulario (un solo botón principal, 06/11/2026)
+Antes había tres al pie («Guardar y crear OC en Dragon», «Guardar y pedir autorización», «Guardar OC»). Ahora `FormOrdenCompra.tsx` (`pie`) muestra **un botón principal según el estado** y «Solo guardar» como enlace chico:
+| Estado de la OC | Botón principal |
+|---|---|
+| Nueva o sin pedir autorización | 💬 **Guardar y pedir autorización** (Compras o quien la cargó) |
+| Autorización ya pedida | **Guardar OC** (el texto dice a quién se pidió) |
+| Autorizada + tilde Dragon + Compras + no mandada | **Guardar y crear en Dragon** («reintentar» si quedó en error) |
+| Autorizada sin Dragon, ya en Dragon o cancelada | **Guardar OC** |
+- **Dragon espera la autorización**: al autorizarse (Telegram, link o tilde en el hub) el trigger `ordenes_compra_dragon_al_autorizar` (`sql/ordenes_compra_dragon_auto.sql`) la deja `pendiente` sola si tiene el tilde Dragon y los datos completos (`private.oc_falta_dragon`); `dragon_por` = «autorizó X». Si falta algo queda en `error` con «No se mandó sola al autorizarse: …» y Compras la completa y reintenta. `oc_mandar_dragon` rechaza las OC sin autorizar; en el detalle el botón «Crear OC en Dragon» solo aparece autorizada («Se crea sola cuando la autoricen»).
+
 ## Autorización por WhatsApp
 - **Nunca sale sola**: botón «💬 Pedir autorización» (lista, detalle y «Guardar y pedir autorización»). Lo tocan Compras o quien cargó la OC. `POST /api/informe {ocPedir}` → RPC `oc_pedir_autorizacion` (con el JWT del usuario) → plantilla **`oc_autorizar_link`** (es_AR, Utility) con un botón al link `/oc/<token>`. Lib `src/lib/ordenesCompraWhatsapp.ts`.
 - A quién: `private.oc_destinatarios` usa `oc_reparto()` = quién autorizó cada tipo en los últimos 90 días (en Gastos, por responsable; mínimo 3 OC) y lo cruza por primer nombre con los contactos tildados en Autorizadores (`informes_contactos`). Si nadie responde en `horas_espera`, `oc_ampliar_avisos()` (pg_cron `informes-diarios` cada 5 min → `?evento=diarios`) les manda a los demás.
@@ -27,7 +37,7 @@ Admin todo; borrar y Autorizadores solo admin. Área del usuario = sus permisos 
 ## Dragon (pedido de compra)
 - Tilde «Esta OC va a Dragon» → base (hoy solo **INDOD**; NOMED en 100.85.74.68\ZOO2024 todavía no), proveedor (buscador sobre `recepcion_indo_proveedores`), motivo (obligatorio), condición de pago, lista (LISTA0) y artículos (buscador en vivo sobre `ZooLogic.ART` de la base elegida: `/api/sql/dragon-articulos?q=` → acción `dragon_articulos` del puente; colores y talles en vivo: `/api/sql/dragon-variantes` → acción `dragon_variantes`, COMB + COL). Monto bruto = total con IVA 21 %.
 - **Importar txt**: una línea por SKU, `CANTIDAD+ARTICULO%COLORTALLE` (`24+zh000200%02xxl` = 24 u. de ZH000200, color 02, talle XXL; sin `N+` es 1). Valida contra la base (`dragon-articulos?codigos=`, de a 100), suma los repetidos y a lo que ya estaba cargado; lo que no existe no entra y se lista con el número de línea. Los precios quedan en 0.
-- «Crear OC en Dragon» (Compras) → `oc_mandar_dragon` deja `dragon_estado = pendiente` → `puente-sql/scripts/sync-oc-dragon.js` (tarea «MITO - Pedidos franquicias», cada 1 min) → `dragon.js crearPedidoCompra` (`POST /Pedidodecompra/`, header `BaseDeDatos`, Letra X, PV 164, **mismo N°**) → `oc_resultado_dragon`. Si falla queda el error y se reintenta con el botón.
+- Sola al autorizarse (ver «Botón del formulario») o «Crear OC en Dragon» (Compras, con la OC autorizada) → `oc_mandar_dragon` deja `dragon_estado = pendiente` → `puente-sql/scripts/sync-oc-dragon.js` (tarea «MITO - Pedidos franquicias», cada 1 min) → `dragon.js crearPedidoCompra` (`POST /Pedidodecompra/`, header `BaseDeDatos`, Letra X, PV 164, **mismo N°**) → `oc_resultado_dragon`. Si falla queda el error y se reintenta con el botón.
 - Prueba hecha: X-0164-99001 en INDOD (EIRY, a anular a mano).
 
 Mockup: `mockups/ordenes-compras.html` (con las OC reales; abrir con el server «mockups» de `.claude/launch.json`, es grande para el visor de archivos).
