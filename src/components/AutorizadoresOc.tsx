@@ -2,11 +2,14 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Loader2, X } from 'lucide-react'
 import {
-  apiInforme, cargarConfig, clavesEstado, contactosAgenda, desbloquearClave, guardarClave, guardarConfig, repartoActual, type ConfigOc,
+  apiInforme, cargarConfig, clavesEstado, contactosAgenda, desbloquearClave, guardarClave, guardarConfig, repartoActual, responsablesGastos, type ConfigOc,
 } from '@/lib/ordenesCompra'
 
 /* Órdenes de compras · Autorizadores (solo admin): a quién le llega el WhatsApp para autorizar
-   (de los contactos de «Envío informes y reportes»), reparto por historial y la plantilla de Meta. */
+   (de los contactos de «Envío informes y reportes»), quién autoriza cada categoría (a mano, con el historial de respaldo) y la plantilla de Meta. */
+
+/** «TOMAS ROCA» → «Tomas Roca» (dos primeras palabras). */
+const nombreCorto2 = (r: string) => r.split(' ').filter(Boolean).slice(0, 2).map((p) => p[0] + p.slice(1).toLowerCase()).join(' ')
 
 type Reparto = Awaited<ReturnType<typeof repartoActual>>
 interface EstadoPlantilla { existe: boolean; estado?: string; motivo?: string; error?: string }
@@ -15,6 +18,9 @@ export default function AutorizadoresOc({ onCerrar }: { onCerrar: () => void }) 
   const [cfg, setCfg] = useState<ConfigOc | null>(null)
   const [contactos, setContactos] = useState<Array<{ id: string; nombre: string; fin: string; activo: boolean }>>([])
   const [reparto, setReparto] = useState<Reparto | null>(null)
+  const [responsables, setResponsables] = useState<string[]>([])
+  /** Personas de Gastos sumadas a mano al cuadro (todavía sin guardar). */
+  const [extras, setExtras] = useState<string[]>([])
   const [plantilla, setPlantilla] = useState<EstadoPlantilla | null>(null)
   const [ocupado, setOcupado] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -30,6 +36,7 @@ export default function AutorizadoresOc({ onCerrar }: { onCerrar: () => void }) 
     void cargarConfig().then(setCfg)
     void contactosAgenda().then(setContactos).catch((e: Error) => setError(e.message))
     void repartoActual().then(setReparto).catch(() => setReparto(null))
+    void responsablesGastos().then(setResponsables).catch(() => setResponsables([]))
     void apiInforme<EstadoPlantilla>({ ocPlantilla: 'estado' }).then(setPlantilla).catch((e: Error) => setPlantilla({ existe: false, error: e.message }))
   }, [])
 
@@ -83,17 +90,32 @@ export default function AutorizadoresOc({ onCerrar }: { onCerrar: () => void }) 
     }
   }
 
-  const fila = (titulo: string, r?: { quien: string; n: number; de: number }) => r && (
-    <tr key={titulo} className="border-t border-line/60">
-      <td className="py-1 pr-3">{titulo}</td>
-      <td className="py-1 pr-3 font-semibold capitalize text-ink">{r.quien}</td>
-      <td className="py-1 text-right tabular-nums">{r.n} de {r.de} ({Math.round((r.n / r.de) * 100)} %)</td>
-    </tr>
-  )
+  const tildados = cfg ? contactos.filter((c) => c.activo && cfg.autorizadores.includes(c.id)) : []
+  const gastosEnFilas = [...new Set([
+    ...Object.keys(reparto?.gastos_responsable ?? {}),
+    ...Object.keys(cfg?.reglas ?? {}).filter((k) => k.startsWith('gastos:')).map((k) => k.slice(7)),
+    ...extras,
+  ])]
+  const filas: Array<{ clave: string; titulo: string; hist?: { quien: string; n: number; de: number } }> = [
+    ...['Producto', 'Servicios', 'Talleres'].map((t) => ({ clave: `tipo:${t}`, titulo: t, hist: reparto?.tipo[t] })),
+    ...gastosEnFilas.sort((x, y) => (reparto?.gastos_responsable[y]?.de ?? 0) - (reparto?.gastos_responsable[x]?.de ?? 0))
+      .map((r) => ({ clave: `gastos:${r}`, titulo: `Gastos de ${nombreCorto2(r)}`, hist: reparto?.gastos_responsable[r] })),
+    { clave: 'tipo:Gastos', titulo: 'Gastos, el resto', hist: reparto?.tipo.Gastos },
+  ]
+  const faltan = responsables.filter((r) => !gastosEnFilas.includes(r))
+  const tildarRegla = (clave: string, id: string) => {
+    if (!cfg) return
+    const actual = cfg.reglas?.[clave] ?? []
+    const nueva = actual.includes(id) ? actual.filter((x) => x !== id) : [...actual, id]
+    const reglas = { ...(cfg.reglas ?? {}) }
+    if (nueva.length) reglas[clave] = nueva
+    else delete reglas[clave]
+    setCfg({ ...cfg, reglas })
+  }
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-3 backdrop-blur-sm" onMouseDown={(e) => e.target === e.currentTarget && onCerrar()}>
-      <div className="max-h-[calc(100vh-24px)] w-full max-w-xl overflow-auto rounded-3xl border border-line bg-[#0c0c11] shadow-2xl">
+      <div className="max-h-[calc(100vh-24px)] w-full max-w-2xl overflow-auto rounded-3xl border border-line bg-[#0c0c11] shadow-2xl">
         <div className="flex items-center justify-between border-b border-line px-5 py-4">
           <h2 className="font-display text-lg font-bold text-ink">🔔 Autorizadores</h2>
           <button onClick={onCerrar} className="rounded-lg border border-line p-1.5 text-sub hover:bg-surface2" aria-label="Cerrar"><X size={16} /></button>
@@ -141,22 +163,51 @@ export default function AutorizadoresOc({ onCerrar }: { onCerrar: () => void }) 
 
           {cfg && (
             <div className="flex flex-col gap-2 rounded-2xl border border-teal-500/30 bg-teal-500/5 p-3">
-              <label className="flex items-center gap-2 font-semibold text-teal-200">
-                <input type="checkbox" checked={cfg.reparto_auto} onChange={(e) => setCfg({ ...cfg, reparto_auto: e.target.checked })} className="h-4 w-4 accent-teal-500" />
-                Mandarle el aviso al que corresponde según el historial
-              </label>
-              {reparto && (
-                <table className="w-full text-xs text-sub"><tbody>
-                  {fila('Producto', reparto.tipo.Producto)}
-                  {fila('Servicios', reparto.tipo.Servicios)}
-                  {fila('Talleres', reparto.tipo.Talleres)}
-                  {Object.entries(reparto.gastos_responsable).sort((a, b) => b[1].de - a[1].de).slice(0, 6)
-                    .map(([r, v]) => fila(`Gastos de ${r.split(' ').slice(0, 2).map((p) => p[0] + p.slice(1).toLowerCase()).join(' ')}`, v))}
-                  {fila('Gastos, el resto', reparto.tipo.Gastos)}
-                </tbody></table>
+              <p className="font-semibold text-teal-200">Quién autoriza cada categoría</p>
+              <p className="text-xs text-sub">Tildá uno o varios por fila: el aviso les llega juntos y vale la primera respuesta. Si una fila no tiene a nadie tildado, va según el historial.</p>
+              {tildados.length === 0 ? <p className="text-xs text-amber-300">Primero tildá arriba a los autorizadores.</p> : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-sub">
+                    <thead><tr className="text-left text-[10.5px] uppercase tracking-wide">
+                      <th className="py-1 pr-3 font-bold">Categoría</th>
+                      {tildados.map((c) => <th key={c.id} className="px-1.5 py-1 text-center font-bold">{c.nombre}</th>)}
+                      <th className="py-1 pl-2 font-bold">Historial (90 días)</th>
+                    </tr></thead>
+                    <tbody>
+                      {filas.map((r) => {
+                        const elegidos = (cfg.reglas?.[r.clave] ?? []).filter((id) => tildados.some((c) => c.id === id))
+                        return (
+                          <tr key={r.clave} className="border-t border-line/60">
+                            <td className="py-1.5 pr-3 text-ink">{r.titulo}</td>
+                            {tildados.map((c) => (
+                              <td key={c.id} className="px-1.5 py-1.5 text-center">
+                                <input type="checkbox" aria-label={`${c.nombre} autoriza ${r.titulo}`} checked={elegidos.includes(c.id)} onChange={() => tildarRegla(r.clave, c.id)} className="h-4 w-4 accent-teal-500" />
+                              </td>
+                            ))}
+                            <td className={`py-1.5 pl-2 ${elegidos.length ? 'opacity-50' : ''}`}>
+                              {r.hist ? <><b className="capitalize text-ink">{r.hist.quien}</b> {r.hist.n} de {r.hist.de} ({Math.round((r.hist.n / r.hist.de) * 100)} %)</> : '—'}
+                              {!elegidos.length && <span className="ml-1 text-[10.5px] text-teal-300">{r.hist && cfg.reparto_auto ? '← va a este' : (r.clave.startsWith('gastos:') ? '← como «Gastos, el resto»' : '← a todos')}</span>}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
+              {tildados.length > 0 && faltan.length > 0 && (
+                <select value="" onChange={(e) => e.target.value && setExtras((x) => [...x, e.target.value])} aria-label="Agregar persona de Gastos"
+                  className="self-start rounded-lg border border-line bg-surface2 px-2 py-1 text-xs text-sky-300">
+                  <option value="">＋ Agregar persona (Gastos de…)</option>
+                  {faltan.map((r) => <option key={r} value={r}>{nombreCorto2(r)}</option>)}
+                </select>
+              )}
+              <label className="flex items-center gap-2 text-xs text-sub">
+                <input type="checkbox" checked={cfg.reparto_auto} onChange={(e) => setCfg({ ...cfg, reparto_auto: e.target.checked })} className="h-4 w-4 accent-teal-500" />
+                En las filas sin nadie tildado, usar el historial (si no, les llega a todos)
+              </label>
               <p className="text-xs text-sub">
-                Últimos 90 días; se recalcula solo con cada OC que se autoriza. Si no responde en{' '}
+                Si no responde en{' '}
                 <select value={cfg.horas_espera} onChange={(e) => setCfg({ ...cfg, horas_espera: Number(e.target.value) })} className="rounded-md border border-line bg-surface2 px-1 text-ink">
                   {[2, 4, 8, 24].map((h) => <option key={h}>{h}</option>)}
                 </select>{' '}horas, el aviso les llega también a los demás tildados.

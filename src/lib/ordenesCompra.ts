@@ -222,13 +222,17 @@ export interface ConfigOc {
   autorizadores: string[]
   reparto_auto: boolean
   horas_espera: number
+  /** Elegidos a mano por categoría: «tipo:Producto», «tipo:Gastos» (el resto) o «gastos:RESPONSABLE» → ids de contactos. */
+  reglas: Record<string, string[]>
 }
 export async function cargarConfig(): Promise<ConfigOc | null> {
-  const { data } = await sb().from('ordenes_compra_config').select('autorizadores,reparto_auto,horas_espera').eq('id', 1).maybeSingle()
+  const { data } = await sb().from('ordenes_compra_config').select('autorizadores,reparto_auto,horas_espera,reglas').eq('id', 1).maybeSingle()
   return (data as ConfigOc | null) ?? null
 }
 export const guardarConfig = (c: ConfigOc) =>
-  rpc('oc_config_guardar', { p_autorizadores: c.autorizadores, p_reparto_auto: c.reparto_auto, p_horas: c.horas_espera })
+  rpc('oc_config_guardar', { p_autorizadores: c.autorizadores, p_reparto_auto: c.reparto_auto, p_horas: c.horas_espera, p_reglas: c.reglas ?? {} })
+/** Responsables con OC de Gastos (para sumar filas al cuadro de autorizadores; solo admin). */
+export const responsablesGastos = () => rpc<string[]>('oc_responsables_gastos', {})
 export const contactosAgenda = () => rpc<Array<{ id: string; nombre: string; fin: string; activo: boolean }>>('oc_contactos', {})
 /** Claves del link de autorización (solo admin): quién tiene y quién está bloqueado; el valor nunca vuelve. */
 export const clavesEstado = () => rpc<Array<{ contacto_id: string; bloqueada: boolean }>>('oc_claves_estado', {})
