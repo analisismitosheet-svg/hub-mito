@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
-  Bell, CheckSquare, CircleX, ClipboardCheck, FileText, Lock, Loader2, Paperclip, Plus, Search, Send, ShieldCheck, Undo2, X,
+  Bell, CheckSquare, CircleX, ClipboardCheck, FileText, Lock, Loader2, Paperclip, Plus, Search, Send, ShieldCheck, Undo2, X, Trash2,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -48,6 +48,21 @@ export default function OrdenesCompra() {
   const { isAdmin, can, perfil, user } = useAuth()
   const [params, setParams] = useSearchParams()
   const [lista, setLista] = useState<OrdenCompra[] | null>(null)
+  const [borrando, setBorrando] = useState<number | null>(null)
+  /** Borrar desde la lista (solo admin; oc_borrar lo controla igual). */
+  const borrarDeLista = async (numero: number) => {
+    if (!window.confirm(`¿Borrar la OC ${numero}? Se borra con su historial y no se puede deshacer.`)) return
+    setBorrando(numero)
+    try {
+      await borrarOrden(numero)
+      setLista((l) => l && l.filter((x) => x.numero !== numero))
+      if (sel === numero) setSel(null)
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setBorrando(null)
+    }
+  }
   /** id → nombre de los subtipos (también los borrados) para mostrar «Gastos · Alquiler». */
   const [subNombres, setSubNombres] = useState<Record<number, string>>({})
   useEffect(() => { void nombresSubtipos().then(setSubNombres) }, [])
@@ -240,6 +255,13 @@ export default function OrdenesCompra() {
                         <BotonPedir o={o} chico userId={user?.id} esCompras={esCompras} onListo={() => void actualizarUna(o.numero)} />
                         {(o.dragon_estado === 'ok' || (o.importada && o.dragon)) && <span className="ml-1 rounded-full border border-teal-400/40 px-2 py-0.5 text-[11px] text-teal-300">Dragon</span>}
                         {(o.archivo_url || o.archivo_path) && <Paperclip size={13} className="ml-1 inline text-sub" aria-label="Con archivo" />}
+                        {isAdmin && (
+                          <button type="button" title={`Borrar la OC ${o.numero} (solo admin)`} aria-label={`Borrar la OC ${o.numero}`} disabled={borrando === o.numero}
+                            onClick={(e) => { e.stopPropagation(); void borrarDeLista(o.numero) }}
+                            className="ml-1.5 inline-grid h-6 w-6 place-items-center rounded-md border border-red-500/30 align-middle text-red-300/80 hover:bg-red-500/10 hover:text-red-300 disabled:opacity-50">
+                            {borrando === o.numero ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                          </button>
+                        )}
                       </td>
                     </tr>
                   )

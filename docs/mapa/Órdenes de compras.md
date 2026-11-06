@@ -15,7 +15,7 @@ Reemplaza la planilla «Alta Órdenes de Compras Mito» (Google Sheets). Alta: 0
 | `ordenes_compra.compras` | validar, enviada/aceptada, cancelar, editar, crear en Dragon | compras |
 | `ordenes_compra.flexxus` | OC / remito / factura en Flexxus | administracion |
 | `ordenes_compra.autorizar` | autorizar desde el hub | (por persona) |
-Admin todo; borrar y Autorizadores solo admin. Área del usuario = sus permisos `area_*.view` (`private.oc_mis_areas`). Las importadas no tienen área: solo las ven quienes tienen `ver_todas`.
+Admin todo; borrar y Autorizadores solo admin. Borrar (`oc_borrar`, con confirmación; se va con su historial): tachito rojo al final de cada fila de la lista o «🗑 Borrar» en el detalle. Área del usuario = sus permisos `area_*.view` (`private.oc_mis_areas`). Las importadas no tienen área: solo las ven quienes tienen `ver_todas`.
 
 ## Botón del formulario (un solo botón principal, 06/11/2026)
 Antes había tres al pie («Guardar y crear OC en Dragon», «Guardar y pedir autorización», «Guardar OC»). Ahora `FormOrdenCompra.tsx` (`pie`) muestra **un botón principal según el estado** y «Solo guardar» como enlace chico:
