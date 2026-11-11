@@ -56,7 +56,6 @@ export function bloquesConversion(d: DatosConversion): { subtitulo: string; bloq
         conv: conv(v.tickets, entradas), convAnt: eAnt > 0 ? conv(vAnt.tickets, eAnt) : null,
       }
     })
-    .sort((a, b) => (b.conv ?? -1) - (a.conv ?? -1))
 
   const bloques: BloqueImagen[] = []
   if (!filas.length) {
@@ -66,104 +65,98 @@ export function bloquesConversion(d: DatosConversion): { subtitulo: string; bloq
 
   const ent = filas.reduce((s, f) => s + f.entradas, 0)
   const tk = filas.reduce((s, f) => s + f.tickets, 0)
-  const tot = filas.reduce((s, f) => s + f.total, 0)
   // Comparación justa: los mismos locales, y solo si la semana pasada también contaron
   const conAnt = filas.filter((f) => (d.entradasAntes.get(f.local) ?? 0) > 0)
   const entAnt = conAnt.reduce((s, f) => s + (d.entradasAntes.get(f.local) ?? 0), 0)
   const tkAnt = conAnt.reduce((s, f) => s + (d.ventasAntes.get(f.local)?.tickets ?? 0), 0)
   const convTot = conv(tk, ent)
   const convAntTot = conAnt.length ? conv(tkAnt, entAnt) : null
-  const mejor = filas[0]
 
-  bloques.push({
-    tipo: 'kpis',
-    items: [
-      { titulo: 'Conversión', valor: pct(convTot), pie: convAntTot != null ? `${puntos(convTot, convAntTot)} vs ${diaCorto(d.antes)} (${pct(convAntTot)})` : 'sin semana anterior para comparar', color: '#16a34a' },
-      { titulo: 'Entradas', valor: nf(ent), pie: `${filas.length} local${filas.length === 1 ? '' : 'es'} con cámara`, color: '#2563eb' },
-      { titulo: 'Tickets', valor: nf(tk), pie: tk ? `ticket promedio ${pesos(tot / tk)}` : 'sin ventas', color: '#7c3aed' },
-      { titulo: 'Mejor local', valor: pct(mejor.conv), pie: mejor.nombre || mejor.local, color: '#ea580c' },
-    ],
-  })
   // Objetivo del día (Locales → Objetivo) al lado del facturado, con la diferencia
   const conObj = Boolean(d.objetivos?.size)
   const obj = (local: string) => d.objetivos?.get(local)
   /** verde si llegó, ámbar desde el 80%, rojo abajo (igual que la pantalla) */
   const colorDif = (v: number, o: number) => (v >= o ? '#16a34a' : o > 0 && v / o >= 0.8 ? '#d97706' : '#dc2626')
   const difTxt = (n: number) => `${n >= 0 ? '+' : '-'}${pesos(Math.abs(n))}`
-  const conObjetivo = filas.filter((f) => obj(f.local) != null)
+
+  // Locales sin cámara: van en la misma tabla, con «-» en entradas y conversión
+  const conCamara = new Set(filas.map((f) => f.local))
+  const sinCamara = [...new Set([...(d.objetivos?.keys() ?? []), ...(d.ventasDia?.keys() ?? [])])]
+    .filter((l) => !conCamara.has(l) && !LOCALES_FUERA_DEL_CONTADOR.has(l))
+  type Fila = { local: string; nombre: string; entradas: number | null; tickets: number; total: number; conv: number | null }
+  const todas: Fila[] = [
+    ...filas.map((f) => ({ ...f, nombre: (f.nombre || f.local).toUpperCase() })),
+    ...sinCamara.map((local) => ({
+      local, nombre: (d.nombres[local] || local).toUpperCase(), entradas: null, conv: null,
+      tickets: d.ventas.get(local)?.tickets ?? 0, total: d.ventasDia?.get(local) ?? d.ventas.get(local)?.total ?? 0,
+    })),
+  ].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }))
+
+  const tkTodos = todas.reduce((s, f) => s + f.tickets, 0)
+  const totTodos = todas.reduce((s, f) => s + f.total, 0)
+  const conObjetivo = todas.filter((f) => obj(f.local) != null)
   const objTot = conObjetivo.reduce((s, f) => s + (obj(f.local) ?? 0), 0)
   const factObjTot = conObjetivo.reduce((s, f) => s + f.total, 0)
+  const avanceObj = objTot > 0 ? (100 * factObjTot) / objTot : null
+
+  bloques.push({
+    tipo: 'kpis',
+    items: [
+      { titulo: 'Conversión', valor: pct(convTot), pie: convAntTot != null ? `${puntos(convTot, convAntTot)} vs ${diaCorto(d.antes)} (${pct(convAntTot)})` : 'sin semana anterior para comparar', color: '#16a34a' },
+      { titulo: 'Entradas', valor: nf(ent), pie: `${filas.length} local${filas.length === 1 ? '' : 'es'} con cámara`, color: '#2563eb' },
+      { titulo: 'Tickets', valor: nf(tkTodos), pie: tkTodos ? `ticket promedio ${pesos(totTodos / tkTodos)}` : 'sin ventas', color: '#7c3aed' },
+      {
+        titulo: '% del objetivo', valor: pct(avanceObj),
+        pie: avanceObj != null ? `${pesos(factObjTot)} de ${pesos(objTot)}` : 'sin objetivos cargados',
+        color: avanceObj != null ? colorDif(factObjTot, objTot) : '#ea580c',
+      },
+    ],
+  })
 
   bloques.push({ tipo: 'seccion', texto: 'Por local', color: '#16a34a' })
-  const fila = (f: (typeof filas)[number]) => {
+  /** En la imagen «CAPTAIN FIN» va como «CF» (y «RIVERA INDARTE» como «R. INDARTE») para que entre el nombre */
+  const nombreCorto = (n: string) => n.replace(/^CAPTAIN FIN/, 'CF').replace('RIVERA INDARTE', 'R. INDARTE')
+  /** % del objetivo completado, sin decimales («113%») */
+  const avance = (v: number, o: number | undefined) => (o ? `${nf((100 * v) / o)}%` : '—')
+  const fila = (f: Fila) => {
     const o = obj(f.local)
     return [
-      f.nombre || f.local,
-      nf(f.entradas), nf(f.tickets), pct(f.conv), pesos(f.total),
-      ...(conObj ? [o != null ? pesos(o) : '—', o != null ? difTxt(f.total - o) : '—'] : []),
+      nombreCorto(f.nombre),
+      f.entradas != null ? nf(f.entradas) : '-', nf(f.tickets), f.entradas != null ? pct(f.conv) : '-', pesos(f.total),
+      ...(conObj ? [o != null ? pesos(o) : '—', avance(f.total, o), o != null ? difTxt(f.total - o) : '—'] : []),
       f.tickets ? pesos(f.total / f.tickets) : '—',
     ]
   }
   const filaTot = [
-    'Total', nf(ent), nf(tk), pct(convTot), pesos(tot),
-    ...(conObj ? [pesos(objTot), conObjetivo.length ? difTxt(factObjTot - objTot) : '—'] : []),
-    tk ? pesos(tot / tk) : '—',
+    'Total', nf(ent), nf(tkTodos), pct(convTot), pesos(totTodos),
+    ...(conObj ? [pesos(objTot), pct(avanceObj), conObjetivo.length ? difTxt(factObjTot - objTot) : '—'] : []),
+    tkTodos ? pesos(totTodos / tkTodos) : '—',
   ]
   bloques.push({
     tipo: 'tabla',
-    columnas: ['Local', 'Entradas', 'Tickets', 'Conversión', 'Facturado', ...(conObj ? ['Objetivo', 'Diferencia'] : []), 'Ticket prom.'],
-    anchos: conObj ? [1.9, 1.05, 0.85, 1.25, 1.5, 1.45, 1.5, 1.45] : [2.4, 1, 1, 1.2, 1.6, 1.4],
-    alinear: ['izq', 'der', 'der', 'der', 'der', ...(conObj ? (['der', 'der'] as const) : []), 'der'],
-    colores: [null, '#2563eb', '#7c3aed', '#16a34a', null, ...(conObj ? ['#475569', null] : []), '#475569'],
+    // Con objetivo son 9 columnas en 1000 px: «Conv.» abreviado para que entren los montos
+    columnas: ['Local', 'Entradas', 'Tickets', conObj ? 'Conv.' : 'Conversión', 'Facturado', ...(conObj ? ['Objetivo', '% obj.', 'Diferencia'] : []), conObj ? 'Promedio' : 'Ticket prom.'],
+    anchos: conObj ? [17.5, 8.5, 7.5, 6, 12.5, 12.5, 6.5, 12.5, 9.5] : [2.4, 1, 1, 1.2, 1.6, 1.4],
+    alinear: ['izq', 'der', 'der', 'der', 'der', ...(conObj ? (['der', 'der', 'der'] as const) : []), 'der'],
+    colores: [null, '#2563eb', '#7c3aed', '#16a34a', null, ...(conObj ? ['#475569', null, null] : []), '#475569'],
     ...(conObj
       ? {
           coloresCelda: [
-            ...filas.map((f) => { const o = obj(f.local); return [null, null, null, null, null, null, o != null ? colorDif(f.total, o) : null, null] }),
-            [null, null, null, null, null, null, conObjetivo.length ? colorDif(factObjTot, objTot) : null, null],
+            ...todas.map((f) => { const o = obj(f.local); const c = o != null ? colorDif(f.total, o) : null; return [null, null, null, null, null, null, c, c, null] }),
+            (() => { const c = conObjetivo.length ? colorDif(factObjTot, objTot) : null; return [null, null, null, null, null, null, c, c, null] })(),
           ],
         }
       : {}),
     total: true,
-    filas: [...filas.map(fila), filaTot],
+    filas: [...todas.map(fila), filaTot],
   })
-
-  // Locales sin cámara: no tienen conversión, pero sí facturado contra el objetivo del día
-  const conCamara = new Set(filas.map((f) => f.local))
-  const sinCamara = [...new Set([...(d.objetivos?.keys() ?? []), ...(d.ventasDia?.keys() ?? [])])]
-    .filter((l) => !conCamara.has(l) && !LOCALES_FUERA_DEL_CONTADOR.has(l))
-    .map((local) => ({ local, nombre: (d.nombres[local] || local).toUpperCase(), total: d.ventasDia?.get(local) ?? 0, o: obj(local) }))
-    .sort((a, b) => b.total - a.total)
-  if (sinCamara.length) {
-    const scObj = sinCamara.filter((f) => f.o != null)
-    const scTot = sinCamara.reduce((s, f) => s + f.total, 0)
-    const scObjTot = scObj.reduce((s, f) => s + (f.o ?? 0), 0)
-    const scFactObj = scObj.reduce((s, f) => s + f.total, 0)
-    const avance = (v: number, o: number | undefined) => (o ? `${nf((100 * v) / o)}%` : '—')
-    bloques.push({ tipo: 'seccion', texto: 'Locales sin cámara', color: '#475569' })
-    bloques.push({
-      tipo: 'tabla',
-      columnas: ['Local', 'Facturado', 'Objetivo', '% objetivo', 'Diferencia'],
-      anchos: [2.4, 1.6, 1.6, 1.2, 1.6],
-      alinear: ['izq', 'der', 'der', 'der', 'der'],
-      colores: [null, null, '#475569', null, null],
-      coloresCelda: [
-        ...sinCamara.map((f) => { const c = f.o != null ? colorDif(f.total, f.o) : null; return [null, null, null, c, c] }),
-        (() => { const c = scObj.length ? colorDif(scFactObj, scObjTot) : null; return [null, null, null, c, c] })(),
-      ],
-      total: true,
-      filas: [
-        ...sinCamara.map((f) => [f.nombre, pesos(f.total), f.o != null ? pesos(f.o) : '—', avance(f.total, f.o), f.o != null ? difTxt(f.total - f.o) : '—']),
-        ['Total', pesos(scTot), scObj.length ? pesos(scObjTot) : '—', avance(scFactObj, scObjTot), scObj.length ? difTxt(scFactObj - scObjTot) : '—'],
-      ],
-    })
-  }
 
   const texto = [
     `*Tasa de conversión* — ${corta(d.fecha)}`,
-    `Total: ${pct(convTot)} (${nf(tk)} tickets / ${nf(ent)} entradas)${convAntTot != null ? ` · ${puntos(convTot, convAntTot)} vs ${diaCorto(d.antes)}` : ''}`,
+    `Total: ${pct(convTot)} (${nf(tk)} tickets / ${nf(ent)} entradas en locales con cámara)${convAntTot != null ? ` · ${puntos(convTot, convAntTot)} vs ${diaCorto(d.antes)}` : ''}`,
+    ...(avanceObj != null ? [`Objetivo: ${pct(avanceObj)} (${pesos(factObjTot)} de ${pesos(objTot)})`] : []),
     '',
-    ...filas.map((f) => { const o = obj(f.local); return `• ${f.nombre || f.local}: ${pct(f.conv)} (${nf(f.tickets)}/${nf(f.entradas)}) · ${pesos(f.total)}${o != null ? ` (obj. ${pesos(o)}, ${difTxt(f.total - o)})` : ''}` }),
-    ...(sinCamara.length ? ['', '_Sin cámara_', ...sinCamara.map((f) => `• ${f.nombre}: ${pesos(f.total)}${f.o != null ? ` (obj. ${pesos(f.o)}, ${difTxt(f.total - f.o)})` : ''}`)] : []),
+    ...todas.map((f) => { const o = obj(f.local); return `• ${f.nombre}: ${f.entradas != null ? `${pct(f.conv)} (${nf(f.tickets)}/${nf(f.entradas)})` : `sin cámara (${nf(f.tickets)} tickets)`} · ${pesos(f.total)}${o != null ? ` (obj. ${pesos(o)}, ${avance(f.total, o)}, ${difTxt(f.total - o)})` : ''}` }),
   ].join('\n')
   return { subtitulo, bloques, texto }
 }
