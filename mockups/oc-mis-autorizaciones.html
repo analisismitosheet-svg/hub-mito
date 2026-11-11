@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maqueta · Mis autorizaciones (OC)</title>
+<style>
+  :root { --bg:#08080c; --panel:#0c0c11; --s2:#16161e; --line:#26262f; --ink:#ececf1; --sub:#9a9aa8; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; padding:22px; }
+  .marca { display:inline-block; background:rgba(251,191,36,.12); color:#fbbf24; border:1px solid rgba(251,191,36,.35); border-radius:8px; padding:1px 7px; font-size:11px; font-weight:700; margin-left:8px; vertical-align:middle; }
+  .nota { color:var(--sub); font-size:12.5px; max-width:980px; margin:4px 0 16px; }
+  .top { display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:12px; margin-bottom:14px; }
+  h1 { font-size:22px; margin:0; }
+  .sub { color:var(--sub); font-size:13px; }
+  .tabsapp { display:flex; gap:6px; margin-bottom:14px; }
+  .tabsapp a { padding:7px 14px; border-radius:12px; border:1px solid var(--line); color:var(--sub); text-decoration:none; font-weight:600; font-size:13px; }
+  .tabsapp a.on { border-color:#84cc16; background:rgba(132,204,22,.12); color:#d9f99d; }
+  select { background:var(--s2); border:1px solid var(--line); color:var(--ink); border-radius:10px; height:34px; padding:0 8px; font-size:13px; }
+  .comoadmin { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--sub); border:1px dashed rgba(244,114,182,.45); border-radius:12px; padding:4px 8px; }
+  .kpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:14px; }
+  @media (max-width: 900px) { .kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  .kpi { background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:12px 14px; }
+  .kpi .t { font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--sub); display:flex; align-items:center; gap:6px; }
+  .kpi .v { font-size:26px; font-weight:800; margin-top:4px; }
+  .kpi .d { font-size:12px; color:var(--sub); }
+  .ico { width:22px; height:22px; border-radius:7px; display:inline-grid; place-items:center; font-size:12px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:20px; overflow:hidden; }
+  .barra { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:12px 14px; border-bottom:1px solid var(--line); }
+  .seg { display:flex; gap:6px; }
+  .seg button { height:34px; border-radius:12px; border:1px solid var(--line); background:var(--s2); color:var(--sub); padding:0 12px; font-weight:600; cursor:pointer; font-size:13px; }
+  .seg button.on { border-color:#84cc16; background:rgba(132,204,22,.15); color:#d9f99d; }
+  .seg .n { display:inline-block; min-width:18px; border-radius:9px; background:rgba(255,255,255,.08); padding:0 5px; margin-left:4px; font-size:11px; }
+  input.buscar { background:var(--s2); border:1px solid var(--line); color:var(--ink); border-radius:10px; height:34px; padding:0 10px; font-size:13px; min-width:220px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th { text-align:left; font-size:10.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--sub); padding:9px 12px; border-bottom:1px solid var(--line); }
+  td { padding:9px 12px; border-bottom:1px solid rgba(38,38,47,.6); vertical-align:top; }
+  tr:hover td { background:rgba(255,255,255,.02); }
+  .num { font-weight:800; font-variant-numeric:tabular-nums; }
+  .r { text-align:right; font-variant-numeric:tabular-nums; }
+  .chip { display:inline-block; border-radius:999px; border:1px solid; padding:1px 8px; font-size:11px; font-weight:600; }
+  .Producto { border-color:rgba(56,189,248,.5); color:#7dd3fc; } .Gastos { border-color:rgba(251,146,60,.5); color:#fdba74; }
+  .Servicios { border-color:rgba(167,139,250,.5); color:#c4b5fd; } .Talleres { border-color:rgba(45,212,191,.5); color:#5eead4; }
+  .estado { font-size:12px; font-weight:600; }
+  .ok { color:#86efac; } .no { color:#fca5a5; } .esp { color:#fcd34d; }
+  .via { font-size:11.5px; color:var(--sub); }
+  .acc button { height:30px; border-radius:10px; font-weight:700; font-size:12px; padding:0 10px; cursor:pointer; margin-right:4px; }
+  .si { background:#16a34a; border:1px solid #16a34a; color:#fff; } .nob { background:none; border:1px solid rgba(248,113,113,.5); color:#fca5a5; }
+  .pie { display:flex; justify-content:space-between; padding:10px 14px; font-size:12.5px; color:var(--sub); }
+  .pie b { color:var(--ink); }
+  .leyenda { margin-top:14px; font-size:12px; color:var(--sub); max-width:980px; }
+  .leyenda li { margin:3px 0; }
+</style>
+</head>
+<body>
+  <div class="nota"><b style="color:var(--ink)">Maqueta · Mis autorizaciones</b><span class="marca">MAQUETA, NO ESTÁ SUBIDO</span><br>
+    Ejemplo con OC reales que autorizó Diego Marchesini; las pendientes, la no autorizada y algunas más son inventadas para mostrar todos los casos. Se puede tocar: pestañas, filtros, «Ver como» (admin) y los botones de las pendientes (no hacen nada real).</div>
+
+  <div class="tabsapp"><a href="#">Órdenes de compras</a><a href="#" class="on">✅ Mis autorizaciones</a><a href="#">🔔 Autorizadores</a></div>
+
+  <div class="top">
+    <div>
+      <h1 id="titulo">Mis autorizaciones</h1>
+      <div class="sub" id="subt">Las OC que te pidieron autorizar y lo que respondiste (por Telegram, el link o el hub).</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <label class="comoadmin">👑 Admin · ver como <select id="como"><option>Diego Marchesini</option><option>Esteban Montañés</option><option>Facundo Roca</option><option>Cecilia Giavedoni</option><option value="todos">Todos</option></select></label>
+      <select id="mes"><option value="11">Noviembre 2026</option><option value="10">Octubre 2026</option><option value="" selected>Todos los meses</option></select>
+    </div>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="card">
+    <div class="barra">
+      <div class="seg" id="tabs"></div>
+      <select id="tipo"><option value="">Todos los tipos</option><option>Producto</option><option>Gastos</option><option>Servicios</option><option>Talleres</option></select>
+      <input class="buscar" id="q" placeholder="Buscar N°, proveedor o qué es…">
+    </div>
+    <table>
+      <thead><tr><th>N° OC</th><th>Fecha</th><th>Tipo</th><th>Proveedor · qué es</th><th>Cargó</th><th class="r">Monto</th><th>Mi respuesta</th></tr></thead>
+      <tbody id="filas"></tbody>
+    </table>
+    <div class="pie" id="pie"></div>
+  </div>
+
+  <div id="aviso" style="display:none;position:fixed;right:22px;bottom:22px;max-width:380px;background:#1c1917;border:1px solid rgba(251,191,36,.45);border-radius:16px;padding:12px 14px;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.5)"></div>
+
+  <div class="card" style="margin-top:14px;padding:14px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px">
+    <div>
+      <div style="font-weight:700;margin-bottom:8px">📱 Telegram · el segundo que aprieta</div>
+      <div style="background:#17212b;border-radius:14px;padding:10px 12px;font-size:12.5px;max-width:340px">
+        <div style="white-space:pre-line">OC N° 15555 · Talleres › Confección
+ARFES S.R.L. · $ 1.420.300
+PROCESO DE CONFECCION PO5011
+Cargó: Buonacucina Martin</div>
+        <div style="margin-top:8px;color:#fcd34d">⚠️ Ya la autorizó Esteban Montañés (06/11 15:20). Tu respuesta no cambió nada.</div>
+      </div>
+      <div style="margin-top:8px;background:#fff;color:#111;border-radius:12px;padding:10px 12px;font-size:12.5px;max-width:340px;box-shadow:0 6px 20px rgba(0,0,0,.4)">
+        <b>Ventana emergente al tocar el botón:</b><br>«La OC 15555 ya la autorizó Esteban Montañés a las 15:20. Vale la primera respuesta.»
+      </div>
+    </div>
+    <div style="font-size:12.5px;color:var(--sub)">
+      <div style="font-weight:700;color:var(--ink);margin-bottom:8px">Qué cambia respecto de hoy</div>
+      <ul style="margin:0;padding-left:18px">
+        <li>Hoy ya vale la primera respuesta, pero al segundo solo se le reescribe el mensaje en silencio («Autorizada por …»).</li>
+        <li>Nuevo: al segundo le sale una <b style="color:var(--ink)">ventana emergente</b> con quién respondió primero, cuándo y qué; el mensaje queda con el aviso y sin efecto.</li>
+        <li>Lo mismo en «Mis autorizaciones» del hub.</li>
+      </ul>
+    </div>
+  </div>
+
+  <ul class="leyenda">
+    <li><b style="color:var(--ink)">Quién la ve:</b> cada autorizador ve solo lo suyo (se lo reconoce por su contacto de «Envío informes y reportes»). El admin ve a todos con «Ver como».</li>
+    <li><b style="color:var(--ink)">Pendientes:</b> las OC que le pidieron y todavía nadie respondió; puede autorizar o no desde acá (igual que en Telegram).</li>
+    <li><b style="color:var(--ink)">Dos o más autorizadores: vale el primero.</b> Si el segundo aprieta después (acá o en Telegram), no cambia nada y le sale el aviso de quién respondió primero; la OC pasa a «Respondió otro». Probá con la <b>15555</b>: en el ejemplo, Esteban ya la autorizó.</li>
+    <li><b style="color:var(--ink)">Tocar una fila</b> abre el detalle de la OC (el mismo de la lista), con el archivo y el historial.</li>
+  </ul>
+
+<script>
+  const OC = [
+    { n: 15556, f: '06/11', mes: '11', tipo: 'Gastos', sub: 'Alquiler', prov: 'INMOBILIARIA CENTRO SRL', que: 'Alquiler depósito noviembre', resp: 'Sanchez Silvina', monto: 1850000, est: 'pend', pedida: 'hace 2 h' },
+    { n: 15555, f: '06/11', mes: '11', tipo: 'Talleres', sub: 'Confección', prov: 'ARFES S.R.L.', que: 'PROCESO DE CONFECCION PO5011', resp: 'Buonacucina Martin', monto: 1420300, est: 'pend', pedida: 'hace 40 min', yaRespondio: { quien: 'Esteban Montañés', que: 'autorizó', cuando: 'hace 5 min', via: 'Telegram' } },
+    { n: 15550, f: '06/11', mes: '11', tipo: 'Gastos', sub: 'Limpieza', prov: 'R. D. S. CONSTRUCCIONES S.A.S.', que: 'Limpieza locales afuera', resp: 'Sanchez Silvina', monto: 434269, est: 'otro', quien: 'Cecilia Giavedoni', cuando: '06/11 17:35', via: 'Telegram' },
+    { n: 15549, f: '30/10', mes: '10', tipo: 'Servicios', sub: 'Reparaciones', prov: 'BASUALDO CRISTIAN DAMIAN', que: 'Reparación de maniquíes, Rivera', resp: 'Alzaga Yohana', monto: 420000, est: 'ok', cuando: '30/10', via: 'planilla' },
+    { n: 15545, f: '04/11', mes: '11', tipo: 'Servicios', sub: 'Vidrieras', prov: 'VISCONTI ANA LAURA', que: 'Vidrieras octubre', resp: 'Sanchez Silvina', monto: 845000, est: 'ok', cuando: '04/11 10:12', via: 'Telegram' },
+    { n: 15544, f: '29/10', mes: '10', tipo: 'Talleres', sub: 'Muestras', prov: 'ALVAREZ BRAVO DE QUISPE DORIS', que: 'MUESTRAS CF175117 // ZH 172506', resp: 'Buonacucina Martin', monto: 11600, est: 'ok', cuando: '29/10', via: 'planilla' },
+    { n: 15543, f: '28/10', mes: '10', tipo: 'Talleres', sub: 'Terminado y planchado', prov: 'RODRIGUEZ ANGEL EMANUEL', que: 'PROCESO DE TERMINADO Y PLANCHADO ZH265722', resp: 'Buonacucina Martin', monto: 692640, est: 'ok', cuando: '28/10', via: 'planilla' },
+    { n: 15542, f: '27/10', mes: '10', tipo: 'Talleres', sub: 'Confección', prov: 'ARFES S.R.L.', que: 'PROCESO DE CONFECCION PO5008 CF265730', resp: 'Buonacucina Martin', monto: 2136618, est: 'ok', cuando: '27/10', via: 'planilla' },
+    { n: 15538, f: '24/10', mes: '10', tipo: 'Gastos', sub: 'Envíos (OCA, Epick)', prov: 'OCA', que: 'Guías octubre', resp: 'Roca Tomas', monto: 318900, est: 'ok', cuando: '24/10', via: 'planilla' },
+    { n: 15531, f: '21/10', mes: '10', tipo: 'Gastos', sub: 'Honorarios', prov: 'ESTUDIO PEREZ', que: 'Honorarios septiembre', resp: 'Daniel De', monto: 960000, est: 'no', cuando: '21/10 18:02', via: 'Telegram', motivo: 'Falta la factura' },
+    { n: 15527, f: '18/10', mes: '10', tipo: 'Producto', sub: 'Reposición', prov: 'REEF - NEW ARRECIFE', que: 'Repo ojotas temporada', resp: 'Morena Garello', monto: 5240000, est: 'ok', cuando: '18/10', via: 'planilla' },
+  ]
+  let tab = 'pend'
+  const $ = (id) => document.getElementById(id)
+  const pesos = (n) => '$ ' + Math.round(n).toLocaleString('es-AR')
+  const TABS = [['pend', 'Pendientes'], ['ok', 'Autorizadas'], ['no', 'No autorizadas'], ['otro', 'Respondió otro'], ['todas', 'Todas']]
+
+  function filtradas(sinTab) {
+    const mes = $('mes').value, tipo = $('tipo').value, q = $('q').value.trim().toLowerCase()
+    return OC.filter((o) => (o.est === 'pend' || !mes || o.mes === mes) && (!tipo || o.tipo === tipo)
+      && (!q || `${o.n} ${o.prov} ${o.que}`.toLowerCase().includes(q)) && (sinTab || tab === 'todas' || o.est === tab))
+  }
+  function pintar() {
+    const todas = filtradas(true)
+    const c = (e) => todas.filter((o) => o.est === e)
+    const ok = c('ok'), no = c('no'), pend = c('pend')
+    const como = $('como').value
+    $('titulo').textContent = como === 'todos' ? 'Autorizaciones de todos' : (como === 'Diego Marchesini' ? 'Mis autorizaciones' : `Autorizaciones de ${como}`)
+    $('kpis').innerHTML = [
+      ['#fbbf24', 'rgba(251,191,36,.15)', '⏳', 'Esperan tu respuesta', pend.length, pend.length ? `la más vieja: ${pend[0].pedida}` : 'nada pendiente'],
+      ['#86efac', 'rgba(134,239,172,.15)', '✓', 'Autorizadas', ok.length, pesos(ok.reduce((a, o) => a + o.monto, 0))],
+      ['#fca5a5', 'rgba(252,165,165,.15)', '✕', 'No autorizadas', no.length, pesos(no.reduce((a, o) => a + o.monto, 0))],
+      ['#7dd3fc', 'rgba(125,211,252,.15)', '⚡', 'Tiempo de respuesta', '1 h 20 min', 'promedio, por Telegram'],
+    ].map(([col, bg, ic, t, v, d]) => `<div class="kpi"><div class="t"><span class="ico" style="color:${col};background:${bg}">${ic}</span>${t}</div><div class="v">${v}</div><div class="d">${d}</div></div>`).join('')
+    $('tabs').innerHTML = TABS.map(([k, t]) => `<button class="${k === tab ? 'on' : ''}" data-k="${k}">${t}<span class="n">${k === 'todas' ? todas.length : todas.filter((o) => o.est === k).length}</span></button>`).join('')
+    $('tabs').querySelectorAll('button').forEach((b) => (b.onclick = () => { tab = b.dataset.k; pintar() }))
+    const lista = filtradas(false)
+    $('filas').innerHTML = lista.map((o) => `<tr>
+      <td class="num">${o.n}</td><td>${o.f}</td>
+      <td><span class="chip ${o.tipo}">${o.tipo}</span><div style="font-size:11.5px;margin-top:3px;font-weight:600">${o.sub}</div></td>
+      <td><b>${o.prov}</b><div class="via">${o.que}</div></td>
+      <td>${o.resp}</td><td class="r"><b>${pesos(o.monto)}</b></td>
+      <td>${o.est === 'pend' ? `<div class="estado esp">⏳ Te la pidieron ${o.pedida}</div><div class="acc" style="margin-top:5px"><button class="si">Autorizar</button><button class="nob">No autorizar</button></div>`
+        : o.est === 'ok' ? `<div class="estado ok">✓ Autorizada</div><div class="via">${o.cuando} · ${o.via === 'planilla' ? 'por planilla' : 'por ' + o.via}</div>`
+        : o.est === 'no' ? `<div class="estado no">✕ No autorizada</div><div class="via">${o.cuando} · por ${o.via}${o.motivo ? ` · «${o.motivo}»` : ''}</div>`
+        : `<div class="estado" style="color:var(--sub)">Respondió ${o.quien}</div><div class="via">${o.cuando} · por ${o.via}</div>`}</td></tr>`).join('')
+      || `<tr><td colspan="7" style="text-align:center;padding:28px;color:var(--sub)">No hay OC con estos filtros.</td></tr>`
+    const tot = lista.reduce((a, o) => a + o.monto, 0)
+    $('pie').innerHTML = `<span>${lista.length} OC</span><span>Total <b>${pesos(tot)}</b></span>`
+    document.querySelectorAll('.acc button').forEach((b) => (b.onclick = () => {
+      const o = OC.find((x) => x.n === Number(b.closest('tr').querySelector('.num').textContent))
+      if (o.yaRespondio) {
+        // Llegó segundo: no cambia nada y se le avisa quién respondió primero
+        aviso(`⚠️ La OC ${o.n} ya la ${o.yaRespondio.que} ${o.yaRespondio.quien} ${o.yaRespondio.cuando} (por ${o.yaRespondio.via}).`,
+          'Vale la primera respuesta: la tuya no cambió nada.')
+        Object.assign(o, { est: 'otro', quien: o.yaRespondio.quien, cuando: o.yaRespondio.cuando, via: o.yaRespondio.via })
+      } else {
+        const si = b.classList.contains('si')
+        aviso(si ? `✓ Autorizaste la OC ${o.n}.` : `✕ No autorizaste la OC ${o.n}.`, 'Los demás autorizadores que la tenían ya no la pueden responder.')
+        Object.assign(o, { est: si ? 'ok' : 'no', cuando: 'recién', via: 'hub' })
+      }
+      pintar()
+    }))
+  }
+  function aviso(titulo, texto) {
+    const d = document.getElementById('aviso')
+    d.innerHTML = `<b>${titulo}</b><div style="margin-top:3px;color:var(--sub)">${texto}</div>`
+    d.style.display = 'block'
+    clearTimeout(aviso.t); aviso.t = setTimeout(() => (d.style.display = 'none'), 6000)
+  }
+  ;['mes', 'tipo', 'q', 'como'].forEach((id) => $(id).addEventListener('input', pintar))
+  pintar()
+</script>
+</body>
+</html>

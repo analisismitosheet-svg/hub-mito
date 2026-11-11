@@ -68,6 +68,25 @@ async function tokenDelEnvio(id: number): Promise<string | null> {
   return filas[0]?.token ?? null
 }
 
+export interface ExtrasOc { forma_pago?: string | null; plazo?: string | null; fecha_entrega?: string | null }
+
+/** Datos de la OC que no vienen en el lote (solo Telegram: la plantilla de WhatsApp tiene campos fijos). */
+async function extrasOc(numero: number): Promise<ExtrasOc> {
+  const r = await rest(`ordenes_compra?numero=eq.${numero}&select=forma_pago,plazo,fecha_entrega`).catch(() => null)
+  return r?.ok ? (((await r.json().catch(() => [])) as ExtrasOc[])[0] ?? {}) : {}
+}
+
+/** «Forma de pago: Bancos», «Plazo: Transferencias», «Entrega: 05/11/2026»; solo lo que está cargado. */
+export function lineasExtraOc(x: ExtrasOc): string {
+  const limpio = (s?: string | null) => String(s ?? '').replace(/\s+/g, ' ').trim()
+  const fecha = /^(\d{4})-(\d{2})-(\d{2})/.exec(x.fecha_entrega ?? '')
+  return [
+    limpio(x.forma_pago) && `Forma de pago: ${corto(x.forma_pago, 80)}`,
+    limpio(x.plazo) && `Plazo: ${corto(x.plazo, 80)}`,
+    fecha && `Entrega: ${fecha[3]}/${fecha[2]}/${fecha[1]}`,
+  ].filter(Boolean).join('\n')
+}
+
 async function mandarPlantilla(envio: EnvioCola, oc: DatosOc): Promise<{ ok: boolean; detalle: string; wamid?: string }> {
   const parametros = [
     envio.nombre, String(oc.numero), oc.tipo, corto(oc.proveedor, 80), pesos(oc.monto), corto(oc.observacion, 200), corto(oc.cargo, 60),
@@ -80,7 +99,10 @@ async function mandarPlantilla(envio: EnvioCola, oc: DatosOc): Promise<{ ok: boo
       .reduce((t, valor, i) => t.replace(`{{${i + 1}}}`, () => valor), CUERPO)
       .replace('Tocá el botón para verla y responder.', `Entrá para verla y responder:\n${URL_OC}${link}`)
     if (telegramActivo()) {
-      const cuerpo = texto.replace(/Entrá para verla y responder:[\s\S]*$/, 'Respondé con los botones.')
+      const extra = lineasExtraOc(await extrasOc(oc.numero))
+      const cuerpo = texto
+        .replace(/\nQué es:/, extra ? `\n${extra}\nQué es:` : '\nQué es:')
+        .replace(/Entrá para verla y responder:[\s\S]*$/, 'Respondé con los botones.')
       const t = await enviarTelegram(envio.telefono, cuerpo, null, botonesOc(envio.id, link))
       return t.ok ? { ok: true, detalle: 'enviado por Telegram' } : { ok: false, detalle: t.detalle }
     }
