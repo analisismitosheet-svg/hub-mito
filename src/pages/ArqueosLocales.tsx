@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Banknote, BellOff, Bell, RefreshCw, Search } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { Banknote, BellOff, Bell, RefreshCw, Search, X } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
@@ -37,6 +38,22 @@ function textoHorario(h: Horario): string {
   if (h.estado === 'avisando') return 'avisando'
   if (h.estado === 'no') return '✕ no hizo'
   return '—'
+}
+
+/** Suma por billete (de mayor a menor) y aparte las monedas, de una lista de arqueos. */
+function sumarBilletes(ls: Arqueo[]) {
+  const suma = new Map<number, { cant: number; tot: number }>()
+  let monedas = 0
+  let cantMonedas = 0
+  for (const l of ls) for (const b of l.billetes) {
+    if (b.tipo !== 'Billete') { monedas += b.tot; cantMonedas += b.cant; continue }
+    const x = suma.get(b.valor) ?? { cant: 0, tot: 0 }
+    x.cant += b.cant
+    x.tot += b.tot
+    suma.set(b.valor, x)
+  }
+  const billetes = [...suma.entries()].map(([v, x]) => ({ v, ...x })).filter((x) => x.cant > 0).sort((a, b) => b.v - a.v)
+  return { billetes, monedas, cantMonedas }
 }
 
 export default function ArqueosLocales() {
@@ -113,17 +130,7 @@ export default function ArqueosLocales() {
   const cumplidos = grilla.filter((g) => !g.excluido).flatMap((g) => g.horarios).filter((h) => h.estado === 'ok' || h.estado === 'tarde' || h.estado === 'marcado').length
   const faltaron = grilla.filter((g) => !g.excluido).flatMap((g) => g.horarios).filter((h) => h.estado === 'no' || h.estado === 'avisando').length
 
-  const billetes = useMemo(() => {
-    const suma = new Map<number, { cant: number; tot: number }>()
-    for (const l of datos) for (const b of l.billetes) {
-      if (b.tipo !== 'Billete') continue
-      const x = suma.get(b.valor) ?? { cant: 0, tot: 0 }
-      x.cant += b.cant
-      x.tot += b.tot
-      suma.set(b.valor, x)
-    }
-    return [...suma.entries()].map(([v, x]) => ({ v, ...x })).filter((x) => x.cant > 0).sort((a, b) => b.v - a.v)
-  }, [datos])
+  const billetes = useMemo(() => sumarBilletes(datos).billetes, [datos])
   const maxBillete = Math.max(1, ...billetes.map((b) => b.tot))
 
   const zonas = useMemo(() => ['TODAS', ...new Set(datos.map((l) => l.zona))], [datos])
@@ -140,7 +147,7 @@ export default function ArqueosLocales() {
     return [...m.entries()].sort((a, b) => suma(b[1]) - suma(a[1])).map(([z, ls]) => ({ zona: z, locales: ls, total: suma(ls) }))
   }, [datos, busca, zona, orden])
 
-  const elegido = datos.find((l) => l.local === sel) ?? mayor
+  const elegido = sel ? datos.find((l) => l.local === sel) : undefined
   const syncViejo = esHoy && (!sync || Date.now() - new Date(sync).getTime() > 10 * 60_000)
 
   async function alternar(local: string) {
@@ -193,7 +200,102 @@ export default function ArqueosLocales() {
         <p className="py-10 text-center text-sm text-sub">No hay arqueos de los últimos 14 días.</p>
       ) : (
         <>
-          <div className="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
+          {/* Filtros */}
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <label className="relative min-w-[180px] flex-1">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sub" aria-hidden />
+              <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar local o vendedor" aria-label="Buscar"
+                className="h-9 w-full rounded-lg border border-line bg-surface2 pl-8 pr-2 text-sm text-ink" />
+            </label>
+            <select value={orden} onChange={(e) => setOrden(e.target.value as typeof orden)} aria-label="Orden" className="h-9 rounded-lg border border-line bg-surface2 px-2 text-sm text-ink">
+              <option value="total">Más efectivo primero</option>
+              <option value="viejo">Arqueo más viejo primero</option>
+              <option value="nombre">Por nombre</option>
+            </select>
+            <div className="flex flex-wrap gap-1.5">
+              {zonas.map((z) => (
+                <button key={z} type="button" onClick={() => setZona(z)}
+                  className={`h-8 rounded-full border px-3 text-xs font-semibold ${zona === z ? 'border-white bg-white text-black' : 'border-line text-sub hover:text-ink'}`}>
+                  {z === 'TODAS' ? 'Todas' : titulo(z)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Zonas: locales a la izquierda, total por billete de la zona a la derecha */}
+          {!grupos.length && <p className="py-6 text-center text-sm text-sub">Ningún local coincide con la búsqueda.</p>}
+          {grupos.map((g, i) => {
+            const sinArqueo = g.locales.filter((l) => !l.delDia).length
+            const bz = sumarBilletes(g.locales)
+            const maxZ = Math.max(1, ...bz.billetes.map((b) => b.tot))
+            return (
+              <section key={g.zona} className="mb-5">
+                <div className="mb-2.5 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-line pb-2">
+                  <h3 className="flex items-center gap-2 font-display text-[15px] font-semibold text-ink">
+                    <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs font-bold tabular-nums text-ink" title="Orden para ir: la zona con más efectivo primero">{i + 1}°</span>
+                    <i className="h-2.5 w-2.5 rounded-sm" style={{ background: COLOR_ZONA[g.zona] ?? '#64748b' }} aria-hidden />{titulo(g.zona)}
+                  </h3>
+                  <span className="text-xs text-sub">
+                    <b className="text-base tabular-nums text-ink">{pesos(g.total)}</b> · {g.locales.length} local{g.locales.length === 1 ? '' : 'es'} ·{' '}
+                    {sinArqueo ? <span className="text-red-300">{sinArqueo} sin arqueo</span> : 'todos arquearon'}
+                  </span>
+                </div>
+                <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_240px]">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-[repeat(auto-fill,minmax(230px,1fr))] sm:gap-2.5">
+                    {g.locales.map((l) => {
+                      const e = estadoCard(l)
+                      const bills = l.billetes.filter((b) => b.tot > 0)
+                      return (
+                        <button key={l.local} type="button" onClick={() => setSel(l.local)}
+                          className={`min-w-0 rounded-2xl border p-2.5 text-left transition sm:p-3 ${sel === l.local ? 'border-emerald-500/60 bg-emerald-500/5' : 'border-line bg-surface hover:border-line2'}`}>
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="min-w-0 text-sm font-semibold leading-tight text-ink sm:text-base">{l.nombre}</span>
+                            <span className="shrink-0 rounded-full border border-line2 px-1.5 text-[10px] font-semibold text-sub sm:px-2 sm:text-[11px]">Caja {l.caja}</span>
+                          </div>
+                          <p className="mt-1 font-display text-lg font-bold tabular-nums text-ink sm:text-xl">{pesos(l.total)}</p>
+                          <div className="my-2 flex h-2 overflow-hidden rounded-full bg-white/5">
+                            {bills.map((b) => (
+                              <i key={`${b.tipo}${b.valor}`} title={`${pesos(b.valor)}: ${b.cant} u.`} style={{ width: `${(100 * b.tot) / (l.total || 1)}%`, background: colorBillete(b.valor) }} />
+                            ))}
+                          </div>
+                          <span className="flex items-start gap-1.5 text-[11px] font-semibold leading-snug sm:text-xs" style={{ color: e.c }}>
+                            <i className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: e.c }} aria-hidden />{e.t}
+                          </span>
+                          {l.vendedor && <p className="mt-0.5 truncate text-xs text-sub">{l.vendedor}</p>}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <aside className="order-first rounded-xl border border-line bg-surface px-2.5 py-2 lg:order-none">
+                    <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-sub">Billetes de la zona</p>
+                    <div className="grid gap-px">
+                      {bz.billetes.map((b) => (
+                        <div key={b.v} className="grid grid-cols-[56px_1fr_30px_80px] items-center gap-1.5 text-[11px] leading-[18px]">
+                          <span className="font-semibold tabular-nums text-ink">{pesos(b.v)}</span>
+                          <span className="h-1.5 overflow-hidden rounded-full bg-white/5">
+                            <i className="block h-full rounded-full" style={{ width: `${Math.max(2, (100 * b.tot) / maxZ)}%`, background: colorBillete(b.v) }} />
+                          </span>
+                          <span className="text-right tabular-nums text-sub">{numero(b.cant)}</span>
+                          <span className="text-right tabular-nums text-ink">{pesos(b.tot)}</span>
+                        </div>
+                      ))}
+                      {bz.monedas > 0 && (
+                        <div className="grid grid-cols-[56px_1fr_30px_80px] items-center gap-1.5 text-[11px] leading-[18px] text-sub">
+                          <span>Monedas</span><span /><span className="text-right tabular-nums">{numero(bz.cantMonedas)}</span>
+                          <span className="text-right tabular-nums">{pesos(bz.monedas)}</span>
+                        </div>
+                      )}
+                      <div className="mt-0.5 grid grid-cols-[1fr_80px] border-t border-line pt-1 text-[11px] font-bold text-ink">
+                        <span>Total</span><span className="text-right tabular-nums">{pesos(g.total)}</span>
+                      </div>
+                    </div>
+                  </aside>
+                </div>
+              </section>
+            )
+          })}
+
+          <div className="mb-4 mt-2 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
             {[
               ['Efectivo en locales', pesos(total), `${datos.length} locales`],
               [esHoy ? 'Arquearon hoy' : 'Arquearon ese día', `${conArqueo} de ${datos.length}`, datos.length - conArqueo ? `${datos.length - conArqueo} sin arqueo` : 'todos'],
@@ -228,76 +330,18 @@ export default function ArqueosLocales() {
             </section>
           )}
 
-          <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-            <div>
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <label className="relative min-w-[180px] flex-1">
-                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sub" aria-hidden />
-                  <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar local o vendedor" aria-label="Buscar"
-                    className="h-9 w-full rounded-lg border border-line bg-surface2 pl-8 pr-2 text-sm text-ink" />
-                </label>
-                <select value={orden} onChange={(e) => setOrden(e.target.value as typeof orden)} aria-label="Orden" className="h-9 rounded-lg border border-line bg-surface2 px-2 text-sm text-ink">
-                  <option value="total">Más efectivo primero</option>
-                  <option value="viejo">Arqueo más viejo primero</option>
-                  <option value="nombre">Por nombre</option>
-                </select>
-                <div className="flex flex-wrap gap-1.5">
-                  {zonas.map((z) => (
-                    <button key={z} type="button" onClick={() => setZona(z)}
-                      className={`h-8 rounded-full border px-3 text-xs font-semibold ${zona === z ? 'border-white bg-white text-black' : 'border-line text-sub hover:text-ink'}`}>
-                      {z === 'TODAS' ? 'Todas' : titulo(z)}
-                    </button>
-                  ))}
-                </div>
+          {elegido && createPortal(
+            <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" onClick={() => setSel(null)}>
+              <div className="relative max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-[#111114] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                <button type="button" onClick={() => setSel(null)} aria-label="Cerrar"
+                  className="absolute right-3 top-3 z-10 grid h-7 w-7 place-items-center rounded-full border border-line bg-surface2 text-sub hover:text-ink">
+                  <X size={14} aria-hidden />
+                </button>
+                <Detalle a={elegido} />
               </div>
-
-              {!grupos.length && <p className="py-6 text-center text-sm text-sub">Ningún local coincide con la búsqueda.</p>}
-              {grupos.map((g, i) => {
-                const sinArqueo = g.locales.filter((l) => !l.delDia).length
-                return (
-                  <section key={g.zona} className="mb-5">
-                    <div className="mb-2.5 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-line pb-2">
-                      <h3 className="flex items-center gap-2 font-display text-[15px] font-semibold text-ink">
-                        <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs font-bold tabular-nums text-ink" title="Orden para ir: la zona con más efectivo primero">{i + 1}°</span>
-                        <i className="h-2.5 w-2.5 rounded-sm" style={{ background: COLOR_ZONA[g.zona] ?? '#64748b' }} aria-hidden />{titulo(g.zona)}
-                      </h3>
-                      <span className="text-xs text-sub">
-                        <b className="text-base tabular-nums text-ink">{pesos(g.total)}</b> · {g.locales.length} local{g.locales.length === 1 ? '' : 'es'} ·{' '}
-                        {sinArqueo ? <span className="text-red-300">{sinArqueo} sin arqueo</span> : 'todos arquearon'}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-2.5">
-                      {g.locales.map((l) => {
-                        const e = estadoCard(l)
-                        const bills = l.billetes.filter((b) => b.tot > 0)
-                        return (
-                          <button key={l.local} type="button" onClick={() => setSel(l.local)}
-                            className={`rounded-2xl border p-3 text-left transition ${elegido?.local === l.local ? 'border-emerald-500/60 bg-emerald-500/5' : 'border-line bg-surface hover:border-line2'}`}>
-                            <div className="flex items-start justify-between gap-2">
-                              <span className="font-semibold text-ink">{l.nombre}</span>
-                              <span className="rounded-full border border-line2 px-2 text-[11px] font-semibold text-sub">Caja {l.caja}</span>
-                            </div>
-                            <p className="mt-1 font-display text-xl font-bold tabular-nums text-ink">{pesos(l.total)}</p>
-                            <div className="my-2 flex h-2 overflow-hidden rounded-full bg-white/5">
-                              {bills.map((b) => (
-                                <i key={`${b.tipo}${b.valor}`} title={`${pesos(b.valor)}: ${b.cant} u.`} style={{ width: `${(100 * b.tot) / (l.total || 1)}%`, background: colorBillete(b.valor) }} />
-                              ))}
-                            </div>
-                            <span className="flex items-center gap-1.5 text-xs font-semibold" style={{ color: e.c }}>
-                              <i className="h-1.5 w-1.5 rounded-full" style={{ background: e.c }} aria-hidden />{e.t}
-                            </span>
-                            {l.vendedor && <p className="mt-0.5 truncate text-xs text-sub">{l.vendedor}</p>}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </section>
-                )
-              })}
-            </div>
-
-            {elegido && <Detalle a={elegido} />}
-          </div>
+            </div>,
+            document.body,
+          )}
 
           {/* Horarios del día */}
           <section className="mt-2 mb-4 rounded-2xl border border-line bg-surface p-4">
@@ -359,7 +403,7 @@ function Detalle({ a }: { a: Arqueo & { nombre: string } }) {
   const cMon = mon.reduce((s, b) => s + b.cant, 0)
   return (
     <aside className="rounded-2xl border border-line bg-surface p-4 lg:sticky lg:top-4">
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-start justify-between gap-2 pr-9">
         <h2 className="font-display text-lg font-semibold text-ink">{a.nombre}</h2>
         <span className="rounded-full border border-line2 px-2 text-[11px] font-semibold text-sub">Caja {a.caja}</span>
       </div>
