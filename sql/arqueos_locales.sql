@@ -149,6 +149,7 @@ grant execute on function public.arqueos_excluir(text, boolean) to authenticated
 create or replace function public.arqueos_avisos_tomar()
 returns table (local text, horario int, avisos int)
 language plpgsql security definer set search_path = public as $$
+#variable_conflict use_column
 declare
   v_ahora timestamp := now() at time zone 'America/Argentina/Cordoba';
   v_hoy date := v_ahora::date;
