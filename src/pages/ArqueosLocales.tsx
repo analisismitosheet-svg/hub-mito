@@ -5,7 +5,7 @@ import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import {
-  COLOR_DOLAR, COLOR_ZONA, HORARIOS_ARQUEO, colorDe, esDolar, ahoraCordoba, arqueosDelDia, colorBillete, estadoHorarios, etiquetaHorario, excluidos as leerExcluidos,
+  COLOR_ZONA, HORARIOS_ARQUEO, ahoraCordoba, arqueosDelDia, colorBillete, estadoHorarios, etiquetaHorario, excluidos as leerExcluidos,
   excluirLocal, hhmm, minutos, numero, pesos, ultimosArqueos, ultimoSync, type Arqueo, type Horario,
 } from '@/lib/arqueos'
 
@@ -120,8 +120,7 @@ export default function ArqueosLocales() {
     }
     return [...suma.entries()].map(([v, x]) => ({ v, ...x })).filter((x) => x.cant > 0).sort((a, b) => b.v - a.v)
   }, [datos])
-  const dolares = datos.reduce((s, l) => s + l.billetes.filter(esDolar).reduce((t, b) => t + b.tot, 0), 0)
-  const maxBillete = Math.max(1, dolares, ...billetes.map((b) => b.tot))
+  const maxBillete = Math.max(1, ...billetes.map((b) => b.tot))
 
   const zonas = useMemo(() => ['TODAS', ...new Set(datos.map((l) => l.zona))], [datos])
   const grupos = useMemo(() => {
@@ -254,7 +253,7 @@ export default function ArqueosLocales() {
           </section>
 
           {/* Billetes en todos los locales */}
-          {(billetes.length > 0 || dolares > 0) && (
+          {billetes.length > 0 && (
             <section className="mb-4 rounded-2xl border border-line bg-surface p-4">
               <h2 className="mb-2 font-display text-base font-semibold text-ink">Billetes en todos los locales</h2>
               <div className="grid gap-1.5">
@@ -268,16 +267,6 @@ export default function ArqueosLocales() {
                     <b className="text-right tabular-nums text-ink">{pesos(b.tot)}</b>
                   </div>
                 ))}
-                {dolares > 0 && (
-                  <div className="grid grid-cols-[84px_1fr_64px_110px] items-center gap-2 text-sm sm:grid-cols-[96px_1fr_80px_130px]">
-                    <b className="text-ink">Dólares</b>
-                    <span className="h-2.5 overflow-hidden rounded-full bg-white/5">
-                      <i className="block h-full rounded-full" style={{ width: `${Math.max(1, (100 * dolares) / maxBillete)}%`, background: COLOR_DOLAR }} />
-                    </span>
-                    <span className="text-right text-xs text-sub">en pesos</span>
-                    <b className="text-right tabular-nums text-ink">{pesos(dolares)}</b>
-                  </div>
-                )}
               </div>
             </section>
           )}
@@ -333,7 +322,7 @@ export default function ArqueosLocales() {
                             <p className="mt-1 font-display text-xl font-bold tabular-nums text-ink">{pesos(l.total)}</p>
                             <div className="my-2 flex h-2 overflow-hidden rounded-full bg-white/5">
                               {bills.map((b) => (
-                                <i key={`${b.tipo}${b.valor}`} title={esDolar(b) ? `Dólares (en pesos): ${pesos(b.tot)}` : `${pesos(b.valor)}: ${b.cant} u.`} style={{ width: `${(100 * b.tot) / (l.total || 1)}%`, background: colorDe(b) }} />
+                                <i key={`${b.tipo}${b.valor}`} title={`${pesos(b.valor)}: ${b.cant} u.`} style={{ width: `${(100 * b.tot) / (l.total || 1)}%`, background: colorBillete(b.valor) }} />
                               ))}
                             </div>
                             <span className="flex items-center gap-1.5 text-xs font-semibold" style={{ color: e.c }}>
@@ -359,8 +348,7 @@ export default function ArqueosLocales() {
 
 function Detalle({ a }: { a: Arqueo & { nombre: string } }) {
   const bil = a.billetes.filter((b) => b.tipo === 'Billete')
-  const mon = a.billetes.filter((b) => b.tipo !== 'Billete' && !esDolar(b))
-  const tDol = a.billetes.filter(esDolar).reduce((s, b) => s + b.tot, 0)
+  const mon = a.billetes.filter((b) => b.tipo !== 'Billete')
   const tMon = mon.reduce((s, b) => s + b.tot, 0)
   const cMon = mon.reduce((s, b) => s + b.cant, 0)
   return (
@@ -386,18 +374,11 @@ function Detalle({ a }: { a: Arqueo & { nombre: string } }) {
           <tr className={`border-t border-line ${tMon ? 'text-ink' : 'text-sub/50'}`}>
             <td className="py-1">Monedas</td><td className="py-1 text-right tabular-nums">{numero(cMon)}</td><td className="py-1 text-right tabular-nums">{pesos(tMon)}</td>
           </tr>
-          {tDol > 0 && (
-            <tr className="border-t border-line text-ink">
-              <td className="py-1"><span className="mr-1.5 inline-block h-2 w-2 rounded-full" style={{ background: COLOR_DOLAR }} aria-hidden />Dólares</td>
-              <td className="py-1 text-right text-xs text-sub">en pesos</td>
-              <td className="py-1 text-right tabular-nums">{pesos(tDol)}</td>
-            </tr>
-          )}
         </tbody>
         <tfoot>
           <tr className="border-t border-line2 font-bold text-ink">
             <td className="py-1">Total</td>
-            <td className="py-1 text-right tabular-nums">{numero(a.billetes.filter((b) => !esDolar(b)).reduce((s, b) => s + b.cant, 0))}</td>
+            <td className="py-1 text-right tabular-nums">{numero(a.billetes.reduce((s, b) => s + b.cant, 0))}</td>
             <td className="py-1 text-right tabular-nums">{pesos(a.total)}</td>
           </tr>
         </tfoot>
