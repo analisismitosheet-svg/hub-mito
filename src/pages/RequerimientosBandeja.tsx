@@ -191,7 +191,7 @@ export default function RequerimientosBandeja() {
         </button>
         <select value={fZona} onChange={(e) => elegirZona(e.target.value)} aria-label="Zona" className={sel}>
           <option value="">Todas las zonas</option>
-          {ZONAS.map((z) => <option key={z} value={z}>Zona {nombreZona(z).toLowerCase()}</option>)}
+          {ZONAS.map((z) => <option key={z} value={z}>Zona {nombreZona(z)}</option>)}
         </select>
         <MultiselectFiltro label="Locales" opciones={opcionesLocal} seleccionadas={fLocales} onChange={setFLocales} />
         <select value={fRubro} onChange={(e) => setFRubro(e.target.value)} aria-label="Rubro" className={sel}>

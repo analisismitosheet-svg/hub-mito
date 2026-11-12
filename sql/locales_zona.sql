@@ -15,7 +15,7 @@
 alter table public.locales add column if not exists zona text;
 alter table public.locales drop constraint if exists locales_zona_valida;
 alter table public.locales add constraint locales_zona_valida
-  check (zona is null or zona in ('CENTRO', 'NORTE', 'SUR', 'ESTE', 'OESTE', 'INTERIOR'));
+  check (zona is null or zona in ('CENTRO', 'NORTE', 'SUR', 'OESTE', 'CARLOS PAZ', 'RIO CUARTO'));  -- zonas nuevas: sql/arqueos_marcados_y_zonas.sql
 
 update public.locales l set zona = v.zona
   from (values

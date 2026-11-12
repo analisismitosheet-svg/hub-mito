@@ -27,9 +27,10 @@ export interface Arqueo {
   billetes: Billete[]
 }
 
-/** ok: arqueó en horario · tarde: después, antes del próximo · avisando: falta y se está avisando ·
+/** ok: arqueó en horario · tarde: después, antes del próximo · marcado: el local tocó «Ya lo hice» y el
+ *  arqueo todavía no llegó de Dragon (tarda hasta 1 h) · avisando: falta y se está avisando ·
  *  no: se cerró sin arqueo · pendiente: todavía no llegó la hora del aviso */
-export type EstadoHorario = 'ok' | 'tarde' | 'avisando' | 'no' | 'pendiente'
+export type EstadoHorario = 'ok' | 'tarde' | 'marcado' | 'avisando' | 'no' | 'pendiente'
 export interface Horario { horario: number; estado: EstadoHorario; hora?: string }
 
 /** Fecha y minutos del día de ahora en Córdoba */
@@ -52,12 +53,13 @@ export const etiquetaHorario = (h: number) => `${String(h).padStart(2, '0')}:00`
  * Estado de cada horario según las horas de arqueo del día. `ahoraMin` = minutos del día de ahora
  * (si el día ya pasó, 24 × 60 + 1: todos cerrados).
  */
-export function estadoHorarios(horas: string[], ahoraMin: number): Horario[] {
+export function estadoHorarios(horas: string[], ahoraMin: number, marcados: number[] = []): Horario[] {
   const mins = horas.map((h) => ({ h: hhmm(h), m: minutos(h) })).sort((a, b) => a.m - b.m)
   return HORARIOS_ARQUEO.map((hh, i) => {
     const h = hh * 60
     const dentro = mins.find((x) => x.m >= h - ANTES && x.m <= h + DESPUES)
     if (dentro) return { horario: hh, estado: 'ok', hora: dentro.h }
+    if (marcados.includes(hh)) return { horario: hh, estado: 'marcado' }
     if (ahoraMin < h + AVISO) return { horario: hh, estado: 'pendiente' }
     const proximo = (HORARIOS_ARQUEO[i + 1] ?? 24) * 60
     const tarde = mins.find((x) => x.m > h + DESPUES && x.m < proximo - ANTES)
@@ -109,6 +111,24 @@ export async function ultimosArqueos(hasta: string): Promise<Arqueo[]> {
   return [...vistos.values()]
 }
 
+/** Horarios marcados con «Ya lo hice» en un día: local → horarios */
+export async function arqueosMarcados(fecha: string, local?: string): Promise<Map<string, number[]>> {
+  const m = new Map<string, number[]>()
+  if (!supabase) return m
+  let q = supabase.from('arqueos_marcados').select('local,horario').eq('fecha', fecha)
+  if (local) q = q.eq('local', local)
+  const { data } = await q
+  for (const x of (data ?? []) as { local: string; horario: number }[]) m.set(x.local, [...(m.get(x.local) ?? []), x.horario])
+  return m
+}
+
+/** El local de la cuenta marca que ya hizo el arqueo de ese horario (corta el aviso) */
+export async function marcarArqueo(horario: number): Promise<void> {
+  if (!supabase) return
+  const { error } = await supabase.rpc('arqueos_marcar', { p_horario: horario })
+  if (error) throw new Error(error.message)
+}
+
 export async function excluidos(): Promise<Set<string>> {
   if (!supabase) return new Set()
   const { data } = await supabase.from('arqueos_excluidos').select('local')
@@ -133,7 +153,7 @@ export const COLOR_BILLETE: Record<number, string> = {
 }
 export const colorBillete = (v: number) => COLOR_BILLETE[v] ?? '#475569'
 export const COLOR_ZONA: Record<string, string> = {
-  CENTRO: '#e879f9', NORTE: '#22d3ee', SUR: '#facc15', ESTE: '#4ade80', OESTE: '#f87171', INTERIOR: '#818cf8',
+  CENTRO: '#e879f9', NORTE: '#22d3ee', SUR: '#facc15', OESTE: '#f87171', 'CARLOS PAZ': '#4ade80', 'RIO CUARTO': '#818cf8',
 }
 export const pesos = (n: number) => `$ ${Math.round(n).toLocaleString('es-AR')}`
 export const numero = (n: number) => Math.round(n).toLocaleString('es-AR')

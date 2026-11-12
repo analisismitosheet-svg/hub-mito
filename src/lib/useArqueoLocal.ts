@@ -24,13 +24,14 @@ const VACIO: EstadoArqueoLocal = { activo: false, horarios: [], falta: null, ult
 let estado = VACIO
 let localActual: string | null = null
 let horasHoy: string[] = []
+let marcadosHoy: number[] = []
 let activo = false
 let timer: ReturnType<typeof setInterval> | null = null
 const oyentes = new Set<() => void>()
 
 function recalcular() {
   const { min } = ahoraCordoba()
-  const horarios = estadoHorarios(horasHoy, min)
+  const horarios = estadoHorarios(horasHoy, min, marcadosHoy)
   estado = {
     activo,
     horarios,
@@ -47,13 +48,15 @@ export async function releerArqueos(): Promise<void> {
   const { fecha } = ahoraCordoba()
   const desde = new Date(`${fecha}T12:00:00Z`)
   desde.setUTCDate(desde.getUTCDate() - 14)
-  const [hoy, antes, fuera] = await Promise.all([
+  const [hoy, antes, fuera, marc] = await Promise.all([
     supabase.from('arqueos_locales').select('hora').eq('local', local).eq('fecha', fecha).order('hora'),
     supabase.from('arqueos_locales').select('fecha').eq('local', local).gte('fecha', desde.toISOString().slice(0, 10)).limit(1),
     supabase.from('arqueos_excluidos').select('local').eq('local', local),
+    supabase.from('arqueos_marcados').select('horario').eq('local', local).eq('fecha', fecha),
   ])
   if (local !== localActual || hoy.error || antes.error) return
   horasHoy = ((hoy.data ?? []) as { hora: string }[]).map((x) => x.hora)
+  marcadosHoy = ((marc.data ?? []) as { horario: number }[]).map((x) => x.horario)
   activo = (antes.data ?? []).length > 0 && !(fuera.data ?? []).length
   recalcular()
 }
@@ -62,6 +65,7 @@ function arrancar(local: string) {
   if (localActual === local && timer) return
   localActual = local
   horasHoy = []
+  marcadosHoy = []
   activo = false
   if (timer) clearInterval(timer)
   void releerArqueos()

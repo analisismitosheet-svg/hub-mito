@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, BellOff, Check, CheckCircle2, Clock, Loader2, XCircle } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { releerArqueos, useArqueoLocal } from '@/lib/useArqueoLocal'
-import { ahoraCordoba, enCuanto, etiquetaHorario, proximoHorario, type Horario } from '@/lib/arqueos'
+import { ahoraCordoba, enCuanto, etiquetaHorario, marcarArqueo, proximoHorario, type Horario } from '@/lib/arqueos'
 import { notificarArmado, sonarArmado, vibrarArmado } from '@/lib/alarma'
 import AvisosCelular from '@/components/AvisosCelular'
 
@@ -26,6 +26,7 @@ export default function AvisoArqueo() {
   const e = useArqueoLocal(perfil?.local)
   const [callado, setCallado] = useState(calladoHasta)
   const [revisando, setRevisando] = useState(false)
+  const [errorMarca, setErrorMarca] = useState<string | null>(null)
   const ultimoSonido = useRef<{ horario: number; at: number } | null>(null)
 
   const falta = e?.falta ?? null
@@ -43,10 +44,17 @@ export default function AvisoArqueo() {
 
   if (!falta) return null
 
-  async function yaLoHice() {
+  async function yaLoHice(horario: number) {
     setRevisando(true)
-    await releerArqueos().catch(() => undefined)
-    setRevisando(false)
+    setErrorMarca(null)
+    try {
+      await marcarArqueo(horario)
+      await releerArqueos()
+    } catch (err) {
+      setErrorMarca(err instanceof Error ? err.message : 'No se pudo marcar')
+    } finally {
+      setRevisando(false)
+    }
   }
   function callar() {
     const hasta = Date.now() + REPITE_MS
@@ -61,11 +69,12 @@ export default function AvisoArqueo() {
       <div className="min-w-0 flex-1">
         <p className="font-display text-base font-bold text-red-200">Falta el arqueo de las {etiquetaHorario(falta.horario)}</p>
         <p className="text-xs text-red-200/80">
-          Hacé el arqueo de caja en Dragon: el aviso se va solo en unos minutos.{cierra > 0 ? ` El horario cierra ${enCuanto(cierra)}.` : ''}
+          Hacé el arqueo de caja en Dragon y tocá «Ya lo hice».{cierra > 0 ? ` El horario cierra ${enCuanto(cierra)}.` : ''}
         </p>
+        {errorMarca && <p className="mt-1 text-xs font-semibold text-red-300">{errorMarca}</p>}
       </div>
       <div className="flex gap-2">
-        <button type="button" onClick={() => void yaLoHice()} disabled={revisando}
+        <button type="button" onClick={() => void yaLoHice(falta.horario)} disabled={revisando}
           className="btn-press inline-flex h-9 items-center gap-1.5 rounded-full bg-red-600 px-3 text-sm font-semibold text-white disabled:opacity-60">
           {revisando ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Check size={14} aria-hidden />} Ya lo hice
         </button>
@@ -82,6 +91,7 @@ export default function AvisoArqueo() {
 const ICONO: Record<Horario['estado'], { clase: string; texto: (h: Horario) => string }> = {
   ok: { clase: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300', texto: (h) => `✓ ${h.hora}` },
   tarde: { clase: 'border-amber-500/40 bg-amber-500/10 text-amber-300', texto: (h) => `tarde ${h.hora}` },
+  marcado: { clase: 'border-sky-500/40 bg-sky-500/10 text-sky-300', texto: () => 'marcado' },
   avisando: { clase: 'animate-pulse border-red-500/60 bg-red-500/15 text-red-300', texto: () => 'falta' },
   no: { clase: 'border-red-500/40 bg-red-500/10 text-red-300', texto: () => '✕ no se hizo' },
   pendiente: { clase: 'border-line text-sub', texto: () => '—' },

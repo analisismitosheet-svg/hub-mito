@@ -355,7 +355,7 @@ export default function RequerimientoNuevo() {
       const sep = modo === 'local' && nivel === 0 && n.zona !== zonaPrev
         ? (zonaPrev = n.zona, (
           <p key={`sep-${n.zona}`} className="mb-1 mt-4 flex items-baseline gap-2 text-xs font-bold uppercase tracking-wider text-teal-500">
-            {n.zona === SIN_ZONA ? 'Sin zona' : `Zona ${nombreZona(n.zona).toLowerCase()}`}
+            {n.zona === SIN_ZONA ? 'Sin zona' : `Zona ${nombreZona(n.zona)}`}
             <span className="font-normal normal-case tracking-normal text-sub">{nodos.filter((x) => x.zona === n.zona).reduce((t, x) => t + x.filas.length, 0)} pedidos</span>
           </p>))
         : null
@@ -368,7 +368,7 @@ export default function RequerimientoNuevo() {
               className="flex w-full items-center gap-2 px-3 py-2.5 text-left">
               {iconoNodo(n)}
               <span className={`min-w-0 flex-1 truncate font-semibold ${n.tipo === 'zona' ? 'text-xs uppercase tracking-wider text-teal-500' : nivel === 0 ? 'text-sm text-ink' : 'text-[13px] text-ink'}`}>
-                {n.tipo === 'zona' ? (n.nombre === SIN_ZONA ? 'Sin zona' : `Zona ${nombreZona(n.nombre).toLowerCase()}`) : n.nombre}
+                {n.tipo === 'zona' ? (n.nombre === SIN_ZONA ? 'Sin zona' : `Zona ${nombreZona(n.nombre)}`) : n.nombre}
               </span>
               <span className="hidden flex-wrap justify-end gap-1 sm:flex">
                 {Object.entries(contarEstados(n.filas)).map(([e, c]) => (

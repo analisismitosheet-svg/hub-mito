@@ -16,7 +16,7 @@
 --   arqueos.view  rol tesoreria   ve todos los locales
 --   arqueos.edit                  saca o vuelve a sumar un local a los avisos
 --   Cada cuenta de local (usuarios.local) ve solo lo suyo.
--- Idempotente.
+-- Idempotente. «Ya lo hice» y la versión vigente de arqueos_avisos_tomar(): sql/arqueos_marcados_y_zonas.sql.
 -- =====================================================
 
 insert into public.permisos (clave, modulo, accion, label, orden) values

@@ -5,7 +5,7 @@ import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import {
-  COLOR_ZONA, HORARIOS_ARQUEO, ahoraCordoba, arqueosDelDia, colorBillete, estadoHorarios, etiquetaHorario, excluidos as leerExcluidos,
+  COLOR_ZONA, HORARIOS_ARQUEO, ahoraCordoba, arqueosDelDia, colorBillete, arqueosMarcados, estadoHorarios, etiquetaHorario, excluidos as leerExcluidos,
   excluirLocal, hhmm, minutos, numero, pesos, ultimosArqueos, ultimoSync, type Arqueo, type Horario,
 } from '@/lib/arqueos'
 
@@ -25,6 +25,7 @@ const ddmm = (f: string) => `${f.slice(8, 10)}/${f.slice(5, 7)}`
 const ESTILO_HORARIO: Record<Horario['estado'], string> = {
   ok: 'bg-emerald-500/15 text-emerald-300',
   tarde: 'bg-amber-500/15 text-amber-300',
+  marcado: 'bg-sky-500/15 text-sky-300',
   avisando: 'bg-red-500/20 text-red-300 animate-pulse',
   no: 'bg-red-500/15 text-red-300',
   pendiente: 'text-sub/60',
@@ -32,6 +33,7 @@ const ESTILO_HORARIO: Record<Horario['estado'], string> = {
 function textoHorario(h: Horario): string {
   if (h.estado === 'ok') return `✓ ${h.hora}`
   if (h.estado === 'tarde') return `tarde ${h.hora}`
+  if (h.estado === 'marcado') return '✓ marcado'
   if (h.estado === 'avisando') return 'avisando'
   if (h.estado === 'no') return '✕ no hizo'
   return '—'
@@ -47,6 +49,7 @@ export default function ArqueosLocales() {
   const [delDia, setDelDia] = useState<Arqueo[]>([])
   const [fuera, setFuera] = useState<Set<string>>(new Set())
   const [sync, setSync] = useState<string | null>(null)
+  const [marcados, setMarcados] = useState<Map<string, number[]>>(new Map())
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busca, setBusca] = useState('')
@@ -61,11 +64,12 @@ export default function ArqueosLocales() {
 
   const cargar = useCallback(async () => {
     try {
-      const [u, d, x, s] = await Promise.all([ultimosArqueos(fecha), arqueosDelDia(fecha), leerExcluidos(), ultimoSync()])
+      const [u, d, x, s, m] = await Promise.all([ultimosArqueos(fecha), arqueosDelDia(fecha), leerExcluidos(), ultimoSync(), arqueosMarcados(fecha)])
       setUltimos(u)
       setDelDia(d)
       setFuera(x)
       setSync(s)
+      setMarcados(m)
       setError(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudieron leer los arqueos')
@@ -97,16 +101,16 @@ export default function ArqueosLocales() {
     const horas = new Map<string, string[]>()
     for (const a of delDia) horas.set(a.local, [...(horas.get(a.local) ?? []), a.hora])
     return datos
-      .map((l) => ({ local: l.local, nombre: l.nombre, zona: l.zona, excluido: fuera.has(l.local), horarios: estadoHorarios(horas.get(l.local) ?? [], ahoraMin) }))
+      .map((l) => ({ local: l.local, nombre: l.nombre, zona: l.zona, excluido: fuera.has(l.local), horarios: estadoHorarios(horas.get(l.local) ?? [], ahoraMin, marcados.get(l.local)) }))
       .sort((a, b) => a.zona.localeCompare(b.zona) || a.nombre.localeCompare(b.nombre))
-  }, [datos, delDia, fuera, ahoraMin])
+  }, [datos, delDia, fuera, ahoraMin, marcados])
 
   const total = datos.reduce((s, l) => s + l.total, 0)
   const conArqueo = datos.filter((l) => l.delDia).length
   const ultimo = [...datos].filter((l) => l.delDia).sort((a, b) => minutos(b.hora) - minutos(a.hora))[0]
   const mayor = [...datos].sort((a, b) => b.total - a.total)[0]
   const b20 = datos.reduce((s, l) => s + (l.billetes.find((b) => b.valor === 20000)?.cant ?? 0), 0)
-  const cumplidos = grilla.filter((g) => !g.excluido).flatMap((g) => g.horarios).filter((h) => h.estado === 'ok' || h.estado === 'tarde').length
+  const cumplidos = grilla.filter((g) => !g.excluido).flatMap((g) => g.horarios).filter((h) => h.estado === 'ok' || h.estado === 'tarde' || h.estado === 'marcado').length
   const faltaron = grilla.filter((g) => !g.excluido).flatMap((g) => g.horarios).filter((h) => h.estado === 'no' || h.estado === 'avisando').length
 
   const billetes = useMemo(() => {
