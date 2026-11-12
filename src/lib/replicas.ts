@@ -53,8 +53,6 @@ export const NOMBRES: Record<string, string> = {
   INDOD: 'INDO',
   LIBED: 'LIBERTAD',
   MITO: 'MITO',
-  MITOD: 'MITO',
-  MITOSHD: 'MITO',
   MMAXD: 'MARIANO MAX',
   MUNOD: 'MUÑOZ',
   NCEND: 'NUEVO CENTRO',

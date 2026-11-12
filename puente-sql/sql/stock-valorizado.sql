@@ -52,6 +52,7 @@ INSERT INTO #fuera (base) VALUES
   ('DRAGONFISH_CONSIGNA'),
   -- 02/11/2026: también las pidió sacar el usuario
   ('DRAGONFISH_MITOD'),
+  ('DRAGONFISH_MITOSHD'),
   ('DRAGONFISH_NVOCED'),
   ('DRAGONFISH_9DEJULIO'),
   ('DRAGONFISH_CFW');
