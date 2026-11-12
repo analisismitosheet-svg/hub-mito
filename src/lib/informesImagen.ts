@@ -37,6 +37,8 @@ export interface ReporteImagen {
   subtitulo?: string
   pie?: string
   bloques: BloqueImagen[]
+  /** ancho de la imagen en px (por defecto 1000); más ancho = más caracteres por columna */
+  ancho?: number
 }
 
 const ANCHO = 1000
@@ -84,11 +86,11 @@ function celda(texto: string, header: boolean, maxChars: number, opc: { der?: bo
 
 type BloqueTabla = Extract<BloqueImagen, { tipo: 'tabla' }>
 
-function bloqueTabla(b: BloqueTabla, key: number) {
+function bloqueTabla(b: BloqueTabla, key: number, carLinea = CAR_LINEA) {
   const cols = b.columnas
   const sumaAnchos = (b.anchos ?? cols.map(() => 1)).reduce((s, n) => s + n, 0)
   const maxCharsDe = (ci: number) =>
-    Math.max(6, Math.floor((CAR_LINEA * (b.anchos?.[ci] ?? 1)) / Math.max(1, sumaAnchos)))
+    Math.max(6, Math.floor((carLinea * (b.anchos?.[ci] ?? 1)) / Math.max(1, sumaAnchos)))
   const opc = (ci: number) => ({ der: b.alinear?.[ci] === 'der', flex: b.anchos?.[ci] ?? 1 })
   const val = (v: unknown) => (v === null || v === undefined ? '' : String(v).replace(/\s+/g, ' ').trim())
 
@@ -226,6 +228,8 @@ function acotar(bloques: BloqueImagen[]): BloqueImagen[] {
 
 export async function renderReporteImagen(r: ReporteImagen): Promise<Buffer> {
   const bloques = acotar(r.bloques)
+  const ancho = r.ancho ?? ANCHO
+  const carLinea = Math.round((CAR_LINEA * (ancho - 2 * PAD)) / (ANCHO - 2 * PAD))
 
   let alto = PAD * 2 + 44 + 12
   if (r.subtitulo) alto += 28
@@ -242,7 +246,7 @@ export async function renderReporteImagen(r: ReporteImagen): Promise<Buffer> {
       b.tipo === 'texto'
         ? bloqueTexto(b.texto, i)
         : b.tipo === 'tabla'
-          ? bloqueTabla(b, i)
+          ? bloqueTabla(b, i, carLinea)
           : b.tipo === 'seccion'
             ? bloqueSeccion(b, i)
             : bloqueKpis(b, i),
@@ -256,7 +260,7 @@ export async function renderReporteImagen(r: ReporteImagen): Promise<Buffer> {
       style: {
         display: 'flex',
         flexDirection: 'column',
-        width: `${ANCHO}px`,
+        width: `${ancho}px`,
         height: `${alto}px`,
         boxSizing: 'border-box',
         backgroundColor: '#ffffff',
@@ -268,7 +272,7 @@ export async function renderReporteImagen(r: ReporteImagen): Promise<Buffer> {
   )
 
   const svg = await satori(el, {
-    width: ANCHO,
+    width: ancho,
     height: alto,
     fonts: [{ name: 'Geist', data: FUENTE, weight: 400, style: 'normal' }],
   })

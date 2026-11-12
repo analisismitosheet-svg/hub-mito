@@ -379,6 +379,10 @@ async function datosConversion(fecha: string): Promise<DatosConversion> {
   const d = new Date(`${fecha}T12:00:00Z`)
   d.setUTCDate(d.getUTCDate() - 7)
   const antes = d.toISOString().slice(0, 10)
+  // Mes de objetivos: del 26 del mes anterior al 25 (del 26 en adelante cuenta para el mes siguiente)
+  const [an, me, di] = fecha.split('-').map(Number)
+  const finMes = new Date(Date.UTC(an, me - 1 + (di >= 26 ? 1 : 0), 25)).toISOString().slice(0, 10)
+  const inicioMes = new Date(Date.UTC(an, me - 2 + (di >= 26 ? 1 : 0), 26)).toISOString().slice(0, 10)
   const cfgVista = await jsonDe<{ valor: unknown }>('config_app?clave=eq.contador_vista_ventas&select=valor')
   const vista = typeof cfgVista[0]?.valor === 'string' ? (cfgVista[0].valor as string) : ''
   if (!vista) throw new Error('Falta configurar la vista de ventas del contador (config_app contador_vista_ventas)')
@@ -389,7 +393,8 @@ async function datosConversion(fecha: string): Promise<DatosConversion> {
     leerVistaRemota(vista, { vista, tope: 20_000 }, 20_000),
     jsonDe<{ codigo: string; nombre: string | null }>('locales?select=codigo,nombre'),
     // Objetivo del día (Locales → Objetivo); si falla, el informe sale sin esas columnas
-    rpc<{ local: string; objetivo: number | null; venta: number | null }>('objetivos_locales_dia', { p_desde: fecha, p_hasta: fecha }).catch(() => []),
+    // Todo el mes de objetivos: el día, el acumulado hasta el día y el objetivo del mes entero
+    rpc<{ local: string; fecha: string; objetivo: number | null; venta: number | null }>('objetivos_locales_dia', { p_desde: inicioMes, p_hasta: finMes }).catch(() => []),
     // Tickets y venta por local que el hub ya tiene copiados (de todos los locales):
     // completan a los que la vista remota no trae y así no salen sin tickets ni promedio
     jsonDe<{ local: string; fecha: string; tickets: number | null; total: number | string | null }>(
@@ -398,11 +403,22 @@ async function datosConversion(fecha: string): Promise<DatosConversion> {
   ])
   const objetivos = new Map<string, number>()
   const ventasDia = new Map<string, number>()
+  const objetivoMes = new Map<string, number>()
+  const ventaMes = new Map<string, number>()
+  const objetivoMesAlDia = new Map<string, number>()
+  const num = (v: unknown) => (v != null && Number.isFinite(Number(v)) ? Number(v) : null)
   for (const f of filasObj) {
     const local = String(f.local ?? '').trim().toUpperCase()
     if (!local) continue
-    if (f.objetivo != null && Number.isFinite(Number(f.objetivo))) objetivos.set(local, Number(f.objetivo))
-    if (f.venta != null && Number.isFinite(Number(f.venta))) ventasDia.set(local, Number(f.venta))
+    const dia = String(f.fecha ?? '').slice(0, 10)
+    const o = num(f.objetivo)
+    const v = num(f.venta)
+    if (o != null) objetivoMes.set(local, (objetivoMes.get(local) ?? 0) + o)
+    if (o != null && dia <= fecha) objetivoMesAlDia.set(local, (objetivoMesAlDia.get(local) ?? 0) + o)
+    if (v != null && dia <= fecha) ventaMes.set(local, (ventaMes.get(local) ?? 0) + v)
+    if (dia !== fecha) continue
+    if (o != null) objetivos.set(local, o)
+    if (v != null) ventasDia.set(local, v)
   }
   const ventas = new Map<string, { tickets: number; total: number }>()
   const ventasAntes = new Map<string, { tickets: number; total: number }>()
@@ -425,7 +441,7 @@ async function datosConversion(fecha: string): Promise<DatosConversion> {
     destino.set(local, { tickets, total: Number(f.total) || 0 })
   }
   const nombres = Object.fromEntries(locales.map((l) => [l.codigo, l.nombre ?? '']))
-  return { fecha, antes, entradas, entradasAntes, ventas, ventasAntes, nombres, objetivos, ventasDia }
+  return { fecha, antes, entradas, entradasAntes, ventas, ventasAntes, nombres, objetivos, ventasDia, objetivoMes, ventaMes, objetivoMesAlDia }
 }
 
 // ---------------------------------------------------------------------------
@@ -622,7 +638,7 @@ async function construirReporteImagen(informe: Informe, fecha?: string): Promise
       if (cfg.tipo === 'tasa_conversion') {
         const r = bloquesConversion(await datosConversion(d.fecha))
         return {
-          reporte: { titulo: limpiarParaImagen(enc || 'Tasa de conversión'), subtitulo: r.subtitulo, pie, bloques: r.bloques },
+          reporte: { titulo: limpiarParaImagen(enc || 'Tasa de conversión'), subtitulo: r.subtitulo, pie, bloques: r.bloques, ancho: r.ancho },
           caption: limpiarParaImagen(enc || informe.nombre || 'Tasa de conversión').slice(0, 900),
         }
       }

@@ -24,6 +24,12 @@ export interface DatosConversion {
   objetivos?: Map<string, number>
   /** Venta del día de todos los locales (ventas_locales_dia, vía objetivos): para los que no tienen cámara */
   ventasDia?: Map<string, number>
+  /** Objetivo del mes de objetivos entero (26 al 25) por local */
+  objetivoMes?: Map<string, number>
+  /** Venta acumulada del mes de objetivos hasta el día del informe, por local */
+  ventaMes?: Map<string, number>
+  /** Objetivo del mes de objetivos sumado hasta el día del informe: da el color de «% obj. mes» */
+  objetivoMesAlDia?: Map<string, number>
 }
 
 /** Locales que no van en el contador ni en la tasa de conversión (pantallas e informe) aunque tengan cámara registrada */
@@ -43,7 +49,7 @@ function puntos(act: number | null, ant: number | null): string {
   return `${d >= 0 ? '+' : '-'}${nf(Math.abs(d), 1)} pp`
 }
 
-export function bloquesConversion(d: DatosConversion): { subtitulo: string; bloques: BloqueImagen[]; texto: string } {
+export function bloquesConversion(d: DatosConversion): { subtitulo: string; bloques: BloqueImagen[]; texto: string; ancho?: number } {
   const subtitulo = `Conversión del ${corta(d.fecha)} · vs ${diaCorto(d.antes)}`
   const filas = [...d.entradas.entries()]
     .filter(([local, e]) => e > 0 && !LOCALES_FUERA_DEL_CONTADOR.has(local))
@@ -114,36 +120,57 @@ export function bloquesConversion(d: DatosConversion): { subtitulo: string; bloq
   })
 
   bloques.push({ tipo: 'seccion', texto: 'Por local', color: '#16a34a' })
-  /** En la imagen «CAPTAIN FIN» va como «CF» (y «RIVERA INDARTE» como «R. INDARTE») para que entre el nombre */
-  const nombreCorto = (n: string) => n.replace(/^CAPTAIN FIN/, 'CF').replace('RIVERA INDARTE', 'R. INDARTE')
-  /** % del objetivo completado, sin decimales («113%») */
-  const avance = (v: number, o: number | undefined) => (o ? `${nf((100 * v) / o)}%` : '—')
+  /** En la imagen «CAPTAIN FIN» va como «CF» («RIVERA INDARTE» → «R. INDARTE», «GENERAL PAZ» → «GRAL. PAZ») para que entre el nombre */
+  const nombreCorto = (n: string) => n.replace(/^CAPTAIN FIN/, 'CF').replace('RIVERA INDARTE', 'R. INDARTE').replace(/^GENERAL PAZ/, 'GRAL. PAZ')
+  /** Cuánto arriba o abajo del objetivo quedó: «+33%» (facturó 133%) o «-3%» (facturó 97%) */
+  const desvio = (v: number, o: number | undefined, dec = 0) => {
+    if (!o) return '—'
+    const p = (100 * v) / o - 100
+    return `${p >= 0 ? '+' : '-'}${nf(Math.abs(p), dec)}%`
+  }
+  /** % completado del objetivo del mes («40%») */
+  const completado = (v: number | undefined, o: number | undefined) => (o && v != null ? `${nf((100 * v) / o)}%` : '—')
+  // Mes de objetivos (26 al 25): venta acumulada hasta el día y objetivo del mes entero
+  const conMes = Boolean(d.objetivoMes?.size)
+  const acumMes = (local: string) => d.ventaMes?.get(local)
+  const objMes = (local: string) => d.objetivoMes?.get(local)
+  const acumMesTot = todas.reduce((s, f) => s + (acumMes(f.local) ?? 0), 0)
+  const objMesTot = todas.reduce((s, f) => s + (objMes(f.local) ?? 0), 0)
+  // Color del mes: lo acumulado contra lo que pedía el objetivo hasta hoy (no contra el mes entero)
+  const objAlDia = (local: string) => d.objetivoMesAlDia?.get(local)
+  const colorMes = (v: number | undefined, o: number | undefined) => (v != null && o ? colorDif(v, o) : null)
+  const conAlDia = todas.filter((f) => objAlDia(f.local) != null)
+  const colorMesTot = colorMes(conAlDia.reduce((s, f) => s + (acumMes(f.local) ?? 0), 0), conAlDia.reduce((s, f) => s + (objAlDia(f.local) ?? 0), 0))
   const fila = (f: Fila) => {
     const o = obj(f.local)
+    const am = acumMes(f.local)
+    const om = objMes(f.local)
     return [
       nombreCorto(f.nombre),
       f.entradas != null ? nf(f.entradas) : '-', nf(f.tickets), f.entradas != null ? pct(f.conv) : '-', pesos(f.total),
-      ...(conObj ? [o != null ? pesos(o) : '—', avance(f.total, o), o != null ? difTxt(f.total - o) : '—'] : []),
+      ...(conObj ? [o != null ? pesos(o) : '—', desvio(f.total, o), o != null ? difTxt(f.total - o) : '—'] : []),
       f.tickets ? pesos(f.total / f.tickets) : '—',
+      ...(conMes ? [am != null ? pesos(am) : '—', completado(am, om)] : []),
     ]
   }
   const filaTot = [
     'Total', nf(ent), nf(tkTodos), pct(convTot), pesos(totTodos),
-    ...(conObj ? [pesos(objTot), pct(avanceObj), conObjetivo.length ? difTxt(factObjTot - objTot) : '—'] : []),
+    ...(conObj ? [pesos(objTot), conObjetivo.length ? desvio(factObjTot, objTot, 1) : '—', conObjetivo.length ? difTxt(factObjTot - objTot) : '—'] : []),
     tkTodos ? pesos(totTodos / tkTodos) : '—',
+    ...(conMes ? [pesos(acumMesTot), objMesTot ? pct((100 * acumMesTot) / objMesTot) : '—'] : []),
   ]
   bloques.push({
     tipo: 'tabla',
     // Con objetivo son 9 columnas en 1000 px: «Conv.» abreviado para que entren los montos
-    columnas: ['Local', 'Entradas', 'Tickets', conObj ? 'Conv.' : 'Conversión', 'Facturado', ...(conObj ? ['Objetivo', '% obj.', 'Diferencia'] : []), conObj ? 'Promedio' : 'Ticket prom.'],
-    anchos: conObj ? [17.5, 8.5, 7.5, 6, 12.5, 12.5, 6.5, 12.5, 9.5] : [2.4, 1, 1, 1.2, 1.6, 1.4],
-    alinear: ['izq', 'der', 'der', 'der', 'der', ...(conObj ? (['der', 'der', 'der'] as const) : []), 'der'],
-    colores: [null, '#2563eb', '#7c3aed', '#16a34a', null, ...(conObj ? ['#475569', null, null] : []), '#475569'],
+    columnas: ['Local', 'Entradas', 'Tickets', conObj ? 'Conv.' : 'Conversión', 'Facturado', ...(conObj ? ['Objetivo', '% obj.', 'Diferencia'] : []), conObj ? 'Promedio' : 'Ticket prom.', ...(conMes ? ['Acum. mes', '% obj. mes'] : [])],
+    anchos: [...(conObj ? [conMes ? 19 : 17.5, 8.5, 7.5, 6, 12.5, 12.5, 6.5, conMes ? 14 : 12.5, 9.5] : [24, 10, 10, 12, 16, 14]), ...(conMes ? [16, 10] : [])],
+    alinear: ['izq', 'der', 'der', 'der', 'der', ...(conObj ? (['der', 'der', 'der'] as const) : []), 'der', ...(conMes ? (['der', 'der'] as const) : [])],
+    colores: [null, '#2563eb', '#7c3aed', '#16a34a', null, ...(conObj ? ['#475569', null, null] : []), '#475569', ...(conMes ? [null, null] : [])],
     ...(conObj
       ? {
           coloresCelda: [
-            ...todas.map((f) => { const o = obj(f.local); const c = o != null ? colorDif(f.total, o) : null; return [null, null, null, null, null, null, c, c, null] }),
-            (() => { const c = conObjetivo.length ? colorDif(factObjTot, objTot) : null; return [null, null, null, null, null, null, c, c, null] })(),
+            ...todas.map((f) => { const o = obj(f.local); const c = o != null ? colorDif(f.total, o) : null; return [null, null, null, null, null, null, c, c, null, null, colorMes(acumMes(f.local), objAlDia(f.local))] }),
+            (() => { const c = conObjetivo.length ? colorDif(factObjTot, objTot) : null; return [null, null, null, null, null, null, c, c, null, null, colorMesTot] })(),
           ],
         }
       : {}),
@@ -155,8 +182,10 @@ export function bloquesConversion(d: DatosConversion): { subtitulo: string; bloq
     `*Tasa de conversión* — ${corta(d.fecha)}`,
     `Total: ${pct(convTot)} (${nf(tk)} tickets / ${nf(ent)} entradas en locales con cámara)${convAntTot != null ? ` · ${puntos(convTot, convAntTot)} vs ${diaCorto(d.antes)}` : ''}`,
     ...(avanceObj != null ? [`Objetivo: ${pct(avanceObj)} (${pesos(factObjTot)} de ${pesos(objTot)})`] : []),
+    ...(conMes && objMesTot ? [`Mes: ${pesos(acumMesTot)} acumulado, ${pct((100 * acumMesTot) / objMesTot)} del objetivo del mes`] : []),
     '',
-    ...todas.map((f) => { const o = obj(f.local); return `• ${f.nombre}: ${f.entradas != null ? `${pct(f.conv)} (${nf(f.tickets)}/${nf(f.entradas)})` : `sin cámara (${nf(f.tickets)} tickets)`} · ${pesos(f.total)}${o != null ? ` (obj. ${pesos(o)}, ${avance(f.total, o)}, ${difTxt(f.total - o)})` : ''}` }),
+    ...todas.map((f) => { const o = obj(f.local); return `• ${f.nombre}: ${f.entradas != null ? `${pct(f.conv)} (${nf(f.tickets)}/${nf(f.entradas)})` : `sin cámara (${nf(f.tickets)} tickets)`} · ${pesos(f.total)}${o != null ? ` (obj. ${pesos(o)}, ${desvio(f.total, o)}, ${difTxt(f.total - o)})` : ''}${completado(acumMes(f.local), objMes(f.local)) !== '—' ? ` · mes ${completado(acumMes(f.local), objMes(f.local))}` : ''}` }),
   ].join('\n')
-  return { subtitulo, bloques, texto }
+  // Con las columnas del mes son 11: la imagen va más ancha para que entren los montos enteros
+  return { subtitulo, bloques, texto, ancho: conMes ? 1300 : undefined }
 }
