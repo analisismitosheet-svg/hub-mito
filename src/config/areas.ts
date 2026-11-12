@@ -174,6 +174,16 @@ export const APPS: AppDef[] = [
     permiso: 'arqueos.view',
   },
   {
+    id: 'mis-arqueos',
+    areaId: 'locales',
+    title: 'Arqueos de mi local',
+    description: 'Horarios del día y lo que contaste en cada arqueo, por billete.',
+    icon: Banknote,
+    kind: 'internal',
+    target: '/locales/arqueos',
+    color: '#eab308',
+  },
+  {
     id: 'manuales',
     areaId: 'locales',
     title: 'Manuales',

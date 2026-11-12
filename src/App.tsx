@@ -51,6 +51,7 @@ import EmpleadosPage from '@/pages/Empleados'
 import Cumpleanios from '@/pages/Cumpleanios'
 import FeriadosRrhh from '@/pages/FeriadosRrhh'
 import ArqueosLocales from '@/pages/ArqueosLocales'
+import MisArqueos from '@/pages/MisArqueos'
 import RequerimientoNuevo from '@/pages/RequerimientoNuevo'
 import RequerimientosBandeja from '@/pages/RequerimientosBandeja'
 import RequerimientosRubros from '@/pages/RequerimientosRubros'
@@ -816,6 +817,14 @@ export default function App() {
               <PermissionRoute permiso="rrhh.empleados.view">
                 <EmpleadosPage />
               </PermissionRoute>
+            }
+          />
+          <Route
+            path="/locales/arqueos"
+            element={
+              <ProtectedRoute>
+                <MisArqueos />
+              </ProtectedRoute>
             }
           />
           <Route
