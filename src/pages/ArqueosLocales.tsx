@@ -126,7 +126,6 @@ export default function ArqueosLocales() {
   const conArqueo = datos.filter((l) => l.delDia).length
   const ultimo = [...datos].filter((l) => l.delDia).sort((a, b) => minutos(b.hora) - minutos(a.hora))[0]
   const mayor = [...datos].sort((a, b) => b.total - a.total)[0]
-  const b20 = datos.reduce((s, l) => s + (l.billetes.find((b) => b.valor === 20000)?.cant ?? 0), 0)
   const cumplidos = grilla.filter((g) => !g.excluido).flatMap((g) => g.horarios).filter((h) => h.estado === 'ok' || h.estado === 'tarde' || h.estado === 'marcado').length
   const faltaron = grilla.filter((g) => !g.excluido).flatMap((g) => g.horarios).filter((h) => h.estado === 'no' || h.estado === 'avisando').length
 
@@ -200,12 +199,11 @@ export default function ArqueosLocales() {
         <p className="py-10 text-center text-sm text-sub">No hay arqueos de los últimos 14 días.</p>
       ) : (
         <>
-          <div className="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="mb-4 grid grid-cols-2 gap-2.5 lg:grid-cols-4">
             {[
               ['Efectivo en locales', pesos(total), `${datos.length} locales`],
               [esHoy ? 'Arquearon hoy' : 'Arquearon ese día', `${conArqueo} de ${datos.length}`, datos.length - conArqueo ? `${datos.length - conArqueo} sin arqueo` : 'todos'],
               ['Horarios cumplidos', numero(cumplidos), faltaron ? `${faltaron} que faltaron` : 'ninguno faltó'],
-              ['Billetes de $ 20.000', numero(b20), pesos(b20 * 20000)],
               ['Más efectivo', mayor ? pesos(mayor.total) : '—', mayor?.nombre ?? ''],
             ].map(([t, v, p]) => (
               <div key={t} className="rounded-2xl border border-line bg-surface p-3">
