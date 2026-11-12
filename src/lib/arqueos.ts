@@ -132,6 +132,13 @@ export const COLOR_BILLETE: Record<number, string> = {
   20000: '#10b981', 10000: '#38bdf8', 2000: '#a78bfa', 1000: '#f59e0b', 500: '#f472b6', 200: '#fb923c', 100: '#94a3b8',
 }
 export const colorBillete = (v: number) => COLOR_BILLETE[v] ?? '#475569'
+/**
+ * En los locales cargan los dólares como monedas de $ 1: la cantidad es lo que valen en pesos
+ * (61.800 monedas = $ 61.800 en dólares). Se muestran aparte y suman al total.
+ */
+export const esDolar = (b: Billete) => b.tipo !== 'Billete' && b.valor === 1
+export const COLOR_DOLAR = '#2dd4bf'
+export const colorDe = (b: Billete) => (esDolar(b) ? COLOR_DOLAR : colorBillete(b.valor))
 export const COLOR_ZONA: Record<string, string> = {
   CENTRO: '#e879f9', NORTE: '#22d3ee', SUR: '#facc15', ESTE: '#4ade80', OESTE: '#f87171', INTERIOR: '#818cf8',
 }
