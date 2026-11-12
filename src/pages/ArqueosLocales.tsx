@@ -200,6 +200,22 @@ export default function ArqueosLocales() {
         <p className="py-10 text-center text-sm text-sub">No hay arqueos de los últimos 14 días.</p>
       ) : (
         <>
+          <div className="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
+            {[
+              ['Efectivo en locales', pesos(total), `${datos.length} locales`],
+              [esHoy ? 'Arquearon hoy' : 'Arquearon ese día', `${conArqueo} de ${datos.length}`, datos.length - conArqueo ? `${datos.length - conArqueo} sin arqueo` : 'todos'],
+              ['Horarios cumplidos', numero(cumplidos), faltaron ? `${faltaron} que faltaron` : 'ninguno faltó'],
+              ['Billetes de $ 20.000', numero(b20), pesos(b20 * 20000)],
+              ['Más efectivo', mayor ? pesos(mayor.total) : '—', mayor?.nombre ?? ''],
+            ].map(([t, v, p]) => (
+              <div key={t} className="rounded-2xl border border-line bg-surface p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-sub">{t}</p>
+                <p className="mt-0.5 font-display text-xl font-bold tabular-nums text-ink">{v}</p>
+                <p className="truncate text-xs text-sub">{p}</p>
+              </div>
+            ))}
+          </div>
+
           {/* Filtros */}
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <label className="relative min-w-[180px] flex-1">
@@ -294,22 +310,6 @@ export default function ArqueosLocales() {
               </section>
             )
           })}
-
-          <div className="mb-4 mt-2 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
-            {[
-              ['Efectivo en locales', pesos(total), `${datos.length} locales`],
-              [esHoy ? 'Arquearon hoy' : 'Arquearon ese día', `${conArqueo} de ${datos.length}`, datos.length - conArqueo ? `${datos.length - conArqueo} sin arqueo` : 'todos'],
-              ['Horarios cumplidos', numero(cumplidos), faltaron ? `${faltaron} que faltaron` : 'ninguno faltó'],
-              ['Billetes de $ 20.000', numero(b20), pesos(b20 * 20000)],
-              ['Más efectivo', mayor ? pesos(mayor.total) : '—', mayor?.nombre ?? ''],
-            ].map(([t, v, p]) => (
-              <div key={t} className="rounded-2xl border border-line bg-surface p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-sub">{t}</p>
-                <p className="mt-0.5 font-display text-xl font-bold tabular-nums text-ink">{v}</p>
-                <p className="truncate text-xs text-sub">{p}</p>
-              </div>
-            ))}
-          </div>
 
           {/* Billetes en todos los locales */}
           {billetes.length > 0 && (
