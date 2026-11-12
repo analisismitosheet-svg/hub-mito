@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { Banknote, BellOff, Bell, RefreshCw, Search, X } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -146,7 +145,6 @@ export default function ArqueosLocales() {
     return [...m.entries()].sort((a, b) => suma(b[1]) - suma(a[1])).map(([z, ls]) => ({ zona: z, locales: ls, total: suma(ls) }))
   }, [datos, busca, zona, orden])
 
-  const elegido = sel ? datos.find((l) => l.local === sel) : undefined
   const syncViejo = esHoy && (!sync || Date.now() - new Date(sync).getTime() > 10 * 60_000)
 
   async function alternar(local: string) {
@@ -240,7 +238,8 @@ export default function ArqueosLocales() {
           {!grupos.length && <p className="py-6 text-center text-sm text-sub">Ningún local coincide con la búsqueda.</p>}
           {grupos.map((g, i) => {
             const sinArqueo = g.locales.filter((l) => !l.delDia).length
-            const bz = sumarBilletes(g.locales)
+            const lsel = g.locales.find((l) => l.local === sel)
+            const bz = sumarBilletes(lsel ? [lsel] : g.locales)
             const maxZ = Math.max(1, ...bz.billetes.map((b) => b.tot))
             return (
               <section key={g.zona} className="mb-5">
@@ -260,7 +259,7 @@ export default function ArqueosLocales() {
                       const e = estadoCard(l)
                       const bills = l.billetes.filter((b) => b.tot > 0)
                       return (
-                        <button key={l.local} type="button" onClick={() => setSel(l.local)}
+                        <button key={l.local} type="button" onClick={() => setSel(sel === l.local ? null : l.local)}
                           className={`min-w-0 rounded-2xl border p-2.5 text-left transition sm:p-3 ${sel === l.local ? 'border-emerald-500/60 bg-emerald-500/5' : 'border-line bg-surface hover:border-line2'}`}>
                           <div className="flex items-start justify-between gap-2">
                             <span className="min-w-0 text-sm font-semibold leading-tight text-ink sm:text-base">{l.nombre}</span>
@@ -281,7 +280,20 @@ export default function ArqueosLocales() {
                     })}
                   </div>
                   <aside className="order-first rounded-xl border border-line bg-surface px-2.5 py-2 lg:order-none">
-                    <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-sub">Billetes de la zona</p>
+                    {lsel ? (
+                      <div className="mb-1 flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-emerald-300">Billetes de {lsel.nombre}</p>
+                          <p className="truncate text-[10px] text-sub">Arqueo N° {lsel.arqueo} · {ddmm(lsel.fecha)} {hhmm(lsel.hora)}</p>
+                        </div>
+                        <button type="button" onClick={() => setSel(null)} title="Volver a la zona" aria-label="Volver a la zona"
+                          className="grid h-5 w-5 shrink-0 place-items-center rounded-full border border-line text-sub hover:text-ink">
+                          <X size={11} aria-hidden />
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-sub">Billetes de la zona</p>
+                    )}
                     <div className="grid gap-px">
                       {bz.billetes.map((b) => (
                         <div key={b.v} className="grid grid-cols-[56px_1fr_30px_80px] items-center gap-1.5 text-[11px] leading-[18px]">
@@ -300,7 +312,7 @@ export default function ArqueosLocales() {
                         </div>
                       )}
                       <div className="mt-0.5 grid grid-cols-[1fr_80px] border-t border-line pt-1 text-[11px] font-bold text-ink">
-                        <span>Total</span><span className="text-right tabular-nums">{pesos(g.total)}</span>
+                        <span>Total</span><span className="text-right tabular-nums">{pesos(lsel ? lsel.total : g.total)}</span>
                       </div>
                     </div>
                   </aside>
@@ -328,18 +340,6 @@ export default function ArqueosLocales() {
             </section>
           )}
 
-          {elegido && createPortal(
-            <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" onClick={() => setSel(null)}>
-              <div className="relative max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-[#111114] shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                <button type="button" onClick={() => setSel(null)} aria-label="Cerrar"
-                  className="absolute right-3 top-3 z-10 grid h-7 w-7 place-items-center rounded-full border border-line bg-surface2 text-sub hover:text-ink">
-                  <X size={14} aria-hidden />
-                </button>
-                <Detalle a={elegido} />
-              </div>
-            </div>,
-            document.body,
-          )}
 
           {/* Horarios del día */}
           <section className="mt-2 mb-4 rounded-2xl border border-line bg-surface p-4">
@@ -391,46 +391,5 @@ export default function ArqueosLocales() {
         </>
       )}
     </Layout>
-  )
-}
-
-function Detalle({ a }: { a: Arqueo & { nombre: string } }) {
-  const bil = a.billetes.filter((b) => b.tipo === 'Billete')
-  const mon = a.billetes.filter((b) => b.tipo !== 'Billete')
-  const tMon = mon.reduce((s, b) => s + b.tot, 0)
-  const cMon = mon.reduce((s, b) => s + b.cant, 0)
-  return (
-    <aside className="rounded-2xl border border-line bg-surface p-4 lg:sticky lg:top-4">
-      <div className="flex items-start justify-between gap-2 pr-9">
-        <h2 className="font-display text-lg font-semibold text-ink">{a.nombre}</h2>
-        <span className="rounded-full border border-line2 px-2 text-[11px] font-semibold text-sub">Caja {a.caja}</span>
-      </div>
-      <p className="mb-2 text-xs text-sub">Arqueo N° {a.arqueo} · {ddmm(a.fecha)} {hhmm(a.hora)}{a.vendedor ? ` · ${a.vendedor}` : ''}</p>
-      <p className="font-display text-3xl font-bold tabular-nums text-ink">{pesos(a.total)}</p>
-      <table className="mt-3 w-full text-sm">
-        <thead className="text-[11px] uppercase tracking-wider text-sub/70">
-          <tr><th className="py-1 text-left font-semibold">Billete</th><th className="py-1 text-right font-semibold">Cantidad</th><th className="py-1 text-right font-semibold">Total</th></tr>
-        </thead>
-        <tbody>
-          {bil.map((b) => (
-            <tr key={b.valor} className={`border-t border-line ${b.cant ? 'text-ink' : 'text-sub/50'}`}>
-              <td className="py-1"><span className="mr-1.5 inline-block h-2 w-2 rounded-full" style={{ background: colorBillete(b.valor) }} aria-hidden />{pesos(b.valor)}</td>
-              <td className="py-1 text-right tabular-nums">{numero(b.cant)}</td>
-              <td className="py-1 text-right tabular-nums">{pesos(b.tot)}</td>
-            </tr>
-          ))}
-          <tr className={`border-t border-line ${tMon ? 'text-ink' : 'text-sub/50'}`}>
-            <td className="py-1">Monedas</td><td className="py-1 text-right tabular-nums">{numero(cMon)}</td><td className="py-1 text-right tabular-nums">{pesos(tMon)}</td>
-          </tr>
-        </tbody>
-        <tfoot>
-          <tr className="border-t border-line2 font-bold text-ink">
-            <td className="py-1">Total</td>
-            <td className="py-1 text-right tabular-nums">{numero(a.billetes.reduce((s, b) => s + b.cant, 0))}</td>
-            <td className="py-1 text-right tabular-nums">{pesos(a.total)}</td>
-          </tr>
-        </tfoot>
-      </table>
-    </aside>
   )
 }
