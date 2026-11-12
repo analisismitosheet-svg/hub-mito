@@ -16,4 +16,7 @@ if ($codigo -eq 0) { $codigo = $LASTEXITCODE }
 # Venta diaria de los locales para Locales -> Objetivos (corre de verdad una vez por hora)
 & $node (Join-Path $raiz 'scripts\sync-ventas-locales.js')
 if ($codigo -eq 0) { $codigo = $LASTEXITCODE }
+# Arqueos de caja de los locales para Tesoreria y el aviso a los locales (corre cada 2 min)
+& $node (Join-Path $raiz 'scripts\sync-arqueos.js')
+if ($codigo -eq 0) { $codigo = $LASTEXITCODE }
 exit $codigo

@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mockup · Arqueos de locales</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --paper:#050508; --surface:rgba(255,255,255,.035); --surface2:rgba(255,255,255,.07);
+    --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.18);
+    --ink:#f8fafc; --sub:#94a3b8; --emerald:#10b981; --amber:#f59e0b; --red:#ef4444;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:radial-gradient(900px 500px at 10% -10%, rgba(5,150,105,.16), transparent 60%),
+      radial-gradient(800px 500px at 95% 0%, rgba(2,132,199,.10), transparent 55%), var(--paper);
+    color:var(--ink); font-family:'Plus Jakarta Sans',system-ui,sans-serif; font-size:14px; line-height:1.45;
+    min-height:100vh; padding:20px clamp(12px,3vw,36px) 64px;
+  }
+  h1,h2,h3{margin:0;font-weight:800;letter-spacing:-.02em}
+  p{margin:0}
+  button{font-family:inherit;cursor:pointer;color:inherit}
+  .sub{color:var(--sub)}
+  .num{font-variant-numeric:tabular-nums}
+  .top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:16px}
+  .migas{font-size:12px;color:var(--sub);margin-bottom:4px}
+  .migas b{color:#6ee7b7}
+  .vivo{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 11px;border-radius:999px;border:1px solid rgba(16,185,129,.4);background:rgba(16,185,129,.08);color:#6ee7b7;font-size:12px;font-weight:700}
+  .punto{width:8px;height:8px;border-radius:50%;background:var(--emerald);box-shadow:0 0 0 0 rgba(16,185,129,.6);animation:latido 1.8s infinite}
+  @keyframes latido{70%{box-shadow:0 0 0 8px rgba(16,185,129,0)}100%{box-shadow:0 0 0 0 rgba(16,185,129,0)}}
+  .btn{height:30px;padding:0 12px;border-radius:999px;border:1px solid var(--line2);background:var(--surface);font-size:12px;font-weight:700}
+  .btn:hover{background:var(--surface2)}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;margin-bottom:16px}
+  .kpi{border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:13px 14px}
+  .kpi .t{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--sub)}
+  .kpi .v{font-size:24px;font-weight:800;margin-top:2px}
+  .kpi .p{font-size:12px;color:var(--sub)}
+  .panel{border:1px solid var(--line);background:var(--surface);border-radius:18px;padding:14px;margin-bottom:16px}
+  .panel h2{font-size:15px;margin-bottom:10px}
+  .billetes{display:grid;gap:7px}
+  .bil{display:grid;grid-template-columns:96px 1fr 70px 120px;align-items:center;gap:10px;font-size:13px}
+  .bil .barra{height:10px;border-radius:99px;background:rgba(255,255,255,.06);overflow:hidden}
+  .bil .barra i{display:block;height:100%;border-radius:99px}
+  .chip{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid var(--line2);color:var(--sub)}
+  .filtros{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+  .filtros input,.filtros select{height:34px;border-radius:10px;border:1px solid var(--line);background:var(--surface2);color:var(--ink);padding:0 10px;font-family:inherit;font-size:13px;outline:none}
+  .filtros input{flex:1;min-width:180px}
+  select option{background:#111}
+  .zona{height:30px;padding:0 11px;border-radius:999px;border:1px solid var(--line);background:transparent;font-size:12px;font-weight:700;color:var(--sub)}
+  .zona.on{background:#fff;color:#111;border-color:#fff}
+  .grilla{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px}
+  .grupo{margin-bottom:18px}
+  .grupo-cab{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 14px;padding:0 2px 8px;margin-bottom:10px;border-bottom:1px solid var(--line)}
+  .grupo-cab h3{font-size:15px;display:flex;align-items:center;gap:8px}
+  .grupo-cab h3 i{width:10px;height:10px;border-radius:3px}
+  .grupo-cab .res{font-size:12px;color:var(--sub)}
+  .grupo-cab .res b{color:var(--ink);font-size:16px}
+  .loc{text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:13px 14px;transition:.15s}
+  .loc:hover{border-color:var(--line2);background:var(--surface2)}
+  .loc.sel{border-color:rgba(16,185,129,.6);background:rgba(16,185,129,.06)}
+  .loc .cab{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+  .loc .nom{font-weight:800;font-size:14px}
+  .loc .tot{font-size:22px;font-weight:800;margin:6px 0 2px}
+  .loc .pila{display:flex;height:8px;border-radius:99px;overflow:hidden;background:rgba(255,255,255,.06);margin:8px 0}
+  .estado{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600}
+  .estado i{width:7px;height:7px;border-radius:50%}
+  .det{position:sticky;top:12px}
+  .cuerpo{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;align-items:start}
+  @media (max-width:980px){.cuerpo{grid-template-columns:1fr}.det{position:static}}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--sub);text-align:right;padding:6px 4px;font-weight:700}
+  th:first-child,td:first-child{text-align:left}
+  td{padding:6px 4px;border-top:1px solid var(--line);text-align:right}
+  tr.cero td{color:#475569}
+  tfoot td{font-weight:800;border-top:1px solid var(--line2)}
+  .nota{border:1px dashed rgba(245,158,11,.45);background:rgba(245,158,11,.06);color:#fcd34d;border-radius:12px;padding:9px 12px;font-size:12px;margin-bottom:14px}
+  .vacio{color:var(--sub);font-size:13px;padding:18px 4px;text-align:center}
+</style>
+</head>
+<body>
+  <div class="nota">Maqueta con los datos reales de hoy (vista <b>DWH.dbo.vw_FACT_ARQUEO</b>, último arqueo de cada local). No es la pantalla real: es para ajustar el diseño.</div>
+
+  <div class="top">
+    <div>
+      <p class="migas">Tesorería · <b>Arqueos de locales</b></p>
+      <h1>Arqueos de locales</h1>
+      <p class="sub">Efectivo contado en el último arqueo de cada caja, por billete.</p>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <span class="vivo"><span class="punto"></span>En vivo · actualizado <span id="hora"></span></span>
+      <button class="btn" onclick="actualizar()">Actualizar</button>
+    </div>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="panel">
+    <h2>Billetes en todos los locales</h2>
+    <div class="billetes" id="billetes"></div>
+  </div>
+
+  <div class="cuerpo">
+    <div>
+      <div class="filtros">
+        <input id="buscar" placeholder="Buscar local o vendedor" oninput="pintar()" />
+        <select id="orden" onchange="pintar()">
+          <option value="total">Más efectivo primero</option>
+          <option value="viejo">Arqueo más viejo primero</option>
+          <option value="nombre">Por nombre</option>
+        </select>
+        <span id="zonas" style="display:flex;gap:6px;flex-wrap:wrap"></span>
+      </div>
+      <div id="grilla"></div>
+    </div>
+    <div class="panel det" id="detalle"></div>
+  </div>
+
+<script>
+const DATOS = [{"cod":"9DEJUL2","nombre":"9 DE JULIO","zona":"CENTRO","caja":1,"arqueo":2108,"cuando":"2026-11-11T11:42:00","vendedor":"FANLOO PIRINOLI SANTIAGO TOMAS","billetes":[{"tipo":"Billete","valor":20000,"cant":6,"tot":120000},{"tipo":"Billete","valor":10000,"cant":0,"tot":0},{"tipo":"Billete","valor":2000,"cant":4,"tot":8000},{"tipo":"Billete","valor":1000,"cant":18,"tot":18000},{"tipo":"Billete","valor":500,"cant":5,"tot":2500},{"tipo":"Billete","valor":200,"cant":1,"tot":200},{"tipo":"Billete","valor":100,"cant":9,"tot":900},{"tipo":"Billete","valor":50,"cant":0,"tot":0},{"tipo":"Billete","valor":20,"cant":0,"tot":0},{"tipo":"Billete","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":5,"cant":0,"tot":0},{"tipo":"Moneda","valor":2,"cant":0,"tot":0},{"tipo":"Moneda","valor":1,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.5,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.25,"cant":0,"tot":0}],"total":149600},{"cod":"BUSTOD","nombre":"BUSTOS","zona":"NORTE","caja":1,"arqueo":6709,"cuando":"2026-11-11T11:07:15","vendedor":"LOPEZ FACUNDO LORENZO","billetes":[{"tipo":"Billete","valor":20000,"cant":0,"tot":0},{"tipo":"Billete","valor":10000,"cant":1,"tot":10000},{"tipo":"Billete","valor":2000,"cant":0,"tot":0},{"tipo":"Billete","valor":1000,"cant":1,"tot":1000},{"tipo":"Billete","valor":500,"cant":0,"tot":0},{"tipo":"Billete","valor":200,"cant":0,"tot":0},{"tipo":"Billete","valor":100,"cant":3,"tot":300},{"tipo":"Billete","valor":50,"cant":0,"tot":0},{"tipo":"Billete","valor":20,"cant":0,"tot":0},{"tipo":"Billete","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":5,"cant":0,"tot":0},{"tipo":"Moneda","valor":2,"cant":0,"tot":0},{"tipo":"Moneda","valor":1,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.5,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.25,"cant":0,"tot":0}],"total":11300},{"cod":"CFD","nombre":"CAPTAIN FIN BUSTOS","zona":"NORTE","caja":1,"arqueo":5223,"cuando":"2026-11-11T10:13:46","vendedor":"MONSALVE VALENTINA","billetes":[{"tipo":"Billete","valor":20000,"cant":47,"tot":940000},{"tipo":"Billete","valor":10000,"cant":74,"tot":740000},{"tipo":"Billete","valor":2000,"cant":31,"tot":62000},{"tipo":"Billete","valor":1000,"cant":31,"tot":31000},{"tipo":"Billete","valor":500,"cant":3,"tot":1500},{"tipo":"Billete","valor":200,"cant":2,"tot":400},{"tipo":"Billete","valor":100,"cant":2,"tot":200},{"tipo":"Billete","valor":50,"cant":0,"tot":0},{"tipo":"Billete","valor":20,"cant":1,"tot":20},{"tipo":"Billete","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":5,"cant":0,"tot":0},{"tipo":"Moneda","valor":2,"cant":0,"tot":0},{"tipo":"Moneda","valor":1,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.5,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.25,"cant":0,"tot":0}],"total":1775120},{"cod":"CFPO","nombre":"CAPTAIN FIN PATIO OLMOS","zona":"CENTRO","caja":1,"arqueo":2627,"cuando":"2026-11-11T10:00:02","vendedor":"ANDRADA VALENTINA IRIEL","billetes":[{"tipo":"Billete","valor":20000,"cant":17,"tot":340000},{"tipo":"Billete","valor":10000,"cant":12,"tot":120000},{"tipo":"Billete","valor":2000,"cant":11,"tot":22000},{"tipo":"Billete","valor":1000,"cant":4,"tot":4000},{"tipo":"Billete","valor":500,"cant":2,"tot":1000},{"tipo":"Billete","valor":200,"cant":1,"tot":200},{"tipo":"Billete","valor":100,"cant":3,"tot":300},{"tipo":"Billete","valor":50,"cant":0,"tot":0},{"tipo":"Billete","valor":20,"cant":0,"tot":0},{"tipo":"Billete","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":5,"cant":0,"tot":0},{"tipo":"Moneda","valor":2,"cant":0,"tot":0},{"tipo":"Moneda","valor":1,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.5,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.25,"cant":0,"tot":0}],"total":487500},{"cod":"CFR4","nombre":"CAPTAIN FIN RIO 4","zona":"INTERIOR","caja":1,"arqueo":974,"cuando":"2026-11-11T13:26:16","vendedor":"MEDINA RUTH DE LOS ANGELES","billetes":[{"tipo":"Billete","valor":20000,"cant":73,"tot":1460000},{"tipo":"Billete","valor":10000,"cant":72,"tot":720000},{"tipo":"Billete","valor":2000,"cant":33,"tot":66000},{"tipo":"Billete","valor":1000,"cant":10,"tot":10000},{"tipo":"Billete","valor":500,"cant":2,"tot":1000},{"tipo":"Billete","valor":200,"cant":0,"tot":0},{"tipo":"Billete","valor":100,"cant":0,"tot":0},{"tipo":"Billete","valor":50,"cant":0,"tot":0},{"tipo":"Billete","valor":20,"cant":0,"tot":0},{"tipo":"Billete","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":5,"cant":0,"tot":0},{"tipo":"Moneda","valor":2,"cant":0,"tot":0},{"tipo":"Moneda","valor":1,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.5,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.25,"cant":0,"tot":0}],"total":2257000},{"cod":"CFR9","nombre":"CAPTAIN FIN RUTA 9","zona":"ESTE","caja":1,"arqueo":3420,"cuando":"2026-11-11T09:24:36","vendedor":"MURUA CIRO MAXIMO","billetes":[{"tipo":"Billete","valor":20000,"cant":68,"tot":1360000},{"tipo":"Billete","valor":10000,"cant":52,"tot":520000},{"tipo":"Billete","valor":2000,"cant":12,"tot":24000},{"tipo":"Billete","valor":1000,"cant":156,"tot":156000},{"tipo":"Billete","valor":500,"cant":0,"tot":0},{"tipo":"Billete","valor":200,"cant":0,"tot":0},{"tipo":"Billete","valor":100,"cant":5,"tot":500},{"tipo":"Billete","valor":50,"cant":0,"tot":0},{"tipo":"Billete","valor":20,"cant":0,"tot":0},{"tipo":"Billete","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":5,"cant":0,"tot":0},{"tipo":"Moneda","valor":2,"cant":0,"tot":0},{"tipo":"Moneda","valor":1,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.5,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.25,"cant":0,"tot":0}],"total":2060500},{"cod":"CFRA","nombre":"CAPTAIN FIN RIVERA INDARTE","zona":"OESTE","caja":1,"arqueo":2661,"cuando":"2026-11-10T20:55:13","vendedor":"ALESSANDRINI MATIAS ALEJANDRO","billetes":[{"tipo":"Billete","valor":20000,"cant":51,"tot":1020000},{"tipo":"Billete","valor":10000,"cant":83,"tot":830000},{"tipo":"Billete","valor":2000,"cant":31,"tot":62000},{"tipo":"Billete","valor":1000,"cant":2,"tot":2000},{"tipo":"Billete","valor":500,"cant":1,"tot":500},{"tipo":"Billete","valor":200,"cant":0,"tot":0},{"tipo":"Billete","valor":100,"cant":1,"tot":100},{"tipo":"Billete","valor":50,"cant":0,"tot":0},{"tipo":"Billete","valor":20,"cant":0,"tot":0},{"tipo":"Billete","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":5,"cant":0,"tot":0},{"tipo":"Moneda","valor":2,"cant":0,"tot":0},{"tipo":"Moneda","valor":1,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.5,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.25,"cant":0,"tot":0}],"total":1914600},{"cod":"DINOD","nombre":"DINO R20","zona":"OESTE","caja":1,"arqueo":7204,"cuando":"2026-11-11T13:00:27","vendedor":"ROSSO JUAN MARTIN","billetes":[{"tipo":"Billete","valor":20000,"cant":96,"tot":1920000},{"tipo":"Billete","valor":10000,"cant":129,"tot":1290000},{"tipo":"Billete","valor":2000,"cant":191,"tot":382000},{"tipo":"Billete","valor":1000,"cant":115,"tot":115000},{"tipo":"Billete","valor":500,"cant":16,"tot":8000},{"tipo":"Billete","valor":200,"cant":1,"tot":200},{"tipo":"Billete","valor":100,"cant":1,"tot":100},{"tipo":"Billete","valor":50,"cant":0,"tot":0},{"tipo":"Billete","valor":20,"cant":0,"tot":0},{"tipo":"Billete","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":5,"cant":0,"tot":0},{"tipo":"Moneda","valor":2,"cant":0,"tot":0},{"tipo":"Moneda","valor":1,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.5,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.25,"cant":0,"tot":0}],"total":3715300},{"cod":"ESPINOD","nombre":"ESPINOSA","zona":"SUR","caja":1,"arqueo":6541,"cuando":"2026-11-11T11:43:10","vendedor":"GRIMA GISEL ALEJANDRA","billetes":[{"tipo":"Billete","valor":20000,"cant":34,"tot":680000},{"tipo":"Billete","valor":10000,"cant":40,"tot":400000},{"tipo":"Billete","valor":2000,"cant":47,"tot":94000},{"tipo":"Billete","valor":1000,"cant":60,"tot":60000},{"tipo":"Billete","valor":500,"cant":0,"tot":0},{"tipo":"Billete","valor":200,"cant":0,"tot":0},{"tipo":"Billete","valor":100,"cant":0,"tot":0},{"tipo":"Billete","valor":50,"cant":0,"tot":0},{"tipo":"Billete","valor":20,"cant":1,"tot":20},{"tipo":"Billete","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":5,"cant":0,"tot":0},{"tipo":"Moneda","valor":2,"cant":0,"tot":0},{"tipo":"Moneda","valor":1,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.5,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.25,"cant":0,"tot":0}],"total":1234020},{"cod":"GRALPAZ","nombre":"GENERAL PAZ OUTLET","zona":"CENTRO","caja":1,"arqueo":4676,"cuando":"2026-11-11T09:31:04","vendedor":"OLIVA ALAN","billetes":[{"tipo":"Billete","valor":20000,"cant":0,"tot":0},{"tipo":"Billete","valor":10000,"cant":7,"tot":70000},{"tipo":"Billete","valor":2000,"cant":2,"tot":4000},{"tipo":"Billete","valor":1000,"cant":9,"tot":9000},{"tipo":"Billete","valor":500,"cant":2,"tot":1000},{"tipo":"Billete","valor":200,"cant":1,"tot":200},{"tipo":"Billete","valor":100,"cant":8,"tot":800},{"tipo":"Billete","valor":50,"cant":0,"tot":0},{"tipo":"Billete","valor":20,"cant":0,"tot":0},{"tipo":"Billete","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":5,"cant":0,"tot":0},{"tipo":"Moneda","valor":2,"cant":0,"tot":0},{"tipo":"Moneda","valor":1,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.5,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.25,"cant":0,"tot":0}],"total":85000},{"cod":"LIBERD","nombre":"LIBERTAD","zona":"NORTE","caja":1,"arqueo":5138,"cuando":"2026-11-11T10:32:59","vendedor":"SANTOS FRANCISCO","billetes":[{"tipo":"Billete","valor":20000,"cant":0,"tot":0},{"tipo":"Billete","valor":10000,"cant":0,"tot":0},{"tipo":"Billete","valor":2000,"cant":17,"tot":34000},{"tipo":"Billete","valor":1000,"cant":13,"tot":13000},{"tipo":"Billete","valor":500,"cant":5,"tot":2500},{"tipo":"Billete","valor":200,"cant":4,"tot":800},{"tipo":"Billete","valor":100,"cant":10,"tot":1000},{"tipo":"Billete","valor":50,"cant":0,"tot":0},{"tipo":"Billete","valor":20,"cant":0,"tot":0},{"tipo":"Billete","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":5,"cant":0,"tot":0},{"tipo":"Moneda","valor":2,"cant":0,"tot":0},{"tipo":"Moneda","valor":1,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.5,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.25,"cant":0,"tot":0}],"total":51300},{"cod":"MUNOZ","nombre":"MUÑOZ","zona":"CENTRO","caja":1,"arqueo":7078,"cuando":"2026-11-11T09:03:35","vendedor":"FARIAS MATIAS ARIEL","billetes":[{"tipo":"Billete","valor":20000,"cant":0,"tot":0},{"tipo":"Billete","valor":10000,"cant":0,"tot":0},{"tipo":"Billete","valor":2000,"cant":10,"tot":20000},{"tipo":"Billete","valor":1000,"cant":38,"tot":38000},{"tipo":"Billete","valor":500,"cant":1,"tot":500},{"tipo":"Billete","valor":200,"cant":7,"tot":1400},{"tipo":"Billete","valor":100,"cant":5,"tot":500},{"tipo":"Billete","valor":50,"cant":1,"tot":50},{"tipo":"Billete","valor":20,"cant":0,"tot":0},{"tipo":"Billete","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":5,"cant":0,"tot":0},{"tipo":"Moneda","valor":2,"cant":0,"tot":0},{"tipo":"Moneda","valor":1,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.5,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.25,"cant":0,"tot":0}],"total":60450},{"cod":"NVOCED2","nombre":"NUEVO CENTRO","zona":"OESTE","caja":1,"arqueo":4138,"cuando":"2026-11-10T22:06:30","vendedor":"COMBA GERMAN ARIEL","billetes":[{"tipo":"Billete","valor":20000,"cant":55,"tot":1100000},{"tipo":"Billete","valor":10000,"cant":32,"tot":320000},{"tipo":"Billete","valor":2000,"cant":1,"tot":2000},{"tipo":"Billete","valor":1000,"cant":40,"tot":40000},{"tipo":"Billete","valor":500,"cant":4,"tot":2000},{"tipo":"Billete","valor":200,"cant":2,"tot":400},{"tipo":"Billete","valor":100,"cant":1,"tot":100},{"tipo":"Billete","valor":50,"cant":0,"tot":0},{"tipo":"Billete","valor":20,"cant":0,"tot":0},{"tipo":"Billete","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":5,"cant":0,"tot":0},{"tipo":"Moneda","valor":2,"cant":0,"tot":0},{"tipo":"Moneda","valor":1,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.5,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.25,"cant":0,"tot":0}],"total":1464500},{"cod":"RIVERAD","nombre":"RIVERA","zona":"OESTE","caja":1,"arqueo":4523,"cuando":"2026-11-11T13:11:09","vendedor":"OLMOS AIMARA","billetes":[{"tipo":"Billete","valor":20000,"cant":114,"tot":2280000},{"tipo":"Billete","valor":10000,"cant":157,"tot":1570000},{"tipo":"Billete","valor":2000,"cant":84,"tot":168000},{"tipo":"Billete","valor":1000,"cant":110,"tot":110000},{"tipo":"Billete","valor":500,"cant":1,"tot":500},{"tipo":"Billete","valor":200,"cant":0,"tot":0},{"tipo":"Billete","valor":100,"cant":1,"tot":100},{"tipo":"Billete","valor":50,"cant":0,"tot":0},{"tipo":"Billete","valor":20,"cant":0,"tot":0},{"tipo":"Billete","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":5,"cant":0,"tot":0},{"tipo":"Moneda","valor":2,"cant":0,"tot":0},{"tipo":"Moneda","valor":1,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.5,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.25,"cant":0,"tot":0}],"total":4128600},{"cod":"RUTA9D2","nombre":"RUTA 9","zona":"ESTE","caja":1,"arqueo":5841,"cuando":"2026-11-11T14:14:37","vendedor":"FUNES MATASSINI JOAQUIN","billetes":[{"tipo":"Billete","valor":20000,"cant":63,"tot":1260000},{"tipo":"Billete","valor":10000,"cant":110,"tot":1100000},{"tipo":"Billete","valor":2000,"cant":217,"tot":434000},{"tipo":"Billete","valor":1000,"cant":363,"tot":363000},{"tipo":"Billete","valor":500,"cant":1,"tot":500},{"tipo":"Billete","valor":200,"cant":4,"tot":800},{"tipo":"Billete","valor":100,"cant":4,"tot":400},{"tipo":"Billete","valor":50,"cant":0,"tot":0},{"tipo":"Billete","valor":20,"cant":0,"tot":0},{"tipo":"Billete","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":5,"cant":0,"tot":0},{"tipo":"Moneda","valor":2,"cant":0,"tot":0},{"tipo":"Moneda","valor":1,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.5,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.25,"cant":0,"tot":0}],"total":3158700},{"cod":"VCPD","nombre":"CARLOS PAZ","zona":"INTERIOR","caja":1,"arqueo":7071,"cuando":"2026-11-11T12:57:40","vendedor":"BUSTAMANTE MILENA","billetes":[{"tipo":"Billete","valor":20000,"cant":119,"tot":2380000},{"tipo":"Billete","valor":10000,"cant":229,"tot":2290000},{"tipo":"Billete","valor":2000,"cant":263,"tot":526000},{"tipo":"Billete","valor":1000,"cant":124,"tot":124000},{"tipo":"Billete","valor":500,"cant":1,"tot":500},{"tipo":"Billete","valor":200,"cant":2,"tot":400},{"tipo":"Billete","valor":100,"cant":3,"tot":300},{"tipo":"Billete","valor":50,"cant":1,"tot":50},{"tipo":"Billete","valor":20,"cant":0,"tot":0},{"tipo":"Billete","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":5,"cant":0,"tot":0},{"tipo":"Moneda","valor":2,"cant":0,"tot":0},{"tipo":"Moneda","valor":1,"cant":61800,"tot":61800},{"tipo":"Moneda","valor":0.5,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.25,"cant":0,"tot":0}],"total":5383050},{"cod":"WALMARTD","nombre":"WALMART","zona":"NORTE","caja":1,"arqueo":7181,"cuando":"2026-11-11T09:05:39","vendedor":"FLORES ROMINA","billetes":[{"tipo":"Billete","valor":20000,"cant":142,"tot":2840000},{"tipo":"Billete","valor":10000,"cant":176,"tot":1760000},{"tipo":"Billete","valor":2000,"cant":42,"tot":84000},{"tipo":"Billete","valor":1000,"cant":11,"tot":11000},{"tipo":"Billete","valor":500,"cant":13,"tot":6500},{"tipo":"Billete","valor":200,"cant":0,"tot":0},{"tipo":"Billete","valor":100,"cant":5,"tot":500},{"tipo":"Billete","valor":50,"cant":0,"tot":0},{"tipo":"Billete","valor":20,"cant":0,"tot":0},{"tipo":"Billete","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":10,"cant":0,"tot":0},{"tipo":"Moneda","valor":5,"cant":0,"tot":0},{"tipo":"Moneda","valor":2,"cant":0,"tot":0},{"tipo":"Moneda","valor":1,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.5,"cant":0,"tot":0},{"tipo":"Moneda","valor":0.25,"cant":0,"tot":0}],"total":4702000}];
+const AHORA = new Date('2026-11-11T14:20:00');
+const COLORES = { 20000: '#10b981', 10000: '#38bdf8', 2000: '#a78bfa', 1000: '#f59e0b', 500: '#f472b6', 200: '#fb923c', 100: '#94a3b8' };
+const color = (v) => COLORES[v] || '#475569';
+/** Un color por zona, sin repetir los de los billetes */
+const COLOR_ZONA = { CENTRO: '#e879f9', NORTE: '#22d3ee', SUR: '#facc15', ESTE: '#4ade80', OESTE: '#f87171', INTERIOR: '#818cf8' };
+const pesos = (n) => '$ ' + Math.round(n).toLocaleString('es-AR');
+const num = (n) => Math.round(n).toLocaleString('es-AR');
+const hora = (s) => s.slice(11, 16);
+const esHoy = (s) => s.slice(0, 10) === '2026-11-11';
+function hace(s) {
+  const min = Math.round((AHORA - new Date(s)) / 60000);
+  if (min < 60) return `hace ${min} min`;
+  const h = Math.floor(min / 60);
+  return h < 24 ? `hace ${h} h ${min % 60 ? (min % 60) + ' min' : ''}` : `hace ${Math.floor(h / 24)} día${h >= 48 ? 's' : ''}`;
+}
+/** verde: arqueo de las últimas 3 h · ámbar: de hoy pero más viejo · rojo: no arqueó hoy */
+function estado(s) {
+  if (!esHoy(s)) return { c: '#ef4444', t: 'Sin arqueo hoy' };
+  return (AHORA - new Date(s)) / 3600000 <= 3 ? { c: '#10b981', t: 'Al día' } : { c: '#f59e0b', t: 'Arqueo de hace más de 3 h' };
+}
+let zona = 'TODAS';
+let sel = null;
+
+function kpis() {
+  const total = DATOS.reduce((s, l) => s + l.total, 0);
+  const hoy = DATOS.filter((l) => esHoy(l.cuando)).length;
+  const ultimo = [...DATOS].sort((a, b) => b.cuando.localeCompare(a.cuando))[0];
+  const b20 = DATOS.reduce((s, l) => s + (l.billetes.find((b) => b.valor === 20000)?.cant || 0), 0);
+  const mayor = [...DATOS].sort((a, b) => b.total - a.total)[0];
+  document.getElementById('kpis').innerHTML = [
+    ['Efectivo en locales', pesos(total), `${DATOS.length} locales con caja`],
+    ['Arqueos de hoy', `${hoy} de ${DATOS.length}`, DATOS.length - hoy ? `${DATOS.length - hoy} sin arquear hoy` : 'todos arquearon'],
+    ['Billetes de $ 20.000', num(b20), pesos(b20 * 20000)],
+    ['Más efectivo', pesos(mayor.total), mayor.nombre],
+    ['Último arqueo', hora(ultimo.cuando), `${ultimo.nombre} · ${hace(ultimo.cuando)}`],
+  ].map(([t, v, p]) => `<div class="kpi"><p class="t">${t}</p><p class="v num">${v}</p><p class="p">${p}</p></div>`).join('');
+}
+
+function billetes() {
+  const suma = {};
+  for (const l of DATOS) for (const b of l.billetes) if (b.tipo === 'Billete') { suma[b.valor] ??= { cant: 0, tot: 0 }; suma[b.valor].cant += b.cant; suma[b.valor].tot += b.tot; }
+  const filas = Object.entries(suma).map(([v, x]) => ({ v: Number(v), ...x })).filter((x) => x.cant > 0).sort((a, b) => b.v - a.v);
+  const max = Math.max(...filas.map((f) => f.tot));
+  document.getElementById('billetes').innerHTML = filas.map((f) => `
+    <div class="bil"><b class="num">${pesos(f.v)}</b>
+      <span class="barra"><i style="width:${Math.max(1, (100 * f.tot) / max)}%;background:${color(f.v)}"></i></span>
+      <span class="num sub" style="text-align:right">${num(f.cant)} u.</span>
+      <b class="num" style="text-align:right">${pesos(f.tot)}</b></div>`).join('');
+}
+
+function zonas() {
+  const z = ['TODAS', ...new Set(DATOS.map((l) => l.zona).filter(Boolean))];
+  document.getElementById('zonas').innerHTML = z.map((x) => `<button class="zona ${x === zona ? 'on' : ''}" onclick="zona='${x}';zonas();pintar()">${x === 'TODAS' ? 'Todas' : x[0] + x.slice(1).toLowerCase()}</button>`).join('');
+}
+
+function pintar() {
+  const t = document.getElementById('buscar').value.trim().toLowerCase();
+  const orden = document.getElementById('orden').value;
+  let lista = DATOS.filter((l) => (zona === 'TODAS' || l.zona === zona) && (!t || (l.nombre + ' ' + l.vendedor + ' ' + l.cod).toLowerCase().includes(t)));
+  lista.sort(orden === 'total' ? (a, b) => b.total - a.total : orden === 'viejo' ? (a, b) => a.cuando.localeCompare(b.cuando) : (a, b) => a.nombre.localeCompare(b.nombre));
+  if (!lista.length) { document.getElementById('grilla').innerHTML = '<p class="vacio">Ningún local coincide con la búsqueda.</p>'; return; }
+  // Un grupo por zona, la de más efectivo primero; adentro, el orden elegido
+  const grupos = new Map();
+  for (const l of lista) { const z = l.zona || 'SIN ZONA'; if (!grupos.has(z)) grupos.set(z, []); grupos.get(z).push(l); }
+  const total = (ls) => ls.reduce((s, l) => s + l.total, 0);
+  document.getElementById('grilla').innerHTML = [...grupos.entries()].sort((a, b) => total(b[1]) - total(a[1])).map(([z, ls]) => {
+    const hoy = ls.filter((l) => esHoy(l.cuando)).length;
+    return `<section class="grupo">
+      <div class="grupo-cab">
+        <h3><i style="background:${COLOR_ZONA[z] || '#64748b'}"></i>${z[0] + z.slice(1).toLowerCase()}</h3>
+        <span class="res"><b class="num">${pesos(total(ls))}</b> · ${ls.length} local${ls.length === 1 ? '' : 'es'} · ${hoy === ls.length ? 'todos arquearon hoy' : `<span style="color:#fca5a5">${ls.length - hoy} sin arquear hoy</span>`}</span>
+      </div>
+      <div class="grilla">${ls.map(tarjeta).join('')}</div>
+    </section>`;
+  }).join('');
+}
+
+function tarjeta(l) {
+  {
+    const e = estado(l.cuando);
+    const bills = l.billetes.filter((b) => b.tot > 0);
+    return `<button class="loc ${sel === l.cod ? 'sel' : ''}" onclick="sel='${l.cod}';pintar();detalle()">
+      <div class="cab"><span class="nom">${l.nombre}</span><span class="chip">Caja ${l.caja}</span></div>
+      <p class="tot num">${pesos(l.total)}</p>
+      <div class="pila">${bills.map((b) => `<i title="${pesos(b.valor)}: ${b.cant} u." style="width:${(100 * b.tot) / (l.total || 1)}%;background:${color(b.valor)}"></i>`).join('')}</div>
+      <span class="estado" style="color:${e.c}"><i style="background:${e.c}"></i>${esHoy(l.cuando) ? 'Hoy ' + hora(l.cuando) : l.cuando.slice(8, 10) + '/' + l.cuando.slice(5, 7) + ' ' + hora(l.cuando)} · ${hace(l.cuando)}</span>
+      <p class="sub" style="font-size:12px;margin-top:2px">${l.vendedor}</p>
+    </button>`;
+  }
+}
+
+function detalle() {
+  const l = DATOS.find((x) => x.cod === sel);
+  const d = document.getElementById('detalle');
+  if (!l) { d.innerHTML = '<p class="vacio">Tocá un local para ver su arqueo por billete.</p>'; return; }
+  const e = estado(l.cuando);
+  const fila = (b) => `<tr class="${b.cant ? '' : 'cero'}"><td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color(b.valor)};margin-right:6px"></span>${pesos(b.valor)}</td><td class="num">${num(b.cant)}</td><td class="num">${pesos(b.tot)}</td></tr>`;
+  const bil = l.billetes.filter((b) => b.tipo === 'Billete');
+  const mon = l.billetes.filter((b) => b.tipo === 'Moneda');
+  const tMon = mon.reduce((s, b) => s + b.tot, 0);
+  d.innerHTML = `
+    <div class="cab" style="display:flex;justify-content:space-between;gap:8px"><h2 style="margin:0">${l.nombre}</h2><span class="chip">Caja ${l.caja}</span></div>
+    <p class="sub" style="font-size:12px;margin:2px 0 10px">Arqueo N° ${l.arqueo} · ${l.cuando.slice(8, 10)}/${l.cuando.slice(5, 7)} ${hora(l.cuando)} · ${l.vendedor}</p>
+    <p class="num" style="font-size:28px;font-weight:800">${pesos(l.total)}</p>
+    <span class="estado" style="color:${e.c};margin-bottom:10px"><i style="background:${e.c}"></i>${e.t} · ${hace(l.cuando)}</span>
+    <table style="margin-top:8px">
+      <thead><tr><th>Billete</th><th>Cantidad</th><th>Total</th></tr></thead>
+      <tbody>${bil.map(fila).join('')}
+        <tr class="${tMon ? '' : 'cero'}"><td>Monedas</td><td class="num">${num(mon.reduce((s, b) => s + b.cant, 0))}</td><td class="num">${pesos(tMon)}</td></tr></tbody>
+      <tfoot><tr><td>Total</td><td class="num">${num(l.billetes.reduce((s, b) => s + b.cant, 0))}</td><td class="num">${pesos(l.total)}</td></tr></tfoot>
+    </table>`;
+}
+
+function actualizar() { document.getElementById('hora').textContent = new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }); }
+
+actualizar(); kpis(); billetes(); zonas();
+sel = [...DATOS].sort((a, b) => b.total - a.total)[0].cod;
+pintar(); detalle();
+</script>
+</body>
+</html>

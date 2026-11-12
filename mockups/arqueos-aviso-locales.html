@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mockup · Aviso de arqueo a los locales</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{--paper:#050508;--surface:rgba(255,255,255,.035);--surface2:rgba(255,255,255,.07);--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.18);--ink:#f8fafc;--sub:#94a3b8}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(900px 500px at 10% -10%,rgba(5,150,105,.14),transparent 60%),var(--paper);color:var(--ink);font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:14px;line-height:1.45;padding:20px clamp(12px,3vw,36px) 64px}
+  h1,h2,h3{margin:0;font-weight:800;letter-spacing:-.02em}
+  p{margin:0}
+  button{font-family:inherit;cursor:pointer;color:inherit}
+  .sub{color:var(--sub)}
+  .paso{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:#10b981;color:#04130d;font-weight:800;font-size:13px;flex:0 0 auto}
+  .titulo{display:flex;gap:10px;align-items:center;margin:26px 0 12px}
+  .titulo h2{font-size:17px}
+  .nota{border:1px dashed rgba(245,158,11,.45);background:rgba(245,158,11,.06);color:#fcd34d;border-radius:12px;padding:9px 12px;font-size:12px;margin-bottom:6px}
+  .fila{display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start}
+  .explica{flex:1;min-width:260px;max-width:520px;font-size:13.5px}
+  .explica li{margin-bottom:8px}
+  ul{margin:0;padding-left:18px}
+  .horarios{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+  .hor{border:1px solid var(--line);background:var(--surface);border-radius:14px;padding:11px 12px}
+  .hor .h{font-size:26px;font-weight:800}
+  .regla{margin-top:10px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+  .regla div{border:1px solid var(--line);border-radius:14px;padding:10px 12px;font-size:13px;background:var(--surface)}
+  .regla b{display:block;margin-bottom:2px}
+  .cel{width:300px;flex:0 0 auto;border-radius:38px;border:8px solid #1e1e24;background:#0b0b10;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.5)}
+  .cel .barra-sup{display:flex;justify-content:space-between;padding:8px 18px 4px;font-size:11px;color:#cbd5e1}
+  .bloq{height:500px;padding:12px;background:linear-gradient(160deg,#1e3a5f,#0f172a 60%)}
+  .bloq .reloj{text-align:center;font-size:56px;font-weight:300;color:#fff;margin-top:22px;letter-spacing:-2px}
+  .bloq .fecha{text-align:center;color:#cbd5e1;font-size:13px;margin-bottom:22px}
+  .notif{background:rgba(255,255,255,.92);color:#111;border-radius:18px;padding:11px 13px;animation:tiembla .6s ease-in-out 0s 3}
+  .notif .app{display:flex;align-items:center;gap:7px;font-size:11.5px;color:#475569;margin-bottom:4px}
+  .notif .app i{width:18px;height:18px;border-radius:5px;background:#dc2626;display:grid;place-items:center;color:#fff;font-style:normal;font-weight:800;font-size:11px}
+  .notif b{font-size:14px}
+  .notif p{font-size:13px;color:#1f2937}
+  @keyframes tiembla{0%,100%{transform:translateX(0)}20%{transform:translateX(-5px)}40%{transform:translateX(5px)}60%{transform:translateX(-4px)}80%{transform:translateX(3px)}}
+  .app-hub{height:500px;background:#050508}
+  .alerta{margin:10px;border-radius:16px;border:1px solid rgba(239,68,68,.6);background:rgba(239,68,68,.14);padding:12px;animation:pulso 1.6s infinite}
+  @keyframes pulso{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.45)}50%{box-shadow:0 0 0 8px rgba(239,68,68,0)}}
+  .alerta b{color:#fecaca;font-size:15px;display:block}
+  .alerta p{font-size:12.5px;color:#fecaca;margin-top:3px}
+  .alerta .acc{display:flex;gap:6px;margin-top:9px}
+  .alerta button{height:30px;border-radius:999px;border:1px solid rgba(254,202,202,.5);background:transparent;color:#fecaca;font-size:12px;font-weight:700;padding:0 11px}
+  .alerta button.pri{background:#ef4444;border-color:#ef4444;color:#fff}
+  .turnos{display:flex;gap:6px;margin:0 10px 8px}
+  .turnos span{flex:1;text-align:center;font-size:11px;font-weight:700;border-radius:10px;padding:6px 0}
+  .menu{padding:4px 12px;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .menu div{height:66px;border-radius:14px;border:1px solid var(--line);background:var(--surface);padding:10px;font-size:12px;font-weight:700;color:#cbd5e1}
+  .campana{position:relative;display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;border:1px solid var(--line2)}
+  .campana span{position:absolute;top:-4px;right:-4px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;border-radius:99px;padding:0 5px}
+  .cab-hub{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line)}
+  .vib{font-size:11px;color:#fca5a5;text-align:center;margin-top:6px}
+  .panel{border:1px solid var(--line);background:var(--surface);border-radius:18px;padding:14px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--sub);padding:6px 4px;font-weight:700;text-align:center}
+  th:first-child,td:first-child{text-align:left}
+  td{padding:7px 4px;border-top:1px solid var(--line);text-align:center}
+  .t{display:inline-flex;align-items:center;justify-content:center;min-width:76px;height:26px;border-radius:99px;font-size:12px;font-weight:700;padding:0 8px}
+  .ok{background:rgba(16,185,129,.15);color:#6ee7b7}
+  .tarde{background:rgba(245,158,11,.15);color:#fcd34d}
+  .no{background:rgba(239,68,68,.15);color:#fca5a5}
+  .pend{background:rgba(148,163,184,.1);color:#64748b}
+  .avi{background:rgba(239,68,68,.15);color:#fca5a5;animation:pulso 1.6s infinite}
+  .ley{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;font-size:12px;color:var(--sub)}
+</style>
+</head>
+<body>
+  <div class="nota">Maqueta del circuito completo. La grilla de abajo usa los arqueos reales de hoy (vista DWH.dbo.vw_FACT_ARQUEO), mirados como si fueran las 15:10.</div>
+  <h1>Aviso a los locales que no arquearon</h1>
+  <p class="sub">Cada local tiene que arquear 4 veces por día. Si llega el horario y no arqueó, le suena el celular y el hub le muestra un cartel rojo hasta que lo haga.</p>
+
+  <div class="titulo"><span class="paso">1</span><h2>Los 4 arqueos del día</h2></div>
+  <div class="horarios">
+    <div class="hor"><p class="sub">Apertura</p><p class="h">10:00</p></div>
+    <div class="hor"><p class="sub">Mediodía</p><p class="h">14:00</p></div>
+    <div class="hor"><p class="sub">Tarde</p><p class="h">19:00</p></div>
+    <div class="hor"><p class="sub">Cierre</p><p class="h">22:00</p></div>
+  </div>
+  <div class="regla">
+    <div><b>Cuándo cuenta</b>Un arqueo vale para el horario si se hace desde 1 h 30 antes hasta 1 h después. Por ejemplo, el de las 14:00 vale entre 12:30 y 15:00.</div>
+    <div><b>Cuándo avisa</b>15 minutos después del horario, si todavía no hay arqueo. Repite cada 15 minutos hasta que arqueen o se cierre el horario.</div>
+    <div><b>Si no lo hizo</b>Al cerrar el horario queda en rojo para Tesorería. Si arquea más tarde, queda en ámbar como «tarde».</div>
+  </div>
+
+  <div class="titulo"><span class="paso">2</span><h2>Lo que ve el local</h2></div>
+  <div class="fila">
+    <div>
+      <div class="cel">
+        <div class="barra-sup"><span>14:15</span><span>▮▮▮ 78%</span></div>
+        <div class="bloq">
+          <p class="reloj">14:15</p>
+          <p class="fecha">martes 11 de noviembre</p>
+          <div class="notif">
+            <div class="app"><i>M</i>Hub Mito · ahora</div>
+            <b>⚠ Falta el arqueo de las 14:00</b>
+            <p>Walmart todavía no hizo el arqueo de mediodía. Hacelo en Dragon.</p>
+          </div>
+        </div>
+      </div>
+      <p class="vib">Con el celular bloqueado: suena y vibra</p>
+    </div>
+    <div>
+      <div class="cel">
+        <div class="barra-sup"><span>14:16</span><span>▮▮▮ 78%</span></div>
+        <div class="app-hub">
+          <div class="cab-hub"><b>Hub Mito</b><span class="campana">🔔<span>1</span></span></div>
+          <div class="alerta">
+            <b>Falta el arqueo de las 14:00</b>
+            <p>Walmart: el último arqueo fue a las 09:05. Hacelo en Dragon: el aviso se va solo en unos minutos.</p>
+            <div class="acc"><button class="pri">Ya lo hice</button><button>Callar 15 min</button></div>
+          </div>
+          <div class="turnos">
+            <span class="ok">10:00 ✓</span><span class="avi">14:00</span><span class="pend">19:00</span><span class="pend">22:00</span>
+          </div>
+          <div class="menu"><div>Requerimientos</div><div>Mi local</div><div>Control</div><div>Tasa de conversión</div></div>
+        </div>
+      </div>
+      <p class="vib">Con el hub abierto: el cartel late y vibra cada 15 min</p>
+    </div>
+    <div class="explica">
+      <ul>
+        <li><b>Celular bloqueado o app cerrada:</b> notificación push que suena y vibra. Solo llega a los celulares que tocaron «Activar avisos»: hoy lo tienen <b>3 de 18 locales</b>. Al resto les aparece el cartel para activarlo.</li>
+        <li><b>Con el hub abierto:</b> cartel rojo arriba de todas las pantallas, vibración y el aviso en la campana. No se cierra: se va solo cuando aparece el arqueo.</li>
+        <li><b>Los 4 horarios del día</b> abajo del cartel, para que el local vea cuáles ya hizo.</li>
+        <li><b>«Ya lo hice»:</b> vuelve a mirar Dragon en el momento. Si todavía no aparece, avisa «Todavía no llegó, revisá que esté grabado».</li>
+        <li><b>«Callar 15 min»:</b> frena la vibración, el cartel queda.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="titulo"><span class="paso">3</span><h2>Lo que ve Tesorería (en Arqueos de locales)</h2></div>
+  <div class="panel">
+    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px">
+      <h3 style="font-size:15px">Arqueos de hoy · 15:10</h3>
+      <span class="sub" id="resumen" style="font-size:13px"></span>
+    </div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Local</th><th>10:00</th><th>14:00</th><th>19:00</th><th>22:00</th></tr></thead>
+        <tbody id="grilla"></tbody>
+      </table>
+    </div>
+    <div class="ley">
+      <span class="t ok">✓ 09:24</span> a tiempo
+      <span class="t tarde">tarde 11:42</span> fuera de horario
+      <span class="t no">✕ no hizo</span> avisado y no arqueó
+      <span class="t pend">—</span> todavía no llegó la hora
+    </div>
+  </div>
+
+<script>
+// Arqueos reales del 11/11 por local (hora de cada uno)
+const HOY = {
+  '9 DE JULIO': ['11:42'], 'BUSTOS': ['11:07'], 'CAPTAIN FIN BUSTOS': ['10:13'], 'CAPTAIN FIN PATIO OLMOS': ['10:00'],
+  'CAPTAIN FIN RIO 4': ['11:13', '13:26'], 'CAPTAIN FIN RUTA 9': ['09:24'], 'CAPTAIN FIN RIVERA INDARTE': [], 'DINO R20': ['09:58', '13:00'],
+  'ESPINOSA': ['11:43'], 'GENERAL PAZ OUTLET': ['09:31'], 'LIBERTAD': ['10:07', '10:32', '14:06'], 'MUÑOZ': ['09:03'],
+  'NUEVO CENTRO': ['13:49', '14:03'], 'RIVERA': ['10:20', '13:11'], 'RUTA 9': ['09:11', '14:14'], 'CARLOS PAZ': ['09:53', '12:57'], 'WALMART': ['09:05'],
+};
+const AHORA = 15 * 60 + 10;
+const HORARIOS = [10, 14, 19, 22].map((h) => h * 60);
+const min = (s) => { const [h, m] = s.split(':').map(Number); return h * 60 + m; };
+/** Estado de un local en un horario: ok (dentro de -90/+60), tarde (después, antes del próximo), no, pend */
+function estado(horas, i) {
+  const h = HORARIOS[i];
+  const dentro = horas.find((x) => min(x) >= h - 90 && min(x) <= h + 60);
+  if (dentro) return { c: 'ok', t: '✓ ' + dentro };
+  if (AHORA < h + 15) return { c: 'pend', t: '—' };
+  const proximo = HORARIOS[i + 1] ?? 24 * 60;
+  const tarde = horas.find((x) => min(x) > h + 60 && min(x) < proximo - 90);
+  if (tarde) return { c: 'tarde', t: 'tarde ' + tarde };
+  return AHORA <= h + 60 ? { c: 'avi', t: 'avisando' } : { c: 'no', t: '✕ no hizo' };
+}
+let ok = 0, falta = 0;
+document.getElementById('grilla').innerHTML = Object.entries(HOY).map(([local, horas]) => {
+  const celdas = HORARIOS.map((_, i) => estado(horas, i));
+  celdas.forEach((e) => { if (e.c === 'ok' || e.c === 'tarde') ok++; if (e.c === 'no') falta++; });
+  const nombre = local.toLowerCase().replace(/(^|\s)(\S)/g, (_, a, b) => a + b.toUpperCase());
+  return `<tr><td><b>${nombre}</b></td>${celdas.map((e) => `<td><span class="t ${e.c}">${e.t}</span></td>`).join('')}</tr>`;
+}).join('');
+document.getElementById('resumen').textContent = `${ok} arqueos hechos · ${falta} que faltaron`;
+</script>
+</body>
+</html>

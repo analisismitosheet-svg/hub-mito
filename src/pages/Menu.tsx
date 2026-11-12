@@ -4,6 +4,7 @@ import { Settings, ArrowRight } from 'lucide-react'
 import Layout from '@/components/Layout'
 import AreaCard from '@/components/AreaCard'
 import AppCard from '@/components/AppCard'
+import { ArqueosHoyLocal } from '@/components/AvisoArqueo'
 import { AREAS, ACCESOS_MENU, areasDeApp, cargarOverridesAreas } from '@/config/areas'
 import { useAuth } from '@/context/AuthContext'
 import { supabase } from '@/lib/supabase'
@@ -86,6 +87,7 @@ export default function Menu() {
         <h1 className="font-display text-3xl font-bold text-ink sm:text-4xl">Áreas</h1>
         <p className="mt-1.5 text-sub sm:text-lg">Elegí un área para ver sus aplicaciones.</p>
       </div>
+      <ArqueosHoyLocal />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
         {areas.map((area, i) => (

@@ -9,3 +9,9 @@
 - **Sistemas**: `DatosSql.tsx`, `SqlConexion.tsx`, `Replicas.tsx` (estado del Replicador SQL de `DESKTOP-OA4GU6I`, `api/replicas.ts`), `SistemasFranquicias.tsx` (`/sistemas/franquicias`, clientes, bases y teléfonos → [[Franquicias]]), `Informes.tsx` → [[Informes por WhatsApp]].
 - **Varios**: `Manuales.tsx`, `Documentos.tsx`, `CarpetaArea.tsx` (`/archivos/:areaId`), `CuentaAmigos.tsx`, `BannerEditor.tsx`.
 - Lectura de remitos con IA: sacada del hub (2026-10-07), queda dormida en mito-server.
+
+## Arqueos de locales (Tesorería, `/tesoreria/arqueos`, 12/11/2026)
+- `ArqueosLocales.tsx`, lógica en `src/lib/arqueos.ts`, SQL `sql/arqueos_locales.sql`. Datos: `arqueos_locales` (copia de `DWH.dbo.vw_FACT_ARQUEO` por `puente-sql/scripts/sync-arqueos.js` cada 2 min). Bases → código: 9DEJUL2→9DEJULIO, GRALPAZ→GPAZD, NVOCED2→NVOCED.
+- Permisos `arqueos.view` (rol tesoreria; el local ve solo lo suyo por RLS) y `arqueos.edit` (apagar avisos de un local → `arqueos_excluidos`).
+- **Horarios fijos 10, 14, 19 y 22.** Vale de 1 h 30 antes a 1 h después; a los 15 min sin arqueo se avisa y repite cada 15 min hasta cerrar el horario; después del cierre y antes del próximo = «tarde». La regla está dos veces: `estadoHorarios` (TS) y `arqueos_avisos_tomar()` (SQL): cambiar las dos.
+- Local: cartel rojo en el Layout (`AvisoArqueo.tsx`, suena/vibra, «Callar 15 min»), tarjeta «Arqueos de hoy» en el menú y aviso en la campana (`useArqueoLocal`, una consulta por minuto solo con la pestaña visible). Con la pestaña oculta llega por push (`/api/push?tipo=arqueo`, sin auth, lo llama el puente). Sin sync en 10 min no se avisa.

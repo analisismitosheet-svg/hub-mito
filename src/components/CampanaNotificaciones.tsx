@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Bell, UserCheck, ClipboardList, Truck, CalendarX, FileText, ArrowRightLeft, PackageCheck, X, Pause,
-  ChevronRight, Building2, Wrench,
+  ChevronRight, Building2, Wrench, Banknote,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
@@ -10,6 +10,8 @@ import { COLUMNAS_ARMADO, PRIORIDADES, nroDePedido, ordenArmados, paraLegajo, ty
 import { notificarArmado, prepararAudio, sonarArmado, vibrarArmado } from '@/lib/alarma'
 import { nombreMotivoPausa } from '@/components/MotivoPausa'
 import { suscribirCambios } from '@/lib/realtime'
+import { useArqueoLocal } from '@/lib/useArqueoLocal'
+import { etiquetaHorario } from '@/lib/arqueos'
 
 interface Notificacion {
   id: string
@@ -24,6 +26,7 @@ interface Notificacion {
     | 'pausas'
     | 'franquicias'
     | 'requerimientos'
+    | 'arqueo'
   titulo: string
   detalle: string
   ruta: string
@@ -61,6 +64,7 @@ const GRUPOS: Record<string, { area: string; seccion: string; color: string; ico
   franquicias: { area: 'Mayorista', seccion: 'Pedidos de franquicias', color: 'bg-teal-500/15 text-teal-400', icono: Building2 },
   transferencias: { area: 'Locales', seccion: 'Reposiciones / Transferencias', color: 'bg-violet-500/15 text-violet-400', icono: ArrowRightLeft },
   requerimientos: { area: 'Locales', seccion: 'Arreglos (requerimientos)', color: 'bg-lime-500/15 text-lime-400', icono: Wrench },
+  arqueo: { area: 'Locales', seccion: 'Arqueo de caja', color: 'bg-indigo-500/15 text-indigo-400', icono: Banknote },
 }
 const GRUPO_DE_TIPO: Record<Notificacion['tipo'], keyof typeof GRUPOS> = {
   usuarios: 'usuarios',
@@ -73,6 +77,7 @@ const GRUPO_DE_TIPO: Record<Notificacion['tipo'], keyof typeof GRUPOS> = {
   pausas: 'pausas',
   franquicias: 'franquicias',
   requerimientos: 'requerimientos',
+  arqueo: 'arqueo',
 }
 
 /** Ícono de cada aviso dentro del grupo (ej. en Facturación: sin fecha vs sin enviar). */
@@ -87,6 +92,7 @@ const ICONO_TIPO: Record<Notificacion['tipo'], typeof Bell> = {
   pausas: Pause,
   franquicias: Building2,
   requerimientos: Wrench,
+  arqueo: Banknote,
 }
 
 /**
@@ -313,6 +319,22 @@ export default function CampanaNotificaciones() {
     }))
   }, [pausas, avisoPausas, puedeAutorizarPausas])
 
+  // Arqueo de caja que falta (cuentas de local, sql/arqueos_locales.sql); el cartel rojo va en el Layout
+  const arqueo = useArqueoLocal(esLocal ? perfil?.local : null)
+  const notisArqueo = useMemo<Notificacion[]>(() => {
+    const f = arqueo?.falta
+    if (!f) return []
+    return [{
+      id: `arq-${f.horario}`,
+      tipo: 'arqueo' as const,
+      titulo: `Falta el arqueo de las ${etiquetaHorario(f.horario)}`,
+      detalle: 'Hacé el arqueo de caja en Dragon: el aviso se va solo',
+      ruta: '/',
+      fecha: new Date().toISOString(),
+      destinoId: null,
+    }]
+  }, [arqueo?.falta])
+
   // Variantes del local del usuario (misma lógica que Transferencias)
   const origenesUsuario = useMemo(() => {
     const base = (perfil?.local ?? '').toUpperCase()
@@ -478,7 +500,7 @@ export default function CampanaNotificaciones() {
   if (!visible || !supabase) return null
 
   // Todo junto: las notificaciones de siempre + los armados de pedidos + las pausas
-  const lista = [...items, ...notisArmados, ...notisPausas].sort(
+  const lista = [...items, ...notisArmados, ...notisPausas, ...notisArqueo].sort(
     (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime(),
   )
   const total = lista.length

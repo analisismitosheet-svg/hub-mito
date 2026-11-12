@@ -4,6 +4,7 @@ import { LogOut, Sun, Moon, RefreshCw, Home } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { useTheme } from '@/context/ThemeContext'
 import CampanaNotificaciones from '@/components/CampanaNotificaciones'
+import AvisoArqueo from '@/components/AvisoArqueo'
 import ChatAgentes from '@/components/ChatAgentes'
 
 /**
@@ -185,7 +186,10 @@ export default function Layout({ children }: { children: ReactNode }) {
       </div>
 
       {/* En celular: sin espacio arriba (no hay barra) y margen abajo para el ícono flotante */}
-      <main className="w-full px-4 pb-24 pt-4 sm:pb-10 sm:pt-10 lg:px-6">{children}</main>
+      <main className="w-full px-4 pb-24 pt-4 sm:pb-10 sm:pt-10 lg:px-6">
+        {logueado && <AvisoArqueo />}
+        {children}
+      </main>
       {logueado && <ChatAgentes />}
     </div>
   )

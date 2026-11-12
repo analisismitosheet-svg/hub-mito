@@ -1,5 +1,6 @@
 import {
   Boxes,
+  Banknote,
   ScanLine,
   Pause,
   Truck,
@@ -222,6 +223,12 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
     id: 'cuentas-amigos', areaId: 'tesoreria', titulo: 'Cuentas Amigos', descripcion: 'También aparece en Locales',
     icon: CreditCard, color: '#059669',
     acciones: { ver: 'cuentas_amigos.view', crear: 'cuentas_amigos.create', editar: 'cuentas_amigos.edit', borrar: 'cuentas_amigos.delete' },
+  },
+
+  {
+    id: 'arqueos-locales', areaId: 'tesoreria', titulo: 'Arqueos de locales', descripcion: 'Efectivo por billete y horarios de arqueo',
+    icon: Banknote, color: '#eab308', acciones: { ver: 'arqueos.view', editar: 'arqueos.edit' },
+    etiquetas: { editar: 'Apagar avisos de un local' },
   },
 
   // ===== Locales =====

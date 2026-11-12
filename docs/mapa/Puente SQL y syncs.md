@@ -29,6 +29,7 @@
 | MITO - Sync pedidos venta | sync-pedidos-venta.js | cada 15 min, últimos 7 días | `pedidos_venta` (+items, motivo); al final `sync-cancelaciones-venta.js` → `cancelaciones_venta` (+items) (2 días; 120 con `--todo`) y `sync-estado-pedidos.js` → `estado_pedidos` (+items, solo los que cambiaron) |
 | MITO - Sync pedidos venta completo | sync-pedidos-venta.js | diario 06:30 | idem, todo |
 | MITO - Sync Tiendanube | sync-tiendanube.js | cada 20 min, modificados desde la última corrida | `tn_pedidos` (+items) desde la API de Tiendanube, ver [[Ventas web (Tiendanube)]] |
+| (dentro de MITO - Pedidos franquicias) | sync-arqueos.js | cada 2 min (hoy y ayer; `--todo` 30 días) | `arqueos_locales` desde `DWH.dbo.vw_FACT_ARQUEO` (una fila por arqueo, billetes en pesos en jsonb); después llama `/api/push?tipo=arqueo` → ver [[Otros módulos]] (Arqueos de locales) |
 | (cancelaciones) | sync-cancelaciones.js | ver instalar-tarea.ps1 | `cancelaciones`, `cancelaciones_items` |
 
 Los scripts leen del SQL Server y hacen upsert en Supabase con la service role (en `puente-sql/.env`).

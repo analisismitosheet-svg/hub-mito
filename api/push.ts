@@ -9,6 +9,10 @@
  *                                                    que el lote tiene renglones para ellos
  *   POST /api/push?tipo=requerimiento { id }       -> avisa al local qué arreglo le programaron, el día,
  *                                                    el horario y quién va (sql/requerimientos.sql)
+ *   POST /api/push?tipo=arqueo                     -> avisa a los locales que no arquearon a las 10, 14, 19
+ *                                                    o 22 (sql/arqueos_locales.sql). Sin autenticación: lo
+ *                                                    llama el puente después de cada sync, no recibe nada y
+ *                                                    la base decide a quién toca (repite cada 15 min).
  *
  * Antes eran tres funciones (push-armado / push-pausa / push-faltantes); se unificaron
  * para no pasar el tope de 12 Serverless Functions del plan Hobby de Vercel. El cliente
@@ -488,6 +492,43 @@ async function avisarRequerimiento(req: Req, res: Res, token: string) {
   return res.status(200).json({ enviados, receptores: uids.length, suscripciones: subs.length, vencidas })
 }
 
+/**
+ * Arqueos: la base devuelve (y anota) los locales que tienen que arquear ahora
+ * (arqueos_avisos_tomar, 15 a 60 min pasado el horario sin arqueo, cada 15 min).
+ */
+async function avisarArqueos(res: Res) {
+  const rT = await rest('rpc/arqueos_avisos_tomar', { method: 'POST', body: '{}' })
+  if (!rT.ok) return res.status(502).json({ error: `No se pudieron leer los avisos (${rT.status})` })
+  const avisos = (await rT.json()) as { local: string; horario: number; avisos: number }[]
+  if (!avisos.length) return res.status(200).json({ avisos: 0, enviados: 0 })
+
+  const locales = [...new Set(avisos.map((a) => a.local.replace(/[^A-Za-z0-9_-]/g, '')))].filter(Boolean)
+  const rU = await rest(`usuarios?select=id,local&local=in.(${locales.join(',')})`)
+  if (!rU.ok) return res.status(502).json({ error: `No se pudieron leer los usuarios (${rU.status})` })
+  const usuarios = (await rU.json()) as { id: string; local: string }[]
+  const uids = usuarios.map((u) => u.id)
+  if (!uids.length) return res.status(200).json({ avisos: avisos.length, locales, enviados: 0 })
+  const rS = await rest(`push_suscripciones?select=endpoint,usuario_id,p256dh,auth&usuario_id=in.(${uids.join(',')})`)
+  if (!rS.ok) return res.status(502).json({ error: `No se pudieron leer las suscripciones (${rS.status})` })
+  const subs = (await rS.json()) as Suscripcion[]
+
+  let enviados = 0
+  for (const a of avisos) {
+    const deLocal = new Set(usuarios.filter((u) => u.local === a.local).map((u) => u.id))
+    const susc = subs.filter((s) => deLocal.has(s.usuario_id))
+    if (!susc.length) continue
+    const hora = `${String(a.horario).padStart(2, '0')}:00`
+    const payload = JSON.stringify({
+      title: a.avisos > 1 ? `⏰ Sigue faltando el arqueo de las ${hora}` : `💵 Falta el arqueo de las ${hora}`,
+      body: 'Hacé el arqueo de caja en Dragon. El aviso se va solo apenas aparece.',
+      url: '/',
+      urgente: true,
+    })
+    enviados += (await entregar(payload, susc)).enviados
+  }
+  return res.status(200).json({ avisos: avisos.length, locales, enviados })
+}
+
 /** Corta la lista de artículos que faltan para el texto del aviso. */
 function resumir(faltantes: Faltante[]): string {
   if (faltantes.length === 0) return ''
@@ -508,6 +549,13 @@ export default async function handler(req: Req, res: Res) {
 
   if (req.method === 'GET') return res.status(200).json({ publicKey: pub })
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' })
+  if (primerQuery(req.query?.tipo) === 'arqueo') {
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return res.status(500).json({ error: 'Falta la configuración de Supabase' })
+    }
+    webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'https://hub-mito.vercel.app', pub, priv)
+    return avisarArqueos(res)
+  }
 
   const auth = req.headers.authorization ?? ''
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''

@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mockup · Arqueos vistos desde el local</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{--paper:#050508;--surface:rgba(255,255,255,.035);--surface2:rgba(255,255,255,.07);--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.18);--ink:#f8fafc;--sub:#94a3b8}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(900px 500px at 10% -10%,rgba(5,150,105,.14),transparent 60%),var(--paper);color:var(--ink);font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:14px;line-height:1.45;padding:20px clamp(12px,3vw,36px) 64px}
+  h1,h2,h3{margin:0;font-weight:800;letter-spacing:-.02em}
+  p{margin:0}
+  button{font-family:inherit;cursor:pointer;color:inherit}
+  .sub{color:var(--sub)}
+  .nota{border:1px dashed rgba(245,158,11,.45);background:rgba(245,158,11,.06);color:#fcd34d;border-radius:12px;padding:9px 12px;font-size:12px;margin-bottom:10px}
+  .momentos{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 18px}
+  .mom{height:36px;padding:0 14px;border-radius:999px;border:1px solid var(--line2);background:transparent;font-weight:700;font-size:13px;color:var(--sub)}
+  .mom.on{background:#fff;color:#111;border-color:#fff}
+  .esc{display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start}
+  .etq{font-size:12px;color:var(--sub);margin:0 0 8px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+  /* PC */
+  .pc{flex:1 1 640px;min-width:300px;max-width:880px;border-radius:14px;border:1px solid var(--line2);overflow:hidden;background:#0b0b10;position:relative}
+  .nav{display:flex;align-items:center;gap:8px;padding:8px 12px;background:#18181d;border-bottom:1px solid var(--line)}
+  .nav i{width:11px;height:11px;border-radius:50%;background:#3f3f46}
+  .nav .url{flex:1;height:26px;border-radius:8px;background:#0b0b10;color:#94a3b8;font-size:12px;display:flex;align-items:center;padding:0 10px}
+  .hub{padding:14px;min-height:430px}
+  .cab{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+  .cab b{font-size:15px}
+  .campana{position:relative;display:inline-grid;place-items:center;width:32px;height:32px;border-radius:50%;border:1px solid var(--line2)}
+  .campana span{position:absolute;top:-4px;right:-4px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;border-radius:99px;padding:0 5px}
+  .alerta{border-radius:16px;border:1px solid rgba(239,68,68,.6);background:rgba(239,68,68,.13);padding:14px 16px;margin-bottom:12px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;animation:pulso 1.6s infinite}
+  @keyframes pulso{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.45)}50%{box-shadow:0 0 0 9px rgba(239,68,68,0)}}
+  .alerta .ico{font-size:26px}
+  .alerta .txt{flex:1;min-width:220px}
+  .alerta b{color:#fecaca;font-size:16px;display:block}
+  .alerta p{font-size:13px;color:#fecaca}
+  .alerta button{height:34px;border-radius:999px;border:1px solid rgba(254,202,202,.5);background:transparent;color:#fecaca;font-size:12.5px;font-weight:700;padding:0 13px}
+  .alerta button.pri{background:#ef4444;border-color:#ef4444;color:#fff}
+  .tarjeta{border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:12px 14px;margin-bottom:12px}
+  .tarjeta.verde{border-color:rgba(16,185,129,.45);background:rgba(16,185,129,.06)}
+  .tarjeta .tit{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+  .tarjeta .tit b{font-size:14px}
+  .turnos{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .tu{border-radius:12px;padding:9px 10px;border:1px solid var(--line)}
+  .tu .h{font-size:18px;font-weight:800}
+  .tu .e{font-size:12px;font-weight:700}
+  .tu.ok{border-color:rgba(16,185,129,.4);background:rgba(16,185,129,.08)}.tu.ok .e{color:#6ee7b7}
+  .tu.no{border-color:rgba(239,68,68,.5);background:rgba(239,68,68,.1)}.tu.no .e{color:#fca5a5}
+  .tu.av{border-color:rgba(239,68,68,.7);background:rgba(239,68,68,.16);animation:pulso 1.6s infinite}.tu.av .e{color:#fecaca}
+  .tu.tar{border-color:rgba(245,158,11,.45);background:rgba(245,158,11,.08)}.tu.tar .e{color:#fcd34d}
+  .tu.pe .e{color:#64748b}
+  .tu.prox{border-color:rgba(56,189,248,.45)}.tu.prox .e{color:#7dd3fc}
+  .menu{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+  .menu div{height:70px;border-radius:14px;border:1px solid var(--line);background:var(--surface);padding:10px;font-size:12.5px;font-weight:700;color:#cbd5e1}
+  .toast{position:absolute;right:12px;bottom:12px;width:330px;max-width:calc(100% - 24px);background:#202024;border:1px solid #3f3f46;border-radius:10px;padding:11px 12px;box-shadow:0 10px 30px rgba(0,0,0,.6);animation:entra .5s ease-out}
+  @keyframes entra{from{transform:translateY(20px);opacity:0}}
+  .toast .app{display:flex;gap:7px;align-items:center;font-size:11.5px;color:#a1a1aa;margin-bottom:4px}
+  .toast .app i{width:16px;height:16px;border-radius:4px;background:#dc2626;color:#fff;font-style:normal;font-size:10px;font-weight:800;display:grid;place-items:center}
+  .toast b{font-size:13.5px}
+  .toast p{font-size:12.5px;color:#d4d4d8}
+  /* celular */
+  .cel{width:280px;flex:0 0 auto;border-radius:36px;border:8px solid #1e1e24;background:#050508;overflow:hidden}
+  .cel .sup{display:flex;justify-content:space-between;padding:8px 18px 4px;font-size:11px;color:#cbd5e1}
+  .cel .in{padding:10px;min-height:470px}
+  .cel .alerta{display:block;padding:12px}
+  .cel .alerta button{margin-top:8px;height:30px;font-size:12px}
+  .cel .turnos{grid-template-columns:repeat(2,1fr)}
+  .cel .menu{grid-template-columns:1fr 1fr}
+  .exp{max-width:880px;margin-top:18px;font-size:13.5px}
+  .exp li{margin-bottom:6px}
+  ul{margin:0;padding-left:18px}
+  .oculto{display:none}
+</style>
+</head>
+<body>
+  <div class="nota">Maqueta: así lo vería el local Walmart durante el día. Tocá cada momento para ver cómo cambia la pantalla.</div>
+  <h1>Arqueos vistos desde el local</h1>
+  <p class="sub">Lo mismo se ve en la PC de la caja y en el celular. El cartel aparece arriba de cualquier pantalla del hub.</p>
+
+  <div class="momentos" id="momentos"></div>
+
+  <div class="esc">
+    <div style="flex:1 1 640px;min-width:300px;max-width:880px">
+      <p class="etq">PC de la caja (hub abierto en el navegador)</p>
+      <div class="pc">
+        <div class="nav"><i></i><i></i><i></i><span class="url">hub-mito.vercel.app</span></div>
+        <div class="hub" id="pc"></div>
+      </div>
+    </div>
+    <div>
+      <p class="etq">Celular del local</p>
+      <div class="cel"><div class="sup"><span id="horaCel"></span><span>▮▮▮ 78%</span></div><div class="in" id="cel"></div></div>
+    </div>
+  </div>
+
+  <div class="exp" id="exp"></div>
+
+<script>
+const MOMENTOS = [
+  { id: 'ok', boton: '10:30 · todo al día', hora: '10:30', turnos: ['ok:09:05', 'prox', 'pe', 'pe'], alerta: false, toast: false,
+    exp: ['Arqueó a las 09:05, que vale para el horario de las 10:00.', 'No hay cartel ni aviso. Solo se ve la tarjeta con el próximo arqueo y cuánto falta.'] },
+  { id: 'aviso', boton: '14:15 · falta el de las 14', hora: '14:15', turnos: ['ok:09:05', 'av', 'pe', 'pe'], alerta: true, toast: true,
+    exp: ['Pasaron 15 minutos de las 14:00 sin arqueo: aparece el cartel rojo arriba de todo, la campana marca 1 y suena un aviso.', 'En la PC sale además la notificación de Windows abajo a la derecha, aunque esté en otra ventana (Dragon, por ejemplo).', 'En el celular: suena y vibra, también bloqueado, si tocaron «Activar avisos».', 'Se repite cada 15 minutos hasta que arqueen o hasta las 15:00.'] },
+  { id: 'listo', boton: '14:25 · ya arqueó', hora: '14:25', turnos: ['ok:09:05', 'ok:14:21', 'prox', 'pe'], alerta: false, toast: false,
+    exp: ['Hizo el arqueo en Dragon a las 14:21. En menos de 5 minutos el cartel se va solo y la tarjeta se pone en verde.', 'No hace falta tocar nada en el hub.'] },
+  { id: 'perdido', boton: '15:10 · no lo hizo', hora: '15:10', turnos: ['ok:09:05', 'no', 'prox', 'pe'], alerta: false, toast: false,
+    exp: ['Se cerró el horario de las 14:00 sin arqueo: se dejan de mandar avisos y queda en rojo en la tarjeta del local y en la grilla de Tesorería.', 'Si arquea igual antes de las 17:30, queda en ámbar como «tarde».'] },
+];
+const PROX = { '10:30': '14:00 · en 3 h 30 min', '14:25': '19:00 · en 4 h 35 min', '15:10': '19:00 · en 3 h 50 min' };
+let actual = 'aviso';
+
+function turnos(m, cel) {
+  const hs = ['10:00', '14:00', '19:00', '22:00'];
+  return `<div class="turnos">${m.turnos.map((t, i) => {
+    const [c, h] = t.split(':').length > 1 ? [t.split(':')[0], t.slice(t.indexOf(':') + 1)] : [t, ''];
+    const e = { ok: '✓ hecho ' + h, av: 'falta · avisando', no: '✕ no se hizo', pe: 'más tarde', prox: 'próximo', tar: 'tarde ' + h }[c];
+    return `<div class="tu ${c}"><p class="h">${hs[i]}</p><p class="e">${e}</p></div>`;
+  }).join('')}</div>`;
+}
+function tarjeta(m, cel) {
+  const todoBien = !m.turnos.includes('av') && !m.turnos.includes('no');
+  return `<div class="tarjeta ${todoBien ? 'verde' : ''}">
+    <div class="tit"><b>Arqueos de hoy</b><span class="sub" style="font-size:12px">${PROX[m.hora] ? 'Próximo: ' + PROX[m.hora] : 'Próximo: 19:00'}</span></div>
+    ${turnos(m, cel)}
+  </div>`;
+}
+function alerta(m) {
+  return m.alerta ? `<div class="alerta"><span class="ico">⚠</span><div class="txt"><b>Falta el arqueo de las 14:00</b><p>El último fue a las 09:05. Hacelo en Dragon: este aviso se va solo en unos minutos.</p></div>
+    <span style="display:flex;gap:6px;flex-wrap:wrap"><button class="pri">Ya lo hice</button><button>Callar 15 min</button></span></div>` : '';
+}
+function pintar() {
+  const m = MOMENTOS.find((x) => x.id === actual);
+  document.getElementById('momentos').innerHTML = MOMENTOS.map((x) => `<button class="mom ${x.id === actual ? 'on' : ''}" onclick="actual='${x.id}';pintar()">${x.boton}</button>`).join('');
+  const campana = `<span class="campana">🔔${m.alerta ? '<span>1</span>' : ''}</span>`;
+  document.getElementById('pc').innerHTML = `
+    <div class="cab"><b>Hub Mito · Walmart</b>${campana}</div>
+    ${alerta(m)}${tarjeta(m)}
+    <div class="menu"><div>Requerimientos</div><div>Control de locales</div><div>Tasa de conversión</div><div>Transferencias</div></div>
+    ${m.toast ? `<div class="toast"><div class="app"><i>M</i>Google Chrome · hub-mito.vercel.app</div><b>⚠ Falta el arqueo de las 14:00</b><p>Walmart todavía no hizo el arqueo de mediodía. Hacelo en Dragon.</p></div>` : ''}`;
+  document.getElementById('horaCel').textContent = m.hora;
+  document.getElementById('cel').innerHTML = `<div class="cab"><b>Hub Mito</b>${campana}</div>${alerta(m)}${tarjeta(m, true)}<div class="menu"><div>Requerimientos</div><div>Control</div></div>`;
+  document.getElementById('exp').innerHTML = `<ul>${m.exp.map((x) => `<li>${x}</li>`).join('')}</ul>`;
+}
+pintar();
+</script>
+</body>
+</html>
