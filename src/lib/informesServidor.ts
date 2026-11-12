@@ -382,7 +382,7 @@ async function datosConversion(fecha: string): Promise<DatosConversion> {
   const cfgVista = await jsonDe<{ valor: unknown }>('config_app?clave=eq.contador_vista_ventas&select=valor')
   const vista = typeof cfgVista[0]?.valor === 'string' ? (cfgVista[0].valor as string) : ''
   if (!vista) throw new Error('Falta configurar la vista de ventas del contador (config_app contador_vista_ventas)')
-  const [entradas, entradasAntes, filasVentas, locales, filasObj] = await Promise.all([
+  const [entradas, entradasAntes, filasVentas, locales, filasObj, filasHub] = await Promise.all([
     entradasDelDia(fecha),
     entradasDelDia(antes),
     // Una fila por local y día (180 días, ~1.200 filas): se pide entera, sin el tope general
@@ -390,6 +390,11 @@ async function datosConversion(fecha: string): Promise<DatosConversion> {
     jsonDe<{ codigo: string; nombre: string | null }>('locales?select=codigo,nombre'),
     // Objetivo del día (Locales → Objetivo); si falla, el informe sale sin esas columnas
     rpc<{ local: string; objetivo: number | null; venta: number | null }>('objetivos_locales_dia', { p_desde: fecha, p_hasta: fecha }).catch(() => []),
+    // Tickets y venta por local que el hub ya tiene copiados (de todos los locales):
+    // completan a los que la vista remota no trae y así no salen sin tickets ni promedio
+    jsonDe<{ local: string; fecha: string; tickets: number | null; total: number | string | null }>(
+      `ventas_locales_dia?select=local,fecha,tickets,total&fecha=in.(${fecha},${antes})`,
+    ).catch(() => []),
   ])
   const objetivos = new Map<string, number>()
   const ventasDia = new Map<string, number>()
@@ -411,6 +416,13 @@ async function datosConversion(fecha: string): Promise<DatosConversion> {
     v.tickets += Number(val(f, 'tickets')) || 0
     v.total += Number(val(f, 'total')) || 0
     destino.set(local, v)
+  }
+  for (const f of filasHub) {
+    const destino = f.fecha === fecha ? ventas : f.fecha === antes ? ventasAntes : null
+    const local = String(f.local ?? '').trim().toUpperCase()
+    const tickets = Number(f.tickets) || 0
+    if (!destino || !local || !tickets || (destino.get(local)?.tickets ?? 0) > 0) continue
+    destino.set(local, { tickets, total: Number(f.total) || 0 })
   }
   const nombres = Object.fromEntries(locales.map((l) => [l.codigo, l.nombre ?? '']))
   return { fecha, antes, entradas, entradasAntes, ventas, ventasAntes, nombres, objetivos, ventasDia }
