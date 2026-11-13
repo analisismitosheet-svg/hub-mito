@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Loader2, Search, ChevronRight, CheckCheck, Check, Minus, Plus, ArrowLeft, PackageCheck, RotateCcw, Boxes, ClipboardList, FileSpreadsheet, Pencil, Save, X,
+  Loader2, Search, ChevronRight, CheckCheck, Check, Minus, Plus, ArrowLeft, PackageCheck, RotateCcw, Boxes, ClipboardList, FileSpreadsheet, Pencil, Save, X, Receipt,
 } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import Layout from '@/components/Layout'
@@ -66,7 +66,30 @@ interface Entrega {
   /** Si un admin lo corrigió después de registrarlo (sql/picking_editar.sql) */
   editado_at?: string | null
   editado_por?: string | null
+  /** Factura de Recepción INDO a la que va este picking (sql/picking_factura.sql) */
+  recepcion_clave?: string | null
+  n_factura?: string | null
 }
+
+/** Una factura de Recepción INDO para atar el picking (picking_facturas) */
+interface FacturaPick {
+  clave: string
+  n_factura: string
+  fecha_factura: string | null
+  proveedor: string
+  n_remito: string
+  n_guia: string
+  fecha_ingreso: string | null
+  estado: string
+  n_oc: string
+  ocs: string[]
+  controlada: boolean
+  /** Pickings vivos de la factura: uno por OC como máximo */
+  pickings: { codigo: string; numero: number | null; nro: number }[]
+}
+
+const textoFactura = (f: FacturaPick) =>
+  `Fact. ${f.n_factura} · ${f.proveedor} · OC ${f.n_oc || '—'} · ingreso ${fechaCorta(f.fecha_ingreso)}${f.n_remito ? ` · rto ${f.n_remito}` : ''}`
 
 type Filtro = 'todos' | 'pendientes' | 'completos'
 type Modo = 'pedido' | 'articulo'
@@ -277,6 +300,12 @@ export default function Picking() {
   const archivoIngresos = useRef<HTMLInputElement>(null)
   const [importando, setImportando] = useState<string | null>(null)
   const [importe, setImporte] = useState<{ ok: boolean; texto: string; detalle?: string[] } | null>(null)
+  // Factura de Recepción INDO del picking: sin factura no se registra, y una factura lleva un solo picking por OC
+  const [facturasPedido, setFacturasPedido] = useState<FacturaPick[]>([])
+  const [facturaSel, setFacturaSel] = useState<string>('')
+  const [facturasArt, setFacturasArt] = useState<FacturaPick[]>([])
+  const [facturaArt, setFacturaArt] = useState<string>('')
+  const recPedida = useRef<string>('')
 
   async function importarIngresos(archivo: File) {
     if (!supabase) return
@@ -371,6 +400,7 @@ ${avisoNo}` : ''}
     const oc = params.get('oc')?.trim()
     if (!oc || cargando) return
     const prov = params.get('prov')?.trim() ?? ''
+    recPedida.current = params.get('rec')?.trim() ?? ''
     const candidatos = pedidos.filter((p) => String(p.numero ?? '') === oc && !p.anulado)
     const elegido = candidatos.find((p) => prov && p.proveedor === prov) ?? candidatos[0]
     setParams({}, { replace: true })
@@ -455,6 +485,56 @@ ${avisoNo}` : ''}
     })
     return () => { vivo = false }
   }, [sel, cargarPedidoSel])
+
+  /** Facturas de Recepción INDO que traen esta OC (para atar el picking) */
+  const cargarFacturasPedido = useCallback(async (numero: number | null, codigo: string) => {
+    if (!supabase || numero == null) {
+      setFacturasPedido([])
+      setFacturaSel('')
+      return
+    }
+    const { data, error: e } = await supabase.rpc('picking_facturas', { p_numero: String(numero) })
+    if (e) {
+      setError(e.message)
+      return
+    }
+    const fs = (data as FacturaPick[] | null) ?? []
+    setFacturasPedido(fs)
+    const pedida = recPedida.current
+    recPedida.current = ''
+    setFacturaSel((prev) => {
+      if (pedida && fs.some((f) => f.clave === pedida)) return pedida
+      if (prev && fs.some((f) => f.clave === prev)) return prev
+      const libres = fs.filter((f) => !f.controlada && !f.pickings.some((k) => k.codigo === codigo))
+      return libres.length === 1 ? libres[0].clave : ''
+    })
+  }, [])
+  const numeroSel = pedidos.find((p) => p.codigo === sel)?.numero ?? null
+  useEffect(() => {
+    if (!sel) {
+      setFacturasPedido([])
+      setFacturaSel('')
+      return
+    }
+    void cargarFacturasPedido(numeroSel, sel)
+  }, [sel, numeroSel, cargarFacturasPedido])
+  const factura = facturasPedido.find((f) => f.clave === facturaSel) ?? null
+  const pickingDeFactura = factura?.pickings.find((k) => k.codigo === sel) ?? null
+  const facturaOk = !!factura && !pickingDeFactura && !factura.controlada
+
+  // Modo por artículo: facturas sin controlar (se reparte solo entre las OC de la factura elegida)
+  const cargarFacturasArt = useCallback(async () => {
+    if (!supabase) return
+    const { data, error: e } = await supabase.rpc('picking_facturas', {})
+    if (e) return setError(e.message)
+    const fs = (data as FacturaPick[] | null) ?? []
+    setFacturasArt(fs)
+    setFacturaArt((prev) => (fs.some((f) => f.clave === prev) ? prev : ''))
+  }, [])
+  useEffect(() => {
+    if (modo === 'articulo') void cargarFacturasArt()
+  }, [modo, cargarFacturasArt])
+  const facturaDeArt = facturasArt.find((f) => f.clave === facturaArt) ?? null
 
   // ---------- Picking en curso (borrador): lo que se cuenta ahora, sin registrar ----------
   const esteDe = (i: ItemPicking) => borrador[claveItem(i)] ?? 0
@@ -607,10 +687,20 @@ ${avisoNo}` : ''}
       setAviso({ ok: false, texto: 'No cargaste nada en este picking.' })
       return
     }
+    if (!factura) {
+      setAviso({ ok: false, texto: 'Elegí la factura de Recepción INDO a la que corresponde este picking.' })
+      return
+    }
+    if (pickingDeFactura) {
+      setAviso({ ok: false, texto: `La factura ${factura.n_factura} ya tiene el picking #${pickingDeFactura.nro} en esta OC: no se puede hacer otro.` })
+      return
+    }
     const unidades = lista.reduce((a, x) => a + x.cantidad, 0)
-    if (!window.confirm(`¿Registrar el picking #${nroSiguiente} de esta OC con ${n0.format(unidades)} unidades?`)) return
+    if (!window.confirm(`¿Registrar el picking #${nroSiguiente} de esta OC con ${n0.format(unidades)} unidades, para la factura ${factura.n_factura}?
+
+La factura pasa a «Listo para controlar».`)) return
     setRegistrando(true)
-    const { data, error: e } = await supabase.rpc('registrar_picking', { p_codigo: sel, p_items: lista })
+    const { data, error: e } = await supabase.rpc('registrar_picking', { p_codigo: sel, p_items: lista, p_recepcion: factura.clave })
     if (e) {
       setRegistrando(false)
       setAviso({ ok: false, texto: `No se pudo registrar el picking: ${e.message}` })
@@ -621,8 +711,9 @@ ${avisoNo}` : ''}
     setEntregas(ents)
     setBorrador({})
     setRegistrando(false)
-    setAviso({ ok: true, texto: `Picking #${data} registrado: ${n0.format(unidades)} unidades.` })
+    setAviso({ ok: true, texto: `Picking #${data} registrado: ${n0.format(unidades)} unidades. La factura ${factura.n_factura} quedó lista para controlar.` })
     void cargarPedidos()
+    void cargarFacturasPedido(numeroSel, sel)
   }
 
   /** Anula un picking registrado: se resta de lo recibido y queda en el historial como anulado */
@@ -642,6 +733,7 @@ ${avisoNo}` : ''}
     setRegistrando(false)
     setAviso({ ok: true, texto: `Picking #${e.nro} anulado.` })
     void cargarPedidos()
+    void cargarFacturasPedido(numeroSel, sel)
   }
 
   /** Abre la corrección de un picking registrado con las cantidades que tiene hoy */
@@ -747,10 +839,16 @@ Se recalcula lo recibido de esta OC.`)) return
       setAviso({ ok: false, texto: 'Poné cuántas unidades llegaron.' })
       return
     }
+    if (!facturaDeArt) {
+      setAviso({ ok: false, texto: 'Elegí la factura de Recepción INDO a la que corresponde lo que llegó.' })
+      return
+    }
+    const ocsFactura = new Set(facturaDeArt.ocs)
     const total = quedan
     const asignaciones: { f: FilaArticulo; suma: number }[] = []
     for (const f of g.filas) {
       if (quedan <= 0) break
+      if (!ocsFactura.has(String(f.numero ?? ''))) continue
       const falta = Math.max(0, f.cantidad - f.recibido)
       if (!falta) continue
       const suma = Math.min(falta, quedan)
@@ -759,7 +857,7 @@ Se recalcula lo recibido de esta OC.`)) return
     }
     const qué = `${g.articulo} ${g.color} ${g.talle}`.trim()
     if (!asignaciones.length) {
-      setAviso({ ok: false, texto: `${qué}: no hay pedidos con saldo, no se registró nada.` })
+      setAviso({ ok: false, texto: `${qué}: ninguna OC de la factura ${facturaDeArt.n_factura} (${facturaDeArt.n_oc || 'sin OC'}) tiene saldo de esto, no se registró nada.` })
       return
     }
     setRegistrando(true)
@@ -768,6 +866,9 @@ Se recalcula lo recibido de esta OC.`)) return
       const { data, error: er } = await supabase.rpc('registrar_picking', {
         p_codigo: f.codigo,
         p_items: [{ articulo: f.articulo, color: f.color, talle: f.talle, cantidad: suma }],
+        // Una factura, un picking por OC: lo de cada artículo se suma a ese picking
+        p_recepcion: facturaDeArt.clave,
+        p_sumar: true,
       })
       if (er) {
         setRegistrando(false)
@@ -779,8 +880,9 @@ Se recalcula lo recibido de esta OC.`)) return
     }
     setRegistrando(false)
     await buscarArticulo()
+    void cargarFacturasArt()
     if (quedan > 0)
-      setAviso({ ok: false, texto: `${qué}: ${n0.format(total - quedan)} registradas en ${usados.join(', ')}. Sobran ${n0.format(quedan)}: no hay más pedidos con saldo de ese talle.` })
+      setAviso({ ok: false, texto: `${qué}: ${n0.format(total - quedan)} registradas en ${usados.join(', ')}. Sobran ${n0.format(quedan)}: no hay más pedidos de esta factura con saldo de ese talle.` })
     else setAviso({ ok: true, texto: `${qué}: ${n0.format(total)} registradas en ${usados.join(', ')}.` })
     void cargarPedidos()
   }
@@ -797,7 +899,7 @@ Se recalcula lo recibido de esta OC.`)) return
         <div className="flex flex-wrap items-center gap-3">
         <input ref={archivoIngresos} type="file" accept=".xlsx,.xls" className="hidden"
           onChange={(e) => { const f = e.target.files?.[0]; if (f) void importarIngresos(f) }} />
-        <button
+        {isAdmin && <button
           onClick={() => archivoIngresos.current?.click()}
           disabled={!!importando}
           title="Excel de Dragonfish con los artículos que ya ingresaron en el picking"
@@ -805,7 +907,7 @@ Se recalcula lo recibido de esta OC.`)) return
         >
           {importando ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <FileSpreadsheet size={15} className="text-emerald-500" aria-hidden />}
           {importando ?? 'Cargar Excel de ingresos'}
-        </button>
+        </button>}
         <p className="text-xs text-sub" aria-live="polite">
           {registrando && (
             <span className="inline-flex items-center gap-1"><Loader2 size={12} className="animate-spin" aria-hidden /> Registrando…</span>
@@ -873,6 +975,28 @@ Se recalcula lo recibido de esta OC.`)) return
             >
               {cargandoArt ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Search size={15} aria-hidden />} Buscar
             </button>
+            <label className="block w-full">
+              <span className="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-sub">
+                <Receipt size={13} className="text-sky-500" aria-hidden /> Factura de lo que llegó
+              </span>
+              <select
+                value={facturaArt}
+                onChange={(e) => setFacturaArt(e.target.value)}
+                className={`h-11 w-full rounded-xl border bg-surface2 px-3 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-sky-500/40 ${facturaArt ? 'border-line' : 'border-amber-500/50'}`}
+              >
+                <option value="">{facturasArt.length ? 'Elegí la factura (Recepción INDO)…' : 'No hay facturas sin controlar en Recepción INDO'}</option>
+                {facturasArt.map((f) => (
+                  <option key={f.clave} value={f.clave}>
+                    {textoFactura(f)}{f.pickings.length ? ` — picking en OC ${f.pickings.map((k) => k.numero ?? '?').join(', ')}` : ''}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-1 block text-xs text-sub">
+                {facturaDeArt
+                  ? `Se reparte solo entre las OC de la factura (${facturaDeArt.n_oc || '—'}) y se suma a su picking en cada OC. La factura pasa a «Listo para controlar».`
+                  : 'Sin factura no se puede registrar: tiene que estar cargada en Recepción INDO con su N° de OC.'}
+              </span>
+            </label>
             <label className="inline-flex h-11 cursor-pointer items-center gap-2 text-sm text-sub">
               <input type="checkbox" checked={verCompletosArt} onChange={(e) => setVerCompletosArt(e.target.checked)} className="h-4 w-4 accent-amber-500" />
               Ver también los pedidos ya recibidos
@@ -927,8 +1051,8 @@ Se recalcula lo recibido de esta OC.`)) return
                       />
                       <button
                         type="submit"
-                        disabled={!falta || registrando}
-                        title="Registra un picking en cada pedido, completando primero el más viejo"
+                        disabled={!falta || registrando || !facturaDeArt}
+                        title={facturaDeArt ? 'Registra en el picking de la factura en cada OC, completando primero la más vieja' : 'Elegí la factura primero'}
                         className="btn-press inline-flex h-9 items-center gap-1 rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-40"
                       >
                         <CheckCheck size={14} aria-hidden /> Registrar
@@ -1116,6 +1240,7 @@ Se recalcula lo recibido de esta OC.`)) return
                         {e.creado_por ? ` · ${e.creado_por}` : ''} · <strong className="tabular-nums text-ink">{n0.format(e.unidades)} u.</strong>
                         {e.origen === 'excel' && ' · Excel'}
                         {e.origen === 'inicial' && ' · inicial'}
+                        {e.n_factura && ` · Fact. ${e.n_factura}`}
                         {e.editado_at && ' · editado'}
                         {e.anulado && ' · anulado'}
                       </button>
@@ -1242,6 +1367,41 @@ Se recalcula lo recibido de esta OC.`)) return
                       </div>
                     )
                   })()}
+                </div>
+
+                {/* Factura del picking: obligatoria y una sola vez por OC */}
+                <div className={`rounded-2xl border p-3 ${facturaOk ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-amber-500/40 bg-amber-500/5'}`}>
+                  <label className="block">
+                    <span className="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-sub">
+                      <Receipt size={13} className="text-sky-500" aria-hidden /> Factura del picking (Recepción INDO)
+                    </span>
+                    <select
+                      value={facturaSel}
+                      onChange={(e) => setFacturaSel(e.target.value)}
+                      className="h-11 w-full rounded-xl border border-line bg-surface2 px-3 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-sky-500/40"
+                    >
+                      <option value="">{facturasPedido.length ? 'Elegí la factura…' : 'Ninguna factura de Recepción INDO trae esta OC'}</option>
+                      {facturasPedido.map((f) => {
+                        const ya = f.pickings.find((k) => k.codigo === sel)
+                        return (
+                          <option key={f.clave} value={f.clave} disabled={(!!ya || f.controlada) && f.clave !== facturaSel}>
+                            {textoFactura(f)}{ya ? ` — ya tiene el picking #${ya.nro}` : f.controlada ? ' — ya controlada' : ''}
+                          </option>
+                        )
+                      })}
+                    </select>
+                  </label>
+                  <p className="mt-1.5 text-xs text-sub">
+                    {!facturasPedido.length
+                      ? `Para hacer el picking, la factura tiene que estar cargada en Recepción INDO con la OC ${pedido.numero ?? ''} y su N° de factura.`
+                      : pickingDeFactura
+                        ? `La factura ${factura?.n_factura} ya tiene el picking #${pickingDeFactura.nro} en esta OC: no se puede hacer otro. Si hay que rehacerlo, anulalo.`
+                        : factura?.controlada
+                          ? 'Esa factura ya está controlada.'
+                          : factura
+                            ? 'Al registrar, la factura pasa a «Listo para controlar».'
+                            : 'Elegí a qué factura corresponde lo que llegó: sin factura no se registra.'}
+                  </p>
                 </div>
 
                 {/* Buscar · filtros · cargar todo el saldo / limpiar */}
@@ -1495,7 +1655,8 @@ Se recalcula lo recibido de esta OC.`)) return
                     </span>
                     <button
                       onClick={() => void registrar()}
-                      disabled={!hayBorrador || registrando}
+                      disabled={!hayBorrador || registrando || !facturaOk}
+                      title={facturaOk ? undefined : 'Elegí una factura sin picking en esta OC'}
                       className="btn-press inline-flex h-10 items-center gap-1.5 rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-40"
                     >
                       {registrando ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Check size={15} aria-hidden />} Registrar picking #{nroSiguiente}

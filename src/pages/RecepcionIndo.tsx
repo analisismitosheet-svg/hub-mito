@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import {
-  AlertTriangle, ArrowLeft, ArrowRight, Building2, CheckCheck, ClipboardCheck, Clock, Download,
+  AlertTriangle, ArrowLeft, ArrowRight, Building2, CheckCheck, CheckCircle2, ClipboardCheck, Clock, Download,
   Link2, Loader2, Lock, Package, PackageCheck, Pencil, Plus, Search, Trash2, Upload, X,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
@@ -623,6 +623,8 @@ export default function RecepcionIndo() {
   const [salvandoClave, setSalvandoClave] = useState<string | null>(null)
   // Números de pedido de compra que existen, para saber qué OC se puede linkear.
   const [numerosPedido, setNumerosPedido] = useState<Set<string>>(new Set())
+  // Pickings vivos de la factura de cada fila (sql/picking_factura.sql): clave -> OC -> N° de picking
+  const [pickingsFila, setPickingsFila] = useState<Map<string, Map<string, number>>>(new Map())
 
   // Filtros
   const [deposito, setDeposito] = useState('')
@@ -666,6 +668,18 @@ export default function RecepcionIndo() {
     else {
       const datos = (rFilas.data as Fila[] | null) ?? []
       setFilas(datos.map((f) => ({ ...f, bultos: Number(f.bultos) })))
+      // Qué facturas ya tienen picking (si la base todavía no tiene la función, no se muestra nada)
+      if (puedePicking && datos.length) {
+        void supabase.rpc('recepcion_indo_pickings', { p_claves: datos.map((f) => f.clave) }).then(({ data }) => {
+          const m = new Map<string, Map<string, number>>()
+          for (const r of (data as { clave: string; numero: string | null; nro: number }[] | null) ?? []) {
+            const porOc = m.get(r.clave) ?? new Map<string, number>()
+            porOc.set(r.numero ?? '', r.nro)
+            m.set(r.clave, porOc)
+          }
+          setPickingsFila(m)
+        })
+      }
       setTotal(Number(datos[0]?.total ?? 0))
       // Sin filas la suma es 0; si la base todavía no devuelve iva_filtrado, queda null
       setIvaFiltrado(datos.length === 0 ? 0 : datos[0].iva_filtrado != null ? Number(datos[0].iva_filtrado) : null)
@@ -673,7 +687,7 @@ export default function RecepcionIndo() {
     if (rResumen.error) agregarError(aclarar(rResumen.error.message, 'recepcion_indo_resumen'))
     else setResumen((rResumen.data as Resumen[] | null)?.[0] ?? VACIO)
     setCargando(false)
-  }, [deposito, proveedor, transporte, estado, control, busca, meses, pagina, agregarError, limpiarErrores])
+  }, [deposito, proveedor, transporte, estado, control, busca, meses, pagina, agregarError, limpiarErrores, puedePicking])
 
   // Opciones de los desplegables: no dependen de los filtros, así que se piden una sola
   // vez (son 106 proveedores) y no en cada cambio de filtro.
@@ -1196,19 +1210,41 @@ export default function RecepcionIndo() {
                       // Solo las OC que existen como pedido de compra (las otras no tienen qué pickear)
                       const ocs = ocsDeFila(f.n_oc).map((oc) => oc.replace(/\s+/g, '')).filter((oc) => /^\d+$/.test(oc) && numerosPedido.has(oc))
                       if (!ocs.length) return null
+                      // El picking va atado a la factura: sin N° de factura no se puede hacer
+                      if (!f.n_factura.trim()) {
+                        return (
+                          <div className="mt-1">
+                            <span
+                              title="Cargá el N° de factura para poder hacer el picking"
+                              className="inline-flex items-center gap-1 rounded-md border border-line px-1.5 py-0.5 text-[10px] font-semibold text-sub/70"
+                            >
+                              <PackageCheck size={11} aria-hidden /> Picking: falta la factura
+                            </span>
+                          </div>
+                        )
+                      }
+                      const hechos = pickingsFila.get(f.clave)
                       return (
                         <div className="mt-1 flex flex-wrap gap-1">
-                          {ocs.map((oc) => (
-                            <Link
-                              key={oc}
-                              to={`/deposito/picking?oc=${encodeURIComponent(oc)}&prov=${encodeURIComponent(f.proveedor_codigo ?? '')}`}
-                              title={`Hacer el picking de la OC ${oc}`}
-                              className="inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-500 hover:bg-emerald-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50"
-                            >
-                              <PackageCheck size={11} aria-hidden />
-                              Picking{ocs.length > 1 ? ` ${oc}` : ''}
-                            </Link>
-                          ))}
+                          {ocs.map((oc) => {
+                            const nro = hechos?.get(oc)
+                            const etiqueta = ocs.length > 1 ? ` ${oc}` : ''
+                            return (
+                              <Link
+                                key={oc}
+                                to={`/deposito/picking?oc=${encodeURIComponent(oc)}&prov=${encodeURIComponent(f.proveedor_codigo ?? '')}&rec=${encodeURIComponent(f.clave)}`}
+                                title={nro ? `La factura ${f.n_factura} ya tiene el picking #${nro} en la OC ${oc} (ver)` : `Hacer el picking de la factura ${f.n_factura}, OC ${oc}`}
+                                className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 ${
+                                  nro
+                                    ? 'border-sky-500/40 bg-sky-500/10 text-sky-500 hover:bg-sky-500/20'
+                                    : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'
+                                }`}
+                              >
+                                {nro ? <CheckCircle2 size={11} aria-hidden /> : <PackageCheck size={11} aria-hidden />}
+                                {nro ? `Picking #${nro}${etiqueta}` : `Picking${etiqueta}`}
+                              </Link>
+                            )
+                          })}
                         </div>
                       )
                     })()}

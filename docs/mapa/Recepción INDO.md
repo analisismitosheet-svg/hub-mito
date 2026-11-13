@@ -5,7 +5,7 @@
 - Import del Excel "Recepción de Mercadería"; reimportar actualiza en el lugar (clave natural `claveRecepcion`).
 - Nuevo registro manual: **sin campos obligatorios**.
 - Columna "N° OC": cada OC (se parte por `/`) linkea a `/compras/pedidos-compra?numero=N` si existe en `pedidos_compra`; las que no existen van como texto.
-- Botón verde **Picking** por OC existente → `/deposito/picking?oc=..&prov=..` (visible con `isAdmin || can('picking.view')`). Ver [[Picking]].
+- Botón verde **Picking** por OC existente → `/deposito/picking?oc=..&prov=..` (visible con `isAdmin || can('picking.view')`). Ver [[Picking]]. Lleva `&rec=<clave>` para atar el picking a la factura de esa fila; sin N° de factura muestra «Picking: falta la factura». Si la factura ya tiene picking en esa OC el botón pasa a celeste «Picking #N» (RPC `recepcion_indo_pickings`). Con picking la factura queda en «LISTO PARA CONTROLAR» (`sql/picking_factura.sql`).
 - Permiso: `deposito.view`.
 - **Botón Borrar por línea** (27/10/2026): lo ve y lo usa **solo el administrador**. Va por la RPC `recepcion_indo_borrar(p_clave)` (`sql/recepcion_indo_borrar.sql`, SECURITY DEFINER), que chequea `private.es_admin()`; la tabla sigue sin DELETE directo para `authenticated`, así que la regla real vive en la RPC.
 - **Orden de la tabla**: primero «Listo para controlar», después «En depósito», después el resto (por fecha de ingreso). Lo hace `recepcion_indo_filas` con `private.recepcion_indo_orden_estado`.
