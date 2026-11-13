@@ -9,8 +9,8 @@
 -- facturas de la misma OC y 782 facturas no tienen ninguno), así que no se inventan
 -- pickings: se guarda una marca "picking previo" por factura + OC.
 --
--- Quedan AFUERA las que hoy están sin controlar y en estado "En deposito": esas
--- todavía no tuvieron picking y se tienen que poder pickear.
+-- Entran TODAS las facturas que ya estaban (pedido del depósito: "todas las otras ya
+-- tienen que tener un picking"). Solo las que se carguen de ahora en más se pickean.
 --
 -- Aplicado en Supabase. Idempotente. Ver sql/picking_factura.sql.
 -- ============================================================================
@@ -34,7 +34,7 @@ SELECT DISTINCT ON (private.factura_clave(r.proveedor, r.n_factura), o)
   FROM public.recepcion_indo r
   CROSS JOIN LATERAL unnest(private.recepcion_ocs(r.n_oc)) o
  WHERE private.factura_clave(r.proveedor, r.n_factura) IS NOT NULL
-   AND NOT (r.fecha_controlada IS NULL AND translate(upper(btrim(r.estado)), 'Ó', 'O') LIKE 'EN DEPOSITO%')
+   -- (13/11 noche: también las "En deposito" sin controlar: las de la OC 15116 ya tenían pickings #6 a #11)
    -- si ya tiene un picking nuevo atado, no hace falta la marca
    AND NOT EXISTS (SELECT 1 FROM public.picking_entregas e
                     WHERE e.factura_clave = private.factura_clave(r.proveedor, r.n_factura) AND e.anulado_at IS NULL)
