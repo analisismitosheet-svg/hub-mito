@@ -1234,10 +1234,11 @@ export default function RecepcionIndo() {
                                 key={oc}
                                 to={`/deposito/picking?oc=${encodeURIComponent(oc)}&prov=${encodeURIComponent(f.proveedor_codigo ?? '')}&rec=${encodeURIComponent(f.clave)}`}
                                 title={nro ? `La factura ${f.n_factura} ya tiene el picking #${nro} en la OC ${oc} (ver)` : `Hacer el picking de la factura ${f.n_factura}, OC ${oc}`}
-                                className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 ${
+                                className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/50 ${
                                   nro
                                     ? 'border-sky-500/40 bg-sky-500/10 text-sky-500 hover:bg-sky-500/20'
-                                    : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'
+                                    // Violeta y no verde: el verde se leía como "todo ok, se pueden abrir los bultos"
+                                    : 'border-violet-500/40 bg-violet-500/10 text-violet-400 hover:bg-violet-500/20'
                                 }`}
                               >
                                 {nro ? <CheckCircle2 size={11} aria-hidden /> : <PackageCheck size={11} aria-hidden />}
