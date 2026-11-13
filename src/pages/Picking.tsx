@@ -85,8 +85,14 @@ interface FacturaPick {
   ocs: string[]
   controlada: boolean
   /** Pickings vivos de la factura: uno por OC como máximo */
-  pickings: { codigo: string; numero: number | null; nro: number }[]
+  /** previo = la factura ya estaba antes del picking por factura (sql/picking_factura_previa.sql): cuenta como hecho */
+  pickings: { codigo: string | null; numero: number | string | null; nro: number | null; previo?: boolean }[]
 }
+
+/** El picking de la factura en esta OC (uno nuevo por código de pedido, o el previo por N° de OC) */
+const pickingEnOc = (f: FacturaPick, codigo: string | null, numero: number | null) =>
+  f.pickings.find((k) => (k.codigo && k.codigo === codigo) || (k.previo && numero != null && String(k.numero) === String(numero))) ?? null
+const textoPicking = (k: { nro: number | null; previo?: boolean }) => (k.previo ? 'un picking anterior' : `el picking #${k.nro}`)
 
 const textoFactura = (f: FacturaPick) =>
   `Fact. ${f.n_factura} · ${f.proveedor} · OC ${f.n_oc || '—'} · ingreso ${fechaCorta(f.fecha_ingreso)}${f.n_remito ? ` · rto ${f.n_remito}` : ''}`
@@ -505,7 +511,7 @@ ${avisoNo}` : ''}
     setFacturaSel((prev) => {
       if (pedida && fs.some((f) => f.clave === pedida)) return pedida
       if (prev && fs.some((f) => f.clave === prev)) return prev
-      const libres = fs.filter((f) => !f.controlada && !f.pickings.some((k) => k.codigo === codigo))
+      const libres = fs.filter((f) => !f.controlada && !pickingEnOc(f, codigo, numero))
       return libres.length === 1 ? libres[0].clave : ''
     })
   }, [])
@@ -519,7 +525,7 @@ ${avisoNo}` : ''}
     void cargarFacturasPedido(numeroSel, sel)
   }, [sel, numeroSel, cargarFacturasPedido])
   const factura = facturasPedido.find((f) => f.clave === facturaSel) ?? null
-  const pickingDeFactura = factura?.pickings.find((k) => k.codigo === sel) ?? null
+  const pickingDeFactura = factura ? pickingEnOc(factura, sel, numeroSel) : null
   const facturaOk = !!factura && !pickingDeFactura && !factura.controlada
 
   // Modo por artículo: facturas sin controlar (se reparte solo entre las OC de la factura elegida)
@@ -692,7 +698,7 @@ ${avisoNo}` : ''}
       return
     }
     if (pickingDeFactura) {
-      setAviso({ ok: false, texto: `La factura ${factura.n_factura} ya tiene el picking #${pickingDeFactura.nro} en esta OC: no se puede hacer otro.` })
+      setAviso({ ok: false, texto: `La factura ${factura.n_factura} ya tiene ${textoPicking(pickingDeFactura)} en esta OC: no se puede hacer otro.` })
       return
     }
     const unidades = lista.reduce((a, x) => a + x.cantidad, 0)
@@ -843,7 +849,8 @@ Se recalcula lo recibido de esta OC.`)) return
       setAviso({ ok: false, texto: 'Elegí la factura de Recepción INDO a la que corresponde lo que llegó.' })
       return
     }
-    const ocsFactura = new Set(facturaDeArt.ocs)
+    // OC de la factura, menos las que ya tenían picking antes del picking por factura
+    const ocsFactura = new Set(facturaDeArt.ocs.filter((oc) => !facturaDeArt.pickings.some((k) => k.previo && String(k.numero) === oc)))
     const total = quedan
     const asignaciones: { f: FilaArticulo; suma: number }[] = []
     for (const f of g.filas) {
@@ -1382,10 +1389,10 @@ Se recalcula lo recibido de esta OC.`)) return
                     >
                       <option value="">{facturasPedido.length ? 'Elegí la factura…' : 'Ninguna factura de Recepción INDO trae esta OC'}</option>
                       {facturasPedido.map((f) => {
-                        const ya = f.pickings.find((k) => k.codigo === sel)
+                        const ya = pickingEnOc(f, sel, numeroSel)
                         return (
                           <option key={f.clave} value={f.clave} disabled={(!!ya || f.controlada) && f.clave !== facturaSel}>
-                            {textoFactura(f)}{ya ? ` — ya tiene el picking #${ya.nro}` : f.controlada ? ' — ya controlada' : ''}
+                            {textoFactura(f)}{ya ? ` — ya tiene ${textoPicking(ya)}` : f.controlada ? ' — ya controlada' : ''}
                           </option>
                         )
                       })}
@@ -1395,7 +1402,7 @@ Se recalcula lo recibido de esta OC.`)) return
                     {!facturasPedido.length
                       ? `Para hacer el picking, la factura tiene que estar cargada en Recepción INDO con la OC ${pedido.numero ?? ''} y su N° de factura.`
                       : pickingDeFactura
-                        ? `La factura ${factura?.n_factura} ya tiene el picking #${pickingDeFactura.nro} en esta OC: no se puede hacer otro. Si hay que rehacerlo, anulalo.`
+                        ? `La factura ${factura?.n_factura} ya tiene ${textoPicking(pickingDeFactura)} en esta OC: no se puede hacer otro.${pickingDeFactura.previo ? '' : ' Si hay que rehacerlo, anulalo.'}`
                         : factura?.controlada
                           ? 'Esa factura ya está controlada.'
                           : factura

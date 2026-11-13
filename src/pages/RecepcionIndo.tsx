@@ -672,9 +672,10 @@ export default function RecepcionIndo() {
       if (puedePicking && datos.length) {
         void supabase.rpc('recepcion_indo_pickings', { p_claves: datos.map((f) => f.clave) }).then(({ data }) => {
           const m = new Map<string, Map<string, number>>()
-          for (const r of (data as { clave: string; numero: string | null; nro: number }[] | null) ?? []) {
+          for (const r of (data as { clave: string; numero: string | null; nro: number | null }[] | null) ?? []) {
             const porOc = m.get(r.clave) ?? new Map<string, number>()
-            porOc.set(r.numero ?? '', r.nro)
+            // nro null = picking previo (la factura ya estaba antes del picking por factura): va como 0
+            porOc.set(r.numero ?? '', r.nro ?? 0)
             m.set(r.clave, porOc)
           }
           setPickingsFila(m)
@@ -1228,21 +1229,22 @@ export default function RecepcionIndo() {
                         <div className="mt-1 flex flex-wrap gap-1">
                           {ocs.map((oc) => {
                             const nro = hechos?.get(oc)
+                            const hecho = nro !== undefined
                             const etiqueta = ocs.length > 1 ? ` ${oc}` : ''
                             return (
                               <Link
                                 key={oc}
                                 to={`/deposito/picking?oc=${encodeURIComponent(oc)}&prov=${encodeURIComponent(f.proveedor_codigo ?? '')}&rec=${encodeURIComponent(f.clave)}`}
-                                title={nro ? `La factura ${f.n_factura} ya tiene el picking #${nro} en la OC ${oc} (ver)` : `Hacer el picking de la factura ${f.n_factura}, OC ${oc}`}
+                                title={hecho ? `La factura ${f.n_factura} ya tiene ${nro ? `el picking #${nro}` : 'un picking anterior'} en la OC ${oc} (ver)` : `Hacer el picking de la factura ${f.n_factura}, OC ${oc}`}
                                 className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/50 ${
-                                  nro
+                                  hecho
                                     ? 'border-sky-500/40 bg-sky-500/10 text-sky-500 hover:bg-sky-500/20'
                                     // Violeta y no verde: el verde se leía como "todo ok, se pueden abrir los bultos"
                                     : 'border-violet-500/40 bg-violet-500/10 text-violet-400 hover:bg-violet-500/20'
                                 }`}
                               >
-                                {nro ? <CheckCircle2 size={11} aria-hidden /> : <PackageCheck size={11} aria-hidden />}
-                                {nro ? `Picking #${nro}${etiqueta}` : `Picking${etiqueta}`}
+                                {hecho ? <CheckCircle2 size={11} aria-hidden /> : <PackageCheck size={11} aria-hidden />}
+                                {hecho ? (nro ? `Picking #${nro}${etiqueta}` : `Picking previo${etiqueta}`) : `Picking${etiqueta}`}
                               </Link>
                             )
                           })}
