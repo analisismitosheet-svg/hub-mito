@@ -527,6 +527,10 @@ ${avisoNo}` : ''}
   const factura = facturasPedido.find((f) => f.clave === facturaSel) ?? null
   const pickingDeFactura = factura ? pickingEnOc(factura, sel, numeroSel) : null
   const facturaOk = !!factura && !pickingDeFactura && !factura.controlada
+  // Sin factura válida no se cuenta nada: si la factura ya tiene picking la pantalla queda solo para ver
+  useEffect(() => {
+    if (!facturaOk) setBorrador({})
+  }, [facturaOk])
 
   // Modo por artículo: facturas sin controlar (se reparte solo entre las OC de la factura elegida)
   const cargarFacturasArt = useCallback(async () => {
@@ -1252,9 +1256,11 @@ Se recalcula lo recibido de esta OC.`)) return
                         {e.anulado && ' · anulado'}
                       </button>
                     ))}
-                    <span className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-500">
-                      <strong>Picking #{nroSiguiente}</strong> · en curso · <strong className="tabular-nums">{n0.format(tot.este)} u.</strong>
-                    </span>
+                    {facturaOk && (
+                      <span className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-500">
+                        <strong>Picking #{nroSiguiente}</strong> · en curso · <strong className="tabular-nums">{n0.format(tot.este)} u.</strong>
+                      </span>
+                    )}
                   </div>
                   {(() => {
                     const e = entregas.find((x) => x.id === entregaAbierta)
@@ -1377,7 +1383,7 @@ Se recalcula lo recibido de esta OC.`)) return
                 </div>
 
                 {/* Factura del picking: obligatoria y una sola vez por OC */}
-                <div className={`rounded-2xl border p-3 ${facturaOk ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-amber-500/40 bg-amber-500/5'}`}>
+                <div className={`rounded-2xl border p-3 ${facturaOk ? 'border-emerald-500/40 bg-emerald-500/5' : pickingDeFactura ? 'border-sky-500/50 bg-sky-500/10' : 'border-amber-500/40 bg-amber-500/5'}`}>
                   <label className="block">
                     <span className="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-sub">
                       <Receipt size={13} className="text-sky-500" aria-hidden /> Factura del picking (Recepción INDO)
@@ -1437,14 +1443,14 @@ Se recalcula lo recibido de esta OC.`)) return
                   <span className="ml-auto flex gap-1.5">
                     <button
                       onClick={limpiarBorrador}
-                      disabled={!hayBorrador}
+                      disabled={!hayBorrador || !facturaOk}
                       className="btn-press inline-flex h-9 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-xs font-medium text-sub transition hover:text-ink disabled:opacity-40"
                     >
                       <RotateCcw size={13} aria-hidden /> Limpiar picking
                     </button>
                     <button
                       onClick={cargarTodoElSaldo}
-                      disabled={!items.some((i) => saldoDe(i) > 0)}
+                      disabled={!facturaOk || !items.some((i) => saldoDe(i) > 0)}
                       title="Carga en este picking todo lo que falta"
                       className="btn-press inline-flex h-9 items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 text-xs font-semibold text-emerald-500 transition hover:bg-emerald-500/20 disabled:opacity-40"
                     >
@@ -1572,6 +1578,8 @@ Se recalcula lo recibido de esta OC.`)) return
                                 <td className="px-3 py-1">
                                   {g.saldo === 0 && g.este === 0 ? (
                                     <span className="mx-auto block w-fit rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-500">COMPLETO</span>
+                                  ) : !facturaOk ? (
+                                    <span className="block text-center text-sub/60">—</span>
                                   ) : (
                                     <Cantidad
                                       valor={g.este}
@@ -1587,7 +1595,7 @@ Se recalcula lo recibido de esta OC.`)) return
                                 <td className="px-3 py-1 text-center">
                                   {g.cantidad === 0 && g.cancelado > 0 ? (
                                     <span className="text-[11px] font-bold uppercase text-red-400" title="Cancelado entero: no debería ingresar">Cancelado</span>
-                                  ) : g.saldo > 0 ? (
+                                  ) : g.saldo > 0 && facturaOk ? (
                                     <Tilde completo={g.este >= g.saldo} etiqueta={g.articulo} onClick={() => tildarEste(g.variantes)} />
                                   ) : null}
                                 </td>
@@ -1616,6 +1624,8 @@ Se recalcula lo recibido de esta OC.`)) return
                                     <td className="px-3 py-1">
                                       {saldo === 0 && este === 0 ? (
                                         <span className="mx-auto block w-fit rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-500">COMPLETO</span>
+                                      ) : !facturaOk ? (
+                                        <span className="block text-center text-sub/60">—</span>
                                       ) : (
                                         <Cantidad
                                           valor={este}
@@ -1631,7 +1641,7 @@ Se recalcula lo recibido de esta OC.`)) return
                                     <td className="px-3 py-1 text-center">
                                       {i.cantidad === 0 && (i.cancelado ?? 0) > 0 ? (
                                         <span className="text-[10px] font-bold uppercase text-red-400" title="Cancelado: no debería ingresar">Cancelado</span>
-                                      ) : saldo > 0 ? (
+                                      ) : saldo > 0 && facturaOk ? (
                                         <Tilde completo={este >= saldo} etiqueta={`${i.articulo} ${i.color} ${i.talle}`} onClick={() => tildarEste([i])} />
                                       ) : null}
                                     </td>
@@ -1655,19 +1665,29 @@ Se recalcula lo recibido de esta OC.`)) return
                     </table>
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line2 bg-surface2 px-3 py-2.5">
-                    <span className="text-sm text-sub">
-                      Picking #{nroSiguiente}:{' '}
-                      <strong className="text-ink">{tot.este > 0 ? `${n0.format(tot.este)} unidades cargadas` : 'nada cargado todavía'}</strong>. Hasta que lo
-                      registres no cambia lo recibido.
-                    </span>
-                    <button
+                    {facturaOk ? (
+                      <span className="text-sm text-sub">
+                        Picking #{nroSiguiente}:{' '}
+                        <strong className="text-ink">{tot.este > 0 ? `${n0.format(tot.este)} unidades cargadas` : 'nada cargado todavía'}</strong>. Hasta que lo
+                        registres no cambia lo recibido.
+                      </span>
+                    ) : (
+                      <span className="text-sm font-medium text-sky-500">
+                        {pickingDeFactura
+                          ? `Solo para ver: la factura ${factura?.n_factura} ya tiene ${textoPicking(pickingDeFactura)} en esta OC.`
+                          : factura?.controlada
+                            ? 'Solo para ver: la factura ya está controlada.'
+                            : 'Elegí la factura arriba para poder cargar el picking.'}
+                      </span>
+                    )}
+                    {facturaOk && <button
                       onClick={() => void registrar()}
                       disabled={!hayBorrador || registrando || !facturaOk}
                       title={facturaOk ? undefined : 'Elegí una factura sin picking en esta OC'}
                       className="btn-press inline-flex h-10 items-center gap-1.5 rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-40"
                     >
                       {registrando ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Check size={15} aria-hidden />} Registrar picking #{nroSiguiente}
-                    </button>
+                    </button>}
                   </div>
                 </div>
               </div>
