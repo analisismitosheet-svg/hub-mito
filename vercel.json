@@ -12,7 +12,7 @@
       "maxDuration": 60
     },
     "api/chat.ts": {
-      "maxDuration": 60
+      "maxDuration": 300
     },
     "api/informe.ts": {
       "maxDuration": 60

@@ -347,7 +347,8 @@ async function vueltaOllama(mensajes: Mensaje[], token: string): Promise<Bloque[
         function: { name: h.nombre, description: h.descripcion, parameters: h.parametros },
       })),
     }),
-    signal: AbortSignal.timeout(50_000),
+    // Ollama en CPU es lento: hasta 4 min por vuelta (la función tiene 300 s en vercel.json, plan Pro)
+    signal: AbortSignal.timeout(240_000),
   })
   const cuerpo = (await r.json().catch(() => null)) as {
     mensaje?: { content?: string; tool_calls?: Array<{ function: { name: string; arguments: unknown } }> }
