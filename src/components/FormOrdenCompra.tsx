@@ -7,6 +7,7 @@ import {
   cargarSubtipos, netoItem, separarVariante, subirArchivo, totalItems, variantesArticulo, type SubtipoOc,
   type ArticuloBusqueda, type DatosProveedor, type ItemDragon, type OrdenCompra, type ProveedorDragon, type Variantes,
 } from '@/lib/ordenesCompra'
+import { generarPdfOc, nombreArchivoPdf } from '@/lib/ocPdf'
 
 /* Alta / edición de una OC. Con «Esta OC va a Dragon» se habilita el pedido de compra
    (base, proveedor y artículos de Dragon) y el monto bruto pasa a ser el total con IVA. */
@@ -60,6 +61,25 @@ function Buscador<T>({ valor, onTexto, buscar, onElegir, placeholder, className 
         </div>
       )}
     </div>
+  )
+}
+
+/** % con decimales y coma (17,5). Guarda el texto mientras se escribe: si se convertía a número en cada tecla, «17,» volvía a «17». */
+function InputPorcentaje({ valor, onCambio, disabled, className }: { valor: number; onCambio: (v: number) => void; disabled?: boolean; className: string }) {
+  const aTexto = (v: number) => (v ? String(v).replace('.', ',') : '')
+  const [txt, setTxt] = useState(() => aTexto(valor))
+  // Si el valor cambia desde afuera (otro renglón, recarga), se muestra ese
+  useEffect(() => { setTxt((t) => (Number(t.replace(',', '.')) || 0) === valor ? t : aTexto(valor)) }, [valor])
+  return (
+    <input value={txt} disabled={disabled} inputMode="decimal" placeholder="0" className={className}
+      onChange={(e) => {
+        const t = e.target.value.replace(/[^\d.,]/g, '').replace('.', ',')
+        if (!/^\d{0,3}(,\d{0,4})?$/.test(t)) return
+        const n = Math.min(Number(t.replace(',', '.')) || 0, 100)
+        setTxt(n === 100 && t.length > 3 ? '100' : t)
+        onCambio(n)
+      }}
+      onBlur={() => setTxt(aTexto(valor))} />
   )
 }
 
@@ -306,6 +326,36 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
     }
   }
 
+  /** PDF del pedido con el formato de Dragon: se descarga y queda subido como archivo de la OC */
+  const puedePdf = f.dragon && cargados.some((x) => Number(x.cantidad) > 0)
+  const [pdfGenerado, setPdfGenerado] = useState<string | null>(null)
+  const generarPdf = async () => {
+    setGuardando('pdf')
+    setError(null)
+    try {
+      const datos = {
+        numero: oc?.numero ?? null, proveedor: f.dragon_proveedor_nombre || f.proveedor, proveedor_cuit: f.proveedor_cuit, contacto: f.contacto,
+        telefono: f.telefono, mail: f.mail, fecha_compra: f.fecha_compra, fecha_entrega: f.fecha_entrega, base: f.dragon_base,
+        condicion: f.dragon_condicion, motivo: f.dragon_motivo, observacion: f.observacion, descuentoGeneral: descGeneral, items, variantes,
+      }
+      const blob = await generarPdfOc(datos)
+      const nombre = nombreArchivoPdf(datos)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = nombre
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 10_000)
+      const path = await subirArchivo(oc ? String(oc.numero) : `nueva-${Date.now()}`, new File([blob], nombre, { type: 'application/pdf' }))
+      set('archivo_path', path)
+      setPdfGenerado(path)
+    } catch (e) {
+      setError(`No se pudo generar el PDF: ${(e as Error).message}`)
+    } finally {
+      setGuardando(null)
+    }
+  }
+
   const seg = (opciones: string[], valor: string, cambiar: (v: string) => void, deshabilitado = false) => (
     <div className="flex flex-wrap gap-1.5">
       {opciones.map((o) => (
@@ -389,9 +439,15 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
                 {guardando === 'archivo' ? <Loader2 size={14} className="animate-spin" /> : <Paperclip size={14} />} {f.archivo_path ? 'Cambiar' : 'Subir'}
                 <input type="file" className="hidden" accept="application/pdf,image/*,.xlsx,.xls" onChange={(e) => void subir(e.target.files?.[0])} />
               </label>
+              <button type="button" disabled={!!guardando || !puedePdf} onClick={() => void generarPdf()}
+                title={puedePdf ? 'Arma el PDF del pedido de compra como el de Dragon, lo descarga y lo deja como archivo de la OC' : 'Tildá «Esta OC va a Dragon» y cargá los artículos'}
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-teal-500/40 bg-surface2 px-3 text-sm text-teal-200 hover:bg-line disabled:opacity-50">
+                {guardando === 'pdf' ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />} Generar PDF
+              </button>
               <input value={f.archivo_url} onChange={(e) => set('archivo_url', e.target.value)} placeholder="…o pegá el enlace de Drive" className={campoCls} />
             </div>
-            {f.archivo_path && <p className="mt-1 text-xs text-lime-300">✓ Archivo subido</p>}</div>
+            {f.archivo_path && <p className="mt-1 text-xs text-lime-300">✓ {pdfGenerado && f.archivo_path === pdfGenerado ? 'PDF generado y subido' : 'Archivo subido'}</p>}
+            {!puedePdf && <p className="mt-1 text-xs text-sub">«Generar PDF» arma el pedido como Dragon con los artículos de abajo.</p>}</div>
 
           {/* ---- Dragon ---- */}
           <p className="mt-2 border-t border-line pt-3 text-[10.5px] font-bold uppercase tracking-wide text-teal-300 sm:col-span-2">DragonFish</p>
@@ -414,8 +470,7 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
                     {LISTAS_DRAGON.map(([c, d]) => <option key={c} value={c}>{c} · {d}</option>)}
                   </select></div>
                 <div><span className={lbl}>% Descuento general</span>
-                  <input value={f.dragon_descuento || ''} disabled={bloqueadoDragon} inputMode="decimal" placeholder="0"
-                    onChange={(e) => set('dragon_descuento', Math.min(Math.max(Number(e.target.value.replace(',', '.')) || 0, 0), 100))} className={campoCls} />
+                  <InputPorcentaje valor={f.dragon_descuento} disabled={bloqueadoDragon} onCambio={(v) => set('dragon_descuento', v)} className={campoCls} />
                   <p className="mt-1 text-xs text-sub">Sobre el total del pedido. Cada artículo puede tener además su «% Desc.».</p></div>
                 <div className="sm:col-span-2"><span className={lbl}>Proveedor en Dragon</span>
                   <Buscador<ProveedorDragon> valor={provDragonTxt} buscar={buscarProvDragon} placeholder="Buscá por código o nombre…"
@@ -468,7 +523,7 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
                           </td>
                           <td className="p-1"><input value={it.cantidad} disabled={bloqueadoDragon} inputMode="numeric" onChange={(e) => setItem(i, { cantidad: Number(e.target.value) || 0 })} className="h-8 w-full rounded-lg border border-line bg-surface2 px-2 text-xs text-ink" /></td>
                           <td className="p-1"><input value={it.precio} disabled={bloqueadoDragon} inputMode="decimal" onChange={(e) => setItem(i, { precio: Number(e.target.value.replace(',', '.')) || 0 })} className="h-8 w-full rounded-lg border border-line bg-surface2 px-2 text-xs text-ink" /></td>
-                          <td className="p-1"><input value={it.descuento || ''} disabled={bloqueadoDragon} inputMode="decimal" placeholder="0" onChange={(e) => setItem(i, { descuento: Math.min(Math.max(Number(e.target.value.replace(',', '.')) || 0, 0), 100) })} className="h-8 w-full rounded-lg border border-line bg-surface2 px-2 text-xs text-ink" /></td>
+                          <td className="p-1"><InputPorcentaje valor={it.descuento ?? 0} disabled={bloqueadoDragon} onCambio={(v) => setItem(i, { descuento: v })} className="h-8 w-full rounded-lg border border-line bg-surface2 px-2 text-xs text-ink" /></td>
                           <td className="p-1.5 text-right tabular-nums">{pesos(netoItem(it))}</td>
                           <td className="p-1 text-right">
                             {!bloqueadoDragon && (
@@ -515,7 +570,7 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
                 <div className="ml-auto grid grid-cols-[auto_auto] gap-x-4 text-right text-xs text-sub">
                   <span>Unidades</span><b className="text-ink">{totUnidades.toLocaleString('es-AR')} ({totArticulos} art.)</b>
                   <span>Subtotal</span><b className="text-ink">{pesos(subtotal)}</b>
-                  {descGeneral > 0 && <><span>Descuento {descGeneral} %</span><b className="text-ink">−{pesos(montoDescGeneral)}</b></>}
+                  {descGeneral > 0 && <><span>Descuento {descGeneral.toLocaleString('es-AR')} %</span><b className="text-ink">−{pesos(montoDescGeneral)}</b></>}
                   <span>IVA 21 %</span><b className="text-ink">{pesos((subtotal - montoDescGeneral) * IVA)}</b>
                   <span className="text-sm">Total Dragon</span><b className="text-sm text-ink">{pesos(totalDragon)}</b>
                 </div>
