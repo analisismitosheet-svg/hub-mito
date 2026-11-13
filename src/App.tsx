@@ -97,6 +97,7 @@ const ReposicionEscaneo = lazy(() => import('@/pages/ReposicionEscaneo'))
 const StockValorizado = lazy(() => import('@/pages/StockValorizado'))
 const RepoDiariaMito = lazy(() => import('@/pages/RepoDiariaMito'))
 const VentasWeb = lazy(() => import('@/pages/VentasWeb'))
+const ChatIa = lazy(() => import('@/pages/ChatIa'))
 
 export default function App() {
   return (
@@ -802,6 +803,14 @@ export default function App() {
               <ProtectedRoute>
                 <ComingSoon title="Reportes" />
               </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/chat-ia"
+            element={
+              <AdminRoute>
+                <ChatIa />
+              </AdminRoute>
             }
           />
           <Route

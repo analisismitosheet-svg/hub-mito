@@ -60,6 +60,7 @@ import {
   Inbox,
   Tags,
   ReceiptText,
+  Bot,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
@@ -801,6 +802,18 @@ export const APPS: AppDef[] = [
     target: '/sistemas/franquicias',
     color: '#0891b2',
     permiso: 'mayorista.franquicias.view',
+  },
+  {
+    id: 'chat-ia',
+    areaId: 'sistemas',
+    title: 'Chat IA',
+    description: 'Preguntale a la IA por stock, ventas, contador, pedidos, OC y transferencias.',
+    icon: Bot,
+    kind: 'internal',
+    target: '/chat-ia',
+    color: '#9333ea',
+    // permiso que no se asigna a nadie: solo lo ven los administradores
+    permiso: 'chat_ia.view',
   },
   {
     id: 'informes',
