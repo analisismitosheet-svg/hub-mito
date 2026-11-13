@@ -7,6 +7,7 @@
  *   GET /api/sql/catalogo?...                  -> explorador de bases/objetos (solo admins)
  *   GET /api/sql/stock-valorizado[?forzar=1]   -> stock valorizado a costo por sucursal (Administradores)
  *   GET /api/sql/stock-valorizado?base=...     -> los artículos de esa sucursal (el desplegable)
+ *   GET /api/sql/repo-diaria[?fechas=&forzar=1] -> repo diaria desde el DWH (Compras; responde "calculando" hasta tenerla)
  *   GET /api/sql/pedido-venta-items?codigo=    -> renglones de un pedido de venta viejo, en vivo de Dragonfish
  *   GET /api/sql/dragon-variantes?base=&articulo= -> colores y talles de un artículo en Dragon (Órdenes de compras)
  *   GET /api/sql/dragon-articulos?base=&q=|codigos= -> artículos en vivo de Dragon (buscador e importar txt de Órdenes de compras)
@@ -28,6 +29,7 @@ import vista from '../../src/lib/sqlVista.js'
 import status from '../../src/lib/sqlStatus.js'
 import catalogo from '../../src/lib/sqlCatalogo.js'
 import stockValorizado from '../../src/lib/stockValorizadoApi.js'
+import repoDiaria from '../../src/lib/repoDiariaApi.js'
 import pedidoVentaItems from '../../src/lib/pedidoVentaItemsApi.js'
 import dragonVariantes, { dragonArticulos } from '../../src/lib/dragonVariantesApi.js'
 
@@ -89,6 +91,7 @@ export default async function handler(req: Req, res: Res) {
   if (ruta === 'status') return status(req, res)
   if (ruta === 'catalogo') return catalogo(req, res)
   if (ruta === 'stock-valorizado') return stockValorizado(req, res)
+  if (ruta === 'repo-diaria') return repoDiaria(req, res)
   if (ruta === 'pedido-venta-items') return pedidoVentaItems(req, res)
   if (ruta === 'dragon-variantes') return dragonVariantes(req, res)
   if (ruta === 'dragon-articulos') return dragonArticulos(req, res)

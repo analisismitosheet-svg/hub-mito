@@ -667,6 +667,18 @@ export const APPS: AppDef[] = [
     permiso: 'transferencias.view',
   },
   {
+    // Antes: TRANSFER.pbix + repo_diaria.py. Ahora en vivo del DWH (Puente SQL).
+    id: 'repo-diaria-mito',
+    areaId: 'compras',
+    title: 'Repo diaria',
+    description: 'Reposición de MITO a los locales con la venta de ayer, sin actualizar el PBI.',
+    icon: PackageCheck,
+    kind: 'internal',
+    target: '/compras/repo-diaria',
+    color: '#0ea5e9',
+    permiso: 'transferencias.import',
+  },
+  {
     id: 'pedidos-compra',
     areaId: 'compras',
     areaIds: ['compras', 'deposito'],

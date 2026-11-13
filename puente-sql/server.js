@@ -33,6 +33,11 @@
  *                   scripts/sync-pedidos-venta.js, últimos 7 días)
  *   POST /          body: { accion: 'items_pedido_venta', codigo } -> [{ linea, articulo, ... }]
  *                   (renglones de un pedido de venta, en vivo de Dragonfish: los viejos ya no se copian)
+ *   POST /          body: { accion: 'repo_diaria', fechas?, forzar? } -> { estado: 'calculando' } | { estado: 'listo', filas, resumen, ... }
+ *                   (Compras > Repo diaria: sql/repo-diaria.sql + repo-diaria.js; stock MITO real = físico - comprometido)
+ *   POST /          body: { accion: 'repo_diaria_dragon', modo: 'revisar'|'cargar'|'estado', fechas, foto, locales?, confirmo? }
+ *                   -> { carga: { obs, locales: [{ cliente, unidades, estado, numero }] } }
+ *                   (carga la repo como pedidos de venta VTD en DRAGONFISH_MITO por la API, uno por local)
  *   POST /          body: { accion: 'stock_valorizado', forzar? } -> { bases, articulos, costo, calculado }
  *                   (Administradores > Stock valorizado: sql/stock-valorizado.sql contra el
  *                    servidor principal, recorre todas las bases DRAGONFISH_*; cache 10 min)
@@ -840,6 +845,219 @@ async function stockValorizadoDeBase(base) {
 }
 
 
+/* ---- Repo diaria (Compras > Repo diaria del hub) ----------------------------------
+ * Reemplaza a TRANSFER.pbix + repo_diaria.py: lee el DWH en vivo (sql/repo-diaria.sql)
+ * y reparte el stock REAL de MITO (físico - comprometido) con repo-diaria.js.
+ * La lectura tarda ~45 s (la vista de ventas no filtra por fecha), más de lo que
+ * aguanta una función de Vercel: se lanza por detrás y el hub vuelve a preguntar
+ * hasta que está ("estado: calculando" -> "listo"). La foto se reusa 5 minutos
+ * para cambiar de día sin volver al SQL; "Actualizar" (forzar) saca una nueva.
+ */
+const repoDiaria = require('./repo-diaria')
+const SCRIPT_REPO_DIARIA = path.join(__dirname, 'sql', 'repo-diaria.sql')
+const REPO_DIARIA_CACHE_MS = 5 * 60_000
+const REPO_DIARIA_DIAS = 12
+let fotoRepo = { en: 0, foto: null, segundos: null, error: null }
+let fotoRepoEnCurso = null
+let fotoRepoInicio = 0
+
+/** 'YYYY-MM-DD' en la hora de esta PC (Argentina), corrido `menos` días. */
+function diaLocal(menos = 0) {
+  const d = new Date()
+  d.setDate(d.getDate() - menos)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function lanzarFotoRepo() {
+  if (fotoRepoEnCurso) return
+  fotoRepoInicio = Date.now()
+  fotoRepoEnCurso = (async () => {
+    if (!fs.existsSync(SCRIPT_REPO_DIARIA)) throw new Error('Falta sql/repo-diaria.sql junto a server.js')
+    const t0 = Date.now()
+    const pool = await conexionLarga()
+    let r
+    try {
+      r = await pool
+        .request()
+        .input('desde', sql.VarChar(10), diaLocal(REPO_DIARIA_DIAS))
+        .query(fs.readFileSync(SCRIPT_REPO_DIARIA, 'utf8'))
+    } finally {
+      await pool.close().catch(() => {})
+    }
+    fotoRepo = {
+      en: Date.now(),
+      foto: repoDiaria.prepararFoto(r.recordsets),
+      segundos: Math.round((Date.now() - t0) / 100) / 10,
+      error: null,
+    }
+  })()
+    .catch((e) => {
+      console.error('[puente] repo diaria:', e.message)
+      fotoRepo = { ...fotoRepo, error: e.message }
+    })
+    .finally(() => {
+      fotoRepoEnCurso = null
+    })
+}
+
+/** body: { fechas?: ['YYYY-MM-DD'], forzar?: bool } */
+function accionRepoDiaria(body) {
+  const calculando = () => ({ estado: 'calculando', desde: new Date(fotoRepoInicio).toISOString() })
+  if (fotoRepoEnCurso) return calculando()
+
+  if (fotoRepo.error) {
+    const error = fotoRepo.error
+    fotoRepo = { ...fotoRepo, error: null }
+    throw new Error(error)
+  }
+
+  const fresca = fotoRepo.foto && Date.now() - fotoRepo.en < REPO_DIARIA_CACHE_MS
+  // forzar = foto nueva, salvo que la última tenga menos de 20 s (doble clic / la que se acaba de pedir)
+  const recienSacada = fotoRepo.foto && Date.now() - fotoRepo.en < 20_000
+  if (!fresca || (body?.forzar === true && !recienSacada)) {
+    lanzarFotoRepo()
+    return calculando()
+  }
+
+  const fechas = Array.isArray(body?.fechas) ? body.fechas.filter((f) => /^\d{4}-\d{2}-\d{2}$/.test(String(f))) : []
+  const repo = repoDiaria.calcularRepo(fotoRepo.foto, { fechas, hoy: diaLocal() })
+  return {
+    estado: 'listo',
+    foto: new Date(fotoRepo.en).toISOString(),
+    segundos: fotoRepo.segundos,
+    ...repo,
+  }
+}
+
+/* ---- Repo diaria → Dragon: un pedido de venta (motivo VTD) por local ----------------
+ * Lo mismo que se hacía importando la hoja IMPORTAR DRAGON: cliente = CLIENTE REPO,
+ * motivo VTD, observación "REPO DIARIA (<días>)", lista la del último pedido VTD del
+ * local (LISTA1; LISTA2 en CFR4 / R9D / VCPD). El precio lo pone Dragon.
+ * Cuidados:
+ *  - Se carga EXACTAMENTE la repo que el usuario vio (body.foto = hora de la foto);
+ *    si la foto cambió desde entonces, no carga y pide revisar de nuevo.
+ *  - Antes de cargar se mira en DRAGONFISH_MITO qué locales ya tienen un pedido VTD con
+ *    la misma observación: esos no se vuelven a cargar (sirve también para reintentar).
+ *  - Una carga a la vez, por detrás; el hub pregunta el avance (modo 'estado').
+ *  - PUENTE_DRAGON_EN_SECO=1 en .env: arma todo pero NO llama a la API de Dragon.
+ */
+const dragon = require('./scripts/dragon')
+const LISTA_REPO = { CFR4: 'LISTA2', R9D: 'LISTA2', VCPD: 'LISTA2' }
+const enSecoDragon = () => /^(1|true|si|sí)$/i.test(String(process.env.PUENTE_DRAGON_EN_SECO ?? ''))
+let cargaDragon = null
+
+/** Pedidos VTD ya cargados con esta observación + la última lista usada por local. */
+async function pedidosVtdEnDragon(obs) {
+  const pool = await conexionLarga()
+  try {
+    const r = await pool
+      .request()
+      .input('obs', sql.VarChar(250), obs)
+      .query(`
+        SELECT RTRIM(FPERSON) AS cliente, MAX(FNUMCOMP) AS numero
+          FROM DRAGONFISH_MITO.ZooLogic.COMPROBANTEV
+         WHERE FACTTIPO = 23 AND RTRIM(MOTIVO) = 'VTD' AND FFCH >= DATEADD(day, -30, GETDATE())
+           AND RTRIM(CAST(FOBS AS varchar(250))) = @obs
+         GROUP BY RTRIM(FPERSON);
+        SELECT cliente, lista FROM (
+          SELECT RTRIM(FPERSON) AS cliente, RTRIM(CODLISTA) AS lista,
+                 ROW_NUMBER() OVER (PARTITION BY RTRIM(FPERSON) ORDER BY FFCH DESC, FNUMCOMP DESC) AS n
+            FROM DRAGONFISH_MITO.ZooLogic.COMPROBANTEV
+           WHERE FACTTIPO = 23 AND RTRIM(MOTIVO) = 'VTD' AND FFCH >= DATEADD(day, -60, GETDATE())) x
+         WHERE n = 1;`)
+    return {
+      existentes: new Map(r.recordsets[0].map((f) => [String(f.cliente).toUpperCase(), f.numero])),
+      listas: new Map(r.recordsets[1].map((f) => [String(f.cliente).toUpperCase(), f.lista])),
+    }
+  } finally {
+    await pool.close().catch(() => {})
+  }
+}
+
+/** Los pedidos a cargar (uno por local) con la foto que el usuario está viendo. */
+function planCargaDragon(body) {
+  if (!fotoRepo.foto) throw new Error('No hay repo calculada: tocá Actualizar.')
+  if (String(body?.foto ?? '') !== new Date(fotoRepo.en).toISOString()) {
+    throw new Error('La repo se volvió a calcular desde que la abriste: tocá Actualizar, revisala y cargá de nuevo.')
+  }
+  const fechas = Array.isArray(body?.fechas) ? body.fechas.filter((f) => /^\d{4}-\d{2}-\d{2}$/.test(String(f))) : []
+  const repo = repoDiaria.calcularRepo(fotoRepo.foto, { fechas, hoy: diaLocal() })
+  const pedir = Array.isArray(body?.locales) && body.locales.length ? new Set(body.locales.map((s) => String(s).toUpperCase())) : null
+  const porLocal = new Map()
+  for (const f of repo.filas) {
+    if (pedir && !pedir.has(f.cliente)) continue
+    if (!porLocal.has(f.cliente)) porLocal.set(f.cliente, [])
+    porLocal.get(f.cliente).push({ art: f.articulo, color: f.color, talle: f.talle, cantidad: f.a_reponer })
+  }
+  const locales = repoDiaria.RECEPTORES_ORDEN.filter((c) => porLocal.has(c)).map((c) => {
+    const items = porLocal.get(c)
+    return { cliente: c, renglones: items.length, unidades: items.reduce((a, i) => a + i.cantidad, 0), items }
+  })
+  return { obs: `REPO DIARIA (${repo.fecha_str})`, fecha_str: repo.fecha_str, dias: repo.dias, locales }
+}
+
+const vistaCarga = (c) =>
+  c && {
+    obs: c.obs,
+    fecha_str: c.fecha_str,
+    en_curso: !!c.enCurso,
+    en_seco: !!c.enSeco,
+    inicio: c.inicio ? new Date(c.inicio).toISOString() : null,
+    fin: c.fin ? new Date(c.fin).toISOString() : null,
+    locales: c.locales.map(({ items, ...l }) => l),
+  }
+
+/** body: { modo: 'revisar' | 'cargar' | 'estado', fechas, foto, locales?, confirmo? } */
+async function accionRepoDragon(body) {
+  const modo = String(body?.modo ?? '')
+  if (modo === 'estado') return { carga: vistaCarga(cargaDragon) }
+  if (modo !== 'revisar' && modo !== 'cargar') throw new Error('Modo inválido')
+  if (modo === 'cargar' && cargaDragon?.enCurso) throw new Error('Ya hay una carga a Dragon en curso: esperá a que termine.')
+
+  const plan = planCargaDragon(body)
+  if (!plan.locales.length) throw new Error('No hay nada para cargar.')
+  const { existentes, listas } = await pedidosVtdEnDragon(plan.obs)
+  for (const l of plan.locales) {
+    l.lista = listas.get(l.cliente) || LISTA_REPO[l.cliente] || 'LISTA1'
+    l.numero = existentes.get(l.cliente) ?? null
+    l.estado = l.numero ? 'ya_estaba' : 'pendiente'
+    l.error = null
+  }
+  if (modo === 'revisar') return { carga: vistaCarga({ ...plan, enSeco: enSecoDragon() }) }
+
+  // El hub repite la observación que mostró en la confirmación: si no coincide, no se carga nada
+  if (String(body?.confirmo ?? '') !== plan.obs) throw new Error('La confirmación no coincide con la repo: revisala de nuevo.')
+  const carga = { ...plan, enCurso: true, enSeco: enSecoDragon(), inicio: Date.now(), fin: null }
+  cargaDragon = carga
+  ;(async () => {
+    for (const l of carga.locales) {
+      if (l.estado !== 'pendiente') continue
+      l.estado = 'cargando'
+      try {
+        const r = await dragon.crearPedido({
+          cliente: l.cliente, lista: l.lista, motivo: 'VTD', obs: carga.obs, items: l.items, soloArmar: carga.enSeco,
+        })
+        if (r.ok) {
+          l.estado = carga.enSeco ? 'en_seco' : 'cargado'
+          l.numero = r.numero ?? r.codigo ?? null
+        } else {
+          l.estado = 'error'
+          l.error = r.detalle
+        }
+      } catch (e) {
+        l.estado = 'error'
+        l.error = e.message
+      }
+      console.log(`[puente] repo → Dragon ${l.cliente}: ${l.estado}${l.numero ? ` N° ${l.numero}` : ''}${l.error ? ` ${l.error}` : ''}`)
+    }
+  })().finally(() => {
+    carga.enCurso = false
+    carga.fin = Date.now()
+  })
+  return { carga: vistaCarga(carga) }
+}
+
+
 /* ---- Pedidos de compra / venta: copia forzada desde el hub (una a la vez por script) ---- */
 const syncEnCurso = new Map()
 function correrSync(script) {
@@ -955,6 +1173,24 @@ const server = http.createServer(async (req, res) => {
     // Los artículos de una sola base (el desplegable de la tabla por sucursal)
     if (body?.accion === 'stock_valorizado_base') {
       return enviar(res, 200, await stockValorizadoDeBase(body?.base))
+    }
+
+    // Repo diaria: reposición de MITO a los locales con la venta del día anterior
+    if (body?.accion === 'repo_diaria') {
+      try {
+        return enviar(res, 200, accionRepoDiaria(body))
+      } catch (e) {
+        return enviar(res, 400, { error: e.message })
+      }
+    }
+
+    // Repo diaria → pedidos de venta VTD en Dragon (uno por local)
+    if (body?.accion === 'repo_diaria_dragon') {
+      try {
+        return enviar(res, 200, await accionRepoDragon(body))
+      } catch (e) {
+        return enviar(res, 400, { error: e.message })
+      }
     }
 
     vista = String(body?.vista ?? '')

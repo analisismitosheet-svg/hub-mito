@@ -24,11 +24,12 @@ function fechaWcf(iso) {
   return `/Date(${Date.UTC(y, m - 1, d, 3)}-0300)/`
 }
 
-async function crearPedido({ cliente, lista = 'LISTA2', obs = '', items, fecha }) {
-  if (!ID || !TOKEN) throw new Error('Faltan DRAGON_API_IDCLIENTE / DRAGON_API_TOKEN en puente-sql/.env')
+async function crearPedido({ cliente, lista = 'LISTA2', obs = '', items, fecha, motivo = '', soloArmar = false }) {
+  if (!soloArmar && (!ID || !TOKEN)) throw new Error('Faltan DRAGON_API_IDCLIENTE / DRAGON_API_TOKEN en puente-sql/.env')
   const cuerpo = {
     Cliente: cliente,
     ListaDePrecios: lista,
+    ...(motivo ? { Motivo: motivo } : {}),
     Fecha: fechaWcf(fecha || new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10)),
     Obs: obs.slice(0, 250),
     FacturaDetalle: items.map((i, n) => ({
@@ -39,6 +40,8 @@ async function crearPedido({ cliente, lista = 'LISTA2', obs = '', items, fecha }
       Cantidad: Number(i.cantidad),
     })),
   }
+  // Prueba en seco: devuelve el cuerpo que se mandaría, sin tocar Dragon
+  if (soloArmar) return { ok: true, status: 0, numero: null, codigo: null, detalle: 'en seco', cuerpo }
   const r = await fetch(`${URL_API}/Pedido/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', IdCliente: ID, Authorization: TOKEN, BaseDeDatos: BASE },

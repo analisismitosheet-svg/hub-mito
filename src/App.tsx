@@ -94,6 +94,7 @@ const TrackingKm = lazy(() => import('@/pages/TrackingKm'))
 const OrdenesCompra = lazy(() => import('@/pages/OrdenesCompra'))
 const ReposicionEscaneo = lazy(() => import('@/pages/ReposicionEscaneo'))
 const StockValorizado = lazy(() => import('@/pages/StockValorizado'))
+const RepoDiariaMito = lazy(() => import('@/pages/RepoDiariaMito'))
 const VentasWeb = lazy(() => import('@/pages/VentasWeb'))
 
 export default function App() {
@@ -165,6 +166,16 @@ export default function App() {
             element={
               <PermissionRoute permiso="transferencias.view">
                 <Transferencias />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/compras/repo-diaria"
+            element={
+              <PermissionRoute permiso="transferencias.import">
+                <Suspense fallback={null}>
+                  <RepoDiariaMito />
+                </Suspense>
               </PermissionRoute>
             }
           />
