@@ -92,7 +92,7 @@ async function cargaDragon(req: Req, res: Res, destino: string, tokenPuente: str
   const cuerpo = (await r0.res.json().catch(() => null)) as ({ error?: string } & Record<string, unknown>) | null
   if (!r0.res.ok || !cuerpo) {
     let detalle = cuerpo?.error ?? `respuesta ${r0.res.status}`
-    if (/vista inválida|vista invalida/i.test(detalle)) detalle += ' — Puente SQL desactualizado: reiniciá puente-sql.'
+    if (/vista inv[aá]lid[ao]/i.test(detalle)) detalle += ' — Puente SQL desactualizado: reiniciá puente-sql.'
     return res.status(r0.res.status === 400 ? 400 : 502).json({ error: detalle })
   }
   return res.status(200).json(cuerpo)
@@ -140,7 +140,7 @@ export default async function handler(req: Req, res: Res) {
   if (!r0.res.ok || !cuerpo) {
     let detalle = cuerpo?.error ?? `respuesta ${r0.res.status}`
     // Un puente viejo no conoce la acción y cae en el camino de vistas
-    if (/vista inválida|vista invalida/i.test(detalle)) {
+    if (/vista inv[aá]lid[ao]/i.test(detalle)) {
       detalle += ' — Puente SQL desactualizado: reiniciá puente-sql (acción "repo_diaria").'
     }
     // 400 del puente = algo del pedido (ej. "Sin ventas para 2026-11-10"): se le muestra tal cual
