@@ -140,7 +140,7 @@ export default function RepoAutomatico({ solo }: { solo?: 'repo' | 'cascada' } =
       <p className="rounded-xl border border-sky-500/30 bg-sky-500/10 p-3 text-xs text-ink">
         El Puente SQL de la PC central revisa cada minuto. A la hora elegida saca una foto nueva del DWH y hace todo solo, sin abrir el Hub.
         {solo !== 'cascada' && 'La repo cubre los días con venta que todavía no tienen su repo en Dragon (un lunes, sábado y domingo juntos) y nunca repite un local que ya tiene el pedido. '}
-        {solo !== 'repo' && 'La cascada usa los días de la última repo cargada y los parámetros guardados en la pantalla Cascada; conviene programarla después de la repo.'}
+        {solo !== 'repo' && 'La cascada usa los días de la última repo cargada y los parámetros guardados en Transferencia diaria; conviene programarla después de la repo.'}
       </p>
       {error && <p role="alert" className="rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
 

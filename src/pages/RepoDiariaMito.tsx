@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRightLeft, CalendarDays, CheckCircle2, Download, Loader2, PackageCheck, RefreshCw, Search, Send, Shuffle, SlidersHorizontal, Store, Timer, X, XCircle } from 'lucide-react'
-import { Link } from 'react-router-dom'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import ParametrosCascada from '@/components/ParametrosCascada'
 import RepoAutomatico from '@/components/RepoAutomatico'
+import Transferencias from '@/pages/Transferencias'
 import {
   PARAMS_DEFAULT,
   bajarExcelCascada,
@@ -45,9 +45,9 @@ const diaCorto = (iso: string) =>
   new Date(`${iso}T12:00:00`).toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit', month: '2-digit' })
 
 /**
- * Dos pantallas con la misma foto del DWH:
- *   /compras/repo-diaria → modo 'repo'    (lo que manda MITO → Dragon)
- *   /compras/cascada     → modo 'cascada' (lo que faltó, entre locales → Transferencias)
+ * Dos pantallas con la misma foto del DWH, tarjetas de Reposiciones / Transferencias (TransferenciasHub):
+ *   /transferencias/reposicion-diaria    → modo 'repo'    (lo que manda MITO → Dragon)
+ *   /transferencias/transferencia-diaria → modo 'cascada' (lo que faltó, entre locales → Transferencias)
  * Cada una con su pestaña «Automático» (solo su parte de la programación).
  */
 export default function RepoDiariaMito({ modo = 'repo' }: { modo?: 'repo' | 'cascada' }) {
@@ -61,8 +61,8 @@ export default function RepoDiariaMito({ modo = 'repo' }: { modo?: 'repo' | 'cas
   const [busqueda, setBusqueda] = useState('')
   const [dragonAbierto, setDragonAbierto] = useState(false)
   /** 'principal' = la repo o la cascada (según la pantalla); 'auto' = su programación */
-  const [vistaSel, setVista] = useState<'principal' | 'auto'>('principal')
-  const vista: 'repo' | 'cascada' | 'auto' = vistaSel === 'auto' ? 'auto' : modo
+  const [vistaSel, setVista] = useState<'principal' | 'lotes' | 'auto'>('principal')
+  const vista: 'repo' | 'cascada' | 'lotes' | 'auto' = vistaSel === 'principal' ? modo : vistaSel
   const vivo = useRef(true)
   const pedido = useRef(0)
 
@@ -149,18 +149,18 @@ export default function RepoDiariaMito({ modo = 'repo' }: { modo?: 'repo' | 'cas
         <h1 className="flex items-center gap-2 font-display text-2xl font-semibold text-ink">
           {modo === 'repo' ? (
             <>
-              <PackageCheck size={22} style={{ color: '#0ea5e9' }} aria-hidden /> Repo diaria
+              <PackageCheck size={22} style={{ color: '#0ea5e9' }} aria-hidden /> Reposición diaria
             </>
           ) : (
             <>
-              <Shuffle size={22} style={{ color: '#8b5cf6' }} aria-hidden /> Cascada entre locales
+              <Shuffle size={22} style={{ color: '#8b5cf6' }} aria-hidden /> Transferencia diaria
             </>
           )}
         </h1>
         <span className="text-xs text-sub/70">
           {modo === 'repo'
             ? 'venta del día anterior · stock MITO real = físico − comprometido'
-            : 'lo que vendió cada local y MITO no pudo mandar, pasado entre locales'}
+            : 'cascada entre locales: lo que vendió cada local y MITO no pudo mandar'}
         </span>
         {datos?.foto && (
           <span className="rounded-full border border-line bg-surface2 px-2 py-0.5 text-[11px] text-sub">
@@ -169,12 +169,6 @@ export default function RepoDiariaMito({ modo = 'repo' }: { modo?: 'repo' | 'cas
           </span>
         )}
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          <Link to={modo === 'repo' ? '/compras/cascada' : '/compras/repo-diaria'} className={btnChico}>
-            {modo === 'repo' ? <Shuffle size={13} aria-hidden /> : <PackageCheck size={13} aria-hidden />}
-            {modo === 'repo'
-              ? `Cascada${datos && esCascada(datos.cascada) ? ` · ${numero(datos.cascada.unidades)} u.` : ''}`
-              : `Repo MITO${datos ? ` · ${numero(datos.unidades)} u.` : ''}`}
-          </Link>
           {modo === 'repo' && (
           <>
           <button
@@ -247,9 +241,10 @@ export default function RepoDiariaMito({ modo = 'repo' }: { modo?: 'repo' | 'cas
             [
               'principal',
               modo === 'repo'
-                ? datos ? `Repo MITO · ${numero(datos.unidades)} u.` : 'Repo MITO'
-                : 'Cascada', // las unidades cambian con los parámetros: van en las tarjetas
+                ? datos ? `Reposición · ${numero(datos.unidades)} u.` : 'Reposición'
+                : 'Transferencia', // las unidades cambian con los parámetros: van en las tarjetas
             ],
+            ...(modo === 'cascada' ? ([['lotes', 'Lotes en Transferencias']] as const) : []),
             ['auto', 'Automático'],
           ] as const
         ).map(([v, label]) => (
@@ -260,13 +255,15 @@ export default function RepoDiariaMito({ modo = 'repo' }: { modo?: 'repo' | 'cas
             className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 transition ${vistaSel === v ? 'bg-sky-500/15 font-semibold text-sky-500' : 'text-sub hover:text-ink'}`}
           >
             {v === 'auto' && <Timer size={14} aria-hidden />}
+            {v === 'lotes' && <ArrowRightLeft size={14} aria-hidden />}
             {label}
           </button>
         ))}
       </div>
 
       {vista === 'auto' && <RepoAutomatico solo={modo} />}
-      {datos && vista === 'cascada' && <VistaCascada datos={datos} />}
+      {vista === 'lotes' && <Transferencias embebido />}
+      {datos && vista === 'cascada' && <VistaCascada datos={datos} onVerLotes={() => setVista('lotes')} />}
 
       {datos && vista === 'repo' && (
         <div className="space-y-4 pb-6">
@@ -390,7 +387,7 @@ export default function RepoDiariaMito({ modo = 'repo' }: { modo?: 'repo' | 'cas
  * Mismas reglas que cascada_*.py (solo VENTA, sin INDOD): el donante se queda con 1,
  * dona hasta 2 por SKU, mínimo 2 u. por par donante → receptor.
  */
-function VistaCascada({ datos }: { datos: Datos }) {
+function VistaCascada({ datos, onVerLotes }: { datos: Datos; onVerLotes: () => void }) {
   const [donante, setDonante] = useState<string | null>(null)
   const [receptor, setReceptor] = useState<string | null>(null)
   const [busqueda, setBusqueda] = useState('')
@@ -564,7 +561,11 @@ function VistaCascada({ datos }: { datos: Datos }) {
         <p role="status" className={`flex flex-wrap items-center gap-2 rounded-xl border p-3 text-sm ${transf.ok ? 'border-emerald-500/30 bg-emerald-500/10 text-ink' : 'border-brand-600/30 bg-brand-600/10 text-brand-400'}`}>
           {transf.ok ? <CheckCircle2 size={15} className="text-emerald-500" aria-hidden /> : <XCircle size={15} aria-hidden />}
           {transf.texto}
-          {transf.ok && <Link to="/transferencias" className="font-semibold text-sky-500 hover:underline">Ver en Transferencias →</Link>}
+          {transf.ok && (
+            <button type="button" onClick={onVerLotes} className="font-semibold text-sky-500 hover:underline">
+              Ver en Lotes →
+            </button>
+          )}
         </p>
       )}
       <ConfirmDialog

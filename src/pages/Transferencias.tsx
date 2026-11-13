@@ -342,7 +342,18 @@ function Barra({ items }: { items: Item[] }) {
   )
 }
 
-export default function Transferencias() {
+/** Con `embebido` va sin Layout ni Volver: es la pestaña «Lotes» de Transferencia diaria (RepoDiariaMito). */
+function Envoltorio({ embebido, children }: { embebido: boolean; children: React.ReactNode }) {
+  if (embebido) return <>{children}</>
+  return (
+    <Layout>
+      <BackButton />
+      {children}
+    </Layout>
+  )
+}
+
+export default function Transferencias({ embebido = false }: { embebido?: boolean } = {}) {
   const { can, perfil, isAdmin } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const { crear: puedeImportar, edicionUnica } = usePermisosArea('transferencias')
@@ -842,16 +853,14 @@ export default function Transferencias() {
   const hayLotesVisibles = verTodo ? lotes.length > 0 : lotes.some((l) => (itemsPorLote.get(l.id)?.length ?? 0) > 0)
 
   return (
-    <Layout>
-      <BackButton />
-
+    <Envoltorio embebido={embebido}>
       <div className="mb-5 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="rounded-xl border p-3" style={{ color: '#d97706', backgroundColor: '#d9770624', borderColor: '#d9770640' }}>
             <ArrowRightLeft size={26} aria-hidden />
           </div>
           <div>
-            <h1 className="font-display text-2xl font-bold text-ink">Reposiciones / Transferencias</h1>
+            <h1 className="font-display text-2xl font-bold text-ink">{embebido ? 'Lotes en Transferencias' : 'Reposiciones / Transferencias'}</h1>
             <p className="text-sm text-sub">Subí el Excel; cada local marca lo que ya envió.</p>
           </div>
         </div>
@@ -1300,7 +1309,7 @@ export default function Transferencias() {
         </div>
       )}
       <ConfirmDialog open={!!confirm} message={confirm?.message ?? ''} onCancel={() => setConfirm(null)} onConfirm={() => { confirm?.onConfirm(); setConfirm(null) }} />
-    </Layout>
+    </Envoltorio>
   )
 }
 

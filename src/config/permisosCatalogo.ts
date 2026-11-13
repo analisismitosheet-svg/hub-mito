@@ -335,7 +335,7 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
     icon: Tags, color: '#c026d3', acciones: { editar: 'requerimientos.rubros' }, etiquetas: { editar: 'Crear, editar y borrar' },
   },
   {
-    id: 'mantenimiento-tareas', areaId: 'mantenimiento', titulo: 'Mis tareas', descripcion: 'Tareas programadas: empezar y terminar',
+    id: 'mantenimiento-tareas', areaId: 'arquitectura', titulo: 'Mis tareas', descripcion: 'Tareas programadas: empezar y terminar',
     icon: Wrench, color: '#64748b', acciones: { ver: 'requerimientos.tareas' },
   },
 

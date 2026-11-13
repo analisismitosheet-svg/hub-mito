@@ -21,6 +21,7 @@ import PedidosCompra from '@/pages/PedidosCompra'
 import EstadoPedidos from '@/pages/EstadoPedidos'
 import Cancelaciones from '@/pages/Cancelaciones'
 import PedidosHub from '@/pages/PedidosHub'
+import TransferenciasHub from '@/pages/TransferenciasHub'
 import PedidosVenta from '@/pages/PedidosVenta'
 import SeguimientoPedidos from '@/pages/SeguimientoPedidos'
 import CancelacionesVenta from '@/pages/CancelacionesVenta'
@@ -169,8 +170,17 @@ export default function App() {
               </PermissionRoute>
             }
           />
+          {/* Reposiciones / Transferencias: tarjetas Transferencias · Reposición diaria · Transferencia diaria */}
           <Route
-            path="/compras/repo-diaria"
+            path="/transferencias/inicio"
+            element={
+              <PermissionRoute permiso="transferencias.view">
+                <TransferenciasHub />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/transferencias/reposicion-diaria"
             element={
               <PermissionRoute permiso="transferencias.import">
                 <Suspense fallback={null}>
@@ -180,7 +190,7 @@ export default function App() {
             }
           />
           <Route
-            path="/compras/cascada"
+            path="/transferencias/transferencia-diaria"
             element={
               <PermissionRoute permiso="transferencias.import">
                 <Suspense fallback={null}>
@@ -189,6 +199,8 @@ export default function App() {
               </PermissionRoute>
             }
           />
+          <Route path="/compras/repo-diaria" element={<Navigate to="/transferencias/reposicion-diaria" replace />} />
+          <Route path="/compras/cascada" element={<Navigate to="/transferencias/transferencia-diaria" replace />} />
           <Route
             path="/compras/pedidos"
             element={
@@ -710,6 +722,14 @@ export default function App() {
               <PermissionRoute permiso="requerimientos.rubros">
                 <RequerimientosRubros />
               </PermissionRoute>
+            }
+          />
+          <Route
+            path="/arquitectura/mantenimiento"
+            element={
+              <ProtectedRoute>
+                <CarpetaArea carpetaId="arquitectura-mantenimiento" titulo="Mantenimiento" color="#64748b" />
+              </ProtectedRoute>
             }
           />
           <Route

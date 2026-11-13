@@ -1,6 +1,5 @@
 import {
   Ban,
-  Shuffle,
   Scale,
   Briefcase,
   Wallet,
@@ -135,7 +134,6 @@ export const AREAS: AreaDef[] = [
   { id: 'polo52', name: 'Polo 52', icon: Building2, accent: 'text-indigo-600', color: '#4f46e5' },
   { id: 'arquitectura', name: 'Arquitectura', icon: PencilRuler, accent: 'text-teal-600', color: '#0d9488' },
   { id: 'recepcion', name: 'Recepción', icon: Bell, accent: 'text-rose-600', color: '#e11d48' },
-  { id: 'mantenimiento', name: 'Mantenimiento', icon: Wrench, accent: 'text-slate-400', color: '#64748b' },
   { id: 'produccion', name: 'Producción', icon: Factory, accent: 'text-yellow-600', color: '#ca8a04' },
   { id: 'administradores', name: 'Administradores', icon: ShieldCheck, accent: 'text-red-600', color: '#dc2626' },
   { id: 'web', name: 'WEB', icon: Globe, accent: 'text-blue-600', color: '#2563eb' },
@@ -663,34 +661,14 @@ export const APPS: AppDef[] = [
     description: 'Subí el Excel; cada local marca lo que ya envió.',
     icon: ArrowRightLeft,
     kind: 'internal',
-    target: '/transferencias',
+    // Abre las tarjetas Transferencias / Reposición diaria / Transferencia diaria
+    // (los locales, sin transferencias.import, van directo a los lotes)
+    target: '/transferencias/inicio',
     color: '#d97706',
     permiso: 'transferencias.view',
   },
-  {
-    // Antes: TRANSFER.pbix + repo_diaria.py. Ahora en vivo del DWH (Puente SQL).
-    id: 'repo-diaria-mito',
-    areaId: 'compras',
-    title: 'Repo diaria',
-    description: 'Reposición de MITO a los locales con la venta de ayer, sin actualizar el PBI.',
-    icon: PackageCheck,
-    kind: 'internal',
-    target: '/compras/repo-diaria',
-    color: '#0ea5e9',
-    permiso: 'transferencias.import',
-  },
-  {
-    // Antes: cascada_*.py sobre el PBIX. Lo que la repo de MITO no cubrió, entre locales.
-    id: 'cascada-locales',
-    areaId: 'compras',
-    title: 'Cascada',
-    description: 'Lo que MITO no pudo reponer, pasado entre locales. Parámetros editables y carga en Transferencias.',
-    icon: Shuffle,
-    kind: 'internal',
-    target: '/compras/cascada',
-    color: '#8b5cf6',
-    permiso: 'transferencias.import',
-  },
+  // Repo diaria y Cascada: ya no tienen tarjeta propia en Compras, son tarjetas dentro de
+  // Reposiciones / Transferencias (src/pages/TransferenciasHub.tsx).
   {
     id: 'pedidos-compra',
     areaId: 'compras',
@@ -960,9 +938,21 @@ export const APPS: AppDef[] = [
     color: '#c026d3',
     permiso: 'requerimientos.rubros',
   },
+  // ===== Arquitectura: carpeta Mantenimiento (antes era un área del menú principal) =====
+  {
+    id: 'arquitectura-mantenimiento',
+    areaId: 'arquitectura',
+    title: 'Mantenimiento',
+    description: 'Arreglos programados en los locales.',
+    icon: Wrench,
+    kind: 'internal',
+    target: '/arquitectura/mantenimiento',
+    color: '#64748b',
+    permiso: 'requerimientos.tareas',
+  },
   {
     id: 'mantenimiento-tareas',
-    areaId: 'mantenimiento',
+    areaId: 'arquitectura-mantenimiento',
     areaIds: ['arquitectura-requerimientos'],
     title: 'Mis tareas',
     description: 'Arreglos programados en los locales: empezar y terminar.',
