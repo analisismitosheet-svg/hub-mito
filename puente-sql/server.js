@@ -854,6 +854,8 @@ async function stockValorizadoDeBase(base) {
  * para cambiar de día sin volver al SQL; "Actualizar" (forzar) saca una nueva.
  */
 const repoDiaria = require('./repo-diaria')
+const cascadaLocales = require('./cascada')
+const programador = require('./programador')
 const SCRIPT_REPO_DIARIA = path.join(__dirname, 'sql', 'repo-diaria.sql')
 const REPO_DIARIA_CACHE_MS = 5 * 60_000
 const REPO_DIARIA_DIAS = 12
@@ -921,12 +923,47 @@ function accionRepoDiaria(body) {
 
   const fechas = Array.isArray(body?.fechas) ? body.fechas.filter((f) => /^\d{4}-\d{2}-\d{2}$/.test(String(f))) : []
   const repo = repoDiaria.calcularRepo(fotoRepo.foto, { fechas, hoy: diaLocal() })
+  // Cascada entre locales con lo que MITO no cubrió (misma foto, mismos días, parámetros guardados)
+  let cascada = null
+  try {
+    cascada = cascadaLocales.calcularCascada(fotoRepo.foto, repo, body?.params)
+  } catch (e) {
+    cascada = { error: e.message }
+  }
   return {
     estado: 'listo',
     foto: new Date(fotoRepo.en).toISOString(),
     segundos: fotoRepo.segundos,
     ...repo,
+    cascada,
   }
+}
+
+/**
+ * body: { fechas, foto, params } -> { cascada }
+ * Recalcula SOLO la cascada con otros parámetros sobre la foto que el usuario está viendo
+ * (aunque tenga más de 5 minutos: es un recálculo en memoria, no vuelve al SQL).
+ */
+function accionRepoCascada(body) {
+  if (!fotoRepo.foto) throw new Error('No hay repo calculada: tocá Actualizar.')
+  if (body?.foto && String(body.foto) !== new Date(fotoRepo.en).toISOString()) {
+    throw new Error('La repo se volvió a calcular: tocá Actualizar.')
+  }
+  const fechas = Array.isArray(body?.fechas) ? body.fechas.filter((f) => /^\d{4}-\d{2}-\d{2}$/.test(String(f))) : []
+  const repo = repoDiaria.calcularRepo(fotoRepo.foto, { fechas, hoy: diaLocal() })
+  return { foto: new Date(fotoRepo.en).toISOString(), cascada: cascadaLocales.calcularCascada(fotoRepo.foto, repo, body?.params) }
+}
+
+/** Foto nueva del DWH y esperar a que esté (la usa el programador). */
+async function fotoRepoNueva() {
+  if (!fotoRepoEnCurso) lanzarFotoRepo()
+  await fotoRepoEnCurso
+  if (fotoRepo.error) {
+    const e = fotoRepo.error
+    fotoRepo = { ...fotoRepo, error: null }
+    throw new Error(e)
+  }
+  return fotoRepo
 }
 
 /* ---- Repo diaria → Dragon: un pedido de venta (motivo VTD) por local ----------------
@@ -974,12 +1011,44 @@ async function pedidosVtdEnDragon(obs) {
   }
 }
 
+/** Qué locales ya tienen el pedido con esa observación (no se repiten) y con qué lista cargar. */
+async function marcarExistentes(plan) {
+  const { existentes, listas } = await pedidosVtdEnDragon(plan.obs)
+  for (const l of plan.locales) {
+    l.lista = listas.get(l.cliente) || LISTA_REPO[l.cliente] || 'LISTA1'
+    l.numero = existentes.get(l.cliente) ?? null
+    l.estado = l.numero ? 'ya_estaba' : 'pendiente'
+    l.error = null
+  }
+  return plan
+}
+
+/** Observaciones "REPO DIARIA (…)" de los pedidos VTD de las últimas 2 semanas (qué días ya se cargaron). */
+async function obsRepoEnDragon() {
+  const pool = await conexionLarga()
+  try {
+    const r = await pool.request().query(`
+      SELECT DISTINCT RTRIM(CAST(FOBS AS varchar(250))) AS obs
+        FROM DRAGONFISH_MITO.ZooLogic.COMPROBANTEV
+       WHERE FACTTIPO = 23 AND RTRIM(MOTIVO) = 'VTD' AND FFCH >= DATEADD(day, -14, GETDATE())
+         AND CAST(FOBS AS varchar(250)) LIKE 'REPO DIARIA (%'`)
+    return r.recordset.map((f) => String(f.obs))
+  } finally {
+    await pool.close().catch(() => {})
+  }
+}
+
 /** Los pedidos a cargar (uno por local) con la foto que el usuario está viendo. */
 function planCargaDragon(body) {
   if (!fotoRepo.foto) throw new Error('No hay repo calculada: tocá Actualizar.')
   if (String(body?.foto ?? '') !== new Date(fotoRepo.en).toISOString()) {
     throw new Error('La repo se volvió a calcular desde que la abriste: tocá Actualizar, revisala y cargá de nuevo.')
   }
+  return armarPlanDragon(body)
+}
+
+/** Pedidos por local de la repo de esos días, con la foto en memoria. */
+function armarPlanDragon(body) {
   const fechas = Array.isArray(body?.fechas) ? body.fechas.filter((f) => /^\d{4}-\d{2}-\d{2}$/.test(String(f))) : []
   const repo = repoDiaria.calcularRepo(fotoRepo.foto, { fechas, hoy: diaLocal() })
   const pedir = Array.isArray(body?.locales) && body.locales.length ? new Set(body.locales.map((s) => String(s).toUpperCase())) : null
@@ -1016,20 +1085,20 @@ async function accionRepoDragon(body) {
 
   const plan = planCargaDragon(body)
   if (!plan.locales.length) throw new Error('No hay nada para cargar.')
-  const { existentes, listas } = await pedidosVtdEnDragon(plan.obs)
-  for (const l of plan.locales) {
-    l.lista = listas.get(l.cliente) || LISTA_REPO[l.cliente] || 'LISTA1'
-    l.numero = existentes.get(l.cliente) ?? null
-    l.estado = l.numero ? 'ya_estaba' : 'pendiente'
-    l.error = null
-  }
+  await marcarExistentes(plan)
   if (modo === 'revisar') return { carga: vistaCarga({ ...plan, enSeco: enSecoDragon() }) }
 
   // El hub repite la observación que mostró en la confirmación: si no coincide, no se carga nada
   if (String(body?.confirmo ?? '') !== plan.obs) throw new Error('La confirmación no coincide con la repo: revisala de nuevo.')
+  ejecutarCargaDragon(plan)
+  return { carga: vistaCarga(cargaDragon) }
+}
+
+/** Carga los locales 'pendiente' del plan en Dragon, uno por uno. Devuelve la promesa del final. */
+function ejecutarCargaDragon(plan) {
   const carga = { ...plan, enCurso: true, enSeco: enSecoDragon(), inicio: Date.now(), fin: null }
   cargaDragon = carga
-  ;(async () => {
+  return (async () => {
     for (const l of carga.locales) {
       if (l.estado !== 'pendiente') continue
       l.estado = 'cargando'
@@ -1053,8 +1122,7 @@ async function accionRepoDragon(body) {
   })().finally(() => {
     carga.enCurso = false
     carga.fin = Date.now()
-  })
-  return { carga: vistaCarga(carga) }
+  }).then(() => carga)
 }
 
 
@@ -1184,6 +1252,20 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
+    // Repo diaria: recalcular la cascada con otros parámetros (misma foto)
+    if (body?.accion === 'repo_diaria_cascada') {
+      try {
+        return enviar(res, 200, accionRepoCascada(body))
+      } catch (e) {
+        return enviar(res, 400, { error: e.message })
+      }
+    }
+
+    // Programación de repo y cascada: estado del programador de esta PC
+    if (body?.accion === 'repo_auto_estado') {
+      return enviar(res, 200, programador.estado())
+    }
+
     // Repo diaria → pedidos de venta VTD en Dragon (uno por local)
     if (body?.accion === 'repo_diaria_dragon') {
       try {
@@ -1284,6 +1366,20 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(Number(PUENTE_PORT), () => {
   console.log(`[puente] Escuchando en http://localhost:${PUENTE_PORT}`)
+  // Repo diaria y cascada programadas (Compras > Repo diaria > Automático). PUENTE_PROGRAMADOR=0 lo apaga.
+  programador.iniciar({
+    fotoNueva: fotoRepoNueva,
+    foto: () => fotoRepo.foto,
+    hoy: diaLocal,
+    calcularRepo: repoDiaria.calcularRepo,
+    calcularCascada: cascadaLocales.calcularCascada,
+    armarPlanDragon,
+    marcarExistentes,
+    cargarDragon: ejecutarCargaDragon,
+    cargaEnCurso: () => !!cargaDragon?.enCurso,
+    obsRepoEnDragon,
+    correrSync,
+  })
 })
 
 // Errores de HTTP a nivel de socket (peticiones rotas a mitad de camino)

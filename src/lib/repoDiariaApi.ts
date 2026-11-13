@@ -56,12 +56,32 @@ async function urlDestino(): Promise<string> {
   return process.env.SQL_LOGICAPP_URL ?? ''
 }
 
+/** Parámetros guardados de la cascada (repo_auto_config.cascada_params); {} = los de siempre. */
+async function paramsGuardados(): Promise<Record<string, unknown>> {
+  const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL
+  const service = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !service) return {}
+  try {
+    const res = await fetch(`${url}/rest/v1/repo_auto_config?id=eq.1&select=cascada_params`, {
+      headers: { Authorization: `Bearer ${service}`, apikey: service },
+    })
+    if (!res.ok) return {}
+    const filas = (await res.json().catch(() => null)) as Array<{ cascada_params?: Record<string, unknown> }> | null
+    return filas?.[0]?.cascada_params ?? {}
+  } catch {
+    return {}
+  }
+}
+
 function primero(q: string | string[] | undefined): string {
   if (Array.isArray(q)) return typeof q[0] === 'string' ? q[0] : ''
   return q ?? ''
 }
 
 /**
+ *   POST /api/sql/repo-diaria  body: { modo: 'cascada', fechas, foto, params } -> { foto, cascada }
+ *   Recalcula solo la cascada entre locales con otros parámetros, sobre la misma foto.
+ *
  *   POST /api/sql/repo-diaria  body: { modo: 'revisar' | 'cargar' | 'estado', fechas, foto, locales?, confirmo? }
  *     -> { carga: { obs, fecha_str, en_curso, en_seco, locales: [{ cliente, renglones, unidades, lista, estado, numero, error }] } }
  *   Carga la repo en Dragon como pedidos de venta VTD (uno por local) desde el Puente.
@@ -70,8 +90,29 @@ function primero(q: string | string[] | undefined): string {
 async function cargaDragon(req: Req, res: Res, destino: string, tokenPuente: string) {
   const b = (typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body ?? {}) as Record<string, unknown>
   const modo = String(b.modo ?? '')
-  if (!['revisar', 'cargar', 'estado'].includes(modo)) return res.status(400).json({ error: 'Modo inválido' })
+  if (!['revisar', 'cargar', 'estado', 'cascada'].includes(modo)) return res.status(400).json({ error: 'Modo inválido' })
   const fechas = (Array.isArray(b.fechas) ? b.fechas : []).map(String).filter((f) => /^\d{4}-\d{2}-\d{2}$/.test(f))
+  // Recalcular solo la cascada con otros parámetros (los que se están editando en pantalla)
+  if (modo === 'cascada') {
+    const params = b.params && typeof b.params === 'object' && !Array.isArray(b.params) ? b.params : {}
+    if (JSON.stringify(params).length > 20_000) return res.status(400).json({ error: 'Parámetros demasiado grandes' })
+    const rc = await postAlPuente(
+      destino,
+      {
+        headers: { 'Content-Type': 'application/json', 'X-Puente-Token': tokenPuente },
+        body: JSON.stringify({ accion: 'repo_diaria_cascada', fechas, foto: String(b.foto ?? ''), params }),
+      },
+      { timeoutMs: 25_000, intentos: 2 },
+    )
+    if (!rc.ok) return res.status(502).json({ error: 'No se pudo contactar el Puente SQL de la PC central' })
+    const cc = (await rc.res.json().catch(() => null)) as ({ error?: string } & Record<string, unknown>) | null
+    if (!rc.res.ok || !cc) {
+      let detalle = cc?.error ?? `respuesta ${rc.res.status}`
+      if (/vista inv[aá]lid[ao]/i.test(detalle)) detalle += ' — Puente SQL desactualizado: reiniciá puente-sql.'
+      return res.status(rc.res.status === 400 ? 400 : 502).json({ error: detalle })
+    }
+    return res.status(200).json(cc)
+  }
   const locales = (Array.isArray(b.locales) ? b.locales : []).map(String).filter((l) => /^[A-Z0-9]{1,12}$/i.test(l))
   const r0 = await postAlPuente(
     destino,
@@ -124,7 +165,7 @@ export default async function handler(req: Req, res: Res) {
     destino,
     {
       headers: { 'Content-Type': 'application/json', 'X-Puente-Token': tokenPuente },
-      body: JSON.stringify({ accion: 'repo_diaria', fechas, forzar }),
+      body: JSON.stringify({ accion: 'repo_diaria', fechas, forzar, params: await paramsGuardados() }),
     },
     // El puente contesta enseguida (calculando o el resultado de la foto en memoria)
     { timeoutMs: 25_000, intentos: 2 },

@@ -1,5 +1,6 @@
 import {
   Ban,
+  Shuffle,
   Scale,
   Briefcase,
   Wallet,
@@ -676,6 +677,18 @@ export const APPS: AppDef[] = [
     kind: 'internal',
     target: '/compras/repo-diaria',
     color: '#0ea5e9',
+    permiso: 'transferencias.import',
+  },
+  {
+    // Antes: cascada_*.py sobre el PBIX. Lo que la repo de MITO no cubrió, entre locales.
+    id: 'cascada-locales',
+    areaId: 'compras',
+    title: 'Cascada',
+    description: 'Lo que MITO no pudo reponer, pasado entre locales. Parámetros editables y carga en Transferencias.',
+    icon: Shuffle,
+    kind: 'internal',
+    target: '/compras/cascada',
+    color: '#8b5cf6',
     permiso: 'transferencias.import',
   },
   {

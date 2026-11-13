@@ -70,13 +70,17 @@ const ddmmaaaa = (iso) => `${ddmm(iso)}/${iso.slice(0, 4)}`
 
 /** Normaliza los recordsets del SQL (una vez por foto). */
 function prepararFoto(recordsets) {
-  const [dias = [], ventas = [], stock = [], articulos = []] = recordsets ?? []
+  const [dias = [], ventas = [], stock = [], articulos = [], stockLocales = [], transito = []] = recordsets ?? []
   const arts = new Map()
   for (const f of articulos) {
     const a = {
       ID_ART: txt(f.ID_ART), ARTICULO: txt(f.ARTICULO), ARTICULO_ADICIONAL: txt(f.ARTICULO_ADICIONAL),
       ID_PROV: txt(f.ID_PROV), PROVEEDOR: txt(f.PROVEEDOR), ID_GRUPO: txt(f.ID_GRUPO).toUpperCase(),
       ID_FLIA: txt(f.ID_FLIA), ID_MATERIAL: txt(f.ID_MATERIAL), MATERIAL: txt(f.MATERIAL), ID_LINEA: txt(f.ID_LINEA),
+      ID_TEMPORADA: txt(f.ID_TEMPORADA),
+      // Atributos de Dragon (cascada: comparar venta por cualquiera)
+      FAMILIA: txt(f.FAMILIA), GRUPO: txt(f.GRUPO), LINEA: txt(f.LINEA), CATEGORIA: txt(f.CATEGORIA),
+      CLASIFICACION: txt(f.CLASIFICACION), TIPO: txt(f.TIPO), MARCA: txt(f.MARCA), ANIO: txt(f.ANIO),
     }
     // El PBIX hace drop_duplicates: queda el primero
     if (a.ID_ART && !arts.has(a.ID_ART)) arts.set(a.ID_ART, a)
@@ -94,6 +98,14 @@ function prepararFoto(recordsets) {
       comprometido: Number(f.comprometido) || 0,
     })),
     arts,
+    // Para la cascada entre locales (cascada.js): base = "BASE DE DATOS" del PBIX
+    stockLocales: stockLocales.map((f) => ({
+      base: baseDeTienda(f.Tienda), art: txt(f.ID_ART), color: txt(f.ID_COLOR), talle: txt(f.ID_TALLE),
+      cant: Number(f.cant) || 0,
+    })),
+    transito: transito.map((f) => ({
+      base: baseDeTienda(f.Tienda), sku: `${txt(f.ID_ART)} ${txt(f.ID_COLOR)} ${txt(f.ID_TALLE)}`,
+    })),
   }
 }
 

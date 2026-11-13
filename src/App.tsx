@@ -180,6 +180,16 @@ export default function App() {
             }
           />
           <Route
+            path="/compras/cascada"
+            element={
+              <PermissionRoute permiso="transferencias.import">
+                <Suspense fallback={null}>
+                  <RepoDiariaMito modo="cascada" />
+                </Suspense>
+              </PermissionRoute>
+            }
+          />
+          <Route
             path="/compras/pedidos"
             element={
               <PermissionRoute permiso="pedidos_compra.view">

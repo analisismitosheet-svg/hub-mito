@@ -22,12 +22,12 @@
  * SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY.
  */
 import webpush from 'web-push'
-import { autorizado, esUuid } from '../src/lib/apiAuth.js'
+import { autorizado, esUuid, mismoSecreto } from '../src/lib/apiAuth.js'
 
 type Req = {
   method?: string
-  headers: { authorization?: string }
-  body?: string
+  headers: { authorization?: string; 'x-puente-token'?: string | string[] }
+  body?: string | Record<string, unknown>
   query?: Record<string, string | string[] | undefined>
 }
 
@@ -82,6 +82,12 @@ const MOTIVO: Record<string, string> = {
   falta_mercaderia: 'Falta mercadería',
   equipo: 'Problema con el celular/escáner',
   otro: 'Otro motivo',
+}
+
+/** El body como objeto (Vercel lo entrega como texto o ya parseado según el Content-Type). */
+function cuerpoDe(req: Req): Record<string, unknown> {
+  if (typeof req.body === 'string') return (JSON.parse(req.body || '{}') ?? {}) as Record<string, unknown>
+  return req.body ?? {}
 }
 
 function primerQuery(q: string | string[] | undefined): string {
@@ -171,12 +177,14 @@ async function conPermiso(clave: string): Promise<string[]> {
 }
 
 /** Armado de pedidos: los armados pendientes que pidió el usuario y todavía no se avisaron. */
-async function avisarArmado(req: Req, res: Res, uid: string) {
-  // Armados pendientes que pidió este usuario y todavía no se avisaron (últimas 2 h)
+async function avisarArmado(req: Req, res: Res, uid: string | null) {
+  // Armados pendientes que pidió este usuario y todavía no se avisaron (últimas 2 h).
+  // uid null = los que pidió el Puente solo (repo diaria programada: creado_por vacío).
   const desde = new Date(Date.now() - 2 * 3600_000).toISOString()
+  const quien = uid ? `creado_por=eq.${uid}` : 'creado_por=is.null'
   const rA = await rest(
     `mayorista_armados?select=id,pedido_numero,pedido_codigo,cliente,cliente_nombre,prioridad,asignado_legajo` +
-      `&estado=eq.pendiente&push_at=is.null&creado_por=eq.${uid}&creado_at=gte.${desde}&order=creado_at.asc`,
+      `&estado=eq.pendiente&push_at=is.null&${quien}&creado_at=gte.${desde}&order=creado_at.asc`,
   )
   if (!rA.ok) return res.status(502).json({ error: `No se pudieron leer los armados (${rA.status})` })
   const armados = (await rA.json()) as Armado[]
@@ -302,7 +310,7 @@ async function avisarPausa(req: Req, res: Res, uid: string) {
 async function avisarFaltantes(req: Req, res: Res, token: string) {
   let armadoId = ''
   try {
-    armadoId = String(JSON.parse(req.body ?? '{}').armado_id ?? '')
+    armadoId = String(cuerpoDe(req).armado_id ?? '')
   } catch {
     armadoId = ''
   }
@@ -368,18 +376,18 @@ interface AvisoUbicacion {
 const NOMBRE_UBICACION: Record<string, string> = { 'DEPOSITO INDO': 'Depósito Indo', 'DEPOSITO MAYORISTA': 'Depósito Mayorista' }
 
 /** Reposición/transferencia nueva: a los legajos de la ubicación que tiene renglones (sql/legajos_ubicacion.sql). */
-async function avisarTransferencia(req: Req, res: Res, token: string) {
+async function avisarTransferencia(req: Req, res: Res, token: string | null) {
   let loteId = ''
   try {
-    loteId = String(JSON.parse(req.body ?? '{}').lote_id ?? '')
+    loteId = String(cuerpoDe(req).lote_id ?? '')
   } catch {
     loteId = ''
   }
   if (!loteId) return res.status(400).json({ error: 'Falta lote_id' })
   // Va pegado en filtros de PostgREST con service role: solo un UUID
   if (!esUuid(loteId)) return res.status(400).json({ error: 'lote_id inválido' })
-  // Lo dispara quien carga las transferencias
-  if (!(await autorizado(token, ['transferencias.import']))) {
+  // Lo dispara quien carga las transferencias (token null = el Puente, ya validado por su clave)
+  if (token !== null && !(await autorizado(token, ['transferencias.import']))) {
     return res.status(403).json({ error: 'No autorizado' })
   }
 
@@ -443,7 +451,7 @@ interface Requerimiento {
 async function avisarRequerimiento(req: Req, res: Res, token: string) {
   let id = ''
   try {
-    id = String(JSON.parse(req.body ?? '{}').id ?? '')
+    id = String(cuerpoDe(req).id ?? '')
   } catch {
     id = ''
   }
@@ -555,6 +563,20 @@ export default async function handler(req: Req, res: Res) {
     }
     webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'https://hub-mito.vercel.app', pub, priv)
     return avisarArqueos(res)
+  }
+
+  // El Puente SQL (repo diaria / cascada programadas) avisa con su clave, sin usuario
+  const clavePuente = req.headers['x-puente-token']
+  if (typeof clavePuente === 'string' && clavePuente) {
+    if (!mismoSecreto(clavePuente, process.env.SQL_BRIDGE_TOKEN ?? '')) return res.status(401).json({ error: 'No autorizado' })
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return res.status(500).json({ error: 'Falta la configuración de Supabase' })
+    }
+    webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'https://hub-mito.vercel.app', pub, priv)
+    const tipoP = primerQuery(req.query?.tipo)
+    if (tipoP === 'armado') return avisarArmado(req, res, null)
+    if (tipoP === 'transferencia') return avisarTransferencia(req, res, null)
+    return res.status(400).json({ error: 'Tipo inválido' })
   }
 
   const auth = req.headers.authorization ?? ''

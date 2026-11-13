@@ -64,6 +64,8 @@ export default defineConfig({
       '/api/replicas': 'http://localhost:4173',
       '/api/tracking': 'http://localhost:4174',
       '/api/sql/stock-valorizado': 'http://localhost:4175',
+      // Compras > Repo diaria y Cascada: `node scripts/mock-repo-diaria.mjs` (+ una copia del Puente en :3199)
+      '/api/sql/repo-diaria': 'http://localhost:4176',
     },
   },
 })

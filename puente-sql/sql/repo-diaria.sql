@@ -26,10 +26,12 @@ SELECT LEFT(Fecha, 10)                AS dia,
        LTRIM(RTRIM(ID_ART))           AS ID_ART,
        LTRIM(RTRIM(ID_COLOR))         AS ID_COLOR,
        LTRIM(RTRIM(ID_TALLE))         AS ID_TALLE,
-       CAST(CANT AS int)              AS CANT
+       CAST(CANT AS int)              AS CANT,
+       CAST(ISNULL(ENTRANSITO, 0) AS int) AS ENTRANSITO
   INTO #f
   FROM DWH.dbo.vw_FACT_VENTAS_STOCK
- WHERE Tipo = 'VENTA' AND Fecha >= @desde
+ -- STOCK = stock de cada local en vivo (Fecha = ahora), para la cascada entre locales
+ WHERE Tipo IN ('VENTA', 'STOCK') AND Fecha >= @desde
    -- El PBIX descarta los artículos con "1P" (Text.Contains distingue mayúsculas)
    AND ID_ART COLLATE Latin1_General_BIN NOT LIKE '%1P%';
 
@@ -78,12 +80,44 @@ SELECT LTRIM(RTRIM(a.ID_ART))              AS ID_ART,
        LTRIM(RTRIM(a.ID_FLIA))             AS ID_FLIA,
        LTRIM(RTRIM(a.ID_MATERIAL))         AS ID_MATERIAL,
        LTRIM(RTRIM(m.MATERIAL))            AS MATERIAL,
-       LTRIM(RTRIM(a.ID_LINEA))            AS ID_LINEA
-  FROM (SELECT DISTINCT ID_ART FROM #f) x
+       LTRIM(RTRIM(a.ID_LINEA))            AS ID_LINEA,
+       LTRIM(RTRIM(a.ID_TEMPORADA))        AS ID_TEMPORADA,
+       -- Más atributos del artículo en Dragon (para comparar venta por cualquiera en la cascada)
+       LTRIM(RTRIM(fa.DESCRIP))            AS FAMILIA,
+       LTRIM(RTRIM(gr.DESCRIP))            AS GRUPO,
+       LTRIM(RTRIM(li.DESCRIP))            AS LINEA,
+       LTRIM(RTRIM(ISNULL(ca.DESCRIP, d.CATEARTI)))  AS CATEGORIA,
+       LTRIM(RTRIM(ISNULL(cl.DESCRIP, d.CLASIFART))) AS CLASIFICACION,
+       LTRIM(RTRIM(ISNULL(ti.DESCRIP, d.TIPOARTI)))  AS TIPO,
+       LTRIM(RTRIM(ISNULL(ma.DESCRIP, d.MARCA)))     AS MARCA,
+       CAST(d.ANO AS varchar(10))                    AS ANIO
+  FROM (SELECT DISTINCT ID_ART FROM #f WHERE Tipo = 'VENTA') x
   JOIN DWH.dbo.vw_DIM_ARTICULO a ON LTRIM(RTRIM(a.ID_ART)) = x.ID_ART
   LEFT JOIN DWH.dbo.vw_DIM_PROVEEDOR p ON p.ID_PROV = a.ID_PROV
   LEFT JOIN DWH.dbo.vw_DIM_MATERIAL  m ON m.ID_MATERIAL = a.ID_MATERIAL
+  OUTER APPLY (SELECT TOP 1 * FROM DRAGONFISH_MITO.ZooLogic.ART z WHERE RTRIM(z.ARTCOD) = x.ID_ART) d
+  OUTER APPLY (SELECT TOP 1 DESCRIP FROM DRAGONFISH_MITO.ZooLogic.FAMILIA   t WHERE RTRIM(t.COD)    = RTRIM(d.FAMILIA))   fa
+  OUTER APPLY (SELECT TOP 1 DESCRIP FROM DRAGONFISH_MITO.ZooLogic.GRUPO     t WHERE RTRIM(t.COD)    = RTRIM(d.GRUPO))     gr
+  OUTER APPLY (SELECT TOP 1 DESCRIP FROM DRAGONFISH_MITO.ZooLogic.LINEA     t WHERE RTRIM(t.COD)    = RTRIM(d.LINEA))     li
+  OUTER APPLY (SELECT TOP 1 DESCRIP FROM DRAGONFISH_MITO.ZooLogic.CATEGART  t WHERE RTRIM(t.COD)    = RTRIM(d.CATEARTI))  ca
+  OUTER APPLY (SELECT TOP 1 DESCRIP FROM DRAGONFISH_MITO.ZooLogic.CLASIFART t WHERE RTRIM(t.CODIGO) = RTRIM(d.CLASIFART)) cl
+  OUTER APPLY (SELECT TOP 1 DESCRIP FROM DRAGONFISH_MITO.ZooLogic.TIPOART   t WHERE RTRIM(t.COD)    = RTRIM(d.TIPOARTI))  ti
+  OUTER APPLY (SELECT TOP 1 DESCRIP FROM DRAGONFISH_MITO.ZooLogic.MARCAS    t WHERE RTRIM(t.CODIGO) = RTRIM(d.MARCA))     ma
  WHERE LTRIM(RTRIM(ISNULL(a.ARTICULO, ''))) <> '';
+
+-- 5) CASCADA: stock de cada local (sin tránsito, renglones > 0) de los artículos vendidos.
+--    Todo el artículo (no solo el SKU): los donantes se ordenan por su stock del artículo.
+SELECT Tienda, ID_ART, ID_COLOR, ID_TALLE, SUM(CANT) AS cant
+  FROM #f
+ WHERE Tipo = 'STOCK' AND ENTRANSITO = 0 AND CANT > 0
+   AND ID_ART IN (SELECT ID_ART FROM #f WHERE Tipo = 'VENTA')
+ GROUP BY Tienda, ID_ART, ID_COLOR, ID_TALLE;
+
+-- 6) CASCADA: SKUs en tránsito hacia cada local (a esos no se les manda)
+SELECT DISTINCT Tienda, ID_ART, ID_COLOR, ID_TALLE
+  FROM #f
+ WHERE ENTRANSITO >= 1
+   AND ID_ART IN (SELECT ID_ART FROM #f WHERE Tipo = 'VENTA');
 
 DROP TABLE #f;
 DROP TABLE #s;
