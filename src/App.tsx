@@ -184,7 +184,7 @@ export default function App() {
             element={
               <PermissionRoute permiso="transferencias.import">
                 <Suspense fallback={null}>
-                  <RepoDiariaMito />
+                  <RepoDiariaMito key="repo" />
                 </Suspense>
               </PermissionRoute>
             }
@@ -194,7 +194,7 @@ export default function App() {
             element={
               <PermissionRoute permiso="transferencias.import">
                 <Suspense fallback={null}>
-                  <RepoDiariaMito modo="cascada" />
+                  <RepoDiariaMito key="cascada" modo="cascada" />
                 </Suspense>
               </PermissionRoute>
             }

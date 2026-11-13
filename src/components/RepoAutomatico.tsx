@@ -116,7 +116,7 @@ export default function RepoAutomatico({ solo }: { solo?: 'repo' | 'cascada' } =
     try {
       await guardarConfigAuto(Object.fromEntries(campos.map((k) => [k, cfg[k]])))
       await leer()
-      setAviso('Guardado. El Puente lo usa desde el próximo minuto.')
+      setAviso('Guardado. Si hoy ya pasó la hora, arranca el próximo día que toque (para ya: «Correr ahora»).')
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
@@ -139,6 +139,7 @@ export default function RepoAutomatico({ solo }: { solo?: 'repo' | 'cascada' } =
     <div className="space-y-4 pb-6">
       <p className="rounded-xl border border-sky-500/30 bg-sky-500/10 p-3 text-xs text-ink">
         El Puente SQL de la PC central revisa cada minuto. A la hora elegida saca una foto nueva del DWH y hace todo solo, sin abrir el Hub.
+        Si la prendés o le cambiás la hora cuando la de hoy ya pasó, arranca el próximo día que toque; para correrla en el momento usá «Correr ahora».
         {solo !== 'cascada' && 'La repo cubre los días con venta que todavía no tienen su repo en Dragon (un lunes, sábado y domingo juntos) y nunca repite un local que ya tiene el pedido. '}
         {solo !== 'repo' && 'La cascada usa los días de la última repo cargada y los parámetros guardados en Transferencia diaria; conviene programarla después de la repo.'}
       </p>
