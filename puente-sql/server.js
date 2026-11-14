@@ -877,6 +877,35 @@ let fotoRepo = { en: 0, foto: null, segundos: null, error: null }
 }
 let fotoRepoEnCurso = null
 let fotoRepoInicio = 0
+/** Días que ya tienen pedidos «REPO DIARIA (…)» en Dragon (últimas 2 semanas). */
+let diasEnDragon = { en: 0, dias: new Set(), enCurso: null }
+
+/** Relee de Dragon qué días ya tienen repo cargada (no frena nada si falla). */
+function refrescarDiasEnDragon() {
+  if (diasEnDragon.enCurso) return diasEnDragon.enCurso
+  diasEnDragon.enCurso = obsRepoEnDragon()
+    .then((obs) => {
+      const dias = new Set()
+      for (const o of obs) programador.diasDeObs(o).forEach((d) => dias.add(d))
+      diasEnDragon = { en: Date.now(), dias, enCurso: null }
+    })
+    .catch((e) => {
+      console.error('[puente] días con repo en Dragon:', e.message)
+      diasEnDragon = { ...diasEnDragon, en: Date.now(), enCurso: null } // reintenta en 5 min
+    })
+  return diasEnDragon.enCurso
+}
+
+/**
+ * Días que la pantalla elige sola: los días con venta DESPUÉS del último que ya tiene repo en
+ * Dragon (si un lunes no se trabajó, el martes trae viernes, sábado, domingo y lunes).
+ * Vacío = el último día con venta (lo decide calcularRepo).
+ */
+function diasPendientesRepo(foto, hoy) {
+  const ultimo = [...diasEnDragon.dias].sort().pop()
+  if (!ultimo) return []
+  return foto.dias.filter((d) => d.unidades > 0 && d.dia < hoy && d.dia > ultimo).map((d) => d.dia).sort().slice(-7)
+}
 
 /** 'YYYY-MM-DD' en la hora de esta PC (Argentina), corrido `menos` días. */
 function diaLocal(menos = 0) {
@@ -890,6 +919,7 @@ function lanzarFotoRepo() {
   fotoRepoInicio = Date.now()
   fotoRepoEnCurso = (async () => {
     if (!fs.existsSync(SCRIPT_REPO_DIARIA)) throw new Error('Falta sql/repo-diaria.sql junto a server.js')
+    const enDragon = refrescarDiasEnDragon()
     const t0 = Date.now()
     const pool = await conexionLarga()
     let r
@@ -908,6 +938,7 @@ function lanzarFotoRepo() {
       error: null,
     }
     require('./memoria-ia').guardar('foto-dwh', { en: fotoRepo.en, segundos: fotoRepo.segundos, foto: fotoRepo.foto })
+    await enDragon
   })()
     .catch((e) => {
       console.error('[puente] repo diaria:', e.message)
@@ -937,7 +968,13 @@ function accionRepoDiaria(body) {
     return calculando()
   }
 
-  const fechas = Array.isArray(body?.fechas) ? body.fechas.filter((f) => /^\d{4}-\d{2}-\d{2}$/.test(String(f))) : []
+  // Lo que Dragon ya tiene cargado puede cambiar sin foto nueva (carga a mano o automática)
+  if (Date.now() - diasEnDragon.en > REPO_DIARIA_CACHE_MS) {
+    refrescarDiasEnDragon()
+    if (!diasEnDragon.en && !body?.fechas?.length) return calculando() // primera vez: esperar a saberlo
+  }
+  let fechas = Array.isArray(body?.fechas) ? body.fechas.filter((f) => /^\d{4}-\d{2}-\d{2}$/.test(String(f))) : []
+  if (!fechas.length) fechas = diasPendientesRepo(fotoRepo.foto, diaLocal())
   const repo = repoDiaria.calcularRepo(fotoRepo.foto, { fechas, hoy: diaLocal() })
   // Cascada entre locales con lo que MITO no cubrió (misma foto, mismos días, parámetros guardados)
   let cascada = null
@@ -951,6 +988,7 @@ function accionRepoDiaria(body) {
     foto: new Date(fotoRepo.en).toISOString(),
     segundos: fotoRepo.segundos,
     ...repo,
+    dias_en_dragon: repo.dias_disponibles.map((d) => d.dia).filter((d) => diasEnDragon.dias.has(d)),
     cascada,
   }
 }
@@ -1441,6 +1479,7 @@ function ejecutarCargaDragon(plan) {
   })().finally(() => {
     carga.enCurso = false
     carga.fin = Date.now()
+    diasEnDragon.en = 0 // la próxima consulta relee qué días quedaron cargados
   }).then(() => carga)
 }
 

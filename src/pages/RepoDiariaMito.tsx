@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowRightLeft, CalendarDays, CheckCircle2, Download, Loader2, PackageCheck, RefreshCw, Search, Send, Shuffle, SlidersHorizontal, Store, Timer, X, XCircle } from 'lucide-react'
+import { ArrowRightLeft, CalendarDays, Check, CheckCircle2, Download, Loader2, PackageCheck, RefreshCw, Search, Send, Shuffle, SlidersHorizontal, Store, Timer, X, XCircle } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
@@ -195,28 +195,33 @@ export default function RepoDiariaMito({ modo = 'repo' }: { modo?: 'repo' | 'cas
         </div>
       </header>
 
-      {/* Días con venta: se pueden sumar varios (ej. el lunes, sábado + domingo) */}
+      {/* Días con venta: arranca con los que todavía no tienen repo en Dragon (si un lunes no se
+          trabajó, el martes trae viernes a lunes); se pueden sumar o sacar a mano */}
       {datos && datos.dias_disponibles.length > 0 && (
         <div className="mb-4 flex flex-wrap items-center gap-1.5">
           <CalendarDays size={15} className="text-sub" aria-hidden />
           {datos.dias_disponibles.map((d) => {
             const on = fechas.includes(d.dia)
+            const enDragon = datos.dias_en_dragon?.includes(d.dia) ?? false
             return (
               <button
                 key={d.dia}
                 type="button"
                 disabled={cargando}
                 onClick={() => alternarDia(d.dia)}
-                title={`${numero(d.unidades)} u. vendidas`}
+                title={`${numero(d.unidades)} u. vendidas${enDragon ? ' · ya tiene repo en Dragon' : ''}`}
                 className={`btn-press rounded-lg border px-2.5 py-1 text-xs capitalize transition disabled:opacity-60 ${
                   on ? 'border-sky-500/50 bg-sky-500/15 font-semibold text-sky-500' : 'border-line bg-surface text-sub hover:text-ink'
                 }`}
               >
                 {diaCorto(d.dia)}
+                {enDragon && <Check size={11} className="ml-0.5 inline align-[-1px] opacity-80" aria-label="ya tiene repo en Dragon" />}
               </button>
             )
           })}
-          <span className="text-[11px] text-sub/70">tocá varios días para sumarlos</span>
+          <span className="text-[11px] text-sub/70">
+            marca los días sin repo en Dragon (✓ = ya cargado) · tocá para sumar o sacar
+          </span>
         </div>
       )}
 

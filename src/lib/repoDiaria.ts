@@ -48,6 +48,8 @@ export interface RepoDiaria {
   resumen: ResumenRepo[]
   unidades: number
   dias_disponibles: Array<{ dia: string; unidades: number }>
+  /** días que ya tienen pedidos «REPO DIARIA (…)» en Dragon */
+  dias_en_dragon?: string[]
   /** cascada entre locales con lo que MITO no cubrió (puente-sql/cascada.js) */
   cascada?: Cascada | { error: string } | null
 }
