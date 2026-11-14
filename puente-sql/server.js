@@ -688,6 +688,11 @@ async function conexionLarga() {
  * (`accion: 'stock_valorizado_base'`), que sale del cache sin tocar el SQL.
  */
 let cacheStockValorizado = { en: 0, datos: null, porBase: null }
+{
+  // La última corrida guardada en D:\memoria ia (con su hora real: si venció, se recalcula igual)
+  const g = require('./memoria-ia').leer('stock-valorizado')
+  if (g?.datos && g.porBase instanceof Map && Number(g.en) > 0) cacheStockValorizado = g
+}
 let stockValorizadoEnCurso = null
 
 async function stockValorizado(forzar) {
@@ -813,6 +818,8 @@ async function stockValorizado(forzar) {
     }
 
     cacheStockValorizado = { en: Date.now(), datos, porBase }
+    // Copia en D:\memoria ia: después de un reinicio se muestra esta al toque (y se recalcula si venció)
+    require('./memoria-ia').guardar('stock-valorizado', cacheStockValorizado)
     return { ...datos, cacheado: false }
   })().finally(() => {
     stockValorizadoEnCurso = null
@@ -862,6 +869,12 @@ const SCRIPT_REPO_DIARIA = path.join(__dirname, 'sql', 'repo-diaria.sql')
 const REPO_DIARIA_CACHE_MS = 5 * 60_000
 const REPO_DIARIA_DIAS = 12
 let fotoRepo = { en: 0, foto: null, segundos: null, error: null }
+{
+  // La última foto del DWH guardada en D:\memoria ia, con su hora real: las reglas de siempre
+  // (5 minutos para la repo, "sacada hoy" para el chat) deciden si sirve o hay que sacar otra.
+  const g = require('./memoria-ia').leer('foto-dwh')
+  if (g?.foto?.arts instanceof Map && Number(g.en) > 0) fotoRepo = { en: g.en, foto: g.foto, segundos: g.segundos ?? null, error: null }
+}
 let fotoRepoEnCurso = null
 let fotoRepoInicio = 0
 
@@ -894,6 +907,7 @@ function lanzarFotoRepo() {
       segundos: Math.round((Date.now() - t0) / 100) / 10,
       error: null,
     }
+    require('./memoria-ia').guardar('foto-dwh', { en: fotoRepo.en, segundos: fotoRepo.segundos, foto: fotoRepo.foto })
   })()
     .catch((e) => {
       console.error('[puente] repo diaria:', e.message)
@@ -992,11 +1006,32 @@ const VENTAS_BASES_LOCAL = listaBases(
   'DRAGONFISH_9DEJUL2,DRAGONFISH_ESPINOD,DRAGONFISH_FABRICA,DRAGONFISH_MUNOZ,DRAGONFISH_NVOCED2,' +
     'DRAGONFISH_RIVERAD,DRAGONFISH_RUTA9D2,DRAGONFISH_VCPD',
 )
+const memoria = require('./memoria-ia')
 const VENTAS_DIRECTO_TIMEOUT_MS = 18_000 // el hub espera 25 s al puente
-let cacheVentasDirecto = new Map() // 'desde|hasta' -> { en, foto, bases_con_error }
+// Días cerrados que se guardan solos en D:\memoria ia\ventas (y se completan por detrás)
+const VENTAS_MEMORIA_DIAS = Math.max(0, Number(process.env.PUENTE_MEMORIA_VENTAS_DIAS ?? 90) || 0)
+const VENTAS_HOY_MS = 60_000 // el día abierto se vuelve a leer después de 1 minuto
+
+/**
+ * dia -> { dia, en, unidades, filas: [[Tienda, art, color, talle, cant], ...], bases_con_error, fijo }
+ * fijo = día cerrado y completo: no cambia más y está guardado en disco.
+ */
+const ventasDia = new Map()
 
 const conTope = (promesa, ms, que) =>
   Promise.race([promesa, new Promise((_, no) => setTimeout(() => no(new Error(`${que}: más de ${ms / 1000} s`)), ms).unref?.())])
+
+/**
+ * Un día está cerrado cuando pasaron 2 horas desde su medianoche siguiente: para entonces
+ * el Replicador ya copió lo último de los locales. Recién ahí se guarda para siempre.
+ */
+const diaCerrado = (dia) => Date.now() >= new Date(`${dia}T00:00:00`).getTime() + 26 * 3_600_000
+
+function sumarDia(dia, n) {
+  const d = new Date(`${dia}T12:00:00`)
+  d.setDate(d.getDate() + n)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 async function ventasDeServidor(srv, bases, desde, hasta) {
   await asegurarConexion(srv)
@@ -1010,43 +1045,8 @@ async function ventasDeServidor(srv, bases, desde, hasta) {
   return { dias, ventas, estado }
 }
 
-/** Descripción, grupo, material y proveedor de los artículos (maestro de INDOD, como vw_DIM_ARTICULO). */
-async function maestroArticulos(codigos) {
-  const arts = new Map()
-  const lista = [...new Set(codigos)].filter((c) => /^[A-Za-z0-9._/ -]{1,40}$/.test(c)).slice(0, 200)
-  if (!lista.length) return arts
-  const srv = SERVIDORES.get(ALIAS_PRINCIPAL.toUpperCase())
-  await asegurarConexion(srv)
-  const p = srv.pool.request()
-  lista.forEach((c, i) => p.input(`a${i}`, srv.sql.VarChar(40), c))
-  const r = await p.query(`
-    SELECT LTRIM(RTRIM(a.ARTCOD)) AS ID_ART, LTRIM(RTRIM(a.ARTDES)) AS ARTICULO, LTRIM(RTRIM(a.ARTDESADIC)) AS ARTICULO_ADICIONAL,
-           LTRIM(RTRIM(pr.DESCFW)) AS PROVEEDOR, UPPER(LTRIM(RTRIM(a.GRUPO))) AS ID_GRUPO, LTRIM(RTRIM(g.DESCRIP)) AS GRUPO,
-           LTRIM(RTRIM(a.MAT)) AS ID_MATERIAL, LTRIM(RTRIM(m.MATDES)) AS MATERIAL
-      FROM DRAGONFISH_INDOD.ZooLogic.ART a
-      OUTER APPLY (SELECT TOP 1 DESCFW FROM DRAGONFISH_INDOD.ZooLogic.PROV t WHERE t.CLCOD = a.ARTFAB) pr
-      OUTER APPLY (SELECT TOP 1 DESCRIP FROM DRAGONFISH_INDOD.ZooLogic.GRUPO t WHERE RTRIM(t.COD) = RTRIM(a.GRUPO)) g
-      OUTER APPLY (SELECT TOP 1 MATDES FROM DRAGONFISH_INDOD.ZooLogic.MAT t WHERE t.MATCOD = a.MAT) m
-     WHERE LTRIM(RTRIM(a.ARTCOD)) IN (${lista.map((_, i) => `@a${i}`).join(',')})`)
-  const t = (v) => String(v ?? '').trim()
-  for (const f of r.recordset ?? []) {
-    if (!arts.has(t(f.ID_ART))) {
-      arts.set(t(f.ID_ART), {
-        ARTICULO: t(f.ARTICULO), ARTICULO_ADICIONAL: t(f.ARTICULO_ADICIONAL), PROVEEDOR: t(f.PROVEEDOR),
-        ID_GRUPO: t(f.ID_GRUPO), GRUPO: t(f.GRUPO), ID_MATERIAL: t(f.ID_MATERIAL), MATERIAL: t(f.MATERIAL),
-      })
-    }
-  }
-  return arts
-}
-
-/** { dias, ventas } de las fechas pedidas, leyendo las bases directo (cache: 1 min con hoy, 1 h si no). */
-async function fotoVentasDirecto(desde, hasta) {
-  const clave = `${desde}|${hasta}`
-  const conHoy = hasta >= diaLocal()
-  const c = cacheVentasDirecto.get(clave)
-  if (c && Date.now() - c.en < (conHoy ? 60_000 : 3_600_000)) return c
-
+/** Lee del SQL los días desde..hasta (los dos servidores a la vez) y los deja en memoria (y en disco si cerraron). */
+async function leerVentasDelSql(desde, hasta) {
   const principal = SERVIDORES.get(ALIAS_PRINCIPAL.toUpperCase())
   const local = [...SERVIDORES.values()].find((s) => !s.principal)
   if (!local) throw new Error('Falta el servidor local (SQL2_*) con las réplicas')
@@ -1064,37 +1064,150 @@ async function fotoVentasDirecto(desde, hasta) {
   if (partes.some((p, i) => !p.estado.some((e) => e.ok) && (i === 0 ? VENTAS_BASES_PRINCIPAL : VENTAS_BASES_LOCAL).length)) {
     throw new Error(`no se leyó ninguna base: ${fallidas.slice(0, 3).join('; ')}`)
   }
-  const porDia = new Map()
-  for (const f of partes.flatMap((p) => p.dias)) porDia.set(String(f.dia), (porDia.get(String(f.dia)) ?? 0) + (Number(f.unidades) || 0))
-  const foto = repoDiaria.prepararFoto([
-    [...porDia.entries()].map(([dia, unidades]) => ({ dia, unidades })),
-    partes.flatMap((p) => p.ventas),
-  ])
-  const datos = { en: Date.now(), foto, bases_con_error: fallidas }
-  if (cacheVentasDirecto.size > 50) cacheVentasDirecto = new Map()
-  cacheVentasDirecto.set(clave, datos)
-  return datos
+  const en = Date.now()
+  const nuevos = new Map()
+  for (let d = desde; d <= hasta; d = sumarDia(d, 1)) {
+    nuevos.set(d, { dia: d, en, unidades: 0, filas: [], bases_con_error: fallidas, fijo: false })
+  }
+  const t = (v) => String(v ?? '').trim()
+  for (const f of partes.flatMap((p) => p.dias)) {
+    const r = nuevos.get(t(f.dia))
+    if (r) r.unidades += Number(f.unidades) || 0
+  }
+  for (const f of partes.flatMap((p) => p.ventas)) {
+    const r = nuevos.get(t(f.dia))
+    if (r) r.filas.push([t(f.Tienda), t(f.ID_ART), t(f.ID_COLOR), t(f.ID_TALLE), Number(f.cant) || 0])
+  }
+  for (const r of nuevos.values()) {
+    // Solo se guarda para siempre un día cerrado y leído entero (sin bases con error)
+    if (diaCerrado(r.dia) && !fallidas.length) {
+      r.fijo = memoria.guardar(`ventas/${r.dia}`, { ...r, fijo: true, guardado: new Date(en).toISOString() })
+    }
+    ventasDia.set(r.dia, r)
+  }
+  return nuevos
 }
 
-/** Ranking leyendo las bases directo; null si no se pudo (y entonces va la foto del DWH). */
+/** Los días pedidos: de la memoria (RAM o disco) los que se puedan, del SQL el resto. */
+async function ventasDeDias(dias) {
+  const listos = new Map()
+  const faltan = []
+  for (const dia of dias) {
+    let r = ventasDia.get(dia)
+    if (!r?.fijo && diaCerrado(dia)) {
+      const disco = memoria.leer(`ventas/${dia}`)
+      if (disco?.dia === dia) {
+        r = { ...disco, fijo: true }
+        ventasDia.set(dia, r)
+      }
+    }
+    if (r && (r.fijo || Date.now() - r.en < VENTAS_HOY_MS)) listos.set(dia, r)
+    else faltan.push(dia)
+  }
+  if (faltan.length) {
+    const nuevos = await leerVentasDelSql(faltan[0], faltan[faltan.length - 1])
+    for (const dia of faltan) listos.set(dia, nuevos.get(dia))
+  }
+  return dias.map((d) => listos.get(d)).filter(Boolean)
+}
+
+/**
+ * Completa por detrás la memoria de ventas: los últimos VENTAS_MEMORIA_DIAS días cerrados que
+ * no estén en disco, de a uno (1-2 s cada uno, para no cargar el SQL). Al arrancar y cada 6 horas.
+ */
+let completandoVentas = false
+async function completarMemoriaVentas() {
+  if (completandoVentas || !VENTAS_MEMORIA_DIAS) return
+  completandoVentas = true
+  let hechos = 0
+  try {
+    for (let i = 1; i <= VENTAS_MEMORIA_DIAS; i++) {
+      const dia = diaLocal(i)
+      if (!diaCerrado(dia) || memoria.existe(`ventas/${dia}`)) continue
+      await leerVentasDelSql(dia, dia)
+      hechos++
+      await new Promise((ok) => setTimeout(ok, 500))
+    }
+    if (hechos) console.log(`[puente] memoria: ${hechos} días de venta guardados en ${memoria.DIR}`)
+  } catch (e) {
+    console.error('[puente] memoria: no se pudo completar la venta guardada:', e.message)
+  } finally {
+    completandoVentas = false
+  }
+}
+function iniciarMemoriaVentas() {
+  if (!VENTAS_MEMORIA_DIAS) return
+  setTimeout(completarMemoriaVentas, 60_000).unref?.()
+  setInterval(completarMemoriaVentas, 6 * 3_600_000).unref?.()
+}
+
+/**
+ * Descripción, grupo, material y proveedor de los artículos (maestro de INDOD, como vw_DIM_ARTICULO).
+ * Lo ya buscado queda en D:\memoria ia\articulos.json y se reusa 7 días.
+ */
+const ARTICULOS_MEMORIA_MS = 7 * 86_400_000
+const artsMemoria = new Map(Object.entries(memoria.leer('articulos') ?? {}))
+async function maestroArticulos(codigos) {
+  const arts = new Map()
+  const pedidos = [...new Set(codigos)].filter((c) => /^[A-Za-z0-9._/ -]{1,40}$/.test(c)).slice(0, 200)
+  const lista = []
+  for (const c of pedidos) {
+    const m = artsMemoria.get(c)
+    if (m && Date.now() - (m.en || 0) < ARTICULOS_MEMORIA_MS) arts.set(c, m)
+    else lista.push(c)
+  }
+  if (!lista.length) return arts
+  const srv = SERVIDORES.get(ALIAS_PRINCIPAL.toUpperCase())
+  await asegurarConexion(srv)
+  const p = srv.pool.request()
+  lista.forEach((c, i) => p.input(`a${i}`, srv.sql.VarChar(40), c))
+  const r = await p.query(`
+    SELECT LTRIM(RTRIM(a.ARTCOD)) AS ID_ART, LTRIM(RTRIM(a.ARTDES)) AS ARTICULO, LTRIM(RTRIM(a.ARTDESADIC)) AS ARTICULO_ADICIONAL,
+           LTRIM(RTRIM(pr.DESCFW)) AS PROVEEDOR, UPPER(LTRIM(RTRIM(a.GRUPO))) AS ID_GRUPO, LTRIM(RTRIM(g.DESCRIP)) AS GRUPO,
+           LTRIM(RTRIM(a.MAT)) AS ID_MATERIAL, LTRIM(RTRIM(m.MATDES)) AS MATERIAL
+      FROM DRAGONFISH_INDOD.ZooLogic.ART a
+      OUTER APPLY (SELECT TOP 1 DESCFW FROM DRAGONFISH_INDOD.ZooLogic.PROV t WHERE t.CLCOD = a.ARTFAB) pr
+      OUTER APPLY (SELECT TOP 1 DESCRIP FROM DRAGONFISH_INDOD.ZooLogic.GRUPO t WHERE RTRIM(t.COD) = RTRIM(a.GRUPO)) g
+      OUTER APPLY (SELECT TOP 1 MATDES FROM DRAGONFISH_INDOD.ZooLogic.MAT t WHERE t.MATCOD = a.MAT) m
+     WHERE LTRIM(RTRIM(a.ARTCOD)) IN (${lista.map((_, i) => `@a${i}`).join(',')})`)
+  const t = (v) => String(v ?? '').trim()
+  const en = Date.now()
+  for (const f of r.recordset ?? []) {
+    const a = {
+      ARTICULO: t(f.ARTICULO), ARTICULO_ADICIONAL: t(f.ARTICULO_ADICIONAL), PROVEEDOR: t(f.PROVEEDOR),
+      ID_GRUPO: t(f.ID_GRUPO), GRUPO: t(f.GRUPO), ID_MATERIAL: t(f.ID_MATERIAL), MATERIAL: t(f.MATERIAL), en,
+    }
+    arts.set(t(f.ID_ART), a)
+    artsMemoria.set(t(f.ID_ART), a)
+  }
+  memoria.guardar('articulos', Object.fromEntries(artsMemoria))
+  return arts
+}
+
+/** Ranking leyendo las bases directo (o la memoria); null si no se pudo (y entonces va la foto del DWH). */
 async function ventasArticulosDirecto(body) {
-  const fechas = (Array.isArray(body?.fechas) ? body.fechas : []).map((f) => String(f).trim()).filter((f) => /^\d{4}-\d{2}-\d{2}$/.test(f)).sort()
-  if (!fechas.length) return null
-  const desde = fechas[0]
-  const hasta = fechas[fechas.length - 1]
-  if ((new Date(hasta) - new Date(desde)) / 86_400_000 > 31) return null
+  const fechas = [...new Set((Array.isArray(body?.fechas) ? body.fechas : []).map((f) => String(f).trim()).filter((f) => /^\d{4}-\d{2}-\d{2}$/.test(f)))].sort()
+  if (!fechas.length || fechas.length > 31) return null
   try {
     const t0 = Date.now()
-    const { en, foto, bases_con_error } = await fotoVentasDirecto(desde, hasta)
+    const recs = await ventasDeDias(fechas)
+    const foto = repoDiaria.prepararFoto([
+      recs.map((r) => ({ dia: r.dia, unidades: r.unidades })),
+      recs.flatMap((r) =>
+        r.filas.map(([Tienda, ID_ART, ID_COLOR, ID_TALLE, cant]) => ({ dia: r.dia, Tienda, ID_ART, ID_COLOR, ID_TALLE, cant })),
+      ),
+    ])
     const opts = { fechas, local: body?.local, agrupar: body?.agrupar, top: body?.top }
     const borrador = repoDiaria.rankingVentas(foto, opts)
     const arts = await maestroArticulos(borrador.ranking.map((r) => r.articulo)).catch(() => new Map())
+    const fallidas = [...new Set(recs.flatMap((r) => r.bases_con_error ?? []))]
     return {
       estado: 'listo',
       fuente: 'bases Dragon (réplicas de esta PC + servidor principal)',
-      foto: new Date(en).toISOString(),
+      foto: new Date(Math.min(...recs.map((r) => r.en))).toISOString(),
       segundos: Math.round((Date.now() - t0) / 100) / 10,
-      ...(bases_con_error.length ? { bases_con_error } : {}),
+      dias_de_memoria: recs.filter((r) => r.fijo).map((r) => r.dia),
+      ...(fallidas.length ? { bases_con_error: fallidas } : {}),
       ...repoDiaria.rankingVentas({ ...foto, arts }, opts),
     }
   } catch (e) {
@@ -1583,6 +1696,8 @@ server.listen(Number(PUENTE_PORT), () => {
   console.log(`[puente] Escuchando en http://localhost:${PUENTE_PORT}`)
   // Repo diaria y cascada programadas (Compras > Repo diaria > Automático). PUENTE_PROGRAMADOR=0 lo apaga.
   iniciarFotoManana()
+  // Venta de los días cerrados guardada en D:\memoria ia (se completa por detrás)
+  iniciarMemoriaVentas()
   programador.iniciar({
     fotoNueva: fotoRepoNueva,
     foto: () => fotoRepo.foto,
