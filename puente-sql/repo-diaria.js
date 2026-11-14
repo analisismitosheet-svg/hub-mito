@@ -11,6 +11,8 @@
  *   - Solo locales receptores (CLIENTE REPO) y artículos de mercadería:
  *     material 0-9, sin BCF, sin INSUMOS / CODIGOS BASURA / DISCONTINUO - A FABRICA,
  *     sin las líneas W27-M / W27-I / X-W27.
+ *   - MITO solo cubre los proveedores MOCF y MOZH (14/11/2026): lo demás queda para la
+ *     cascada (primero INDOD, después los locales).
  *   - A REPONER = mín(venta del local, stock MITO que queda). El stock MITO de un
  *     SKU se reparte por prioridad de local (COMPLETO / PARCIAL) y NUNCA se pasa.
  *
@@ -25,6 +27,10 @@ const RECEPTORES_ORDEN = [
   'WALTD', 'VCPD', 'GPAZD',
 ]
 const PRIO = new Map(RECEPTORES_ORDEN.map((r, i) => [r, i]))
+
+// Los únicos proveedores que MITO repone (lo demás lo cubre la cascada: INDOD y los locales)
+const PROVEEDORES_MITO = new Set(['MOCF', 'MOZH'])
+const deMito = (a) => !!a && PROVEEDORES_MITO.has(String(a.ID_PROV).toUpperCase())
 
 const EXCL_LINEA = new Set(['W27-M', 'W27-I', 'X-W27'])
 const EXCL_MATERIAL = new Set(['INSUMOS', 'CODIGOS BASURA', 'DISCONTINUO - A FABRICA'])
@@ -135,7 +141,7 @@ function calcularRepo(foto, opts) {
   const stockSku = new Map()
   const detalleStock = new Map()
   for (const s of foto.stock) {
-    if (s.cant <= 0 || !articuloValido(foto.arts.get(s.art))) continue
+    if (s.cant <= 0 || !articuloValido(foto.arts.get(s.art)) || !deMito(foto.arts.get(s.art))) continue
     const sku = `${s.art} ${s.color} ${s.talle}`
     stockSku.set(sku, (stockSku.get(sku) ?? 0) + s.cant)
     const d = detalleStock.get(sku) ?? { fisico: 0, comprometido: 0 }
@@ -144,13 +150,13 @@ function calcularRepo(foto, opts) {
     detalleStock.set(sku, d)
   }
 
-  // Venta de los días pedidos, de locales receptores y artículos válidos
+  // Venta de los días pedidos, de locales receptores y artículos válidos de proveedores de MITO
   const ventas = []
   for (const v of foto.ventas) {
     if (!tset.has(v.dia) || v.cant <= 0) continue
     const base = baseDeTienda(v.tienda)
     const cliente = clienteDeBase(base)
-    if (!PRIO.has(cliente) || !articuloValido(foto.arts.get(v.art))) continue
+    if (!PRIO.has(cliente) || !articuloValido(foto.arts.get(v.art)) || !deMito(foto.arts.get(v.art))) continue
     ventas.push({ ...v, base, cliente, sku: `${v.art} ${v.color} ${v.talle}` })
   }
 
@@ -317,4 +323,4 @@ function rankingVentas(foto, opts = {}) {
   }
 }
 
-module.exports = { prepararFoto, calcularRepo, rankingVentas, baseDeTienda, clienteDeBase, RECEPTORES_ORDEN }
+module.exports = { PROVEEDORES_MITO, prepararFoto, calcularRepo, rankingVentas, baseDeTienda, clienteDeBase, RECEPTORES_ORDEN }
