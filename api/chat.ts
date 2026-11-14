@@ -240,8 +240,8 @@ const HERRAMIENTAS: Herramienta[] = [
       'Estado de los pedidos de compra a proveedores (todos, no anulados): unidades pedidas, recibidas, canceladas y PENDIENTES ' +
       '(pedidas − recibidas − canceladas = lo que el proveedor todavía debe). Sin proveedor: resumen por proveedor de TODOS los pedidos, ' +
       'ordenado por pendientes (completo, sirve para rankings). Con proveedor: además el detalle de sus pedidos. ' +
-      'Ojo: hay pedidos de 2025 con saldo que probablemente nunca se cerraron en Dragon; "pendiente_mas_viejo" lo muestra ' +
-      'y con "desde" se cuentan solo los pedidos desde esa fecha. Aclaralo al usuario cuando el pendiente venga de pedidos viejos.',
+      'Los pedidos anteriores a la fecha de corte del hub (hoy marzo 2026) están marcados SIN SALDO: su pendiente no cuenta ' +
+      '("pedidos_sin_saldo" dice cuántos). Con "desde" se cuentan solo los pedidos desde esa fecha.',
     parametros: {
       type: 'object',
       properties: {
@@ -259,7 +259,8 @@ const HERRAMIENTAS: Herramienta[] = [
           (!desde || String(f.fecha ?? '').slice(0, 10) >= desde),
       )
       const n = (v: unknown) => Number(v) || 0
-      const pend = (f: Record<string, unknown>) => Math.max(n(f.unidades) - n(f.recibidas) - n(f.canceladas), 0)
+      // Los pedidos anteriores a la fecha de corte (config_app.pedidos_compra_saldo_desde) no cuentan
+      const pend = (f: Record<string, unknown>) => (f.sin_saldo ? 0 : Math.max(n(f.unidades) - n(f.recibidas) - n(f.canceladas), 0))
 
       // Se resume acá: 500 pedidos con todos sus campos no entran en el resultado (se recortan a 10.000
       // caracteres) y el ranking salía con una parte. Por proveedor entran todos.
@@ -288,6 +289,7 @@ const HERRAMIENTAS: Herramienta[] = [
       return {
         ...(desde ? { desde } : {}),
         pedidos: sel.length,
+        pedidos_sin_saldo: sel.filter((f) => f.sin_saldo).length,
         totales: { pedidas: total('pedidas'), recibidas: total('recibidas'), canceladas: total('canceladas'), pendientes: total('pendientes') },
         cantidad_proveedores: proveedores.length,
         // Columnas + filas (sin repetir los nombres de campo): así entran todos en el resultado

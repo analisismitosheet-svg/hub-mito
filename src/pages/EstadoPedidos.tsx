@@ -35,6 +35,8 @@ interface EstadoPedido {
   renglones: number
   renglones_completos: number
   ultimo_ingreso: string | null
+  /** Pedido anterior a config_app.pedidos_compra_saldo_desde: se muestra, pero su pendiente no cuenta */
+  sin_saldo?: boolean
 }
 
 interface Renglon {
@@ -46,7 +48,7 @@ interface Renglon {
   cancelado: number
 }
 
-type Estado = 'todos' | 'sin' | 'parcial' | 'completo' | 'sobrante'
+type Estado = 'todos' | 'sin' | 'parcial' | 'completo' | 'sobrante' | 'viejo'
 type Periodo = '90' | '180' | '365' | 'todo'
 
 /** Proveedor elegido en el filtro: la etiqueta para mostrar y los códigos a filtrar. */
@@ -57,19 +59,22 @@ const fechaCorta = (f: string | null) => (f ? f.slice(0, 10).split('-').reverse(
 const diasDesde = (f: string | null) => (f ? Math.max(0, Math.floor((Date.now() - new Date(f + 'T00:00:00').getTime()) / 86400000)) : null)
 const pct = (a: number, b: number) => (b > 0 ? Math.min(100, Math.round((a / b) * 100)) : 0)
 
-/** Lo que todavía tiene que llegar: lo pedido menos lo ingresado y lo cancelado. */
-const pendientes = (p: { unidades: number; recibidas: number; canceladas: number }) => Math.max(0, p.unidades - p.recibidas - p.canceladas)
+/** Lo que todavía tiene que llegar: lo pedido menos lo ingresado y lo cancelado (los pedidos viejos marcados sin saldo, 0). */
+const pendientesReal = (p: { unidades: number; recibidas: number; canceladas: number }) => Math.max(0, p.unidades - p.recibidas - p.canceladas)
+const pendientes = (p: { unidades: number; recibidas: number; canceladas: number; sin_saldo?: boolean }) => (p.sin_saldo ? 0 : pendientesReal(p))
 
 function estadoDe(p: EstadoPedido): Exclude<Estado, 'todos'> {
   // Completo, pero llegaron unidades de más: se marca aparte
-  if (p.unidades > 0 && pendientes(p) === 0) return p.demas > 0 ? 'sobrante' : 'completo'
+  if (p.unidades > 0 && pendientesReal(p) === 0) return p.demas > 0 ? 'sobrante' : 'completo'
+  // Viejo con saldo que no se cuenta (antes de la fecha de corte): ya no se espera
+  if (p.sin_saldo) return 'viejo'
   return p.recibidas > 0 ? 'parcial' : 'sin'
 }
 
 /** Ya no espera nada (completo, con o sin sobrante) */
 const cerrado = (p: EstadoPedido) => {
   const e = estadoDe(p)
-  return e === 'completo' || e === 'sobrante'
+  return e === 'completo' || e === 'sobrante' || e === 'viejo'
 }
 
 const ESTADOS: Record<Exclude<Estado, 'todos'>, { label: string; clase: string }> = {
@@ -77,6 +82,7 @@ const ESTADOS: Record<Exclude<Estado, 'todos'>, { label: string; clase: string }
   parcial: { label: 'Parcial', clase: 'border-amber-500/40 bg-amber-500/10 text-amber-400' },
   completo: { label: 'Completo', clase: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400' },
   sobrante: { label: 'Con sobrante', clase: 'border-sky-500/40 bg-sky-500/10 text-sky-400' },
+  viejo: { label: 'Sin saldo (viejo)', clase: 'border-zinc-500/40 bg-zinc-500/10 text-zinc-400' },
 }
 
 /** "PEDIDODECOMPRA X 00001-00009787" -> "X 00001-00009787" */
@@ -504,7 +510,7 @@ export default function EstadoPedidos() {
           <section className="rounded-2xl border border-line bg-surface p-3">
             <div className="mb-2 flex flex-wrap items-center gap-1.5">
               <h2 className="mr-1 text-sm font-semibold text-ink">Pedidos <span className="font-normal text-sub">({n0.format(lista.length)})</span></h2>
-              {(['todos', 'sin', 'parcial', 'completo', 'sobrante'] as const).map((e) => (
+              {(['todos', 'sin', 'parcial', 'completo', 'sobrante', 'viejo'] as const).map((e) => (
                 <button key={e} onClick={() => setEstado(e)}
                   className={`${chip} ${estado === e ? 'border-lime-500/50 bg-lime-500/15 text-lime-500' : 'border-line text-sub hover:text-ink'}`}>
                   {e === 'todos' ? 'Todos' : ESTADOS[e].label}

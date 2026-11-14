@@ -2,14 +2,19 @@
 -- ESTADO DE PEDIDOS (Compras → Pedidos): cómo viene el ingreso de cada pedido de compra.
 -- Cruza pedidos_compra(_items) (copia de Dragonfish) con lo marcado en el Picking (picking_compra)
 -- y lo cancelado (cancelaciones, copia de DWH.dbo.vw_FACT_CANCELADOS). Solo unidades.
+-- sin_saldo: pedidos anteriores a config_app.pedidos_compra_saldo_desde ("2026-03-01" desde el 13/11/2026):
+-- se siguen mostrando pero su pendiente no cuenta (pedidos viejos que nunca se cerraron en Dragon).
 -- Solo lectura. Permiso: pedidos_compra.view o picking.view. Idempotente.
+
+INSERT INTO public.config_app (clave, valor) VALUES ('pedidos_compra_saldo_desde', to_jsonb('2026-03-01'::text))
+ON CONFLICT (clave) DO NOTHING;
 -- =====================================================
 
 DROP FUNCTION IF EXISTS public.estado_pedidos_compra();
 CREATE FUNCTION public.estado_pedidos_compra()
 RETURNS TABLE (codigo text, numero integer, comprobante text, fecha date, proveedor text, proveedor_nombre text,
                observacion text, unidades numeric, recibidas numeric, demas numeric, canceladas numeric,
-               renglones integer, renglones_completos integer, ultimo_ingreso timestamptz)
+               renglones integer, renglones_completos integer, ultimo_ingreso timestamptz, sin_saldo boolean)
 LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = public
 AS $$
@@ -37,7 +42,8 @@ AS $$
          coalesce(max(canc.canceladas), 0),
          count(r.articulo)::int,
          count(r.articulo) FILTER (WHERE r.recibido >= r.cantidad)::int,
-         max(r.actualizado_at) FILTER (WHERE r.recibido > 0)
+         max(r.actualizado_at) FILTER (WHERE r.recibido > 0),
+         coalesce(p.fecha < (SELECT (c.valor #>> '{}')::date FROM public.config_app c WHERE c.clave = 'pedidos_compra_saldo_desde'), false)
   FROM public.pedidos_compra p
   LEFT JOIN r ON r.codigo = p.codigo
   LEFT JOIN canc ON canc.codigo = p.codigo
