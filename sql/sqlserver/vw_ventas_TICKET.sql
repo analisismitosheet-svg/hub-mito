@@ -40,11 +40,42 @@
 -- atrasada, mirar ahi. Cuando el Replicador copie bien, cambiar ese bloque por la lectura
 -- local (igual que los otros).
 --
+-- 9 DE JULIO (2026-11-14): la replica DRAGONFISH_9DEJUL2 se trabo el 13/11 a las 19:18 y la
+-- conversion quedo en 0 mientras el principal ya tenia 99 comprobantes del dia. Desde entonces,
+-- para los ultimos 7 dias, se compara cuantos comprobantes tiene cada lado: el dia en que el
+-- principal tiene mas, sale entero del principal (OPENQUERY [MITO]); si no, de la replica.
+-- Si el linked server MITO no responde, la vista entera falla (igual que con Ruta 9).
+--
 -- Aplicar:  node scripts/sql.mjs --alias DESKTOP-OA4GU6I -f sql/sqlserver/vw_ventas_TICKET.sql
 -- ============================================================
 USE VISTAS_CONSOLIDADAS;
 GO
 CREATE OR ALTER VIEW dbo.vw_ventas_TICKET AS
+WITH
+-- 9 de Julio en el servidor principal, ultimos 7 dias (mismo filtro que la replica)
+J9_PRINCIPAL AS (
+  SELECT CAST(Q.FECHA AS date) AS FECHA, Q.HALTAFW, Q.FHORA, Q.DESCFW, Q.FTOTAL, Q.SIGNOMOV
+  FROM OPENQUERY([MITO], '
+    SELECT CAST(C.FFCH AS date) AS FECHA, C.HALTAFW, C.FHORA, C.DESCFW, C.FTOTAL, C.SIGNOMOV
+    FROM DRAGONFISH_9DEJUL2.ZooLogic.COMPROBANTEV AS C
+    WHERE C.ANULADO = 0 AND C.FPTOVEN <> 39
+      AND (C.DESCFW LIKE ''TICKET%'' OR C.DESCFW LIKE ''FACTURAELECTRONICA%'' OR C.DESCFW LIKE ''NOTADECREDITOELECTRONICA%'')
+      AND C.FFCH >= DATEADD(day, -7, CONVERT(date, GETDATE()))
+  ') AS Q
+),
+-- Dias en que el principal tiene MAS comprobantes que la replica = la replica no esta al dia
+J9_ATRASADOS AS (
+  SELECT P.FECHA
+  FROM (SELECT FECHA, COUNT(*) AS N FROM J9_PRINCIPAL GROUP BY FECHA) AS P
+  LEFT JOIN (
+    SELECT CAST(C.FFCH AS date) AS FECHA, COUNT(*) AS N
+    FROM DRAGONFISH_9DEJUL2.ZooLogic.COMPROBANTEV AS C
+    WHERE C.ANULADO = 0 AND C.FPTOVEN <> 39 AND (C.DESCFW LIKE 'TICKET%' OR C.DESCFW LIKE 'FACTURAELECTRONICA%' OR C.DESCFW LIKE 'NOTADECREDITOELECTRONICA%')
+      AND C.FFCH >= DATEADD(day, -7, CONVERT(date, GETDATE()))
+    GROUP BY CAST(C.FFCH AS date)
+  ) AS R ON R.FECHA = P.FECHA
+  WHERE P.N > ISNULL(R.N, 0)
+)
 SELECT
   CAST(T.LOCAL AS varchar(20)) COLLATE DATABASE_DEFAULT                            AS LOCAL,
   CAST(CONVERT(varchar(10), T.FECHA, 23) AS varchar(10)) COLLATE DATABASE_DEFAULT  AS FECHA,  -- 'yyyy-mm-dd'
@@ -76,11 +107,22 @@ FROM (
 
   UNION ALL
 
+  -- 9 de Julio: de la replica, salvo los dias que esten ATRASADOS (ver J9_PRINCIPAL / J9_ATRASADOS
+  -- arriba): esos salen del servidor principal.
   SELECT '9DEJULIO', CAST(C.FFCH AS date),
          TRY_CAST(LEFT(LTRIM(COALESCE(NULLIF(LTRIM(RTRIM(C.HALTAFW)), ''), C.FHORA)), 2) AS int),
          C.DESCFW COLLATE DATABASE_DEFAULT, C.FTOTAL * C.SIGNOMOV
   FROM DRAGONFISH_9DEJUL2.ZooLogic.COMPROBANTEV AS C
   WHERE C.ANULADO = 0 AND C.FPTOVEN <> 39 AND (C.DESCFW LIKE 'TICKET%' OR C.DESCFW LIKE 'FACTURAELECTRONICA%' OR C.DESCFW LIKE 'NOTADECREDITOELECTRONICA%') AND C.FFCH >= DATEADD(day, -180, CONVERT(date, GETDATE()))
+    AND NOT EXISTS (SELECT 1 FROM J9_ATRASADOS A WHERE A.FECHA = CAST(C.FFCH AS date))
+
+  UNION ALL
+
+  SELECT '9DEJULIO', P.FECHA,
+         TRY_CAST(LEFT(LTRIM(COALESCE(NULLIF(LTRIM(RTRIM(P.HALTAFW)), ''), P.FHORA)), 2) AS int),
+         P.DESCFW COLLATE DATABASE_DEFAULT, P.FTOTAL * P.SIGNOMOV
+  FROM J9_PRINCIPAL AS P
+  WHERE EXISTS (SELECT 1 FROM J9_ATRASADOS A WHERE A.FECHA = P.FECHA)
 
   UNION ALL
 
