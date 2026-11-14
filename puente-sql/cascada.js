@@ -24,6 +24,9 @@
  *     MITO: cubren el faltante con todo su stock, por prioridad de local, sin quedarse con
  *     nada, sin tope por SKU, sin mínimo por envío ni tránsito / «ya tiene» / restricción
  *     de proveedor. Lo que no cubren pasa a los locales. Por defecto: INDOD.
+ *   - cerrados_dia (14/11/2026): locales que no abren ciertos días de la semana (1 = lunes …
+ *     7 = domingo). El día que corre la cascada NO donan: lo que se les iba a pedir lo dona
+ *     el siguiente local que sí abre. Por defecto: domingo 9DEJULIO, MUNOZ, GRALPAZ y CFR4.
  *   - materiales (incluir), excluir_temporadas / grupos / articulos / proveedores / lineas
  *   - orden_receptores: 'alfabetico' (como el script) o 'prioridad'
  *   - orden_donantes: 'stock' (más stock del artículo primero, como el script) o 'prioridad'
@@ -60,6 +63,7 @@
     restriccion: { activo: true, receptores: ['CFR4', 'CFR9', 'CFD', 'CFPO', 'CFRA'], proveedores: ['MOCF', 'MOZH', 'MOFR'] },
     pase_extra: { activo: true, locales: ['NVOCED'] },
     donante_principal: { activo: true, bases: ['INDOD'] },
+    cerrados_dia: { activo: true, dias: { 7: ['9DEJULIO', 'MUNOZ', 'GRALPAZ', 'CFR4'] } },
     materiales: { activo: true, lista: ['ACCESORIOS', 'PANTALONES', 'BERMUDAS', 'BOARDSHORTS-BIKINIS', 'REMERAS', 'CAMISAS', 'CALZADO'] },
     excluir_temporadas: { activo: true, lista: ['Invierno'] },
     excluir_grupos: { activo: true, lista: ['U02', 'U03'] },
@@ -147,6 +151,7 @@
     const r = obj(p.restriccion)
     const pe = obj(p.pase_extra)
     const dp = obj(p.donante_principal)
+    const cd = obj(p.cerrados_dia)
     // Temporadas: se guardan con su nombre (Verano / Continuo / Invierno)
     const temp = reglaL('excluir_temporadas', false)
     temp.lista = temp.lista.map((t) => TEMPORADA[t] ?? t[0].toUpperCase() + t.slice(1).toLowerCase())
@@ -168,6 +173,18 @@
       },
       pase_extra: { activo: bool(pe.activo, d.pase_extra.activo), locales: lista(pe.locales, d.pase_extra.locales) },
       donante_principal: { activo: bool(dp.activo, d.donante_principal.activo), bases: lista(dp.bases, d.donante_principal.bases) },
+      cerrados_dia: {
+        activo: bool(cd.activo, d.cerrados_dia.activo),
+        dias: (() => {
+          const fuente = cd.dias && typeof cd.dias === 'object' ? obj(cd.dias) : d.cerrados_dia.dias
+          const out = {}
+          for (let n = 1; n <= 7; n++) {
+            const l = lista(fuente[n], [])
+            if (l.length) out[n] = l
+          }
+          return out
+        })(),
+      },
       materiales: reglaL('materiales'),
       excluir_temporadas: temp,
       excluir_grupos: reglaL('excluir_grupos'),
@@ -199,8 +216,12 @@
    * @param repo   calcularRepo(...) de los mismos días ({ dias, filas: [{base, sku, a_reponer}] })
    * @param params parámetros (se completan con PARAMS_DEFAULT)
    */
-  function calcularCascada(foto, repo, params) {
+  function calcularCascada(foto, repo, params, opts) {
     const P = normalizarParams(params)
+    // Día en que corre la cascada (el pedido de transferencia sale hoy): 1 = lunes … 7 = domingo
+    const hoy = opts?.hoy ? new Date(`${opts.hoy}T12:00:00`) : new Date()
+    const diaSemana = hoy.getDay() || 7
+    const cerradosHoy = new Set(P.cerrados_dia.activo ? P.cerrados_dia.dias[diaSemana] ?? [] : [])
     const PRIORIDAD = P.prioridad
     const PRIO = new Map(PRIORIDAD.map((b, i) => [b, i + 1]))
     const noDonan = new Set(P.no_donan)
@@ -311,7 +332,7 @@
       p.elegible = elegible(p.art) && !noReciben.has(p.base)
     }
 
-    const donantesBase = PRIORIDAD.filter((d) => !noDonan.has(d) && !principal.has(d))
+    const donantesBase = PRIORIDAD.filter((d) => !noDonan.has(d) && !principal.has(d) && !cerradosHoy.has(d))
     // Con prioridad por venta (donantes): dona primero el que MENOS vende la categoría
     const donantesDe = (art, color, talle) =>
       [...donantesBase].sort(
@@ -459,6 +480,8 @@
       faltante_despues_mito: faltanteTotal,
       // Unidades que cubrieron los donantes principales (INDOD) antes que los locales
       de_principal: dePrincipal,
+      // Locales que hoy no abren: no donan (cerrados_dia)
+      cerrados_hoy: [...cerradosHoy],
       pares_eliminados: chicos.length,
       unidades_eliminadas: chicos.reduce((s, u) => s + u, 0),
       // Por qué quedó sin cubrir lo que faltaba (unidades)

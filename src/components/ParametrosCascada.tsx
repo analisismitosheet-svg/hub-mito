@@ -214,6 +214,28 @@ export default function ParametrosCascada({ params, guardados, onChange, onGuard
         >
           <Etiquetas valores={P.donante_principal.bases} sugerencias={['INDOD', 'POLO52', 'FABRICA']} onChange={(v) => set((p) => { p.donante_principal.bases = v })} />
         </Regla>
+        <Regla
+          titulo="Cerrados por día"
+          ayuda="Los días que no abren no donan: lo que se les iba a pedir lo dona otro local que sí abre."
+          activo={P.cerrados_dia.activo}
+          onActivo={(v) => set((p) => { p.cerrados_dia.activo = v })}
+          cambio={!igual(P.cerrados_dia, D.cerrados_dia)}
+        >
+          <div className="space-y-1">
+            {['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'].map((nombre, i) => (
+              <div key={nombre} className="flex items-start gap-2">
+                <span className="w-16 flex-none pt-1 text-[11px] text-sub">{nombre}</span>
+                <div className="min-w-0 flex-1">
+                  <Etiquetas
+                    valores={P.cerrados_dia.dias[i + 1] ?? []}
+                    sugerencias={P.prioridad}
+                    onChange={(v) => set((p) => { if (v.length) p.cerrados_dia.dias[i + 1] = v; else delete p.cerrados_dia.dias[i + 1] })}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </Regla>
         <Regla titulo="No donan" ayuda="Reciben pero nunca mandan." cambio={!igual(P.no_donan, D.no_donan)}>
           <Etiquetas valores={P.no_donan} sugerencias={P.prioridad} onChange={(v) => set((p) => { p.no_donan = v })} />
         </Regla>

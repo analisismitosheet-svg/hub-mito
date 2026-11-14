@@ -499,7 +499,11 @@ function VistaCascada({ datos, onVerLotes }: { datos: Datos; onVerLotes: () => v
       pie: `${numero(cas.filas.length)} renglones${cas.de_principal ? ` · ${numero(cas.de_principal)} u. de ${(P0.donante_principal?.bases ?? []).join(', ') || 'principal'}` : ''}`,
     },
     { titulo: 'Faltaba después de MITO', valor: numero(cas.faltante_despues_mito), pie: 'venta − repo MITO' },
-    { titulo: 'Sigue sin cubrir', valor: numero(sinCubrir), pie: 'sin donante o fuera de las reglas' },
+    {
+      titulo: 'Sigue sin cubrir',
+      valor: numero(sinCubrir),
+      pie: `sin donante o fuera de las reglas${cas.cerrados_hoy?.length ? ` · hoy no donan (cerrados): ${cas.cerrados_hoy.join(', ')}` : ''}`,
+    },
     { titulo: 'Envíos chicos sacados', valor: numero(cas.pares_eliminados), pie: `donante → receptor con < ${P0.min_envio.activo ? P0.min_envio.valor : 1} u.` },
   ]
   const totalDon = (d: string) => cas.receptores.reduce((s, r) => s + (cas.matriz[d]?.[r] ?? 0), 0)

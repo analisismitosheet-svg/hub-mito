@@ -85,6 +85,8 @@ export interface Cascada {
   faltante_despues_mito: number
   /** unidades que cubrieron los donantes principales (INDOD) antes que los locales */
   de_principal?: number
+  /** locales que hoy no abren (no donan) */
+  cerrados_hoy?: string[]
   pares_eliminados: number
   unidades_eliminadas?: number
   /** por qué quedó sin cubrir lo que faltaba (unidades) */
@@ -117,6 +119,8 @@ export interface ParamsCascada {
   pase_extra: { activo: boolean; locales: string[] }
   /** bases que donan primero, como MITO (sin quedarse con nada, sin topes): INDOD */
   donante_principal: { activo: boolean; bases: string[] }
+  /** locales que no abren ese día de la semana (1 = lunes … 7 = domingo): ese día no donan */
+  cerrados_dia: { activo: boolean; dias: Partial<Record<number, string[]>> }
   materiales: ReglaLista
   excluir_temporadas: ReglaLista
   excluir_grupos: ReglaLista
@@ -165,6 +169,7 @@ export const PARAMS_DEFAULT: ParamsCascada = {
   restriccion: { activo: true, receptores: ['CFR4', 'CFR9', 'CFD', 'CFPO', 'CFRA'], proveedores: ['MOCF', 'MOZH', 'MOFR'] },
   pase_extra: { activo: true, locales: ['NVOCED'] },
   donante_principal: { activo: true, bases: ['INDOD'] },
+  cerrados_dia: { activo: true, dias: { 7: ['9DEJULIO', 'MUNOZ', 'GRALPAZ', 'CFR4'] } },
   materiales: { activo: true, lista: ['ACCESORIOS', 'PANTALONES', 'BERMUDAS', 'BOARDSHORTS-BIKINIS', 'REMERAS', 'CAMISAS', 'CALZADO'] },
   excluir_temporadas: { activo: true, lista: ['Invierno'] },
   excluir_grupos: { activo: true, lista: ['U02', 'U03'] },
