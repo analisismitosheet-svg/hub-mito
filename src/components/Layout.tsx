@@ -6,6 +6,7 @@ import { useTheme } from '@/context/ThemeContext'
 import CampanaNotificaciones from '@/components/CampanaNotificaciones'
 import AvisoArqueo from '@/components/AvisoArqueo'
 import ChatAgentes from '@/components/ChatAgentes'
+import ChatIaFlotante from '@/components/ChatIaFlotante'
 
 /**
  * Shell de la app. Todas las pantallas ocupan el 100% del ancho del dispositivo
@@ -191,6 +192,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         {children}
       </main>
       {logueado && <ChatAgentes />}
+      {logueado && <ChatIaFlotante />}
     </div>
   )
 }
