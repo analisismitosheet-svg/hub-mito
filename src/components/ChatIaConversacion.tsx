@@ -14,12 +14,16 @@ export interface MensajeChatIa {
   content: string
   proveedor?: 'opencode' | 'ollama'
   consultas?: string[]
+  /** por qué no contestó OpenCode (cuando respondió Ollama) */
+  aviso?: string
   error?: boolean
 }
 
 // ---------- estado compartido (memoria de la pestaña) ----------
 
 let estado: { mensajes: MensajeChatIa[]; pensando: boolean } = { mensajes: [], pensando: false }
+/** ID estable de la conversación (OpenCode Go lo pide en x-opencode-session); cambia con "Nueva conversación". */
+let sesion = crypto.randomUUID()
 const oyentes = new Set<() => void>()
 function fijar(cambio: Partial<typeof estado>) {
   estado = { ...estado, ...cambio }
@@ -33,7 +37,9 @@ export function useChatIa() {
   return useSyncExternalStore(suscribir, () => estado)
 }
 export function reiniciarChatIa() {
-  if (!estado.pensando) fijar({ mensajes: [] })
+  if (estado.pensando) return
+  sesion = crypto.randomUUID()
+  fijar({ mensajes: [] })
 }
 
 async function preguntar(q: string) {
@@ -45,17 +51,18 @@ async function preguntar(q: string) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${data.session?.access_token ?? ''}` },
       body: JSON.stringify({
+        sesion,
         mensajes: historial.filter((m) => !m.error).map((m) => ({ role: m.role, content: m.content })),
       }),
     })
     const cuerpo = (await res.json().catch(() => null)) as
-      | { respuesta?: string; proveedor?: 'opencode' | 'ollama'; consultas?: string[]; error?: string }
+      | { respuesta?: string; proveedor?: 'opencode' | 'ollama'; consultas?: string[]; aviso?: string; error?: string }
       | null
     if (!res.ok || !cuerpo?.respuesta) throw new Error(cuerpo?.error ?? `Error ${res.status}`)
     fijar({
       mensajes: [
         ...estado.mensajes,
-        { role: 'assistant', content: cuerpo.respuesta, proveedor: cuerpo.proveedor, consultas: cuerpo.consultas },
+        { role: 'assistant', content: cuerpo.respuesta, proveedor: cuerpo.proveedor, consultas: cuerpo.consultas, aviso: cuerpo.aviso },
       ],
     })
   } catch (err) {
@@ -220,6 +227,7 @@ export default function ChatIaConversacion({ compacto = false }: { compacto?: bo
                   {m.consultas?.length
                     ? ` · consultó ${[...new Set(m.consultas)].map((c) => NOMBRE_CONSULTA[c] ?? c).join(', ')}`
                     : ''}
+                  {m.aviso ? ` · OpenCode no respondió: ${m.aviso}` : ''}
                 </p>
               )}
             </div>

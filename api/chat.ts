@@ -262,7 +262,7 @@ type Mensaje = { role: 'user' | 'assistant'; content: string | Bloque[] }
 
 class SinCupo extends Error {}
 
-async function vueltaOpencode(mensajes: Mensaje[]): Promise<Bloque[]> {
+async function vueltaOpencode(mensajes: Mensaje[], sesion: string): Promise<Bloque[]> {
   const key = process.env.OPENCODE_GO_API_KEY?.trim()
   if (!key) throw new SinCupo('OpenCode Go no está configurado')
   let r: Response
@@ -274,6 +274,9 @@ async function vueltaOpencode(mensajes: Mensaje[]): Promise<Bloque[]> {
         'x-api-key': key,
         Authorization: `Bearer ${key}`,
         'anthropic-version': '2023-06-01',
+        // OpenCode Go exige un ID de sesión estable por conversación y un User-Agent propio
+        'x-opencode-session': sesion,
+        'User-Agent': 'hub-mito-chat/1.0',
       },
       body: JSON.stringify({
         model: process.env.OPENCODE_GO_MODELO?.trim() || 'claude-haiku-5-5',
@@ -404,7 +407,10 @@ export default async function handler(req: Req, res: Res) {
 
   const body = (typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body ?? {}) as {
     mensajes?: Array<{ role?: string; content?: unknown }>
+    sesion?: unknown
   }
+  const sesion =
+    typeof body.sesion === 'string' && /^[\w-]{8,64}$/.test(body.sesion) ? body.sesion : crypto.randomUUID()
   const historial: Mensaje[] = (body.mensajes ?? [])
     .filter((m) => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim())
     .slice(-20)
@@ -425,7 +431,7 @@ export default async function handler(req: Req, res: Res) {
       let bloques: Bloque[]
       if (proveedor === 'opencode') {
         try {
-          bloques = await vueltaOpencode(mensajes)
+          bloques = await vueltaOpencode(mensajes, sesion)
         } catch (err) {
           if (!(err instanceof SinCupo)) throw err
           proveedor = 'ollama'
