@@ -11,7 +11,7 @@
  *   - Solo locales receptores (CLIENTE REPO) y artículos de mercadería:
  *     material 0-9, sin BCF, sin INSUMOS / CODIGOS BASURA / DISCONTINUO - A FABRICA,
  *     sin las líneas W27-M / W27-I / X-W27.
- *   - MITO solo cubre los proveedores MOCF y MOZH (14/11/2026): lo demás queda para la
+ *   - MITO solo cubre los proveedores MOCF, MOZH y MOFR (14/11/2026): lo demás queda para la
  *     cascada (primero INDOD, después los locales).
  *   - A REPONER = mín(venta del local, stock MITO que queda). El stock MITO de un
  *     SKU se reparte por prioridad de local (COMPLETO / PARCIAL) y NUNCA se pasa.
@@ -29,7 +29,7 @@ const RECEPTORES_ORDEN = [
 const PRIO = new Map(RECEPTORES_ORDEN.map((r, i) => [r, i]))
 
 // Los únicos proveedores que MITO repone (lo demás lo cubre la cascada: INDOD y los locales)
-const PROVEEDORES_MITO = new Set(['MOCF', 'MOZH'])
+const PROVEEDORES_MITO = new Set(['MOCF', 'MOZH', 'MOFR'])
 const deMito = (a) => !!a && PROVEEDORES_MITO.has(String(a.ID_PROV).toUpperCase())
 
 const EXCL_LINEA = new Set(['W27-M', 'W27-I', 'X-W27'])
