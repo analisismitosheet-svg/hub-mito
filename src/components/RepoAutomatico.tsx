@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { CheckCircle2, Clock, Loader2, Play, Save, XCircle } from 'lucide-react'
+import { CalendarOff, CheckCircle2, Clock, Loader2, Play, Save, XCircle } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 import { correrAhora, guardarConfigAuto, leerConfigAuto, type ConfigAuto, type LogAuto } from '@/lib/repoDiaria'
 
 /**
@@ -75,6 +76,12 @@ export default function RepoAutomatico({ solo }: { solo?: 'repo' | 'cascada' } =
   const [error, setError] = useState<string | null>(null)
   const [guardando, setGuardando] = useState(false)
   const [aviso, setAviso] = useState<string | null>(null)
+  /** próximos feriados de todos los locales (RR. HH. → Feriados): la repo automática no corre */
+  const [feriados, setFeriados] = useState<Array<{ fecha: string; motivo: string | null }>>([])
+
+  useEffect(() => {
+    if (supabase) void supabase.rpc('repo_auto_feriados').then(({ data }) => setFeriados((data as typeof feriados | null) ?? []))
+  }, [])
 
   const leer = useCallback(async (soloEstado = false) => {
     try {
@@ -140,7 +147,7 @@ export default function RepoAutomatico({ solo }: { solo?: 'repo' | 'cascada' } =
       <p className="rounded-xl border border-sky-500/30 bg-sky-500/10 p-3 text-xs text-ink">
         El Puente SQL de la PC central revisa cada minuto. A la hora elegida saca una foto nueva del DWH y hace todo solo, sin abrir el Hub.
         Si la prendés o le cambiás la hora cuando la de hoy ya pasó, arranca el próximo día que toque; para correrla en el momento usá «Correr ahora».
-        {solo !== 'cascada' && 'La repo cubre los días con venta que todavía no tienen su repo en Dragon (un lunes, sábado y domingo juntos) y nunca repite un local que ya tiene el pedido. '}
+        {solo !== 'cascada' && 'La repo cubre los días con venta que todavía no tienen su repo en Dragon (un lunes, sábado y domingo juntos) y nunca repite un local que ya tiene el pedido. No corre los feriados de todos los locales (los de Objetivos, que carga RR. HH.): al día siguiente suma también el feriado. '}
         {solo !== 'repo' && 'La cascada usa los días de la última repo cargada y los parámetros guardados en Transferencia diaria; conviene programarla después de la repo.'}
       </p>
       {error && <p role="alert" className="rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
@@ -170,6 +177,17 @@ export default function RepoAutomatico({ solo }: { solo?: 'repo' | 'cascada' } =
               <span className="basis-full text-[11px] text-sub">Después de cargar en Dragon pide el armado de esos pedidos, como el botón «Pedir armado» de Pedidos de venta: les suena a todos los legajos del piso.</span>
             </div>
           </div>
+          {feriados.length > 0 && (
+            <p className="mt-2 flex items-start gap-1.5 text-[11px] text-sub">
+              <CalendarOff size={13} className="mt-px flex-none text-amber-500" aria-hidden />
+              <span>
+                No corre:{' '}
+                {feriados
+                  .map((f) => `${new Date(`${f.fecha}T12:00:00`).toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit', month: '2-digit' })}${f.motivo ? ` (${f.motivo})` : ''}`)
+                  .join(' · ')}
+              </span>
+            </p>
+          )}
           <UltimaCorrida log={cfg.repo_log} pendiente={cfg.repo_ahora_at} />
           <button type="button" onClick={() => void ahora('repo')} disabled={!!cfg.repo_ahora_at} className="btn-press mt-3 inline-flex h-8 items-center gap-1 rounded-lg border border-line bg-surface2 px-2.5 text-xs font-medium text-ink hover:bg-line disabled:opacity-50">
             <Play size={13} aria-hidden /> Correr ahora
