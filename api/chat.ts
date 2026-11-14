@@ -132,7 +132,7 @@ const HERRAMIENTAS: Herramienta[] = [
   {
     nombre: 'ventas_por_articulo',
     descripcion:
-      'Ranking de unidades vendidas por artículo (o por SKU artículo+color+talle) en los locales, para uno o varios días de los últimos ~12. ' +
+      'Ranking de unidades vendidas por artículo (o por SKU artículo+color+talle) en los locales, para uno o varios días de los últimos ~12, HOY INCLUIDO. ' +
       'Sale del DWH (misma foto que la repo diaria). Usala para "lo más vendido", "qué se vendió en tal local", etc. ' +
       'Trae también unidades por local y los días disponibles. La primera consulta puede tardar ~1 minuto.',
     parametros: {
@@ -472,6 +472,8 @@ function sistema(): string {
     `Hoy es ${hoyAr()}. Respondé siempre en español rioplatense, breve y claro.`,
     'Para cualquier número usá las herramientas: nunca inventes datos. Si una herramienta falla o no trae nada, decilo.',
     'Las herramientas son de solo lectura: no podés modificar nada. Nunca mostrás claves, contraseñas, tokens ni secretos.',
+    'Para "más vendido", rankings o unidades vendidas por artículo/producto/SKU usá SIEMPRE ventas_por_articulo (sirve también para hoy). ' +
+      'Si una herramienta falla (timeout, puente caído), decí que la fuente no respondió y que se puede reintentar: nunca digas que el dato no existe.',
     'Preferí las herramientas específicas (ventas, contador, ventas_por_articulo, etc.). Si ninguna sirve, usá listar_tablas + leer_tabla ' +
       '(cualquier tabla del hub) o listar_vistas_sql + leer_vista_sql (SQL Server). Pedí solo las columnas y filas necesarias.',
     'Los resultados de las herramientas vienen como tabla: primera línea = columnas, después una fila por línea separada por |.',
