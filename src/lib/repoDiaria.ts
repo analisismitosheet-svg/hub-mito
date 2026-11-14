@@ -83,6 +83,8 @@ export interface Cascada {
   filas: FilaCascada[]
   unidades: number
   faltante_despues_mito: number
+  /** unidades que cubrieron los donantes principales (INDOD) antes que los locales */
+  de_principal?: number
   pares_eliminados: number
   unidades_eliminadas?: number
   /** por qué quedó sin cubrir lo que faltaba (unidades) */
@@ -113,6 +115,8 @@ export interface ParamsCascada {
   min_envio: ReglaNumero
   restriccion: { activo: boolean; receptores: string[]; proveedores: string[] }
   pase_extra: { activo: boolean; locales: string[] }
+  /** bases que donan primero, como MITO (sin quedarse con nada, sin topes): INDOD */
+  donante_principal: { activo: boolean; bases: string[] }
   materiales: ReglaLista
   excluir_temporadas: ReglaLista
   excluir_grupos: ReglaLista
@@ -160,6 +164,7 @@ export const PARAMS_DEFAULT: ParamsCascada = {
   min_envio: { activo: true, valor: 2 },
   restriccion: { activo: true, receptores: ['CFR4', 'CFR9', 'CFD', 'CFPO', 'CFRA'], proveedores: ['MOCF', 'MOZH', 'MOFR'] },
   pase_extra: { activo: true, locales: ['NVOCED'] },
+  donante_principal: { activo: true, bases: ['INDOD'] },
   materiales: { activo: true, lista: ['ACCESORIOS', 'PANTALONES', 'BERMUDAS', 'BOARDSHORTS-BIKINIS', 'REMERAS', 'CAMISAS', 'CALZADO'] },
   excluir_temporadas: { activo: true, lista: ['Invierno'] },
   excluir_grupos: { activo: true, lista: ['U02', 'U03'] },

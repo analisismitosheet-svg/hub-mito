@@ -20,6 +20,10 @@
  *   - min_envio: cada par donante → receptor suma al menos N unidades
  *   - restriccion: ciertos receptores solo reciben ciertos proveedores (CF ⇐ MOCF/MOZH/MOFR)
  *   - pase_extra: locales que, si no recibieron nada, aceptan donantes con 1 sola unidad (NVOCED)
+ *   - donante_principal (14/11/2026): bases que donan ANTES que los locales y trabajan como
+ *     MITO: cubren el faltante con todo su stock, por prioridad de local, sin quedarse con
+ *     nada, sin tope por SKU, sin mínimo por envío ni tránsito / «ya tiene» / restricción
+ *     de proveedor. Lo que no cubren pasa a los locales. Por defecto: INDOD.
  *   - materiales (incluir), excluir_temporadas / grupos / articulos / proveedores / lineas
  *   - orden_receptores: 'alfabetico' (como el script) o 'prioridad'
  *   - orden_donantes: 'stock' (más stock del artículo primero, como el script) o 'prioridad'
@@ -55,6 +59,7 @@
     min_envio: { activo: true, valor: 2 },
     restriccion: { activo: true, receptores: ['CFR4', 'CFR9', 'CFD', 'CFPO', 'CFRA'], proveedores: ['MOCF', 'MOZH', 'MOFR'] },
     pase_extra: { activo: true, locales: ['NVOCED'] },
+    donante_principal: { activo: true, bases: ['INDOD'] },
     materiales: { activo: true, lista: ['ACCESORIOS', 'PANTALONES', 'BERMUDAS', 'BOARDSHORTS-BIKINIS', 'REMERAS', 'CAMISAS', 'CALZADO'] },
     excluir_temporadas: { activo: true, lista: ['Invierno'] },
     excluir_grupos: { activo: true, lista: ['U02', 'U03'] },
@@ -141,6 +146,7 @@
     const reglaL = (k, mayus = true) => ({ activo: bool(obj(p[k]).activo, d[k].activo), lista: lista(obj(p[k]).lista, d[k].lista, mayus) })
     const r = obj(p.restriccion)
     const pe = obj(p.pase_extra)
+    const dp = obj(p.donante_principal)
     // Temporadas: se guardan con su nombre (Verano / Continuo / Invierno)
     const temp = reglaL('excluir_temporadas', false)
     temp.lista = temp.lista.map((t) => TEMPORADA[t] ?? t[0].toUpperCase() + t.slice(1).toLowerCase())
@@ -161,6 +167,7 @@
         proveedores: lista(r.proveedores, d.restriccion.proveedores),
       },
       pase_extra: { activo: bool(pe.activo, d.pase_extra.activo), locales: lista(pe.locales, d.pase_extra.locales) },
+      donante_principal: { activo: bool(dp.activo, d.donante_principal.activo), bases: lista(dp.bases, d.donante_principal.bases) },
       materiales: reglaL('materiales'),
       excluir_temporadas: temp,
       excluir_grupos: reglaL('excluir_grupos'),
@@ -203,6 +210,11 @@
     const restrRec = new Set(P.restriccion.activo ? P.restriccion.receptores : [])
     const restrProv = new Set(P.restriccion.proveedores)
     const paseExtra = new Set(P.pase_extra.activo ? P.pase_extra.locales : [])
+    // Donantes principales (INDOD): dan primero, como MITO. No reciben ni entran en la ronda de locales.
+    const PRINCIPALES = P.donante_principal.activo ? P.donante_principal.bases : []
+    const principal = new Set(PRINCIPALES)
+    /** Orden de salida: los principales primero, después la prioridad de locales */
+    const orden = (b) => (principal.has(b) ? PRINCIPALES.indexOf(b) - PRINCIPALES.length : PRIO.get(b) ?? 999)
     const dias = new Set(repo.dias)
     const sku = (a, c, t) => `${a} ${c} ${t}`
 
@@ -231,7 +243,7 @@
     const stock = new Map()
     const stockArt = new Map()
     for (const s of foto.stockLocales) {
-      if (!PRIO.has(s.base) || s.cant <= 0) continue
+      if ((!PRIO.has(s.base) && !principal.has(s.base)) || s.cant <= 0) continue
       const k = `${s.base}|${sku(s.art, s.color, s.talle)}`
       stock.set(k, (stock.get(k) ?? 0) + s.cant)
       stockArt.set(`${s.base}|${s.art}`, (stockArt.get(`${s.base}|${s.art}`) ?? 0) + s.cant)
@@ -246,7 +258,7 @@
     for (const v of foto.ventas) {
       if (!dias.has(v.dia) || v.cant <= 0) continue
       const base = baseDeTienda(v.tienda)
-      if (!PRIO.has(base)) continue
+      if (!PRIO.has(base) || principal.has(base)) continue
       const s = sku(v.art, v.color, v.talle)
       const k = `${base}|${s}`
       const p = venta.get(k)
@@ -295,10 +307,11 @@
     for (const p of pares) {
       p.mito = mito.get(`${p.base}|${p.sku}`) ?? 0
       p.faltante = P.restar_mito ? p.venta - p.mito : p.venta
+      p.faltante_inicial = p.faltante
       p.elegible = elegible(p.art) && !noReciben.has(p.base)
     }
 
-    const donantesBase = PRIORIDAD.filter((d) => !noDonan.has(d))
+    const donantesBase = PRIORIDAD.filter((d) => !noDonan.has(d) && !principal.has(d))
     // Con prioridad por venta (donantes): dona primero el que MENOS vende la categoría
     const donantesDe = (art, color, talle) =>
       [...donantesBase].sort(
@@ -335,6 +348,26 @@
       return falta
     }
 
+    // PASE 0: DONANTES PRINCIPALES (INDOD), como MITO en la repo: por prioridad de local,
+    // cada uno se lleva lo que le falta mientras haya stock (sin quedarse con nada ni topes).
+    let dePrincipal = 0
+    if (principal.size) {
+      const porPrioridad = [...pares].sort((a, b) => PRIO.get(a.base) - PRIO.get(b.base) || cmp(a.sku, b.sku))
+      for (const p of porPrioridad) {
+        if (p.faltante <= 0 || !p.elegible) continue
+        for (const d of PRINCIPALES) {
+          const n = Math.min(get(d, p.sku), p.faltante)
+          if (n <= 0) continue
+          mover(d, p.sku, -n)
+          envios.push({ donante: d, receptor: p.base, sku: p.sku, art: p.art, color: p.color, talle: p.talle, cantidad: n, principal: true })
+          asignados.add(`${p.base}|${p.sku}`)
+          p.faltante -= n
+          dePrincipal += n
+          if (p.faltante <= 0) break
+        }
+      }
+    }
+
     // PASE 1: VENTA (lo que faltó después de MITO). Se anota por qué no se intenta cada par.
     const motivoDe = new Map()
     const resto = new Map()
@@ -358,16 +391,16 @@
 
     // Mínimo de unidades por par donante → receptor
     const porPar = new Map()
-    for (const e of envios) porPar.set(`${e.donante}|${e.receptor}`, (porPar.get(`${e.donante}|${e.receptor}`) ?? 0) + e.cantidad)
+    for (const e of envios) if (!e.principal) porPar.set(`${e.donante}|${e.receptor}`, (porPar.get(`${e.donante}|${e.receptor}`) ?? 0) + e.cantidad)
     const minEnvio = P.min_envio.activo ? P.min_envio.valor : 0
     const chicos = [...porPar.values()].filter((u) => u < minEnvio)
-    const finales = envios.filter((e) => porPar.get(`${e.donante}|${e.receptor}`) >= minEnvio)
+    const finales = envios.filter((e) => e.principal || porPar.get(`${e.donante}|${e.receptor}`) >= minEnvio)
 
     // Controles: nadie dona más del tope ni más de lo que tiene
     const totDon = new Map()
     for (const e of envios) totDon.set(`${e.donante}|${e.sku}`, (totDon.get(`${e.donante}|${e.sku}`) ?? 0) + e.cantidad)
     for (const [k, u] of totDon) {
-      if (u > TOPE) throw new Error(`Cascada: ${k} dona ${u} (> ${TOPE})`)
+      if (u > TOPE && !principal.has(k.split('|')[0])) throw new Error(`Cascada: ${k} dona ${u} (> ${TOPE})`)
       if (u > (stockInicial.get(k) ?? 0)) throw new Error(`Cascada: ${k} dona más que su stock`)
     }
 
@@ -401,10 +434,10 @@
             : {}),
         }
       })
-      .sort((a, b) => PRIO.get(a.donante) - PRIO.get(b.donante) || PRIO.get(a.receptor) - PRIO.get(b.receptor) || cmp(a.sku, b.sku))
+      .sort((a, b) => orden(a.donante) - orden(b.donante) || PRIO.get(a.receptor) - PRIO.get(b.receptor) || cmp(a.sku, b.sku))
 
     // Resumen
-    const faltanteTotal = pares.filter((p) => p.elegible).reduce((s, p) => s + Math.max(0, p.faltante), 0)
+    const faltanteTotal = pares.filter((p) => p.elegible).reduce((s, p) => s + Math.max(0, p.faltante_inicial), 0)
     const cubierto = filas.reduce((s, f) => s + f.cantidad, 0)
     const porMaterial = {}
     for (const f of filas) porMaterial[f.material] = (porMaterial[f.material] ?? 0) + f.cantidad
@@ -424,13 +457,15 @@
       filas,
       unidades: cubierto,
       faltante_despues_mito: faltanteTotal,
+      // Unidades que cubrieron los donantes principales (INDOD) antes que los locales
+      de_principal: dePrincipal,
       pares_eliminados: chicos.length,
       unidades_eliminadas: chicos.reduce((s, u) => s + u, 0),
       // Por qué quedó sin cubrir lo que faltaba (unidades)
       no_cubierto: { ...motivos, envio_chico: chicos.reduce((s, u) => s + u, 0) },
       por_material: porMaterial,
       matriz,
-      donantes: PRIORIDAD.filter((d) => matriz[d]),
+      donantes: [...PRINCIPALES, ...PRIORIDAD.filter((d) => !principal.has(d))].filter((d) => matriz[d]),
       receptores: PRIORIDAD.filter((r) => filas.some((f) => f.receptor === r)),
       // Venta por categoría de cada local (solo las categorías que salen en la cascada)
       ranking_venta: PV.activo

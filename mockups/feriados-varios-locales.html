@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mockup · Feriados con varios locales</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --paper:#050508; --surface:rgba(255,255,255,.035); --surface2:rgba(255,255,255,.07);
+    --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.18);
+    --ink:#f8fafc; --sub:#94a3b8; --orange:#f97316; --red:#f87171; --sky:#38bdf8;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:24px clamp(12px,3vw,36px) 64px;background:
+    radial-gradient(900px 500px at 10% -10%, rgba(249,115,22,.12), transparent 60%), var(--paper);
+    color:var(--ink);font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:14px;line-height:1.45}
+  h1{margin:0;font-size:24px;font-weight:800;letter-spacing:-.02em;display:flex;align-items:center;gap:8px}
+  p{margin:0} button{font-family:inherit;cursor:pointer}
+  .wrap{max-width:900px;margin:0 auto}
+  .back{color:var(--sub);font-size:13px;margin-bottom:10px;display:inline-block}
+  .sub{color:var(--sub)} .small{font-size:12px}
+  .card{border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:16px;margin-top:16px}
+  .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:rgba(148,163,184,.75);margin:14px 0 6px;display:flex;justify-content:space-between;align-items:center}
+  .lbl:first-child{margin-top:0}
+  input[type=date],input[type=text]{height:36px;border-radius:8px;border:1px solid var(--line);background:var(--surface2);color:var(--ink);padding:0 10px;font:inherit;font-size:14px;color-scheme:dark}
+  .dia{font-size:13px;color:var(--sub);margin-left:8px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{border:1px solid var(--line);background:var(--surface);color:var(--sub);border-radius:8px;padding:5px 10px;font-size:12.5px;transition:.12s}
+  .chip:hover{color:var(--ink)}
+  .chip.on{border-color:rgba(249,115,22,.55);background:rgba(249,115,22,.16);color:#fdba74;font-weight:600}
+  .chip.todos{font-weight:700}
+  .chip.todos.on{background:var(--orange);color:#fff;border-color:var(--orange)}
+  .links button{background:none;border:0;color:var(--sky);font-size:12px;padding:0 0 0 10px;text-transform:none;letter-spacing:0}
+  .aviso{margin-top:10px;border:1px solid rgba(56,189,248,.3);background:rgba(56,189,248,.08);border-radius:10px;padding:8px 10px;font-size:12px}
+  .fila{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;align-items:center}
+  .fila input[type=text]{flex:1;min-width:180px}
+  .btn{height:36px;border:0;border-radius:8px;background:var(--orange);color:#fff;font-weight:700;padding:0 14px;font-size:14px}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:rgba(148,163,184,.7);padding:6px 12px 6px 0;font-weight:600}
+  td{border-top:1px solid var(--line);padding:8px 12px 8px 0;vertical-align:top}
+  .tag{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line2);border-radius:999px;padding:1px 4px 1px 9px;font-size:12px;margin:0 4px 4px 0}
+  .tag button{background:none;border:0;color:var(--sub);font-size:13px;line-height:1;padding:2px 4px;border-radius:999px}
+  .tag button:hover{color:var(--red);background:rgba(248,113,113,.12)}
+  .tag.todos{border-color:rgba(249,115,22,.55);color:#fdba74;font-weight:600}
+  .quitar{background:none;border:0;color:var(--red);font-size:12px}
+  .quitar:hover{text-decoration:underline}
+  .nota{margin-top:24px;border:1px dashed var(--line2);border-radius:12px;padding:12px 14px;font-size:12.5px;color:var(--sub)}
+  .nota b{color:var(--ink)}
+  .nota li{margin:3px 0}
+  @media (max-width:560px){.dia{display:block;margin:6px 0 0}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span class="back">← Volver</span>
+  <h1><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.2 4.2A2 2 0 0 0 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 1.82-1.18"/><path d="M21 15.5V6a2 2 0 0 0-2-2H9.5"/><path d="M16 2v4"/><path d="M3 10h7"/><path d="M21 10h-5.5"/><path d="m2 2 20 20"/></svg> Feriados</h1>
+  <p class="sub" style="margin-top:4px">Días que uno o varios locales no abren. Ese día no lleva objetivo: no suma al objetivo de la semana ni del mes.</p>
+
+  <!-- FORMULARIO -->
+  <div class="card">
+    <div class="lbl">1 · Día</div>
+    <div><input type="date" id="fecha" value="2026-11-23" /><span class="dia" id="diaNombre"></span></div>
+
+    <div class="lbl">2 · Locales <span class="links"><button id="ninguno" type="button">Limpiar</button></span></div>
+    <div class="chips" id="chips"></div>
+    <div class="lbl" style="margin-top:12px">Otras bases · sin objetivo</div>
+    <div class="chips" id="otras"></div>
+    <div class="aviso" id="aviso"></div>
+
+    <div class="fila">
+      <input type="text" id="motivo" placeholder="Motivo (opcional)" value="Feriado nacional" />
+      <button class="btn" id="agregar" type="button"></button>
+    </div>
+  </div>
+
+  <!-- LISTA AGRUPADA -->
+  <div class="card">
+    <table>
+      <thead><tr><th style="width:110px">Fecha</th><th style="width:90px">Día</th><th>Locales</th><th>Motivo</th><th></th></tr></thead>
+      <tbody id="lista"></tbody>
+    </table>
+  </div>
+
+  <div class="nota">
+    <b>Qué cambia (maqueta, todavía no está subido):</b>
+    <ul style="margin:6px 0 0;padding-left:18px">
+      <li>Se elige <b>un día</b> y se tocan <b>todas las bases</b> que no abren, de una sola vez. «Todos los locales» queda como primera opción.</li>
+      <li><b>Otras bases:</b> Fábrica (MITO / Depósito INDO, es la misma) y Polo 52. No llevan objetivo, pero si tienen feriado <b>la repo automática no corre ese día</b> y al día siguiente suma ese día.</li>
+      <li><b>Cascada:</b> un local con feriado ese día no dona ni recibe nada; lo que le tocaba donar se lo pide al siguiente local que tenga stock (como si estuviera en «no donan» y «no reciben» solo por ese día).</li>
+      <li>El recuadro celeste avisa en el momento qué va a pasar con la repo y la cascada.</li>
+      <li>La lista junta por día: una fila con las bases como etiquetas. La <b>×</b> saca esa base; «Quitar» borra el día entero.</li>
+      <li>Si ese día ya había bases cargadas, no se duplican. En la base de datos sigue una fila por local: Objetivos queda igual.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+const LOCALES = [["9DEJULIO","9 DE JULIO"],["BUSTOD","BUSTOS"],["CFD","CAPTAIN FIN BUSTOS"],["CFPO","CAPTAIN FIN PATIO OLMOS"],["CFR4","CAPTAIN FIN RIO 4"],["CFRA","CAPTAIN FIN RIVERA INDARTE"],["CFR9","CAPTAIN FIN RUTA 9"],["VCPD","CARLOS PAZ"],["DINOD","DINO R20"],["ESPINOD","ESPINOSA"],["GPAZD","GENERAL PAZ OUTLET"],["LIBERD","LIBERTAD"],["MARIANOMAX","MARIANO MAX"],["MUNOZ","MUÑOZ"],["NVOCED","NUEVO CENTRO"],["RIVERAD","RIVERA"],["RUTA9D2","RUTA 9"],["WALMARTD","WALMART"],["WEB","WEB (tienda online)"]]
+// Bases que no están en la tabla de locales: fijas en la pantalla
+const OTRAS = [["INDOD","FÁBRICA (MITO / DEPÓSITO INDO)"],["POLO52","POLO 52"]]
+const FRENAN_REPO = new Set(["INDOD","POLO52"])
+const nom = (c) => c === null ? 'Todos los locales' : (LOCALES.concat(OTRAS).find(l => l[0] === c) || [c, c])[1]
+const DIAS = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado']
+let sel = new Set(['MUNOZ','GPAZD','9DEJULIO','POLO52'])
+let todos = false
+let lista = [
+  {fecha:'2026-11-10', local:'MUNOZ', motivo:'viene el papa'},
+  {fecha:'2026-11-10', local:'9DEJULIO', motivo:'viene el papa'},
+  {fecha:'2026-11-10', local:'GPAZD', motivo:null},
+  {fecha:'2026-11-09', local:'CFR4', motivo:'viene el papa'},
+]
+const $ = (id) => document.getElementById(id)
+const ddmm = (f) => `${f.slice(8,10)}/${f.slice(5,7)}/${f.slice(0,4)}`
+const dow = (f) => DIAS[new Date(f + 'T12:00:00Z').getUTCDay()]
+
+function pintarForm() {
+  const f = $('fecha').value
+  $('diaNombre').textContent = f ? dow(f) : ''
+  const chips = [`<button type="button" class="chip todos ${todos ? 'on' : ''}" data-c="*">Todos los locales</button>`]
+    .concat(LOCALES.map(([c, n]) => `<button type="button" class="chip ${!todos && sel.has(c) ? 'on' : ''}" data-c="${c}">${n}</button>`))
+  $('chips').innerHTML = chips.join('')
+  $('otras').innerHTML = OTRAS.map(([c, n]) => `<button type="button" class="chip ${!todos && sel.has(c) ? 'on' : ''}" data-c="${c}">${n}</button>`).join('')
+  const n = todos ? 0 : sel.size
+  const locs = [...sel].filter((c) => !FRENAN_REPO.has(c))
+  const otras = [...sel].filter((c) => FRENAN_REPO.has(c))
+  const lineas = []
+  if (todos) {
+    lineas.push('🚫 <b>Repo automática:</b> ese día no corre; al día siguiente suma este día.')
+    lineas.push('🔀 <b>Cascada:</b> ese día no corre (cierran todos).')
+  } else if (!n) {
+    lineas.push('Tocá los locales o bases que no abren ese día, o «Todos los locales».')
+  } else {
+    lineas.push(otras.length
+      ? `🚫 <b>Repo automática:</b> no corre (cierra ${otras.map(nom).join(' y ')}); al día siguiente suma este día.`
+      : '✅ <b>Repo automática:</b> corre igual (solo la frenan Fábrica, Polo 52 o «Todos los locales»).')
+    if (locs.length) lineas.push(`🔀 <b>Cascada:</b> ${locs.map(nom).join(', ')} no ${locs.length === 1 ? 'dona ni recibe' : 'donan ni reciben'}; lo que ${locs.length === 1 ? 'iba a donar' : 'iban a donar'} se lo pide a otro local con stock.`)
+  }
+  $('aviso').innerHTML = lineas.join('<br>')
+  $('agregar').textContent = todos ? 'Agregar feriado · todos' : `Agregar feriado · ${n} ${n === 1 ? 'local' : 'locales'}`
+  $('agregar').disabled = !f || (!todos && !n)
+}
+
+function pintarLista() {
+  const grupos = new Map()
+  for (const x of lista) {
+    if (!grupos.has(x.fecha)) grupos.set(x.fecha, { fecha: x.fecha, motivos: new Set(), locales: [] })
+    const g = grupos.get(x.fecha)
+    g.locales.push(x.local)
+    if (x.motivo) g.motivos.add(x.motivo)
+  }
+  const filas = [...grupos.values()].sort((a, b) => b.fecha.localeCompare(a.fecha))
+  $('lista').innerHTML = filas.map((g) => `<tr>
+    <td style="font-variant-numeric:tabular-nums">${ddmm(g.fecha)}</td>
+    <td class="sub">${dow(g.fecha)}</td>
+    <td>${g.locales.sort((a, b) => nom(a).localeCompare(nom(b))).map((l) => `<span class="tag ${l === null ? 'todos' : ''}">${nom(l)}<button type="button" title="Sacar ${nom(l)}" data-f="${g.fecha}" data-l="${l ?? '*'}">×</button></span>`).join('')}</td>
+    <td class="sub">${[...g.motivos].join(' · ')}</td>
+    <td style="text-align:right;white-space:nowrap"><button class="quitar" type="button" data-dia="${g.fecha}">🗑 Quitar</button></td>
+  </tr>`).join('') || '<tr><td colspan="5" class="sub">No hay feriados cargados.</td></tr>'
+}
+
+const elegir = (e) => {
+  const b = e.target.closest('[data-c]'); if (!b) return
+  const c = b.dataset.c
+  if (c === '*') { todos = !todos; if (todos) sel.clear() }
+  else { todos = false; sel.has(c) ? sel.delete(c) : sel.add(c) }
+  pintarForm()
+}
+$('chips').addEventListener('click', elegir)
+$('otras').addEventListener('click', elegir)
+$('ninguno').onclick = () => { sel.clear(); todos = false; pintarForm() }
+$('fecha').oninput = pintarForm
+$('agregar').onclick = () => {
+  const f = $('fecha').value, m = $('motivo').value.trim() || null
+  const nuevos = todos ? [null] : [...sel]
+  for (const l of nuevos) if (!lista.some((x) => x.fecha === f && x.local === l)) lista.push({ fecha: f, local: l, motivo: m })
+  sel.clear(); todos = false
+  pintarForm(); pintarLista()
+}
+$('lista').addEventListener('click', (e) => {
+  const t = e.target.closest('[data-f]')
+  if (t) { const l = t.dataset.l === '*' ? null : t.dataset.l; lista = lista.filter((x) => !(x.fecha === t.dataset.f && x.local === l)); pintarLista(); return }
+  const q = e.target.closest('[data-dia]')
+  if (q) { lista = lista.filter((x) => x.fecha !== q.dataset.dia); pintarLista() }
+})
+pintarForm(); pintarLista()
+</script>
+</body>
+</html>

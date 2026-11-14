@@ -205,6 +205,15 @@ export default function ParametrosCascada({ params, guardados, onChange, onGuard
             <Etiquetas valores={[]} placeholder="+ local" sugerencias={sugerencias.locales.filter((l) => !P.prioridad.includes(l))} onChange={(v) => set((p) => { p.prioridad.push(...v) })} />
           </div>
         </Regla>
+        <Regla
+          titulo="Donante principal"
+          ayuda="Dona antes que los locales y trabaja como MITO: cubre lo que falta con todo su stock, por prioridad de local, sin quedarse con nada ni topes. Lo que no alcanza lo donan los locales."
+          activo={P.donante_principal.activo}
+          onActivo={(v) => set((p) => { p.donante_principal.activo = v })}
+          cambio={!igual(P.donante_principal, D.donante_principal)}
+        >
+          <Etiquetas valores={P.donante_principal.bases} sugerencias={['INDOD', 'POLO52', 'FABRICA']} onChange={(v) => set((p) => { p.donante_principal.bases = v })} />
+        </Regla>
         <Regla titulo="No donan" ayuda="Reciben pero nunca mandan." cambio={!igual(P.no_donan, D.no_donan)}>
           <Etiquetas valores={P.no_donan} sugerencias={P.prioridad} onChange={(v) => set((p) => { p.no_donan = v })} />
         </Regla>
