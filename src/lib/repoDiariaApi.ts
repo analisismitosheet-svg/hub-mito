@@ -139,6 +139,42 @@ async function cargaDragon(req: Req, res: Res, destino: string, tokenPuente: str
   return res.status(200).json(cuerpo)
 }
 
+/**
+ *   GET /api/sql/repo-diaria?modo=ventas&fechas=YYYY-MM-DD[,..][&local=NVOCED][&agrupar=sku][&top=20]
+ *     -> { estado: 'calculando' } | { estado: 'listo', ranking, por_local, unidades_totales, dias_disponibles, ... }
+ *   Ranking de ventas por artículo con la misma foto del DWH (Chat IA del hub). Solo lectura.
+ */
+async function ventasArticulos(req: Req, res: Res, destino: string, tokenPuente: string) {
+  const fechas = primero(req.query.fechas)
+    .split(',')
+    .map((f) => f.trim())
+    .filter((f) => /^\d{4}-\d{2}-\d{2}$/.test(f))
+  if (!fechas.length) return res.status(400).json({ error: 'Faltan las fechas (YYYY-MM-DD)' })
+  const local = primero(req.query.local).trim().toUpperCase()
+  const r0 = await postAlPuente(
+    destino,
+    {
+      headers: { 'Content-Type': 'application/json', 'X-Puente-Token': tokenPuente },
+      body: JSON.stringify({
+        accion: 'ventas_articulos',
+        fechas,
+        local: /^[A-Z0-9_]{1,30}$/.test(local) ? local : '',
+        agrupar: primero(req.query.agrupar) === 'sku' ? 'sku' : 'articulo',
+        top: Number(primero(req.query.top)) || 20,
+      }),
+    },
+    { timeoutMs: 25_000, intentos: 2 },
+  )
+  if (!r0.ok) return res.status(502).json({ error: 'No se pudo contactar el Puente SQL de la PC central' })
+  const cuerpo = (await r0.res.json().catch(() => null)) as ({ error?: string } & Record<string, unknown>) | null
+  if (!r0.res.ok || !cuerpo) {
+    let detalle = cuerpo?.error ?? `respuesta ${r0.res.status}`
+    if (/vista inv[aá]lid[ao]/i.test(detalle)) detalle += ' — Puente SQL desactualizado: reiniciá puente-sql (acción "ventas_articulos").'
+    return res.status(r0.res.status === 400 ? 400 : 502).json({ error: detalle })
+  }
+  return res.status(200).json(cuerpo)
+}
+
 export default async function handler(req: Req, res: Res) {
   res.setHeader('Cache-Control', 'no-store')
   if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' })
@@ -154,6 +190,7 @@ export default async function handler(req: Req, res: Res) {
   const tokenPuente = process.env.SQL_BRIDGE_TOKEN ?? ''
   if (!tokenPuente) return res.status(500).json({ error: 'Falta la variable SQL_BRIDGE_TOKEN en Vercel' })
   if (req.method === 'POST') return cargaDragon(req, res, destino, tokenPuente)
+  if (primero(req.query.modo) === 'ventas') return ventasArticulos(req, res, destino, tokenPuente)
 
   const fechas = primero(req.query.fechas)
     .split(',')

@@ -35,6 +35,7 @@
  *                   (renglones de un pedido de venta, en vivo de Dragonfish: los viejos ya no se copian)
  *   POST /          body: { accion: 'repo_diaria', fechas?, forzar? } -> { estado: 'calculando' } | { estado: 'listo', filas, resumen, ... }
  *                   (Compras > Repo diaria: sql/repo-diaria.sql + repo-diaria.js; stock MITO real = físico - comprometido)
+ *   POST /          body: { accion: 'ventas_articulos', fechas, local?, agrupar?, top? } -> { estado: 'calculando' } | { estado: 'listo', ranking, ... }
  *   POST /          body: { accion: 'repo_diaria_dragon', modo: 'revisar'|'cargar'|'estado', fechas, foto, locales?, confirmo? }
  *                   -> { carga: { obs, locales: [{ cliente, unidades, estado, numero }] } }
  *                   (carga la repo como pedidos de venta VTD en DRAGONFISH_MITO por la API, uno por local)
@@ -940,6 +941,38 @@ function accionRepoDiaria(body) {
 }
 
 /**
+ * body: { fechas, local?, agrupar?, top? } -> ranking de ventas por artículo (Chat IA del hub).
+ * Usa la foto de la repo diaria; la venta de días cerrados no cambia, así que sirve una foto de
+ * hasta 2 horas. Si no hay, la saca por detrás y contesta "calculando" (el hub vuelve a preguntar).
+ */
+function accionVentasArticulos(body) {
+  const calculando = () => ({ estado: 'calculando', desde: new Date(fotoRepoInicio).toISOString() })
+  if (fotoRepoEnCurso) return calculando()
+  if (fotoRepo.error) {
+    const error = fotoRepo.error
+    fotoRepo = { ...fotoRepo, error: null }
+    throw new Error(error)
+  }
+  const sirve = fotoRepo.foto && Date.now() - fotoRepo.en < 2 * 60 * 60_000
+  // Si piden hoy, que la foto sea de los últimos 5 minutos
+  const pideHoy = Array.isArray(body?.fechas) && body.fechas.includes(diaLocal())
+  if (!sirve || (pideHoy && Date.now() - fotoRepo.en > REPO_DIARIA_CACHE_MS)) {
+    lanzarFotoRepo()
+    return calculando()
+  }
+  return {
+    estado: 'listo',
+    foto: new Date(fotoRepo.en).toISOString(),
+    ...repoDiaria.rankingVentas(fotoRepo.foto, {
+      fechas: Array.isArray(body?.fechas) ? body.fechas : [],
+      local: body?.local,
+      agrupar: body?.agrupar,
+      top: body?.top,
+    }),
+  }
+}
+
+/**
  * body: { fechas, foto, params } -> { cascada }
  * Recalcula SOLO la cascada con otros parámetros sobre la foto que el usuario está viendo
  * (aunque tenga más de 5 minutos: es un recálculo en memoria, no vuelve al SQL).
@@ -1247,6 +1280,15 @@ const server = http.createServer(async (req, res) => {
     if (body?.accion === 'repo_diaria') {
       try {
         return enviar(res, 200, accionRepoDiaria(body))
+      } catch (e) {
+        return enviar(res, 400, { error: e.message })
+      }
+    }
+
+    // Ranking de ventas por artículo sobre la foto de la repo diaria (Chat IA del hub)
+    if (body?.accion === 'ventas_articulos') {
+      try {
+        return enviar(res, 200, accionVentasArticulos(body))
       } catch (e) {
         return enviar(res, 400, { error: e.message })
       }

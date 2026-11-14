@@ -257,4 +257,64 @@ function calcularRepo(foto, opts) {
   }
 }
 
-module.exports = { prepararFoto, calcularRepo, baseDeTienda, clienteDeBase, RECEPTORES_ORDEN }
+/**
+ * Ranking de ventas por artículo (lo usa el Chat IA del hub: "¿qué fue lo más vendido el domingo?").
+ * Sale de la misma foto del DWH que la repo diaria (últimos ~12 días, TODAS las ventas de todos
+ * los locales, no solo lo que se repone). Solo lectura, en memoria.
+ * @param opts { fechas: ['YYYY-MM-DD'], local?: 'NVOCED' (base, sin DRAGONFISH_), agrupar?: 'articulo'|'sku', top?: n }
+ */
+function rankingVentas(foto, opts = {}) {
+  const fechas = new Set((opts.fechas ?? []).map(txt).filter((f) => /^\d{4}-\d{2}-\d{2}$/.test(f)))
+  const disponibles = foto.dias.filter((d) => d.unidades > 0).map((d) => d.dia).sort()
+  if (!fechas.size) throw new Error('Faltan las fechas')
+  const faltan = [...fechas].filter((f) => !disponibles.includes(f))
+  const local = txt(opts.local).toUpperCase().replace(/^DRAGONFISH_/, '')
+  const porSku = opts.agrupar === 'sku'
+  const top = Math.min(Math.max(Number(opts.top) || 20, 1), 100)
+
+  const grupos = new Map()
+  const porLocal = new Map()
+  let total = 0
+  for (const v of foto.ventas) {
+    if (!fechas.has(v.dia) || v.cant <= 0) continue
+    const base = baseDeTienda(v.tienda)
+    if (local && base !== local) continue
+    total += v.cant
+    porLocal.set(base, (porLocal.get(base) ?? 0) + v.cant)
+    const k = porSku ? `${v.art} ${v.color} ${v.talle}` : v.art
+    const g = grupos.get(k) ?? { art: v.art, color: porSku ? v.color : undefined, talle: porSku ? v.talle : undefined, unidades: 0, locales: new Map() }
+    g.unidades += v.cant
+    g.locales.set(base, (g.locales.get(base) ?? 0) + v.cant)
+    grupos.set(k, g)
+  }
+
+  const ranking = [...grupos.values()]
+    .sort((a, b) => b.unidades - a.unidades || cmp(a.art, b.art))
+    .slice(0, top)
+    .map((g) => {
+      const a = foto.arts.get(g.art)
+      return {
+        articulo: g.art,
+        ...(porSku ? { color: g.color, talle: g.talle } : {}),
+        descripcion: a ? `${a.ARTICULO} ${a.ARTICULO_ADICIONAL}`.trim() : '',
+        material: a ? `${a.ID_MATERIAL} ${a.MATERIAL}`.trim() : '',
+        grupo: a?.GRUPO || a?.ID_GRUPO || '',
+        proveedor: a?.PROVEEDOR ?? '',
+        unidades: g.unidades,
+        locales: [...g.locales.entries()].sort((x, y) => y[1] - x[1]).slice(0, 5).map(([l, u]) => `${l} ${u}`).join(', '),
+      }
+    })
+
+  return {
+    fechas: [...fechas].sort(),
+    sin_datos: faltan,
+    dias_disponibles: disponibles,
+    local: local || null,
+    unidades_totales: total,
+    articulos_distintos: grupos.size,
+    por_local: [...porLocal.entries()].sort((x, y) => y[1] - x[1]).map(([l, u]) => ({ local: l, unidades: u })),
+    ranking,
+  }
+}
+
+module.exports = { prepararFoto, calcularRepo, rankingVentas, baseDeTienda, clienteDeBase, RECEPTORES_ORDEN }

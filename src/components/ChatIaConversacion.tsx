@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { Loader2, Send, Sparkles } from 'lucide-react'
+import { Loader2, Mic, MicOff, Send, Sparkles } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
 /**
@@ -78,6 +78,7 @@ const SUGERENCIAS = [
   '¿Cuánto vendió cada local ayer contra su objetivo?',
   '¿Qué locales tuvieron más entradas de clientes esta semana?',
   '¿Cómo viene la tasa de conversión de hoy?',
+  '¿Cuál fue el artículo más vendido ayer?',
   '¿Cuánto stock hay del artículo …?',
   '¿Cuántos pedidos y cuánta plata entró por la tienda web esta semana?',
   '¿Qué pedidos de compra a proveedores tienen unidades pendientes de recibir?',
@@ -90,6 +91,7 @@ const NOMBRE_CONSULTA: Record<string, string> = {
   listar_locales: 'locales',
   buscar_articulos: 'artículos',
   ventas_locales: 'ventas',
+  ventas_por_articulo: 'ventas por artículo',
   contador_clientes: 'contador',
   contador_hoy: 'contador hoy',
   ventas_web: 'tienda web',
@@ -160,6 +162,38 @@ function Markdown({ texto }: { texto: string }) {
   return <>{bloques}</>
 }
 
+// ---------- dictado por voz (Web Speech API: Chrome, Edge y Safari) ----------
+
+type Reconocedor = {
+  lang: string
+  interimResults: boolean
+  continuous: boolean
+  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => void) | null
+  onend: (() => void) | null
+  onerror: ((e: { error: string }) => void) | null
+  start(): void
+  stop(): void
+}
+
+function crearReconocedorDisponible(): boolean {
+  const w = window as unknown as Record<string, unknown>
+  return !!(w.SpeechRecognition || w.webkitSpeechRecognition)
+}
+
+function crearReconocedor(): Reconocedor | null {
+  const w = window as unknown as { SpeechRecognition?: new () => Reconocedor; webkitSpeechRecognition?: new () => Reconocedor }
+  const Clase = w.SpeechRecognition ?? w.webkitSpeechRecognition
+  return Clase ? new Clase() : null
+}
+
+const ERRORES_VOZ: Record<string, string> = {
+  'not-allowed': 'El navegador no dio permiso al micrófono.',
+  'service-not-allowed': 'El navegador no dio permiso al micrófono.',
+  'no-speech': 'No se escuchó nada. Probá de nuevo.',
+  'audio-capture': 'No se encontró un micrófono.',
+  network: 'El dictado necesita conexión a internet.',
+}
+
 // ---------- conversación ----------
 
 /** Lista de mensajes + sugerencias + cuadro de texto. Ocupa todo el alto del contenedor. */
@@ -168,6 +202,51 @@ export default function ChatIaConversacion({ compacto = false }: { compacto?: bo
   const [texto, setTexto] = useState('')
   const listaRef = useRef<HTMLDivElement>(null)
   const entradaRef = useRef<HTMLTextAreaElement>(null)
+  const reconocedorRef = useRef<Reconocedor | null>(null)
+  const [escuchando, setEscuchando] = useState(false)
+  const [avisoVoz, setAvisoVoz] = useState('')
+  const hayVoz = typeof window !== 'undefined' && !!crearReconocedorDisponible()
+
+  useEffect(() => () => reconocedorRef.current?.stop(), [])
+
+  /** Escucha una pregunta; al terminar de hablar la manda sola. */
+  function dictar() {
+    if (escuchando) {
+      reconocedorRef.current?.stop()
+      return
+    }
+    const rec = crearReconocedor()
+    if (!rec) return
+    reconocedorRef.current = rec
+    rec.lang = 'es-AR'
+    rec.interimResults = true
+    rec.continuous = false
+    let final = ''
+    rec.onresult = (e) => {
+      let parcial = ''
+      final = ''
+      for (let i = 0; i < e.results.length; i++) {
+        const r = e.results[i]
+        if (r.isFinal) final += r[0].transcript
+        else parcial += r[0].transcript
+      }
+      setTexto((final + parcial).trim())
+    }
+    rec.onerror = (e) => setAvisoVoz(ERRORES_VOZ[e.error] ?? `No se pudo usar el micrófono (${e.error}).`)
+    rec.onend = () => {
+      setEscuchando(false)
+      reconocedorRef.current = null
+      if (final.trim()) enviar(final)
+    }
+    setAvisoVoz('')
+    setTexto('')
+    setEscuchando(true)
+    try {
+      rec.start()
+    } catch {
+      setEscuchando(false)
+    }
+  }
 
   useEffect(() => {
     listaRef.current?.scrollTo({ top: listaRef.current.scrollHeight, behavior: 'smooth' })
@@ -241,6 +320,7 @@ export default function ChatIaConversacion({ compacto = false }: { compacto?: bo
         )}
       </div>
 
+      {avisoVoz && <p className={`text-xs text-rose-500 ${compacto ? 'px-3' : ''}`}>{avisoVoz}</p>}
       <form
         onSubmit={(e) => {
           e.preventDefault()
@@ -260,9 +340,23 @@ export default function ChatIaConversacion({ compacto = false }: { compacto?: bo
           }}
           rows={1}
           maxLength={2000}
-          placeholder="Preguntá sobre stock, ventas, contador, pedidos…"
+          placeholder={escuchando ? 'Te escucho…' : 'Preguntá sobre stock, ventas, contador, pedidos…'}
           className="max-h-32 min-h-[44px] flex-1 resize-none rounded-xl border border-line bg-surface px-3 py-2.5 text-sm text-ink outline-none focus:border-violet-500"
         />
+        {hayVoz && (
+          <button
+            type="button"
+            onClick={dictar}
+            disabled={pensando}
+            aria-label={escuchando ? 'Dejar de escuchar' : 'Preguntar hablando'}
+            title={escuchando ? 'Dejar de escuchar' : 'Preguntar hablando'}
+            className={`btn-press inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border disabled:opacity-40 ${
+              escuchando ? 'animate-pulse border-rose-500 bg-rose-500 text-white' : 'border-line bg-surface2 text-ink hover:bg-line'
+            }`}
+          >
+            {escuchando ? <MicOff size={18} aria-hidden /> : <Mic size={18} aria-hidden />}
+          </button>
+        )}
         <button
           type="submit"
           disabled={pensando || !texto.trim()}

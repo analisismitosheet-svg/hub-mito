@@ -6,7 +6,7 @@ import { useTheme } from '@/context/ThemeContext'
 import CampanaNotificaciones from '@/components/CampanaNotificaciones'
 import AvisoArqueo from '@/components/AvisoArqueo'
 import ChatAgentes from '@/components/ChatAgentes'
-import ChatIaFlotante from '@/components/ChatIaFlotante'
+import ChatIaFlotante, { BotonMostrarChatIa } from '@/components/ChatIaFlotante'
 
 /**
  * Shell de la app. Todas las pantallas ocupan el 100% del ancho del dispositivo
@@ -101,6 +101,7 @@ export default function Layout({ children }: { children: ReactNode }) {
               >
                 {tema === 'dark' ? <Sun size={16} aria-hidden /> : <Moon size={16} aria-hidden />}
               </button>
+              <BotonMostrarChatIa className="btn-press flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-line bg-surface2 text-ink outline-none hover:border-line2 hover:bg-surface2 focus-visible:ring-2 focus-visible:ring-brand-500/50" />
               <CampanaNotificaciones />
               <span className="hidden text-sm text-sub lg:inline">{user.email}</span>
               <span
@@ -158,6 +159,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                   <Home size={16} aria-hidden /> Ir al menú
                 </Link>
               )}
+              <BotonMostrarChatIa conTexto className={`${itemMenu} w-full`} alTocar={() => setMenuAbierto(false)} />
               <button type="button" role="menuitem" onClick={() => window.location.reload()} className={itemMenu}>
                 <RefreshCw size={16} aria-hidden /> Recargar
               </button>

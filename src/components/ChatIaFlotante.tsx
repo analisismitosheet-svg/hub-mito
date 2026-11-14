@@ -45,6 +45,32 @@ export function useChatIaOculto(): boolean {
   return oculto
 }
 
+/**
+ * Botón para volver a mostrar el chat cuando se lo ocultó (encabezado y menú del celular).
+ * No se dibuja si el chat está visible o el usuario no es admin.
+ */
+export function BotonMostrarChatIa({ className = '', conTexto = false, alTocar }: { className?: string; conTexto?: boolean; alTocar?: () => void }) {
+  const { isAdmin } = useAuth()
+  const oculto = useChatIaOculto()
+  if (!isAdmin || !oculto) return null
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        abiertoGlobal = true
+        fijarChatIaOculto(false)
+        alTocar?.()
+      }}
+      className={className}
+      title="Mostrar el Chat IA"
+      aria-label="Mostrar el Chat IA"
+    >
+      <Sparkles size={16} className="text-violet-500" aria-hidden />
+      {conTexto && 'Mostrar Chat IA'}
+    </button>
+  )
+}
+
 export default function ChatIaFlotante() {
   const { isAdmin } = useAuth()
   const { pathname } = useLocation()
@@ -52,6 +78,9 @@ export default function ChatIaFlotante() {
   const { pensando, mensajes } = useChatIa()
   // Cada pantalla monta su propio Layout: se recuerda si estaba abierto para que no se cierre al navegar
   const [abierto, setAbiertoLocal] = useState(abiertoGlobal)
+  useEffect(() => {
+    if (!oculto) setAbiertoLocal(abiertoGlobal)
+  }, [oculto])
   const setAbierto = (v: boolean) => {
     abiertoGlobal = v
     setAbiertoLocal(v)

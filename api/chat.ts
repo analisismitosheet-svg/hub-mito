@@ -130,6 +130,44 @@ const HERRAMIENTAS: Herramienta[] = [
     },
   },
   {
+    nombre: 'ventas_por_articulo',
+    descripcion:
+      'Ranking de unidades vendidas por artículo (o por SKU artículo+color+talle) en los locales, para uno o varios días de los últimos ~12. ' +
+      'Sale del DWH (misma foto que la repo diaria). Usala para "lo más vendido", "qué se vendió en tal local", etc. ' +
+      'Trae también unidades por local y los días disponibles. La primera consulta puede tardar ~1 minuto.',
+    parametros: {
+      type: 'object',
+      properties: {
+        fechas: { type: 'array', items: FECHA, description: 'Días a sumar (AAAA-MM-DD)' },
+        local: { type: 'string', description: 'Código de local (base Dragon, ej. NVOCED, GPAZD); opcional' },
+        agrupar: { type: 'string', enum: ['articulo', 'sku'], description: 'articulo (por defecto) o sku (color y talle)' },
+        top: { type: 'number', description: 'Cuántos devolver (1-100, por defecto 20)' },
+      },
+      required: ['fechas'],
+    },
+    correr: async (a, { token, origen }) => {
+      const fechas = (Array.isArray(a.fechas) ? a.fechas : [a.fechas]).map(fecha).filter(Boolean) as string[]
+      if (!fechas.length) return { error: 'Faltan las fechas (AAAA-MM-DD).' }
+      const qs = new URLSearchParams({ modo: 'ventas', fechas: fechas.slice(0, 12).join(',') })
+      if (texto(a.local, 30)) qs.set('local', texto(a.local, 30))
+      if (a.agrupar === 'sku') qs.set('agrupar', 'sku')
+      if (Number(a.top)) qs.set('top', String(Math.min(Math.max(Number(a.top), 1), 100)))
+      // La foto del DWH tarda ~45 s: el puente contesta "calculando" y se vuelve a preguntar
+      const limite = Date.now() + 120_000
+      for (;;) {
+        const r = await fetch(`${origen}/api/sql/repo-diaria?${qs}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(30_000),
+        })
+        const cuerpo = (await r.json().catch(() => null)) as ({ estado?: string; error?: string } & Record<string, unknown>) | null
+        if (!r.ok) return { error: cuerpo?.error ?? `El puente respondió ${r.status}` }
+        if (cuerpo?.estado !== 'calculando') return cuerpo
+        if (Date.now() > limite) return { error: 'El DWH sigue calculando; probá de nuevo en un minuto.' }
+        await new Promise((ok) => setTimeout(ok, 5000))
+      }
+    },
+  },
+  {
     nombre: 'ventas_locales',
     descripcion:
       'Venta y objetivo diario por local (plata, en pesos) entre dos fechas. Incluye si el local operó y si fue feriado.',
@@ -239,14 +277,203 @@ const HERRAMIENTAS: Herramienta[] = [
       return tabla(token, `transfer_lotes?select=id,nombre,fecha,motivo&fecha=gte.${desde}&fecha=lte.${hasta}&order=fecha.desc&limit=200`)
     },
   },
+  {
+    nombre: 'listar_tablas',
+    descripcion:
+      'Catálogo de TODAS las tablas del hub (Supabase) que se pueden leer, con sus columnas. Sin "buscar" devuelve solo los nombres; ' +
+      'con "buscar" (parte del nombre de tabla o columna) devuelve las columnas de las que coinciden. Usala antes de leer_tabla.',
+    parametros: { type: 'object', properties: { buscar: { type: 'string', description: 'Texto a buscar en tablas/columnas (opcional)' } } },
+    correr: async (a) => {
+      const tablas = await leerCatalogo()
+      const q = texto(a.buscar, 40).toLowerCase()
+      if (!q) return { tablas: [...tablas.keys()].sort() }
+      const coinciden = [...tablas.entries()].filter(([t, cols]) => t.includes(q) || cols.some((c) => c.columna.includes(q)))
+      return { tablas: Object.fromEntries(coinciden.slice(0, 20).map(([t, cols]) => [t, cols.map((c) => `${c.columna}:${c.tipo}`).join(', ')])) }
+    },
+  },
+  {
+    nombre: 'leer_tabla',
+    descripcion:
+      'Lee filas de cualquier tabla del hub (solo lectura, sin columnas secretas). Filtros con operadores PostgREST ' +
+      '(eq, neq, gt, gte, lt, lte, like, ilike con * o %, is null/true/false, in con lista). Devuelve también el total de filas que cumplen.',
+    parametros: {
+      type: 'object',
+      properties: {
+        tabla: { type: 'string' },
+        columnas: { type: 'array', items: { type: 'string' }, description: 'Columnas a traer (por defecto todas las permitidas)' },
+        filtros: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: { columna: { type: 'string' }, operador: { type: 'string' }, valor: {} },
+            required: ['columna', 'operador', 'valor'],
+          },
+        },
+        orden: { type: 'string', description: 'Columna para ordenar' },
+        descendente: { type: 'boolean' },
+        limite: { type: 'number', description: '1-300, por defecto 50' },
+      },
+      required: ['tabla'],
+    },
+    correr: async (a, { token }) => {
+      const tablas = await leerCatalogo()
+      const nombre = texto(a.tabla, 63)
+      const cols = tablas.get(nombre)
+      if (!cols) return { error: `La tabla "${nombre}" no existe o no se puede leer. Usá listar_tablas.` }
+      const validas = new Set(cols.map((c) => c.columna))
+      const pedidas = Array.isArray(a.columnas) ? a.columnas.map((c) => texto(c, 63)).filter((c) => validas.has(c)) : []
+      const select = (pedidas.length ? pedidas : [...validas]).join(',')
+      const partes = [`select=${encodeURIComponent(select)}`]
+      for (const f of Array.isArray(a.filtros) ? a.filtros.slice(0, 10) : []) {
+        const fil = f as { columna?: unknown; operador?: unknown; valor?: unknown }
+        const col = texto(fil.columna, 63)
+        const op = texto(fil.operador, 6).toLowerCase()
+        if (!validas.has(col)) return { error: `La columna "${col}" no existe en ${nombre} o no se puede leer.` }
+        if (!OPERADORES.has(op)) return { error: `Operador inválido: ${op}` }
+        partes.push(`${col}=${op}.${valorFiltro(op, fil.valor)}`)
+      }
+      const orden = texto(a.orden, 63)
+      if (orden && validas.has(orden)) partes.push(`order=${orden}.${a.descendente ? 'desc' : 'asc'}.nullslast`)
+      partes.push(`limit=${Math.min(Math.max(Number(a.limite) || 50, 1), 300)}`)
+      const { url, anon } = supa()
+      const r = await fetch(`${url}/rest/v1/${nombre}?${partes.join('&')}`, {
+        headers: { apikey: anon, Authorization: `Bearer ${token}`, Prefer: 'count=exact' },
+        signal: AbortSignal.timeout(25_000),
+      })
+      const cuerpo = await r.json().catch(() => null)
+      if (!r.ok) return { error: (cuerpo as { message?: string } | null)?.message ?? `Error ${r.status}` }
+      const total = Number(r.headers.get('content-range')?.split('/')[1]) || undefined
+      return { total, filas: cuerpo }
+    },
+  },
+  {
+    nombre: 'listar_vistas_sql',
+    descripcion: 'Vistas del SQL Server (Dragon, DWH, etc.) habilitadas para consultar desde el hub (las de Datos SQL).',
+    parametros: { type: 'object', properties: {} },
+    correr: async () => ({ vistas: await vistasSql() }),
+  },
+  {
+    nombre: 'leer_vista_sql',
+    descripcion:
+      'Lee filas de una vista habilitada del SQL Server. "buscar" filtra por código o descripción de artículo (LIKE). Solo lectura.',
+    parametros: {
+      type: 'object',
+      properties: {
+        vista: { type: 'string', description: 'Nombre exacto, tal cual lo da listar_vistas_sql' },
+        buscar: { type: 'string' },
+        limite: { type: 'number', description: '1-300, por defecto 100' },
+      },
+      required: ['vista'],
+    },
+    correr: async (a, { token, origen }) => {
+      const vista = texto(a.vista, 150)
+      if (!(await vistasSql()).includes(vista)) return { error: `La vista "${vista}" no está habilitada. Usá listar_vistas_sql.` }
+      const qs = new URLSearchParams({ limit: String(Math.min(Math.max(Number(a.limite) || 100, 1), 300)) })
+      const q = texto(a.buscar, 60)
+      if (q) {
+        qs.set('where', COLUMNAS_BUSQUEDA)
+        qs.set('value', q)
+        qs.set('match', 'contiene')
+      }
+      const r = await fetch(`${origen}/api/sql/${encodeURIComponent(vista)}?${qs}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(40_000),
+      })
+      const cuerpo = (await r.json().catch(() => null)) as { filas?: unknown[]; error?: string; detalle?: string } | null
+      if (!r.ok) return { error: [cuerpo?.error, cuerpo?.detalle].filter(Boolean).join(' — ') || `Error ${r.status}` }
+      return { cantidad: cuerpo?.filas?.length ?? 0, filas: cuerpo?.filas ?? [] }
+    },
+  },
 ]
+
+// ---------------------------------------------------------------- lectura general (sin secretos)
+
+/** Tablas que el chat NUNCA lee: secretos, tokens, suscripciones push, configuración con claves. */
+const TABLAS_BLOQUEADAS = new Set([
+  'puente_secreto', 'push_suscripciones', 'tracking_push', 'qr_tokens', 'ordenes_compra_claves',
+  'sql_conexion', 'telegram_vinculos', 'app_config', 'config_app', 'contador_config',
+])
+/** Columnas que nunca se leen, en ninguna tabla. */
+const COLUMNA_SECRETA = /^(token|token_hash|hash|qr_token|p256dh|auth|endpoint)$|pass|contrase|secret|api_?key|private|clave_api/i
+
+type Catalogo = Map<string, Array<{ columna: string; tipo: string }>>
+let catalogo: { en: number; tablas: Catalogo } | null = null
+
+/**
+ * Tablas y columnas del esquema public. Supabase solo entrega el catálogo (OpenAPI de PostgREST)
+ * con la clave de servicio: se usa SOLO para eso, sin leer datos. Los datos se leen con el JWT
+ * del usuario, así que valen la RLS y los permisos de la base. Se cachea 10 minutos.
+ */
+async function leerCatalogo(): Promise<Catalogo> {
+  if (catalogo && Date.now() - catalogo.en < 10 * 60_000) return catalogo.tablas
+  const { url } = supa()
+  const service = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
+  if (!url || !service) throw new Error('Falta SUPABASE_SERVICE_ROLE_KEY para leer el catálogo')
+  const r = await fetch(`${url}/rest/v1/`, {
+    headers: { apikey: service, Authorization: `Bearer ${service}`, Accept: 'application/openapi+json' },
+    signal: AbortSignal.timeout(20_000),
+  })
+  if (!r.ok) throw new Error(`No se pudo leer el catálogo (${r.status})`)
+  const api = (await r.json()) as { definitions?: Record<string, { properties?: Record<string, { type?: string; format?: string }> }> }
+  const tablas: Catalogo = new Map()
+  for (const [nombre, def] of Object.entries(api.definitions ?? {})) {
+    if (TABLAS_BLOQUEADAS.has(nombre)) continue
+    const cols = Object.entries(def.properties ?? {})
+      .filter(([c]) => !COLUMNA_SECRETA.test(c))
+      .map(([c, d]) => ({ columna: c, tipo: d.format || d.type || '' }))
+    if (cols.length) tablas.set(nombre, cols)
+  }
+  catalogo = { en: Date.now(), tablas }
+  return tablas
+}
+
+const OPERADORES = new Set(['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'like', 'ilike', 'is', 'in'])
+
+/** Valor seguro para PostgREST: sin caracteres que rompan la sintaxis del filtro. */
+function valorFiltro(op: string, v: unknown): string {
+  if (op === 'is') {
+    const t = String(v).toLowerCase()
+    return ['null', 'true', 'false'].includes(t) ? t : 'null'
+  }
+  if (op === 'in') {
+    const lista = (Array.isArray(v) ? v : String(v).split(',')).map((x) => `"${String(x).replace(/["\\]/g, '').trim()}"`)
+    return `(${lista.slice(0, 50).join(',')})`
+  }
+  let t = String(v ?? '').slice(0, 200)
+  if (op === 'like' || op === 'ilike') t = t.replace(/%/g, '*')
+  return encodeURIComponent(t)
+}
+
+/** Vistas del SQL Server habilitadas en Configuraciones > Conexión SQL (las mismas que Datos SQL). */
+async function vistasSql(): Promise<string[]> {
+  const { url } = supa()
+  const service = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
+  const fijas = (process.env.SQL_VIEWS ?? '').split(',').map((v) => v.trim()).filter(Boolean)
+  if (!url || !service) return fijas
+  try {
+    const r = await fetch(`${url}/rest/v1/config_app?clave=eq.sql_vistas&select=valor`, {
+      headers: { apikey: service, Authorization: `Bearer ${service}` },
+    })
+    const filas = (await r.json().catch(() => null)) as Array<{ valor?: unknown }> | null
+    const raw = filas?.[0]?.valor
+    const lista = typeof raw === 'string' ? JSON.parse(raw) : raw
+    const deDb = Array.isArray(lista)
+      ? lista.map((v) => (typeof v === 'object' && v ? String((v as Record<string, unknown>).vista ?? '') : '')).filter(Boolean)
+      : []
+    return [...new Set([...fijas, ...deDb])]
+  } catch {
+    return fijas
+  }
+}
 
 function sistema(): string {
   return [
     'Sos el asistente de datos del Hub MITO (empresa de indumentaria con locales, mayorista, fábrica y tienda web, en Córdoba, Argentina).',
     `Hoy es ${hoyAr()}. Respondé siempre en español rioplatense, breve y claro.`,
     'Para cualquier número usá las herramientas: nunca inventes datos. Si una herramienta falla o no trae nada, decilo.',
-    'Las herramientas son de solo lectura: no podés modificar nada. No das datos personales (empleados, DNI, clientes de la web).',
+    'Las herramientas son de solo lectura: no podés modificar nada. Nunca mostrás claves, contraseñas, tokens ni secretos.',
+    'Preferí las herramientas específicas (ventas, contador, ventas_por_articulo, etc.). Si ninguna sirve, usá listar_tablas + leer_tabla ' +
+      '(cualquier tabla del hub) o listar_vistas_sql + leer_vista_sql (SQL Server). Pedí solo las columnas y filas necesarias.',
     'Mostrá montos en pesos con separador de miles (ej. $ 1.234.567) y usá tablas Markdown cortas cuando haya varias filas.',
     'Si el pedido es ambiguo (qué local, qué fechas), elegí lo más razonable y aclaralo en una línea.',
   ].join('\n')
