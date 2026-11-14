@@ -296,14 +296,35 @@ async function vueltaOpencode(mensajes: Mensaje[]): Promise<Bloque[]> {
   return (cuerpo?.content ?? []).filter((b) => b.type === 'text' || b.type === 'tool_use')
 }
 
-async function urlAgentes(token: string): Promise<string> {
+/**
+ * URLs candidatas del mito-server, en orden: la que publicó la PC en la base (túnel) y la del
+ * entorno (Funnel de Tailscale). La de la base puede quedar vieja si el túnel cambió y el
+ * script no la volvió a publicar (pasó el 11/11/2026), por eso se prueba la siguiente.
+ */
+async function urlsAgentes(token: string): Promise<string[]> {
+  const urls: string[] = []
   try {
     const u = await rpc(token, 'url_agentes')
-    if (typeof u === 'string' && u.trim()) return u.trim().replace(/\/$/, '')
+    if (typeof u === 'string' && u.trim()) urls.push(u.trim())
   } catch {
-    /* respaldo: env */
+    /* sigue con el env */
   }
-  return (process.env.URL_AGENTES ?? process.env.VITE_URL_AGENTES ?? '').trim().replace(/\/$/, '')
+  for (const e of [process.env.URL_AGENTES, process.env.VITE_URL_AGENTES]) if (e?.trim()) urls.push(e.trim())
+  return [...new Set(urls.map((u) => u.replace(/\/$/, '')))]
+}
+
+/** Primera URL del mito-server que contesta /api/salud (rápido, 6 s cada una). */
+async function urlAgentes(token: string): Promise<string> {
+  const urls = await urlsAgentes(token)
+  for (const u of urls) {
+    try {
+      const r = await fetch(`${u}/api/salud`, { signal: AbortSignal.timeout(6000) })
+      if (r.ok) return u
+    } catch {
+      /* prueba la siguiente */
+    }
+  }
+  return ''
 }
 
 /** Convierte la conversación al formato de Ollama (/api/chat). */
@@ -336,7 +357,7 @@ function aOllama(mensajes: Mensaje[]) {
 
 async function vueltaOllama(mensajes: Mensaje[], token: string): Promise<Bloque[]> {
   const base = await urlAgentes(token)
-  if (!base) throw new Error('No hay URL del servidor de agentes (mito-server).')
+  if (!base) throw new Error('El servidor de agentes (mito-server) no responde desde afuera: revisá el túnel o el Funnel de la PC.')
   const r = await fetch(`${base}/api/ia/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
