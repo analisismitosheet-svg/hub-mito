@@ -940,6 +940,31 @@ function accionRepoDiaria(body) {
   }
 }
 
+/** ¿La foto en memoria se sacó hoy (fecha de esta PC)? */
+function fotoDeHoy() {
+  if (!fotoRepo.foto || !fotoRepo.en) return false
+  const d = new Date(fotoRepo.en)
+  const dia = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return dia === diaLocal()
+}
+
+/**
+ * Foto del DWH lista a la mañana para el Chat IA: a partir de las 7:30, si todavía no hay
+ * una foto de hoy, se saca una (una sola lectura del DWH por día; si la repo automática
+ * ya sacó la suya, no hace nada). PUENTE_FOTO_MANANA=0 lo apaga.
+ */
+function iniciarFotoManana() {
+  if (process.env.PUENTE_FOTO_MANANA === '0') return
+  setInterval(() => {
+    const ahora = new Date()
+    const minutos = ahora.getHours() * 60 + ahora.getMinutes()
+    if (minutos < 7 * 60 + 30 || minutos > 21 * 60) return
+    if (fotoRepoEnCurso || fotoDeHoy()) return
+    console.log('[puente] foto del DWH de la mañana (Chat IA)')
+    lanzarFotoRepo()
+  }, 5 * 60_000).unref?.()
+}
+
 /**
  * body: { fechas, local?, agrupar?, top? } -> ranking de ventas por artículo (Chat IA del hub).
  * Usa la foto de la repo diaria; la venta de días cerrados no cambia, así que sirve una foto de
@@ -953,10 +978,12 @@ function accionVentasArticulos(body) {
     fotoRepo = { ...fotoRepo, error: null }
     throw new Error(error)
   }
-  const sirve = fotoRepo.foto && Date.now() - fotoRepo.en < 2 * 60 * 60_000
-  // Si piden hoy, que la foto sea de los últimos 5 minutos
-  const pideHoy = Array.isArray(body?.fechas) && body.fechas.includes(diaLocal())
-  if (!sirve || (pideHoy && Date.now() - fotoRepo.en > REPO_DIARIA_CACHE_MS)) {
+  // La venta de días cerrados no cambia: para días pasados sirve cualquier foto sacada HOY
+  // (la de las 7:30 o la de la repo automática). Si piden hoy, que tenga menos de 5 minutos.
+  const hoy = diaLocal()
+  const pideHoy = Array.isArray(body?.fechas) && body.fechas.includes(hoy)
+  const sirve = fotoRepo.foto && (pideHoy ? Date.now() - fotoRepo.en < REPO_DIARIA_CACHE_MS : fotoDeHoy())
+  if (!sirve) {
     lanzarFotoRepo()
     return calculando()
   }
@@ -1409,6 +1436,7 @@ const server = http.createServer(async (req, res) => {
 server.listen(Number(PUENTE_PORT), () => {
   console.log(`[puente] Escuchando en http://localhost:${PUENTE_PORT}`)
   // Repo diaria y cascada programadas (Compras > Repo diaria > Automático). PUENTE_PROGRAMADOR=0 lo apaga.
+  iniciarFotoManana()
   programador.iniciar({
     fotoNueva: fotoRepoNueva,
     foto: () => fotoRepo.foto,

@@ -16,6 +16,8 @@ export interface MensajeChatIa {
   consultas?: string[]
   /** por qué no contestó OpenCode (cuando respondió Ollama) */
   aviso?: string
+  /** tokens que consumió la pregunta (entrada + salida + caché) */
+  tokens?: number
   error?: boolean
 }
 
@@ -56,13 +58,13 @@ async function preguntar(q: string) {
       }),
     })
     const cuerpo = (await res.json().catch(() => null)) as
-      | { respuesta?: string; proveedor?: 'opencode' | 'ollama'; consultas?: string[]; aviso?: string; error?: string }
+      | { respuesta?: string; proveedor?: 'opencode' | 'ollama'; consultas?: string[]; aviso?: string; tokens?: number; error?: string }
       | null
     if (!res.ok || !cuerpo?.respuesta) throw new Error(cuerpo?.error ?? `Error ${res.status}`)
     fijar({
       mensajes: [
         ...estado.mensajes,
-        { role: 'assistant', content: cuerpo.respuesta, proveedor: cuerpo.proveedor, consultas: cuerpo.consultas, aviso: cuerpo.aviso },
+        { role: 'assistant', content: cuerpo.respuesta, proveedor: cuerpo.proveedor, consultas: cuerpo.consultas, aviso: cuerpo.aviso, tokens: cuerpo.tokens },
       ],
     })
   } catch (err) {
@@ -306,6 +308,7 @@ export default function ChatIaConversacion({ compacto = false }: { compacto?: bo
                   {m.consultas?.length
                     ? ` · consultó ${[...new Set(m.consultas)].map((c) => NOMBRE_CONSULTA[c] ?? c).join(', ')}`
                     : ''}
+                  {m.tokens ? ` · ${m.tokens.toLocaleString('es-AR')} tokens` : ''}
                   {m.aviso ? ` · OpenCode no respondió: ${m.aviso}` : ''}
                 </p>
               )}

@@ -34,7 +34,7 @@ type Res = {
 
 const OPENCODE_URL = 'https://opencode.ai/inference/go/anthropic/v1/messages'
 const MAX_VUELTAS = 6
-const MAX_RESULTADO = 14_000
+const MAX_RESULTADO = 10_000
 const VISTA_ARTICULOS = 'DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.vw_ARTICULOS_MITO'
 const COLUMNAS_BUSQUEDA = 'ARTCOD,ID_ARTICULO,ARTICULO,NOMBRE_COMPLETO,DESCRIPCION,ARTDES,ARTDESADIC'
 
@@ -474,6 +474,7 @@ function sistema(): string {
     'Las herramientas son de solo lectura: no podés modificar nada. Nunca mostrás claves, contraseñas, tokens ni secretos.',
     'Preferí las herramientas específicas (ventas, contador, ventas_por_articulo, etc.). Si ninguna sirve, usá listar_tablas + leer_tabla ' +
       '(cualquier tabla del hub) o listar_vistas_sql + leer_vista_sql (SQL Server). Pedí solo las columnas y filas necesarias.',
+    'Los resultados de las herramientas vienen como tabla: primera línea = columnas, después una fila por línea separada por |.',
     'Mostrá montos en pesos con separador de miles (ej. $ 1.234.567) y usá tablas Markdown cortas cuando haya varias filas.',
     'Si el pedido es ambiguo (qué local, qué fechas), elegí lo más razonable y aclaralo en una línea.',
   ].join('\n')
@@ -489,7 +490,80 @@ type Mensaje = { role: 'user' | 'assistant'; content: string | Bloque[] }
 
 class SinCupo extends Error {}
 
-async function vueltaOpencode(mensajes: Mensaje[], sesion: string): Promise<Bloque[]> {
+// ---------------------------------------------------------------- tokens: resultados compactos y medición
+
+/** Celda de tabla: sin saltos ni barras (rompen el formato), números tal cual. */
+function celda(v: unknown): string {
+  if (v === null || v === undefined) return ''
+  if (typeof v === 'object') return JSON.stringify(v)
+  return String(v).replace(/[|\r\n]+/g, ' ').trim()
+}
+
+const esFila = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x)
+
+/**
+ * Resultado de una herramienta en texto compacto para el modelo: las listas de filas van como
+ * tabla (encabezado UNA vez y valores separados por |) en vez de JSON, que repite el nombre de
+ * cada columna en cada fila. Mismo dato, ~40-60 % menos tokens.
+ */
+function compactar(v: unknown, sangria = ''): string {
+  if (Array.isArray(v)) {
+    if (!v.length) return `${sangria}(vacío)`
+    if (v.every(esFila)) {
+      const cols: string[] = []
+      for (const f of v) for (const k of Object.keys(f)) if (!cols.includes(k) && cols.length < 40) cols.push(k)
+      const filas = v.map((f) => cols.map((c) => celda(f[c])).join('|'))
+      return [`${sangria}${cols.join('|')}`, ...filas.map((f) => `${sangria}${f}`)].join('\n')
+    }
+    return `${sangria}${v.map(celda).join(', ')}`
+  }
+  if (esFila(v)) {
+    return Object.entries(v)
+      .filter(([, x]) => x !== undefined)
+      .map(([k, x]) =>
+        Array.isArray(x) || esFila(x) ? `${sangria}${k}:\n${compactar(x, `${sangria}  `)}` : `${sangria}${k}: ${celda(x)}`,
+      )
+      .join('\n')
+  }
+  return `${sangria}${celda(v)}`
+}
+
+interface Uso {
+  vueltas: number
+  entrada: number
+  salida: number
+  cache: number
+}
+
+/** user id (sub) del JWT, sin verificar: solo para anotar el consumo (el acceso ya lo validó soy_admin). */
+function usuarioDelToken(token: string): string | null {
+  try {
+    const sub = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'))?.sub
+    return typeof sub === 'string' && /^[0-9a-f-]{36}$/i.test(sub) ? sub : null
+  } catch {
+    return null
+  }
+}
+
+/** Anota el consumo de la pregunta en chat_ia_uso (sin texto de preguntas ni respuestas). Nunca falla la respuesta. */
+async function registrarUso(fila: Record<string, unknown>) {
+  console.log('[chat-ia] uso', JSON.stringify(fila))
+  const { url } = supa()
+  const service = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
+  if (!url || !service) return
+  try {
+    await fetch(`${url}/rest/v1/chat_ia_uso`, {
+      method: 'POST',
+      headers: { apikey: service, Authorization: `Bearer ${service}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify(fila),
+      signal: AbortSignal.timeout(5000),
+    })
+  } catch {
+    /* la medición es opcional */
+  }
+}
+
+async function vueltaOpencode(mensajes: Mensaje[], sesion: string, uso: Uso): Promise<Bloque[]> {
   const key = process.env.OPENCODE_GO_API_KEY?.trim()
   if (!key) throw new SinCupo('OpenCode Go no está configurado')
   let r: Response
@@ -517,12 +591,20 @@ async function vueltaOpencode(mensajes: Mensaje[], sesion: string): Promise<Bloq
   } catch (err) {
     throw new SinCupo(`OpenCode Go no respondió (${(err as Error).message})`)
   }
-  const cuerpo = (await r.json().catch(() => null)) as { content?: Bloque[]; error?: { message?: string } } | null
+  const cuerpo = (await r.json().catch(() => null)) as {
+    content?: Bloque[]
+    error?: { message?: string }
+    usage?: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number }
+  } | null
   if (!r.ok) {
     const msg = cuerpo?.error?.message ?? `OpenCode Go respondió ${r.status}`
     // 401/402/403/429/5xx: se pasa a Ollama. 400 es un error nuestro, también se intenta con Ollama.
     throw new SinCupo(msg)
   }
+  uso.vueltas++
+  uso.entrada += (cuerpo?.usage?.input_tokens ?? 0) + (cuerpo?.usage?.cache_creation_input_tokens ?? 0)
+  uso.salida += cuerpo?.usage?.output_tokens ?? 0
+  uso.cache += cuerpo?.usage?.cache_read_input_tokens ?? 0
   return (cuerpo?.content ?? []).filter((b) => b.type === 'text' || b.type === 'tool_use')
 }
 
@@ -652,13 +734,26 @@ export default async function handler(req: Req, res: Res) {
   let proveedor: 'opencode' | 'ollama' = 'opencode'
   let avisoRespaldo = ''
   const mensajes = [...historial]
+  const uso: Uso = { vueltas: 0, entrada: 0, salida: 0, cache: 0 }
+  const inicio = Date.now()
+  const anotar = () =>
+    registrarUso({
+      usuario_id: usuarioDelToken(token),
+      proveedor,
+      vueltas: uso.vueltas,
+      herramientas: consultas,
+      tokens_entrada: uso.entrada,
+      tokens_salida: uso.salida,
+      tokens_cache: uso.cache,
+      ms: Date.now() - inicio,
+    })
 
   try {
     for (let vuelta = 0; vuelta < MAX_VUELTAS; vuelta++) {
       let bloques: Bloque[]
       if (proveedor === 'opencode') {
         try {
-          bloques = await vueltaOpencode(mensajes, sesion)
+          bloques = await vueltaOpencode(mensajes, sesion, uso)
         } catch (err) {
           if (!(err instanceof SinCupo)) throw err
           proveedor = 'ollama'
@@ -673,7 +768,14 @@ export default async function handler(req: Req, res: Res) {
       mensajes.push({ role: 'assistant', content: bloques })
       if (!llamadas.length) {
         const respuesta = bloques.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text).join('\n').trim()
-        return res.status(200).json({ respuesta: respuesta || '(sin respuesta)', proveedor, consultas, aviso: avisoRespaldo || undefined })
+        await anotar()
+        return res.status(200).json({
+          respuesta: respuesta || '(sin respuesta)',
+          proveedor,
+          consultas,
+          aviso: avisoRespaldo || undefined,
+          tokens: uso.entrada + uso.salida + uso.cache,
+        })
       }
 
       const resultados: Bloque[] = []
@@ -685,7 +787,7 @@ export default async function handler(req: Req, res: Res) {
           continue
         }
         try {
-          let salida = JSON.stringify(await h.correr(l.input ?? {}, { token, origen }))
+          let salida = compactar(await h.correr(l.input ?? {}, { token, origen }))
           if (salida.length > MAX_RESULTADO) salida = `${salida.slice(0, MAX_RESULTADO)}… (recortado: pedí un rango más chico)`
           resultados.push({ type: 'tool_result', tool_use_id: l.id, content: salida })
         } catch (err) {
@@ -694,6 +796,7 @@ export default async function handler(req: Req, res: Res) {
       }
       mensajes.push({ role: 'user', content: resultados })
     }
+    await anotar()
     return res.status(200).json({
       respuesta: 'La consulta necesitó demasiados pasos. Probá con una pregunta más acotada.',
       proveedor,
