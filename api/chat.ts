@@ -280,7 +280,7 @@ async function vueltaOpencode(mensajes: Mensaje[], sesion: string): Promise<Bloq
       },
       body: JSON.stringify({
         model: process.env.OPENCODE_GO_MODELO?.trim() || 'claude-haiku-5-5',
-        max_tokens: 2048,
+        max_tokens: 8192,
         system: sistema(),
         tools: HERRAMIENTAS.map((h) => ({ name: h.nombre, description: h.descripcion, input_schema: h.parametros })),
         messages: mensajes,
