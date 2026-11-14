@@ -237,18 +237,79 @@ const HERRAMIENTAS: Herramienta[] = [
   {
     nombre: 'estado_pedidos_compra',
     descripcion:
-      'Estado de los pedidos de compra a proveedores: unidades pedidas, recibidas, de más y canceladas, y último ingreso.',
+      'Estado de los pedidos de compra a proveedores (todos, no anulados): unidades pedidas, recibidas, canceladas y PENDIENTES ' +
+      '(pedidas − recibidas − canceladas = lo que el proveedor todavía debe). Sin proveedor: resumen por proveedor de TODOS los pedidos, ' +
+      'ordenado por pendientes (completo, sirve para rankings). Con proveedor: además el detalle de sus pedidos. ' +
+      'Ojo: hay pedidos de 2025 con saldo que probablemente nunca se cerraron en Dragon; "pendiente_mas_viejo" lo muestra ' +
+      'y con "desde" se cuentan solo los pedidos desde esa fecha. Aclaralo al usuario cuando el pendiente venga de pedidos viejos.',
     parametros: {
       type: 'object',
-      properties: { proveedor: { type: 'string', description: 'Parte del nombre o código del proveedor (opcional)' } },
+      properties: {
+        proveedor: { type: 'string', description: 'Parte del nombre o código del proveedor (opcional)' },
+        desde: { ...FECHA, description: 'Solo pedidos con fecha desde este día (opcional, AAAA-MM-DD)' },
+      },
     },
     correr: async (a, { token }) => {
       const filas = (await rpc(token, 'estado_pedidos_compra')) as Array<Record<string, unknown>>
       const p = texto(a.proveedor, 40).toLowerCase()
-      const sel = p
-        ? filas.filter((f) => `${f.proveedor ?? ''} ${f.proveedor_nombre ?? ''}`.toLowerCase().includes(p))
-        : filas
-      return { cantidad: sel.length, filas: sel.slice(0, 150) }
+      const desde = fecha(a.desde)
+      const sel = filas.filter(
+        (f) =>
+          (!p || `${f.proveedor ?? ''} ${f.proveedor_nombre ?? ''}`.toLowerCase().includes(p)) &&
+          (!desde || String(f.fecha ?? '').slice(0, 10) >= desde),
+      )
+      const n = (v: unknown) => Number(v) || 0
+      const pend = (f: Record<string, unknown>) => Math.max(n(f.unidades) - n(f.recibidas) - n(f.canceladas), 0)
+
+      // Se resume acá: 500 pedidos con todos sus campos no entran en el resultado (se recortan a 10.000
+      // caracteres) y el ranking salía con una parte. Por proveedor entran todos.
+      const grupos = new Map<string, { proveedor: string; codigos: Set<string>; pedidos: number; con_pendiente: number; pedidas: number; recibidas: number; canceladas: number; pendientes: number; pendiente_mas_viejo: string; ultimo_ingreso: string }>()
+      for (const f of sel) {
+        const nombre = String(f.proveedor_nombre ?? '').trim() || String(f.proveedor ?? '').trim() || '(sin proveedor)'
+        const g = grupos.get(nombre) ?? { proveedor: nombre, codigos: new Set(), pedidos: 0, con_pendiente: 0, pedidas: 0, recibidas: 0, canceladas: 0, pendientes: 0, pendiente_mas_viejo: '', ultimo_ingreso: '' }
+        const fp = String(f.fecha ?? '').slice(0, 10)
+        if (pend(f) > 0 && fp && (!g.pendiente_mas_viejo || fp < g.pendiente_mas_viejo)) g.pendiente_mas_viejo = fp
+        if (f.proveedor) g.codigos.add(String(f.proveedor).trim())
+        g.pedidos++
+        g.pedidas += n(f.unidades)
+        g.recibidas += n(f.recibidas)
+        g.canceladas += n(f.canceladas)
+        g.pendientes += pend(f)
+        if (pend(f) > 0) g.con_pendiente++
+        const ult = String(f.ultimo_ingreso ?? '').slice(0, 10)
+        if (ult > g.ultimo_ingreso) g.ultimo_ingreso = ult
+        grupos.set(nombre, g)
+      }
+      const proveedores = [...grupos.values()]
+        .sort((x, y) => y.pendientes - x.pendientes || y.pedidas - x.pedidas)
+        .map(({ codigos, ...g }) => ({ ...g, codigos: [...codigos].join(',') }))
+      const total = (k: 'pedidas' | 'recibidas' | 'canceladas' | 'pendientes') => proveedores.reduce((s, g) => s + g[k], 0)
+      const MAX_PROV = 60
+      return {
+        ...(desde ? { desde } : {}),
+        pedidos: sel.length,
+        totales: { pedidas: total('pedidas'), recibidas: total('recibidas'), canceladas: total('canceladas'), pendientes: total('pendientes') },
+        cantidad_proveedores: proveedores.length,
+        // Columnas + filas (sin repetir los nombres de campo): así entran todos en el resultado
+        columnas: ['proveedor', 'codigos', 'pedidos', 'con_pendiente', 'pedidas', 'recibidas', 'canceladas', 'pendientes', 'pendiente_mas_viejo', 'ultimo_ingreso'],
+        proveedores: proveedores
+          .slice(0, MAX_PROV)
+          .map((g) => [g.proveedor.slice(0, 45), g.codigos, g.pedidos, g.con_pendiente, g.pedidas, g.recibidas, g.canceladas, g.pendientes, g.pendiente_mas_viejo || null, g.ultimo_ingreso || null]),
+        ...(proveedores.length > MAX_PROV ? { nota: `Se muestran los ${MAX_PROV} con más pendientes; los totales son de todos.` } : {}),
+        // Con un proveedor puntual, también el detalle (primero los que deben más)
+        ...(p
+          ? {
+              detalle: sel
+                .map((f) => ({
+                  numero: f.numero, fecha: f.fecha, proveedor: f.proveedor, observacion: String(f.observacion ?? '').slice(0, 60),
+                  pedidas: n(f.unidades), recibidas: n(f.recibidas), canceladas: n(f.canceladas), pendientes: pend(f),
+                  ultimo_ingreso: String(f.ultimo_ingreso ?? '').slice(0, 10) || null,
+                }))
+                .sort((x, y) => y.pendientes - x.pendientes)
+                .slice(0, 50),
+            }
+          : {}),
+      }
     },
   },
   {
