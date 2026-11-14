@@ -920,6 +920,7 @@ function lanzarFotoRepo() {
   fotoRepoEnCurso = (async () => {
     if (!fs.existsSync(SCRIPT_REPO_DIARIA)) throw new Error('Falta sql/repo-diaria.sql junto a server.js')
     const enDragon = refrescarDiasEnDragon()
+    programador.feriadosHoyFrescos().catch(() => {}) // locales con feriado hoy (cascada)
     const t0 = Date.now()
     const pool = await conexionLarga()
     let r
@@ -979,7 +980,7 @@ function accionRepoDiaria(body) {
   // Cascada entre locales con lo que MITO no cubrió (misma foto, mismos días, parámetros guardados)
   let cascada = null
   try {
-    cascada = cascadaLocales.calcularCascada(fotoRepo.foto, repo, body?.params)
+    cascada = cascadaLocales.calcularCascada(fotoRepo.foto, repo, body?.params, { feriados: programador.feriadosHoy() })
   } catch (e) {
     cascada = { error: e.message }
   }
@@ -1308,7 +1309,7 @@ function accionRepoCascada(body) {
   }
   const fechas = Array.isArray(body?.fechas) ? body.fechas.filter((f) => /^\d{4}-\d{2}-\d{2}$/.test(String(f))) : []
   const repo = repoDiaria.calcularRepo(fotoRepo.foto, { fechas, hoy: diaLocal() })
-  return { foto: new Date(fotoRepo.en).toISOString(), cascada: cascadaLocales.calcularCascada(fotoRepo.foto, repo, body?.params) }
+  return { foto: new Date(fotoRepo.en).toISOString(), cascada: cascadaLocales.calcularCascada(fotoRepo.foto, repo, body?.params, { feriados: programador.feriadosHoy() }) }
 }
 
 /** Foto nueva del DWH y esperar a que esté (la usa el programador). */

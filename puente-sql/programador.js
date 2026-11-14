@@ -126,6 +126,30 @@ function nombreLote(hoy, dias) {
   return `${hoy.slice(2, 4)}${hoy.slice(5, 7)}${hoy.slice(8, 10)} - CASCADA ${tramo}`
 }
 
+// ---- Feriados de hoy (RR. HH. → Feriados): la cascada saca esos locales ----
+let feriados = { en: 0, lista: [], enCurso: null }
+/** Pide a Supabase los locales con feriado hoy ('*' = todos). Se guarda 5 minutos. */
+function refrescarFeriados() {
+  const token = cfg('PUENTE_TOKEN')
+  if (feriados.enCurso || !token || !SUPABASE_URL()) return feriados.enCurso
+  feriados.enCurso = rpc('feriados_hoy_puente', { p_token: token })
+    .then((r) => { feriados = { en: Date.now(), lista: Array.isArray(r) ? r.map(String) : [], enCurso: null } })
+    .catch((e) => {
+      anotar(`feriados de hoy: ${e.message}`)
+      feriados = { ...feriados, en: Date.now(), enCurso: null }
+    })
+  return feriados.enCurso
+}
+/** Lo último que se sabe (y lo vuelve a pedir si tiene más de 5 minutos). */
+function feriadosHoy() {
+  if (Date.now() - feriados.en > 5 * 60_000) refrescarFeriados()
+  return feriados.lista
+}
+async function feriadosHoyFrescos() {
+  if (Date.now() - feriados.en > 5 * 60_000) await refrescarFeriados()
+  return feriados.lista
+}
+
 // ---- Tareas ----
 async function correrRepo(ctx, pend, token) {
   if (ctx.cargaEnCurso()) throw new Error('Hay una carga a Dragon en curso desde el hub: se reintenta más tarde.')
@@ -182,7 +206,7 @@ async function correrCascada(ctx, pend, token, diasRepo) {
   const conVenta = new Set(foto.dias.filter((d) => d.unidades > 0 && d.dia < hoy).map((d) => d.dia))
   dias = (dias ?? []).filter((d) => conVenta.has(d))
   const repo = ctx.calcularRepo(foto, { fechas: dias, hoy }) // sin días: el último con venta
-  const c = ctx.calcularCascada(foto, repo, pend.params)
+  const c = ctx.calcularCascada(foto, repo, pend.params, { feriados: await feriadosHoyFrescos() })
   const hasta = repo.dias[repo.dias.length - 1]
   if (!c.filas.length) return { ok: true, hasta, texto: `Venta ${repo.fecha_str}: la cascada no dio ningún envío.` }
   const nombre = nombreLote(hoy, repo.dias)
@@ -268,4 +292,4 @@ function iniciar(contexto) {
   }, CADA_MS).unref?.()
 }
 
-module.exports = { iniciar, estado: () => ({ ...estado }), diasDeObs, nombreLote }
+module.exports = { iniciar, estado: () => ({ ...estado }), diasDeObs, nombreLote, feriadosHoy, feriadosHoyFrescos }

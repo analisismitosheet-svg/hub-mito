@@ -77,7 +77,7 @@ export default function RepoAutomatico({ solo }: { solo?: 'repo' | 'cascada' } =
   const [guardando, setGuardando] = useState(false)
   const [aviso, setAviso] = useState<string | null>(null)
   /** próximos feriados de todos los locales (RR. HH. → Feriados): la repo automática no corre */
-  const [feriados, setFeriados] = useState<Array<{ fecha: string; motivo: string | null }>>([])
+  const [feriados, setFeriados] = useState<Array<{ fecha: string; local: string | null; motivo: string | null }>>([])
 
   useEffect(() => {
     if (supabase) void supabase.rpc('repo_auto_feriados').then(({ data }) => setFeriados((data as typeof feriados | null) ?? []))
@@ -147,7 +147,7 @@ export default function RepoAutomatico({ solo }: { solo?: 'repo' | 'cascada' } =
       <p className="rounded-xl border border-sky-500/30 bg-sky-500/10 p-3 text-xs text-ink">
         El Puente SQL de la PC central revisa cada minuto. A la hora elegida saca una foto nueva del DWH y hace todo solo, sin abrir el Hub.
         Si la prendés o le cambiás la hora cuando la de hoy ya pasó, arranca el próximo día que toque; para correrla en el momento usá «Correr ahora».
-        {solo !== 'cascada' && 'La repo cubre los días con venta que todavía no tienen su repo en Dragon (un lunes, sábado y domingo juntos) y nunca repite un local que ya tiene el pedido. No corre los feriados de todos los locales (los de Objetivos, que carga RR. HH.): al día siguiente suma también el feriado. '}
+        {solo !== 'cascada' && 'La repo cubre los días con venta que todavía no tienen su repo en Dragon (un lunes, sábado y domingo juntos) y nunca repite un local que ya tiene el pedido. No corre si hay feriado de todos los locales, de Fábrica o de Polo 52 (RR. HH. → Feriados): al día siguiente suma también el feriado. En la cascada, un local con feriado ese día no dona ni recibe. '}
         {solo !== 'repo' && 'La cascada usa los días de la última repo cargada y los parámetros guardados en Transferencia diaria; conviene programarla después de la repo.'}
       </p>
       {error && <p role="alert" className="rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
@@ -183,7 +183,7 @@ export default function RepoAutomatico({ solo }: { solo?: 'repo' | 'cascada' } =
               <span>
                 No corre:{' '}
                 {feriados
-                  .map((f) => `${new Date(`${f.fecha}T12:00:00`).toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit', month: '2-digit' })}${f.motivo ? ` (${f.motivo})` : ''}`)
+                  .map((f) => `${new Date(`${f.fecha}T12:00:00`).toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit', month: '2-digit' })} · ${f.local == null ? 'todos' : f.local.toUpperCase() === 'POLO52' ? 'Polo 52' : 'Fábrica'}${f.motivo ? ` (${f.motivo})` : ''}`)
                   .join(' · ')}
               </span>
             </p>

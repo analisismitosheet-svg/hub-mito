@@ -27,6 +27,8 @@
  *   - cerrados_dia (14/11/2026): locales que no abren ciertos días de la semana (1 = lunes …
  *     7 = domingo). El día que corre la cascada NO donan: lo que se les iba a pedir lo dona
  *     el siguiente local que sí abre. Por defecto: domingo 9DEJULIO, MUNOZ, GRALPAZ y CFR4.
+ * Feriados (opts.feriados, RR. HH. → Feriados): el local con feriado el día que corre NO dona
+ * ni recibe; lo que se le iba a pedir lo dona otro. '*' = todos los locales.
  *   - materiales (incluir), excluir_temporadas / grupos / articulos / proveedores / lineas
  *   - orden_receptores: 'alfabetico' (como el script) o 'prioridad'
  *   - orden_donantes: 'stock' (más stock del artículo primero, como el script) o 'prioridad'
@@ -222,6 +224,10 @@
     const hoy = opts?.hoy ? new Date(`${opts.hoy}T12:00:00`) : new Date()
     const diaSemana = hoy.getDay() || 7
     const cerradosHoy = new Set(P.cerrados_dia.activo ? P.cerrados_dia.dias[diaSemana] ?? [] : [])
+    // Feriados de hoy (códigos de la tabla de locales; General Paz es GPAZD ahí y GRALPAZ acá)
+    const CODIGO_CASCADA = { GPAZD: 'GRALPAZ' }
+    const fer = (opts?.feriados ?? []).map((c) => String(c ?? '').trim().toUpperCase()).filter(Boolean)
+    const feriadoHoy = new Set(fer.includes('*') ? P.prioridad : fer.map((c) => CODIGO_CASCADA[c] ?? c))
     const PRIORIDAD = P.prioridad
     const PRIO = new Map(PRIORIDAD.map((b, i) => [b, i + 1]))
     const noDonan = new Set(P.no_donan)
@@ -329,10 +335,10 @@
       p.mito = mito.get(`${p.base}|${p.sku}`) ?? 0
       p.faltante = P.restar_mito ? p.venta - p.mito : p.venta
       p.faltante_inicial = p.faltante
-      p.elegible = elegible(p.art) && !noReciben.has(p.base)
+      p.elegible = elegible(p.art) && !noReciben.has(p.base) && !feriadoHoy.has(p.base)
     }
 
-    const donantesBase = PRIORIDAD.filter((d) => !noDonan.has(d) && !principal.has(d) && !cerradosHoy.has(d))
+    const donantesBase = PRIORIDAD.filter((d) => !noDonan.has(d) && !principal.has(d) && !cerradosHoy.has(d) && !feriadoHoy.has(d))
     // Con prioridad por venta (donantes): dona primero el que MENOS vende la categoría
     const donantesDe = (art, color, talle) =>
       [...donantesBase].sort(
@@ -482,6 +488,8 @@
       de_principal: dePrincipal,
       // Locales que hoy no abren: no donan (cerrados_dia)
       cerrados_hoy: [...cerradosHoy],
+      // Locales con feriado hoy: no donan ni reciben
+      feriado_hoy: P.prioridad.filter((b) => feriadoHoy.has(b)),
       pares_eliminados: chicos.length,
       unidades_eliminadas: chicos.reduce((s, u) => s + u, 0),
       // Por qué quedó sin cubrir lo que faltaba (unidades)
