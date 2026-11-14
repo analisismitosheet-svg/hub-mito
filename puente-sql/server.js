@@ -36,6 +36,7 @@
  *   POST /          body: { accion: 'repo_diaria', fechas?, forzar? } -> { estado: 'calculando' } | { estado: 'listo', filas, resumen, ... }
  *                   (Compras > Repo diaria: sql/repo-diaria.sql + repo-diaria.js; stock MITO real = físico - comprometido)
  *   POST /          body: { accion: 'ventas_articulos', fechas, local?, agrupar?, top? } -> { estado: 'calculando' } | { estado: 'listo', ranking, ... }
+ *                     (lee las bases Dragon directo con sql/ventas-articulos.sql; si falla, la foto de la repo diaria)
  *   POST /          body: { accion: 'repo_diaria_dragon', modo: 'revisar'|'cargar'|'estado', fechas, foto, locales?, confirmo? }
  *                   -> { carga: { obs, locales: [{ cliente, unidades, estado, numero }] } }
  *                   (carga la repo como pedidos de venta VTD en DRAGONFISH_MITO por la API, uno por local)
@@ -965,12 +966,157 @@ function iniciarFotoManana() {
   }, 5 * 60_000).unref?.()
 }
 
+/* ---- Ventas por artículo DIRECTO de las bases (Chat IA) -----------------------------------
+ * sql/ventas-articulos.sql lee COMPROBANTEV/DET de cada base solo en las fechas pedidas, en los dos
+ * servidores a la vez: las réplicas del Replicador SQL en esta PC (SQL2, usuario de Windows) y el
+ * resto de las bases en el principal. Tarda 1-2 s por día y no depende de que los locales respondan
+ * (la vista del DWH tarda ~1 minuto). Las listas son las mismas bases que arma vw_FACT_VENTAS_STOCK;
+ * se pueden cambiar con PUENTE_VENTAS_BASES_PRINCIPAL / PUENTE_VENTAS_BASES_LOCAL (separadas por coma).
+ * Si algo falla, se vuelve a la foto del DWH de siempre.
+ */
+const SCRIPT_VENTAS_ARTICULOS = path.join(__dirname, 'sql', 'ventas-articulos.sql')
+const listaBases = (env, porDefecto) =>
+  (process.env[env] || porDefecto)
+    .split(',')
+    .map((b) => b.trim().toUpperCase())
+    .filter((b) => PARTE.test(b))
+const VENTAS_BASES_PRINCIPAL = listaBases(
+  'PUENTE_VENTAS_BASES_PRINCIPAL',
+  'DRAGONFISH_9DEJULIO,DRAGONFISH_BUSTOD,DRAGONFISH_CENTRALD,DRAGONFISH_CFD,DRAGONFISH_CFPO,DRAGONFISH_CFR4,' +
+    'DRAGONFISH_CFR9,DRAGONFISH_CFRA,DRAGONFISH_DINOD,DRAGONFISH_GRALPAZ,DRAGONFISH_INDO,DRAGONFISH_INDOD,' +
+    'DRAGONFISH_LIBERD,DRAGONFISH_NOMED,DRAGONFISH_NVOCED,DRAGONFISH_OUTLETD,DRAGONFISH_TX-POLO,' +
+    'DRAGONFISH_WALMARTD,DRAGONFISH_POLO52,DRAGONFISH_MITO',
+)
+const VENTAS_BASES_LOCAL = listaBases(
+  'PUENTE_VENTAS_BASES_LOCAL',
+  'DRAGONFISH_9DEJUL2,DRAGONFISH_ESPINOD,DRAGONFISH_FABRICA,DRAGONFISH_MUNOZ,DRAGONFISH_NVOCED2,' +
+    'DRAGONFISH_RIVERAD,DRAGONFISH_RUTA9D2,DRAGONFISH_VCPD',
+)
+const VENTAS_DIRECTO_TIMEOUT_MS = 18_000 // el hub espera 25 s al puente
+let cacheVentasDirecto = new Map() // 'desde|hasta' -> { en, foto, bases_con_error }
+
+const conTope = (promesa, ms, que) =>
+  Promise.race([promesa, new Promise((_, no) => setTimeout(() => no(new Error(`${que}: más de ${ms / 1000} s`)), ms).unref?.())])
+
+async function ventasDeServidor(srv, bases, desde, hasta) {
+  await asegurarConexion(srv)
+  const r = await srv.pool
+    .request()
+    .input('desde', srv.sql.VarChar(10), desde)
+    .input('hasta', srv.sql.VarChar(10), hasta)
+    .input('bases', srv.sql.NVarChar(4000), bases.join(','))
+    .query(fs.readFileSync(SCRIPT_VENTAS_ARTICULOS, 'utf8'))
+  const [dias = [], ventas = [], estado = []] = r.recordsets ?? []
+  return { dias, ventas, estado }
+}
+
+/** Descripción, grupo, material y proveedor de los artículos (maestro de INDOD, como vw_DIM_ARTICULO). */
+async function maestroArticulos(codigos) {
+  const arts = new Map()
+  const lista = [...new Set(codigos)].filter((c) => /^[A-Za-z0-9._/ -]{1,40}$/.test(c)).slice(0, 200)
+  if (!lista.length) return arts
+  const srv = SERVIDORES.get(ALIAS_PRINCIPAL.toUpperCase())
+  await asegurarConexion(srv)
+  const p = srv.pool.request()
+  lista.forEach((c, i) => p.input(`a${i}`, srv.sql.VarChar(40), c))
+  const r = await p.query(`
+    SELECT LTRIM(RTRIM(a.ARTCOD)) AS ID_ART, LTRIM(RTRIM(a.ARTDES)) AS ARTICULO, LTRIM(RTRIM(a.ARTDESADIC)) AS ARTICULO_ADICIONAL,
+           LTRIM(RTRIM(pr.DESCFW)) AS PROVEEDOR, UPPER(LTRIM(RTRIM(a.GRUPO))) AS ID_GRUPO, LTRIM(RTRIM(g.DESCRIP)) AS GRUPO,
+           LTRIM(RTRIM(a.MAT)) AS ID_MATERIAL, LTRIM(RTRIM(m.MATDES)) AS MATERIAL
+      FROM DRAGONFISH_INDOD.ZooLogic.ART a
+      OUTER APPLY (SELECT TOP 1 DESCFW FROM DRAGONFISH_INDOD.ZooLogic.PROV t WHERE t.CLCOD = a.ARTFAB) pr
+      OUTER APPLY (SELECT TOP 1 DESCRIP FROM DRAGONFISH_INDOD.ZooLogic.GRUPO t WHERE RTRIM(t.COD) = RTRIM(a.GRUPO)) g
+      OUTER APPLY (SELECT TOP 1 MATDES FROM DRAGONFISH_INDOD.ZooLogic.MAT t WHERE t.MATCOD = a.MAT) m
+     WHERE LTRIM(RTRIM(a.ARTCOD)) IN (${lista.map((_, i) => `@a${i}`).join(',')})`)
+  const t = (v) => String(v ?? '').trim()
+  for (const f of r.recordset ?? []) {
+    if (!arts.has(t(f.ID_ART))) {
+      arts.set(t(f.ID_ART), {
+        ARTICULO: t(f.ARTICULO), ARTICULO_ADICIONAL: t(f.ARTICULO_ADICIONAL), PROVEEDOR: t(f.PROVEEDOR),
+        ID_GRUPO: t(f.ID_GRUPO), GRUPO: t(f.GRUPO), ID_MATERIAL: t(f.ID_MATERIAL), MATERIAL: t(f.MATERIAL),
+      })
+    }
+  }
+  return arts
+}
+
+/** { dias, ventas } de las fechas pedidas, leyendo las bases directo (cache: 1 min con hoy, 1 h si no). */
+async function fotoVentasDirecto(desde, hasta) {
+  const clave = `${desde}|${hasta}`
+  const conHoy = hasta >= diaLocal()
+  const c = cacheVentasDirecto.get(clave)
+  if (c && Date.now() - c.en < (conHoy ? 60_000 : 3_600_000)) return c
+
+  const principal = SERVIDORES.get(ALIAS_PRINCIPAL.toUpperCase())
+  const local = [...SERVIDORES.values()].find((s) => !s.principal)
+  if (!local) throw new Error('Falta el servidor local (SQL2_*) con las réplicas')
+  if (!fs.existsSync(SCRIPT_VENTAS_ARTICULOS)) throw new Error('Falta sql/ventas-articulos.sql junto a server.js')
+  const partes = await conTope(
+    Promise.all([
+      ventasDeServidor(principal, VENTAS_BASES_PRINCIPAL, desde, hasta),
+      ventasDeServidor(local, VENTAS_BASES_LOCAL, desde, hasta),
+    ]),
+    VENTAS_DIRECTO_TIMEOUT_MS,
+    'ventas directo',
+  )
+  const fallidas = partes.flatMap((p) => p.estado.filter((e) => !e.ok).map((e) => `${e.base}: ${e.error}`))
+  // Si no se pudo leer ninguna base de un servidor, mejor la foto del DWH que un ranking a medias
+  if (partes.some((p, i) => !p.estado.some((e) => e.ok) && (i === 0 ? VENTAS_BASES_PRINCIPAL : VENTAS_BASES_LOCAL).length)) {
+    throw new Error(`no se leyó ninguna base: ${fallidas.slice(0, 3).join('; ')}`)
+  }
+  const porDia = new Map()
+  for (const f of partes.flatMap((p) => p.dias)) porDia.set(String(f.dia), (porDia.get(String(f.dia)) ?? 0) + (Number(f.unidades) || 0))
+  const foto = repoDiaria.prepararFoto([
+    [...porDia.entries()].map(([dia, unidades]) => ({ dia, unidades })),
+    partes.flatMap((p) => p.ventas),
+  ])
+  const datos = { en: Date.now(), foto, bases_con_error: fallidas }
+  if (cacheVentasDirecto.size > 50) cacheVentasDirecto = new Map()
+  cacheVentasDirecto.set(clave, datos)
+  return datos
+}
+
+/** Ranking leyendo las bases directo; null si no se pudo (y entonces va la foto del DWH). */
+async function ventasArticulosDirecto(body) {
+  const fechas = (Array.isArray(body?.fechas) ? body.fechas : []).map((f) => String(f).trim()).filter((f) => /^\d{4}-\d{2}-\d{2}$/.test(f)).sort()
+  if (!fechas.length) return null
+  const desde = fechas[0]
+  const hasta = fechas[fechas.length - 1]
+  if ((new Date(hasta) - new Date(desde)) / 86_400_000 > 31) return null
+  try {
+    const t0 = Date.now()
+    const { en, foto, bases_con_error } = await fotoVentasDirecto(desde, hasta)
+    const opts = { fechas, local: body?.local, agrupar: body?.agrupar, top: body?.top }
+    const borrador = repoDiaria.rankingVentas(foto, opts)
+    const arts = await maestroArticulos(borrador.ranking.map((r) => r.articulo)).catch(() => new Map())
+    return {
+      estado: 'listo',
+      fuente: 'bases Dragon (réplicas de esta PC + servidor principal)',
+      foto: new Date(en).toISOString(),
+      segundos: Math.round((Date.now() - t0) / 100) / 10,
+      ...(bases_con_error.length ? { bases_con_error } : {}),
+      ...repoDiaria.rankingVentas({ ...foto, arts }, opts),
+    }
+  } catch (e) {
+    console.error('[puente] ventas directo (se usa la foto del DWH):', e.message)
+    return null
+  }
+}
+
 /**
  * body: { fechas, local?, agrupar?, top? } -> ranking de ventas por artículo (Chat IA del hub).
- * Usa la foto de la repo diaria; la venta de días cerrados no cambia, así que sirve una foto de
- * hasta 2 horas. Si no hay, la saca por detrás y contesta "calculando" (el hub vuelve a preguntar).
+ * Primero lee las bases directo (segundos); si falla, usa la foto de la repo diaria.
  */
-function accionVentasArticulos(body) {
+async function accionVentasArticulos(body) {
+  return (await ventasArticulosDirecto(body)) ?? accionVentasArticulosFoto(body)
+}
+
+/**
+ * Respaldo: la foto de la repo diaria (vw_FACT_VENTAS_STOCK). La venta de días cerrados no cambia,
+ * así que sirve una foto sacada hoy. Si no hay, la saca por detrás y contesta "calculando"
+ * (el hub vuelve a preguntar).
+ */
+function accionVentasArticulosFoto(body) {
   const calculando = () => ({ estado: 'calculando', desde: new Date(fotoRepoInicio).toISOString() })
   if (fotoRepoEnCurso) return calculando()
   if (fotoRepo.error) {
@@ -1312,10 +1458,10 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
-    // Ranking de ventas por artículo sobre la foto de la repo diaria (Chat IA del hub)
+    // Ranking de ventas por artículo: bases directo, con la foto de la repo diaria de respaldo (Chat IA)
     if (body?.accion === 'ventas_articulos') {
       try {
-        return enviar(res, 200, accionVentasArticulos(body))
+        return enviar(res, 200, await accionVentasArticulos(body))
       } catch (e) {
         return enviar(res, 400, { error: e.message })
       }

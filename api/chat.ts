@@ -133,8 +133,8 @@ const HERRAMIENTAS: Herramienta[] = [
     nombre: 'ventas_por_articulo',
     descripcion:
       'Ranking de unidades vendidas por artículo (o por SKU artículo+color+talle) en los locales, para uno o varios días de los últimos ~12, HOY INCLUIDO. ' +
-      'Sale del DWH (misma foto que la repo diaria). Usala para "lo más vendido", "qué se vendió en tal local", etc. ' +
-      'Trae también unidades por local y los días disponibles. La primera consulta puede tardar ~1 minuto.',
+      'Sale directo de las bases Dragon de los locales (mismos criterios que el DWH; tarda unos segundos). Usala para "lo más vendido", "qué se vendió en tal local", etc. ' +
+      'Trae también unidades por local y los días disponibles. Si las bases no responden usa la foto del DWH, que puede tardar ~1 minuto.',
     parametros: {
       type: 'object',
       properties: {
