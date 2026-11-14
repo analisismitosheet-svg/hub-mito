@@ -117,6 +117,25 @@ async function repoEnDragon(ctx) {
   return { cubiertos, ultima }
 }
 
+/**
+ * Días de venta que ya tienen lote de cascada, por el nombre del lote:
+ * "261114 - CASCADA 12-11" -> ['2026-11-12'] · "261110 - CASCADA 07 AL 09-11" -> 07, 08 y 09/11.
+ */
+function diasDeLote(nombre) {
+  const m = String(nombre).match(/^(\d{2})(\d{2})\d{2} - CASCADA (\d{2})(?: AL (\d{2}))?-(\d{2})\s*$/)
+  if (!m) return []
+  const [, aa, mmLote, d1, d2, mm] = m
+  // La venta es anterior al lote: si el lote es de enero y la venta de diciembre, es del año anterior
+  const anio = 2000 + Number(aa) - (Number(mm) > Number(mmLote) ? 1 : 0)
+  const desde = new Date(anio, Number(mm) - 1, Number(d1))
+  const hasta = new Date(anio, Number(mm) - 1, Number(d2 ?? d1))
+  // "28 AL 02-12": el primer día es del mes anterior
+  if (desde > hasta) desde.setMonth(desde.getMonth() - 1)
+  const out = []
+  for (let d = new Date(desde); d <= hasta && out.length < 31; d.setDate(d.getDate() + 1)) out.push(iso(d))
+  return out
+}
+
 const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 /** «261113 - CASCADA 12-11» / «261110 - CASCADA 07 AL 09-11» (mismo estilo que los lotes que se suben) */
 function nombreLote(hoy, dias) {
@@ -205,7 +224,18 @@ async function correrCascada(ctx, pend, token, diasRepo) {
   const foto = ctx.foto()
   const conVenta = new Set(foto.dias.filter((d) => d.unidades > 0 && d.dia < hoy).map((d) => d.dia))
   dias = (dias ?? []).filter((d) => conVenta.has(d))
-  const repo = ctx.calcularRepo(foto, { fechas: dias, hoy }) // sin días: el último con venta
+  if (!dias.length) dias = [...conVenta].sort().slice(-1) // sin repo en Dragon: el último día con venta
+  // Nunca repetir días de venta que ya tuvieron cascada (el sábado no hay repo y volvía a tomar
+  // los días de la última: el 13 y el 14/11 salieron dos lotes «CASCADA 12-11»)
+  const lotes = await rpc('cascada_lotes_recientes_puente', { p_token: token })
+  const yaCubiertos = new Set((Array.isArray(lotes) ? lotes : []).flatMap(diasDeLote))
+  const repetidos = dias.filter((d) => yaCubiertos.has(d))
+  dias = dias.filter((d) => !yaCubiertos.has(d))
+  if (!dias.length) {
+    const u = repetidos[repetidos.length - 1]
+    return { ok: true, hasta: u ?? null, texto: `Nada nuevo: la venta ${repetidos.map((d) => `${d.slice(8, 10)}/${d.slice(5, 7)}`).join(', ')} ya tiene su cascada en Transferencias.` }
+  }
+  const repo = ctx.calcularRepo(foto, { fechas: dias, hoy })
   const c = ctx.calcularCascada(foto, repo, pend.params, { feriados: await feriadosHoyFrescos() })
   const hasta = repo.dias[repo.dias.length - 1]
   if (!c.filas.length) return { ok: true, hasta, texto: `Venta ${repo.fecha_str}: la cascada no dio ningún envío.` }
@@ -292,4 +322,4 @@ function iniciar(contexto) {
   }, CADA_MS).unref?.()
 }
 
-module.exports = { iniciar, estado: () => ({ ...estado }), diasDeObs, nombreLote, feriadosHoy, feriadosHoyFrescos }
+module.exports = { iniciar, estado: () => ({ ...estado }), diasDeObs, diasDeLote, nombreLote, feriadosHoy, feriadosHoyFrescos }
