@@ -127,3 +127,31 @@
 .pp-volver:hover {
   color: var(--pp-texto);
 }
+
+/* ---------- Impresión (botón «Imprimir», solo usuarios del hub) ----------
+   Hoja blanca con tinta negra en las dos marcas, sin botones ni buscador;
+   el logo queda arriba y las tablas no se cortan por la mitad de una fila. */
+@media print {
+  body:has(.pp) { background: #fff !important; }
+  body:has(.pp)::before, body:has(.pp)::after { display: none !important; }
+  .pp {
+    --pp-fondo: #fff;
+    --pp-panel: #fff;
+    --pp-texto: #000;
+    --pp-suave: #444;
+    --pp-tenue: #999;
+    --pp-borde: #ccc;
+    --pp-borde2: #999;
+    --pp-acento-texto: #000;
+    --pp-acento-suave: #eee;
+    background: #fff !important;
+    color: #000;
+    min-height: 0;
+  }
+  .pp-no-imprimir { display: none !important; }
+  .pp-cabecera { position: static; background: #fff; border-bottom: 2px solid #000; height: 56px; }
+  .pp[data-marca='indonesia'] .pp-cabecera img { filter: none; }
+  .pp section, .pp tr { break-inside: avoid; }
+  .pp .shadow-soft-lg { box-shadow: none !important; }
+  .pp img { max-height: 260px; width: auto !important; }
+}

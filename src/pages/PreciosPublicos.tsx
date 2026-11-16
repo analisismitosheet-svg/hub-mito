@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Camera, Loader2, LocateFixed, MapPin, Search, Store, Tag, X } from 'lucide-react'
+import { ArrowLeft, Camera, FileDown, Loader2, LocateFixed, MapPin, QrCode, Search, Store, Tag, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import ScannerCamara from '@/components/ScannerCamara'
 import { compararTalles } from '@/lib/ordenPiso'
+import { descargarQrPdf } from '@/lib/qrPdf'
+import { QRCodeCanvas } from 'qrcode.react'
 import './precios.css'
 import { RADIO_EN_LOCAL_M, localPorCodigo, porCercania, useLocalesPublicos, type LocalPublico } from '@/lib/localesPublicos'
 
@@ -122,15 +124,23 @@ export default function PreciosPublicos() {
     [],
   )
 
-  // Al entrar: detectar el local por ubicación (si vino por QR, igual se usa para ordenar los demás)
+  // Usuarios del hub (con sesión): sin ubicación, eligen el local de la lista (queda recordado)
+  const { user, loading: cargandoSesion } = useAuth()
+  const enHub = !!user
+
   useEffect(() => {
     const antes = document.title
     document.title = 'Consulta de precios · MITO'
-    pedirUbicacion()
     return () => {
       document.title = antes
     }
-  }, [pedirUbicacion])
+  }, [])
+
+  // Al entrar (clientes): detectar el local por ubicación (si vino por QR, igual se usa para ordenar los demás)
+  useEffect(() => {
+    if (cargandoSesion || enHub) return
+    pedirUbicacion()
+  }, [cargandoSesion, enHub, pedirUbicacion])
 
   // Con la ubicación y las coordenadas del mapa: el local más cercano
   // (el del QR y el elegido a mano mandan, salvo que toque "Usar mi ubicación")
@@ -208,7 +218,12 @@ export default function PreciosPublicos() {
     setActualizado(r.actualizado ?? null)
     setResultados(r.resultados ?? [])
     setBuscado(limpio)
-    if (r.exacto) setElegido(r.exacto)
+    if (r.exacto) {
+      setElegido(r.exacto)
+      // Como el F12: con el buscador en foco (lector USB/Bluetooth) queda todo seleccionado,
+      // así la próxima etiqueta reemplaza a la anterior
+      if (document.activeElement === inputRef.current) inputRef.current?.select()
+    }
   }, [])
 
   useEffect(() => {
@@ -228,7 +243,17 @@ export default function PreciosPublicos() {
     }
   }, [texto, params, setParams])
 
-  const leido = (cod: string) => {
+  const leido = (leidoCrudo: string) => {
+    // Un QR con link (ej. …/precios?q=CF050302): se usa el código que trae, no la URL entera
+    let cod = leidoCrudo.trim()
+    if (/^https?:\/\//i.test(cod)) {
+      try {
+        cod = new URL(cod).searchParams.get('q') ?? ''
+      } catch {
+        /* no es un link válido: queda como vino */
+      }
+      if (!cod) return
+    }
     setCamara(false)
     setElegido(null)
     setTexto(cod.trim())
@@ -244,8 +269,6 @@ export default function PreciosPublicos() {
 
   // Marca del local: los Captain Fin (CF*) con su tema; el resto, Indonesia
   const marca = local?.codigo.startsWith('CF') ? 'captain' : 'indonesia'
-  // Entrando desde el hub (Locales → Consulta stock entre locales): botón para volver
-  const { user } = useAuth()
 
   return (
     <div className="pp pb-10" data-marca={marca}>
@@ -255,16 +278,17 @@ export default function PreciosPublicos() {
           alt={marca === 'captain' ? 'Captain Fin' : 'Indonesia'}
         />
         {user && (
-          <Link to="/area/locales" className="pp-volver" aria-label="Volver al hub">
+          <Link to="/area/locales" className="pp-volver pp-no-imprimir" aria-label="Volver al hub">
             <ArrowLeft size={18} aria-hidden /> Hub
           </Link>
         )}
         {local && <span className="pp-local">{local.codigo}</span>}
       </header>
       <div className="mx-auto w-full max-w-lg px-4 pt-5">
-        <header className="mb-4">
+        <header className="pp-no-imprimir mb-4">
           <h1 className="pp-titulo text-xl font-semibold leading-tight text-[var(--pp-texto)]">Consulta de precios y stock</h1>
           <p className="text-sm text-[var(--pp-suave)]">Buscá por código, nombre o escaneá la etiqueta</p>
+          {user && <BotonQr />}
         </header>
 
         <BarraLocal
@@ -274,7 +298,60 @@ export default function PreciosPublicos() {
           geo={geo}
           onElegir={elegirLocal}
           onUbicar={() => pedirUbicacion(true)}
+          sinUbicacion={enHub}
         />
+
+        {/* Buscador siempre a la vista (como el F12 y el tótem): lo escaneado cae acá */}
+        <div className="pp-no-imprimir mb-4">
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--pp-suave)]" aria-hidden />
+            <input
+              ref={inputRef}
+              value={texto}
+              onChange={(e) => {
+                setElegido(null)
+                setTexto(e.target.value)
+              }}
+              onKeyDown={(e) => e.key === 'Enter' && void buscar(texto)}
+              inputMode="search"
+              enterKeyHint="search"
+              autoComplete="off"
+              autoCapitalize="characters"
+              maxLength={80}
+              placeholder={elegido ? 'Escaneá otra etiqueta o escribí el código' : 'Ej: CF050302 o remera negra'}
+              aria-label="Código o nombre del artículo"
+              className="w-full rounded-xl border border-[var(--pp-borde)] bg-[var(--pp-panel)] py-3 pl-10 pr-10 text-base text-[var(--pp-texto)] outline-none transition placeholder:text-[var(--pp-suave)] focus-visible:border-[var(--pp-acento)] focus-visible:ring-2 focus-visible:ring-[var(--pp-foco)]"
+            />
+            {texto && (
+              <button
+                type="button"
+                onClick={limpiar}
+                aria-label="Borrar"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-[var(--pp-suave)] hover:text-[var(--pp-texto)]"
+              >
+                <X size={18} aria-hidden />
+              </button>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setCamara((v) => !v)}
+            aria-label="Escanear etiqueta"
+            className="btn-press inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-[var(--pp-acento)] px-4 font-medium text-white shadow-soft hover:bg-[var(--pp-acento-hover)]"
+          >
+            <Camera size={18} aria-hidden />
+            <span className="hidden sm:inline">Escanear</span>
+          </button>
+        </div>
+
+        {camara && (
+          <div className="mt-3">
+            {/* QR, EAN-13/8, UPC, Code 39 y Code 128 */}
+            <ScannerCamara conQr onLectura={(t) => leido(t)} onCerrar={() => setCamara(false)} />
+          </div>
+        )}
+        </div>
 
         {elegido ? (
           <Detalle
@@ -288,57 +365,10 @@ export default function PreciosPublicos() {
             marca={colorTalleDe(texto)}
             onElegirLocal={elegirLocal}
             onVolver={() => setElegido(null)}
+            conHub={!!user}
           />
         ) : (
           <>
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--pp-suave)]" aria-hidden />
-                <input
-                  ref={inputRef}
-                  value={texto}
-                  onChange={(e) => {
-                    setElegido(null)
-                    setTexto(e.target.value)
-                  }}
-                  onKeyDown={(e) => e.key === 'Enter' && void buscar(texto)}
-                  inputMode="search"
-                  enterKeyHint="search"
-                  autoComplete="off"
-                  autoCapitalize="characters"
-                  maxLength={80}
-                  placeholder="Ej: CF050302 o remera negra"
-                  aria-label="Código o nombre del artículo"
-                  className="w-full rounded-xl border border-[var(--pp-borde)] bg-[var(--pp-panel)] py-3 pl-10 pr-10 text-base text-[var(--pp-texto)] outline-none transition placeholder:text-[var(--pp-suave)] focus-visible:border-[var(--pp-acento)] focus-visible:ring-2 focus-visible:ring-[var(--pp-foco)]"
-                />
-                {texto && (
-                  <button
-                    type="button"
-                    onClick={limpiar}
-                    aria-label="Borrar"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-[var(--pp-suave)] hover:text-[var(--pp-texto)]"
-                  >
-                    <X size={18} aria-hidden />
-                  </button>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => setCamara((v) => !v)}
-                aria-label="Escanear etiqueta"
-                className="btn-press inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-[var(--pp-acento)] px-4 font-medium text-white shadow-soft hover:bg-[var(--pp-acento-hover)]"
-              >
-                <Camera size={18} aria-hidden />
-                <span className="hidden sm:inline">Escanear</span>
-              </button>
-            </div>
-
-            {camara && (
-              <div className="mt-3">
-                <ScannerCamara onLectura={(t) => leido(t)} onCerrar={() => setCamara(false)} />
-              </div>
-            )}
-
             <div className="mt-4">
               {cargando && resultados.length === 0 ? (
                 <p className="flex items-center justify-center gap-2 py-10 text-sm text-[var(--pp-suave)]">
@@ -407,6 +437,53 @@ export default function PreciosPublicos() {
   )
 }
 
+/* ---------- QR del link para imprimir (solo usuarios del hub) ----------
+   Link FIJO: va impreso en las remeras de los empleados. Nunca cambiarlo (ver App.tsx). */
+const LINK_QR = 'https://hub-mito.vercel.app/precios'
+
+function BotonQr() {
+  const lienzo = useRef<HTMLCanvasElement>(null)
+  const [generando, setGenerando] = useState(false)
+  const descargar = async () => {
+    const png = lienzo.current?.toDataURL('image/png')
+    if (!png) return
+    setGenerando(true)
+    try {
+      await descargarQrPdf(png, LINK_QR)
+    } finally {
+      setGenerando(false)
+    }
+  }
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
+      {/* QR en alta (2000 px, corrección H) fuera de la vista: de acá sale el PDF y el PNG */}
+      <QRCodeCanvas ref={lienzo} value={LINK_QR} size={2000} level="H" marginSize={4} className="hidden" />
+      <button
+        type="button"
+        onClick={() => void descargar()}
+        disabled={generando}
+        className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-[var(--pp-borde)] bg-[var(--pp-panel)] px-3 py-1.5 text-sm font-medium text-[var(--pp-texto)] hover:border-[var(--pp-borde2)] disabled:opacity-50"
+      >
+        {generando ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <QrCode size={15} aria-hidden />} QR para imprimir (PDF)
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          const png = lienzo.current?.toDataURL('image/png')
+          if (!png) return
+          const a = document.createElement('a')
+          a.href = png
+          a.download = 'qr-consulta-stock-precios.png'
+          a.click()
+        }}
+        className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-[var(--pp-borde)] bg-[var(--pp-panel)] px-3 py-1.5 text-sm font-medium text-[var(--pp-texto)] hover:border-[var(--pp-borde2)]"
+      >
+        <FileDown size={15} aria-hidden /> PNG
+      </button>
+    </div>
+  )
+}
+
 /* ---------- Local elegido (arriba de todo) ---------- */
 function BarraLocal({
   locales,
@@ -415,6 +492,7 @@ function BarraLocal({
   geo,
   onElegir,
   onUbicar,
+  sinUbicacion,
 }: {
   locales: LocalPublico[]
   local: { codigo: string; origen: Origen } | null
@@ -422,6 +500,8 @@ function BarraLocal({
   geo: 'idle' | 'pidiendo' | 'ok' | 'denegado' | 'no'
   onElegir: (codigo: string) => void
   onUbicar: () => void
+  /** usuarios del hub: sin ubicación (ni aviso ni botón), solo la lista */
+  sinUbicacion: boolean
 }) {
   const ordenados = useMemo(
     () =>
@@ -451,7 +531,7 @@ function BarraLocal({
         : 'Elegido por vos'
 
   return (
-    <div className="mb-4 rounded-2xl border border-[var(--pp-borde)] bg-[var(--pp-panel)] p-3">
+    <div className="pp-no-imprimir mb-4 rounded-2xl border border-[var(--pp-borde)] bg-[var(--pp-panel)] p-3">
       <div className="flex items-center gap-2.5">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--pp-acento-suave)] text-[var(--pp-acento-texto)]">
           {geo === 'pidiendo' && !local ? <Loader2 size={18} className="animate-spin" aria-hidden /> : <Store size={18} aria-hidden />}
@@ -475,7 +555,7 @@ function BarraLocal({
             ))}
           </select>
         </div>
-        {geo !== 'no' && (
+        {!sinUbicacion && geo !== 'no' && (
           <button
             type="button"
             onClick={onUbicar}
@@ -503,7 +583,7 @@ function BarraLocal({
         </div>
       )}
       {/* Al abrir el link se pide la ubicación; mientras no esté activada, se avisa bien grande */}
-      {local?.origen !== 'qr' && (geo === 'idle' || geo === 'pidiendo' || geo === 'denegado') && (
+      {!sinUbicacion && local?.origen !== 'qr' && (geo === 'idle' || geo === 'pidiendo' || geo === 'denegado') && (
         <div className="mt-3 rounded-xl border border-[var(--pp-acento-borde)] bg-[var(--pp-acento-suave)] p-3">
           <p className="flex items-start gap-2 text-sm font-medium text-[var(--pp-texto)]">
             <MapPin size={18} className="mt-0.5 shrink-0 text-[var(--pp-acento-texto)]" aria-hidden />
@@ -549,6 +629,7 @@ function Detalle({
   marca,
   onElegirLocal,
   onVolver,
+  conHub,
 }: {
   art: Articulo
   precio: { precio: number; lista: string | null }
@@ -560,6 +641,8 @@ function Detalle({
   marca: { color: string; talle: string } | null
   onElegirLocal: (codigo: string) => void
   onVolver: () => void
+  /** usuario del hub (con sesión): ve el stock de todos los locales */
+  conHub: boolean
 }) {
   const [foto, setFoto] = useState(0)
   const [stock, setStock] = useState<Stock | null>(null)
@@ -617,15 +700,37 @@ function Detalle({
       .sort((a, b) => (ubicacion ? a.distancia - b.distancia : b.total - a.total))
   }, [stock, locales, local, ubicacion, marca])
 
+  // Solo usuarios del hub: el stock de TODOS los locales (local × color, por talle) (los clientes ven solo su local y la lista de otros)
+  const todos = useMemo(() => {
+    if (!stock) return { talles: [] as string[], filas: [] as Array<{ local: string; color: string; talles: Record<string, number>; total: number }> }
+    const talles = new Set<string>()
+    const filas: Array<{ local: string; color: string; talles: Record<string, number>; total: number }> = []
+    for (const l of locales) {
+      const porColor = new Map<string, Record<string, number>>()
+      for (const f of stock.locales[l.codigo] ?? []) {
+        talles.add(f.talle)
+        const c = porColor.get(f.color) ?? {}
+        c[f.talle] = (c[f.talle] ?? 0) + f.stock
+        porColor.set(f.color, c)
+      }
+      for (const [color, t] of [...porColor.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+        filas.push({ local: l.nombre, color: `${color} ${stock.colores[color] ?? ''}`.trim(), talles: t, total: Object.values(t).reduce((a, b) => a + b, 0) })
+      }
+    }
+    return { talles: [...talles].sort(compararTalles), filas }
+  }, [stock, locales])
+
   return (
     <div>
-      <button
-        type="button"
-        onClick={onVolver}
-        className="btn-press mb-3 inline-flex items-center gap-1.5 rounded-lg px-1 py-1 text-sm font-medium text-[var(--pp-suave)] hover:text-[var(--pp-texto)]"
-      >
-        <ArrowLeft size={16} aria-hidden /> Buscar otro
-      </button>
+      <div className="pp-no-imprimir mb-3 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onVolver}
+          className="btn-press inline-flex items-center gap-1.5 rounded-lg px-1 py-1 text-sm font-medium text-[var(--pp-suave)] hover:text-[var(--pp-texto)]"
+        >
+          <ArrowLeft size={16} aria-hidden /> Buscar otro
+        </button>
+      </div>
       <div className="overflow-hidden rounded-2xl border border-[var(--pp-borde)] bg-[var(--pp-panel)] shadow-soft-lg">
         {fotos.length > 0 ? (
           <div className="bg-white">
@@ -758,8 +863,50 @@ function Detalle({
         )}
       </section>
 
+      {/* Solo usuarios del hub: stock de todos los locales (también sale al imprimir) */}
+      {conHub && estado === 'ok' && todos.filas.length > 0 && (
+        <section className="mt-4 rounded-2xl border border-[var(--pp-borde)] bg-[var(--pp-panel)] p-4">
+          <h3 className="pp-titulo text-base font-semibold text-[var(--pp-texto)]">Stock en todos los locales</h3>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full border-separate border-spacing-0 text-sm">
+              <thead>
+                <tr>
+                  <th className="py-1.5 pr-3 text-left text-xs font-medium text-[var(--pp-suave)]">Local</th>
+                  <th className="py-1.5 pr-3 text-left text-xs font-medium text-[var(--pp-suave)]">Color</th>
+                  {todos.talles.map((t) => (
+                    <th key={t} className="px-2 py-1.5 text-center text-xs font-semibold text-[var(--pp-suave)]">{t}</th>
+                  ))}
+                  <th className="px-2 py-1.5 text-center text-xs font-semibold text-[var(--pp-suave)]">Tot</th>
+                </tr>
+              </thead>
+              <tbody>
+                {todos.filas.map((f, i) => (
+                  <tr key={`${f.local}-${f.color}`}>
+                    <td className="whitespace-nowrap border-t border-[var(--pp-borde)] py-1.5 pr-3 font-medium text-[var(--pp-texto)]">
+                      {i === 0 || todos.filas[i - 1].local !== f.local ? f.local : ''}
+                    </td>
+                    <td className="whitespace-nowrap border-t border-[var(--pp-borde)] py-1.5 pr-3 text-[var(--pp-texto)]">{f.color}</td>
+                    {todos.talles.map((t) => (
+                      <td
+                        key={t}
+                        className={`border-t border-[var(--pp-borde)] px-2 py-1.5 text-center tabular-nums ${
+                          f.talles[t] ? 'text-[var(--pp-texto)]' : 'text-[var(--pp-tenue)]'
+                        }`}
+                      >
+                        {f.talles[t] || '–'}
+                      </td>
+                    ))}
+                    <td className="border-t border-[var(--pp-borde)] px-2 py-1.5 text-center font-semibold tabular-nums text-[var(--pp-texto)]">{f.total}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
       {/* Otros locales */}
-      {estado === 'ok' && otros.length > 0 && (
+      {!conHub && estado === 'ok' && otros.length > 0 && (
         <section className="mt-4 rounded-2xl border border-[var(--pp-borde)] bg-[var(--pp-panel)] p-4">
           <h3 className="pp-titulo text-base font-semibold text-[var(--pp-texto)]">
             {marca ? 'Tu color y talle en otros locales' : 'También hay en'}
