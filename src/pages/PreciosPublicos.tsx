@@ -850,8 +850,8 @@ function Detalle({
         </button>
       </div>
       {/* PC: foto y precio a la izquierda (fijos al bajar), stock a la derecha */}
-      <div className="lg:grid lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)] lg:items-start lg:gap-6">
-      <div className="overflow-hidden rounded-2xl border border-[var(--pp-borde)] bg-[var(--pp-panel)] shadow-soft-lg lg:sticky lg:top-24">
+      <div className="xl:grid xl:grid-cols-[minmax(0,320px)_minmax(0,1fr)] xl:items-start xl:gap-6">
+      <div className="overflow-hidden rounded-2xl border border-[var(--pp-borde)] bg-[var(--pp-panel)] shadow-soft-lg xl:sticky xl:top-24">
         {fotos.length > 0 ? (
           <div className="bg-white">
             <img src={fotos[foto]} alt={art.descripcion} className="mx-auto aspect-square w-full max-w-sm object-contain" />
@@ -912,7 +912,7 @@ function Detalle({
         </div>
       </div>
 
-      <div className="lg:[&>section:first-child]:mt-0">
+      <div className="xl:[&>section:first-child]:mt-0">
       {/* Stock del local */}
       <section className="mt-4 rounded-2xl border border-[var(--pp-borde)] bg-[var(--pp-panel)] p-4">
         <h3 className="flex items-center gap-1.5 pp-titulo text-base font-semibold text-[var(--pp-texto)]">
@@ -930,12 +930,12 @@ function Detalle({
         ) : grilla.colores.length === 0 ? (
           <p className="py-4 text-sm text-[var(--pp-suave)]">No hay stock de este artículo en {nombreLocal ?? 'ningún local'}.</p>
         ) : (
-          <div className="mt-3 overflow-x-auto">
+          <div className="mt-3 overflow-x-auto lg:overflow-x-visible">
             {/* Columnas divididas; tocar una celda (o el talle de arriba) muestra abajo ese talle en los otros locales */}
-            <table className="w-full border-collapse overflow-hidden rounded-lg text-sm">
+            <table className="w-full border-collapse overflow-hidden rounded-lg text-sm lg:table-fixed">
               <thead>
                 <tr>
-                  <th className="sticky left-0 border border-[var(--pp-borde)] bg-[var(--pp-panel)] px-2 py-1.5 text-left text-xs font-medium text-[var(--pp-suave)]">
+                  <th className="sticky left-0 border border-[var(--pp-borde)] bg-[var(--pp-panel)] px-2 py-1.5 text-left lg:w-32 text-xs font-medium text-[var(--pp-suave)]">
                     Color
                   </th>
                   {grilla.talles.map((t) => {
@@ -945,7 +945,7 @@ function Detalle({
                         <button
                           type="button"
                           onClick={() => elegirCelda(null, t)}
-                          className={`w-full px-2 py-1.5 text-center text-xs font-semibold ${
+                          className={`w-full px-2 py-1.5 lg:px-0.5 text-center text-xs font-semibold ${
                             activo
                               ? 'bg-[var(--pp-acento)] text-white'
                               : sel?.talle === t
@@ -972,7 +972,7 @@ function Detalle({
                           esColor ? 'text-[var(--pp-acento-texto)]' : 'text-[var(--pp-texto)]'
                         }`}
                       >
-                        <span className="whitespace-nowrap">
+                        <span className="whitespace-nowrap lg:whitespace-normal">
                           {color} {stock?.colores[color] ?? ''}
                         </span>
                       </td>
@@ -986,7 +986,7 @@ function Detalle({
                               onClick={() => elegirCelda(color, t)}
                               aria-pressed={activo}
                               aria-label={`${color} ${stock?.colores[color] ?? ''} talle ${t}: ${n}. Ver en otros locales`}
-                              className={`w-full px-2 py-2 text-center tabular-nums ${
+                              className={`w-full px-2 py-2 lg:px-0.5 text-center tabular-nums ${
                                 activo
                                   ? 'bg-[var(--pp-acento)] font-bold text-white'
                                   : n
@@ -1062,36 +1062,36 @@ function Detalle({
       {conHub && estado === 'ok' && todos.filas.length > 0 && (
         <section className="mt-4 rounded-2xl border border-[var(--pp-borde)] bg-[var(--pp-panel)] p-4">
           <h3 className="pp-titulo text-base font-semibold text-[var(--pp-texto)]">Stock en todos los locales</h3>
-          <div className="mt-3 overflow-x-auto">
-            <table className="w-full border-separate border-spacing-0 text-sm">
+          <div className="mt-3 overflow-x-auto lg:overflow-x-visible">
+            <table className="w-full border-separate border-spacing-0 text-sm lg:table-fixed lg:text-xs xl:text-[11px]">
               <thead>
                 <tr>
-                  <th className="py-1.5 pr-3 text-left text-xs font-medium text-[var(--pp-suave)]">Local</th>
-                  <th className="py-1.5 pr-3 text-left text-xs font-medium text-[var(--pp-suave)]">Color</th>
+                  <th className="py-1.5 pr-3 text-left lg:w-36 lg:pr-2 xl:w-28 text-xs font-medium text-[var(--pp-suave)]">Local</th>
+                  <th className="py-1.5 pr-3 text-left lg:w-28 lg:pr-2 xl:w-20 text-xs font-medium text-[var(--pp-suave)]">Color</th>
                   {todos.talles.map((t) => (
-                    <th key={t} className="px-2 py-1.5 text-center text-xs font-semibold text-[var(--pp-suave)]">{t}</th>
+                    <th key={t} className="px-2 py-1.5 text-center lg:px-0.5 text-xs font-semibold text-[var(--pp-suave)]">{t}</th>
                   ))}
-                  <th className="px-2 py-1.5 text-center text-xs font-semibold text-[var(--pp-suave)]">Tot</th>
+                  <th className="px-2 py-1.5 text-center lg:w-10 lg:px-0.5 text-xs font-semibold text-[var(--pp-suave)]">Tot</th>
                 </tr>
               </thead>
               <tbody>
                 {todos.filas.map((f, i) => (
                   <tr key={`${f.local}-${f.color}`}>
-                    <td className="whitespace-nowrap border-t border-[var(--pp-borde)] py-1.5 pr-3 font-medium text-[var(--pp-texto)]">
+                    <td className="whitespace-nowrap border-t lg:whitespace-normal border-[var(--pp-borde)] py-1.5 pr-3 font-medium text-[var(--pp-texto)]">
                       {i === 0 || todos.filas[i - 1].local !== f.local ? f.local : ''}
                     </td>
-                    <td className="whitespace-nowrap border-t border-[var(--pp-borde)] py-1.5 pr-3 text-[var(--pp-texto)]">{f.color}</td>
+                    <td className="whitespace-nowrap border-t lg:whitespace-normal border-[var(--pp-borde)] py-1.5 pr-3 text-[var(--pp-texto)]">{f.color}</td>
                     {todos.talles.map((t) => (
                       <td
                         key={t}
-                        className={`border-t border-[var(--pp-borde)] px-2 py-1.5 text-center tabular-nums ${
+                        className={`border-t border-[var(--pp-borde)] px-2 py-1.5 text-center lg:px-0.5 tabular-nums ${
                           f.talles[t] ? 'text-[var(--pp-texto)]' : 'text-[var(--pp-tenue)]'
                         }`}
                       >
                         {f.talles[t] || '–'}
                       </td>
                     ))}
-                    <td className="border-t border-[var(--pp-borde)] px-2 py-1.5 text-center font-semibold tabular-nums text-[var(--pp-texto)]">{f.total}</td>
+                    <td className="border-t border-[var(--pp-borde)] px-2 py-1.5 text-center lg:px-0.5 font-semibold tabular-nums text-[var(--pp-texto)]">{f.total}</td>
                   </tr>
                 ))}
               </tbody>
