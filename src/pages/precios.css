@@ -1,0 +1,129 @@
+/* =====================================================================
+   Consulta de precios para clientes (/precios): tema según el local.
+   Igual que el tótem ConsultaPrecios.exe (D:\pbi a html\pwa-locales):
+   - Captain Fin (locales CF*): tinta negra sobre blanco, Bebas Neue para
+     títulos y números (como "CAPTAIN FIN") y Nunito para el texto.
+   - Indonesia (el resto): negro con rojo.
+   La página usa estas variables (--pp-*) en vez de los colores del hub.
+   ===================================================================== */
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Nunito:wght@400;600;700;800&display=swap');
+
+.pp {
+  position: relative;
+  z-index: 1;
+  isolation: isolate;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--pp-fondo);
+  color: var(--pp-texto);
+  font-family: var(--pp-letra);
+  color-scheme: var(--pp-esquema);
+}
+
+/* ---------- Indonesia ---------- */
+.pp[data-marca='indonesia'] {
+  --pp-esquema: dark;
+  --pp-fondo: #050505;
+  --pp-panel: rgba(31, 31, 31, 0.92);
+  --pp-borde: #333333;
+  --pp-borde2: #555555;
+  --pp-texto: #f1faee;
+  --pp-suave: #a9adaa;
+  --pp-tenue: #5c5f5d;
+  --pp-acento: #e63946;
+  --pp-acento-hover: #c92d3a;
+  --pp-acento-texto: #ff6b75;
+  --pp-acento-suave: rgba(230, 57, 70, 0.14);
+  --pp-acento-borde: rgba(230, 57, 70, 0.45);
+  --pp-foco: rgba(230, 57, 70, 0.45);
+  --pp-cabecera: #000000;
+  --pp-cabecera-linea: #1c1c1c;
+  --pp-letra: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --pp-titulo: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* ---------- Captain Fin ---------- */
+.pp[data-marca='captain'] {
+  --pp-esquema: light;
+  --pp-fondo: #f3f3f1;
+  --pp-panel: #ffffff;
+  --pp-borde: #dcdcd8;
+  --pp-borde2: #b9b9b5;
+  --pp-texto: #0a0a0a;
+  --pp-suave: #62625e;
+  --pp-tenue: #b5b5b1;
+  --pp-acento: #0a0a0a;
+  --pp-acento-hover: #262626;
+  --pp-acento-texto: #0a0a0a;
+  --pp-acento-suave: #ececea;
+  --pp-acento-borde: #0a0a0a;
+  --pp-foco: rgba(0, 0, 0, 0.12);
+  --pp-cabecera: #ffffff;
+  --pp-cabecera-linea: #0a0a0a;
+  --pp-letra: 'Nunito', 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+  --pp-titulo: 'Bebas Neue', 'Bahnschrift SemiBold Condensed', 'Bahnschrift Condensed', 'Oswald', 'Arial Narrow', sans-serif;
+  background: radial-gradient(circle at 50% 0%, #ffffff 0%, #f3f3f1 70%) fixed;
+}
+
+/* Títulos y números grandes en la letra de la marca */
+.pp-titulo {
+  font-family: var(--pp-titulo);
+}
+.pp[data-marca='captain'] .pp-titulo {
+  font-weight: 400 !important; /* Bebas tiene un solo peso: sin negrita falsa */
+  letter-spacing: 0.02em;
+}
+.pp[data-marca='captain'] .pp-titulo-grande {
+  font-size: 4.25rem;
+  line-height: 0.95;
+}
+
+/* Cabecera con el logo, como el tótem */
+.pp-cabecera {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 76px;
+  padding: 0 16px;
+  padding-top: env(safe-area-inset-top);
+  background: var(--pp-cabecera);
+  border-bottom: 2px solid var(--pp-cabecera-linea);
+}
+.pp-cabecera img {
+  max-height: 44px;
+  max-width: min(62vw, 360px); /* deja lugar a «← Hub» a la izquierda y al código del local */
+  object-fit: contain;
+}
+.pp-cabecera .pp-local {
+  position: absolute;
+  right: 14px;
+  top: 8px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--pp-suave);
+}
+.pp select option {
+  background: var(--pp-panel);
+  color: var(--pp-texto);
+}
+/* Volver al hub (solo con sesión iniciada: empleados que entran desde Locales) */
+.pp-volver {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pp-suave);
+}
+.pp-volver:hover {
+  color: var(--pp-texto);
+}

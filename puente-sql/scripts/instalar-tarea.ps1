@@ -82,6 +82,14 @@ Register-ScheduledTask -TaskName 'MITO - Sync Tiendanube' -Force `
   -Settings $ajustesPedidos | Out-Null
 Write-Output 'OK  MITO - Sync Tiendanube (cada 20 minutos)'
 
+# Fotos de los productos de indonesiashop.com.ar -> Supabase (articulos_fotos), para la consulta de precios publica (/precios).
+Register-ScheduledTask -TaskName 'MITO - Sync fotos Tiendanube' -Force `
+  -Description 'Copia las fotos de los productos de indonesiashop.com.ar (Tiendanube) a Supabase para la consulta de precios publica del hub. Log: puente-sql\data\sync-fotos-tiendanube.log' `
+  -Action (Accion 'sync-fotos-tiendanube.ps1') `
+  -Trigger (New-ScheduledTaskTrigger -Daily -At '07:40') `
+  -Settings $ajustesSync | Out-Null
+Write-Output 'OK  MITO - Sync fotos Tiendanube (todos los dias 7:40)'
+
 # Vigilante: cada 5 minutos revisa puente local, Funnel y el camino desde el hub; arregla solo.
 $cada5 = New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval (New-TimeSpan -Minutes 5)
 $ajustesVig = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `

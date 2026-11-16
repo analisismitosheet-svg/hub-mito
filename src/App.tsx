@@ -117,7 +117,10 @@ export default function App() {
           <Route path="/p/:token" element={<PropuestaFranquicia />} />
           {/* Autorizar una orden de compra desde el WhatsApp: link público por token (sin usuario) */}
           <Route path="/oc/:token" element={<AutorizarOc />} />
-          {/* Consulta de precios para clientes (versión web del tótem): link público, sin usuario */}
+          {/* Consulta de precios y stock para clientes (versión web del tótem): link público, sin usuario.
+              NO CAMBIAR NI SACAR LA RUTA /precios: https://hub-mito.vercel.app/precios va impreso en QR en
+              las remeras de los empleados (16/11/2026; QR en docs/qr/). Si algún día se mueve, dejar
+              /precios redirigiendo a la nueva. */}
           <Route
             path="/precios"
             element={

@@ -157,6 +157,7 @@ export default async function stockPublico(req: Req, res: Res) {
     locales?: Record<string, Array<{ color?: unknown; talle?: unknown; stock?: unknown }>>
     colores?: Record<string, unknown>
     sin_datos?: unknown
+    detalle?: unknown
   } | null
   if (!r0.res.ok || !cuerpo || typeof cuerpo.locales !== 'object' || !cuerpo.locales) {
     return res.status(502).json({ error: 'No se pudo consultar el stock' })
@@ -178,5 +179,6 @@ export default async function stockPublico(req: Req, res: Res) {
   const sinDatos = Array.isArray(cuerpo.sin_datos) ? cuerpo.sin_datos.filter((c): c is string => typeof c === 'string' && LOCALES.has(c)) : []
 
   res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=60, stale-while-revalidate=60')
-  return res.status(200).json({ articulo, locales, colores, sin_datos: sinDatos, en: new Date().toISOString() })
+  const detalle = typeof cuerpo.detalle === 'string' ? cuerpo.detalle.replace(/[^\p{L}\p{N} .·/&()+-]/gu, '').slice(0, 120) : ''
+  return res.status(200).json({ articulo, detalle, locales, colores, sin_datos: sinDatos, en: new Date().toISOString() })
 }

@@ -12,6 +12,24 @@
 
 BEGIN;
 
+-- Fotos de un artículo (public.articulos_fotos, sql/articulos_fotos.sql): primero las de
+-- indonesiashop.com.ar y después las de ventasxmayor (Captain/Zimith), sin repetir, hasta 14.
+CREATE OR REPLACE FUNCTION private.fotos_articulo(p_art text)
+RETURNS text[]
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT coalesce(ARRAY(
+    SELECT u FROM (
+      SELECT t.u, min(CASE f.origen WHEN 'indonesiashop' THEN 0 ELSE 1000 END + t.i) AS orden
+        FROM public.articulos_fotos f, unnest(f.fotos) WITH ORDINALITY t(u, i)
+       WHERE f.id_art = p_art
+       GROUP BY t.u) q
+     ORDER BY orden
+     LIMIT 14), '{}');
+$$;
+REVOKE ALL ON FUNCTION private.fotos_articulo(text) FROM PUBLIC;
+
 CREATE OR REPLACE FUNCTION public.precios_publicos_buscar(p_q text)
 RETURNS jsonb
 LANGUAGE plpgsql STABLE SECURITY DEFINER
@@ -47,7 +65,8 @@ BEGIN
      LIMIT 1;
   END IF;
   IF v_art IS NOT NULL THEN
-    SELECT jsonb_build_object('articulo', a.id_art, 'descripcion', a.descripcion, 'precio', a.precio_publico)
+    SELECT jsonb_build_object('articulo', a.id_art, 'descripcion', a.descripcion, 'precio', a.precio_publico,
+                              'fotos', to_jsonb(private.fotos_articulo(a.id_art)))
       INTO v_res FROM public.articulos a WHERE a.id_art = v_art;
     RETURN jsonb_build_object('exacto', v_res, 'resultados', jsonb_build_array(v_res), 'actualizado', v_act);
   END IF;
@@ -73,7 +92,11 @@ BEGIN
        ORDER BY a.anio DESC NULLS LAST, a.id_art DESC
        LIMIT 40
     ) x;
-  RETURN jsonb_build_object('resultados', (SELECT coalesce(jsonb_agg(r - 'anio'), '[]'::jsonb) FROM jsonb_array_elements(v_res) r), 'actualizado', v_act);
+  -- Con todas sus fotos (el detalle se abre tocando uno de la lista)
+  RETURN jsonb_build_object('resultados',
+    (SELECT coalesce(jsonb_agg((r - 'anio') || jsonb_build_object('fotos', to_jsonb(private.fotos_articulo(r->>'articulo')))), '[]'::jsonb)
+       FROM jsonb_array_elements(v_res) r),
+    'actualizado', v_act);
 END;
 $$;
 

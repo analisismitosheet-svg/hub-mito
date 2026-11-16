@@ -443,7 +443,27 @@ async function stockPublico(articulo) {
       /* sin nombres: se muestra el código */
     }
   }
-  const datos = { articulo: art, locales, colores: nombres, sin_datos: sinDatos, en: new Date().toISOString() }
+  // Detalle como el tótem: grupo · material · temporada (maestro de INDO)
+  let detalle = ''
+  try {
+    await asegurarConexion(principal)
+    const r = await principal.pool
+      .request()
+      .input('a', principal.sql.VarChar(40), art)
+      .query(
+        `SELECT TOP 1 RTRIM(g.DESCRIP) AS grupo, RTRIM(m.MATDES) AS material, LEFT(a.ATEMPORADA, 1) AS temporada
+           FROM [DRAGONFISH_INDOD].[ZooLogic].[ART] a
+           LEFT JOIN [DRAGONFISH_INDOD].[ZooLogic].[GRUPO] g ON g.COD = a.GRUPO
+           LEFT JOIN [DRAGONFISH_INDOD].[ZooLogic].[MAT] m ON m.MATCOD = a.MAT
+          WHERE a.ARTCOD = @a`,
+      )
+    const f = r.recordset?.[0]
+    const TEMP = { 1: 'Verano', 2: 'Continuo', 3: 'Invierno', 4: 'Primavera' }
+    if (f) detalle = [f.grupo, f.material, TEMP[f.temporada]].filter(Boolean).join(' · ')
+  } catch {
+    /* sin detalle */
+  }
+  const datos = { articulo: art, detalle, locales, colores: nombres, sin_datos: sinDatos, en: new Date().toISOString() }
   cacheStockPublico.set(art, { en: Date.now(), datos })
   if (cacheStockPublico.size > 500) cacheStockPublico.delete(cacheStockPublico.keys().next().value)
   return datos

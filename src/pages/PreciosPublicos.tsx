@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Camera, Loader2, LocateFixed, MapPin, Search, Store, Tag, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/context/AuthContext'
 import ScannerCamara from '@/components/ScannerCamara'
-import { fotosArticulo, useFotosArticulos } from '@/lib/fotosArticulos'
 import { compararTalles } from '@/lib/ordenPiso'
+import './precios.css'
 import { RADIO_EN_LOCAL_M, localPorCodigo, porCercania, useLocalesPublicos, type LocalPublico } from '@/lib/localesPublicos'
 
 /**
@@ -19,10 +20,11 @@ import { RADIO_EN_LOCAL_M, localPorCodigo, porCercania, useLocalesPublicos, type
  * La ubicación del cliente se usa solo en el celular: no se manda a ningún servidor.
  */
 
-type Articulo = { articulo: string; descripcion: string; precio: number }
+/** `fotos`: de indonesiashop.com.ar y de Captain/Zimith (tabla articulos_fotos), las trae la búsqueda. */
+type Articulo = { articulo: string; descripcion: string; precio: number; fotos?: string[] }
 type Respuesta = { exacto?: Articulo; resultados: Articulo[]; actualizado?: string | null }
 type FilaStock = { color: string; talle: string; stock: number }
-type Stock = { locales: Record<string, FilaStock[]>; colores: Record<string, string>; sin_datos: string[]; en: string }
+type Stock = { detalle?: string; locales: Record<string, FilaStock[]>; colores: Record<string, string>; sin_datos: string[]; en: string }
 type Ubicacion = { lat: number; lng: number; precision: number }
 type Origen = 'qr' | 'ubicacion' | 'manual'
 /** Precios de la lista propia del local (General Paz = Outlet); los que no están ahí van a Contado. */
@@ -35,6 +37,9 @@ const CLAVE_LOCAL = 'precios.local'
 
 const pesos = (n: number) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n)
+
+const pesos2 = (n: number) =>
+  new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
 
 const fechaHora = (iso: string) =>
   new Date(iso).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
@@ -80,7 +85,6 @@ export default function PreciosPublicos() {
   const [error, setError] = useState<string | null>(null)
   const [actualizado, setActualizado] = useState<string | null>(null)
   const [camara, setCamara] = useState(false)
-  const fotos = useFotosArticulos()
   const pedido = useRef(0)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -120,8 +124,12 @@ export default function PreciosPublicos() {
 
   // Al entrar: detectar el local por ubicación (si vino por QR, igual se usa para ordenar los demás)
   useEffect(() => {
+    const antes = document.title
     document.title = 'Consulta de precios · MITO'
     pedirUbicacion()
+    return () => {
+      document.title = antes
+    }
   }, [pedirUbicacion])
 
   // Con la ubicación y las coordenadas del mapa: el local más cercano
@@ -234,17 +242,29 @@ export default function PreciosPublicos() {
   }
 
 
+  // Marca del local: los Captain Fin (CF*) con su tema; el resto, Indonesia
+  const marca = local?.codigo.startsWith('CF') ? 'captain' : 'indonesia'
+  // Entrando desde el hub (Locales → Consulta stock entre locales): botón para volver
+  const { user } = useAuth()
+
   return (
-    <div className="min-h-screen bg-paper px-4 pb-10 pt-6">
-      <div className="mx-auto w-full max-w-lg">
-        <header className="mb-4 flex items-center gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-600 font-display text-lg font-bold text-white shadow-glow">
-            M
-          </div>
-          <div className="min-w-0">
-            <h1 className="font-display text-xl font-semibold leading-tight text-ink">Consulta de precios</h1>
-            <p className="text-sm text-sub">Buscá por código, nombre o escaneá la etiqueta</p>
-          </div>
+    <div className="pp pb-10" data-marca={marca}>
+      <header className="pp-cabecera">
+        <img
+          src={marca === 'captain' ? '/marcas/captain-fin.png' : '/marcas/indonesia.png'}
+          alt={marca === 'captain' ? 'Captain Fin' : 'Indonesia'}
+        />
+        {user && (
+          <Link to="/area/locales" className="pp-volver" aria-label="Volver al hub">
+            <ArrowLeft size={18} aria-hidden /> Hub
+          </Link>
+        )}
+        {local && <span className="pp-local">{local.codigo}</span>}
+      </header>
+      <div className="mx-auto w-full max-w-lg px-4 pt-5">
+        <header className="mb-4">
+          <h1 className="pp-titulo text-xl font-semibold leading-tight text-[var(--pp-texto)]">Consulta de precios y stock</h1>
+          <p className="text-sm text-[var(--pp-suave)]">Buscá por código, nombre o escaneá la etiqueta</p>
         </header>
 
         <BarraLocal
@@ -261,7 +281,7 @@ export default function PreciosPublicos() {
             art={elegido}
             precio={precioDe(elegido)}
             esperandoLista={esperandoLista}
-            fotos={fotosArticulo(elegido.articulo, fotos)}
+            fotos={Array.isArray(elegido.fotos) ? elegido.fotos : []}
             locales={locales}
             local={local?.codigo ?? null}
             ubicacion={ubicacion}
@@ -273,7 +293,7 @@ export default function PreciosPublicos() {
           <>
             <div className="flex gap-2">
               <div className="relative flex-1">
-                <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sub" aria-hidden />
+                <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--pp-suave)]" aria-hidden />
                 <input
                   ref={inputRef}
                   value={texto}
@@ -289,14 +309,14 @@ export default function PreciosPublicos() {
                   maxLength={80}
                   placeholder="Ej: CF050302 o remera negra"
                   aria-label="Código o nombre del artículo"
-                  className="w-full rounded-xl border border-line bg-surface py-3 pl-10 pr-10 text-base text-ink outline-none transition placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40"
+                  className="w-full rounded-xl border border-[var(--pp-borde)] bg-[var(--pp-panel)] py-3 pl-10 pr-10 text-base text-[var(--pp-texto)] outline-none transition placeholder:text-[var(--pp-suave)] focus-visible:border-[var(--pp-acento)] focus-visible:ring-2 focus-visible:ring-[var(--pp-foco)]"
                 />
                 {texto && (
                   <button
                     type="button"
                     onClick={limpiar}
                     aria-label="Borrar"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-sub hover:text-ink"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-[var(--pp-suave)] hover:text-[var(--pp-texto)]"
                   >
                     <X size={18} aria-hidden />
                   </button>
@@ -306,7 +326,7 @@ export default function PreciosPublicos() {
                 type="button"
                 onClick={() => setCamara((v) => !v)}
                 aria-label="Escanear etiqueta"
-                className="btn-press inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-brand-600 px-4 font-medium text-white shadow-soft hover:bg-brand-700"
+                className="btn-press inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-[var(--pp-acento)] px-4 font-medium text-white shadow-soft hover:bg-[var(--pp-acento-hover)]"
               >
                 <Camera size={18} aria-hidden />
                 <span className="hidden sm:inline">Escanear</span>
@@ -321,49 +341,49 @@ export default function PreciosPublicos() {
 
             <div className="mt-4">
               {cargando && resultados.length === 0 ? (
-                <p className="flex items-center justify-center gap-2 py-10 text-sm text-sub">
+                <p className="flex items-center justify-center gap-2 py-10 text-sm text-[var(--pp-suave)]">
                   <Loader2 size={16} className="animate-spin" aria-hidden /> Buscando…
                 </p>
               ) : error ? (
-                <p className="py-10 text-center text-sm text-brand-400">{error}</p>
+                <p className="py-10 text-center text-sm text-[var(--pp-acento-texto)]">{error}</p>
               ) : buscado && resultados.length === 0 ? (
                 <div className="py-10 text-center">
-                  <p className="font-medium text-ink">No encontramos «{buscado}»</p>
-                  <p className="mt-1 text-sm text-sub">Probá con otra palabra o con el código de la etiqueta.</p>
+                  <p className="font-medium text-[var(--pp-texto)]">No encontramos «{buscado}»</p>
+                  <p className="mt-1 text-sm text-[var(--pp-suave)]">Probá con otra palabra o con el código de la etiqueta.</p>
                 </div>
               ) : !buscado ? (
-                <div className="rounded-2xl border border-dashed border-line px-5 py-10 text-center text-sm text-sub">
-                  <Tag size={28} className="mx-auto mb-2 text-sub/70" aria-hidden />
-                  Escribí el código que figura en la etiqueta o tocá <b className="text-ink">Escanear</b> y apuntá al
+                <div className="rounded-2xl border border-dashed border-[var(--pp-borde)] px-5 py-10 text-center text-sm text-[var(--pp-suave)]">
+                  <Tag size={28} className="mx-auto mb-2 text-[var(--pp-tenue)]" aria-hidden />
+                  Escribí el código que figura en la etiqueta o tocá <b className="text-[var(--pp-texto)]">Escanear</b> y apuntá al
                   código de barras.
                 </div>
               ) : (
                 <ul className="space-y-2" aria-live="polite">
                   {resultados.map((a) => {
-                    const foto = fotosArticulo(a.articulo, fotos)[0]
+                    const foto = Array.isArray(a.fotos) ? a.fotos[0] : undefined
                     return (
                       <li key={a.articulo}>
                         <button
                           type="button"
                           onClick={() => setElegido(a)}
-                          className="btn-press flex w-full items-center gap-3 rounded-xl border border-line bg-surface p-2.5 text-left hover:border-line2"
+                          className="btn-press flex w-full items-center gap-3 rounded-xl border border-[var(--pp-borde)] bg-[var(--pp-panel)] p-2.5 text-left hover:border-[var(--pp-borde2)]"
                         >
-                          <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-paper">
+                          <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[var(--pp-borde)] bg-[var(--pp-fondo)]">
                             {foto ? (
                               <img src={foto} alt="" loading="lazy" className="h-full w-full object-cover" />
                             ) : (
-                              <Tag size={18} className="text-sub/60" aria-hidden />
+                              <Tag size={18} className="text-[var(--pp-tenue)]" aria-hidden />
                             )}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="line-clamp-2 text-sm font-medium text-ink">{a.descripcion}</p>
-                            <p className="font-mono text-xs text-sub">{a.articulo}</p>
+                            <p className="line-clamp-2 text-sm font-medium text-[var(--pp-texto)]">{a.descripcion}</p>
+                            <p className="font-mono text-xs text-[var(--pp-suave)]">{a.articulo}</p>
                           </div>
                           <p className="shrink-0 text-right">
-                            <span className={`block font-display text-base font-semibold tabular-nums ${esperandoLista ? 'text-sub' : 'text-ink'}`}>
+                            <span className={`block pp-titulo text-base font-semibold tabular-nums ${esperandoLista ? 'text-[var(--pp-suave)]' : 'text-[var(--pp-texto)]'}`}>
                               {pesos(precioDe(a).precio)}
                             </span>
-                            {precioDe(a).lista && <span className="block text-[11px] font-medium text-brand-400">{precioDe(a).lista}</span>}
+                            {precioDe(a).lista && <span className="block text-[11px] font-medium text-[var(--pp-acento-texto)]">{precioDe(a).lista}</span>}
                           </p>
                         </button>
                       </li>
@@ -375,7 +395,7 @@ export default function PreciosPublicos() {
           </>
         )}
 
-        <p className="mt-8 text-center text-xs text-sub">
+        <p className="mt-8 text-center text-xs text-[var(--pp-suave)]">
           {codLocal && LOCALES_CON_LISTA.has(codLocal)
             ? 'En General Paz rigen los precios outlet (los artículos sin precio outlet, al de contado). Con IVA incluido.'
             : 'Precios de contado, con IVA incluido.'}
@@ -431,20 +451,20 @@ function BarraLocal({
         : 'Elegido por vos'
 
   return (
-    <div className="mb-4 rounded-2xl border border-line bg-surface p-3">
+    <div className="mb-4 rounded-2xl border border-[var(--pp-borde)] bg-[var(--pp-panel)] p-3">
       <div className="flex items-center gap-2.5">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-600/15 text-brand-400">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--pp-acento-suave)] text-[var(--pp-acento-texto)]">
           {geo === 'pidiendo' && !local ? <Loader2 size={18} className="animate-spin" aria-hidden /> : <Store size={18} aria-hidden />}
         </div>
         <div className="min-w-0 flex-1">
-          <label htmlFor="local-precios" className="block text-xs text-sub">
+          <label htmlFor="local-precios" className="block text-xs text-[var(--pp-suave)]">
             {leyenda}
           </label>
           <select
             id="local-precios"
             value={local?.codigo ?? ''}
             onChange={(e) => e.target.value && onElegir(e.target.value)}
-            className="w-full truncate bg-transparent font-medium text-ink outline-none"
+            className="w-full truncate bg-transparent font-medium text-[var(--pp-texto)] outline-none"
           >
             {!local && <option value="">Elegir local…</option>}
             {ordenados.map((l) => (
@@ -461,21 +481,21 @@ function BarraLocal({
             onClick={onUbicar}
             aria-label="Usar mi ubicación"
             title="Usar mi ubicación"
-            className="btn-press shrink-0 rounded-lg p-2 text-sub hover:text-ink"
+            className="btn-press shrink-0 rounded-lg p-2 text-[var(--pp-suave)] hover:text-[var(--pp-texto)]"
           >
             {geo === 'pidiendo' ? <Loader2 size={18} className="animate-spin" aria-hidden /> : <LocateFixed size={18} aria-hidden />}
           </button>
         )}
       </div>
       {vecinos.length > 0 && (
-        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-sub">
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-[var(--pp-suave)]">
           ¿Estás en otro?
           {vecinos.map((v) => (
             <button
               key={v.codigo}
               type="button"
               onClick={() => onElegir(v.codigo)}
-              className="btn-press rounded-full border border-line px-2.5 py-1 text-ink hover:border-line2"
+              className="btn-press rounded-full border border-[var(--pp-borde)] px-2.5 py-1 text-[var(--pp-texto)] hover:border-[var(--pp-borde2)]"
             >
               {v.nombre}
             </button>
@@ -484,20 +504,20 @@ function BarraLocal({
       )}
       {/* Al abrir el link se pide la ubicación; mientras no esté activada, se avisa bien grande */}
       {local?.origen !== 'qr' && (geo === 'idle' || geo === 'pidiendo' || geo === 'denegado') && (
-        <div className="mt-3 rounded-xl border border-brand-500/40 bg-brand-600/10 p-3">
-          <p className="flex items-start gap-2 text-sm font-medium text-ink">
-            <MapPin size={18} className="mt-0.5 shrink-0 text-brand-400" aria-hidden />
+        <div className="mt-3 rounded-xl border border-[var(--pp-acento-borde)] bg-[var(--pp-acento-suave)] p-3">
+          <p className="flex items-start gap-2 text-sm font-medium text-[var(--pp-texto)]">
+            <MapPin size={18} className="mt-0.5 shrink-0 text-[var(--pp-acento-texto)]" aria-hidden />
             {geo === 'denegado'
               ? 'Tu ubicación está desactivada'
               : 'Activá tu ubicación para ver el stock del local donde estás'}
           </p>
           {geo === 'denegado' ? (
-            <p className="mt-1 pl-[26px] text-xs text-sub">
+            <p className="mt-1 pl-[26px] text-xs text-[var(--pp-suave)]">
               Tocá el candado o los ajustes al lado de la dirección de la página → <b>Permisos</b> →{' '}
               <b>Ubicación</b> → <b>Permitir</b>, y volvé a cargar. Si preferís, elegí el local de la lista.
             </p>
           ) : (
-            <p className="mt-1 pl-[26px] text-xs text-sub">
+            <p className="mt-1 pl-[26px] text-xs text-[var(--pp-suave)]">
               Tu celular te va a preguntar si nos dejás usarla: tocá <b>Permitir</b>. Solo la usamos para saber en qué
               local estás; no se guarda ni se envía.
             </p>
@@ -506,7 +526,7 @@ function BarraLocal({
             type="button"
             onClick={onUbicar}
             disabled={geo === 'pidiendo'}
-            className="btn-press mt-2.5 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-brand-600 py-2 text-sm font-medium text-white shadow-soft hover:bg-brand-700 disabled:opacity-60"
+            className="btn-press mt-2.5 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-[var(--pp-acento)] py-2 text-sm font-medium text-white shadow-soft hover:bg-[var(--pp-acento-hover)] disabled:opacity-60"
           >
             {geo === 'pidiendo' ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <LocateFixed size={16} aria-hidden />}
             {geo === 'pidiendo' ? 'Esperando permiso…' : geo === 'denegado' ? 'Probar de nuevo' : 'Activar ubicación'}
@@ -602,23 +622,23 @@ function Detalle({
       <button
         type="button"
         onClick={onVolver}
-        className="btn-press mb-3 inline-flex items-center gap-1.5 rounded-lg px-1 py-1 text-sm font-medium text-sub hover:text-ink"
+        className="btn-press mb-3 inline-flex items-center gap-1.5 rounded-lg px-1 py-1 text-sm font-medium text-[var(--pp-suave)] hover:text-[var(--pp-texto)]"
       >
         <ArrowLeft size={16} aria-hidden /> Buscar otro
       </button>
-      <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-soft-lg">
-        {fotos.length > 0 && (
+      <div className="overflow-hidden rounded-2xl border border-[var(--pp-borde)] bg-[var(--pp-panel)] shadow-soft-lg">
+        {fotos.length > 0 ? (
           <div className="bg-white">
             <img src={fotos[foto]} alt={art.descripcion} className="mx-auto aspect-square w-full max-w-sm object-contain" />
             {fotos.length > 1 && (
-              <div className="flex gap-1.5 overflow-x-auto border-t border-line bg-surface p-2">
+              <div className="flex gap-1.5 overflow-x-auto border-t border-[var(--pp-borde)] bg-[var(--pp-panel)] p-2">
                 {fotos.map((u, i) => (
                   <button
                     key={u}
                     type="button"
                     onClick={() => setFoto(i)}
                     aria-label={`Foto ${i + 1}`}
-                    className={`h-12 w-12 shrink-0 overflow-hidden rounded-md border-2 ${i === foto ? 'border-brand-500' : 'border-transparent'}`}
+                    className={`h-12 w-12 shrink-0 overflow-hidden rounded-md border-2 ${i === foto ? 'border-[var(--pp-acento)]' : 'border-transparent'}`}
                   >
                     <img src={u} alt="" loading="lazy" className="h-full w-full object-cover" />
                   </button>
@@ -626,70 +646,90 @@ function Detalle({
               </div>
             )}
           </div>
+        ) : (
+          <div className="flex h-28 flex-col items-center justify-center gap-1 border-b border-[var(--pp-borde)] text-[var(--pp-tenue)]">
+            <Tag size={26} aria-hidden />
+            <span className="text-xs">Sin foto</span>
+          </div>
         )}
-        <div className="p-5 text-center">
-          <p className="font-mono text-xs text-sub">{art.articulo}</p>
-          <h2 className="mt-1 text-base font-medium text-ink">{art.descripcion}</h2>
-          <p className={`mt-4 font-display text-4xl font-bold tabular-nums ${esperandoLista ? 'text-sub' : 'text-ink'}`}>
-            {pesos(precio.precio)}
+        <div className="p-5">
+          <p className="font-mono text-xs text-[var(--pp-suave)]">{art.articulo}</p>
+          <h2 className="pp-titulo mt-1 text-2xl font-semibold uppercase leading-tight text-[var(--pp-texto)]">{art.descripcion}</h2>
+          {/* Precio como el tótem: con IVA grande y al lado sin IVA y el IVA */}
+          <p className="mt-4 text-sm text-[var(--pp-suave)]">
+            {precio.lista ? `Precio ${precio.lista.toLowerCase()} (con IVA)` : esperandoLista ? 'Buscando el precio outlet…' : 'Precio contado (con IVA)'}
           </p>
-          {precio.lista ? (
-            <>
-              <p className="mt-1 text-sm font-medium text-brand-400">Precio {precio.lista} · {localPorCodigo(locales, local)?.nombre}</p>
+          <div className="mt-1 flex flex-wrap items-end gap-x-5 gap-y-2">
+            <p
+              className={`pp-titulo pp-titulo-grande text-5xl font-semibold tabular-nums leading-none ${
+                esperandoLista ? 'text-[var(--pp-suave)]' : 'text-[var(--pp-texto)]'
+              }`}
+            >
+              {pesos(precio.precio)}
+            </p>
+            <div className="pb-0.5">
+              <p className="text-xs text-[var(--pp-suave)]">Sin IVA</p>
+              <p className="pp-titulo text-2xl font-semibold tabular-nums leading-tight text-[var(--pp-texto)]">{pesos2(precio.precio / 1.21)}</p>
+              <p className="text-xs text-[var(--pp-suave)]">IVA 21 %: {pesos2(precio.precio - precio.precio / 1.21)}</p>
+            </div>
+          </div>
+          {precio.lista && (
+            <p className="mt-2 text-sm font-medium text-[var(--pp-acento-texto)]">
+              Precio {precio.lista} de {localPorCodigo(locales, local)?.nombre}
               {art.precio > precio.precio && (
-                <p className="mt-0.5 text-xs text-sub">
-                  Contado en otros locales: <span className="line-through">{pesos(art.precio)}</span>
-                </p>
+                <span className="ml-1 font-normal text-[var(--pp-suave)]">
+                  · contado <span className="line-through">{pesos(art.precio)}</span>
+                </span>
               )}
-            </>
-          ) : (
-            <p className="mt-1 text-sm text-sub">{esperandoLista ? 'Buscando el precio outlet…' : 'Precio de contado'}</p>
+            </p>
           )}
+          {stock?.detalle && <p className="mt-3 text-sm text-[var(--pp-suave)]">{stock.detalle}</p>}
         </div>
       </div>
 
       {/* Stock del local */}
-      <section className="mt-4 rounded-2xl border border-line bg-surface p-4">
-        <h3 className="flex items-center gap-1.5 font-display text-base font-semibold text-ink">
-          <MapPin size={16} className="text-brand-400" aria-hidden />
-          {nombreLocal ? `Stock en ${nombreLocal}` : 'Stock'}
+      <section className="mt-4 rounded-2xl border border-[var(--pp-borde)] bg-[var(--pp-panel)] p-4">
+        <h3 className="flex items-center gap-1.5 pp-titulo text-base font-semibold text-[var(--pp-texto)]">
+          <MapPin size={16} className="text-[var(--pp-acento-texto)]" aria-hidden />
+          {nombreLocal ? `Stock en ${nombreLocal} por color y talle` : 'Stock por color y talle'}
         </h3>
         {estado === 'cargando' ? (
-          <p className="flex items-center gap-2 py-6 text-sm text-sub">
+          <p className="flex items-center gap-2 py-6 text-sm text-[var(--pp-suave)]">
             <Loader2 size={16} className="animate-spin" aria-hidden /> Consultando stock…
           </p>
         ) : estado === 'error' ? (
-          <p className="py-4 text-sm text-sub">No pudimos consultar el stock en este momento. Probá de nuevo en un rato.</p>
+          <p className="py-4 text-sm text-[var(--pp-suave)]">No pudimos consultar el stock en este momento. Probá de nuevo en un rato.</p>
         ) : !local ? (
-          <p className="py-4 text-sm text-sub">Elegí el local arriba para ver el stock por color y talle.</p>
+          <p className="py-4 text-sm text-[var(--pp-suave)]">Elegí el local arriba para ver el stock por color y talle.</p>
         ) : sinDatosLocal ? (
-          <p className="py-4 text-sm text-sub">No pudimos leer el stock de este local ahora. Consultá a un vendedor.</p>
+          <p className="py-4 text-sm text-[var(--pp-suave)]">No pudimos leer el stock de este local ahora. Consultá a un vendedor.</p>
         ) : grilla.colores.length === 0 ? (
-          <p className="py-4 text-sm text-sub">No hay stock de este artículo en {nombreLocal}.</p>
+          <p className="py-4 text-sm text-[var(--pp-suave)]">No hay stock de este artículo en {nombreLocal}.</p>
         ) : (
           <div className="mt-3 overflow-x-auto">
             <table className="w-full border-separate border-spacing-0 text-sm">
               <thead>
                 <tr>
-                  <th className="sticky left-0 bg-surface py-1.5 pr-3 text-left text-xs font-medium text-sub">Color</th>
+                  <th className="sticky left-0 bg-[var(--pp-panel)] py-1.5 pr-3 text-left text-xs font-medium text-[var(--pp-suave)]">Color</th>
                   {grilla.talles.map((t) => (
                     <th
                       key={t}
-                      className={`px-2 py-1.5 text-center text-xs font-semibold ${marca?.talle === t ? 'text-brand-400' : 'text-sub'}`}
+                      className={`px-2 py-1.5 text-center text-xs font-semibold ${marca?.talle === t ? 'text-[var(--pp-acento-texto)]' : 'text-[var(--pp-suave)]'}`}
                     >
                       {t}
                     </th>
                   ))}
+                  <th className="px-2 py-1.5 text-center text-xs font-semibold text-[var(--pp-suave)]">Tot</th>
                 </tr>
               </thead>
               <tbody>
                 {grilla.colores.map(([color, talles]) => {
                   const esColor = marca?.color === color
                   return (
-                    <tr key={color} className={esColor ? 'bg-brand-600/10' : ''}>
-                      <td className="sticky left-0 border-t border-line bg-surface py-2 pr-3 text-left">
-                        <span className={`font-medium ${esColor ? 'text-brand-400' : 'text-ink'}`}>
-                          {stock?.colores[color] ?? color}
+                    <tr key={color} className={esColor ? 'bg-[var(--pp-acento-suave)]' : ''}>
+                      <td className="sticky left-0 border-t border-[var(--pp-borde)] bg-[var(--pp-panel)] py-2 pr-3 text-left">
+                        <span className={`font-medium ${esColor ? 'text-[var(--pp-acento-texto)]' : 'text-[var(--pp-texto)]'}`}>
+                          {color} {stock?.colores[color] ?? ''}
                         </span>
                       </td>
                       {grilla.talles.map((t) => {
@@ -698,14 +738,17 @@ function Detalle({
                         return (
                           <td
                             key={t}
-                            className={`border-t border-line px-2 py-2 text-center tabular-nums ${
-                              n ? 'font-semibold text-ink' : 'text-sub/40'
-                            } ${esCelda ? 'rounded-md ring-2 ring-inset ring-brand-500' : ''}`}
+                            className={`border-t border-[var(--pp-borde)] px-2 py-2 text-center tabular-nums ${
+                              n ? 'font-semibold text-[var(--pp-texto)]' : 'text-[var(--pp-tenue)]'
+                            } ${esCelda ? 'rounded-md ring-2 ring-inset ring-[var(--pp-acento)]' : ''}`}
                           >
                             {n || '–'}
                           </td>
                         )
                       })}
+                      <td className="border-t border-[var(--pp-borde)] px-2 py-2 text-center font-semibold tabular-nums text-[var(--pp-texto)]">
+                        {Object.values(talles).reduce((a, b) => a + b, 0)}
+                      </td>
                     </tr>
                   )
                 })}
@@ -717,11 +760,11 @@ function Detalle({
 
       {/* Otros locales */}
       {estado === 'ok' && otros.length > 0 && (
-        <section className="mt-4 rounded-2xl border border-line bg-surface p-4">
-          <h3 className="font-display text-base font-semibold text-ink">
+        <section className="mt-4 rounded-2xl border border-[var(--pp-borde)] bg-[var(--pp-panel)] p-4">
+          <h3 className="pp-titulo text-base font-semibold text-[var(--pp-texto)]">
             {marca ? 'Tu color y talle en otros locales' : 'También hay en'}
           </h3>
-          <ul className="mt-2 divide-y divide-line">
+          <ul className="mt-2 divide-y divide-[var(--pp-borde)]">
             {otros.map((l) => (
               <li key={l.codigo}>
                 <button
@@ -733,10 +776,10 @@ function Detalle({
                   className="flex w-full items-center gap-3 py-2.5 text-left hover:opacity-80"
                 >
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-ink">{l.nombre}</span>
-                    {isFinite(l.distancia) && <span className="text-xs text-sub">a {distancia(l.distancia)}</span>}
+                    <span className="block truncate text-sm font-medium text-[var(--pp-texto)]">{l.nombre}</span>
+                    {isFinite(l.distancia) && <span className="text-xs text-[var(--pp-suave)]">a {distancia(l.distancia)}</span>}
                   </span>
-                  <span className="shrink-0 text-sm tabular-nums text-sub">
+                  <span className="shrink-0 text-sm tabular-nums text-[var(--pp-suave)]">
                     {marca ? l.delEscaneado : l.total} u.
                   </span>
                 </button>

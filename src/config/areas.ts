@@ -195,6 +195,17 @@ export const APPS: AppDef[] = [
     permiso: 'manuales.view',
   },
   {
+    // La misma consulta pública de los clientes (/precios): precio y stock por color y talle de cada local
+    id: 'consulta-stock-locales',
+    areaId: 'locales',
+    title: 'Consulta stock entre locales',
+    description: 'Precio y stock por color y talle de cada local. Escaneá la etiqueta o buscá el artículo.',
+    icon: PackageSearch,
+    kind: 'internal',
+    target: '/precios',
+    color: '#0ea5e9',
+  },
+  {
     id: 'errores-tarjetas',
     areaId: 'locales',
     title: 'Errores tarjetas',
