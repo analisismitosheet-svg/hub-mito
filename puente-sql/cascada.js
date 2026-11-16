@@ -27,6 +27,11 @@
  *   - cerrados_dia (14/11/2026): locales que no abren ciertos días de la semana (1 = lunes …
  *     7 = domingo). El día que corre la cascada NO donan: lo que se les iba a pedir lo dona
  *     el siguiente local que sí abre. Por defecto: domingo 9DEJULIO, MUNOZ, GRALPAZ y CFR4.
+ *   - huecos (16/11/2026, el PASE 2 del script con SOLO_VENTA=0): después de la venta, a cada
+ *     local le manda 1 unidad de un talle que no tiene (stock 0) de los SKUs vendidos, si tiene
+ *     stock de un talle de al lado (completa la curva). No a los que ya recibieron ese SKU por
+ *     venta, ni en tránsito, ni a los de `huecos.no_reciben` (GRALPAZ, como el script).
+ *     Los donantes con las mismas reglas (se quedan con `donante_queda`, tope por SKU).
  * Feriados (opts.feriados, RR. HH. → Feriados): el local con feriado el día que corre NO dona
  * ni recibe; lo que se le iba a pedir lo dona otro. '*' = todos los locales.
  *   - materiales (incluir), excluir_temporadas / grupos / articulos / proveedores / lineas
@@ -64,9 +69,10 @@
     min_envio: { activo: true, valor: 2 },
     restriccion: { activo: true, receptores: ['CFR4', 'CFR9', 'CFD', 'CFPO', 'CFRA'], proveedores: ['MOCF', 'MOZH', 'MOFR'] },
     pase_extra: { activo: true, locales: ['NVOCED'] },
+    huecos: { activo: true, no_reciben: ['GRALPAZ'] },
     donante_principal: { activo: true, bases: ['INDOD'] },
     cerrados_dia: { activo: true, dias: { 7: ['9DEJULIO', 'MUNOZ', 'GRALPAZ', 'CFR4'] } },
-    materiales: { activo: true, lista: ['ACCESORIOS', 'PANTALONES', 'BERMUDAS', 'BOARDSHORTS-BIKINIS', 'REMERAS', 'CAMISAS', 'CALZADO'] },
+    materiales: { activo: true, lista: ['ACCESORIOS', 'PANTALONES', 'BERMUDAS', 'BOARDSHORTS-BIKINIS', 'REMERAS', 'CAMISAS', 'CALZADO', 'BUZOS', 'CAMPERAS'] },
     excluir_temporadas: { activo: true, lista: ['Invierno'] },
     excluir_grupos: { activo: true, lista: ['U02', 'U03'] },
     excluir_articulos: { activo: true, lista: ['BCF'] },
@@ -154,6 +160,7 @@
     const pe = obj(p.pase_extra)
     const dp = obj(p.donante_principal)
     const cd = obj(p.cerrados_dia)
+    const hu = obj(p.huecos)
     // Temporadas: se guardan con su nombre (Verano / Continuo / Invierno)
     const temp = reglaL('excluir_temporadas', false)
     temp.lista = temp.lista.map((t) => TEMPORADA[t] ?? t[0].toUpperCase() + t.slice(1).toLowerCase())
@@ -174,6 +181,7 @@
         proveedores: lista(r.proveedores, d.restriccion.proveedores),
       },
       pase_extra: { activo: bool(pe.activo, d.pase_extra.activo), locales: lista(pe.locales, d.pase_extra.locales) },
+      huecos: { activo: bool(hu.activo, d.huecos.activo), no_reciben: lista(hu.no_reciben, d.huecos.no_reciben) },
       donante_principal: { activo: bool(dp.activo, d.donante_principal.activo), bases: lista(dp.bases, d.donante_principal.bases) },
       cerrados_dia: {
         activo: bool(cd.activo, d.cerrados_dia.activo),
@@ -367,7 +375,7 @@
         if (n <= 0) continue
         mover(d, p.sku, -n)
         donado.set(kd, ya + n)
-        envios.push({ donante: d, receptor: p.base, sku: p.sku, art: p.art, color: p.color, talle: p.talle, cantidad: n })
+        envios.push({ donante: d, receptor: p.base, sku: p.sku, art: p.art, color: p.color, talle: p.talle, cantidad: n, tipo: 'VENTA' })
         asignados.add(`${p.base}|${p.sku}`)
         falta -= n
         if (falta <= 0) break
@@ -386,7 +394,7 @@
           const n = Math.min(get(d, p.sku), p.faltante)
           if (n <= 0) continue
           mover(d, p.sku, -n)
-          envios.push({ donante: d, receptor: p.base, sku: p.sku, art: p.art, color: p.color, talle: p.talle, cantidad: n, principal: true })
+          envios.push({ donante: d, receptor: p.base, sku: p.sku, art: p.art, color: p.color, talle: p.talle, cantidad: n, principal: true, tipo: 'VENTA' })
           asignados.add(`${p.base}|${p.sku}`)
           p.faltante -= n
           dePrincipal += n
@@ -416,6 +424,79 @@
     }
     for (const [p, r] of resto) motivos[motivoDe.get(p)] += Math.max(0, r)
 
+    // PASE HUECOS: 1 unidad del talle que le falta a un local que tiene los talles de al lado
+    let huecos = 0
+    if (P.huecos.activo) {
+      // Talles de cada artículo + color (todas las bases), en orden de curva
+      const ESCALA = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', 'XXXXL', 'U', '00', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
+      const claveTalle = (t) => {
+        const u = String(t).trim().toUpperCase()
+        const i = ESCALA.indexOf(u)
+        if (i >= 0) return [0, i, '']
+        const n = Number(u)
+        return Number.isFinite(n) && u !== '' ? [1, n, ''] : [2, 0, u]
+      }
+      const ordenTalle = (a, b) => {
+        const x = claveTalle(a), y = claveTalle(b)
+        return x[0] - y[0] || x[1] - y[1] || cmp(x[2], y[2])
+      }
+      const tallesAC = new Map()
+      for (const s of foto.stockLocales) {
+        const k = `${s.art} ${s.color}`
+        if (!tallesAC.has(k)) tallesAC.set(k, new Set())
+        tallesAC.get(k).add(s.talle)
+      }
+      const curva = new Map([...tallesAC].map(([k, set]) => [k, [...set].sort(ordenTalle)]))
+      const vecinos = (art, color, talle) => {
+        const ts = curva.get(`${art} ${color}`) ?? []
+        const i = ts.indexOf(talle)
+        if (i < 0) return []
+        return [ts[i - 1], ts[i + 1]].filter((t) => t !== undefined)
+      }
+      const noRecHueco = new Set(P.huecos.no_reciben)
+      const receptoresHueco = PRIORIDAD.filter((b) => !noReciben.has(b) && !noRecHueco.has(b) && !feriadoHoy.has(b) && !principal.has(b))
+      // SKUs vendidos en los días (de cualquier local), en orden
+      const skusVendidos = new Map()
+      for (const p of pares) if (!skusVendidos.has(p.sku)) skusVendidos.set(p.sku, p)
+      for (const sk of [...skusVendidos.keys()].sort(cmp)) {
+        const v = skusVendidos.get(sk)
+        if (!elegible(v.art)) continue
+        for (const r of receptoresHueco) {
+          if (asignados.has(`${r}|${sk}`)) continue
+          if ((stockInicial.get(`${r}|${sk}`) ?? 0) > 0) continue
+          if (transito.has(`${r}|${sk}`)) continue
+          if (restrRec.has(r) && !restrProv.has(prov(v.art))) continue
+          if (!vecinos(v.art, v.color, v.talle).some((t) => (stockInicial.get(`${r}|${sku(v.art, v.color, t)}`) ?? 0) > 0)) continue
+          // Donante: primero los principales (sin quedarse con nada), después los locales
+          let dio = false
+          for (const d of PRINCIPALES) {
+            if (get(d, sk) < 1) continue
+            mover(d, sk, -1)
+            envios.push({ donante: d, receptor: r, sku: sk, art: v.art, color: v.color, talle: v.talle, cantidad: 1, principal: true, tipo: 'HUECO' })
+            dio = true
+            break
+          }
+          if (!dio) {
+            for (const d of donantesDe(v.art, v.color, v.talle)) {
+              if (d === r) continue
+              const kd = `${d}|${sk}`
+              const ya = donado.get(kd) ?? 0
+              if (ya >= TOPE || get(d, sk) - P.donante_queda < 1) continue
+              mover(d, sk, -1)
+              donado.set(kd, ya + 1)
+              envios.push({ donante: d, receptor: r, sku: sk, art: v.art, color: v.color, talle: v.talle, cantidad: 1, tipo: 'HUECO' })
+              dio = true
+              break
+            }
+          }
+          if (dio) {
+            asignados.add(`${r}|${sk}`)
+            huecos++
+          }
+        }
+      }
+    }
+
     // Mínimo de unidades por par donante → receptor
     const porPar = new Map()
     for (const e of envios) if (!e.principal) porPar.set(`${e.donante}|${e.receptor}`, (porPar.get(`${e.donante}|${e.receptor}`) ?? 0) + e.cantidad)
@@ -438,6 +519,7 @@
         return {
           donante: e.donante,
           receptor: e.receptor,
+          tipo: e.tipo ?? 'VENTA',
           articulo: e.art,
           descripcion: descripcion(a),
           material: a.MATERIAL,
@@ -486,6 +568,8 @@
       faltante_despues_mito: faltanteTotal,
       // Unidades que cubrieron los donantes principales (INDOD) antes que los locales
       de_principal: dePrincipal,
+      // Unidades del pase de huecos (antes de sacar los envíos chicos)
+      huecos,
       // Locales que hoy no abren: no donan (cerrados_dia)
       cerrados_hoy: [...cerradosHoy],
       // Locales con feriado hoy: no donan ni reciben

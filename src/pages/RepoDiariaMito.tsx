@@ -397,7 +397,8 @@ function VistaCascada({ datos, onVerLotes }: { datos: Datos; onVerLotes: () => v
   const [receptor, setReceptor] = useState<string | null>(null)
   const [busqueda, setBusqueda] = useState('')
   // Parámetros: los guardados vienen en la cascada del Puente; los que se editan recalculan
-  const delPuente = esCascada(datos.cascada) ? datos.cascada.params ?? PARAMS_DEFAULT : PARAMS_DEFAULT
+  // Un puente más viejo puede no mandar las reglas nuevas: se completan con las de siempre
+  const delPuente: ParamsCascada = esCascada(datos.cascada) ? { ...PARAMS_DEFAULT, ...(datos.cascada.params ?? {}) } : PARAMS_DEFAULT
   const [guardados, setGuardados] = useState<ParamsCascada>(delPuente)
   const [params, setParams] = useState<ParamsCascada>(delPuente)
   const [recalculada, setRecalculada] = useState<Cascada | null>(null)
@@ -490,13 +491,15 @@ function VistaCascada({ datos, onVerLotes }: { datos: Datos; onVerLotes: () => v
     setCargandoTransf(false)
     setConfirmarTransf(false)
   }
-  const sinCubrir = Math.max(0, cas.faltante_despues_mito - cas.unidades)
+  // Los huecos no cubren venta: lo que sigue sin cubrir se cuenta solo con los envíos por venta
+  const porVenta = cas.filas.reduce((s, f) => s + (f.tipo === 'HUECO' ? 0 : f.cantidad), 0)
+  const sinCubrir = Math.max(0, cas.faltante_despues_mito - porVenta)
   const P0 = cas.params ?? params
   const tarjetas = [
     {
       titulo: 'Unidades en cascada',
       valor: numero(cas.unidades),
-      pie: `${numero(cas.filas.length)} renglones${cas.de_principal ? ` · ${numero(cas.de_principal)} u. de ${(P0.donante_principal?.bases ?? []).join(', ') || 'principal'}` : ''}`,
+      pie: `${numero(cas.filas.length)} renglones${cas.huecos ? ` · ${numero(cas.filas.filter((f) => f.tipo === 'HUECO').reduce((s, f) => s + f.cantidad, 0))} u. de huecos` : ''}${cas.de_principal ? ` · ${numero(cas.de_principal)} u. de ${(P0.donante_principal?.bases ?? []).join(', ') || 'principal'}` : ''}`,
     },
     { titulo: 'Faltaba después de MITO', valor: numero(cas.faltante_despues_mito), pie: 'venta − repo MITO' },
     {
@@ -770,6 +773,7 @@ function VistaCascada({ datos, onVerLotes }: { datos: Datos; onVerLotes: () => v
             <tr className="border-b border-line text-left text-sub">
               <th className="px-2 py-2">Donante</th>
               <th className="px-2 py-2">Receptor</th>
+              <th className="px-2 py-2" title="VENTA = cubre lo vendido · HUECO = 1 u. del talle que le falta">Tipo</th>
               <th className="px-2 py-2">SKU</th>
               <th className="px-2 py-2">Descripción</th>
               <th className="px-2 py-2">Material</th>
@@ -790,6 +794,9 @@ function VistaCascada({ datos, onVerLotes }: { datos: Datos; onVerLotes: () => v
               <tr key={`${f.donante}|${f.receptor}|${f.sku}`} className="border-b border-line/60 last:border-0">
                 <td className="px-2 py-1 text-ink">{f.donante}</td>
                 <td className="px-2 py-1 text-ink">{f.receptor}</td>
+                <td className="px-2 py-1">
+                  <span className={`rounded px-1 text-[10px] font-semibold ${f.tipo === 'HUECO' ? 'bg-amber-500/10 text-amber-500' : 'bg-sky-500/10 text-sky-500'}`}>{f.tipo ?? 'VENTA'}</span>
+                </td>
                 <td className="whitespace-nowrap px-2 py-1 font-mono text-ink">{f.sku}</td>
                 <td className="px-2 py-1 text-sub">{f.descripcion}</td>
                 <td className="px-2 py-1 text-sub">{f.material}</td>

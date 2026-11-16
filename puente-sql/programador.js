@@ -242,7 +242,7 @@ async function correrCascada(ctx, pend, token, diasRepo) {
   const nombre = nombreLote(hoy, repo.dias)
   const items = c.filas.map((f) => ({
     origen: f.donante, destino: f.receptor, articulo: f.articulo, descripcion: f.descripcion,
-    material: f.material, color: f.color, talle: f.talle, cantidad: f.cantidad,
+    material: f.material, color: f.color, talle: f.talle, cantidad: f.cantidad, tipo: f.tipo ?? 'VENTA',
   }))
   const r = await rpc('cascada_cargar_transferencias_puente', { p_token: token, p_nombre: nombre, p_items: items })
   if (!r.repetido) await avisarHub('transferencia', { lote_id: r.id })

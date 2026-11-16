@@ -57,6 +57,8 @@ export interface RepoDiaria {
 export interface FilaCascada {
   donante: string
   receptor: string
+  /** VENTA = cubre lo vendido; HUECO = 1 u. del talle que le falta (completa la curva) */
+  tipo?: 'VENTA' | 'HUECO'
   articulo: string
   descripcion: string
   material: string
@@ -85,6 +87,8 @@ export interface Cascada {
   faltante_despues_mito: number
   /** unidades que cubrieron los donantes principales (INDOD) antes que los locales */
   de_principal?: number
+  /** unidades del pase de huecos */
+  huecos?: number
   /** locales que hoy no abren (no donan) */
   cerrados_hoy?: string[]
   pares_eliminados: number
@@ -117,6 +121,8 @@ export interface ParamsCascada {
   min_envio: ReglaNumero
   restriccion: { activo: boolean; receptores: string[]; proveedores: string[] }
   pase_extra: { activo: boolean; locales: string[] }
+  /** pase de huecos: 1 u. del talle que le falta al local si tiene los de al lado */
+  huecos: { activo: boolean; no_reciben: string[] }
   /** bases que donan primero, como MITO (sin quedarse con nada, sin topes): INDOD */
   donante_principal: { activo: boolean; bases: string[] }
   /** locales que no abren ese día de la semana (1 = lunes … 7 = domingo): ese día no donan */
@@ -168,9 +174,10 @@ export const PARAMS_DEFAULT: ParamsCascada = {
   min_envio: { activo: true, valor: 2 },
   restriccion: { activo: true, receptores: ['CFR4', 'CFR9', 'CFD', 'CFPO', 'CFRA'], proveedores: ['MOCF', 'MOZH', 'MOFR'] },
   pase_extra: { activo: true, locales: ['NVOCED'] },
+  huecos: { activo: true, no_reciben: ['GRALPAZ'] },
   donante_principal: { activo: true, bases: ['INDOD'] },
   cerrados_dia: { activo: true, dias: { 7: ['9DEJULIO', 'MUNOZ', 'GRALPAZ', 'CFR4'] } },
-  materiales: { activo: true, lista: ['ACCESORIOS', 'PANTALONES', 'BERMUDAS', 'BOARDSHORTS-BIKINIS', 'REMERAS', 'CAMISAS', 'CALZADO'] },
+  materiales: { activo: true, lista: ['ACCESORIOS', 'PANTALONES', 'BERMUDAS', 'BOARDSHORTS-BIKINIS', 'REMERAS', 'CAMISAS', 'CALZADO', 'BUZOS', 'CAMPERAS'] },
   excluir_temporadas: { activo: true, lista: ['Invierno'] },
   excluir_grupos: { activo: true, lista: ['U02', 'U03'] },
   excluir_articulos: { activo: true, lista: ['BCF'] },
@@ -250,7 +257,7 @@ export async function cargarCascadaEnTransferencias(
   if (!supabase) throw new Error('Supabase no está configurado.')
   const items = c.filas.map((f) => ({
     origen: f.donante, destino: f.receptor, articulo: f.articulo, descripcion: f.descripcion,
-    material: f.material, color: f.color, talle: f.talle, cantidad: f.cantidad,
+    material: f.material, color: f.color, talle: f.talle, cantidad: f.cantidad, tipo: f.tipo ?? 'VENTA',
   }))
   const { data, error } = await supabase.rpc('cascada_cargar_transferencias', { p_nombre: nombre, p_items: items })
   if (error) throw new Error(error.message)

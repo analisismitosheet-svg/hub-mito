@@ -261,6 +261,16 @@ export default function ParametrosCascada({ params, guardados, onChange, onGuard
         <Regla titulo="Pase extra" ayuda="Si no recibieron nada, aceptan donantes con 1 sola unidad." activo={P.pase_extra.activo} onActivo={(v) => set((p) => { p.pase_extra.activo = v })} cambio={!igual(P.pase_extra, D.pase_extra)}>
           <Etiquetas valores={P.pase_extra.locales} sugerencias={P.prioridad} onChange={(v) => set((p) => { p.pase_extra.locales = v })} />
         </Regla>
+        <Regla
+          titulo="Huecos"
+          ayuda="Después de la venta, a cada local le manda 1 u. del talle que no tiene de lo que se vendió, si tiene stock de un talle de al lado (completa la curva). No si le está llegando."
+          activo={P.huecos.activo}
+          onActivo={(v) => set((p) => { p.huecos.activo = v })}
+          cambio={!igual(P.huecos, D.huecos)}
+        >
+          <p className="mb-0.5 text-[10px] uppercase tracking-wide text-sub">No reciben huecos</p>
+          <Etiquetas valores={P.huecos.no_reciben} sugerencias={P.prioridad} onChange={(v) => set((p) => { p.huecos.no_reciben = v })} />
+        </Regla>
         {listaRegla('materiales', 'Solo estos materiales', 'Apagado: todos.', sugerencias.materiales)}
         {listaRegla('excluir_temporadas', 'Sin temporadas', 'Verano / Continuo / Invierno.', ['Verano', 'Continuo', 'Invierno'], false)}
         {listaRegla('excluir_grupos', 'Sin grupos', 'Los que empiezan con…')}
