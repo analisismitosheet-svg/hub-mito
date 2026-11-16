@@ -216,7 +216,7 @@ export default function ParametrosCascada({ params, guardados, onChange, onGuard
         </Regla>
         <Regla
           titulo="Cerrados por día"
-          ayuda="Los días que no abren no donan: lo que se les iba a pedir lo dona otro local que sí abre."
+          ayuda="Los días que no abren no donan ni reciben: lo que se les iba a pedir lo dona otro local que sí abre, y al día siguiente reciben también por la venta que se perdieron."
           activo={P.cerrados_dia.activo}
           onActivo={(v) => set((p) => { p.cerrados_dia.activo = v })}
           cambio={!igual(P.cerrados_dia, D.cerrados_dia)}

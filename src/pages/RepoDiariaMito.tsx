@@ -505,7 +505,7 @@ function VistaCascada({ datos, onVerLotes }: { datos: Datos; onVerLotes: () => v
     {
       titulo: 'Sigue sin cubrir',
       valor: numero(sinCubrir),
-      pie: `sin donante o fuera de las reglas${cas.cerrados_hoy?.length ? ` · hoy no donan (cerrados): ${cas.cerrados_hoy.join(', ')}` : ''}`,
+      pie: `sin donante o fuera de las reglas${cas.cerrados_hoy?.length ? ` · hoy no donan ni reciben (cerrados): ${cas.cerrados_hoy.join(', ')}` : ''}${Object.keys(cas.dias_perdidos ?? {}).length ? ` · suman la venta que se perdieron: ${Object.entries(cas.dias_perdidos ?? {}).map(([b, ds]) => `${b} (${ds.map((d) => `${d.slice(8, 10)}/${d.slice(5, 7)}`).join(', ')})`).join(', ')}` : ''}`,
     },
     { titulo: 'Envíos chicos sacados', valor: numero(cas.pares_eliminados), pie: `donante → receptor con < ${P0.min_envio.activo ? P0.min_envio.valor : 1} u.` },
   ]

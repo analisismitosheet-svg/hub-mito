@@ -152,9 +152,12 @@ function calcularRepo(foto, opts) {
 
   // Venta de los días pedidos, de locales receptores y artículos válidos de proveedores de MITO
   const ventas = []
+  // Días extra por base (cascada: locales que estuvieron cerrados suman la venta que se perdieron)
+  const extra = opts.extraPorBase ?? {}
   for (const v of foto.ventas) {
-    if (!tset.has(v.dia) || v.cant <= 0) continue
+    if (v.cant <= 0) continue
     const base = baseDeTienda(v.tienda)
+    if (!tset.has(v.dia) && !extra[base]?.includes(v.dia)) continue
     const cliente = clienteDeBase(base)
     if (!PRIO.has(cliente) || !articuloValido(foto.arts.get(v.art)) || !deMito(foto.arts.get(v.art))) continue
     ventas.push({ ...v, base, cliente, sku: `${v.art} ${v.color} ${v.talle}` })

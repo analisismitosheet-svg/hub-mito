@@ -25,8 +25,11 @@
  *     nada, sin tope por SKU, sin mínimo por envío ni tránsito / «ya tiene» / restricción
  *     de proveedor. Lo que no cubren pasa a los locales. Por defecto: INDOD.
  *   - cerrados_dia (14/11/2026): locales que no abren ciertos días de la semana (1 = lunes …
- *     7 = domingo). El día que corre la cascada NO donan: lo que se les iba a pedir lo dona
- *     el siguiente local que sí abre. Por defecto: domingo 9DEJULIO, MUNOZ, GRALPAZ y CFR4.
+ *     7 = domingo). El día que corre la cascada NO donan NI reciben: lo que se les iba a pedir
+ *     lo dona el siguiente local que sí abre. Al día siguiente esos locales suman la venta que
+ *     se perdieron (16/11/2026): el lunes 9 de Julio recibe por la venta del sábado y del
+ *     domingo; los demás locales, solo la del domingo (el sábado ya la cubrió la del domingo).
+ *     Por defecto: domingo 9DEJULIO, MUNOZ, GRALPAZ y CFR4.
  *   - huecos (16/11/2026, el PASE 2 del script con SOLO_VENTA=0): después de la venta, a cada
  *     local le manda 1 unidad de un talle que no tiene (stock 0) de los SKUs vendidos, si tiene
  *     stock de un talle de al lado (completa la curva). No a los que ya recibieron ese SKU por
@@ -51,9 +54,9 @@
  * también en el navegador (el HTML de muestra la incluye tal cual).
  */
 ;(function (raiz, fabrica) {
-  if (typeof module === 'object' && module.exports) module.exports = fabrica(require('./repo-diaria').baseDeTienda)
-  else raiz.CascadaLocales = fabrica((t) => String(t ?? '').trim())
-})(typeof self !== 'undefined' ? self : this, function (baseDeTienda) {
+  if (typeof module === 'object' && module.exports) module.exports = fabrica(require('./repo-diaria').baseDeTienda, require('./repo-diaria').calcularRepo)
+  else raiz.CascadaLocales = fabrica((t) => String(t ?? '').trim(), null)
+})(typeof self !== 'undefined' ? self : this, function (baseDeTienda, calcularRepo) {
   const PARAMS_DEFAULT = Object.freeze({
     prioridad: [
       'CFD', 'CFPO', 'CFRA', 'CFR4', 'CFR9', 'NVOCED', 'ESPINOD', 'LIBERD',
@@ -226,12 +229,55 @@
    * @param repo   calcularRepo(...) de los mismos días ({ dias, filas: [{base, sku, a_reponer}] })
    * @param params parámetros (se completan con PARAMS_DEFAULT)
    */
+  const isoDe = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  const sumarDias = (dia, n) => {
+    const d = new Date(`${dia}T12:00:00`)
+    d.setDate(d.getDate() + n)
+    return isoDe(d)
+  }
+  const isodow = (dia) => new Date(`${dia}T12:00:00`).getDay() || 7
+
+  /**
+   * Venta que se perdieron los locales cerrados: cada día de venta lo cubre la cascada del día
+   * siguiente. Si ese día el local estaba cerrado (cerrados_dia), no recibió: se le suma ahora.
+   * Ej.: cascada del lunes con la venta del domingo → 9DEJULIO (cerrado el domingo) suma el sábado.
+   * Devuelve { base: ['2026-11-14', …] } (solo días con venta que no están en `dias`).
+   */
+  function diasPerdidosCerrados(P, dias, conVenta) {
+    const out = {}
+    if (!P.cerrados_dia.activo) return out
+    const enDias = new Set(dias)
+    const cerradoEl = (base, dia) => (P.cerrados_dia.dias[isodow(dia)] ?? []).includes(base)
+    const bases = new Set(Object.values(P.cerrados_dia.dias).flat())
+    for (const base of bases) {
+      const set = new Set()
+      for (const d of dias) {
+        // La venta de `prev` la cubrió la cascada del día siguiente: si ese día estaba cerrado, no recibió
+        let prev = sumarDias(d, -1)
+        for (let i = 0; i < 7 && cerradoEl(base, sumarDias(prev, 1)); i++) {
+          if (!enDias.has(prev) && conVenta.has(prev)) set.add(prev)
+          prev = sumarDias(prev, -1)
+        }
+      }
+      if (set.size) out[base] = [...set].sort()
+    }
+    return out
+  }
+
   function calcularCascada(foto, repo, params, opts) {
     const P = normalizarParams(params)
     // Día en que corre la cascada (el pedido de transferencia sale hoy): 1 = lunes … 7 = domingo
     const hoy = opts?.hoy ? new Date(`${opts.hoy}T12:00:00`) : new Date()
+    const hoyIso = isoDe(hoy)
     const diaSemana = hoy.getDay() || 7
     const cerradosHoy = new Set(P.cerrados_dia.activo ? P.cerrados_dia.dias[diaSemana] ?? [] : [])
+    // Locales que estuvieron cerrados: suman la venta que se perdieron (y MITO se recalcula con eso)
+    const conVenta = new Set(foto.dias.filter((d) => d.unidades > 0 && d.dia < hoyIso).map((d) => d.dia))
+    const perdidos = diasPerdidosCerrados(P, repo.dias, conVenta)
+    for (const b of cerradosHoy) delete perdidos[b] // hoy tampoco reciben: lo suman mañana
+    if (Object.keys(perdidos).length && calcularRepo) {
+      repo = { ...calcularRepo(foto, { fechas: repo.dias, hoy: hoyIso, extraPorBase: perdidos }), dias: repo.dias }
+    }
     // Feriados de hoy (códigos de la tabla de locales; General Paz es GPAZD ahí y GRALPAZ acá)
     const CODIGO_CASCADA = { GPAZD: 'GRALPAZ' }
     const fer = (opts?.feriados ?? []).map((c) => String(c ?? '').trim().toUpperCase()).filter(Boolean)
@@ -291,8 +337,9 @@
     // Venta de los días por local (base) y SKU — v_agg del script
     const venta = new Map()
     for (const v of foto.ventas) {
-      if (!dias.has(v.dia) || v.cant <= 0) continue
+      if (v.cant <= 0) continue
       const base = baseDeTienda(v.tienda)
+      if (!dias.has(v.dia) && !perdidos[base]?.includes(v.dia)) continue
       if (!PRIO.has(base) || principal.has(base)) continue
       const s = sku(v.art, v.color, v.talle)
       const k = `${base}|${s}`
@@ -343,7 +390,7 @@
       p.mito = mito.get(`${p.base}|${p.sku}`) ?? 0
       p.faltante = P.restar_mito ? p.venta - p.mito : p.venta
       p.faltante_inicial = p.faltante
-      p.elegible = elegible(p.art) && !noReciben.has(p.base) && !feriadoHoy.has(p.base)
+      p.elegible = elegible(p.art) && !noReciben.has(p.base) && !feriadoHoy.has(p.base) && !cerradosHoy.has(p.base)
     }
 
     const donantesBase = PRIORIDAD.filter((d) => !noDonan.has(d) && !principal.has(d) && !cerradosHoy.has(d) && !feriadoHoy.has(d))
@@ -454,7 +501,7 @@
         return [ts[i - 1], ts[i + 1]].filter((t) => t !== undefined)
       }
       const noRecHueco = new Set(P.huecos.no_reciben)
-      const receptoresHueco = PRIORIDAD.filter((b) => !noReciben.has(b) && !noRecHueco.has(b) && !feriadoHoy.has(b) && !principal.has(b))
+      const receptoresHueco = PRIORIDAD.filter((b) => !noReciben.has(b) && !noRecHueco.has(b) && !feriadoHoy.has(b) && !cerradosHoy.has(b) && !principal.has(b))
       // SKUs vendidos en los días (de cualquier local), en orden
       const skusVendidos = new Map()
       for (const p of pares) if (!skusVendidos.has(p.sku)) skusVendidos.set(p.sku, p)
@@ -570,8 +617,10 @@
       de_principal: dePrincipal,
       // Unidades del pase de huecos (antes de sacar los envíos chicos)
       huecos,
-      // Locales que hoy no abren: no donan (cerrados_dia)
+      // Locales que hoy no abren: no donan ni reciben (cerrados_dia)
       cerrados_hoy: [...cerradosHoy],
+      // Locales que estuvieron cerrados: días de venta que suman además de los de la cascada
+      dias_perdidos: perdidos,
       // Locales con feriado hoy: no donan ni reciben
       feriado_hoy: P.prioridad.filter((b) => feriadoHoy.has(b)),
       pares_eliminados: chicos.length,

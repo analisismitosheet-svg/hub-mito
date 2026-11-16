@@ -91,6 +91,7 @@ export interface Cascada {
   huecos?: number
   /** locales que hoy no abren (no donan) */
   cerrados_hoy?: string[]
+  dias_perdidos?: Record<string, string[]>
   pares_eliminados: number
   unidades_eliminadas?: number
   /** por qué quedó sin cubrir lo que faltaba (unidades) */
