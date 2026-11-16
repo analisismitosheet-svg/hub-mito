@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { FileText, Loader2, Paperclip, Plus, Trash2, X } from 'lucide-react'
+import { FileText, Loader2, Paperclip, Plus, ScanText, Trash2, X } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import {
   AREAS, BASES_DRAGON, CONDICIONES_DRAGON, IVA, LISTAS_DRAGON, MOTIVOS_DRAGON, PLAZOS, PLAZO_A_CONDICION, TIPOS,
@@ -8,6 +8,7 @@ import {
   type ArticuloBusqueda, type DatosProveedor, type ItemDragon, type OrdenCompra, type ProveedorDragon, type Variantes,
 } from '@/lib/ordenesCompra'
 import { generarPdfOc, nombreArchivoPdf } from '@/lib/ocPdf'
+import { cuitConGuiones, leerFactura, type DatosFactura } from '@/lib/leerFactura'
 
 /* Alta / edición de una OC. Con «Esta OC va a Dragon» se habilita el pedido de compra
    (base, proveedor y artículos de Dragon) y el monto bruto pasa a ser el total con IVA. */
@@ -81,6 +82,27 @@ function InputPorcentaje({ valor, onCambio, disabled, className }: { valor: numb
       }}
       onBlur={() => setTxt(aTexto(valor))} />
   )
+}
+
+/** Palabras de la factura -> subtipo del árbol de autorizadores ([texto, tipo, nombre del subtipo]) */
+const REGLAS_SUBTIPO: Array<[RegExp, string, RegExp]> = [
+  [/\b(FLETES?|ENV[IÍ]OS?|ENCOMIENDAS?|CORREO|OCA|ANDREANI|EPICK|CARGAS?|COURIER)\b/i, 'Gastos', /env[ií]o/i],
+  [/\bHONORARIOS?\b/i, 'Gastos', /honorario/i],
+  [/\bLIMPIEZA\b/i, 'Gastos', /limpieza/i],
+  [/\b(MANTENIMIENTO|L[AÁ]MPARAS?)\b/i, 'Gastos', /mantenimiento/i],
+  [/\bALQUILER(ES)?\b/i, 'Gastos', /alquiler/i],
+  [/\bREPARACI[OÓ]N(ES)?\b/i, 'Servicios', /reparaci/i],
+  [/\bVIDRIERAS?\b/i, 'Servicios', /vidriera/i],
+  [/\bCONFECCI[OÓ]N\b/i, 'Talleres', /confecci/i],
+  [/\b(PLANCHADO|TERMINADO)\b/i, 'Talleres', /terminado|planchado/i],
+]
+function subtipoPorTexto(texto: string, subtipos: SubtipoOc[]): SubtipoOc | null {
+  for (const [re, tipo, nombre] of REGLAS_SUBTIPO) {
+    if (!re.test(texto)) continue
+    const s = subtipos.find((x) => x.tipo === tipo && nombre.test(x.nombre))
+    if (s) return s
+  }
+  return null
 }
 
 const campoCls = 'h-9 w-full rounded-xl border border-line bg-surface2 px-3 text-sm text-ink outline-none'
@@ -317,12 +339,74 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
   const subir = async (archivo: File | undefined) => {
     if (!archivo) return
     setGuardando('archivo')
+    void autocompletar(archivo)
     try {
       set('archivo_path', await subirArchivo(oc ? String(oc.numero) : `nueva-${Date.now()}`, archivo))
     } catch (e) {
       setError(`No se pudo subir el archivo: ${(e as Error).message}`)
     } finally {
       setGuardando(null)
+    }
+  }
+
+  /** Lee la factura subida (texto del PDF o QR de ARCA) y completa los campos que están vacíos. */
+  const [lectura, setLectura] = useState<{ estado: 'leyendo' } | { estado: 'nada' } | { estado: 'ok'; d: DatosFactura; campos: string[] } | null>(null)
+  const autocompletar = async (archivo: File) => {
+    setLectura({ estado: 'leyendo' })
+    try {
+      const d = await leerFactura(archivo)
+      if (!d) { setLectura({ estado: 'nada' }); return }
+      const cuit = d.cuit ? cuitConGuiones(d.cuit) : ''
+      const nombreFactura = d.razonSocial ?? d.nombreFantasia ?? ''
+      // Con el CUIT se busca el proveedor en las OC anteriores y en el maestro de Dragon (nombre y contacto como ya se usan)
+      const [hist, dragon] = d.cuit
+        ? await Promise.all([datosProveedorHistorial(nombreFactura, d.cuit).catch(() => null), datosProveedorDragon(nombreFactura, d.cuit).catch(() => null)])
+        : [null, null]
+      const delHist = hist && hist.proveedor_cuit === cuit ? hist : null
+      const deDragon = dragon && dragon.proveedor_cuit === cuit ? dragon : null
+      const nombre = delHist?.proveedor ?? deDragon?.proveedor ?? nombreFactura
+      const comprobante = [d.tipo ? d.tipo.charAt(0) + d.tipo.slice(1).toLowerCase() : 'Factura', d.letra, d.puntoVenta && d.numero ? `${d.puntoVenta}-${d.numero}` : null].filter(Boolean).join(' ')
+      const enMoneda = d.moneda && d.moneda !== 'PES' && d.total != null
+        ? ` (${d.moneda} ${d.total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}${d.cotizacion ? ` a TC ${d.cotizacion.toLocaleString('es-AR')}` : ''})` : ''
+      const obs = [d.detalle, `${comprobante}${d.nombreFantasia && d.nombreFantasia !== nombre ? ` de ${d.nombreFantasia}` : ''}${enMoneda}`].filter(Boolean).join(' — ')
+      const campos: string[] = []
+      setF((x) => {
+        const n = { ...x }
+        const poner = <K extends keyof typeof x>(k: K, v: (typeof x)[K] | null | undefined, etiqueta: string, pisar = false) => {
+          if (v == null || v === '') return
+          const actual = x[k]
+          if (!pisar && typeof actual === 'string' && actual.trim()) return
+          n[k] = v
+          campos.push(etiqueta)
+        }
+        poner('proveedor', nombre, 'Razón social')
+        poner('proveedor_cuit', cuit, 'CUIT')
+        poner('contacto', delHist?.contacto ?? deDragon?.contacto, 'Contacto')
+        poner('telefono', delHist?.telefono ?? deDragon?.telefono, 'Teléfono')
+        poner('mail', delHist?.mail ?? deDragon?.mail, 'Mail')
+        // La fecha de compra arranca en hoy: si no la cambiaron, va la de la factura
+        poner('fecha_compra', d.fecha, 'Fecha de compra', x.fecha_compra === hoy)
+        if (!x.dragon) poner('monto_bruto', d.totalPesos != null ? String(d.totalPesos) : null, 'Monto bruto')
+        poner('observacion', obs, 'Observación')
+        // Tipo y subtipo por lo que dice la factura (solo si todavía no eligieron subtipo)
+        const sub = x.subtipo_id == null ? subtipoPorTexto(`${d.detalle ?? ''} ${d.nombreFantasia ?? ''}`, subtipos) : null
+        if (sub) {
+          n.tipo = sub.tipo as typeof x.tipo
+          n.subtipo_id = sub.id
+          if (sub.tipo === 'Servicios' || sub.tipo === 'Talleres') { n.planificable = true; n.metodo = 'Sin anticipo' }
+          campos.push(`Tipo (${sub.tipo} · ${sub.nombre})`)
+        }
+        if (x.dragon && !x.dragon_proveedor && deDragon?.dragon) {
+          n.dragon_proveedor = deDragon.dragon
+          n.dragon_proveedor_nombre = deDragon.proveedor
+          campos.push('Proveedor en Dragon')
+        }
+        return n
+      })
+      if (f.dragon && !f.dragon_proveedor && deDragon?.dragon) setProvDragonTxt(`${deDragon.dragon} — ${deDragon.proveedor}`)
+      setLectura({ estado: 'ok', d, campos })
+    } catch {
+      setLectura({ estado: 'nada' })
     }
   }
 
@@ -377,6 +461,37 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
         </div>
 
         <div className="grid gap-x-4 gap-y-3 px-5 py-4 sm:grid-cols-2">
+          {/* Cargar la factura o presupuesto: queda como archivo de la OC y completa los datos que encuentre */}
+          <div className="sm:col-span-2">
+            <label
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => { e.preventDefault(); void subir(e.dataTransfer.files?.[0]) }}
+              className={`flex cursor-pointer items-center gap-3 rounded-2xl border border-dashed px-4 py-3 transition ${lectura?.estado === 'ok' ? 'border-lime-500/50 bg-lime-500/5' : 'border-teal-500/50 bg-teal-500/5 hover:bg-teal-500/10'}`}>
+              {lectura?.estado === 'leyendo' ? <Loader2 size={20} className="shrink-0 animate-spin text-teal-300" /> : <ScanText size={20} className="shrink-0 text-teal-300" />}
+              <span className="min-w-0 flex-1">
+                <b className="block text-sm text-ink">{lectura?.estado === 'leyendo' ? 'Leyendo el archivo…' : f.archivo_path ? 'Cargar otra factura' : 'Cargar factura o presupuesto'}</b>
+                <span className="block text-xs text-sub">PDF o foto. Queda como archivo de la OC y se completan solos el proveedor, CUIT, fecha, monto y qué se compra.</span>
+              </span>
+              <input type="file" className="hidden" accept="application/pdf,image/*" onChange={(e) => { void subir(e.target.files?.[0]); e.target.value = '' }} />
+            </label>
+            {lectura?.estado === 'nada' && <p className="mt-1.5 text-xs text-amber-300">No se encontraron datos de factura en el archivo (igual quedó subido). Completá los campos a mano.</p>}
+            {lectura?.estado === 'ok' && (
+              <div className="mt-1.5 rounded-xl border border-lime-500/30 bg-lime-500/5 p-2.5 text-xs text-lime-100">
+                <div className="flex items-start justify-between gap-2">
+                  <p>
+                    <b>Leído{lectura.d.origen === 'qr' ? ' del QR de ARCA' : ''}:</b>{' '}
+                    {[lectura.d.tipo && `${lectura.d.tipo} ${lectura.d.letra ?? ''}`.trim(), lectura.d.puntoVenta && lectura.d.numero && `N° ${lectura.d.puntoVenta}-${lectura.d.numero}`,
+                      lectura.d.razonSocial ?? lectura.d.nombreFantasia, lectura.d.cuit && `CUIT ${cuitConGuiones(lectura.d.cuit)}`,
+                      lectura.d.total != null && `${lectura.d.moneda === 'PES' ? '$' : lectura.d.moneda} ${lectura.d.total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`,
+                      lectura.d.moneda !== 'PES' && lectura.d.totalPesos != null && `= ${pesos(lectura.d.totalPesos)}`,
+                      lectura.d.condicionVenta].filter(Boolean).join(' · ')}
+                  </p>
+                  <button type="button" onClick={() => setLectura(null)} className="shrink-0 opacity-70 hover:opacity-100" aria-label="Cerrar aviso"><X size={13} /></button>
+                </div>
+                <p className="mt-1 text-lime-300/90">{lectura.campos.length ? `Completado: ${[...new Set(lectura.campos)].join(', ')}. Revisalo antes de guardar.` : 'Los campos ya estaban cargados: no se cambió nada.'}</p>
+              </div>
+            )}
+          </div>
           <p className="text-[10.5px] font-bold uppercase tracking-wide text-lime-400 sm:col-span-2">Qué se compra</p>
           <div className="sm:col-span-2"><span className={lbl}>Tipo de compra</span>
             {seg([...TIPOS], f.tipo, (v) => setF((x) => ({ ...x, tipo: v as typeof x.tipo, subtipo_id: v === x.tipo ? x.subtipo_id : null, ...(v === 'Servicios' || v === 'Talleres' ? { planificable: true, metodo: 'Sin anticipo' as const } : {}) })))}</div>
