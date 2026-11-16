@@ -81,3 +81,45 @@ REVOKE ALL ON FUNCTION public.precios_publicos_buscar(text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.precios_publicos_buscar(text) TO anon, authenticated;
 
 COMMIT;
+
+-- =====================================================
+-- Locales de la consulta pública con su ubicación, leída EN VIVO del mapa del tracking de
+-- transporte (public.tracking_bases): si se corrige un punto en el mapa, la consulta lo toma.
+-- Lista fija de locales al público (sin MITO, INDO, fábrica, Polo 52 ni franquicias), la misma
+-- de STOCK_PUBLICO_LOCALES del puente. Devuelve solo código, nombre y coordenadas.
+-- =====================================================
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.precios_publicos_locales()
+RETURNS jsonb
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT coalesce(jsonb_agg(jsonb_build_object('codigo', v.codigo, 'nombre', v.nombre, 'lat', b.lat, 'lng', b.lng)
+                            ORDER BY v.nombre), '[]'::jsonb)
+    FROM (VALUES
+      ('9DEJULIO', '9DEJU2',   '9 de Julio'),
+      ('BUSTOD',   'BUSTD',    'Bustos'),
+      ('CFD',      'CFD',      'Captain Fin Bustos'),
+      ('CFPO',     'CFPO',     'Captain Fin Patio Olmos'),
+      ('CFR4',     'CFR4',     'Captain Fin Río Cuarto'),
+      ('CFR9',     'CFR9',     'Captain Fin Ruta 9'),
+      ('CFRA',     'CFRA',     'Captain Fin Rivera Indarte'),
+      ('DINOD',    'DINOD',    'Dino R20'),
+      ('ESPINOD',  'ESPID',    'Espinosa'),
+      ('GPAZD',    'GPAZD',    'General Paz Outlet'),
+      ('LIBERD',   'LIBED',    'Libertad'),
+      ('MUNOZ',    'MUNOD',    'Muñoz'),
+      ('NVOCED',   'NCEND2',   'Nuevo Centro'),
+      ('RIVERAD',  'RIVED',    'Rivera'),
+      ('RUTA9D2',  'R9D',      'Ruta 9'),
+      ('VCPD',     'VCPD',     'Carlos Paz'),
+      ('WALMARTD', 'WALTD',    'Walmart')
+    ) v(codigo, base_id, nombre)
+    LEFT JOIN public.tracking_bases b ON b.base_id = v.base_id;
+$$;
+
+REVOKE ALL ON FUNCTION public.precios_publicos_locales() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.precios_publicos_locales() TO anon, authenticated;
+
+COMMIT;

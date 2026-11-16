@@ -217,18 +217,36 @@ async function correrRepo(ctx, pend, token) {
   return { ok: errores.length === 0, hasta, dias, texto }
 }
 
+/**
+ * Días de venta para la cascada:
+ *  - si hoy corrió la repo, sus días;
+ *  - si no (sábado / domingo sin repo), los días con venta DESPUÉS del último que ya tiene
+ *    cascada (hasta 7). El 15/11 tomaba los días de la última repo (12/11), ya cubiertos,
+ *    y no cargó nada: el 13 y el 14/11 quedaron sin cascada hasta el lunes;
+ *  - sin cascadas recientes: los de la última repo en Dragon, o el último día con venta.
+ */
+function diasParaCascada({ diasRepo, conVenta, yaCubiertos, ultimaRepo }) {
+  const disponibles = [...conVenta].sort()
+  let dias = (diasRepo ?? []).filter((d) => conVenta.has(d))
+  if (!dias.length && yaCubiertos.size) {
+    const maxCubierto = [...yaCubiertos].sort().pop()
+    dias = disponibles.filter((d) => d > maxCubierto).slice(-7)
+  }
+  if (!dias.length) dias = (ultimaRepo ?? []).filter((d) => conVenta.has(d))
+  if (!dias.length) dias = disponibles.slice(-1)
+  return dias
+}
+
 async function correrCascada(ctx, pend, token, diasRepo) {
   const hoy = ctx.hoy()
-  let dias = diasRepo
-  if (!dias?.length) dias = (await repoEnDragon(ctx)).ultima
   const foto = ctx.foto()
   const conVenta = new Set(foto.dias.filter((d) => d.unidades > 0 && d.dia < hoy).map((d) => d.dia))
-  dias = (dias ?? []).filter((d) => conVenta.has(d))
-  if (!dias.length) dias = [...conVenta].sort().slice(-1) // sin repo en Dragon: el último día con venta
   // Nunca repetir días de venta que ya tuvieron cascada (el sábado no hay repo y volvía a tomar
   // los días de la última: el 13 y el 14/11 salieron dos lotes «CASCADA 12-11»)
   const lotes = await rpc('cascada_lotes_recientes_puente', { p_token: token })
   const yaCubiertos = new Set((Array.isArray(lotes) ? lotes : []).flatMap(diasDeLote))
+  const ultimaRepo = diasRepo?.length ? [] : (await repoEnDragon(ctx)).ultima
+  let dias = diasParaCascada({ diasRepo, conVenta, yaCubiertos, ultimaRepo })
   const repetidos = dias.filter((d) => yaCubiertos.has(d))
   dias = dias.filter((d) => !yaCubiertos.has(d))
   if (!dias.length) {
@@ -322,4 +340,4 @@ function iniciar(contexto) {
   }, CADA_MS).unref?.()
 }
 
-module.exports = { iniciar, estado: () => ({ ...estado }), diasDeObs, diasDeLote, nombreLote, feriadosHoy, feriadosHoyFrescos }
+module.exports = { iniciar, estado: () => ({ ...estado }), diasDeObs, diasDeLote, diasParaCascada, nombreLote,feriadosHoy, feriadosHoyFrescos }

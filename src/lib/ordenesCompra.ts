@@ -90,12 +90,14 @@ export interface PasoDef {
   titulo: string
   quien: 'compras' | 'autorizador' | 'administracion'
   permiso: string
+  /** Permiso extra que también deja tildar el paso (Administración tilda los de Compras, no la autorización). */
+  tambien?: string
 }
 export const PASOS: PasoDef[] = [
-  { k: 'valid', titulo: 'Validación Dto. Compras', quien: 'compras', permiso: 'ordenes_compra.compras' },
+  { k: 'valid', titulo: 'Validación Dto. Compras', quien: 'compras', permiso: 'ordenes_compra.compras', tambien: 'ordenes_compra.tildar' },
   { k: 'autor', titulo: 'Autorización financiera', quien: 'autorizador', permiso: 'ordenes_compra.autorizar' },
-  { k: 'env', titulo: 'Enviada al proveedor', quien: 'compras', permiso: 'ordenes_compra.compras' },
-  { k: 'acep', titulo: 'Aceptada por el proveedor', quien: 'compras', permiso: 'ordenes_compra.compras' },
+  { k: 'env', titulo: 'Enviada al proveedor', quien: 'compras', permiso: 'ordenes_compra.compras', tambien: 'ordenes_compra.tildar' },
+  { k: 'acep', titulo: 'Aceptada por el proveedor', quien: 'compras', permiso: 'ordenes_compra.compras', tambien: 'ordenes_compra.tildar' },
   { k: 'f_oc', titulo: 'OC cargada en Flexxus', quien: 'administracion', permiso: 'ordenes_compra.flexxus' },
   { k: 'f_rem', titulo: 'Remito cargado en Flexxus', quien: 'administracion', permiso: 'ordenes_compra.flexxus' },
   { k: 'f_fac', titulo: 'Factura cargada en Flexxus', quien: 'administracion', permiso: 'ordenes_compra.flexxus' },

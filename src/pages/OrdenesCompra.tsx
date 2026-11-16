@@ -83,6 +83,11 @@ export default function OrdenesCompra() {
   const [verAut, setVerAut] = useState(false)
   const sel = Number(params.get('n')) || null
   const setSel = (n: number | null) => setParams(n ? { n: String(n) } : {}, { replace: true })
+  /** En el celular el detalle queda abajo de la lista: al elegir una OC, bajar hasta él. */
+  const elegirEnCelular = (numero: number) => {
+    setSel(numero)
+    window.setTimeout(() => document.getElementById('detalle-oc')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60)
+  }
 
   const esCompras = can('ordenes_compra.compras')
 
@@ -218,7 +223,45 @@ export default function OrdenesCompra() {
           {!lista ? (
             <p className="flex items-center gap-2 p-6 text-sm text-sub"><Loader2 size={16} className="animate-spin" /> Cargando órdenes…</p>
           ) : (
-            <table className="w-full min-w-[1100px] text-sm">
+            <>
+            {/* Celular: tarjetas con la etapa a la vista (la tabla ancha la escondía a la derecha) */}
+            <ul className="divide-y divide-line/60 md:hidden">
+              {visibles.slice(0, tope).map((o) => {
+                const et = etapaDe(o)
+                const venc = vencida(o)
+                return (
+                  <li key={o.numero}>
+                    <button type="button" onClick={() => elegirEnCelular(o.numero)}
+                      className={`w-full px-3 py-3 text-left transition active:bg-surface2 ${sel === o.numero ? 'bg-lime-500/5' : ''} ${o.cancelada_at ? 'opacity-60' : ''}`}>
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="font-bold tabular-nums text-ink">N° {o.numero}</span>
+                        <span className="font-semibold tabular-nums text-ink">{pesos(o.monto_bruto)}</span>
+                      </div>
+                      <div className="mt-0.5 truncate text-[13px] font-semibold text-ink">{o.proveedor}</div>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-sub">
+                        <span className={`rounded-full border px-2 py-0.5 text-[10.5px] font-semibold ${CHIP_TIPO[o.tipo] ?? ''}`}>{o.tipo}</span>
+                        <span>{fechaCorta(o.fecha_compra)}</span>
+                        {o.fecha_entrega && <span className={venc ? 'font-semibold text-red-400' : ''}>entrega {fechaCorta(o.fecha_entrega)}{venc && ' ⚠'}</span>}
+                        <span>{nombreCorto(o.responsable)}</span>
+                      </div>
+                      <div className="mt-2 flex gap-0.5">
+                        {PASOS.map((p) => (
+                          <i key={p.k} title={p.titulo} className={`h-1.5 flex-1 rounded ${o.pasos?.[p.k] ? 'bg-emerald-500' : et.clave === p.k ? 'bg-amber-400' : 'bg-white/10'}`} />
+                        ))}
+                      </div>
+                      <div className={`mt-1 text-[12px] font-semibold ${TONO[et.tono]}`}>
+                        {et.texto}
+                        {o.pasos?.autor
+                          ? <span className="font-normal text-sub"> · autorizó {o.pasos.autor.por}</span>
+                          : !o.cancelada_at && <span className="font-normal text-sub"> · sin autorización financiera</span>}
+                      </div>
+                    </button>
+                  </li>
+                )
+              })}
+              {visibles.length === 0 && <li className="p-8 text-center text-sm text-sub">No hay órdenes con estos filtros.</li>}
+            </ul>
+            <table className="hidden w-full min-w-[1100px] text-sm md:table">
               <thead>
                 <tr className="border-b border-line text-left text-[10.5px] uppercase tracking-wide text-sub">
                   {['N° OC', 'Fecha', 'Entrega', 'Proveedor', 'Tipo', 'Observación', 'Responsable', 'Monto bruto', 'Pago', 'Etapa', ''].map((h) => (
@@ -274,6 +317,7 @@ export default function OrdenesCompra() {
                 )}
               </tbody>
             </table>
+            </>
           )}
           {lista && (
             <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-xs text-sub">
@@ -388,7 +432,7 @@ function DetalleOc({ oc, onCerrar, onCambio, onBorrada, onEditar }: {
   )
 
   return (
-    <aside className="self-start rounded-2xl border border-line bg-surface lg:sticky lg:top-3 lg:max-h-[calc(100vh-24px)] lg:overflow-auto">
+    <aside id="detalle-oc" className="scroll-mt-3 self-start rounded-2xl border border-line bg-surface lg:sticky lg:top-3 lg:max-h-[calc(100vh-24px)] lg:overflow-auto">
       <div className="flex items-start justify-between gap-2 border-b border-line p-4">
         <div>
           <p className="text-xs text-sub">Orden de compra{oc.importada && ' · de la planilla'}</p>
@@ -429,7 +473,7 @@ function DetalleOc({ oc, onCerrar, onCambio, onBorrada, onEditar }: {
           <ol className="divide-y divide-dashed divide-line">
             {PASOS.map((p, i) => {
               const h = oc.pasos?.[p.k]
-              const puede = can(p.permiso)
+              const puede = can(p.permiso) || (!!p.tambien && can(p.tambien))
               const toca = !h && et.clave === p.k
               return (
                 <li key={p.k} className="grid grid-cols-[26px_1fr_auto] items-center gap-2.5 py-2">

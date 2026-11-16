@@ -11,6 +11,7 @@
  *   GET /api/sql/pedido-venta-items?codigo=    -> renglones de un pedido de venta viejo, en vivo de Dragonfish
  *   GET /api/sql/dragon-variantes?base=&articulo= -> colores y talles de un artículo en Dragon (Órdenes de compras)
  *   GET /api/sql/dragon-articulos?base=&q=|codigos= -> artículos en vivo de Dragon (buscador e importar txt de Órdenes de compras)
+ *   GET /api/sql/stock-publico?articulo=      -> PÚBLICO (sin sesión): stock de un artículo por local (/precios)
  *   GET /api/sql/<vista>[?where=&value=&limit=] -> filas de una vista habilitada
  *
  * Antes eran tres funciones (sql/[view], sql/status, sql/catalogo); se unificaron para
@@ -32,6 +33,7 @@ import stockValorizado from '../../src/lib/stockValorizadoApi.js'
 import repoDiaria from '../../src/lib/repoDiariaApi.js'
 import pedidoVentaItems from '../../src/lib/pedidoVentaItemsApi.js'
 import dragonVariantes, { dragonArticulos } from '../../src/lib/dragonVariantesApi.js'
+import stockPublico from '../../src/lib/stockPublicoApi.js'
 
 type Req = {
   method?: string
@@ -87,6 +89,7 @@ export default async function handler(req: Req, res: Res) {
   const ruta = primero(req.query.ruta)
 
   if (ruta === 'ping') return ping(res)
+  if (ruta === 'stock-publico') return stockPublico(req, res)
 
   if (ruta === 'status') return status(req, res)
   if (ruta === 'catalogo') return catalogo(req, res)

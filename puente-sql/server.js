@@ -302,6 +302,153 @@ async function dragonVariantes(base, articulo) {
 
 const ARTICULO_DRAGON = /^[A-Z0-9._/-]{1,40}$/
 
+/**
+ * STOCK PÚBLICO (consulta de precios para clientes, hub /precios): stock de UN artículo en cada
+ * local de venta al público, por color y talle (ZooLogic.COMB, COCANT > 0), como el tótem
+ * ConsultaPrecios.exe. Lista FIJA de locales (sin MITO, INDO, fábrica, Polo 52 ni franquicias):
+ * nada de lo que llega del pedido elige bases. Cada base va por el servidor donde está al día
+ * (las réplicas de esta PC o el principal, igual que las ventas del Chat IA). Si una base falla,
+ * el resto responde igual. Cache 60 s por artículo.
+ */
+const STOCK_PUBLICO_LOCALES = [
+  // [código del local en el hub, base, 'principal' | 'local']
+  ['9DEJULIO', 'DRAGONFISH_9DEJUL2', 'local'],
+  ['BUSTOD', 'DRAGONFISH_BUSTOD', 'principal'],
+  ['CFD', 'DRAGONFISH_CFD', 'principal'],
+  ['CFPO', 'DRAGONFISH_CFPO', 'principal'],
+  ['CFR4', 'DRAGONFISH_CFR4', 'principal'],
+  ['CFR9', 'DRAGONFISH_CFR9', 'principal'],
+  ['CFRA', 'DRAGONFISH_CFRA', 'principal'],
+  ['DINOD', 'DRAGONFISH_DINOD', 'principal'],
+  ['ESPINOD', 'DRAGONFISH_ESPINOD', 'local'],
+  ['GPAZD', 'DRAGONFISH_GRALPAZ', 'principal'],
+  ['LIBERD', 'DRAGONFISH_LIBERD', 'principal'],
+  ['MUNOZ', 'DRAGONFISH_MUNOZ', 'local'],
+  ['NVOCED', 'DRAGONFISH_NVOCED2', 'local'],
+  ['RIVERAD', 'DRAGONFISH_RIVERAD', 'local'],
+  ['RUTA9D2', 'DRAGONFISH_RUTA9D2', 'local'],
+  ['VCPD', 'DRAGONFISH_VCPD', 'local'],
+  ['WALMARTD', 'DRAGONFISH_WALMARTD', 'principal'],
+]
+const ARTICULO_PUBLICO = /^[A-Z0-9]{2,20}$/
+
+/**
+ * Locales con lista de precios propia en la consulta pública (el resto usa Contado / LISTA1).
+ * General Paz es outlet: lista OUTLET ("OUTLET - GPAZ") de su propia base, precio vigente hoy
+ * (FECHAVIG <= hoy, la más nueva; como el tótem). Cache 5 min por artículo.
+ */
+const LISTAS_LOCAL_PUBLICO = {
+  GPAZD: { base: 'DRAGONFISH_GRALPAZ', lista: 'OUTLET', nombre: 'Outlet' },
+}
+const cachePreciosLocal = new Map() // `${local}|${art}` -> { en, precio }
+
+async function preciosLocalPublico(localCod, articulos) {
+  const cfgLista = LISTAS_LOCAL_PUBLICO[String(localCod ?? '').toUpperCase()]
+  if (!cfgLista) throw new Error('Local sin lista propia')
+  const arts = [...new Set((Array.isArray(articulos) ? articulos : []).map((a) => String(a ?? '').trim().toUpperCase()))]
+  if (!arts.length || arts.length > 40 || arts.some((a) => !ARTICULO_PUBLICO.test(a))) throw new Error('Artículos inválidos')
+  const ahora = Date.now()
+  const precios = {}
+  const faltan = []
+  for (const a of arts) {
+    const c = cachePreciosLocal.get(`${localCod}|${a}`)
+    if (c && ahora - c.en < 5 * 60_000) {
+      if (c.precio != null) precios[a] = c.precio
+    } else faltan.push(a)
+  }
+  if (faltan.length) {
+    const srv = SERVIDORES.get(ALIAS_PRINCIPAL.toUpperCase())
+    await asegurarConexion(srv)
+    const p = srv.pool.request().input('lista', srv.sql.VarChar(20), cfgLista.lista)
+    faltan.forEach((a, i) => p.input(`a${i}`, srv.sql.VarChar(40), a))
+    const r = await conTope(
+      p.query(
+        `SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+         SELECT art, PDIRECTO AS precio FROM (
+           SELECT RTRIM(ARTICULO) AS art, PDIRECTO,
+                  ROW_NUMBER() OVER (PARTITION BY ARTICULO ORDER BY FECHAVIG DESC, HMODIFW DESC) AS rn
+             FROM [${cfgLista.base}].[ZooLogic].[PRECIOAR]
+            WHERE LISTAPRE = @lista AND FECHAVIG <= GETDATE()
+              AND ARTICULO IN (${faltan.map((_, i) => `@a${i}`).join(',')})) x
+          WHERE rn = 1 AND PDIRECTO > 0`,
+      ),
+      12_000,
+      'precios del local',
+    )
+    const leidos = new Map((r.recordset ?? []).map((f) => [String(f.art).toUpperCase(), Number(f.precio)]))
+    for (const a of faltan) {
+      const precio = leidos.get(a) ?? null
+      cachePreciosLocal.set(`${localCod}|${a}`, { en: ahora, precio })
+      if (precio != null) precios[a] = precio
+    }
+    if (cachePreciosLocal.size > 5000) cachePreciosLocal.clear()
+  }
+  return { local: localCod, lista: cfgLista.nombre, precios }
+}
+const cacheStockPublico = new Map() // articulo -> { en, datos }
+
+async function stockPublico(articulo) {
+  const art = String(articulo ?? '').trim().toUpperCase()
+  if (!ARTICULO_PUBLICO.test(art)) throw new Error('Artículo inválido')
+  const enCache = cacheStockPublico.get(art)
+  if (enCache && Date.now() - enCache.en < 60_000) return enCache.datos
+
+  const principal = SERVIDORES.get(ALIAS_PRINCIPAL.toUpperCase())
+  const local = [...SERVIDORES.values()].find((s) => !s.principal) ?? principal
+  const leer = async (srv, base) => {
+    await asegurarConexion(srv)
+    const db = `[${base}].[ZooLogic]`
+    const r = await srv.pool
+      .request()
+      .input('a', srv.sql.VarChar(40), art)
+      .query(
+        `SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+         SELECT RTRIM(COCOL) AS color, RTRIM(TALLE) AS talle, SUM(COCANT) AS stock
+           FROM ${db}.[COMB] WHERE COART = @a AND COCANT > 0 GROUP BY COCOL, TALLE`,
+      )
+    return r.recordset ?? []
+  }
+  const resultados = await Promise.allSettled(
+    STOCK_PUBLICO_LOCALES.map(([, base, donde]) => conTope(leer(donde === 'local' ? local : principal, base), 12_000, base)),
+  )
+  const locales = {}
+  const sinDatos = []
+  const colores = new Set()
+  resultados.forEach((r, i) => {
+    const cod = STOCK_PUBLICO_LOCALES[i][0]
+    if (r.status !== 'fulfilled') {
+      sinDatos.push(cod)
+      return
+    }
+    const filas = r.value
+      .map((f) => ({ color: String(f.color ?? ''), talle: String(f.talle ?? ''), stock: Math.max(0, Math.round(Number(f.stock) || 0)) }))
+      .filter((f) => f.stock > 0)
+    filas.forEach((f) => colores.add(f.color))
+    locales[cod] = filas
+  })
+  // Nombres de los colores (maestro de INDO)
+  const nombres = {}
+  if (colores.size) {
+    try {
+      await asegurarConexion(principal)
+      const p = principal.pool.request()
+      const lista = [...colores].slice(0, 200)
+      lista.forEach((c, i) => p.input(`c${i}`, principal.sql.VarChar(20), c))
+      const r = await p.query(
+        `SELECT RTRIM(COLCOD) AS cod, RTRIM(COLDES) AS des FROM [DRAGONFISH_INDOD].[ZooLogic].[COL]
+          WHERE COLCOD IN (${lista.map((_, i) => `@c${i}`).join(',')})`,
+      )
+      for (const f of r.recordset ?? []) nombres[f.cod] = f.des
+    } catch {
+      /* sin nombres: se muestra el código */
+    }
+  }
+  const datos = { articulo: art, locales, colores: nombres, sin_datos: sinDatos, en: new Date().toISOString() }
+  cacheStockPublico.set(art, { en: Date.now(), datos })
+  if (cacheStockPublico.size > 500) cacheStockPublico.delete(cacheStockPublico.keys().next().value)
+  return datos
+}
+
 function armarVariantes(filas) {
   const colores = [...new Map(filas.filter((f) => f.color).map((f) => [f.color, { codigo: f.color, nombre: f.nombre }])).values()]
     .sort((x, y) => x.codigo.localeCompare(y.codigo))
@@ -1546,6 +1693,14 @@ const server = http.createServer(async (req, res) => {
     // Órdenes de compras: colores y talles de un artículo en Dragon (COMB/COL de DRAGONFISH_<base>)
     if (body?.accion === 'dragon_variantes') {
       return enviar(res, 200, await dragonVariantes(body?.base, body?.articulo))
+    }
+    // Consulta de precios para clientes (hub /precios): stock de un artículo por local, color y talle
+    if (body?.accion === 'stock_publico') {
+      return enviar(res, 200, await stockPublico(body?.articulo))
+    }
+    // Consulta de precios para clientes: precios de la lista propia de un local (General Paz = Outlet)
+    if (body?.accion === 'precios_local_publico') {
+      return enviar(res, 200, await preciosLocalPublico(body?.local, body?.articulos))
     }
     if (body?.accion === 'dragon_articulos') {
       return enviar(res, 200, body?.codigos ? await dragonDatosArticulos(body?.base, body.codigos, body?.lista) : await dragonBuscarArticulos(body?.base, body?.texto, body?.lista))
