@@ -98,6 +98,7 @@ const StockValorizado = lazy(() => import('@/pages/StockValorizado'))
 const RepoDiariaMito = lazy(() => import('@/pages/RepoDiariaMito'))
 const VentasWeb = lazy(() => import('@/pages/VentasWeb'))
 const ChatIa = lazy(() => import('@/pages/ChatIa'))
+const PreciosPublicos = lazy(() => import('@/pages/PreciosPublicos'))
 
 export default function App() {
   return (
@@ -116,6 +117,15 @@ export default function App() {
           <Route path="/p/:token" element={<PropuestaFranquicia />} />
           {/* Autorizar una orden de compra desde el WhatsApp: link público por token (sin usuario) */}
           <Route path="/oc/:token" element={<AutorizarOc />} />
+          {/* Consulta de precios para clientes (versión web del tótem): link público, sin usuario */}
+          <Route
+            path="/precios"
+            element={
+              <Suspense fallback={null}>
+                <PreciosPublicos />
+              </Suspense>
+            }
+          />
           {/* Pantalla para autenticados no aprobados (pendiente/rechazado/desactivado) */}
           <Route path="/acceso" element={<Acceso />} />
 
