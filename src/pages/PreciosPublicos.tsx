@@ -28,7 +28,7 @@ type Respuesta = { exacto?: Articulo; resultados: Articulo[]; actualizado?: stri
 type FilaStock = { color: string; talle: string; stock: number }
 type Stock = { detalle?: string; locales: Record<string, FilaStock[]>; colores: Record<string, string>; sin_datos: string[]; en: string }
 type Ubicacion = { lat: number; lng: number; precision: number }
-type Origen = 'qr' | 'ubicacion' | 'manual'
+type Origen = 'qr' | 'ubicacion' | 'manual' | 'usuario'
 /** Precios de la lista propia del local (General Paz = Outlet); los que no están ahí van a Contado. */
 type PreciosLocal = { local: string; lista: string | null; precios: Record<string, number> }
 
@@ -129,7 +129,7 @@ export default function PreciosPublicos() {
   // «Modo hub» solo entrando desde el hub (Locales → Consulta stock entre locales, que abre
   // /precios?desde=hub) y con sesión. Un cliente que escanea el QR nunca lo ve, aunque ese
   // celular tenga una sesión del hub abierta.
-  const { user, loading: cargandoSesion } = useAuth()
+  const { user, loading: cargandoSesion, perfil, isAdmin } = useAuth()
   const [desdeHub] = useState(() => {
     if (params.get('desde') === 'hub') {
       try {
@@ -198,9 +198,24 @@ export default function PreciosPublicos() {
   }
   const esperandoLista = !!codLocal && LOCALES_CON_LISTA.has(codLocal) && preciosLocal?.local !== codLocal
 
+  // Hub: arranca con el local del usuario; el admin (o quien no tiene local) arranca con todos los locales.
+  // Una sola vez al entrar: después puede elegir otro de la lista.
+  const localDelUsuarioListo = useRef(false)
+  useEffect(() => {
+    if (!enHub || localDelUsuarioListo.current || cargandoSesion || !perfil) return
+    localDelUsuarioListo.current = true
+    const delUsuario = isAdmin ? null : localPorCodigo(locales, perfil.local)
+    setLocal(delUsuario ? { codigo: delUsuario.codigo, origen: 'usuario' } : null)
+  }, [enHub, cargandoSesion, perfil, isAdmin, locales])
+
   const elegirLocal = (codigo: string) => {
+    if (!codigo) {
+      // «Todos los locales» (solo en el hub): la grilla suma todos
+      setLocal(null)
+      return
+    }
     setLocal({ codigo, origen: 'manual' })
-    guardar(codigo)
+    if (!enHub) guardar(codigo)
   }
 
   /* ---------- Búsqueda ---------- */
@@ -602,8 +617,12 @@ function BarraLocal({
   const leyenda = !local
     ? geo === 'pidiendo'
       ? 'Buscando el local más cercano…'
-      : 'Elegí el local para ver su stock'
-    : local.origen === 'qr'
+      : sinUbicacion
+        ? 'Stock sumando todos los locales'
+        : 'Elegí el local para ver su stock'
+    : local.origen === 'usuario'
+      ? 'Tu local'
+      : local.origen === 'qr'
       ? 'Local del QR'
       : local.origen === 'ubicacion'
         ? enLocal
@@ -624,10 +643,11 @@ function BarraLocal({
           <select
             id="local-precios"
             value={local?.codigo ?? ''}
-            onChange={(e) => e.target.value && onElegir(e.target.value)}
+            onChange={(e) => (e.target.value || sinUbicacion) && onElegir(e.target.value)}
             className="w-full truncate bg-transparent font-medium text-[var(--pp-texto)] outline-none"
           >
-            {!local && <option value="">Elegir local…</option>}
+            {/* En el hub se puede volver a «Todos los locales» */}
+            {(!local || sinUbicacion) && <option value="">{sinUbicacion ? 'Todos los locales' : 'Elegir local…'}</option>}
             {ordenados.map((l) => (
               <option key={l.codigo} value={l.codigo}>
                 {l.nombre}
@@ -750,7 +770,11 @@ function Detalle({
   }, [art.articulo])
 
   const nombreLocal = localPorCodigo(locales, local)?.nombre ?? null
-  const filas = (local && stock?.locales[local]) || []
+  // Con local: su stock. Sin local elegido: la suma de todos los locales, así igual se ven talles y cantidades
+  const filas = useMemo(
+    () => (local ? stock?.locales[local] ?? [] : Object.values(stock?.locales ?? {}).flat()),
+    [local, stock],
+  )
   const sinDatosLocal = !!local && !!stock?.sin_datos.includes(local)
 
   const grilla = useMemo(() => {
@@ -893,7 +917,7 @@ function Detalle({
       <section className="mt-4 rounded-2xl border border-[var(--pp-borde)] bg-[var(--pp-panel)] p-4">
         <h3 className="flex items-center gap-1.5 pp-titulo text-base font-semibold text-[var(--pp-texto)]">
           <MapPin size={16} className="text-[var(--pp-acento-texto)]" aria-hidden />
-          {nombreLocal ? `Stock en ${nombreLocal} por color y talle` : 'Stock por color y talle'}
+          {nombreLocal ? `Stock en ${nombreLocal} por color y talle` : 'Stock en todos los locales por color y talle'}
         </h3>
         {estado === 'cargando' ? (
           <p className="flex items-center gap-2 py-6 text-sm text-[var(--pp-suave)]">
@@ -901,12 +925,10 @@ function Detalle({
           </p>
         ) : estado === 'error' ? (
           <p className="py-4 text-sm text-[var(--pp-suave)]">No pudimos consultar el stock en este momento. Probá de nuevo en un rato.</p>
-        ) : !local ? (
-          <p className="py-4 text-sm text-[var(--pp-suave)]">Elegí el local arriba para ver el stock por color y talle.</p>
         ) : sinDatosLocal ? (
           <p className="py-4 text-sm text-[var(--pp-suave)]">No pudimos leer el stock de este local ahora. Consultá a un vendedor.</p>
         ) : grilla.colores.length === 0 ? (
-          <p className="py-4 text-sm text-[var(--pp-suave)]">No hay stock de este artículo en {nombreLocal}.</p>
+          <p className="py-4 text-sm text-[var(--pp-suave)]">No hay stock de este artículo en {nombreLocal ?? 'ningún local'}.</p>
         ) : (
           <div className="mt-3 overflow-x-auto">
             {/* Columnas divididas; tocar una celda (o el talle de arriba) muestra abajo ese talle en los otros locales */}
@@ -982,7 +1004,7 @@ function Detalle({
                 })}
               </tbody>
             </table>
-            <p className="mt-2 text-xs text-[var(--pp-suave)]">Tocá un talle para ver si hay en otros locales.</p>
+            <p className="mt-2 text-xs text-[var(--pp-suave)]">{local ? 'Tocá un talle para ver si hay en otros locales.' : 'Suma de todos los locales. Tocá un talle para ver en qué local está, o elegí tu local arriba.'}</p>
           </div>
         )}
       </section>
@@ -993,8 +1015,8 @@ function Detalle({
           <div className="flex items-start gap-2">
             <h3 className="pp-titulo flex-1 text-base font-semibold text-[var(--pp-texto)]">
               {sel
-                ? `${sel.color != null ? `${sel.color} ${stock?.colores[sel.color] ?? ''} · ` : ''}talle ${sel.talle} en otros locales`
-                : 'También hay en'}
+                ? `${sel.color != null ? `${sel.color} ${stock?.colores[sel.color] ?? ''} · ` : ''}talle ${sel.talle} ${local ? 'en otros locales' : 'por local'}`
+                : local ? 'También hay en' : 'Hay en estos locales'}
             </h3>
             {sel && (
               <button
