@@ -83,11 +83,6 @@ export default function OrdenesCompra() {
   const [verAut, setVerAut] = useState(false)
   const sel = Number(params.get('n')) || null
   const setSel = (n: number | null) => setParams(n ? { n: String(n) } : {}, { replace: true })
-  /** En el celular el detalle queda abajo de la lista: al elegir una OC, bajar hasta él. */
-  const elegirEnCelular = (numero: number) => {
-    setSel(numero)
-    window.setTimeout(() => document.getElementById('detalle-oc')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60)
-  }
 
   const esCompras = can('ordenes_compra.compras')
 
@@ -231,7 +226,7 @@ export default function OrdenesCompra() {
                 const venc = vencida(o)
                 return (
                   <li key={o.numero}>
-                    <button type="button" onClick={() => elegirEnCelular(o.numero)}
+                    <button type="button" onClick={() => setSel(o.numero)}
                       className={`w-full px-3 py-3 text-left transition active:bg-surface2 ${sel === o.numero ? 'bg-lime-500/5' : ''} ${o.cancelada_at ? 'opacity-60' : ''}`}>
                       <div className="flex items-baseline justify-between gap-2">
                         <span className="font-bold tabular-nums text-ink">N° {o.numero}</span>
@@ -333,9 +328,15 @@ export default function OrdenesCompra() {
         </div>
 
         {oc && (
-          <DetalleOc key={oc.numero} oc={oc} onCerrar={() => setSel(null)} onCambio={() => void actualizarUna(oc.numero)}
-            onBorrada={() => { setSel(null); void cargar() }}
-            onEditar={(enfocarDragon) => setForm({ oc, enfocarDragon })} />
+          /* Celular/tablet: el detalle se abre como tarjeta flotante encima de la lista; en compu queda al costado. */
+          <div onClick={() => setSel(null)}
+            className="fixed inset-0 z-40 flex items-end bg-black/60 backdrop-blur-[2px] sm:items-center sm:justify-center sm:p-4 lg:static lg:z-auto lg:contents lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
+            <div onClick={(e) => e.stopPropagation()} className="w-full sm:max-w-lg lg:contents">
+              <DetalleOc key={oc.numero} oc={oc} onCerrar={() => setSel(null)} onCambio={() => void actualizarUna(oc.numero)}
+                onBorrada={() => { setSel(null); void cargar() }}
+                onEditar={(enfocarDragon) => setForm({ oc, enfocarDragon })} />
+            </div>
+          </div>
         )}
       </div>
 
@@ -404,6 +405,14 @@ function DetalleOc({ oc, onCerrar, onCambio, onBorrada, onEditar }: {
   const esCompras = can('ordenes_compra.compras')
   const puedeEditar = esCompras || (oc.creada_por === user?.id && !oc.pasos?.autor)
 
+  /** Con la tarjeta flotante abierta (celular/tablet) la lista de atrás no se mueve. */
+  useEffect(() => {
+    if (!window.matchMedia('(max-width: 1023px)').matches) return
+    const antes = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = antes }
+  }, [])
+
   useEffect(() => {
     void cargarEventos(oc.numero).then(setEventos).catch(() => setEventos([]))
     if (!oc.pasos?.autor && !oc.cancelada_at) void sugeridoDe(oc.numero).then(setSug).catch(() => setSug(null))
@@ -432,8 +441,8 @@ function DetalleOc({ oc, onCerrar, onCambio, onBorrada, onEditar }: {
   )
 
   return (
-    <aside id="detalle-oc" className="scroll-mt-3 self-start rounded-2xl border border-line bg-surface lg:sticky lg:top-3 lg:max-h-[calc(100vh-24px)] lg:overflow-auto">
-      <div className="flex items-start justify-between gap-2 border-b border-line p-4">
+    <aside className="max-h-[88dvh] overflow-auto rounded-t-2xl border border-line bg-[var(--surface-solid)] shadow-2xl lg:bg-surface sm:rounded-2xl lg:sticky lg:top-3 lg:max-h-[calc(100vh-24px)] lg:self-start lg:shadow-none">
+      <div className="sticky top-0 z-10 flex items-start justify-between gap-2 border-b border-line bg-[var(--surface-solid)] p-4">
         <div>
           <p className="text-xs text-sub">Orden de compra{oc.importada && ' · de la planilla'}</p>
           <h2 className="font-display text-xl font-bold text-ink">N° {oc.numero}</h2>
