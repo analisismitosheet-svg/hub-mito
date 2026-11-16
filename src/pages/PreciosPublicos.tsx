@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Camera, FileDown, Loader2, LocateFixed, MapPin, QrCode, Search, Store, Tag, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
-import ScannerCamara from '@/components/ScannerCamara'
+import EscanerZxing from '@/components/EscanerZxing'
 import { compararTalles } from '@/lib/ordenPiso'
 import { descargarQrPdf } from '@/lib/qrPdf'
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react'
@@ -404,7 +404,7 @@ export default function PreciosPublicos() {
         {camara && (
           <div className="mt-3">
             {/* QR, EAN-13/8, UPC, Code 39 y Code 128 */}
-            <ScannerCamara conQr onLectura={(t) => leido(t)} onCerrar={() => setCamara(false)} />
+            <EscanerZxing conQr onLectura={(t) => leido(t)} onCerrar={() => setCamara(false)} />
           </div>
         )}
         </div>
@@ -777,16 +777,21 @@ function Detalle({
   )
   const sinDatosLocal = !!local && !!stock?.sin_datos.includes(local)
 
+  // Curva completa: talles y colores que hay en CUALQUIER local (aunque este local no los tenga),
+  // así se puede tocar el talle que falta acá y ver en qué local está. Las cantidades son del local.
   const grilla = useMemo(() => {
-    const talles = [...new Set(filas.map((f) => f.talle))].sort(compararTalles)
+    const todasLasFilas = Object.values(stock?.locales ?? {}).flat()
+    const talles = [...new Set(todasLasFilas.map((f) => f.talle))].sort(compararTalles)
     const colores = new Map<string, Record<string, number>>()
+    for (const f of todasLasFilas) if (!colores.has(f.color)) colores.set(f.color, {})
     for (const f of filas) {
       const c = colores.get(f.color) ?? {}
       c[f.talle] = (c[f.talle] ?? 0) + f.stock
       colores.set(f.color, c)
     }
     return { talles, colores: [...colores.entries()].sort((a, b) => a[0].localeCompare(b[0])) }
-  }, [filas])
+  }, [filas, stock])
+  const localSinStock = grilla.colores.every(([, t]) => Object.keys(t).length === 0)
 
   // Talle elegido en la grilla del local (arranca con el de la etiqueta escaneada): abajo se ve
   // cuánto hay de ese color y talle en los otros locales. Tocar el encabezado = ese talle en todos los colores.
@@ -928,9 +933,14 @@ function Detalle({
         ) : sinDatosLocal ? (
           <p className="py-4 text-sm text-[var(--pp-suave)]">No pudimos leer el stock de este local ahora. Consultá a un vendedor.</p>
         ) : grilla.colores.length === 0 ? (
-          <p className="py-4 text-sm text-[var(--pp-suave)]">No hay stock de este artículo en {nombreLocal ?? 'ningún local'}.</p>
+          <p className="py-4 text-sm text-[var(--pp-suave)]">No hay stock de este artículo en ningún local.</p>
         ) : (
           <div className="mt-3 overflow-x-auto lg:overflow-x-visible">
+            {local && localSinStock && (
+              <p className="mb-2 text-sm text-[var(--pp-suave)]">
+                No hay en {nombreLocal}. Tocá el talle que buscás para ver en qué local está.
+              </p>
+            )}
             {/* Columnas divididas; tocar una celda (o el talle de arriba) muestra abajo ese talle en los otros locales */}
             <table className="w-full border-collapse overflow-hidden rounded-lg text-sm lg:table-fixed">
               <thead>

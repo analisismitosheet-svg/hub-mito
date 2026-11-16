@@ -25,7 +25,7 @@
 - **Cron en Hobby: máximo 1 vez por día** (`*/10 * * * *` hace fallar el deploy).
 
 ## Seguridad (revisión 13/10/2026, `sql/seguridad_2026_10.sql`)
-- **CSP en `vercel.json`** (`script-src 'self'`, sin inline ni eval). Un dominio externo nuevo que se cargue como script, iframe o fuente hay que sumarlo ahí; imágenes y `fetch` a `https:` ya están permitidos.
+- **CSP en `vercel.json`** (`script-src 'self' 'wasm-unsafe-eval'`, sin inline ni eval; `wasm-unsafe-eval` desde el 16/11/2026 solo para compilar el lector de códigos zxing-wasm de `/precios`). Un dominio externo nuevo que se cargue como script, iframe o fuente hay que sumarlo ahí; imágenes y `fetch` a `https:` ya están permitidos.
 - **Ventanas de impresión sin `<script>` inline**: heredan la CSP. Imprimir o agregar controles desde la ventana principal con `src/lib/ventanaImpresion.ts` (`imprimirCuandoCarguen`, `controlesHojaPedido`).
 - **Funciones `/api`**: no alcanza con un JWT válido (el registro es abierto y el usuario nuevo queda `pendiente`). Usar `autorizado(token, [permisos])` de `src/lib/apiAuth.ts` (RPC `api_autorizado`: aprobado + permiso). Ids que van en filtros de PostgREST con service role: validar con `esUuid` y `encodeURIComponent`.
 - **Storage**: el bucket `dni` es privado; las fotos se muestran con `createSignedUrl`. No crear buckets públicos con datos personales.

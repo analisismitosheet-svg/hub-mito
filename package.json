@@ -29,7 +29,8 @@
     "sharp": "^0.35.5",
     "web-push": "^3.6.7",
     "webfontloader": "^1.6.28",
-    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+    "zxing-wasm": "3.1.6"
   },
   "devDependencies": {
     "@types/leaflet": "^1.9.12",
