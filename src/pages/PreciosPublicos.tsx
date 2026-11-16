@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext'
 import ScannerCamara from '@/components/ScannerCamara'
 import { compararTalles } from '@/lib/ordenPiso'
 import { descargarQrPdf } from '@/lib/qrPdf'
-import { QRCodeCanvas } from 'qrcode.react'
+import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react'
 import './precios.css'
 import { RADIO_EN_LOCAL_M, localPorCodigo, porCercania, useLocalesPublicos, type LocalPublico } from '@/lib/localesPublicos'
 
@@ -444,6 +444,16 @@ const LINK_QR = 'https://hub-mito.vercel.app/precios'
 function BotonQr() {
   const lienzo = useRef<HTMLCanvasElement>(null)
   const [generando, setGenerando] = useState(false)
+  const [mostrar, setMostrar] = useState(false)
+
+  // Pantalla del QR: se cierra con Esc
+  useEffect(() => {
+    if (!mostrar) return
+    const tecla = (e: KeyboardEvent) => e.key === 'Escape' && setMostrar(false)
+    window.addEventListener('keydown', tecla)
+    return () => window.removeEventListener('keydown', tecla)
+  }, [mostrar])
+
   const descargar = async () => {
     const png = lienzo.current?.toDataURL('image/png')
     if (!png) return
@@ -458,6 +468,13 @@ function BotonQr() {
     <div className="mt-3 flex flex-wrap gap-2">
       {/* QR en alta (2000 px, corrección H) fuera de la vista: de acá sale el PDF y el PNG */}
       <QRCodeCanvas ref={lienzo} value={LINK_QR} size={2000} level="H" marginSize={4} className="hidden" />
+      <button
+        type="button"
+        onClick={() => setMostrar(true)}
+        className="btn-press inline-flex items-center gap-1.5 rounded-lg bg-[var(--pp-acento)] px-3 py-1.5 text-sm font-medium text-white hover:bg-[var(--pp-acento-hover)]"
+      >
+        <QrCode size={15} aria-hidden /> Mostrar QR
+      </button>
       <button
         type="button"
         onClick={() => void descargar()}
@@ -480,6 +497,29 @@ function BotonQr() {
       >
         <FileDown size={15} aria-hidden /> PNG
       </button>
+
+      {/* QR en pantalla completa, blanco y grande, para escanearlo desde la pantalla. Tocar o Esc cierra. */}
+      {mostrar && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="QR de la consulta de precios y stock"
+          onClick={() => setMostrar(false)}
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-white p-6 text-black"
+        >
+          <button
+            type="button"
+            onClick={() => setMostrar(false)}
+            aria-label="Cerrar"
+            className="absolute right-4 top-4 rounded-full p-2 text-neutral-600 hover:bg-neutral-100 hover:text-black"
+          >
+            <X size={26} aria-hidden />
+          </button>
+          <p className="text-center text-xl font-semibold">Escaneá para ver precios y stock</p>
+          <QRCodeSVG value={LINK_QR} level="H" marginSize={2} className="h-auto w-[min(80vw,70vh)]" />
+          <p className="text-center font-mono text-sm text-neutral-600">{LINK_QR}</p>
+        </div>
+      )}
     </div>
   )
 }
