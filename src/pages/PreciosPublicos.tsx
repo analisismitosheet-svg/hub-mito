@@ -36,6 +36,7 @@ type PreciosLocal = { local: string; lista: string | null; precios: Record<strin
 const LOCALES_CON_LISTA = new Set(['GPAZD'])
 
 const CLAVE_LOCAL = 'precios.local'
+const CLAVE_DESDE_HUB = 'precios.desdeHub'
 
 const pesos = (n: number) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n)
@@ -125,16 +126,27 @@ export default function PreciosPublicos() {
   )
 
   // Usuarios del hub (con sesión): sin ubicación, eligen el local de la lista (queda recordado)
+  // «Modo hub» solo entrando desde el hub (Locales → Consulta stock entre locales, que abre
+  // /precios?desde=hub) y con sesión. Un cliente que escanea el QR nunca lo ve, aunque ese
+  // celular tenga una sesión del hub abierta.
   const { user, loading: cargandoSesion } = useAuth()
-  const enHub = !!user
-
-  useEffect(() => {
-    const antes = document.title
-    document.title = 'Consulta de precios · MITO'
-    return () => {
-      document.title = antes
+  const [desdeHub] = useState(() => {
+    if (params.get('desde') === 'hub') {
+      try {
+        sessionStorage.setItem(CLAVE_DESDE_HUB, '1')
+      } catch {
+        /* sin almacenamiento: vale solo esta vez */
+      }
+      return true
     }
-  }, [])
+    try {
+      return sessionStorage.getItem(CLAVE_DESDE_HUB) === '1'
+    } catch {
+      return false
+    }
+  })
+  const enHub = !!user && desdeHub
+
 
   // Al entrar (clientes): detectar el local por ubicación (si vino por QR, igual se usa para ordenar los demás)
   useEffect(() => {
@@ -270,6 +282,34 @@ export default function PreciosPublicos() {
   // Marca del local: los Captain Fin (CF*) con su tema; el resto, Indonesia
   const marca = local?.codigo.startsWith('CF') ? 'captain' : 'indonesia'
 
+  // Pestaña y acceso directo con la marca (no la «M» del hub): ícono, título y color de barra
+  useEffect(() => {
+    const cambios: Array<() => void> = []
+    const poner = (selector: string, crear: () => HTMLElement, attr: string, valor: string) => {
+      let el = document.head.querySelector<HTMLElement>(selector)
+      const nuevo = !el
+      if (!el) {
+        el = crear()
+        document.head.appendChild(el)
+      }
+      const antes = el.getAttribute(attr)
+      el.setAttribute(attr, valor)
+      cambios.push(() => (nuevo ? el!.remove() : antes == null ? el!.removeAttribute(attr) : el!.setAttribute(attr, antes)))
+    }
+    const link = (rel: string) => () => Object.assign(document.createElement('link'), { rel })
+    const esCaptain = marca === 'captain'
+    poner('link[rel="icon"]', link('icon'), 'href', esCaptain ? '/marcas/icono-captain-64.png' : '/marcas/icono-indonesia-64.png')
+    poner('link[rel="icon"]', link('icon'), 'type', 'image/png')
+    poner('link[rel="apple-touch-icon"]', link('apple-touch-icon'), 'href', esCaptain ? '/marcas/icono-captain-180.png' : '/marcas/icono-indonesia-180.png')
+    poner('meta[name="theme-color"]', () => Object.assign(document.createElement('meta'), { name: 'theme-color' }), 'content', esCaptain ? '#ffffff' : '#000000')
+    const titulo = document.title
+    document.title = `${esCaptain ? 'Captain Fin' : 'Indonesia'} · Precios y stock`
+    return () => {
+      document.title = titulo
+      cambios.reverse().forEach((f) => f())
+    }
+  }, [marca])
+
   return (
     <div className="pp pb-10" data-marca={marca}>
       <header className="pp-cabecera">
@@ -277,7 +317,7 @@ export default function PreciosPublicos() {
           src={marca === 'captain' ? '/marcas/captain-fin.png' : '/marcas/indonesia.png'}
           alt={marca === 'captain' ? 'Captain Fin' : 'Indonesia'}
         />
-        {user && (
+        {enHub && (
           <Link to="/area/locales" className="pp-volver pp-no-imprimir" aria-label="Volver al hub">
             <ArrowLeft size={18} aria-hidden /> Hub
           </Link>
@@ -288,7 +328,7 @@ export default function PreciosPublicos() {
         <header className="pp-no-imprimir mb-4">
           <h1 className="pp-titulo text-xl font-semibold leading-tight text-[var(--pp-texto)]">Consulta de precios y stock</h1>
           <p className="text-sm text-[var(--pp-suave)]">Buscá por código, nombre o escaneá la etiqueta</p>
-          {user && <BotonQr />}
+          {enHub && <BotonQr />}
         </header>
 
         <BarraLocal
@@ -365,7 +405,7 @@ export default function PreciosPublicos() {
             marca={colorTalleDe(texto)}
             onElegirLocal={elegirLocal}
             onVolver={() => setElegido(null)}
-            conHub={!!user}
+            conHub={enHub}
           />
         ) : (
           <>
@@ -723,7 +763,20 @@ function Detalle({
     return { talles, colores: [...colores.entries()].sort((a, b) => a[0].localeCompare(b[0])) }
   }, [filas])
 
-  // Otros locales con stock del artículo (o del color/talle escaneado), los más cercanos primero
+  // Talle elegido en la grilla del local (arranca con el de la etiqueta escaneada): abajo se ve
+  // cuánto hay de ese color y talle en los otros locales. Tocar el encabezado = ese talle en todos los colores.
+  const [sel, setSel] = useState<{ color: string | null; talle: string } | null>(marca?.talle ? { color: marca.color, talle: marca.talle } : null)
+  useEffect(() => {
+    setSel(marca?.talle ? { color: marca.color, talle: marca.talle } : null)
+  }, [art.articulo, marca?.color, marca?.talle])
+  const refOtros = useRef<HTMLElement>(null)
+  const elegirCelda = (color: string | null, talle: string) => {
+    const igual = sel && sel.talle === talle && sel.color === color
+    setSel(igual ? null : { color, talle })
+    if (!igual) setTimeout(() => refOtros.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50)
+  }
+
+  // Otros locales con stock del artículo (o del color/talle elegido), los más cercanos primero
   const otros = useMemo(() => {
     if (!stock) return []
     const dist = ubicacion ? new Map(porCercania(locales, ubicacion.lat, ubicacion.lng).map((l) => [l.codigo, l.distancia])) : null
@@ -731,14 +784,14 @@ function Detalle({
       .map((l) => {
         const fs = stock.locales[l.codigo] ?? []
         const total = fs.reduce((s, f) => s + f.stock, 0)
-        const delEscaneado = marca
-          ? fs.filter((f) => f.color === marca.color && (!marca.talle || f.talle === marca.talle)).reduce((s, f) => s + f.stock, 0)
+        const delEscaneado = sel
+          ? fs.filter((f) => f.talle === sel.talle && (sel.color == null || f.color === sel.color)).reduce((s, f) => s + f.stock, 0)
           : null
         return { ...l, total, delEscaneado, distancia: dist?.get(l.codigo) ?? Infinity }
       })
-      .filter((l) => (marca ? (l.delEscaneado ?? 0) > 0 : l.total > 0))
+      .filter((l) => (sel ? (l.delEscaneado ?? 0) > 0 : l.total > 0))
       .sort((a, b) => (ubicacion ? a.distancia - b.distancia : b.total - a.total))
-  }, [stock, locales, local, ubicacion, marca])
+  }, [stock, locales, local, ubicacion, sel])
 
   // Solo usuarios del hub: el stock de TODOS los locales (local × color, por talle) (los clientes ven solo su local y la lista de otros)
   const todos = useMemo(() => {
@@ -852,56 +905,132 @@ function Detalle({
           <p className="py-4 text-sm text-[var(--pp-suave)]">No hay stock de este artículo en {nombreLocal}.</p>
         ) : (
           <div className="mt-3 overflow-x-auto">
-            <table className="w-full border-separate border-spacing-0 text-sm">
+            {/* Columnas divididas; tocar una celda (o el talle de arriba) muestra abajo ese talle en los otros locales */}
+            <table className="w-full border-collapse overflow-hidden rounded-lg text-sm">
               <thead>
                 <tr>
-                  <th className="sticky left-0 bg-[var(--pp-panel)] py-1.5 pr-3 text-left text-xs font-medium text-[var(--pp-suave)]">Color</th>
-                  {grilla.talles.map((t) => (
-                    <th
-                      key={t}
-                      className={`px-2 py-1.5 text-center text-xs font-semibold ${marca?.talle === t ? 'text-[var(--pp-acento-texto)]' : 'text-[var(--pp-suave)]'}`}
-                    >
-                      {t}
-                    </th>
-                  ))}
-                  <th className="px-2 py-1.5 text-center text-xs font-semibold text-[var(--pp-suave)]">Tot</th>
+                  <th className="sticky left-0 border border-[var(--pp-borde)] bg-[var(--pp-panel)] px-2 py-1.5 text-left text-xs font-medium text-[var(--pp-suave)]">
+                    Color
+                  </th>
+                  {grilla.talles.map((t) => {
+                    const activo = sel?.talle === t && sel.color == null
+                    return (
+                      <th key={t} className="border border-[var(--pp-borde)] p-0">
+                        <button
+                          type="button"
+                          onClick={() => elegirCelda(null, t)}
+                          className={`w-full px-2 py-1.5 text-center text-xs font-semibold ${
+                            activo
+                              ? 'bg-[var(--pp-acento)] text-white'
+                              : sel?.talle === t
+                                ? 'text-[var(--pp-acento-texto)]'
+                                : 'text-[var(--pp-suave)]'
+                          }`}
+                          aria-pressed={activo}
+                          title={`Ver el talle ${t} en otros locales`}
+                        >
+                          {t}
+                        </button>
+                      </th>
+                    )
+                  })}
                 </tr>
               </thead>
               <tbody>
                 {grilla.colores.map(([color, talles]) => {
-                  const esColor = marca?.color === color
+                  const esColor = sel?.color === color
                   return (
-                    <tr key={color} className={esColor ? 'bg-[var(--pp-acento-suave)]' : ''}>
-                      <td className="sticky left-0 border-t border-[var(--pp-borde)] bg-[var(--pp-panel)] py-2 pr-3 text-left">
-                        <span className={`font-medium ${esColor ? 'text-[var(--pp-acento-texto)]' : 'text-[var(--pp-texto)]'}`}>
+                    <tr key={color}>
+                      <td
+                        className={`sticky left-0 border border-[var(--pp-borde)] bg-[var(--pp-panel)] px-2 py-2 text-left font-medium ${
+                          esColor ? 'text-[var(--pp-acento-texto)]' : 'text-[var(--pp-texto)]'
+                        }`}
+                      >
+                        <span className="whitespace-nowrap">
                           {color} {stock?.colores[color] ?? ''}
                         </span>
                       </td>
                       {grilla.talles.map((t) => {
                         const n = talles[t] ?? 0
-                        const esCelda = esColor && marca?.talle === t
+                        const activo = sel?.color === color && sel.talle === t
                         return (
-                          <td
-                            key={t}
-                            className={`border-t border-[var(--pp-borde)] px-2 py-2 text-center tabular-nums ${
-                              n ? 'font-semibold text-[var(--pp-texto)]' : 'text-[var(--pp-tenue)]'
-                            } ${esCelda ? 'rounded-md ring-2 ring-inset ring-[var(--pp-acento)]' : ''}`}
-                          >
-                            {n || '–'}
+                          <td key={t} className="border border-[var(--pp-borde)] p-0">
+                            <button
+                              type="button"
+                              onClick={() => elegirCelda(color, t)}
+                              aria-pressed={activo}
+                              aria-label={`${color} ${stock?.colores[color] ?? ''} talle ${t}: ${n}. Ver en otros locales`}
+                              className={`w-full px-2 py-2 text-center tabular-nums ${
+                                activo
+                                  ? 'bg-[var(--pp-acento)] font-bold text-white'
+                                  : n
+                                    ? 'font-semibold text-[var(--pp-texto)] hover:bg-[var(--pp-acento-suave)]'
+                                    : 'text-[var(--pp-tenue)] hover:bg-[var(--pp-acento-suave)]'
+                              }`}
+                            >
+                              {n || '–'}
+                            </button>
                           </td>
                         )
                       })}
-                      <td className="border-t border-[var(--pp-borde)] px-2 py-2 text-center font-semibold tabular-nums text-[var(--pp-texto)]">
-                        {Object.values(talles).reduce((a, b) => a + b, 0)}
-                      </td>
                     </tr>
                   )
                 })}
               </tbody>
             </table>
+            <p className="mt-2 text-xs text-[var(--pp-suave)]">Tocá un talle para ver si hay en otros locales.</p>
           </div>
         )}
       </section>
+
+      {/* Otros locales: con un talle elegido, ese color y talle (o ese talle en todos los colores) */}
+      {estado === 'ok' && (sel || (!conHub && otros.length > 0)) && (
+        <section ref={refOtros} className="mt-4 scroll-mt-24 rounded-2xl border border-[var(--pp-borde)] bg-[var(--pp-panel)] p-4">
+          <div className="flex items-start gap-2">
+            <h3 className="pp-titulo flex-1 text-base font-semibold text-[var(--pp-texto)]">
+              {sel
+                ? `${sel.color != null ? `${sel.color} ${stock?.colores[sel.color] ?? ''} · ` : ''}talle ${sel.talle} en otros locales`
+                : 'También hay en'}
+            </h3>
+            {sel && (
+              <button
+                type="button"
+                onClick={() => setSel(null)}
+                aria-label="Quitar el talle elegido"
+                className="rounded-lg p-1 text-[var(--pp-suave)] hover:text-[var(--pp-texto)]"
+              >
+                <X size={16} aria-hidden />
+              </button>
+            )}
+          </div>
+          {otros.length === 0 ? (
+            <p className="py-3 text-sm text-[var(--pp-suave)]">No hay en otros locales.</p>
+          ) : (
+            <ul className="mt-2 divide-y divide-[var(--pp-borde)]">
+              {otros.map((l) => (
+                <li key={l.codigo}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onElegirLocal(l.codigo)
+                      window.scrollTo({ top: 0, behavior: 'smooth' })
+                    }}
+                    className="flex w-full items-center gap-3 py-2.5 text-left hover:opacity-80"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-[var(--pp-texto)]">{l.nombre}</span>
+                      {isFinite(l.distancia) && <span className="text-xs text-[var(--pp-suave)]">a {distancia(l.distancia)}</span>}
+                    </span>
+                    <span className="shrink-0 text-sm font-semibold tabular-nums text-[var(--pp-texto)]">
+                      {sel ? l.delEscaneado : l.total} u.
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
 
       {/* Solo usuarios del hub: stock de todos los locales (también sale al imprimir) */}
       {conHub && estado === 'ok' && todos.filas.length > 0 && (
@@ -945,36 +1074,6 @@ function Detalle({
         </section>
       )}
 
-      {/* Otros locales */}
-      {!conHub && estado === 'ok' && otros.length > 0 && (
-        <section className="mt-4 rounded-2xl border border-[var(--pp-borde)] bg-[var(--pp-panel)] p-4">
-          <h3 className="pp-titulo text-base font-semibold text-[var(--pp-texto)]">
-            {marca ? 'Tu color y talle en otros locales' : 'También hay en'}
-          </h3>
-          <ul className="mt-2 divide-y divide-[var(--pp-borde)]">
-            {otros.map((l) => (
-              <li key={l.codigo}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onElegirLocal(l.codigo)
-                    window.scrollTo({ top: 0, behavior: 'smooth' })
-                  }}
-                  className="flex w-full items-center gap-3 py-2.5 text-left hover:opacity-80"
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-[var(--pp-texto)]">{l.nombre}</span>
-                    {isFinite(l.distancia) && <span className="text-xs text-[var(--pp-suave)]">a {distancia(l.distancia)}</span>}
-                  </span>
-                  <span className="shrink-0 text-sm tabular-nums text-[var(--pp-suave)]">
-                    {marca ? l.delEscaneado : l.total} u.
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
     </div>
   )
 }

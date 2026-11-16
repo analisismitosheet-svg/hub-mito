@@ -202,7 +202,7 @@ export const APPS: AppDef[] = [
     description: 'Precio y stock por color y talle de cada local. Escaneá la etiqueta o buscá el artículo.',
     icon: PackageSearch,
     kind: 'internal',
-    target: '/precios',
+    target: '/precios?desde=hub',
     color: '#0ea5e9',
   },
   {

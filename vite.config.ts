@@ -43,6 +43,10 @@ export default defineConfig({
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [
           /^\/api\//,
+          // Consulta de precios para clientes (QR impreso en las remeras): siempre la versión
+          // publicada, nunca la copia guardada en el celular. Con una copia vieja (de antes de que
+          // existiera /precios) la app no conocía la ruta y mandaba al login.
+          /^\/precios/,
           // Nunca hacer fallback con el HTML de la app para llamadas a Supabase
           // (REST) ni a los endpoints de autenticación.
           /\/rest\/v1\//,
