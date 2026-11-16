@@ -324,7 +324,8 @@ export default function PreciosPublicos() {
         )}
         {local && <span className="pp-local">{local.codigo}</span>}
       </header>
-      <div className="mx-auto w-full max-w-lg px-4 pt-5">
+      {/* Celular: una columna. PC: todo el ancho (hasta 72rem) */}
+      <div className="mx-auto w-full max-w-lg px-4 pt-5 lg:max-w-6xl lg:px-8">
         <header className="pp-no-imprimir mb-4">
           <h1 className="pp-titulo text-xl font-semibold leading-tight text-[var(--pp-texto)]">Consulta de precios y stock</h1>
           <p className="text-sm text-[var(--pp-suave)]">Buscá por código, nombre o escaneá la etiqueta</p>
@@ -428,7 +429,7 @@ export default function PreciosPublicos() {
                   código de barras.
                 </div>
               ) : (
-                <ul className="space-y-2" aria-live="polite">
+                <ul className="space-y-2 lg:grid lg:grid-cols-2 lg:gap-2 lg:space-y-0" aria-live="polite">
                   {resultados.map((a) => {
                     const foto = Array.isArray(a.fotos) ? a.fotos[0] : undefined
                     return (
@@ -824,7 +825,9 @@ function Detalle({
           <ArrowLeft size={16} aria-hidden /> Buscar otro
         </button>
       </div>
-      <div className="overflow-hidden rounded-2xl border border-[var(--pp-borde)] bg-[var(--pp-panel)] shadow-soft-lg">
+      {/* PC: foto y precio a la izquierda (fijos al bajar), stock a la derecha */}
+      <div className="lg:grid lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)] lg:items-start lg:gap-6">
+      <div className="overflow-hidden rounded-2xl border border-[var(--pp-borde)] bg-[var(--pp-panel)] shadow-soft-lg lg:sticky lg:top-24">
         {fotos.length > 0 ? (
           <div className="bg-white">
             <img src={fotos[foto]} alt={art.descripcion} className="mx-auto aspect-square w-full max-w-sm object-contain" />
@@ -885,6 +888,7 @@ function Detalle({
         </div>
       </div>
 
+      <div className="lg:[&>section:first-child]:mt-0">
       {/* Stock del local */}
       <section className="mt-4 rounded-2xl border border-[var(--pp-borde)] bg-[var(--pp-panel)] p-4">
         <h3 className="flex items-center gap-1.5 pp-titulo text-base font-semibold text-[var(--pp-texto)]">
@@ -1073,7 +1077,8 @@ function Detalle({
           </div>
         </section>
       )}
-
+      </div>
+      </div>
     </div>
   )
 }
