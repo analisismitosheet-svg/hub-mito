@@ -111,7 +111,8 @@ const lbl = 'mb-1 block text-[10.5px] font-bold uppercase tracking-wide text-sub
 export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCerrar, onGuardada }: {
   oc: OrdenCompra | null; enfocarDragon?: boolean; nombreUsuario: string; onCerrar: () => void; onGuardada: (numero: number) => void
 }) {
-  const { can, isAdmin } = useAuth()
+  const { can, isAdmin: esAdminHub } = useAuth()
+  const isAdmin = esAdminHub || can('ordenes_compra.admin')
   const esCompras = can('ordenes_compra.compras')
   const hoy = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10)
   /* Responsable de una OC nueva: el usuario que la crea. La cuenta del admin (se llama «admin») no es una persona:

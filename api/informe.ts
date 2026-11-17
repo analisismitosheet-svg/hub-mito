@@ -263,7 +263,7 @@ async function manual(req: Req, res: Res) {
 
   // --- Telegram: estado del bot (pantalla de contactos) y conectar el webhook (solo admin) ---
   if (datos.telegram === 'estado') {
-    if (!(await tienePermiso(token, ['sistemas.informes.view']))) return res.status(403).json({ error: 'No tenés permiso para esta acción' })
+    if (!(await tienePermiso(token, ['sistemas.informes.view', 'ordenes_compra.admin']))) return res.status(403).json({ error: 'No tenés permiso para esta acción' })
     return res.status(200).json(await estadoTelegram(HUB_URL()))
   }
   if (datos.telegram === 'conectar') {

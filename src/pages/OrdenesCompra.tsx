@@ -48,7 +48,9 @@ const enKpi = (o: OrdenCompra, k: string) => {
 const sinWhatsapp = (t: string) => t.replace(/link de WhatsApp/gi, 'link').replace(/por WhatsApp/gi, 'por Telegram')
 
 export default function OrdenesCompra() {
-  const { isAdmin, can, perfil, user } = useAuth()
+  const { isAdmin: esAdminHub, can, perfil, user } = useAuth()
+  /** Admin del hub o admin del módulo (ordenes_compra.admin): borrar y autorizadores. */
+  const isAdmin = esAdminHub || can('ordenes_compra.admin')
   const [params, setParams] = useSearchParams()
   const [lista, setLista] = useState<OrdenCompra[] | null>(null)
   const [borrando, setBorrando] = useState<number | null>(null)
@@ -393,7 +395,8 @@ function BotonPedir({ o, chico, userId, esCompras, onListo }: {
 function DetalleOc({ oc, onCerrar, onCambio, onBorrada, onEditar }: {
   oc: OrdenCompra; onCerrar: () => void; onCambio: () => void; onBorrada: () => void; onEditar: (enfocarDragon?: boolean) => void
 }) {
-  const { isAdmin, can, user } = useAuth()
+  const { isAdmin: esAdminHub, can, user } = useAuth()
+  const isAdmin = esAdminHub || can('ordenes_compra.admin')
   const [eventos, setEventos] = useState<EventoOc[]>([])
   const [sug, setSug] = useState<{ nombres: string[]; resto: string[]; motivo: string | null; horas: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
