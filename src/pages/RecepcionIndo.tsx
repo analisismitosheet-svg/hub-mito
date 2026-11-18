@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   AlertTriangle, ArrowLeft, ArrowRight, Building2, CheckCheck, CheckCircle2, ClipboardCheck, Clock, Download,
   Link2, Loader2, Lock, Package, PackageCheck, Pencil, Plus, Search, Trash2, Upload, X,
@@ -601,6 +601,7 @@ export default function RecepcionIndo() {
   const { isAdmin, can } = useAuth()
   // Botón "Picking" por línea: abre el pedido de compra de esa OC en Depósito > Picking
   const puedePicking = isAdmin || can('picking.view')
+  const navigate = useNavigate()
   const [resumen, setResumen] = useState<Resumen>(VACIO)
   const [filas, setFilas] = useState<Fila[]>([])
   const [opciones, setOpciones] = useState<Opciones>({ depositos: [], proveedores: [], transportes: [], estados: [] })
@@ -763,6 +764,23 @@ export default function RecepcionIndo() {
         if (e) { setMsg({ ok: false, texto: e.message }); return }
         setMsg({ ok: true, texto: 'Línea borrada' })
         await cargar()
+      },
+    })
+  }
+
+  // "Picking previo" (marca del 13/11): se libera para poder hacer un picking nuevo de la factura
+  function pedirPickingNuevo(f: Fila, oc: string, destino: string) {
+    setConfirma({
+      titulo: 'Hacer un picking nuevo',
+      texto: `La factura ${f.n_factura} figura con un picking previo en la OC ${oc}.\n\nSe saca esa marca y se abre el picking para cargarlo de nuevo atado a esta factura.`,
+      accion: async () => {
+        if (!supabase) return
+        setSalvandoClave(f.clave)
+        setMsg(null)
+        const { error: e } = await supabase.rpc('liberar_picking_previo', { p_clave: f.clave, p_numero: oc })
+        setSalvandoClave(null)
+        if (e) { setMsg({ ok: false, texto: e.message }); return }
+        navigate(destino)
       },
     })
   }
@@ -1231,10 +1249,11 @@ export default function RecepcionIndo() {
                             const nro = hechos?.get(oc)
                             const hecho = nro !== undefined
                             const etiqueta = ocs.length > 1 ? ` ${oc}` : ''
+                            const destino = `/deposito/picking?oc=${encodeURIComponent(oc)}&prov=${encodeURIComponent(f.proveedor_codigo ?? '')}&rec=${encodeURIComponent(f.clave)}`
                             return (
+                              <span key={oc} className="inline-flex items-center gap-1">
                               <Link
-                                key={oc}
-                                to={`/deposito/picking?oc=${encodeURIComponent(oc)}&prov=${encodeURIComponent(f.proveedor_codigo ?? '')}&rec=${encodeURIComponent(f.clave)}`}
+                                to={destino}
                                 title={hecho ? `La factura ${f.n_factura} ya tiene ${nro ? `el picking #${nro}` : 'un picking anterior'} en la OC ${oc} (ver)` : `Hacer el picking de la factura ${f.n_factura}, OC ${oc}`}
                                 className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/50 ${
                                   hecho
@@ -1246,6 +1265,18 @@ export default function RecepcionIndo() {
                                 {hecho ? <CheckCircle2 size={11} aria-hidden /> : <PackageCheck size={11} aria-hidden />}
                                 {hecho ? (nro ? `Picking #${nro}${etiqueta}` : `Picking previo${etiqueta}`) : `Picking${etiqueta}`}
                               </Link>
+                              {hecho && !nro && !cerrada && (
+                                <button
+                                  type="button"
+                                  disabled={saving}
+                                  onClick={() => pedirPickingNuevo(f, oc, destino)}
+                                  title={`Sacar el picking previo y hacer un picking nuevo de la factura ${f.n_factura}, OC ${oc}`}
+                                  className="inline-flex items-center gap-1 rounded-md border border-violet-500/40 bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-violet-400 hover:bg-violet-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/50 disabled:opacity-50"
+                                >
+                                  <PackageCheck size={11} aria-hidden /> Nuevo
+                                </button>
+                              )}
+                              </span>
                             )
                           })}
                         </div>
