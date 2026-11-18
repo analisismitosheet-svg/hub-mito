@@ -59,6 +59,7 @@ El detalle largo y la historia de cada módulo siguen en `CONTEXTO.md` (raíz de
 | `/rrhh/*` | Empleados, CargaNovedades, ResumenNovedades, MotivosNovedades, Cumpleanios | [[Otros módulos]] |
 | `/contador-clientes`, `/tasa-conversion`, `/ia-camaras` | ContadorClientes, TasaConversion, IaCamaras, CalibrarCamara | [[Otros módulos]] |
 | `/datos-sql`, `/configuraciones/sql`, `/replicas` | DatosSql, SqlConexion, Replicas | [[Puente SQL y syncs]] |
+| `/tareas` | TareasTablero.tsx | [[Otros módulos]] |
 | `/usuarios`, `/roles`, `/locales`, `/configuraciones` | Usuarios, Roles, Locales, Configuraciones | [[Permisos y usuarios]] |
 
 Rutas: `src/App.tsx`. Menú por áreas y apps: `src/config/areas.ts` (agregar una app = un `AppDef` ahí).

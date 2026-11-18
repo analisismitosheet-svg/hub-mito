@@ -61,6 +61,7 @@ import {
   Tags,
   ReceiptText,
   Bot,
+  KanbanSquare,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
@@ -813,6 +814,18 @@ export const APPS: AppDef[] = [
     target: '/sistemas/franquicias',
     color: '#0891b2',
     permiso: 'mayorista.franquicias.view',
+  },
+  {
+    id: 'organizador-tareas',
+    areaId: 'administradores',
+    title: 'Organizador de tareas',
+    description: 'Tablero de ideas, en marcha y hechas, con fecha de idea y de terminada.',
+    icon: KanbanSquare,
+    kind: 'internal',
+    target: '/tareas',
+    color: '#8b5cf6',
+    permiso: 'tareas.view',
+    enMenu: true,
   },
   {
     id: 'chat-ia',

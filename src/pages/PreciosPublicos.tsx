@@ -29,6 +29,12 @@ type FilaStock = { color: string; talle: string; stock: number }
 type Stock = { detalle?: string; locales: Record<string, FilaStock[]>; colores: Record<string, string>; sin_datos: string[]; en: string }
 type Ubicacion = { lat: number; lng: number; precision: number }
 type Origen = 'qr' | 'ubicacion' | 'manual' | 'usuario'
+/** sinSenal = permiso dado pero el celular no devolvió posición a tiempo · no = el navegador no permite ubicación */
+type EstadoGeo = 'idle' | 'pidiendo' | 'ok' | 'denegado' | 'sinSenal' | 'no'
+
+const ES_IPHONE = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/i.test(navigator.userAgent)
+/** Navegadores de adentro de otras apps (Instagram, Facebook, TikTok…): suelen no dar la ubicación */
+const EN_OTRA_APP = typeof navigator !== 'undefined' && /Instagram|FBAN|FBAV|FB_IAB|Line\/|musical_ly|BytedanceWebview|Snapchat/i.test(navigator.userAgent)
 /** Precios de la lista propia del local (General Paz = Outlet); los que no están ahí van a Contado. */
 type PreciosLocal = { local: string; lista: string | null; precios: Record<string, number> }
 
@@ -102,25 +108,77 @@ export default function PreciosPublicos() {
   // "Usar mi ubicación" (el botón) pisa lo elegido a mano; la detección del arranque, no
   const forzarUbicacion = useRef(false)
   const [ubicacion, setUbicacion] = useState<Ubicacion | null>(null)
-  const [geo, setGeo] = useState<'idle' | 'pidiendo' | 'ok' | 'denegado' | 'no'>('idle')
+  const [geo, setGeo] = useState<EstadoGeo>('idle')
+  const vigilancia = useRef<{ id: number; tope: ReturnType<typeof setTimeout> } | null>(null)
 
+  /**
+   * Ubicación en dos pasos (18/11/2026: en varios celulares no se detectaba con la ubicación activada):
+   *  1) rápida, por wifi/antenas (acepta una de hasta 5 min): responde en 1-2 s aunque el GPS no tenga señal
+   *     adentro del local;
+   *  2) precisa, por GPS, que va afinando hasta 25 s (o hasta tener < 60 m).
+   * Antes se pedía solo con GPS y 12 s de tope: adentro de un local se vencía el tiempo y la página lo
+   * tomaba como «sin ubicación» (escondía el aviso y el botón).
+   */
   const pedirUbicacion = useCallback(
     (forzar = false) => {
-      if (!('geolocation' in navigator)) {
+      if (!('geolocation' in navigator) || !window.isSecureContext) {
         setGeo('no')
         return
       }
+      if (vigilancia.current) {
+        navigator.geolocation.clearWatch(vigilancia.current.id)
+        clearTimeout(vigilancia.current.tope)
+        vigilancia.current = null
+      }
       setGeo('pidiendo')
-      navigator.geolocation.getCurrentPosition(
+      let encontrada = false
+      const recibir = (p: GeolocationPosition) => {
+        encontrada = true
+        forzarUbicacion.current = forzar
+        const nueva = { lat: p.coords.latitude, lng: p.coords.longitude, precision: p.coords.accuracy || 0 }
+        // Se queda con la más precisa (la rápida puede llegar después que la del GPS)
+        setUbicacion((antes) => (!antes || nueva.precision <= antes.precision || antes.precision > 1000 ? nueva : antes))
+        setGeo('ok')
+      }
+      const fin = () => {
+        if (!vigilancia.current) return
+        navigator.geolocation.clearWatch(vigilancia.current.id)
+        clearTimeout(vigilancia.current.tope)
+        vigilancia.current = null
+      }
+      const fallo = (e: GeolocationPositionError) => {
+        if (e.code === e.PERMISSION_DENIED) {
+          fin()
+          setGeo('denegado')
+        }
+        // Sin señal o tiempo vencido: se sigue esperando al otro pedido; al tope se avisa
+      }
+      // 1) rápida
+      navigator.geolocation.getCurrentPosition(recibir, fallo, { enableHighAccuracy: false, timeout: 10_000, maximumAge: 300_000 })
+      // 2) precisa, afinando
+      const id = navigator.geolocation.watchPosition(
         (p) => {
-          const u = { lat: p.coords.latitude, lng: p.coords.longitude, precision: p.coords.accuracy || 0 }
-          forzarUbicacion.current = forzar
-          setUbicacion(u)
-          setGeo('ok')
+          recibir(p)
+          if (p.coords.accuracy <= 60) fin()
         },
-        (e) => setGeo(e.code === e.PERMISSION_DENIED ? 'denegado' : 'no'),
-        { enableHighAccuracy: true, timeout: 12_000, maximumAge: 60_000 },
+        fallo,
+        { enableHighAccuracy: true, timeout: 25_000, maximumAge: 0 },
       )
+      const tope = setTimeout(() => {
+        fin()
+        if (!encontrada) setGeo((g) => (g === 'denegado' ? g : 'sinSenal'))
+      }, 25_000)
+      vigilancia.current = { id, tope }
+    },
+    [],
+  )
+  // Al salir de la página se deja de seguir la ubicación
+  useEffect(
+    () => () => {
+      if (vigilancia.current) {
+        navigator.geolocation.clearWatch(vigilancia.current.id)
+        clearTimeout(vigilancia.current.tope)
+      }
     },
     [],
   )
@@ -593,7 +651,7 @@ function BarraLocal({
   locales: LocalPublico[]
   local: { codigo: string; origen: Origen } | null
   ubicacion: Ubicacion | null
-  geo: 'idle' | 'pidiendo' | 'ok' | 'denegado' | 'no'
+  geo: EstadoGeo
   onElegir: (codigo: string) => void
   onUbicar: () => void
   /** usuarios del hub: sin ubicación (ni aviso ni botón), solo la lista */
@@ -683,26 +741,53 @@ function BarraLocal({
           ))}
         </div>
       )}
-      {/* Al abrir el link se pide la ubicación; mientras no esté activada, se avisa bien grande */}
-      {!sinUbicacion && local?.origen !== 'qr' && (geo === 'idle' || geo === 'pidiendo' || geo === 'denegado') && (
+      {/* Al abrir el link se pide la ubicación; mientras no la tengamos, se avisa bien grande */}
+      {!sinUbicacion && local?.origen !== 'qr' && (geo === 'idle' || geo === 'pidiendo' || geo === 'denegado' || geo === 'sinSenal') && (
         <div className="mt-3 rounded-xl border border-[var(--pp-acento-borde)] bg-[var(--pp-acento-suave)] p-3">
           <p className="flex items-start gap-2 text-sm font-medium text-[var(--pp-texto)]">
             <MapPin size={18} className="mt-0.5 shrink-0 text-[var(--pp-acento-texto)]" aria-hidden />
             {geo === 'denegado'
-              ? 'Tu ubicación está desactivada'
-              : 'Activá tu ubicación para ver el stock del local donde estás'}
+              ? 'Tu ubicación está bloqueada para esta página'
+              : geo === 'sinSenal'
+                ? 'No pudimos encontrar tu ubicación'
+                : geo === 'pidiendo'
+                  ? 'Buscando tu ubicación…'
+                  : 'Activá tu ubicación para ver el stock del local donde estás'}
           </p>
-          {geo === 'denegado' ? (
-            <p className="mt-1 pl-[26px] text-xs text-[var(--pp-suave)]">
-              Tocá el candado o los ajustes al lado de la dirección de la página → <b>Permisos</b> →{' '}
-              <b>Ubicación</b> → <b>Permitir</b>, y volvé a cargar. Si preferís, elegí el local de la lista.
-            </p>
-          ) : (
-            <p className="mt-1 pl-[26px] text-xs text-[var(--pp-suave)]">
-              Tu celular te va a preguntar si nos dejás usarla: tocá <b>Permitir</b>. Solo la usamos para saber en qué
-              local estás; no se guarda ni se envía.
-            </p>
-          )}
+          <div className="mt-1 space-y-1 pl-[26px] text-xs text-[var(--pp-suave)]">
+            {EN_OTRA_APP && (
+              <p>
+                <b>Estás adentro de otra app.</b> Abrí el link en {ES_IPHONE ? 'Safari' : 'Chrome'} (menú <b>⋯</b> →{' '}
+                <b>Abrir en el navegador</b>): desde acá muchas veces no se puede usar la ubicación.
+              </p>
+            )}
+            {geo === 'denegado' ? (
+              ES_IPHONE ? (
+                <p>
+                  En el iPhone: <b>Ajustes</b> → <b>Privacidad y seguridad</b> → <b>Localización</b> (activada) →{' '}
+                  <b>Sitios web de Safari</b> (o Chrome) → <b>Al usar la app</b>. Después volvé a cargar la página.
+                </p>
+              ) : (
+                <p>
+                  Tocá el candado al lado de la dirección → <b>Permisos</b> → <b>Ubicación</b> → <b>Permitir</b>, y
+                  fijate que la ubicación del celular esté prendida. Después volvé a cargar.
+                </p>
+              )
+            ) : geo === 'sinSenal' ? (
+              <p>
+                Puede pasar adentro del local o con la ubicación en «ahorro de batería».
+                {ES_IPHONE ? ' Revisá que esté activada la «Ubicación exacta».' : ' Probá prender el wifi, que ayuda a ubicarte.'}{' '}
+                Probá de nuevo o elegí tu local de la lista.
+              </p>
+            ) : geo === 'pidiendo' ? (
+              <p>Si tu celular te pregunta, tocá <b>Permitir</b>.</p>
+            ) : (
+              <p>
+                Tu celular te va a preguntar si nos dejás usarla: tocá <b>Permitir</b>. Solo la usamos para saber en qué
+                local estás; no se guarda ni se envía.
+              </p>
+            )}
+          </div>
           <button
             type="button"
             onClick={onUbicar}
@@ -710,9 +795,12 @@ function BarraLocal({
             className="btn-press mt-2.5 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-[var(--pp-acento)] py-2 text-sm font-medium text-white shadow-soft hover:bg-[var(--pp-acento-hover)] disabled:opacity-60"
           >
             {geo === 'pidiendo' ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <LocateFixed size={16} aria-hidden />}
-            {geo === 'pidiendo' ? 'Esperando permiso…' : geo === 'denegado' ? 'Probar de nuevo' : 'Activar ubicación'}
+            {geo === 'pidiendo' ? 'Buscando…' : geo === 'denegado' || geo === 'sinSenal' ? 'Probar de nuevo' : 'Activar ubicación'}
           </button>
         </div>
+      )}
+      {!sinUbicacion && geo === 'no' && !local && (
+        <p className="mt-2 text-xs text-[var(--pp-suave)]">Este navegador no permite usar la ubicación: elegí tu local de la lista.</p>
       )}
     </div>
   )

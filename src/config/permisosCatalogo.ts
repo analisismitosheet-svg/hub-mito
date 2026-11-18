@@ -40,6 +40,7 @@ import {
   Wrench,
   Tags,
   ReceiptText,
+  KanbanSquare,
 } from 'lucide-react'
 
 /**
@@ -337,6 +338,12 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
   {
     id: 'mantenimiento-tareas', areaId: 'arquitectura', titulo: 'Mis tareas', descripcion: 'Tareas programadas: empezar y terminar',
     icon: Wrench, color: '#64748b', acciones: { ver: 'requerimientos.tareas' },
+  },
+
+  // ===== Organizador de tareas (acceso directo del menú) =====
+  {
+    id: 'organizador-tareas', areaId: 'administradores', titulo: 'Organizador de tareas', descripcion: 'Tablero propio: ideas, en marcha y hechas',
+    icon: KanbanSquare, color: '#8b5cf6', acciones: { ver: 'tareas.view' },
   },
 
   // ===== Configuración =====

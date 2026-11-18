@@ -98,6 +98,7 @@ const StockValorizado = lazy(() => import('@/pages/StockValorizado'))
 const RepoDiariaMito = lazy(() => import('@/pages/RepoDiariaMito'))
 const VentasWeb = lazy(() => import('@/pages/VentasWeb'))
 const ChatIa = lazy(() => import('@/pages/ChatIa'))
+const TareasTablero = lazy(() => import('@/pages/TareasTablero'))
 const PreciosPublicos = lazy(() => import('@/pages/PreciosPublicos'))
 
 export default function App() {
@@ -816,6 +817,14 @@ export default function App() {
               <ProtectedRoute>
                 <ComingSoon title="Reportes" />
               </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tareas"
+            element={
+              <PermissionRoute permiso="tareas.view">
+                <TareasTablero />
+              </PermissionRoute>
             }
           />
           <Route

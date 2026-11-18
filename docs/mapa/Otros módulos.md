@@ -18,3 +18,8 @@
 - Zonas (`locales.zona`, también en Requerimientos): Centro, Norte, Sur, Oeste, Carlos Paz y Río Cuarto (CFR4 sola). Las cards se ordenan por la zona con más efectivo (1°, 2°…).
 - Las monedas de $ 1 son dólares cargados en pesos: se dejan como «Monedas» a propósito (no es un error de carga).
 - Local: cartel rojo en el Layout (`AvisoArqueo.tsx`, suena/vibra, «Callar 15 min»), tarjeta «Arqueos de hoy» en el menú y aviso en la campana (`useArqueoLocal`, una consulta por minuto solo con la pestaña visible). Con la pestaña oculta llega por push (`/api/push?tipo=arqueo`, sin auth, lo llama el puente). Sin sync en 10 min no se avisa.
+
+## Organizador de tareas (18/11/2026)
+- Tablero tipo Trello en `/tareas` (`TareasTablero.tsx`), acceso directo del menú (`organizador-tareas`, permiso `tareas.view`; el admin siempre).
+- Columnas Ideas → En marcha → Hechas; se arrastra o se usan los botones Arrancar/Terminar. Fechas `fecha_idea`, `fecha_inicio`, `fecha_fin` se ponen solas al mover y se corrigen tocando la tarjeta (el estado sale de las fechas). Etiquetas fijas en el front.
+- Tabla `tareas_tablero` (`sql/tareas_tablero.sql`): cada uno ve lo suyo; el admin ve todo con selector (RPC `tareas_tablero_duenos`).
