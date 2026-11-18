@@ -22,6 +22,7 @@ export default function Documentos() {
       backTo={`/area/${areaId}`}
       backLabel={area?.name ?? 'Área'}
       icon={FolderOpen}
+      soloDescargaLectores
     />
   )
 }

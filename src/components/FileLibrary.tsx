@@ -47,6 +47,8 @@ interface FileLibraryProps {
   pathPrefix?: string
   backTo: string
   backLabel: string
+  /** Quien solo puede ver (sin subir/editar/borrar) ve únicamente el botón Descargar, sin visor. */
+  soloDescargaLectores?: boolean
   icon?: typeof FolderOpen
 }
 
@@ -84,6 +86,7 @@ export default function FileLibrary(props: FileLibraryProps) {
   const puedeCrear = can(`${permisoPrefix}.create`)
   const puedeEditar = can(`${permisoPrefix}.edit`)
   const puedeEliminar = can(`${permisoPrefix}.delete`)
+  const soloDescarga = !!props.soloDescargaLectores && !puedeCrear && !puedeEditar && !puedeEliminar
   const Icono = props.icon ?? FolderOpen
 
   const [items, setItems] = useState<Archivo[]>([])
@@ -245,12 +248,21 @@ export default function FileLibrary(props: FileLibraryProps) {
                   </div>
                 </div>
                 <div className="mt-auto flex items-center gap-1.5">
-                  <button
-                    onClick={() => ver(a)}
-                    className="btn-press inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-line bg-surface2 px-2 py-1.5 text-xs font-medium text-ink hover:bg-line"
-                  >
-                    <Eye size={14} aria-hidden /> Ver
-                  </button>
+                  {soloDescarga ? (
+                    <button
+                      onClick={() => descargar(a)}
+                      className="btn-press inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-line bg-surface2 px-2 py-1.5 text-xs font-medium text-ink hover:bg-line"
+                    >
+                      <Download size={14} aria-hidden /> Descargar
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => ver(a)}
+                      className="btn-press inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-line bg-surface2 px-2 py-1.5 text-xs font-medium text-ink hover:bg-line"
+                    >
+                      <Eye size={14} aria-hidden /> Ver
+                    </button>
+                  )}
                   {puedeEditar && (
                     <button onClick={() => setEditando(a)} aria-label={`Editar ${a.nombre}`} className="btn-press rounded-lg border border-line bg-surface2 p-1.5 text-sub hover:text-ink">
                       <Pencil size={14} aria-hidden />
