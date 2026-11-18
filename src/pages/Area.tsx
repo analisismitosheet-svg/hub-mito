@@ -25,7 +25,7 @@ export default function Area() {
   const apps = appsDeAreaConOverrides(areaId, overrides)
     .filter((a) => (!a.permiso || can(a.permiso)) && (!a.soloLegajo || esLegajo || isAdmin) && (!a.soloDeposito || veMiRepoDeposito))
     .sort((a, b) => a.title.localeCompare(b.title, 'es', { sensitivity: 'base' }))
-  const verArchivos = MOSTRAR_ARCHIVOS && can('documentos.view') && !AREAS_SIN_ARCHIVOS.has(areaId)
+  const verArchivos = AREAS_CON_ARCHIVOS.has(areaId) && can('documentos.view')
 
   // La luz de fondo de arriba toma el color del área mientras estás adentro
   useEffect(() => {
@@ -88,7 +88,7 @@ export default function Area() {
                 </div>
                 <div>
                   <h3 className="font-display text-lg font-semibold tracking-tight text-ink">Archivos</h3>
-                  <p className="mt-1 text-sm text-sub">Fotos, PDF, Excel y documentos del área.</p>
+                  <p className="mt-1 text-sm text-sub">Fotos, PDF, Excel y documentos compartidos.</p>
                 </div>
                 <span className="card-link mt-auto flex items-center gap-1.5 text-sm font-semibold transition-[gap] duration-300 group-hover:gap-2.5">
                   Abrir
@@ -103,11 +103,11 @@ export default function Area() {
   )
 }
 
-/** Tarjeta "Archivos" oculta en todas las áreas por ahora (pedido del 04/11/2026); poner en true para volver a mostrarla. */
-const MOSTRAR_ARCHIVOS = false
-
-/** Áreas donde no se muestra la tarjeta "Archivos" (Administradores: lo pidió sacar el usuario el 30/10/2026). */
-const AREAS_SIN_ARCHIVOS = new Set(['administradores'])
+/**
+ * Áreas que muestran la tarjeta "Archivos". Se ocultó en todas el 04/11/2026 y el 18/11/2026
+ * se volvió a habilitar solo en Locales para compartir archivos con todos.
+ */
+const AREAS_CON_ARCHIVOS = new Set(['locales'])
 
 /** Un color por tarjeta sin repetir tonos en el área (Archivos usa el del área). */
 function conColores(
