@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { COLUMNAS_ARMADO, PRIORIDADES, nroDePedido, ordenArmados, paraLegajo, type Armado, type PrioridadArmado } from '@/lib/armados'
-import { notificarArmado, prepararAudio, sonarArmado, vibrarArmado } from '@/lib/alarma'
+import { notificarArmado, pedirPermisoNotificaciones, prepararAudio, sonarArmado, vibrarArmado } from '@/lib/alarma'
 import { nombreMotivoPausa } from '@/components/MotivoPausa'
 import { suscribirCambios } from '@/lib/realtime'
 import { useArqueoLocal } from '@/lib/useArqueoLocal'
@@ -165,7 +165,51 @@ export default function CampanaNotificaciones() {
    * 8 minutos) hasta que alguien lo acepte o el mayorista lo cierre.
    */
   // El audio del celular arranca trabado hasta el primer toque: se destraba ahí
-  useEffect(() => { if (verArmados || avisosIndo) prepararAudio() }, [verArmados, avisosIndo])
+  useEffect(() => { if (verArmados || avisosIndo || esLocal) prepararAudio() }, [verArmados, avisosIndo, esLocal])
+
+  /**
+   * Lotes de Transferencias / Cascada que el local tiene que mandar y todavía no
+   * empezó (ningún renglón suyo marcado). Suenan al llegar y repican con el mismo
+   * backoff que los armados (1, 2, 4, 8 y cada 8 min) hasta que marque el primero.
+   * Lo llena el sondeo de abajo; el repique corre con su propio reloj, sin ir a la base.
+   */
+  const lotesSinEmpezarRef = useRef<Map<string, { nombre: string; articulos: number; n: number; proxima: number }> | null>(null)
+
+  // El permiso de notificaciones del sistema pide un toque: se pide en el primero
+  useEffect(() => {
+    if (!esLocal) return
+    const pedir = () => pedirPermisoNotificaciones()
+    window.addEventListener('pointerdown', pedir, { once: true })
+    return () => window.removeEventListener('pointerdown', pedir)
+  }, [esLocal])
+
+  useEffect(() => {
+    if (!esLocal) return
+    const revisar = () => {
+      const mapa = lotesSinEmpezarRef.current
+      if (!mapa) return
+      const t = Date.now()
+      const toca = Array.from(mapa.entries()).filter(([, l]) => t >= l.proxima)
+      if (!toca.length) return
+      for (const [, l] of toca) {
+        l.n += 1
+        l.proxima = t + esperaRepique(l.n)
+      }
+      const [loteId, primero] = toca[0]
+      const repique = primero.n > 1
+      sonarArmado('urgente')
+      notificarArmado(
+        repique
+          ? `⏳ Transferencia sin empezar: ${primero.nombre}`
+          : toca.length === 1 ? `📦 Transferencia nueva: ${primero.nombre}` : `📦 ${toca.length} transferencias nuevas para mandar`,
+        `${primero.articulos} artículo${primero.articulos === 1 ? '' : 's'} para mandar · deja de sonar cuando marques el primero`,
+        `/transferencias?abrir=${loteId}`,
+      )
+    }
+    // Corre aunque la pestaña esté oculta: no consulta la base, solo suena
+    const reloj = setInterval(revisar, 15000)
+    return () => clearInterval(reloj)
+  }, [esLocal])
 
   const [armados, setArmados] = useState<Armado[]>([])
   const [avisoArmados, setAvisoArmados] = useState(false)
@@ -433,6 +477,34 @@ export default function CampanaNotificaciones() {
             const nombre = nombreLote.get(loteId) ?? 'Archivo cargado'
             notis.push({ id: `tf-${loteId}`, tipo: 'transferencias', titulo: nombre, detalle: `${g.count} artículo${g.count > 1 ? 's' : ''} sin marcar`, ruta: `/transferencias?abrir=${loteId}`, fecha: g.fecha, destinoId: loteId })
           }
+          // Aviso con sonido: lotes de las últimas 24 h en los que el local todavía no
+          // marcó ningún renglón. Apenas marca uno (hecho, señado o faltante) deja de sonar.
+          const limite = Date.now() - 24 * 3600_000
+          const recientes = Array.from(porLote.entries())
+            .filter(([, g]) => new Date(g.fecha).getTime() >= limite)
+            .map(([id]) => id)
+          const empezados = new Set<string>()
+          if (recientes.length) {
+            const { data: marcados, error: errMarcados } = await sb.from('transfer_items').select('lote_id')
+              .in('lote_id', recientes).in('origen', origenesUsuario).neq('estado', 'pendiente').limit(5000)
+            if (errMarcados) recientes.length = 0 // sin dato: mejor no sonar de más
+            for (const m of (marcados ?? []) as { lote_id: string }[]) empezados.add(m.lote_id)
+          }
+          if (activo) {
+            const primeraVez = lotesSinEmpezarRef.current === null
+            const mapa = lotesSinEmpezarRef.current ?? new Map()
+            lotesSinEmpezarRef.current = mapa
+            const sinEmpezar = new Set(recientes.filter((id) => !empezados.has(id)))
+            for (const id of sinEmpezar) {
+              const g = porLote.get(id)!
+              const l = mapa.get(id)
+              if (l) { l.articulos = g.count; continue }
+              // Al abrir el hub el audio arranca trabado hasta el primer toque: el
+              // primer aviso de lo que ya estaba cae al minuto; lo nuevo, en el acto.
+              mapa.set(id, { nombre: nombreLote.get(id) ?? 'Archivo cargado', articulos: g.count, n: 0, proxima: primeraVez ? Date.now() + 60_000 : 0 })
+            }
+            for (const id of Array.from(mapa.keys())) if (!sinEmpezar.has(id)) mapa.delete(id)
+          }
         }
       }
       // 6b) Requerimientos del local (sql/requerimientos.sql): los arreglos programados con día y
@@ -494,7 +566,19 @@ export default function CampanaNotificaciones() {
     }, 60000)
     const alVolver = () => { if (document.visibilityState === 'visible') void cargar() }
     document.addEventListener('visibilitychange', alVolver)
-    return () => { activo = false; clearInterval(intervalo); document.removeEventListener('visibilitychange', alVolver) }
+    // Lote nuevo (sql/transfer_lotes_realtime.sql): la base avisa aunque la pestaña esté
+    // oculta. Se espera 20 s para que terminen de grabarse sus renglones.
+    const desuscribir = esLocal ? suscribirCambios(['transfer_lotes'], () => void cargar(), { espera: 20000 }) : () => {}
+    // El local marcó un renglón en Transferencias: se relee ya para cortar el repique
+    const alMarcar = () => void cargar()
+    window.addEventListener('hub-transferencia-marcada', alMarcar)
+    return () => {
+      activo = false
+      clearInterval(intervalo)
+      desuscribir()
+      window.removeEventListener('hub-transferencia-marcada', alMarcar)
+      document.removeEventListener('visibilitychange', alVolver)
+    }
   }, [isAdmin, esMayorista, esLocal, avisosIndo, can, origenesUsuario, visible, perfil?.local])
 
   if (!visible || !supabase) return null

@@ -626,7 +626,7 @@ export default function Transferencias({ embebido = false }: { embebido?: boolea
     if (error) {
       setError(error.message)
       await cargar()
-    }
+    } else window.dispatchEvent(new Event('hub-transferencia-marcada')) // la campana corta el repique
   }
 
   // Marca varios ítems de una (ej. todo un destino)
@@ -648,7 +648,7 @@ export default function Transferencias({ embebido = false }: { embebido?: boolea
     if (error) {
       setError(error.message)
       await cargar()
-    }
+    } else window.dispatchEvent(new Event('hub-transferencia-marcada')) // la campana corta el repique
   }
 
   function onSelectFile(e: React.ChangeEvent<HTMLInputElement>) {
