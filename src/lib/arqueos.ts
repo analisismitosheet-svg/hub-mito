@@ -1,8 +1,8 @@
 /* ------------------------------------------------------------------ */
 /*  Arqueos de caja de los locales (sql/arqueos_locales.sql).           */
 /*  El puente copia DWH.dbo.vw_FACT_ARQUEO cada 2 min. Horarios fijos   */
-/*  10, 14, 19 y 22: un arqueo vale si se hace desde 1 h 30 antes hasta */
-/*  1 h después; 15 min después del horario sin arqueo se avisa al      */
+/*  10, 14, 19 y 22: un arqueo vale si se hace desde 1 h 30 antes (el  */
+/*  de las 19 desde las 17:00) hasta 1 h después; 15 min después del horario sin arqueo se avisa al      */
 /*  local cada 15 min hasta que arquee o se cierre el horario.          */
 /*  La misma regla está en arqueos_avisos_tomar() (push): cambiar las   */
 /*  dos juntas.                                                          */
@@ -11,6 +11,8 @@ import { supabase } from '@/lib/supabase'
 
 export const HORARIOS_ARQUEO = [10, 14, 19, 22]
 const ANTES = 90
+/** Minutos antes del horario desde los que vale el arqueo (el de las 19 vale desde las 17:00) */
+const antesDe = (h: number) => (h === 19 ? 120 : ANTES)
 const DESPUES = 60
 const AVISO = 15
 const ZONA_HORARIA = 'America/Argentina/Cordoba'
@@ -57,12 +59,13 @@ export function estadoHorarios(horas: string[], ahoraMin: number, marcados: numb
   const mins = horas.map((h) => ({ h: hhmm(h), m: minutos(h) })).sort((a, b) => a.m - b.m)
   return HORARIOS_ARQUEO.map((hh, i) => {
     const h = hh * 60
-    const dentro = mins.find((x) => x.m >= h - ANTES && x.m <= h + DESPUES)
+    const dentro = mins.find((x) => x.m >= h - antesDe(hh) && x.m <= h + DESPUES)
     if (dentro) return { horario: hh, estado: 'ok', hora: dentro.h }
     if (marcados.includes(hh)) return { horario: hh, estado: 'marcado' }
     if (ahoraMin < h + AVISO) return { horario: hh, estado: 'pendiente' }
-    const proximo = (HORARIOS_ARQUEO[i + 1] ?? 24) * 60
-    const tarde = mins.find((x) => x.m > h + DESPUES && x.m < proximo - ANTES)
+    const sig = HORARIOS_ARQUEO[i + 1]
+    const desdeProximo = sig === undefined ? 24 * 60 : sig * 60 - antesDe(sig)
+    const tarde = mins.find((x) => x.m > h + DESPUES && x.m < desdeProximo)
     if (tarde) return { horario: hh, estado: 'tarde', hora: tarde.h }
     return { horario: hh, estado: ahoraMin <= h + DESPUES ? 'avisando' : 'no' }
   })

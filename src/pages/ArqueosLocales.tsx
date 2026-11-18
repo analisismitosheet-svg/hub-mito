@@ -346,7 +346,7 @@ export default function ArqueosLocales() {
             <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
               <h2 className="font-display text-base font-semibold text-ink">Horarios {esHoy ? 'de hoy' : `del ${ddmm(fecha)}`}</h2>
               <p className="text-xs text-sub">
-                Vale desde 1 h 30 antes hasta 1 h después · avisa a los 15 min y cada 15 min{ultimo ? ` · último arqueo ${hhmm(ultimo.hora)} (${ultimo.nombre})` : ''}
+                Vale desde 1 h 30 antes (el de las 19, desde las 17:00) hasta 1 h después · avisa a los 15 min y cada 15 min{ultimo ? ` · último arqueo ${hhmm(ultimo.hora)} (${ultimo.nombre})` : ''}
               </p>
             </div>
             <div className="overflow-x-auto">

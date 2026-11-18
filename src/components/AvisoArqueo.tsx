@@ -165,7 +165,7 @@ function ArqueosDeHoy({ local }: { local: string }) {
         </p>
       </div>
       <GrillaHorarios horarios={e.horarios} />
-      <p className="mt-2 text-[11px] text-sub">Cada arqueo vale desde 1 h 30 antes hasta 1 h después del horario.</p>
+      <p className="mt-2 text-[11px] text-sub">Cada arqueo vale desde 1 h 30 antes hasta 1 h después del horario (el de las 19, desde las 17:00).</p>
       <MisArqueosHoy local={local} fecha={ahoraCordoba().fecha} leido={e.leido} />
       {!e.activo && <p className="mt-2 text-xs text-amber-300">Este local no tiene arqueos en las últimas 2 semanas o tiene los avisos apagados.</p>}
       <div className="mt-3">

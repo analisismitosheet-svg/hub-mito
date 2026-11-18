@@ -41,7 +41,7 @@ create policy arqueos_marcados_ver on public.arqueos_marcados for select to auth
   using (private.tengo_permiso('arqueos.view') or local = private.mi_local());
 revoke insert, update, delete on public.arqueos_marcados from anon, authenticated;
 
--- El local de la cuenta marca un horario de hoy (solo 10/14/19/22 y desde 1 h 30 antes).
+-- El local de la cuenta marca un horario de hoy (solo 10/14/19/22 y desde 1 h 30 antes; el de las 19 desde las 17:00).
 create or replace function public.arqueos_marcar(p_horario int)
 returns void language plpgsql security definer set search_path = public as $$
 declare
@@ -52,7 +52,7 @@ begin
   if coalesce(v_local, '') = '' then
     raise exception 'La cuenta no es de un local' using errcode = '42501';
   end if;
-  if p_horario not in (10, 14, 19, 22) or v_min < p_horario * 60 - 90 then
+  if p_horario not in (10, 14, 19, 22) or v_min < p_horario * 60 - (case when p_horario = 19 then 120 else 90 end) then
     raise exception 'Horario inválido' using errcode = '22023';
   end if;
   insert into public.arqueos_marcados (local, fecha, horario, por)
@@ -92,7 +92,7 @@ begin
          select 1 from public.arqueos_locales a
           where a.local = l.local and a.fecha = v_hoy
             and (extract(hour from a.hora)::int * 60 + extract(minute from a.hora)::int)
-                between h.horario * 60 - 90 and h.horario * 60 + 60)
+                between h.horario * 60 - (case when h.horario = 19 then 120 else 90 end) and h.horario * 60 + 60)
   ),
   anotados as (
     insert into public.arqueos_avisos as v (local, fecha, horario, avisos, ultimo_at)
