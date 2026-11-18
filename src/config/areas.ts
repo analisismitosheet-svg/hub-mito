@@ -818,6 +818,7 @@ export const APPS: AppDef[] = [
   {
     id: 'organizador-tareas',
     areaId: 'administradores',
+    areaIds: ['administradores', 'web'],
     title: 'Organizador de tareas',
     description: 'Tablero de ideas, en marcha y hechas, con fecha de idea y de terminada.',
     icon: KanbanSquare,

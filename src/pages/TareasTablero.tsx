@@ -64,7 +64,8 @@ export default function TareasTablero() {
   const [error, setError] = useState<string | null>(null)
   const [filtro, setFiltro] = useState<Filtro>('todo')
   const [duenos, setDuenos] = useState<{ id: string; nombre: string }[]>([])
-  const [dueno, setDueno] = useState<string>('yo')
+  // el admin arranca viendo las de todos; al resto la RLS ya le trae solo las suyas
+  const [dueno, setDueno] = useState<string>('todos')
   const [arrastrando, setArrastrando] = useState<number | null>(null)
   const [sobre, setSobre] = useState<Estado | null>(null)
   const [nueva, setNueva] = useState('')
@@ -149,7 +150,7 @@ export default function TareasTablero() {
 
   const hechas = visibles.filter((t) => t.estado === 'hecha' && t.fecha_fin)
   const promedio = hechas.length ? Math.round(hechas.reduce((a, t) => a + dias(t.fecha_idea, t.fecha_fin!), 0) / hechas.length) : 0
-  const verDueno = isAdmin && dueno !== 'yo'
+  const verDueno = isAdmin && dueno === 'todos'
 
   return (
     <Layout>
@@ -171,8 +172,8 @@ export default function TareasTablero() {
         {isAdmin && (
           <select value={dueno} onChange={(e) => setDueno(e.target.value)} aria-label="De quién"
             className="h-8 rounded-lg border border-line bg-surface2 px-2 text-xs text-ink">
-            <option value="yo">Mis tarjetas</option>
             <option value="todos">Todas las personas</option>
+            <option value="yo">Mis tarjetas</option>
             {duenos.filter((d) => d.id !== user?.id).map((d) => <option key={d.id} value={d.id}>{d.nombre}</option>)}
           </select>
         )}

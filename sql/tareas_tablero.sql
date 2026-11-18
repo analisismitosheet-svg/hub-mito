@@ -5,7 +5,7 @@
 -- Cada tarjeta guarda la fecha de la idea, cuándo arrancó y cuándo se terminó
 -- (las pone sola la pantalla al moverla; se pueden corregir a mano).
 -- Cada uno ve sus tarjetas; el admin ve las de todos (con selector).
--- Permiso: tareas.view (el admin siempre). Pantalla: src/pages/TareasTablero.tsx
+-- Permiso: tareas.view (rol web; el admin siempre y arranca viendo las de todos). Pantalla: src/pages/TareasTablero.tsx
 -- Idempotente.
 -- =====================================================
 
@@ -72,3 +72,7 @@ as $$
 $$;
 revoke all on function public.tareas_tablero_duenos() from public, anon;
 grant execute on function public.tareas_tablero_duenos() to authenticated;
+
+-- 18/11/2026: lo usan los del rol web
+insert into public.rol_permisos (rol, permiso_clave) values ('web', 'tareas.view')
+on conflict do nothing;
