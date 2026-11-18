@@ -340,9 +340,9 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
     icon: Wrench, color: '#64748b', acciones: { ver: 'requerimientos.tareas' },
   },
 
-  // ===== Organizador de tareas (acceso directo del menú) =====
+  // ===== WEB: organizador de tareas =====
   {
-    id: 'organizador-tareas', areaId: 'administradores', titulo: 'Organizador de tareas', descripcion: 'Tablero propio: ideas, en marcha y hechas',
+    id: 'organizador-tareas', areaId: 'web', titulo: 'Organizador de tareas', descripcion: 'Tablero propio: ideas, en marcha y hechas',
     icon: KanbanSquare, color: '#8b5cf6', acciones: { ver: 'tareas.view' },
   },
 

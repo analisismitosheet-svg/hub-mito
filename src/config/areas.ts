@@ -817,8 +817,7 @@ export const APPS: AppDef[] = [
   },
   {
     id: 'organizador-tareas',
-    areaId: 'administradores',
-    areaIds: ['administradores', 'web'],
+    areaId: 'web',
     title: 'Organizador de tareas',
     description: 'Tablero de ideas, en marcha y hechas, con fecha de idea y de terminada.',
     icon: KanbanSquare,
@@ -826,7 +825,6 @@ export const APPS: AppDef[] = [
     target: '/tareas',
     color: '#8b5cf6',
     permiso: 'tareas.view',
-    enMenu: true,
   },
   {
     id: 'chat-ia',
