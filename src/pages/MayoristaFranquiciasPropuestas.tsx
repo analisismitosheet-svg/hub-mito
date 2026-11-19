@@ -39,7 +39,14 @@ export default function MayoristaFranquiciasPropuestas() {
 
   useEffect(() => { setArtsExtra([...new Set([...extras.values()].map((p) => p.art))]) }, [extras, setArtsExtra])
 
+  // Material: el filtro va por nombre (es lo que lleva la propuesta) y se muestra código · nombre
   const materiales = useMemo(() => [...new Set([...filas.map((f) => f.material), ...posturas.map((p) => p.material)].filter(Boolean))].sort(), [filas, posturas])
+  const codMaterial = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const f of [...filas, ...posturas]) if (f.material && f.materialCod && !m.has(f.material)) m.set(f.material, f.materialCod)
+    return m
+  }, [filas, posturas])
+  const etiquetaMat = (m: string) => { const c = codMaterial.get(m); return c && c !== m ? `${c} · ${m}` : m }
   const grupos = useMemo(() => [...new Set(posturas.filter((p) => !selMats.size || selMats.has(p.material)).map((p) => p.grupo).filter(Boolean))].sort(), [posturas, selMats])
   const temporadas = useMemo(() => [...new Set(posturas.map((p) => p.temporada).filter(Boolean))].sort(), [posturas])
   const hayFiltro = selMats.size > 0 || Boolean(grupo || temporada || busca.trim())
@@ -203,7 +210,7 @@ export default function MayoristaFranquiciasPropuestas() {
                       aria-pressed={selMats.has(m)}
                       className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${selMats.has(m) ? 'border-amber-500/50 bg-amber-500/15 text-amber-400' : 'border-line bg-surface text-sub hover:text-ink'}`}
                     >
-                      {m}
+                      {etiquetaMat(m)}
                     </button>
                   ))}
                 </div>

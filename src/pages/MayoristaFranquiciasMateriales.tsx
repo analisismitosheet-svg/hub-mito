@@ -28,7 +28,7 @@ import {
 const VISTA_MATERIALES = 'DWH.dbo.vw_DIM_MATERIAL'
 
 const TEMPORADAS: Record<string, string> = { '0': 'Sin temporada', '1': 'Verano', '2': 'Continuo', '3': 'Invierno', '4': 'Atemporal' }
-const temporadaDe = (codigo: string) => TEMPORADAS[codigo] || (codigo ? `Temporada ${codigo}` : 'Sin temporada')
+const temporadaDe = (codigo: string) => (codigo ? `${codigo} · ${TEMPORADAS[codigo] || 'Temporada'}` : 'Sin temporada')
 
 const fmt = (n: number) => new Intl.NumberFormat('es-AR').format(n)
 const fmtPesos = (n: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n)
@@ -101,10 +101,14 @@ export default function MayoristaFranquiciasMateriales() {
     let activo = true
     ;(async () => {
       try {
-        const [stock, filasM] = await Promise.all([
+        const [stock, filasM, filasG] = await Promise.all([
           cargarStockSku(),
           leerVista(VISTA_MATERIALES).catch(() => []),
+          // Nombres de grupo: si la vista no está habilitada en Datos SQL, el filtro muestra solo el código
+          leerVista('DWH.dbo.vw_DIM_GRUPO').catch(() => []),
         ])
+        const nombresGrupo = new Map(filasG.map((g) => [txt(g.ID_GRUPO).toUpperCase(), txt(g.GRUPO)]))
+        const grupoDe = (cod: string) => { const g = cod.toUpperCase(); const n = nombresGrupo.get(g); return g && n ? `${g} · ${n}` : g }
         if (!activo) return
 
         // Códigos de material que el DWH llama CALZADO (en el maestro son '1' y 'CALZADO')
@@ -125,7 +129,7 @@ export default function MayoristaFranquiciasMateriales() {
             .in('id_art', arts.slice(i, i + 300))
           for (const a of (data as { id_art: string; descripcion: string | null; id_material: string | null; id_grupo: string | null; id_temporada: string | null }[] | null) ?? []) {
             if (!codCalzado.has(txt(a.id_material).toUpperCase())) continue
-            info.set(txt(a.id_art).toUpperCase(), { descripcion: txt(a.descripcion), grupo: txt(a.id_grupo), temporada: temporadaDe(txt(a.id_temporada)) })
+            info.set(txt(a.id_art).toUpperCase(), { descripcion: txt(a.descripcion), grupo: grupoDe(txt(a.id_grupo)), temporada: temporadaDe(txt(a.id_temporada)) })
           }
         }
         if (!activo) return

@@ -24,6 +24,9 @@ export type FilaReposicion = {
   stockCli: number
   sugerido: number
   material: string
+  /** código de material (el filtro muestra código · nombre) */
+  materialCod: string
+  /** 'código · nombre' del grupo (solo el código si no está vw_DIM_GRUPO) */
   grupo: string
   temporada: string
 }
@@ -34,6 +37,9 @@ export type Postura = {
   color: string
   descrip: string
   material: string
+  /** código de material (el filtro muestra código · nombre) */
+  materialCod: string
+  /** 'código · nombre' del grupo (solo el código si no está vw_DIM_GRUPO) */
   grupo: string
   temporada: string
   /** stock MITO sumando todos los talles */
@@ -47,8 +53,9 @@ export type Postura = {
 }
 
 const TEMPORADAS: Record<string, string> = { '0': 'Sin temporada', '1': 'Verano', '2': 'Continuo', '3': 'Invierno', '4': 'Atemporal' }
-const temporadaDe = (codigo: string) => TEMPORADAS[codigo] || (codigo ? `Temporada ${codigo}` : 'Sin temporada')
-type InfoArticulo = { descripcion: string; material: string; grupo: string; temporada: string }
+const temporadaDe = (codigo: string) => (codigo ? `${codigo} · ${TEMPORADAS[codigo] || 'Temporada'}` : 'Sin temporada')
+const VISTA_GRUPOS = 'DWH.dbo.vw_DIM_GRUPO'
+type InfoArticulo = { descripcion: string; material: string; materialCod: string; grupo: string; temporada: string }
 
 /**
  * Las ventas salen de la vista `venta_franquicias` y el stock del cliente de
@@ -134,11 +141,13 @@ export function useReposicionFranquicia() {
     let activo = true
     ;(async () => {
       try {
-        const [filasV, filasS, stock, filasM] = await Promise.all([
+        const [filasV, filasS, stock, filasM, filasG] = await Promise.all([
           leerVista(VISTA_VENTAS),
           leerVista(VISTA_STOCK_SUC),
           cargarStockSku(),
           leerVista(VISTA_MATERIALES).catch(() => [] as FilaSql[]),
+          // Nombres de grupo: si la vista no está habilitada en Datos SQL, el filtro muestra solo el código
+          leerVista(VISTA_GRUPOS).catch(() => [] as FilaSql[]),
         ])
         if (!activo) return
 
@@ -173,6 +182,7 @@ export function useReposicionFranquicia() {
         // Descripción, material, grupo y temporada del maestro (copia en Supabase) + nombres de material del DWH.
         // Se piden los vendidos y todos los que tienen stock en MITO (para revisar el surtido del local).
         const nombresMat = new Map(filasM.map((m) => [txt(m.ID_MATERIAL).toUpperCase(), txt(m.MATERIAL)]))
+        const nombresGrupo = new Map(filasG.map((g) => [txt(g.ID_GRUPO).toUpperCase(), txt(g.GRUPO)]))
         const conStock = [...stock.porArticulo.entries()].filter(([, n]) => n > 0).map(([a]) => a)
         const arts = [...new Set([...vs.map((v) => v.art), ...conStock])]
         const info = new Map<string, InfoArticulo>()
@@ -187,7 +197,8 @@ export function useReposicionFranquicia() {
               info.set(txt(a.id_art).toUpperCase(), {
                 descripcion: txt(a.descripcion),
                 material: nombresMat.get(cod) || cod,
-                grupo: txt(a.id_grupo).toUpperCase(),
+                materialCod: cod,
+                grupo: (() => { const g = txt(a.id_grupo).toUpperCase(); const n = nombresGrupo.get(g); return g && n ? `${g} · ${n}` : g })(),
                 temporada: temporadaDe(txt(a.id_temporada)),
               })
             }
@@ -220,7 +231,7 @@ export function useReposicionFranquicia() {
       let f = porSku.get(k)
       if (!f) {
         const a = articulos.get(v.art)
-        f = { art: v.art, descrip: a?.descripcion || v.txt, color: v.color, talle: v.talle, vendido: 0, stock: 0, stockCli: 0, sugerido: 0, material: a?.material || '', grupo: a?.grupo || '', temporada: a?.temporada || '', precio: null }
+        f = { art: v.art, descrip: a?.descripcion || v.txt, color: v.color, talle: v.talle, vendido: 0, stock: 0, stockCli: 0, sugerido: 0, material: a?.material || '', materialCod: a?.materialCod || '', grupo: a?.grupo || '', temporada: a?.temporada || '', precio: null }
         porSku.set(k, f)
       }
       f.vendido += v.cant
@@ -248,7 +259,7 @@ export function useReposicionFranquicia() {
       let p = porPostura.get(kp)
       if (!p) {
         const a = articulos.get(art)
-        p = { art, color, descrip: a?.descripcion || '', material: a?.material || '', grupo: a?.grupo || '', temporada: a?.temporada || '', stock: 0, stockCli: 0, vendido: 0, talles: [] }
+        p = { art, color, descrip: a?.descripcion || '', material: a?.material || '', materialCod: a?.materialCod || '', grupo: a?.grupo || '', temporada: a?.temporada || '', stock: 0, stockCli: 0, vendido: 0, talles: [] }
         porPostura.set(kp, p)
       }
       p.stock += n
