@@ -555,6 +555,13 @@ export default function FranquiciasVentaStock() {
     return p ? fmtPesos(p) : preciosMay.has(art) ? '—' : cargandoPrecios ? '…' : '—'
   }
 
+  /** Stock MITO de un SKU. El local escribe 'U' donde MITO dice 'UNICO' (o talle vacío). */
+  const mitoSku = (art: string, color: string, talle: string) => {
+    const v = stockSkuDe(stockMito, art, color, talle)
+    if (v || !['U', 'UNICO', ''].includes(talle.toUpperCase())) return v ?? 0
+    return stockSkuDe(stockMito, art, color, 'UNICO') || stockSkuDe(stockMito, art, color, '') || 0
+  }
+
   const colores = useMemo(() => coloresUnicos(['#0ea5e9', '#22c55e', '#a855f7', '#eab308', '#14b8a6', '#ec4899']), [])
   const kpis: { label: string; valor: string; actual: number; anterior: number | null; Icon: LucideIcon; ayuda: string }[] = [
     { label: 'Venta neta', valor: fmtPesosCorto(d.r.importe), actual: d.r.importe, anterior: d.ra.importe, Icon: DollarSign, ayuda: fmtPesos(d.r.importe) },
@@ -704,7 +711,7 @@ export default function FranquiciasVentaStock() {
                 <thead className="sticky top-0 z-10 bg-surface"><tr>
                   <th className={`text-left ${th}`}>Artículo</th>
                   <th className={`text-right ${th}`}>Stock</th>
-                  <th className={`text-left ${th}`}>Color · talle <span className="normal-case">(stock · <span className="text-amber-400">vendido</span> · rojo = vendido y en 0)</span></th>
+                  <th className={`text-left ${th}`}>Color · talle <span className="normal-case">(stock local · <span className="text-amber-400">vendido</span> · <span className="text-violet-400">MITO</span> · rojo = vendido y en 0)</span></th>
                   <th className={`text-right ${th}`}>Vendido</th>
                   <th className={`text-right ${th}`}>Precio mayorista</th>
                   <th className={`text-right ${th}`}>Stock MITO</th>
@@ -731,10 +738,11 @@ export default function FranquiciasVentaStock() {
                                 {c.color || 'U'}{nombresColor.get(c.color) ? ` · ${nombresColor.get(c.color)}` : ''}
                               </span>
                               {c.talles.map((t) => (
-                                <span key={t.talle} title={`Talle ${t.talle || '—'} · stock ${fmt(t.q)} · vendido en el rango ${fmt(t.vendido)}`}
+                                <span key={t.talle} title={`Talle ${t.talle || '—'} · stock local ${fmt(t.q)} · vendido en el rango ${fmt(t.vendido)} · stock MITO ${fmt(mitoSku(x.art, c.color, t.talle) ?? 0)}`}
                                   className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] tabular-nums ${t.q > 0 ? 'border-line bg-surface text-ink' : t.vendido > 0 ? 'border-red-500/40 bg-red-500/10 text-red-400' : 'border-line bg-surface text-sub'}`}>
                                   <span className="text-sub">{t.talle || '—'}</span><b>{fmt(t.q)}</b>
                                   {t.vendido > 0 && <span className="rounded bg-amber-500/15 px-1 font-semibold text-amber-400">vend. {fmt(t.vendido)}</span>}
+                                  {stockMito && <span className={`rounded px-1 font-semibold ${(mitoSku(x.art, c.color, t.talle) ?? 0) > 0 ? 'bg-violet-500/15 text-violet-400' : 'text-sub'}`}>MITO {fmt(mitoSku(x.art, c.color, t.talle) ?? 0)}</span>}
                                 </span>
                               ))}
                             </div>
