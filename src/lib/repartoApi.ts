@@ -33,8 +33,8 @@ type Res = {
 }
 
 const PERMISO = 'transferencias.import'
-/** Solo ver el reparto (rol mayorista): stock y venta, sin cargar pedidos en Dragon */
-const PERMISO_VER = 'transferencias.reparto'
+/** Reparto manual sin el resto de Transferencias (rol mayorista): ver, cargar el lote y los pedidos en Dragon */
+const PERMISO_REPARTO = 'transferencias.reparto'
 
 /** URL efectiva del Puente: la guardada en sql_conexion, si no el env (igual que repoDiariaApi). */
 async function urlDestino(): Promise<string> {
@@ -62,7 +62,7 @@ export default async function handler(req: Req, res: Res) {
   if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' })
 
   const token = tokenDe(req.headers.authorization as string | undefined)
-  if (!token || !(await autorizado(token, [PERMISO, PERMISO_VER]))) return res.status(401).json({ error: 'No autorizado' })
+  if (!token || !(await autorizado(token, [PERMISO, PERMISO_REPARTO]))) return res.status(401).json({ error: 'No autorizado' })
 
   const destino = await urlDestino()
   if (!destino) return res.status(500).json({ error: 'Falta configurar la URL del Puente SQL' })
@@ -82,9 +82,6 @@ export default async function handler(req: Req, res: Res) {
       if (JSON.stringify(b).length > 1_000_000) return res.status(400).json({ error: 'Pedido demasiado grande' })
       const modo = String(b.modo ?? '')
       if (!['motivos', 'revisar', 'cargar', 'estado'].includes(modo)) return res.status(400).json({ error: 'Modo inválido' })
-      if ((modo === 'revisar' || modo === 'cargar') && !(await autorizado(token, [PERMISO]))) {
-        return res.status(403).json({ error: 'Solo podés ver el reparto: cargar pedidos en Dragon necesita el permiso de importar transferencias.' })
-      }
       cuerpo = { accion: 'reparto_dragon', modo, motivo: b.motivo, obs: b.obs, pedidos: b.pedidos, confirmo: b.confirmo }
     } else {
       if (JSON.stringify(b).length > 20_000) return res.status(400).json({ error: 'Filtros demasiado grandes' })

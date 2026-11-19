@@ -182,7 +182,7 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
     etiquetas: { crear: 'Importar' },
     especiales: [
       { clave: 'transferencias.ver_todo', label: 'Ver todos los locales' },
-      { clave: 'transferencias.reparto', label: 'Ver Reparto manual (sin cargar lotes ni pedidos)' },
+      { clave: 'transferencias.reparto', label: 'Reparto manual: ver y cargar (lote y pedidos en Dragon), sin el resto de Transferencias' },
     ],
   },
   {

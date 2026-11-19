@@ -504,7 +504,7 @@ export const APPS: AppDef[] = [
     id: 'mayorista-reparto',
     areaId: 'mayorista',
     title: 'Reparto manual',
-    description: 'Stock y venta por local y talle, con la sugerencia de reparto (solo ver).',
+    description: 'Repartí el stock entre locales con sugerencia y cargalo como lote y pedidos en Dragon.',
     icon: Grid3x3,
     kind: 'internal',
     target: '/transferencias/reparto',
