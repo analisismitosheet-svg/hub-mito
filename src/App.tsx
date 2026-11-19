@@ -81,6 +81,8 @@ import ComingSoon from '@/pages/ComingSoon'
 import Replicas from '@/pages/Replicas'
 import MayoristaFranquicias from '@/pages/MayoristaFranquicias'
 import FranquiciasReposicionAuto from '@/pages/FranquiciasReposicionAuto'
+import FranquiciasMenu from '@/pages/FranquiciasMenu'
+import FranquiciasVentaStock from '@/pages/FranquiciasVentaStock'
 import MayoristaFranquiciasPropuestas from '@/pages/MayoristaFranquiciasPropuestas'
 import MayoristaFranquiciasMateriales from '@/pages/MayoristaFranquiciasMateriales'
 import SistemasFranquicias from '@/pages/SistemasFranquicias'
@@ -426,7 +428,23 @@ export default function App() {
             path="/mayorista/franquicias"
             element={
               <PermissionRoute permiso="mayorista.franquicias.view">
+                <FranquiciasMenu />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/mayorista/franquicias/auto"
+            element={
+              <PermissionRoute permiso="mayorista.franquicias.view">
                 <FranquiciasReposicionAuto />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/mayorista/franquicias/venta-stock"
+            element={
+              <PermissionRoute permiso="mayorista.franquicias.view">
+                <FranquiciasVentaStock />
               </PermissionRoute>
             }
           />
