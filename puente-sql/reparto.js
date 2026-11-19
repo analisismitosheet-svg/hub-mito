@@ -6,7 +6,7 @@
  *   accion 'reparto_stock' body: { filtros:{prov[],mat[],temp[],anio[],linea[],flia[],grupo[],gen[],art}, desde, hasta }
  *       -> { estado:'calculando', desde } mientras lee el DWH (~1-2 min, por detrás)
  *       -> { estado:'listo', locales:[20 códigos], filas:[{a,c,t,s,v,tr,u}], arts:{ID_ART:{...}}, ... }
- *       -> { estado:'demasiados', articulos } si el filtro trae más de MAX_ARTICULOS
+ *       -> { estado:'demasiados', articulos, motivo? } si el filtro trae más de MAX_ARTICULOS o la respuesta pasa ~4 MB
  *       sql/reparto-stock.sql. Cada foto (por filtro + fechas) dura 5 minutos.
  *
  * Columnas = los 20 locales del reparto (mismos que la PWA vieja y que el Excel de remitos).
@@ -31,7 +31,9 @@ const columna = (tienda) => {
 const TEMPORADA = { 1: 'Verano', 2: 'Continuo', 3: 'Invierno', 4: 'Primavera' }
 const txt = (v) => (v == null ? '' : String(v).trim())
 
-const MAX_ARTICULOS = 600
+const MAX_ARTICULOS = 6000 // el maestro trae muchos artículos viejos sin stock ni venta: el corte real es MAX_BYTES
+// La respuesta pasa por una función de Vercel (tope ~4,5 MB): si el JSON se pasa de esto, se pide achicar
+const MAX_BYTES = 4_000_000
 const DIAS_ULTIMA_VENTA = 180
 const CACHE_MS = 5 * 60_000
 const OPCIONES_MS = 60 * 60_000
@@ -157,7 +159,15 @@ function crear(deps) {
     }
     // Solo SKUs con algo: stock, venta o tránsito en algún local
     const lista = [...filas.values()].filter((f) => f.s.some((x) => x > 0) || f.v.some((x) => x > 0) || f.tr.some((x) => x > 0))
-    return { articulos, locales: LOCALES, filas: lista, arts }
+    // Formato compacto (18/11): [art, color, talle, stock[], venta[] | 0, tránsito "0101…" | 0, últimaVenta[] (-1 = sin venta) | 0]
+    // 0 = toda la fila vacía. El hub lo vuelve a armar en src/lib/reparto.ts (desarmarFilas).
+    const compactas = lista.map((f) => [
+      f.a, f.c, f.t, f.s,
+      f.v.some((x) => x > 0) ? f.v : 0,
+      f.tr.some((x) => x > 0) ? f.tr.join('') : 0,
+      f.u.some((x) => x != null) ? f.u.map((x) => (x == null ? -1 : x)) : 0,
+    ])
+    return { articulos, locales: LOCALES, filas: compactas, formato: 2, arts }
   }
 
   function lanzar(clave, f, desde, hasta) {
@@ -179,10 +189,12 @@ function crear(deps) {
         req.input('max', V, String(MAX_ARTICULOS))
         const r = await req.query(fs.readFileSync(SQL_STOCK, 'utf8'))
         const articulos = Number(r.recordsets?.[0]?.[0]?.articulos) || 0
-        foto.datos =
-          articulos > MAX_ARTICULOS
-            ? { estado: 'demasiados', articulos, max: MAX_ARTICULOS }
-            : { estado: 'listo', ...procesar(r.recordsets, hoy), desde, hasta, hoy, segundos: Math.round((Date.now() - t0) / 100) / 10 }
+        if (articulos > MAX_ARTICULOS) foto.datos = { estado: 'demasiados', articulos, max: MAX_ARTICULOS }
+        else {
+          const datos = { estado: 'listo', ...procesar(r.recordsets, hoy), desde, hasta, hoy, segundos: Math.round((Date.now() - t0) / 100) / 10 }
+          const bytes = JSON.stringify(datos).length
+          foto.datos = bytes > MAX_BYTES ? { estado: 'demasiados', articulos, max: MAX_ARTICULOS, motivo: 'peso', bytes } : datos
+        }
         foto.en = Date.now()
       } finally {
         await pool.close().catch(() => {})

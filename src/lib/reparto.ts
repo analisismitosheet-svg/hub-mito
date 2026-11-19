@@ -467,7 +467,23 @@ export async function cargarOpciones(): Promise<Opciones> {
   return b.opciones
 }
 
-export type RespuestaStock = DatosReparto | { estado: 'demasiados'; articulos: number; max: number }
+export type RespuestaStock = DatosReparto | { estado: 'demasiados'; articulos: number; max: number; motivo?: 'peso'; bytes?: number }
+
+type FilaCompacta = [string, string, string, number[], number[] | 0, string | 0, number[] | 0]
+/** El Puente manda las filas compactas (formato 2, puente-sql/reparto.js): se vuelven a armar. */
+function desarmarFilas(filas: unknown[], n: number): FilaPuente[] {
+  const ceros = () => Array(n).fill(0)
+  return filas.map((x) => {
+    if (!Array.isArray(x)) return x as FilaPuente // formato viejo (objetos)
+    const [a, c, t, s, v, tr, u] = x as FilaCompacta
+    return {
+      a, c, t, s,
+      v: v || ceros(),
+      tr: tr ? tr.split('').map(Number) : ceros(),
+      u: u ? u.map((d) => (d < 0 ? null : d)) : Array(n).fill(null),
+    }
+  })
+}
 
 /** Pide stock y venta al Puente; mientras lee el DWH repregunta cada 4 s (tope 5 minutos). */
 export async function cargarStock(
@@ -487,7 +503,11 @@ export async function cargarStock(
     })
     const b = (await res.json().catch(() => null)) as (RespuestaStock & { estado?: string; error?: string }) | { estado: 'calculando'; error?: string } | null
     if (!res.ok || !b) throw new Error((b as { error?: string } | null)?.error ?? `Error ${res.status} leyendo stock y venta`)
-    if (b.estado === 'listo' || b.estado === 'demasiados') return b as RespuestaStock
+    if (b.estado === 'listo') {
+      const d = b as DatosReparto
+      return { ...d, filas: desarmarFilas(d.filas as unknown[], d.locales.length) }
+    }
+    if (b.estado === 'demasiados') return b as RespuestaStock
     if (cancelado?.()) throw new Error('cancelado')
     alEsperar?.(Math.round((Date.now() - inicio) / 1000))
     await espera(4000)

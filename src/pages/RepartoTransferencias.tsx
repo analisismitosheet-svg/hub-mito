@@ -138,7 +138,11 @@ export default function RepartoTransferencias() {
       const filtros = Object.fromEntries(FILTROS.map((f) => [f.k, [...sel[f.k]]])) as Record<ClaveFiltro, string[]>
       const r = await cargarStock({ ...filtros, art: art.trim().toUpperCase() }, desde, hasta, setEsperando, () => cancelado.current)
       if (r.estado === 'demasiados') {
-        setError(`El filtro trae ${r.articulos.toLocaleString('es-AR')} artículos (máximo ${r.max}). Achicalo con más filtros.`)
+        setError(
+          r.motivo === 'peso'
+            ? `El filtro trae ${r.articulos.toLocaleString('es-AR')} artículos y son demasiados datos para mandar de una vez. Achicalo con más filtros (por ejemplo línea, grupo o temporada).`
+            : `El filtro trae ${r.articulos.toLocaleString('es-AR')} artículos (máximo ${r.max.toLocaleString('es-AR')}). Achicalo con más filtros.`,
+        )
         return
       }
       // Solo las columnas de los locales elegidos
