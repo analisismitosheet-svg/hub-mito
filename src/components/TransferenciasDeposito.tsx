@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowRightLeft, Check, ChevronRight, Loader2, Package, Undo2, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { AlertTriangle, ArrowRightLeft, Camera, CameraOff, Check, ChevronRight, Loader2, Package, Undo2, X } from 'lucide-react'
+import ScannerCamara from '@/components/ScannerCamara'
 import { supabase } from '@/lib/supabase'
 import { suscribirCambios } from '@/lib/realtime'
 import { compararTalles } from '@/lib/ordenPiso'
@@ -20,13 +21,32 @@ interface Renglon {
   cantidad: number
   estado: 'pendiente' | 'hecho' | 'faltante' | 'senado'
   hecho_at: string | null
+  /** unidades escaneadas (sql/transferencias_deposito_escaneo.sql); sin ese SQL llega undefined = 0 */
+  escaneadas?: number
 }
+
+/** Lo que devuelve transferencia_escanear_deposito() */
+interface FilaEscaneo {
+  item_id: string
+  articulo: string | null
+  color: string | null
+  talle: string | null
+  escaneadas: number
+  cantidad: number
+  estado: Renglon['estado']
+}
+
+/** Unidades ya preparadas de un renglón: todo si está marcado, si no lo escaneado */
+const listasDe = (r: Renglon) => (r.estado !== 'pendiente' ? r.cantidad : Math.min(r.escaneadas ?? 0, r.cantidad))
+const etiquetaDe = (r: { articulo: string | null; color: string | null; talle: string | null }) =>
+  [r.articulo, r.color, r.talle].filter(Boolean).join(' · ') || 'Artículo'
 
 type Estado = 'pendiente' | 'hecho' | 'faltante'
 
 /** Lo que se prepara para un local de un lote (una tarjeta, como una repo del mayorista) */
 interface TarjetaLocal {
   clave: string
+  loteId: string
   loteNombre: string
   destino: string
   renglones: Renglon[]
@@ -39,7 +59,8 @@ interface TarjetaLocal {
  * La ven el rol deposito y los legajos con ubicación Depósito Indo: lotes de los
  * últimos 7 días. Igual que Mi repo del mayorista: una tarjeta por local con su
  * avance; al tocarla se abre ese local con lo que falta preparar ordenado por caja
- * (Mapeo de cajas) y ✓ Hecho / Faltante por renglón o ✓ Todo.
+ * (Mapeo de cajas). Se escanea prenda por prenda (cada lectura suma 1 unidad al
+ * renglón; completo = hecho) o se marca a mano ✓ Hecho / Faltante / ✓ Todo.
  * Los marcados hoy quedan a la vista para poder deshacer.
  */
 /** `mostrarVacio`: cuando es lo único que tiene Mi repo (rol deposito sin legajo), avisa que no hay nada.
@@ -57,6 +78,18 @@ export default function TransferenciasDeposito({
   /** Local abierto: `${lote_id}|${destino}` */
   const [sel, setSel] = useState<string | null>(null)
   const [enviando, setEnviando] = useState<Set<string>>(new Set())
+
+  // Escaneo en el local abierto (como Mi repo del mayorista)
+  const [mensaje, setMensaje] = useState<{ ok: boolean; texto: string } | null>(null)
+  const [ultimo, setUltimo] = useState<{ id: string; texto: string } | null>(null)
+  const [enViaje, setEnViaje] = useState(0)
+  const [deshaciendo, setDeshaciendo] = useState(false)
+  const [camara, setCamara] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const enfocar = useCallback(() => {
+    // El lector inalámbrico escribe como teclado: el foco vuelve al casillero
+    window.setTimeout(() => inputRef.current?.focus(), 0)
+  }, [])
 
   const cargar = useCallback(async () => {
     if (!supabase) return
@@ -112,10 +145,70 @@ export default function TransferenciasDeposito({
     if (!supabase || !ids.length) return
     setEnviando((s) => new Set([...s, ...ids]))
     const at = estado === 'pendiente' ? null : new Date().toISOString()
-    setRenglones((arr) => arr.map((r) => (ids.includes(r.id) ? { ...r, estado, hecho_at: at } : r)))
+    setRenglones((arr) =>
+      arr.map((r) => (ids.includes(r.id) ? { ...r, estado, hecho_at: at, escaneadas: estado === 'pendiente' ? 0 : r.escaneadas } : r)),
+    )
+    if (estado === 'pendiente' && ultimo && ids.includes(ultimo.id)) setUltimo(null)
     const { error: e } = await supabase.rpc('transferencia_marcar_deposito', { p_ids: ids, p_estado: estado })
     setEnviando((s) => { const n = new Set(s); for (const i of ids) n.delete(i); return n })
     if (e) { setError(e.message); await cargar() }
+  }
+
+  /** Escanea 1 unidad en el local abierto */
+  async function escanear(codigo: string, t: TarjetaLocal) {
+    const bruto = codigo.trim()
+    if (!bruto || !supabase) return
+    setEnViaje((n) => n + 1)
+    try {
+      const { data, error: e } = await supabase.rpc('transferencia_escanear_deposito', {
+        p_lote: t.loteId,
+        p_destino: t.destino,
+        p_codigo: bruto,
+      })
+      if (e) throw new Error(e.message)
+      const f = ((Array.isArray(data) ? data[0] : data) ?? null) as FilaEscaneo | null
+      if (!f) throw new Error('Sin respuesta del servidor.')
+      setRenglones((arr) =>
+        arr.map((r) =>
+          r.id === f.item_id
+            ? { ...r, escaneadas: f.escaneadas, estado: f.estado, hecho_at: f.estado === 'hecho' ? new Date().toISOString() : r.hecho_at }
+            : r,
+        ),
+      )
+      const texto = etiquetaDe(f)
+      setUltimo({ id: f.item_id, texto })
+      setMensaje({
+        ok: true,
+        texto: f.escaneadas >= f.cantidad ? `✓ Completo: ${texto} (${f.cantidad}/${f.cantidad})` : `${texto} · ${f.escaneadas}/${f.cantidad}`,
+      })
+    } catch (e) {
+      setMensaje({ ok: false, texto: e instanceof Error ? e.message : 'No se pudo guardar el escaneo.' })
+    } finally {
+      setEnViaje((n) => n - 1)
+    }
+  }
+
+  /** Resta la última unidad escaneada (si estaba completo, vuelve a pendiente) */
+  async function deshacerUltimo() {
+    if (!ultimo || !supabase) return
+    setDeshaciendo(true)
+    const { data, error: e } = await supabase.rpc('transferencia_desescanear_deposito', { p_item: ultimo.id })
+    setDeshaciendo(false)
+    if (e) {
+      setMensaje({ ok: false, texto: e.message })
+      return
+    }
+    const quedan = Number(data ?? 0)
+    setRenglones((arr) =>
+      arr.map((r) =>
+        r.id === ultimo.id
+          ? { ...r, escaneadas: quedan, estado: r.estado === 'hecho' ? 'pendiente' : r.estado, hecho_at: r.estado === 'hecho' ? null : r.hecho_at }
+          : r,
+      ),
+    )
+    setMensaje({ ok: true, texto: `Deshecho: ${ultimo.texto}` })
+    setUltimo(null)
+    enfocar()
   }
 
   /** Un renglón: artículo, caja, unidades y ✓ / ✕ (o el estado con Deshacer) */
@@ -139,7 +232,12 @@ export default function TransferenciasDeposito({
           </p>
           {r.descripcion && <p className="truncate text-xs text-sub">{r.descripcion}</p>}
         </div>
-        <span className="shrink-0 text-sm font-semibold tabular-nums text-ink">{r.cantidad} u.</span>
+        <span
+          className={`shrink-0 text-sm font-semibold tabular-nums ${r.estado === 'pendiente' && (r.escaneadas ?? 0) > 0 ? 'text-orange-500' : 'text-ink'}`}
+          title="Escaneadas / pedidas"
+        >
+          {r.estado === 'pendiente' && (r.escaneadas ?? 0) > 0 ? `${r.escaneadas}/${r.cantidad}` : `${r.cantidad} u.`}
+        </span>
         {r.estado === 'pendiente' ? (
           <>
             <button type="button" disabled={ocupado} onClick={() => void marcar([r.id], 'hecho')} title="Hecho" aria-label="Marcar hecho" className="btn-press rounded-lg bg-emerald-600 p-2 text-white hover:bg-emerald-700 disabled:opacity-50">
@@ -169,8 +267,8 @@ export default function TransferenciasDeposito({
     for (const l of lotes) {
       for (const [destino, rs] of l.destinos) {
         const total = rs.reduce((s, r) => s + r.cantidad, 0)
-        const listas = rs.filter((r) => r.estado !== 'pendiente').reduce((s, r) => s + r.cantidad, 0)
-        out.push({ clave: `${l.id}|${destino}`, loteNombre: l.nombre, destino, renglones: rs, total, listas })
+        const listas = rs.reduce((s, r) => s + listasDe(r), 0)
+        out.push({ clave: `${l.id}|${destino}`, loteId: l.id, loteNombre: l.nombre, destino, renglones: rs, total, listas })
       }
     }
     // Primero los que tienen algo por preparar; después, por local
@@ -182,6 +280,14 @@ export default function TransferenciasDeposito({
   const abierta = sel ? tarjetas.find((t) => t.clave === sel) ?? null : null
 
   // Avisa a Mi repo para que esconda lo demás mientras hay un local abierto
+  // Al abrir otro local: casillero limpio y con foco
+  useEffect(() => {
+    setMensaje(null)
+    setUltimo(null)
+    setCamara(false)
+    if (sel) enfocar()
+  }, [sel, enfocar])
+
   useEffect(() => {
     alAbrir?.(!!abierta)
     return () => alAbrir?.(false)
@@ -245,7 +351,82 @@ export default function TransferenciasDeposito({
               style={{ width: `${pct}%` }}
             />
           </div>
+
+          {/* Escáner inalámbrico (escribe + Enter), teclado o cámara: 1 lectura = 1 unidad */}
+          <form
+            onSubmit={(e: FormEvent<HTMLFormElement>) => {
+              e.preventDefault()
+              const input = inputRef.current
+              if (!input) return
+              const v = input.value
+              input.value = ''
+              void escanear(v, abierta)
+              enfocar()
+            }}
+            className="flex gap-2"
+          >
+            <input
+              ref={inputRef}
+              type="text"
+              autoComplete="off"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+              enterKeyHint="send"
+              placeholder="Escaneá la prenda…"
+              aria-label="Código de barra de la prenda"
+              className="h-11 w-full min-w-0 rounded-xl border border-line bg-surface2 px-3 text-base text-ink outline-none transition placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40"
+            />
+            <button
+              type="button"
+              onClick={() => setCamara((c) => !c)}
+              className="btn-press flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-line bg-surface2 text-ink transition hover:bg-line"
+              aria-label={camara ? 'Cerrar cámara' : 'Abrir cámara'}
+            >
+              {camara ? <CameraOff size={19} aria-hidden /> : <Camera size={19} aria-hidden />}
+            </button>
+          </form>
+
+          {(mensaje || enViaje > 0) && (
+            <div aria-live="polite" className="space-y-1">
+              {mensaje && (
+                <div
+                  className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-sm font-medium ${
+                    mensaje.ok ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-brand-600/40 bg-brand-600/10 text-brand-400'
+                  }`}
+                >
+                  {mensaje.ok ? <Check size={15} className="shrink-0" aria-hidden /> : <AlertTriangle size={15} className="shrink-0" aria-hidden />}
+                  <span className="min-w-0 flex-1 truncate">{mensaje.texto}</span>
+                  {mensaje.ok && ultimo && (
+                    <button
+                      type="button"
+                      onClick={() => void deshacerUltimo()}
+                      disabled={deshaciendo}
+                      className="btn-press inline-flex shrink-0 items-center gap-1 rounded-lg border border-line bg-surface px-2 py-0.5 text-xs font-semibold text-ink hover:bg-line disabled:opacity-60"
+                    >
+                      {deshaciendo ? <Loader2 size={12} className="animate-spin" aria-hidden /> : <Undo2 size={12} aria-hidden />} Deshacer
+                    </button>
+                  )}
+                </div>
+              )}
+              {enViaje > 0 && (
+                <p className="flex items-center gap-1.5 text-xs text-sub">
+                  <Loader2 size={12} className="animate-spin" aria-hidden /> Guardando {enViaje === 1 ? '1 escaneo' : `${enViaje} escaneos`}…
+                </p>
+              )}
+            </div>
+          )}
         </div>
+
+        {camara && (
+          <ScannerCamara
+            onLectura={(t) => void escanear(t, abierta)}
+            onCerrar={() => {
+              setCamara(false)
+              enfocar()
+            }}
+          />
+        )}
 
         {error && <p role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-2 text-sm text-red-500">{error}</p>}
 
