@@ -93,7 +93,7 @@ export default function MayoristaFranquicias() {
     <Layout>
       <div className="px-3 pt-3 md:px-4 md:pt-4">
         <FranquiciasHeader
-          titulo="Reposición diaria"
+          titulo="Reposición franquicias sugerida"
           descripcion="Qué reponerle a cada franquicia según lo que vendió y el stock real de MITO."
         />
 

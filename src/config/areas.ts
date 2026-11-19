@@ -515,7 +515,7 @@ export const APPS: AppDef[] = [
     id: 'mayorista-franquicias',
     areaId: 'mayorista',
     title: 'Franquicias',
-    description: 'Reposición diaria automática y venta/stock de cada franquicia.',
+    description: 'Reposición diaria automática, reposición sugerida y venta/stock de cada franquicia.',
     icon: Building2,
     kind: 'internal',
     target: '/mayorista/franquicias',

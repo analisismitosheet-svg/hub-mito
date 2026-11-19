@@ -2,7 +2,7 @@
 
 Área Mayorista + configuración en Sistemas. Permiso `mayorista.franquicias.view` (rol `mayorista`, ver [[Permisos y usuarios]]). Tres pantallas (`src/components/FranquiciasTabs.tsx`) y la configuración separada; lógica común en `src/lib/franquicias.ts` y `src/hooks/useReposicionFranquicia.ts`.
 
-## Reposición diaria automática (desde 27/10/2026, la única en el menú)
+## Reposición diaria automática (desde 27/10/2026)
 
 - `/mayorista/franquicias`, `FranquiciasReposicionAuto.tsx`. Las pantallas de abajo quedaron fuera del menú (siguen por link; la vieja diaria pasó a `/mayorista/franquicias/diaria`).
 - **Paso 1**: cliente ↔ base, sucursal de stock (es de la base), **varios WhatsApps**, automático activo, días (1 = lunes … 7 = domingo) y hora. RPC `franquicias_guardar_auto`. Columnas nuevas en `franquicias_clientes`: `telefonos[]`, `auto_activo`, `auto_dias[]`, `auto_hora`, `auto_ultimo_hasta`, `auto_pedido_at`, `auto_error`.
@@ -13,7 +13,7 @@
 
 ## Pantallas anteriores (fuera del menú)
 
-- **Reposición diaria** — `/mayorista/franquicias/diaria`, `MayoristaFranquicias.tsx`.
+- **Reposición franquicias sugerida** (antes «Reposición diaria»; vuelve al menú de Franquicias el 19/11/2026) — `/mayorista/franquicias/diaria`, `MayoristaFranquicias.tsx`.
   - Se elige el **cliente** (solo los que tienen base asignada; por defecto `01140`). La base, la sucursal de stock y el teléfono salen de *Sistemas → Franquicias*.
   - Ventas de `VISTAS_CONSOLIDADAS.dbo.venta_franquicias` filtradas por `BASE_DATOS` = base del cliente; stock del cliente de `vw_STOCK_SUCURSALES_REAL` por `BD_ORIGEN` = sucursal de la base; stock MITO de `vw_STOCK_SKU_MITO`. Detalle de fuentes en [[Puente SQL y syncs]].
   - Sugerido = máx(0, mín(vendido − stock cliente, stock MITO)). La columna **Estado** (Urgente/Normal) va al lado del artículo.
