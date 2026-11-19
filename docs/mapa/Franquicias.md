@@ -23,6 +23,8 @@
   - Muestra un resumen de artículos/unidades/importe y una vista previa de lo que se va a proponer.
   - Renderiza `FranquiciaPropuestas`: arma la propuesta, la guarda y abre WhatsApp con el link. El envío sigue siendo manual por `wa.me`; no hay cron de propuestas ni envío automático.
   - Historial por franquicia: propuesto vs. lo que pidió el cliente, estado y alta en Dragon.
+  - **Filtros** (19/11/2026): material, grupo, temporada y texto; valen para la sugerencia y para el surtido.
+  - **Surtido: ¿tiene todas las posturas?**: con algún filtro puesto lista cada artículo + color con stock en MITO (`Postura` de `useReposicionFranquicia`, info de `articulos` para todo lo que tiene stock) contra el stock del cliente sumado por color, y marca **Falta** las que tiene en 0. Las marcadas se suman a la propuesta con 1 unidad por talle con stock MITO (vendido 0, etiqueta «Faltaba en el local», se pueden sacar).
 - **Reposición de materiales** — `/mayorista/franquicias/materiales`, `MayoristaFranquiciasMateriales.tsx` (reemplaza al pedido de venta de calzado; `/mayorista/franquicias/calzado` redirige acá).
   - Reposición por **curva de talles**: un modelo por artículo + color con el stock de cada talle (`vw_STOCK_SKU_MITO`), precio de `vw_ARTICULOS_MITO`. Solo materiales que `DWH.dbo.vw_DIM_MATERIAL` llama CALZADO (en `articulos`: `1` y `CALZADO`).
   - Pestañas talle simple (40) / doble (38/39, chanclas y slippers). Filtros por grupo, **temporada** (`articulos.id_temporada`: 0 sin temporada, 1 verano, 2 continuo, 3 invierno, 4 atemporal) y texto.

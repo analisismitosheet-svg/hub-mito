@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { leerVista, leerVistaFiltrada, type FilaSql } from '@/lib/sqlApi'
@@ -24,7 +24,31 @@ export type FilaReposicion = {
   stockCli: number
   sugerido: number
   material: string
+  grupo: string
+  temporada: string
 }
+
+/** Una postura = artículo + color con stock en MITO, y cuánto tiene el cliente de esa postura. */
+export type Postura = {
+  art: string
+  color: string
+  descrip: string
+  material: string
+  grupo: string
+  temporada: string
+  /** stock MITO sumando todos los talles */
+  stock: number
+  /** stock del cliente sumando todos los talles */
+  stockCli: number
+  /** vendido por el cliente en el rango elegido */
+  vendido: number
+  /** talles con stock en MITO (para sumarlos a la propuesta) */
+  talles: { talle: string; stock: number }[]
+}
+
+const TEMPORADAS: Record<string, string> = { '0': 'Sin temporada', '1': 'Verano', '2': 'Continuo', '3': 'Invierno', '4': 'Atemporal' }
+const temporadaDe = (codigo: string) => TEMPORADAS[codigo] || (codigo ? `Temporada ${codigo}` : 'Sin temporada')
+type InfoArticulo = { descripcion: string; material: string; grupo: string; temporada: string }
 
 /**
  * Las ventas salen de la vista `venta_franquicias` y el stock del cliente de
@@ -61,12 +85,14 @@ export function useReposicionFranquicia() {
   const [ventas, setVentas] = useState<Venta[]>([])
   const [stockPorSucursal, setStockPorSucursal] = useState<Map<string, Map<string, number>>>(new Map())
   const [stockMito, setStockMito] = useState<StockSku | null>(null)
-  const [articulos, setArticulos] = useState<Map<string, { descripcion: string; material: string }>>(new Map())
+  const [articulos, setArticulos] = useState<Map<string, InfoArticulo>>(new Map())
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   // Precio (columna PRECIO de vw_ARTICULOS_MITO) por SKU y por artículo
   const [precios, setPrecios] = useState<{ sku: Map<string, number>; art: Map<string, number> }>({ sku: new Map(), art: new Map() })
   const [cargandoPrecios, setCargandoPrecios] = useState(false)
+  // Artículos que se suman a mano a la propuesta (posturas que faltan): también necesitan precio
+  const [artsExtra, setArtsExtra] = useState<string[]>([])
 
   const desdeInicial = search.get('desde')
   const hastaInicial = search.get('hasta')
@@ -144,17 +170,30 @@ export function useReposicionFranquicia() {
           m.set(k, (m.get(k) ?? 0) + num(f.CANTIDAD_REAL))
         }
 
-        // Descripción y material del maestro (copia en Supabase) + nombres de material del DWH
+        // Descripción, material, grupo y temporada del maestro (copia en Supabase) + nombres de material del DWH.
+        // Se piden los vendidos y todos los que tienen stock en MITO (para revisar el surtido del local).
         const nombresMat = new Map(filasM.map((m) => [txt(m.ID_MATERIAL).toUpperCase(), txt(m.MATERIAL)]))
-        const arts = [...new Set(vs.map((v) => v.art))]
-        const info = new Map<string, { descripcion: string; material: string }>()
-        for (let i = 0; supabase && i < arts.length; i += 300) {
-          const { data } = await supabase.from('articulos').select('id_art,descripcion,id_material').in('id_art', arts.slice(i, i + 300))
-          for (const a of (data as { id_art: string; descripcion: string | null; id_material: string | null }[] | null) ?? []) {
-            const cod = txt(a.id_material).toUpperCase()
-            info.set(txt(a.id_art).toUpperCase(), { descripcion: txt(a.descripcion), material: nombresMat.get(cod) || cod })
+        const conStock = [...stock.porArticulo.entries()].filter(([, n]) => n > 0).map(([a]) => a)
+        const arts = [...new Set([...vs.map((v) => v.art), ...conStock])]
+        const info = new Map<string, InfoArticulo>()
+        const lotes: string[][] = []
+        for (let i = 0; i < arts.length; i += 300) lotes.push(arts.slice(i, i + 300))
+        const cola = [...lotes]
+        async function trabajador() {
+          for (let lote = cola.shift(); supabase && lote; lote = cola.shift()) {
+            const { data } = await supabase.from('articulos').select('id_art,descripcion,id_material,id_grupo,id_temporada').in('id_art', lote)
+            for (const a of (data as { id_art: string; descripcion: string | null; id_material: string | null; id_grupo: string | null; id_temporada: string | null }[] | null) ?? []) {
+              const cod = txt(a.id_material).toUpperCase()
+              info.set(txt(a.id_art).toUpperCase(), {
+                descripcion: txt(a.descripcion),
+                material: nombresMat.get(cod) || cod,
+                grupo: txt(a.id_grupo).toUpperCase(),
+                temporada: temporadaDe(txt(a.id_temporada)),
+              })
+            }
           }
         }
+        await Promise.all(Array.from({ length: 4 }, trabajador))
         if (!activo) return
         setVentas(vs)
         setStockPorSucursal(sc)
@@ -181,7 +220,7 @@ export function useReposicionFranquicia() {
       let f = porSku.get(k)
       if (!f) {
         const a = articulos.get(v.art)
-        f = { art: v.art, descrip: a?.descripcion || v.txt, color: v.color, talle: v.talle, vendido: 0, stock: 0, stockCli: 0, sugerido: 0, material: a?.material || '', precio: null }
+        f = { art: v.art, descrip: a?.descripcion || v.txt, color: v.color, talle: v.talle, vendido: 0, stock: 0, stockCli: 0, sugerido: 0, material: a?.material || '', grupo: a?.grupo || '', temporada: a?.temporada || '', precio: null }
         porSku.set(k, f)
       }
       f.vendido += v.cant
@@ -196,11 +235,51 @@ export function useReposicionFranquicia() {
     return [...porSku.values()]
   }, [ventas, desde, hasta, articulos, stockMito, stockPorSucursal, precios, franq?.base, franq?.origenStock])
 
+  // Surtido: todas las posturas (artículo + color) con stock en MITO, con lo que tiene el cliente de cada una
+  const posturas = useMemo<Postura[]>(() => {
+    if (!franq || !stockMito) return []
+    const porPostura = new Map<string, Postura>()
+    for (const [k, n] of stockMito.porSku) {
+      if (n <= 0) continue
+      const [art, color, talle] = k.split('|')
+      // La lib indexa 'UNICO' también con el talle vacío: no se cuenta dos veces
+      if (!talle && stockMito.porSku.has(`${art}|${color}|UNICO`)) continue
+      const kp = `${art}|${color}`
+      let p = porPostura.get(kp)
+      if (!p) {
+        const a = articulos.get(art)
+        p = { art, color, descrip: a?.descripcion || '', material: a?.material || '', grupo: a?.grupo || '', temporada: a?.temporada || '', stock: 0, stockCli: 0, vendido: 0, talles: [] }
+        porPostura.set(kp, p)
+      }
+      p.stock += n
+      p.talles.push({ talle, stock: n })
+    }
+    const stockCli = stockPorSucursal.get(franq.origenStock) ?? new Map<string, number>()
+    for (const [k, n] of stockCli) {
+      const [art, color] = k.split('|')
+      const p = porPostura.get(`${art}|${color}`)
+      if (p) p.stockCli += n
+    }
+    for (const v of ventas) {
+      if (v.base !== franq.base.toUpperCase() || v.dia < desde || v.dia > hasta) continue
+      const p = porPostura.get(`${v.art}|${v.color}`)
+      if (p) p.vendido += v.cant
+    }
+    return [...porPostura.values()]
+  }, [stockMito, stockPorSucursal, articulos, ventas, desde, hasta, franq?.base, franq?.origenStock])
+
+  /** Precio de un SKU (o del artículo si el SKU no tiene), null si todavía no se trajo */
+  const precioDe = useCallback(
+    (art: string, color: string, talle: string) =>
+      precios.sku.get(claveSku(art, color, talle)) ?? precios.art.get(art.toUpperCase()) ?? null,
+    [precios],
+  )
+
   // vw_ARTICULOS_MITO pesa ~6,8 MB: no se trae entera, se pide el precio de cada
   // artículo que se va a reponer (filtro por ID_ARTICULO, de a 6 a la vez).
   const artsAReponer = useMemo(
-    () => [...new Set(filas.filter((f) => f.stock > 0 && f.sugerido > 0).map((f) => f.art))].sort().join(','),
-    [filas],
+    () => [...new Set([...filas.filter((f) => f.stock > 0 && f.sugerido > 0).map((f) => f.art), ...artsExtra])].sort().join(','),
+    [filas, artsExtra],
   )
   useEffect(() => {
     const faltan = artsAReponer.split(',').filter((a) => a && !precios.art.has(a))
@@ -245,6 +324,7 @@ export function useReposicionFranquicia() {
     disponibles, cliente, franq,
     clienteSel, setClienteSel,
     desde, setDesde, hasta, setHasta,
-    filas, cargando, cargandoPrecios, error,
+    filas, posturas, precioDe, setArtsExtra,
+    cargando, cargandoPrecios, error,
   }
 }
