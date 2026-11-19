@@ -641,7 +641,7 @@ export default function FranquiciasVentaStock() {
                 <thead className="sticky top-0 z-10 bg-surface"><tr>
                   <th className={`text-left ${th}`}>Artículo</th>
                   <th className={`text-right ${th}`}>Stock</th>
-                  <th className={`text-left ${th}`}>Color · talles <span className="normal-case">(rojo = vendido y en 0)</span></th>
+                  <th className={`text-left ${th}`}>Color · talle <span className="normal-case">(stock · <span className="text-amber-400">vendido</span> · rojo = vendido y en 0)</span></th>
                   <th className={`text-right ${th}`}>Vendido</th>
                   <th className={`text-right ${th}`}>Stock MITO</th>
                 </tr></thead>
@@ -663,11 +663,14 @@ export default function FranquiciasVentaStock() {
                         <div className="flex flex-col gap-1">
                           {x.colores.map((c) => (
                             <div key={c.color} className="flex flex-wrap items-center gap-1">
-                              <span className="w-8 shrink-0 text-[11px] font-semibold text-sub">{c.color || 'U'}</span>
+                              <span className="w-28 shrink-0 truncate text-[11px] font-semibold text-sub" title={nombresColor.get(c.color) || c.color}>
+                                {c.color || 'U'}{nombresColor.get(c.color) ? ` · ${nombresColor.get(c.color)}` : ''}
+                              </span>
                               {c.talles.map((t) => (
-                                <span key={t.talle} title={`Vendido en el rango: ${fmt(t.vendido)}`}
+                                <span key={t.talle} title={`Talle ${t.talle || '—'} · stock ${fmt(t.q)} · vendido en el rango ${fmt(t.vendido)}`}
                                   className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] tabular-nums ${t.q > 0 ? 'border-line bg-surface text-ink' : t.vendido > 0 ? 'border-red-500/40 bg-red-500/10 text-red-400' : 'border-line bg-surface text-sub'}`}>
                                   <span className="text-sub">{t.talle || '—'}</span><b>{fmt(t.q)}</b>
+                                  {t.vendido > 0 && <span className="rounded bg-amber-500/15 px-1 font-semibold text-amber-400">vend. {fmt(t.vendido)}</span>}
                                 </span>
                               ))}
                             </div>
