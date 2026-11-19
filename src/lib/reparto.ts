@@ -519,6 +519,52 @@ export async function cargarStock(
   throw new Error('El Puente SQL tardó más de 5 minutos en leer el DWH. Probá de nuevo o achicá el filtro.')
 }
 
+/* ------------------------- MITO -> pedidos de venta en Dragon ------------------------- */
+
+/** Lo que sale de MITO (MAYORD) no va al lote: va a Dragon como pedido de venta por local. */
+export const esDeMito = (m: Movimiento) => m.desde === 'MAYORD'
+
+export interface MotivoDragon { cod: string; pedidos: number }
+export interface LocalCargaDragon {
+  cliente: string
+  local: string
+  renglones: number
+  unidades: number
+  lista: string
+  numero: number | string | null
+  estado: 'pendiente' | 'ya_estaba' | 'cargando' | 'cargado' | 'en_seco' | 'error'
+  error: string | null
+}
+export interface CargaDragon { motivo: string; obs: string; en_curso: boolean; en_seco: boolean; locales: LocalCargaDragon[] }
+
+async function postDragon<T>(cuerpo: Record<string, unknown>): Promise<T> {
+  const res = await fetch('/api/sql/reparto', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dragon: true, ...cuerpo }),
+  })
+  const b = (await res.json().catch(() => null)) as (T & { error?: string }) | null
+  if (!res.ok || !b) throw new Error(b?.error ?? `Error ${res.status} hablando con Dragon`)
+  return b
+}
+
+export const motivosDragon = () => postDragon<{ motivos: MotivoDragon[] }>({ modo: 'motivos' }).then((r) => r.motivos)
+
+/** Un pedido por local destino con lo que MITO le da. */
+export function pedidosDeMito(movs: Movimiento[]) {
+  const por = new Map<string, { art: string; color: string; talle: string; cantidad: number }[]>()
+  for (const m of movs.filter(esDeMito)) {
+    if (!por.has(m.hacia)) por.set(m.hacia, [])
+    por.get(m.hacia)!.push({ art: m.articulo, color: m.color, talle: m.talle, cantidad: m.cantidad })
+  }
+  return [...por].map(([local, items]) => ({ local, items }))
+}
+
+export function cargaDragon(modo: 'revisar' | 'cargar', motivo: string, obs: string, movs: Movimiento[]) {
+  return postDragon<{ carga: CargaDragon }>({ modo, motivo, obs, pedidos: pedidosDeMito(movs), confirmo: modo === 'cargar' ? obs : undefined }).then((r) => r.carga)
+}
+export const estadoCargaDragon = () => postDragon<{ carga: CargaDragon | null }>({ modo: 'estado' }).then((r) => r.carga)
+
 /** «Cargar en Transferencias»: un lote más (origen = local que bajó, destino = el que subió). */
 export async function cargarEnTransferencias(nombre: string, obs: string, movs: Movimiento[]) {
   if (!supabase) throw new Error('Supabase no está configurado.')

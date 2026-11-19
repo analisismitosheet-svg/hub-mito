@@ -38,6 +38,8 @@
  *   POST /          body: { accion: 'reparto_opciones' } -> { opciones } (filtros del Reparto manual, sql/reparto-opciones.sql)
  *   POST /          body: { accion: 'reparto_stock', filtros, desde, hasta } -> { estado: 'calculando' } | { estado: 'listo', locales, filas, arts }
  *                   (Reposiciones / Transferencias > Reparto manual: sql/reparto-stock.sql + reparto.js, SOLO LECTURA)
+ *   POST /          body: { accion: 'reparto_dragon', modo: 'motivos'|'revisar'|'cargar'|'estado', motivo, obs, pedidos, confirmo? }
+ *                   (lo que da MITO en el Reparto manual -> pedido de venta por local en Dragon: reparto-dragon.js)
  *   POST /          body: { accion: 'ventas_articulos', fechas, local?, agrupar?, top? } -> { estado: 'calculando' } | { estado: 'listo', ranking, ... }
  *                     (lee las bases Dragon directo con sql/ventas-articulos.sql; si falla, la foto de la repo diaria)
  *   POST /          body: { accion: 'repo_diaria_dragon', modo: 'revisar'|'cargar'|'estado', fechas, foto, locales?, confirmo? }
@@ -1513,6 +1515,8 @@ const dragon = require('./scripts/dragon')
 const LISTA_REPO = { CFR4: 'LISTA2', R9D: 'LISTA2', VCPD: 'LISTA2' }
 const enSecoDragon = () => /^(1|true|si|sí)$/i.test(String(process.env.PUENTE_DRAGON_EN_SECO ?? ''))
 let cargaDragon = null
+// Reparto manual: lo que da MITO va como pedido de venta por local, con el motivo elegido
+const repartoDragon = require('./reparto-dragon').crear({ get sql() { return sql }, conexionLarga: () => conexionLarga(), dragon, enSeco: enSecoDragon })
 
 /** Pedidos VTD ya cargados con esta observación + la última lista usada por local. */
 async function pedidosVtdEnDragon(obs) {
@@ -1794,6 +1798,13 @@ const server = http.createServer(async (req, res) => {
     if (body?.accion === 'reparto_stock') {
       try {
         return enviar(res, 200, repartoManual.accionStock(body))
+      } catch (e) {
+        return enviar(res, 400, { error: e.message })
+      }
+    }
+    if (body?.accion === 'reparto_dragon') {
+      try {
+        return enviar(res, 200, await repartoDragon.accion(body))
       } catch (e) {
         return enviar(res, 400, { error: e.message })
       }

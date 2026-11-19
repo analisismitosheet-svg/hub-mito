@@ -37,7 +37,9 @@ http
       if (req.method === 'GET') cuerpo = { accion: 'reparto_opciones' }
       else {
         const b = JSON.parse((await leer(req)) || '{}')
-        cuerpo = { accion: 'reparto_stock', filtros: b.filtros ?? {}, desde: b.desde ?? '', hasta: b.hasta ?? '', forzar: !!b.forzar }
+        cuerpo = b.dragon
+          ? { accion: 'reparto_dragon', modo: b.modo, motivo: b.motivo, obs: b.obs, pedidos: b.pedidos, confirmo: b.confirmo }
+          : { accion: 'reparto_stock', filtros: b.filtros ?? {}, desde: b.desde ?? '', hasta: b.hasta ?? '', forzar: !!b.forzar }
       }
       const r = await fetch(PUENTE, {
         method: 'POST',

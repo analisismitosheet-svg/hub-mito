@@ -9,6 +9,12 @@ import {
   BASE_TRACKING,
   FILTROS,
   esProvMito,
+  esDeMito,
+  motivosDragon,
+  cargaDragon,
+  estadoCargaDragon,
+  type MotivoDragon,
+  type CargaDragon,
   type Origen,
   OPCIONES_SUGERENCIA,
   bajarExcelRemitos,
@@ -99,6 +105,14 @@ export default function RepartoTransferencias() {
   const [obs, setObs] = useState('')
   const [cargando, setCargando] = useState(false)
   const [resultado, setResultado] = useState<string | null>(null)
+  // lo que da MITO -> pedidos de venta en Dragon
+  const [motivos, setMotivos] = useState<MotivoDragon[] | null>(null)
+  const [motivo, setMotivo] = useState('VTD')
+  const [obsDragon, setObsDragon] = useState('')
+  const [revDragon, setRevDragon] = useState<CargaDragon | null>(null)
+  const [estDragon, setEstDragon] = useState<CargaDragon | null>(null)
+  const [ocupDragon, setOcupDragon] = useState(false)
+  const [errDragon, setErrDragon] = useState<string | null>(null)
 
   useEffect(() => {
     cargarOpciones().then(setOpciones).catch((e: Error) => setErrOpciones(e.message))
@@ -218,6 +232,23 @@ export default function RepartoTransferencias() {
   }, [datos, buscar, fColor, fTalle, fGrupo, orden])
   const res = useMemo(() => calcularResumen(visibles, locales), [visibles, locales, version])
   const movimientos = useMemo(() => calcularMovimientos(modelo.current, locales), [locales, version])
+  // lo que sale de MITO va a Dragon como pedido de venta; el resto es el lote de Transferencias
+  const movsLote = useMemo(() => movimientos.filter((m) => !esDeMito(m)), [movimientos])
+  const movsMito = useMemo(() => movimientos.filter(esDeMito), [movimientos])
+  const mitoPorLocal = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const x of movsMito) m.set(x.hacia, (m.get(x.hacia) ?? 0) + x.cantidad)
+    return [...m]
+  }, [movsMito])
+  // si cambia lo que da MITO, la revisión anterior ya no vale
+  useEffect(() => setRevDragon(null), [movsMito, motivo, obsDragon])
+  useEffect(() => {
+    if (movsMito.length && !obsDragon) setObsDragon(`REPARTO MANUAL ${nombreLote}`.trim())
+  }, [movsMito.length, obsDragon, nombreLote])
+  useEffect(() => {
+    if (movsMito.length && !motivos) motivosDragon().then(setMotivos).catch((e: Error) => setErrDragon(`No se pudieron leer los motivos de Dragon: ${e.message}`))
+  }, [movsMito.length, motivos])
+  const obsPedido = obsDragon.replace(/\s+/g, ' ').trim().slice(0, 250)
   const negativos = useMemo(
     () => modelo.current.filter((f) => f.cur.reduce((a, b) => a + b, 0) > f.base.reduce((a, b) => a + b, 0)).length,
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -262,12 +293,45 @@ export default function RepartoTransferencias() {
     return () => document.removeEventListener('fullscreenchange', salir)
   }, [])
 
+  /* ---------- MITO -> Dragon ---------- */
+  async function revisarDragon() {
+    setErrDragon(null)
+    setEstDragon(null)
+    setOcupDragon(true)
+    try {
+      setRevDragon(await cargaDragon('revisar', motivo, obsPedido, movsMito))
+    } catch (e) {
+      setErrDragon((e as Error).message)
+    } finally {
+      setOcupDragon(false)
+    }
+  }
+  async function confirmarDragon() {
+    setErrDragon(null)
+    setOcupDragon(true)
+    try {
+      let c: CargaDragon | null = await cargaDragon('cargar', motivo, obsPedido, movsMito)
+      setRevDragon(null)
+      setEstDragon(c)
+      // carga por detrás en el Puente: se pregunta el avance
+      for (let i = 0; c?.en_curso && i < 150; i++) {
+        await new Promise((ok) => setTimeout(ok, 2000))
+        c = await estadoCargaDragon()
+        setEstDragon(c)
+      }
+    } catch (e) {
+      setErrDragon((e as Error).message)
+    } finally {
+      setOcupDragon(false)
+    }
+  }
+
   /* ---------- cargar ---------- */
   async function cargar() {
     setCargando(true)
     setResultado(null)
     try {
-      const r = await cargarEnTransferencias(nombreLote.trim(), obs.trim(), movimientos)
+      const r = await cargarEnTransferencias(nombreLote.trim(), obs.trim(), movsLote)
       setResultado(
         r.repetido
           ? `Ya había un lote «${nombreLote.trim()}» de los últimos 7 días: no se cargó de nuevo (${r.renglones} renglones, ${r.unidades} unidades). Cambiale el nombre si es otro.`
@@ -519,12 +583,13 @@ export default function RepartoTransferencias() {
           <div className="mt-4 grid gap-4 pb-8 xl:grid-cols-[1.2fr_.8fr]">
             <section className="rounded-2xl border border-line bg-surface p-4">
               <h2 className="text-[15px] font-bold text-ink">Movimientos que salen del reparto</h2>
-              <p className="text-xs text-sub">Lo que bajó en un local va a donde subió. Esto es lo que se carga como lote.</p>
+              <p className="text-xs text-sub">Lo que bajó en un local va a donde subió. Lo que sale de MITO va a Dragon como pedido de venta; el resto es el lote de Transferencias.</p>
               <div className="my-3 flex flex-wrap gap-2">
                 {[
                   [movimientos.length, 'renglones'],
                   [movimientos.reduce((a, m) => a + m.cantidad, 0), 'unidades'],
-                  [new Set(movimientos.map((m) => m.desde)).size, 'locales origen'],
+                  [new Set(movsLote.map((m) => m.desde)).size, 'locales origen'],
+                  [movsMito.reduce((a, m) => a + m.cantidad, 0), 'unid. de MITO (pedido)'],
                 ].map(([v, t]) => (
                   <div key={t as string} className="min-w-[110px] rounded-xl border border-line px-3 py-2">
                     <b className="block font-display text-xl text-ink">{v}</b>
@@ -542,7 +607,10 @@ export default function RepartoTransferencias() {
                     {movimientos.slice(0, 400).map((m, i) => (
                       <tr key={i} className="border-t border-line text-ink">
                         <td className="py-1">{m.articulo}</td><td>{m.color}</td><td>{m.talle}</td>
-                        <td><b>{m.desde}</b> <span className="text-sub">→</span> <b>{m.hacia}</b></td>
+                        <td>
+                          <b>{m.desde}</b> <span className="text-sub">→</span> <b>{m.hacia}</b>
+                          {esDeMito(m) && <span className="ml-1.5 rounded bg-sky-500/15 px-1 text-[10px] font-semibold text-sky-300">pedido de venta</span>}
+                        </td>
                         <td className="text-right">{m.cantidad}</td>
                       </tr>
                     ))}
@@ -563,7 +631,7 @@ export default function RepartoTransferencias() {
               </label>
               <p className="text-right text-[11px] text-sub">{obs.length}/300</p>
               <div className="mt-2 flex flex-wrap gap-2">
-                <button type="button" disabled={!movimientos.length || negativos > 0 || cargando || !nombreLote.trim()} onClick={() => void cargar()} className="btn-press inline-flex h-9 items-center gap-1.5 rounded-lg border border-lime-400/50 bg-lime-400/15 px-3 text-sm font-semibold text-lime-200 disabled:opacity-40">
+                <button type="button" disabled={!movsLote.length || negativos > 0 || cargando || !nombreLote.trim()} onClick={() => void cargar()} className="btn-press inline-flex h-9 items-center gap-1.5 rounded-lg border border-lime-400/50 bg-lime-400/15 px-3 text-sm font-semibold text-lime-200 disabled:opacity-40">
                   {cargando ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Send size={14} aria-hidden />} Cargar en Transferencias
                 </button>
                 <button type="button" disabled={!movimientos.length} onClick={() => void bajarExcelRemitos(movimientos, locales)} className={btn + ' h-9'}>
@@ -576,8 +644,72 @@ export default function RepartoTransferencias() {
                 <li>A los locales origen les suena la campana hasta que marquen el primer renglón.</li>
                 <li>Si sale o llega a DEPO, avisa a Depósito Indo.</li>
                 <li>No se repite: el mismo nombre en 7 días no crea otro lote.</li>
+                {movsMito.length > 0 && <li>Lo que sale de MITO no va en el lote: se carga abajo como pedido de venta en Dragon.</li>}
               </ol>
             </section>
+
+            {movsMito.length > 0 && (
+              <section className="rounded-2xl border border-sky-500/30 bg-surface p-4 xl:col-span-2">
+                <h2 className="text-[15px] font-bold text-ink">Pedidos de venta de MITO en Dragon</h2>
+                <p className="text-xs text-sub">
+                  Lo que MITO le da a cada local se carga en Dragon como un pedido de venta por local, como la Repo diaria (cliente = el del local, lista = la de su último pedido VTD, el precio lo pone Dragon).
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {mitoPorLocal.map(([l, u]) => (
+                    <span key={l} className="rounded-lg border border-line px-2.5 py-1 text-xs text-ink"><b>{l}</b> <span className="text-sub">{u} unid.</span></span>
+                  ))}
+                </div>
+                <div className="mt-3 flex flex-wrap items-end gap-3">
+                  <label className="text-[11px] font-medium uppercase tracking-wider text-sub/80">
+                    Motivo
+                    <select value={motivo} onChange={(e) => setMotivo(e.target.value)} className="mt-1 block h-9 rounded-lg border border-line bg-surface2 px-2 text-sm normal-case tracking-normal text-ink">
+                      {(motivos ?? [{ cod: 'VTD', pedidos: 0 }]).map((m) => <option key={m.cod} value={m.cod}>{m.cod}</option>)}
+                    </select>
+                  </label>
+                  <label className="min-w-[260px] flex-1 text-[11px] font-medium uppercase tracking-wider text-sub/80">
+                    Observación del pedido <span className="normal-case tracking-normal">(la ve Dragon · no se carga dos veces la misma)</span>
+                    <input value={obsDragon} maxLength={250} onChange={(e) => setObsDragon(e.target.value)} className="mt-1 block h-9 w-full rounded-lg border border-line bg-surface2 px-2.5 text-sm normal-case tracking-normal text-ink" />
+                  </label>
+                  <button type="button" disabled={negativos > 0 || ocupDragon || obsPedido.length < 3 || !!estDragon?.en_curso} onClick={() => void revisarDragon()} className="btn-press inline-flex h-9 items-center gap-1.5 rounded-lg border border-sky-400/50 bg-sky-400/15 px-3 text-sm font-semibold text-sky-200 disabled:opacity-40">
+                    {ocupDragon && !revDragon ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Send size={14} aria-hidden />} Cargar pedidos en Dragon
+                  </button>
+                </div>
+                {errDragon && <p className="mt-3 rounded-lg border border-red-500/40 bg-red-500/10 p-2 text-sm text-red-200">✕ {errDragon}</p>}
+                {(revDragon || estDragon) && (
+                  <div className="mt-3 rounded-xl border border-line p-3">
+                    <p className="text-sm text-ink">
+                      {revDragon ? 'Revisá antes de cargar' : estDragon?.en_curso ? 'Cargando en Dragon…' : 'Carga terminada'} · motivo <b>{(revDragon ?? estDragon)!.motivo}</b> · «{(revDragon ?? estDragon)!.obs}»
+                      {(revDragon ?? estDragon)!.en_seco && <span className="ml-2 rounded bg-amber-500/20 px-1.5 text-xs text-amber-200">EN SECO: no llama a Dragon</span>}
+                    </p>
+                    <table className="mt-2 w-full text-xs">
+                      <thead className="text-left text-[10.5px] uppercase tracking-wider text-sub/70">
+                        <tr><th className="py-1">Local</th><th>Cliente</th><th>Lista</th><th className="text-right">Renglones</th><th className="text-right">Unid.</th><th className="pl-3">Estado</th></tr>
+                      </thead>
+                      <tbody>
+                        {(revDragon ?? estDragon)!.locales.map((l) => (
+                          <tr key={l.cliente} className="border-t border-line text-ink">
+                            <td className="py-1 font-semibold">{l.local}</td><td>{l.cliente}</td><td>{l.lista}</td>
+                            <td className="text-right">{l.renglones}</td><td className="text-right">{l.unidades}</td>
+                            <td className={`pl-3 ${l.estado === 'error' ? 'text-red-300' : l.estado === 'cargado' || l.estado === 'en_seco' ? 'text-lime-300' : l.estado === 'ya_estaba' ? 'text-amber-200' : 'text-sub'}`}>
+                              {{ pendiente: 'Se carga', ya_estaba: `Ya estaba (N° ${l.numero}): no se repite`, cargando: 'Cargando…', cargado: `✓ Pedido N° ${l.numero}`, en_seco: '✓ Armado (en seco)', error: `✕ ${l.error}` }[l.estado]}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {revDragon && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button type="button" disabled={ocupDragon || !revDragon.locales.some((l) => l.estado === 'pendiente')} onClick={() => void confirmarDragon()} className="btn-press inline-flex h-9 items-center gap-1.5 rounded-lg border border-lime-400/50 bg-lime-400/15 px-3 text-sm font-semibold text-lime-200 disabled:opacity-40">
+                          {ocupDragon ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Send size={14} aria-hidden />}
+                          Confirmar: cargar {revDragon.locales.filter((l) => l.estado === 'pendiente').length} pedidos
+                        </button>
+                        <button type="button" onClick={() => setRevDragon(null)} className={btn + ' h-9'}>Cancelar</button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </section>
+            )}
           </div>
         </>
       )}

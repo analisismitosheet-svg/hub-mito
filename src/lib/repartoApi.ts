@@ -6,10 +6,13 @@
  *     -> { estado: 'calculando', desde }        (el Puente está leyendo el DWH, ~1-2 min)
  *     -> { estado: 'listo', locales, filas, arts, ... }
  *     -> { estado: 'demasiados', articulos, max }
+ *   POST /api/sql/reparto  { dragon: true, modo: 'motivos'|'revisar'|'cargar'|'estado', motivo, obs, pedidos, confirmo? }
+ *     -> lo que da MITO se carga como pedido de venta por local en Dragon (puente-sql/reparto-dragon.js)
  *
  * SOLO LECTURA: el Puente (puente-sql/reparto.js + sql/reparto-*.sql) lee stock y venta de cada
- * local y depósito. Los movimientos que se arman en pantalla van a Supabase como lote de
- * Transferencias (RPC reparto_cargar_transferencias), nunca al SQL Server.
+ * local y depósito. Los movimientos entre locales van a Supabase como lote de Transferencias
+ * (RPC reparto_cargar_transferencias); lo que sale de MITO va a Dragon como pedido de venta
+ * (API REST de Dragon, solo altas). Nunca se escribe directo en el SQL Server.
  *
  * Cuelga del router api/sql/[ruta].ts (tope de funciones de Vercel). Permiso: transferencias.import.
  */
@@ -72,8 +75,16 @@ export default async function handler(req: Req, res: Res) {
     cuerpo = { accion: 'reparto_opciones' }
   } else {
     const b = (typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body ?? {}) as Record<string, unknown>
-    if (JSON.stringify(b).length > 20_000) return res.status(400).json({ error: 'Filtros demasiado grandes' })
-    cuerpo = { accion: 'reparto_stock', filtros: b.filtros ?? {}, desde: String(b.desde ?? ''), hasta: String(b.hasta ?? ''), forzar: !!b.forzar }
+    if (b.dragon) {
+      // Lo que da MITO -> pedidos de venta en Dragon (puente-sql/reparto-dragon.js valida todo)
+      if (JSON.stringify(b).length > 1_000_000) return res.status(400).json({ error: 'Pedido demasiado grande' })
+      const modo = String(b.modo ?? '')
+      if (!['motivos', 'revisar', 'cargar', 'estado'].includes(modo)) return res.status(400).json({ error: 'Modo inválido' })
+      cuerpo = { accion: 'reparto_dragon', modo, motivo: b.motivo, obs: b.obs, pedidos: b.pedidos, confirmo: b.confirmo }
+    } else {
+      if (JSON.stringify(b).length > 20_000) return res.status(400).json({ error: 'Filtros demasiado grandes' })
+      cuerpo = { accion: 'reparto_stock', filtros: b.filtros ?? {}, desde: String(b.desde ?? ''), hasta: String(b.hasta ?? ''), forzar: !!b.forzar }
+    }
   }
 
   const r0 = await postAlPuente(
