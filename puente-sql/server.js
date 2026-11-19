@@ -506,53 +506,6 @@ async function preciosLista(srv, db, listaPrecios, codigos) {
   return Object.fromEntries((r.recordset ?? []).map((f) => [String(f.articulo).toUpperCase(), Number(f.precio) || 0]))
 }
 
-/**
- * Stock MAYORISTA para la tienda web (Captain Fin + Zimith): depósito MITO, stock REAL por artículo, color y talle.
- * Misma fórmula que el Reparto manual (sql/reparto-stock.sql, paso 5): físico − comprometido, cada parte del
- * comprometido (PEDIDO, PREPARADO) con piso 0; solo filas de MITO (BDALTAFW/BDMODIFW = 'MITO'). SOLO LECTURA.
- *   body: { accion:'stock_mayorista', prefijos:['CF','ZH'] }  (o articulos:[...], hasta 200)
- *   -> { filas: [{ a, c, t, s }], en }   (s > 0; a = artículo, c = color, t = talle)
- * Cache de 60 s por pedido: la tienda pregunta seguido y el número no cambia tan rápido.
- */
-const cacheStockMayorista = new Map()
-async function stockMayorista(prefijos, articulos) {
-  const pre = [...new Set((Array.isArray(prefijos) ? prefijos : []).map((p) => String(p).trim().toUpperCase()))].filter(Boolean)
-  const arts = [...new Set((Array.isArray(articulos) ? articulos : []).map((a) => String(a).trim().toUpperCase()))].filter(Boolean)
-  if (!pre.length && !arts.length) throw new Error('Pasá prefijos o articulos')
-  if (pre.length > 10 || pre.some((p) => !/^[A-Z]{1,4}$/.test(p))) throw new Error('Prefijos inválidos')
-  if (arts.length > 200 || arts.some((a) => !ARTICULO_DRAGON.test(a))) throw new Error('Artículos inválidos')
-  const clave = JSON.stringify([pre.sort(), arts.sort()])
-  const c = cacheStockMayorista.get(clave)
-  if (c && Date.now() - c.en < 60_000) return c.datos
-
-  const srv = SERVIDORES.get(ALIAS_PRINCIPAL.toUpperCase())
-  await asegurarConexion(srv)
-  const p = srv.pool.request()
-  pre.forEach((x, i) => p.input(`p${i}`, srv.sql.VarChar(10), x + '%'))
-  arts.forEach((x, i) => p.input(`a${i}`, srv.sql.VarChar(40), x))
-  const filtro = [
-    ...pre.map((_, i) => `LTRIM(RTRIM(COART)) LIKE @p${i}`),
-    ...(arts.length ? [`LTRIM(RTRIM(COART)) IN (${arts.map((_, i) => `@a${i}`).join(',')})`] : []),
-  ].join(' OR ')
-  const r = await p.query(
-    `SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
-     SELECT LTRIM(RTRIM(COART)) AS a, LTRIM(RTRIM(COCOL)) AS c, LTRIM(RTRIM(TALLE)) AS t,
-            SUM(CAST(ISNULL(COCANT, 0) AS int))
-          - SUM(CASE WHEN ISNULL(PEDIDO, 0) > 0 THEN CAST(PEDIDO AS int) ELSE 0 END
-              + CASE WHEN ISNULL(PREPARADO, 0) > 0 THEN CAST(PREPARADO AS int) ELSE 0 END) AS s
-       FROM DRAGONFISH_MITO.ZooLogic.COMB
-      WHERE BDALTAFW = 'MITO' AND BDMODIFW = 'MITO' AND (${filtro})
-      GROUP BY LTRIM(RTRIM(COART)), LTRIM(RTRIM(COCOL)), LTRIM(RTRIM(TALLE))
-     HAVING SUM(CAST(ISNULL(COCANT, 0) AS int))
-          - SUM(CASE WHEN ISNULL(PEDIDO, 0) > 0 THEN CAST(PEDIDO AS int) ELSE 0 END
-              + CASE WHEN ISNULL(PREPARADO, 0) > 0 THEN CAST(PREPARADO AS int) ELSE 0 END) > 0`,
-  )
-  const datos = { filas: (r.recordset ?? []).map((f) => ({ a: f.a, c: f.c, t: f.t, s: Number(f.s) || 0 })), en: new Date().toISOString() }
-  cacheStockMayorista.set(clave, { en: Date.now(), datos })
-  if (cacheStockMayorista.size > 50) cacheStockMayorista.delete(cacheStockMayorista.keys().next().value)
-  return datos
-}
-
 /** Buscador de artículos en vivo sobre ZooLogic.ART de la base elegida: cada palabra tiene que estar en el código o la descripción.
     Con listaPrecios trae también el precio vigente de esa lista. */
 async function dragonBuscarArticulos(base, texto, listaPrecios) {
@@ -1779,15 +1732,6 @@ const server = http.createServer(async (req, res) => {
     if (body?.accion === 'precios_local_publico') {
       return enviar(res, 200, await preciosLocalPublico(body?.local, body?.articulos))
     }
-    // Tienda mayorista web: stock real del depósito MITO por SKU (solo lectura)
-    if (body?.accion === 'stock_mayorista') {
-      try {
-        return enviar(res, 200, await stockMayorista(body?.prefijos, body?.articulos))
-      } catch (e) {
-        return enviar(res, 400, { error: e.message })
-      }
-    }
-
     if (body?.accion === 'dragon_articulos') {
       return enviar(res, 200, body?.codigos ? await dragonDatosArticulos(body?.base, body.codigos, body?.lista) : await dragonBuscarArticulos(body?.base, body?.texto, body?.lista))
     }

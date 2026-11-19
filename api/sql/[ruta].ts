@@ -13,7 +13,6 @@
  *   GET /api/sql/dragon-variantes?base=&articulo= -> colores y talles de un artículo en Dragon (Órdenes de compras)
  *   GET /api/sql/dragon-articulos?base=&q=|codigos= -> artículos en vivo de Dragon (buscador e importar txt de Órdenes de compras)
  *   GET /api/sql/stock-publico?articulo=      -> PÚBLICO (sin sesión): stock de un artículo por local (/precios)
- *   GET /api/sql/stock-mayorista?prefijos=CF,ZH -> stock REAL de MITO por SKU para la tienda mayorista (clave X-Mayorista-Token)
  *   GET /api/sql/<vista>[?where=&value=&limit=] -> filas de una vista habilitada
  *
  * Antes eran tres funciones (sql/[view], sql/status, sql/catalogo); se unificaron para
@@ -37,7 +36,6 @@ import reparto from '../../src/lib/repartoApi.js'
 import pedidoVentaItems from '../../src/lib/pedidoVentaItemsApi.js'
 import dragonVariantes, { dragonArticulos } from '../../src/lib/dragonVariantesApi.js'
 import stockPublico from '../../src/lib/stockPublicoApi.js'
-import stockMayorista from '../../src/lib/stockMayoristaApi.js'
 
 type Req = {
   method?: string
@@ -94,8 +92,6 @@ export default async function handler(req: Req, res: Res) {
 
   if (ruta === 'ping') return ping(res)
   if (ruta === 'stock-publico') return stockPublico(req, res)
-  // tienda mayorista web: con clave privada (X-Mayorista-Token), no con sesión
-  if (ruta === 'stock-mayorista') return stockMayorista(req, res)
 
   if (ruta === 'status') return status(req, res)
   if (ruta === 'catalogo') return catalogo(req, res)
