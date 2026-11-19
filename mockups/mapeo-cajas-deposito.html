@@ -84,6 +84,10 @@
   .chipc.azul{border-color:rgba(14,165,233,.5);background:rgba(14,165,233,.1);color:#38bdf8}
   .chipc.azul small,.chipc.verde small{color:inherit;opacity:.85}
   .grupo{font-size:12px;font-weight:700;margin:0 0 6px}
+  .tarjloc{display:flex;align-items:center;gap:12px;border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:12px 14px}
+  .locchip{font-size:11.5px;font-weight:700;border-radius:99px;padding:2px 8px;background:rgba(249,115,22,.15);color:var(--or);margin-right:4px}
+  .barra-av{height:6px;border-radius:99px;background:rgba(255,255,255,.09);overflow:hidden;margin-top:8px}
+  .barra-av i{display:block;height:100%;background:var(--or);border-radius:99px}
   .nuevo-sec{border:2px solid rgba(249,115,22,.55);box-shadow:0 0 0 4px rgba(249,115,22,.1)}
 </style>
 </head>
@@ -206,20 +210,30 @@
     <div>
       <h2>5 · Mi repo · Transferencias Depósito Indo <span class="badge">NUEVO</span></h2>
       <div class="pantalla stack nuevo-sec">
-        <p class="sub" style="font-size:12.5px">Como el armado de pedidos del mayorista con las ubicaciones: cada artículo muestra en qué caja está y la lista va ordenada por caja (recorrido), después artículo, color y talle.</p>
-        <div class="card" style="padding:12px">
+        <p class="sub" style="font-size:12.5px">Igual que Mi repo del mayorista: una tarjeta por local con su avance. Tocás el local y se abre solo, con lo que falta preparar ordenado por caja.</p>
+
+        <p class="sub" style="font-size:12px;font-weight:700">Lista: una tarjeta por local</p>
+        <div class="stack">
           <b style="font-size:16px">⇄ Transferencias Depósito Indo</b>
-          <div style="border:1px solid var(--line);border-radius:12px;margin-top:10px;background:rgba(22,22,29,.5)">
-            <div style="padding:8px 12px;border-bottom:1px solid var(--line)"><b>Reposición 19/11</b><p class="sub" style="font-size:12px">5 renglones · 14 u. por preparar</p></div>
-            <div style="display:flex;align-items:center;gap:8px;padding:8px 12px"><span>▾</span><b style="flex:1">ALTO ROSARIO <span class="sub" style="font-weight:500;font-size:12px">14 u. pendientes</span></b><span class="btn em" style="height:28px;padding:0 10px;font-size:12px">✓ Todo</span></div>
-            <div class="stack" style="padding:0 12px 12px">
-              <div class="renglon"><div style="flex:1;min-width:0"><b style="font-size:13px">24110231 · NEGRO · M</b> <span class="cajachip num">📦 Caja 3</span><p class="sub" style="font-size:11.5px">REMERA BASIC M/C</p></div><b class="num">4 u.</b><span class="ok-b">✓</span><span class="x-b">✕</span></div>
-              <div class="renglon"><div style="flex:1;min-width:0"><b style="font-size:13px">25010044 · AZUL · 38</b> <span class="cajachip num">📦 Cajas 14 · 15</span><p class="sub" style="font-size:11.5px">JEAN MOM TIRO ALTO</p></div><b class="num">3 u.</b><span class="ok-b">✓</span><span class="x-b">✕</span></div>
-              <div class="renglon"><div style="flex:1;min-width:0"><b style="font-size:13px">25010044 · AZUL · 40</b> <span class="cajachip num">📦 Cajas 14 · 15</span><p class="sub" style="font-size:11.5px">JEAN MOM TIRO ALTO</p></div><b class="num">2 u.</b><span class="ok-b">✓</span><span class="x-b">✕</span></div>
-              <div class="renglon"><div style="flex:1;min-width:0"><b style="font-size:13px">24300071 · GRIS · L</b> <span class="cajachip num">📦 Caja 16</span><p class="sub" style="font-size:11.5px">BUZO CANGURO</p></div><b class="num">3 u.</b><span class="ok-b">✓</span><span class="x-b">✕</span></div>
-              <div class="renglon"><div style="flex:1;min-width:0"><b style="font-size:13px">26990001 · BLANCO · U</b><p class="sub" style="font-size:11.5px">MEDIAS SOQUETE (sin caja: va al final)</p></div><b class="num">2 u.</b><span class="ok-b">✓</span><span class="x-b">✕</span></div>
-            </div>
+          <div class="tarjloc"><div style="flex:1;min-width:0"><p><span class="locchip">ALTO ROSARIO</span> <b>Reposición 19/11</b></p><p class="sub num" style="font-size:12px;margin-top:3px">2 de 14 unidades</p><div class="barra-av"><i style="width:14%"></i></div></div><span class="sub" style="font-size:20px">›</span></div>
+          <div class="tarjloc"><div style="flex:1;min-width:0"><p><span class="locchip">NUEVO CENTRO</span> <b>Reposición 19/11</b></p><p class="sub num" style="font-size:12px;margin-top:3px">0 de 22 unidades</p><div class="barra-av"><i style="width:0%"></i></div></div><span class="sub" style="font-size:20px">›</span></div>
+          <div class="tarjloc"><div style="flex:1;min-width:0"><p><span class="locchip">PATIO OLMOS</span> <b>Reposición 18/11</b></p><p class="sub num" style="font-size:12px;margin-top:3px">9 de 9 unidades <span style="color:#34d399;font-weight:600">&nbsp;✓ Listo</span></p><div class="barra-av"><i style="width:100%;background:#10b981"></i></div></div><span class="sub" style="font-size:20px">›</span></div>
+        </div>
+
+        <p class="sub" style="font-size:12px;font-weight:700;margin-top:6px">Al tocar ALTO ROSARIO</p>
+        <div class="stack">
+          <p class="sub" style="font-size:13px">‹ Mis locales</p>
+          <div class="card" style="padding:10px 12px">
+            <div style="display:flex;align-items:center;gap:10px"><div style="flex:1"><b>Reposición 19/11</b><p style="font-size:12px"><b style="color:var(--or)">ALTO ROSARIO</b> <span class="sub num">· 2 de 14 unidades</span></p></div><span class="btn em" style="height:38px;padding:0 12px">✓ Todo</span></div>
+            <div class="barra-av" style="height:8px"><i style="width:14%"></i></div>
           </div>
+          <b style="font-size:13.5px">Faltan preparar <span class="sub" style="font-weight:400">(4)</span></b>
+          <div class="renglon"><div style="flex:1;min-width:0"><b style="font-size:13px">24110231 · NEGRO · M</b> <span class="cajachip num">📦 Caja 3</span><p class="sub" style="font-size:11.5px">REMERA BASIC M/C</p></div><b class="num">4 u.</b><span class="ok-b">✓</span><span class="x-b">✕</span></div>
+          <div class="renglon"><div style="flex:1;min-width:0"><b style="font-size:13px">25010044 · AZUL · 38</b> <span class="cajachip num">📦 Cajas 14 · 15</span><p class="sub" style="font-size:11.5px">JEAN MOM TIRO ALTO</p></div><b class="num">3 u.</b><span class="ok-b">✓</span><span class="x-b">✕</span></div>
+          <div class="renglon"><div style="flex:1;min-width:0"><b style="font-size:13px">24300071 · GRIS · L</b> <span class="cajachip num">📦 Caja 16</span><p class="sub" style="font-size:11.5px">BUZO CANGURO</p></div><b class="num">3 u.</b><span class="ok-b">✓</span><span class="x-b">✕</span></div>
+          <div class="renglon"><div style="flex:1;min-width:0"><b style="font-size:13px">26990001 · BLANCO · U</b><p class="sub" style="font-size:11.5px">MEDIAS SOQUETE (sin caja: va al final)</p></div><b class="num">2 u.</b><span class="ok-b">✓</span><span class="x-b">✕</span></div>
+          <b class="sub" style="font-size:13.5px">Listos (1)</b>
+          <div class="renglon" style="opacity:.6"><div style="flex:1;min-width:0"><b style="font-size:13px">25010044 · AZUL · 40</b> <span class="cajachip num">📦 Cajas 14 · 15</span><p class="sub" style="font-size:11.5px">JEAN MOM TIRO ALTO</p></div><b class="num">2 u.</b><span style="color:#10b981;font-size:12px;font-weight:600">Hecho</span><span class="ok-b" style="background:transparent;border:1px solid var(--line);color:var(--sub)">↶</span></div>
         </div>
       </div>
     </div>

@@ -158,6 +158,8 @@ export default function MiRepo() {
   }, [items])
 
   const [sel, setSel] = useState<string | null>(null)
+  // Un local de Transferencias Depósito Indo abierto: se esconde lo demás, como con una repo abierta
+  const [depAbierto, setDepAbierto] = useState(false)
   const [mensaje, setMensaje] = useState<{ ok: boolean; texto: string } | null>(null)
   const [deshacer, setDeshacer] = useState<UltimoEscaneo | null>(null)
   // Escaneos en viaje: se cuentan (no se bloquea), así un lector rápido no pierde lecturas
@@ -1053,7 +1055,7 @@ export default function MiRepo() {
       {/* Las cuentas de piso no tienen menú: Mi repo es su única pantalla */}
       {!soloPiso && <BackButton label="Menú" />}
 
-      {!asignacionSel && (
+      {!asignacionSel && !depAbierto && (
         <div className="mb-4 flex items-center gap-3 sm:mb-5">
           <div
             className="rounded-xl border p-2.5 sm:p-3"
@@ -1071,7 +1073,7 @@ export default function MiRepo() {
       )}
 
       {/* Avisos push: que el celular suene aunque esté bloqueado */}
-      {!asignacionSel && (
+      {!asignacionSel && !depAbierto && (
         <AvisosCelular
           texto={soloDeposito
             ? 'Activá los avisos para que suene cuando carguen una reposición de Depósito Indo, aunque el celular esté bloqueado.'
@@ -1080,7 +1082,7 @@ export default function MiRepo() {
       )}
 
       {/* Rol deposito y legajos de Depósito Indo: los renglones que salen de Indo */}
-      {!asignacionSel && veMiRepoDeposito && <TransferenciasDeposito mostrarVacio={soloDeposito} />}
+      {!asignacionSel && veMiRepoDeposito && <TransferenciasDeposito mostrarVacio={soloDeposito} alAbrir={setDepAbierto} />}
 
       {avisoArmado && (
         <p
@@ -1106,7 +1108,7 @@ export default function MiRepo() {
       )}
 
       {/* ---------- Armados de pedidos (lo que pidió el mayorista) ---------- */}
-      {!asignacionSel && armadosPendientes.length > 0 && (
+      {!asignacionSel && !depAbierto && armadosPendientes.length > 0 && (
         <div className="space-y-3">
           <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-400">
             <BellRing size={13} aria-hidden /> Armados pedidos
@@ -1122,7 +1124,7 @@ export default function MiRepo() {
         </div>
       )}
 
-      {!asignacionSel && armadosMios.length > 0 && (
+      {!asignacionSel && !depAbierto && armadosMios.length > 0 && (
         <div className="space-y-3">
           <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-emerald-500">
             <Flag size={13} aria-hidden /> Armados en curso
@@ -1135,13 +1137,13 @@ export default function MiRepo() {
       )}
 
       {/* Resumen del último repo finalizado */}
-      {!asignacionSel && resumen && (
+      {!asignacionSel && !depAbierto && resumen && (
         <div className="mb-4 flex items-start gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm font-medium text-emerald-400">
           <Flag size={16} className="mt-0.5 shrink-0" aria-hidden /> {resumen}
         </div>
       )}
 
-      {!aviso && !error && !soloDeposito && asignaciones.length === 0 && (
+      {!aviso && !error && !soloDeposito && !depAbierto && asignaciones.length === 0 && (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-line2 bg-surface/50 px-4 py-14 text-center text-sub">
           <Store size={28} aria-hidden />
           <p>{modoAdmin ? 'No hay repos con responsables asignados.' : 'Todavía no te asignaron ningún local en un repo.'}</p>
@@ -1151,7 +1153,7 @@ export default function MiRepo() {
         </div>
       )}
 
-      {!aviso && !error && !asignacionSel && asignaciones.length > 0 && conPendientes.length === 0 &&
+      {!aviso && !error && !asignacionSel && !depAbierto && asignaciones.length > 0 && conPendientes.length === 0 &&
         armadosPendientes.length === 0 && armadosMios.length === 0 && (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-14 text-center text-emerald-400">
           <Check size={28} aria-hidden />
@@ -1163,12 +1165,12 @@ export default function MiRepo() {
       )}
 
       {/* ---------- Lista de repos (solo los que tienen algo pendiente o están abiertos) ---------- */}
-      {!asignacionSel && conPendientes.length > 0 && !modoAdmin && (
+      {!asignacionSel && !depAbierto && conPendientes.length > 0 && !modoAdmin && (
         <div className="space-y-3">{conPendientes.map((a) => tarjeta(a))}</div>
       )}
 
       {/* ---------- Administrador: por legajo → pendientes / terminados ---------- */}
-      {!asignacionSel && modoAdmin && porLegajo.length > 0 && (
+      {!asignacionSel && !depAbierto && modoAdmin && porLegajo.length > 0 && (
         <div className="space-y-3">
           {porLegajo.map((g) => {
             const abierto = empAbiertos.has(g.clave)
