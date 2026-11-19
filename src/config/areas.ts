@@ -1,5 +1,6 @@
 import {
   Ban,
+  PackageOpen,
   Scale,
   Briefcase,
   Wallet,
@@ -670,7 +671,7 @@ export const APPS: AppDef[] = [
     id: 'deposito-mapeo-cajas',
     areaId: 'deposito',
     title: 'Mapeo de cajas',
-    description: 'Escaneo por número de caja, cajas mapeadas y lista de cajas con QR.',
+    description: 'Escaneo por número de caja, cajas llenas, dónde guardar y lista de cajas con QR.',
     icon: MapIcon,
     kind: 'internal',
     target: '/deposito/mapeo-cajas',
@@ -697,6 +698,17 @@ export const APPS: AppDef[] = [
     kind: 'internal',
     target: '/deposito/mapeo-cajas/orden',
     color: '#0891b2',
+    permiso: 'deposito.cajas.view',
+  },
+  {
+    id: 'mapeo-cajas-lugar',
+    areaId: 'deposito-mapeo-cajas',
+    title: '¿Dónde guardo?',
+    description: 'Mercadería nueva: las cajas con lugar (sin tilde de llena) y dónde ya está ese artículo.',
+    icon: PackageOpen,
+    kind: 'internal',
+    target: '/deposito/mapeo-cajas/lugar',
+    color: '#16a34a',
     permiso: 'deposito.cajas.view',
   },
   {

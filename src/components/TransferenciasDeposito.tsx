@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowRightLeft, Check, ChevronDown, ChevronRight, Loader2, Undo2, X } from 'lucide-react'
+import { ArrowRightLeft, Check, ChevronDown, ChevronRight, Loader2, Package, Undo2, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { suscribirCambios } from '@/lib/realtime'
+import { compararTalles } from '@/lib/ordenPiso'
+import { useCajasMapeo } from '@/lib/useCajasMapeo'
 
 /** Renglón de transferencia que sale de Depósito Indo (RPC transferencias_deposito_items). */
 interface Renglon {
@@ -51,6 +53,29 @@ export default function TransferenciasDeposito({ mostrarVacio = false }: { mostr
     return () => { desuscribir(); window.clearInterval(id) }
   }, [cargar])
 
+  // Cajas del Mapeo de cajas (como las ubicaciones en el armado de pedidos):
+  // chip al lado del artículo y recorrido por número de caja. Se actualizan solas.
+  const codigos = useMemo(() => renglones.map((r) => String(r.articulo ?? '')), [renglones])
+  const cajas = useCajasMapeo(codigos)
+  const cajasDe = useCallback((r: Renglon) => cajas.get(String(r.articulo ?? '').trim().toUpperCase()) ?? [], [cajas])
+
+  /** Recorrido: caja → artículo → color → talle; los que no están en ninguna caja, al final */
+  const compararRecorrido = useCallback(
+    (a: Renglon, b: Renglon) => {
+      const ca = cajasDe(a)[0]
+      const cb = cajasDe(b)[0]
+      const porCaja = ca != null && cb != null ? ca - cb : ca != null ? -1 : cb != null ? 1 : 0
+      const t = (v: unknown) => String(v ?? '').trim().toUpperCase()
+      return (
+        porCaja ||
+        t(a.articulo).localeCompare(t(b.articulo), 'es', { numeric: true }) ||
+        t(a.color).localeCompare(t(b.color), 'es', { numeric: true }) ||
+        compararTalles(a.talle, b.talle)
+      )
+    },
+    [cajasDe],
+  )
+
   // Lote → destino → renglones
   const lotes = useMemo(() => {
     const m = new Map<string, { id: string; nombre: string; creado: string; destinos: Map<string, Renglon[]> }>()
@@ -59,8 +84,9 @@ export default function TransferenciasDeposito({ mostrarVacio = false }: { mostr
       if (!l) { l = { id: r.lote_id, nombre: r.lote_nombre, creado: r.lote_creado, destinos: new Map() }; m.set(r.lote_id, l) }
       l.destinos.set(r.destino, [...(l.destinos.get(r.destino) ?? []), r])
     }
+    for (const l of m.values()) for (const [d, rs] of l.destinos) l.destinos.set(d, [...rs].sort(compararRecorrido))
     return [...m.values()]
-  }, [renglones])
+  }, [renglones, compararRecorrido])
 
   async function marcar(ids: string[], estado: Estado) {
     if (!supabase || !ids.length) return
@@ -143,8 +169,17 @@ export default function TransferenciasDeposito({ mostrarVacio = false }: { mostr
                           return (
                             <li key={r.id} className={'flex items-center gap-2 rounded-lg border border-line bg-surface px-2 py-1.5 ' + (r.estado !== 'pendiente' ? 'opacity-60' : '')}>
                               <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm font-medium text-ink">
-                                  {[r.articulo, r.color, r.talle].filter(Boolean).join(' · ') || 'Artículo'}
+                                <p className="flex min-w-0 items-center gap-1.5 text-sm font-medium text-ink">
+                                  <span className="truncate">{[r.articulo, r.color, r.talle].filter(Boolean).join(' · ') || 'Artículo'}</span>
+                                  {cajasDe(r).length > 0 && (
+                                    <span
+                                      className="inline-flex shrink-0 items-center gap-1 rounded-md bg-orange-500/15 px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-orange-500"
+                                      title="Caja del Mapeo de cajas"
+                                    >
+                                      <Package size={11} aria-hidden />
+                                      {cajasDe(r).length === 1 ? `Caja ${cajasDe(r)[0]}` : `Cajas ${cajasDe(r).join(' · ')}`}
+                                    </span>
+                                  )}
                                 </p>
                                 {r.descripcion && <p className="truncate text-xs text-sub">{r.descripcion}</p>}
                               </div>

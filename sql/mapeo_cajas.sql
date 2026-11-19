@@ -89,6 +89,94 @@ CREATE POLICY mapeo_cajas_lista_borrar ON public.mapeo_cajas_lista
   FOR DELETE TO authenticated
   USING (private.tengo_permiso('deposito.cajas.gestionar'));
 
+-- Transferencias Depósito Indo (Mi repo del rol deposito) muestra la caja de cada
+-- artículo y ordena por caja, como el armado de pedidos con las ubicaciones:
+-- quien ve esas transferencias también lee el mapeo de cajas.
+DROP POLICY IF EXISTS mapeo_cajas_ver_repo ON public.mapeo_cajas;
+CREATE POLICY mapeo_cajas_ver_repo ON public.mapeo_cajas
+  FOR SELECT TO authenticated
+  USING (private.tengo_permiso('deposito.view') OR private.tengo_permiso('mayorista.repos_piso'));
+
+-- ============================================================
+-- Cajas llenas: tilde que se pone al escanear o desde Cajas mapeadas.
+-- Sirve para «¿Dónde guardo?»: muestra las cajas que todavía tienen lugar.
+-- Fila presente = caja llena. Se escribe solo por mapeo_cajas_marcar_llena().
+-- ============================================================
+CREATE TABLE IF NOT EXISTS public.mapeo_cajas_llenas (
+  caja        integer PRIMARY KEY CHECK (caja BETWEEN 1 AND 999999),
+  marcada_por uuid DEFAULT auth.uid(),
+  marcada_at  timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.mapeo_cajas_llenas ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.mapeo_cajas_llenas FROM anon, authenticated;
+GRANT SELECT ON public.mapeo_cajas_llenas TO authenticated;
+
+DROP POLICY IF EXISTS mapeo_cajas_llenas_ver ON public.mapeo_cajas_llenas;
+CREATE POLICY mapeo_cajas_llenas_ver ON public.mapeo_cajas_llenas
+  FOR SELECT TO authenticated
+  USING (private.tengo_permiso('deposito.cajas.view') OR private.tengo_permiso('deposito.cajas.escanear'));
+
+DROP FUNCTION IF EXISTS public.mapeo_cajas_marcar_llena(integer, boolean);
+CREATE FUNCTION public.mapeo_cajas_marcar_llena(p_caja integer, p_llena boolean)
+RETURNS boolean
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $$
+BEGIN
+  IF NOT private.tengo_permiso('deposito.cajas.escanear') THEN
+    RAISE EXCEPTION 'Sin permiso para marcar cajas';
+  END IF;
+  IF p_caja IS NULL OR p_caja < 1 THEN
+    RAISE EXCEPTION 'Número de caja inválido';
+  END IF;
+  IF p_llena THEN
+    INSERT INTO public.mapeo_cajas_llenas (caja) VALUES (p_caja)
+    ON CONFLICT (caja) DO UPDATE SET marcada_por = auth.uid(), marcada_at = now();
+  ELSE
+    DELETE FROM public.mapeo_cajas_llenas WHERE caja = p_caja;
+  END IF;
+  RETURN p_llena;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.mapeo_cajas_marcar_llena(integer, boolean) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.mapeo_cajas_marcar_llena(integer, boolean) TO authenticated;
+
+-- «¿Dónde guardo?»: traduce lo que leyó el lector (EAN, CODIGO!COLOR!TALLE…)
+-- al código de artículo, sin guardar nada.
+DROP FUNCTION IF EXISTS public.mapeo_cajas_leer_codigo(text);
+CREATE FUNCTION public.mapeo_cajas_leer_codigo(p_codigo text)
+RETURNS text
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public
+AS $$
+DECLARE
+  v_bruto text := upper(regexp_replace(coalesce(p_codigo, ''), '\s', '', 'g'));
+  v_p     record;
+BEGIN
+  IF NOT (private.tengo_permiso('deposito.cajas.view') OR private.tengo_permiso('deposito.cajas.escanear')) THEN
+    RAISE EXCEPTION 'Sin permiso para el mapeo de cajas';
+  END IF;
+  IF v_bruto = '' THEN
+    RETURN NULL;
+  END IF;
+  SELECT * INTO v_p FROM private.parsear_codigo_barras(v_bruto);
+  RETURN nullif(v_p.codigo, '');
+END;
+$$;
+REVOKE ALL ON FUNCTION public.mapeo_cajas_leer_codigo(text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.mapeo_cajas_leer_codigo(text) TO authenticated;
+
+-- Cambios en vivo: Mi repo y las pantallas del mapeo se enteran solas
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'mapeo_cajas') THEN
+      ALTER PUBLICATION supabase_realtime ADD TABLE public.mapeo_cajas;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'mapeo_cajas_llenas') THEN
+      ALTER PUBLICATION supabase_realtime ADD TABLE public.mapeo_cajas_llenas;
+    END IF;
+  END IF;
+END $$;
+
 -- ============================================================
 -- Escanear un artículo en la caja actual (al final del orden).
 --   p_accion NULL     : si el artículo no está en ninguna caja -> 'nuevo'.

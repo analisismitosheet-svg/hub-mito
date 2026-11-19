@@ -73,6 +73,7 @@ import MapeoUbicaciones from '@/pages/MapeoUbicaciones'
 import MapeoCajasEscanear from '@/pages/MapeoCajasEscanear'
 import MapeoCajasOrden from '@/pages/MapeoCajasOrden'
 import MapeoCajasLista from '@/pages/MapeoCajasLista'
+import MapeoCajasLugar from '@/pages/MapeoCajasLugar'
 import ConsultaArticulos from '@/pages/ConsultaArticulos'
 import CargaNovedades from '@/pages/CargaNovedades'
 import ResumenNovedades from '@/pages/ResumenNovedades'
@@ -574,6 +575,14 @@ export default function App() {
             element={
               <PermissionRoute permiso="deposito.cajas.view">
                 <MapeoCajasOrden />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/deposito/mapeo-cajas/lugar"
+            element={
+              <PermissionRoute permiso="deposito.cajas.view">
+                <MapeoCajasLugar />
               </PermissionRoute>
             }
           />

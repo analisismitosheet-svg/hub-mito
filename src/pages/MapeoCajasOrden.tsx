@@ -6,7 +6,7 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { descripcionesDeArticulos } from '@/lib/mapeo'
-import { cargarMapeoCajas, tramoDe, type MapeoCaja } from '@/lib/mapeoCajas'
+import { cargarCajasLlenas, cargarMapeoCajas, marcarCajaLlena, tramoDe, type MapeoCaja } from '@/lib/mapeoCajas'
 import { cargarStockArticulos, stockDe, type StockArticulos } from '@/lib/stockArticulos'
 
 interface Caja {
@@ -48,6 +48,9 @@ function chipStock(v: number | null) {
 export default function MapeoCajasOrden() {
   const { isAdmin, can } = useAuth()
   const veBorrar = isAdmin || can('deposito.cajas.borrar')
+  const puedeMarcar = isAdmin || can('deposito.cajas.escanear')
+  const [llenas, setLlenas] = useState<Set<number>>(new Set())
+  const [marcando, setMarcando] = useState<number | null>(null)
 
   const [filas, setFilas] = useState<MapeoCaja[]>([])
   const [cargando, setCargando] = useState(true)
@@ -70,6 +73,7 @@ export default function MapeoCajasOrden() {
     try {
       const todas = await cargarMapeoCajas()
       setFilas(todas)
+      cargarCajasLlenas().then(setLlenas).catch(() => { /* sin tilde de llenas */ })
       // No frenan la carga: si fallan, se ven solo los códigos
       descripcionesDeArticulos(todas.map((f) => f.codigo))
         .then(setDescripciones)
@@ -149,6 +153,25 @@ export default function MapeoCajasOrden() {
   // Buscando, todo se abre solo para mostrar lo encontrado
   const estaAbierto = (k: string) => !!q || abiertos.has(k)
 
+  async function alternarLlena(caja: number) {
+    const nueva = !llenas.has(caja)
+    setMarcando(caja)
+    setError(null)
+    try {
+      await marcarCajaLlena(caja, nueva)
+      setLlenas((prev) => {
+        const s = new Set(prev)
+        if (nueva) s.add(caja)
+        else s.delete(caja)
+        return s
+      })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo marcar la caja.')
+    } finally {
+      setMarcando(null)
+    }
+  }
+
   async function confirmarBorrar() {
     if (!borrar || !supabase) return
     setBorrando(true)
@@ -170,6 +193,7 @@ export default function MapeoCajasOrden() {
       .sort((a, b) => a.caja - b.caja || a.codigo.localeCompare(b.codigo))
       .map((f) => ({
         Caja: f.caja,
+        Llena: llenas.has(f.caja) ? 'Sí' : '',
         Artículo: f.codigo,
         Descripción: descDe(f.codigo),
         Stock: stockDe(stock, f.codigo) ?? '',
@@ -191,6 +215,7 @@ export default function MapeoCajasOrden() {
         <h1 className="font-display text-2xl font-semibold text-ink">Cajas mapeadas</h1>
         <p className="text-sm text-sub">
           {cantCajas} {cantCajas === 1 ? 'caja' : 'cajas'} · {visibles.length} códigos
+          {llenas.size > 0 && <> · {llenas.size} {llenas.size === 1 ? 'llena' : 'llenas'}</>}
           {cantSinStock > 0 && (
             <>
               {' · '}
@@ -285,11 +310,30 @@ export default function MapeoCajasOrden() {
                       <div className="flex gap-3">
                         {t.cajas.map((c) => (
                           <div key={c.caja} className="flex w-56 shrink-0 flex-col overflow-hidden rounded-xl border border-line bg-surface">
-                            <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-2">
-                              <span className="font-display text-base font-bold tabular-nums text-ink">Caja {c.caja}</span>
-                              <span className="rounded-full bg-orange-500/15 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-orange-500">
-                                {c.items.length}
-                              </span>
+                            <div className={`border-b border-line px-3 py-2 ${llenas.has(c.caja) ? 'bg-brand-600/10' : ''}`}>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-display text-base font-bold tabular-nums text-ink">Caja {c.caja}</span>
+                                <span className="rounded-full bg-orange-500/15 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-orange-500">
+                                  {c.items.length}
+                                </span>
+                              </div>
+                              {puedeMarcar ? (
+                                <label className={`mt-1 flex cursor-pointer select-none items-center gap-1.5 text-xs font-semibold ${llenas.has(c.caja) ? 'text-brand-400' : 'text-sub'}`}>
+                                  {marcando === c.caja ? (
+                                    <Loader2 size={14} className="animate-spin" aria-hidden />
+                                  ) : (
+                                    <input
+                                      type="checkbox"
+                                      checked={llenas.has(c.caja)}
+                                      onChange={() => void alternarLlena(c.caja)}
+                                      className="h-4 w-4 accent-red-600"
+                                    />
+                                  )}
+                                  Caja llena
+                                </label>
+                              ) : (
+                                llenas.has(c.caja) && <p className="mt-1 text-xs font-bold text-brand-400">LLENA</p>
+                              )}
                             </div>
                             <ul className="divide-y divide-line/40">
                               {c.items.map((i) => (

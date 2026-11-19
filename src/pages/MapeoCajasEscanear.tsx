@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
-  Loader2, Check, AlertTriangle, Camera, CameraOff, Package, MoveDown, QrCode, Plus, RotateCcw,
+  Loader2, Check, AlertTriangle, Camera, CameraOff, Package, MoveDown, QrCode, Plus, RotateCcw, PackageCheck,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ScannerCamara from '@/components/ScannerCamara'
 import { supabase } from '@/lib/supabase'
 import {
-  PREFIJO_CAJA, cargarListaCajas, leerNumeroCaja,
+  PREFIJO_CAJA, cargarCajasLlenas, cargarListaCajas, leerNumeroCaja, marcarCajaLlena,
   type AccionRepetidoCaja, type FilaEscaneoCaja,
 } from '@/lib/mapeoCajas'
 
@@ -54,6 +55,40 @@ export default function MapeoCajasEscanear() {
     return () => { vivo = false }
   }, [])
 
+  // Cajas marcadas como llenas: la actual muestra el tilde
+  const [llenas, setLlenas] = useState<Set<number>>(new Set())
+  const llenasRef = useRef(llenas)
+  llenasRef.current = llenas
+  const [marcando, setMarcando] = useState(false)
+  useEffect(() => {
+    let vivo = true
+    cargarCajasLlenas()
+      .then((s) => { if (vivo) setLlenas(s) })
+      .catch(() => { /* sin tabla todavía: nadie llena */ })
+    return () => { vivo = false }
+  }, [])
+
+  async function alternarLlena() {
+    if (caja == null) return
+    const nueva = !llenas.has(caja)
+    setMarcando(true)
+    try {
+      await marcarCajaLlena(caja, nueva)
+      setLlenas((prev) => {
+        const s = new Set(prev)
+        if (nueva) s.add(caja)
+        else s.delete(caja)
+        return s
+      })
+      setMensaje({ ok: true, texto: nueva ? `Caja ${caja} marcada como llena.` : `Caja ${caja}: tiene lugar otra vez.` })
+    } catch (e) {
+      setMensaje({ ok: false, texto: e instanceof Error ? e.message : 'No se pudo marcar la caja.' })
+    } finally {
+      setMarcando(false)
+      enfocar()
+    }
+  }
+
   const fijarCaja = useCallback((n: number | null, bruto: string) => {
     if (n == null) {
       setMensaje({ ok: false, texto: `«${bruto}» no es un número de caja.` })
@@ -67,8 +102,19 @@ export default function MapeoCajasEscanear() {
     setCaja(n)
     setEnEsta(0)
     setRepetido(null)
-    setMensaje({ ok: true, texto: `Caja ${n}: ahora escaneá los artículos.` })
+    setMensaje(
+      llenasRef.current.has(n)
+        ? { ok: false, texto: `La caja ${n} está marcada como llena. Si le entra más, sacale el tilde.` }
+        : { ok: true, texto: `Caja ${n}: ahora escaneá los artículos.` },
+    )
   }, [])
+
+  // Viene de «¿Dónde guardo?» con ?caja=N: arranca con esa caja elegida
+  const [params] = useSearchParams()
+  const cajaInicial = params.get('caja')
+  useEffect(() => {
+    if (cajaInicial) fijarCaja(leerNumeroCaja(cajaInicial), cajaInicial)
+  }, [cajaInicial, fijarCaja])
 
   function cambiarCaja() {
     cajaRef.current = null
@@ -178,16 +224,45 @@ export default function MapeoCajasEscanear() {
         <div className="space-y-3 rounded-2xl border border-line bg-surface p-4 shadow-soft">
           {/* Paso actual */}
           {caja != null ? (
-            <div className="flex items-center gap-3 rounded-xl border border-orange-500/30 bg-orange-500/10 px-3 py-2.5">
-              <Package size={22} aria-hidden className="shrink-0 text-orange-500" />
-              <div className="min-w-0 flex-1">
-                <p className="text-xs text-sub">Caja</p>
-                <p className="truncate font-display text-2xl font-bold leading-tight tabular-nums text-ink">{caja}</p>
+            <div className="space-y-2">
+              <div className="flex items-center gap-3 rounded-xl border border-orange-500/30 bg-orange-500/10 px-3 py-2.5">
+                <Package size={22} aria-hidden className="shrink-0 text-orange-500" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-sub">Caja</p>
+                  <p className="truncate font-display text-2xl font-bold leading-tight tabular-nums text-ink">
+                    {caja}
+                    {llenas.has(caja) && (
+                      <span className="ml-2 rounded-full bg-brand-600/15 px-2 py-0.5 align-middle text-xs font-bold text-brand-400">LLENA</span>
+                    )}
+                  </p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="font-display text-xl font-bold leading-tight tabular-nums text-orange-500">{enEsta}</p>
+                  <p className="text-[11px] text-sub">artículos</p>
+                </div>
               </div>
-              <div className="shrink-0 text-right">
-                <p className="font-display text-xl font-bold leading-tight tabular-nums text-orange-500">{enEsta}</p>
-                <p className="text-[11px] text-sub">artículos</p>
-              </div>
+              {/* Tilde de caja llena: después «¿Dónde guardo?» no la ofrece */}
+              <label
+                className={`flex min-h-[2.75rem] cursor-pointer select-none items-center gap-2.5 rounded-xl border px-3 text-sm font-semibold transition ${
+                  llenas.has(caja) ? 'border-brand-600/50 bg-brand-600/10 text-brand-400' : 'border-line bg-surface2 text-ink hover:bg-line'
+                }`}
+              >
+                {marcando ? (
+                  <Loader2 size={16} className="animate-spin" aria-hidden />
+                ) : (
+                  <input
+                    type="checkbox"
+                    checked={llenas.has(caja)}
+                    onChange={() => void alternarLlena()}
+                    className="h-5 w-5 accent-red-600"
+                  />
+                )}
+                <PackageCheck size={16} aria-hidden />
+                Caja llena
+                <span className="ml-auto text-xs font-normal text-sub">
+                  {llenas.has(caja) ? 'No se ofrece para guardar' : 'Tildala cuando no entre más'}
+                </span>
+              </label>
             </div>
           ) : (
             <div className="flex items-center gap-3 rounded-xl border border-dashed border-line bg-surface2 px-3 py-4">

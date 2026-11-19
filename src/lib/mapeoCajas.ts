@@ -93,3 +93,55 @@ export function tramoDe(caja: number): { desde: number; hasta: number } {
   const desde = Math.floor((caja - 1) / TRAMO_CAJAS) * TRAMO_CAJAS + 1
   return { desde, hasta: desde + TRAMO_CAJAS - 1 }
 }
+
+/* ------------------------------------------------------------------ */
+/*  Cajas llenas                                                       */
+/* ------------------------------------------------------------------ */
+
+/** Números de caja marcadas como llenas */
+export async function cargarCajasLlenas(): Promise<Set<number>> {
+  if (!supabase) return new Set()
+  const { data, error } = await supabase.from('mapeo_cajas_llenas').select('caja').range(0, 9999)
+  if (error) throw new Error(error.message)
+  return new Set(((data as { caja: number }[] | null) ?? []).map((r) => r.caja))
+}
+
+/** Pone o saca el tilde de caja llena */
+export async function marcarCajaLlena(caja: number, llena: boolean): Promise<void> {
+  if (!supabase) return
+  const { error } = await supabase.rpc('mapeo_cajas_marcar_llena', { p_caja: caja, p_llena: llena })
+  if (error) throw new Error(error.message)
+}
+
+/* ------------------------------------------------------------------ */
+/*  Cajas de cada artículo (para Mi repo / transferencias de Depósito) */
+/* ------------------------------------------------------------------ */
+
+/** código en mayúsculas -> cajas donde está, de menor a mayor */
+export async function cajasDeArticulos(codigos: string[]): Promise<Map<string, number[]>> {
+  const out = new Map<string, number[]>()
+  const unicos = [...new Set(codigos.map((c) => c.trim().toUpperCase()).filter(Boolean))]
+  if (!supabase || unicos.length === 0) return out
+  const TANDA = 200 // el filtro .in() va en la URL: de a tandas
+  for (let i = 0; i < unicos.length; i += TANDA) {
+    const { data, error } = await supabase
+      .from('mapeo_cajas')
+      .select('codigo,caja')
+      .in('codigo', unicos.slice(i, i + TANDA))
+      .range(0, 9999)
+    if (error) throw new Error(error.message)
+    for (const r of (data as { codigo: string; caja: number }[] | null) ?? []) {
+      out.set(r.codigo, [...(out.get(r.codigo) ?? []), r.caja])
+    }
+  }
+  for (const [k, v] of out) out.set(k, v.sort((a, b) => a - b))
+  return out
+}
+
+/** Traduce lo que leyó el lector al código de artículo (sin guardar nada) */
+export async function leerCodigoArticulo(bruto: string): Promise<string | null> {
+  if (!supabase || !bruto.trim()) return null
+  const { data, error } = await supabase.rpc('mapeo_cajas_leer_codigo', { p_codigo: bruto })
+  if (error) throw new Error(error.message)
+  return (data as string | null) ?? null
+}
