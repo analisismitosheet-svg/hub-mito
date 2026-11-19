@@ -42,7 +42,7 @@
 
 - Tablas `franquicias_propuestas` (estado `borrador` → `enviada` → `confirmada` → `en_dragon`, o `anulada`; vence a los 7 días), `franquicias_propuesta_items`, `franquicias_contactos`. SQL: `sql/franquicias_propuestas.sql`.
 - Multi-cliente (`sql/franquicias_multicliente.sql`, 21/10/2026): la propuesta guarda `cliente_id`, `cliente_nombre` (destino del pedido en Dragon) y `tipo` (`reposicion` / `materiales`; también se acepta `calzado` por compatibilidad).
-- Link sin usuario `/p/:token` (`PropuestaFranquicia.tsx`): RPC `propuesta_franquicia_publica` y `confirmar_propuesta_franquicia`. Cada artículo muestra «Stock local = N · Venta = N · Propuesta de reposición = N · Disponible MITO = N» (desde 19/11/2026; `stock_cli` en la RPC, `sql/franquicias_link_stock_local.sql`). Disponible MITO = `stock_mito` guardado al armar: es el tope del + y la RPC de confirmar recorta a ese valor.
+- Link sin usuario `/p/:token` (`PropuestaFranquicia.tsx`): RPC `propuesta_franquicia_publica` y `confirmar_propuesta_franquicia`. Cada artículo muestra «Stock local = N · Venta = N · Propuesta de reposición = N · Disponible MITO = N» y la foto del artículo (`FotoArticulo`, índice público `fotos-articulos.json`, zoom con todas las fotos) (desde 19/11/2026; `stock_cli` en la RPC, `sql/franquicias_link_stock_local.sql`). Disponible MITO = `stock_mito` guardado al armar: es el tope del + y la RPC de confirmar recorta a ese valor.
 
 ## Alta en Dragon
 

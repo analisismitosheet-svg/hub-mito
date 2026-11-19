@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Check, Loader2, Minus, Plus, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import FotoArticulo from '@/components/FotoArticulo'
 
 /* ------------------------------------------------------------------ */
 /*  /p/:token — lo que abre la franquicia desde el WhatsApp.            */
@@ -182,7 +183,8 @@ export default function PropuestaFranquicia() {
                 return (
                   <li key={i.id} className={`rounded-2xl border-[1.5px] p-3 transition ${v === true ? 'border-emerald-500 bg-emerald-50' : v === false ? 'border-neutral-200 bg-white opacity-50' : 'border-neutral-200 bg-white'}`}>
                     <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
+                      <FotoArticulo codigo={i.art} nombre={i.descrip} size={64} />
+                      <div className="min-w-0 flex-1">
                         <p className="text-sm font-bold">{i.art}</p>
                         <p className="truncate text-xs text-neutral-500">{i.descrip || '—'}</p>
                         <p className="mt-0.5 text-[11px] text-neutral-600">
