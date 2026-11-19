@@ -28,6 +28,7 @@ import {
   ordenTalle,
   resumen as calcularResumen,
   sugerir,
+  CORTO,
   type ClaveFiltro,
   type DatosReparto,
   type Fila,
@@ -54,7 +55,7 @@ const menosDias = (n: number) => {
 }
 const fechaCorta = (iso: string) => iso.split('-').reverse().slice(0, 2).join('/')
 const TODOS_LOCALES = ['VCPD', 'WALMARTD', 'DINOD', 'RIVERAD', 'CFRA', 'RUTA9D', 'CFR9', 'BUSTOD', 'CFD', 'CFPO', 'GRALPAZ', 'MUNOZ', '9DEJULIO', 'LIBERD', 'ESPINOD', 'NVOCED', 'CFR4', 'DEPO', 'MAYORD', 'POLO52']
-const NOMBRE_LOCAL: Record<string, string> = { DEPO: 'DEPO (Indo)', MAYORD: 'MAYORD (MITO)', POLO52: 'POLO52 (Polo)' }
+const NOMBRE_LOCAL: Record<string, string> = { DEPO: 'DEPO (Indo)', MAYORD: 'MITO', POLO52: 'POLO52 (Polo)' }
 const btn = 'btn-press inline-flex h-8 items-center gap-1.5 rounded-lg border border-line2 bg-surface2 px-2.5 text-xs font-semibold text-ink transition hover:bg-line disabled:opacity-40'
 const tilde = 'flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-ink'
 
@@ -608,7 +609,7 @@ export default function RepartoTransferencias() {
                       <tr key={i} className="border-t border-line text-ink">
                         <td className="py-1">{m.articulo}</td><td>{m.color}</td><td>{m.talle}</td>
                         <td>
-                          <b>{m.desde}</b> <span className="text-sub">→</span> <b>{m.hacia}</b>
+                          <b>{CORTO[m.desde] ?? m.desde}</b> <span className="text-sub">→</span> <b>{CORTO[m.hacia] ?? m.hacia}</b>
                           {esDeMito(m) && <span className="ml-1.5 rounded bg-sky-500/15 px-1 text-[10px] font-semibold text-sky-300">pedido de venta</span>}
                         </td>
                         <td className="text-right">{m.cantidad}</td>

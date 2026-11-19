@@ -67,7 +67,7 @@ export const FILTROS: { k: ClaveFiltro; titulo: string }[] = [
 export const filtrosVacios = (): Filtros => ({ prov: [], mat: [], temp: [], anio: [], linea: [], flia: [], gen: [], grupo: [], art: '' })
 
 /** Nombres cortos del encabezado para que entren los 20 locales sin scroll horizontal. */
-export const CORTO: Record<string, string> = { WALMARTD: 'WALMRT', '9DEJULIO': '9DEJUL', GRALPAZ: 'GPAZ' }
+export const CORTO: Record<string, string> = { MAYORD: 'MITO', WALMARTD: 'WALMRT', '9DEJULIO': '9DEJUL', GRALPAZ: 'GPAZ' }
 export const DEPOSITOS = ['MAYORD', 'DEPO', 'POLO52'] // MITO, Indo, Polo: donan, nunca reciben
 
 /** Prioridad de locales de la Repo diaria / Cascada (puente-sql/cascada.js PARAMS_DEFAULT). */
