@@ -6,7 +6,7 @@ import { CalendarDays, ClipboardList, Package, type LucideIcon } from 'lucide-re
 const TABS: { to: string; label: string; detalle: string; Icon: LucideIcon; end: boolean }[] = [
   { to: '/mayorista/franquicias/diaria', label: 'Reposición sugerida', detalle: 'Ventas contra stock real', Icon: CalendarDays, end: true },
   { to: '/mayorista/franquicias/propuestas', label: 'Propuesta de reposición', detalle: 'Armar, enviar y seguir', Icon: ClipboardList, end: false },
-  { to: '/mayorista/franquicias/materiales', label: 'Reposición de materiales', detalle: 'Calzado por curva de talles', Icon: Package, end: false },
+  { to: '/mayorista/franquicias/materiales', label: 'Reposición de materiales', detalle: 'Por material y curva de talles', Icon: Package, end: false },
 ]
 
 export default function FranquiciasTabs() {

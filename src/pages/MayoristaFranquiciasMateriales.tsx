@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Loader2, Search } from 'lucide-react'
 import Layout from '@/components/Layout'
@@ -19,7 +19,7 @@ import {
 } from '@/lib/franquicias'
 
 /* ------------------------------------------------------------------ */
-/*  Reposición de materiales · Calzado por curva de talles             */
+/*  Reposición de materiales · cualquier material por curva de talles  */
 /*  Stock y precio: vw_STOCK_SKU_MITO + vw_ARTICULOS_MITO.             */
 /*  Se arma la reposición, se manda el link (/p/:token) y el cliente   */
 /*  la confirma: el mismo circuito que la propuesta de reposición.     */
@@ -38,9 +38,13 @@ const num = (v: unknown) => Number(v) || 0
 /** '38/39' es talle doble (chanclas, slippers); '40' es simple. */
 const esDoble = (talle: string) => talle.includes('/')
 /** Ordena 38, 39, 40… y 38/39, 40/41… */
+const LETRAS = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', '3XL', '4XL', '5XL']
 const valorTalle = (talle: string) => {
-  const n = Number((talle.split('/')[0] ?? '').replace(',', '.'))
-  return Number.isFinite(n) ? n : 9999
+  const t = talle.toUpperCase()
+  const l = LETRAS.indexOf(t)
+  if (l >= 0) return 1000 + l
+  const n = Number((t.split('/')[0] ?? '').replace(',', '.'))
+  return Number.isFinite(n) && t !== '' ? n : 9999
 }
 
 interface Modelo {
@@ -48,6 +52,9 @@ interface Modelo {
   art: string
   color: string
   descrip: string
+  /** código y nombre del material (vw_DIM_MATERIAL) */
+  materialCod: string
+  material: string
   grupo: string
   temporada: string
   talles: Map<string, number>
@@ -68,6 +75,8 @@ export default function MayoristaFranquiciasMateriales() {
   const [cargandoPrecios, setCargandoPrecios] = useState(false)
 
   const [tab, setTab] = useState<'simple' | 'doble'>('simple')
+  /** material elegido (código); arranca en CALZADO */
+  const [mat, setMat] = useState('')
   const [busca, setBusca] = useState('')
   const [grupo, setGrupo] = useState('')
   const [temporada, setTemporada] = useState('')
@@ -111,25 +120,26 @@ export default function MayoristaFranquiciasMateriales() {
         const grupoDe = (cod: string) => { const g = cod.toUpperCase(); const n = nombresGrupo.get(g); return g && n ? `${g} · ${n}` : g }
         if (!activo) return
 
-        // Códigos de material que el DWH llama CALZADO (en el maestro son '1' y 'CALZADO')
-        const codCalzado = new Set(
-          filasM
-            .filter((m) => txt(m.MATERIAL).toUpperCase() === 'CALZADO')
-            .map((m) => txt(m.ID_MATERIAL).toUpperCase()),
-        )
-        if (codCalzado.size === 0) { codCalzado.add('1'); codCalzado.add('CALZADO') }
+        // Nombre de cada material. CALZADO tiene dos códigos en el maestro ('1' y 'CALZADO'): se unifican por nombre.
+        const nombresMat = new Map(filasM.map((m) => [txt(m.ID_MATERIAL).toUpperCase(), txt(m.MATERIAL).toUpperCase()]))
+        const codPorNombre = new Map<string, string>()
+        for (const [c, n] of nombresMat) if (n && !codPorNombre.has(n)) codPorNombre.set(n, c)
+        const materialDe = (cod: string) => {
+          const c = cod.toUpperCase()
+          const n = nombresMat.get(c) || (c === 'CALZADO' ? 'CALZADO' : '')
+          return n ? { materialCod: codPorNombre.get(n) ?? c, material: n } : { materialCod: c, material: c || 'SIN MATERIAL' }
+        }
 
         // Artículos con stock > 0 (una sola pasada al maestro en Supabase)
         const arts = [...stock.porArticulo.entries()].filter(([, n]) => n > 0).map(([a]) => a)
-        const info = new Map<string, { descripcion: string; grupo: string; temporada: string }>()
+        const info = new Map<string, { descripcion: string; materialCod: string; material: string; grupo: string; temporada: string }>()
         for (let i = 0; supabase && i < arts.length; i += 300) {
           const { data } = await supabase
             .from('articulos')
             .select('id_art,descripcion,id_material,id_grupo,id_temporada')
             .in('id_art', arts.slice(i, i + 300))
           for (const a of (data as { id_art: string; descripcion: string | null; id_material: string | null; id_grupo: string | null; id_temporada: string | null }[] | null) ?? []) {
-            if (!codCalzado.has(txt(a.id_material).toUpperCase())) continue
-            info.set(txt(a.id_art).toUpperCase(), { descripcion: txt(a.descripcion), grupo: grupoDe(txt(a.id_grupo)), temporada: temporadaDe(txt(a.id_temporada)) })
+            info.set(txt(a.id_art).toUpperCase(), { descripcion: txt(a.descripcion), ...materialDe(txt(a.id_material)), grupo: grupoDe(txt(a.id_grupo)), temporada: temporadaDe(txt(a.id_temporada)) })
           }
         }
         if (!activo) return
@@ -144,7 +154,7 @@ export default function MayoristaFranquiciasMateriales() {
           const key = `${art}|${color}`
           let m = porModelo.get(key)
           if (!m) {
-            m = { key, art, color, descrip: a.descripcion, grupo: a.grupo, temporada: a.temporada, talles: new Map(), stockTotal: 0, precio: null }
+            m = { key, art, color, descrip: a.descripcion, materialCod: a.materialCod, material: a.material, grupo: a.grupo, temporada: a.temporada, talles: new Map(), stockTotal: 0, precio: null }
             porModelo.set(key, m)
           }
           m.talles.set(talle, (m.talles.get(talle) ?? 0) + n)
@@ -154,6 +164,7 @@ export default function MayoristaFranquiciasMateriales() {
         lista.sort((a, b) => b.stockTotal - a.stockTotal || a.art.localeCompare(b.art))
         if (!activo) return
         setModelos(lista)
+        setMat((prev) => prev || lista.find((m) => m.material === 'CALZADO')?.materialCod || lista[0]?.materialCod || '')
       } catch (e) {
         if (activo) setError(e instanceof Error ? e.message : String(e))
       } finally {
@@ -202,25 +213,48 @@ export default function MayoristaFranquiciasMateriales() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [artsModelos])
 
+  // Materiales con stock (código · nombre) y los modelos del elegido
+  const materiales = useMemo(() => {
+    const m = new Map<string, { cod: string; nombre: string; modelos: number }>()
+    for (const x of modelos) {
+      const e = m.get(x.materialCod) ?? { cod: x.materialCod, nombre: x.material, modelos: 0 }
+      e.modelos++
+      m.set(x.materialCod, e)
+    }
+    return [...m.values()].sort((a, b) => a.nombre.localeCompare(b.nombre))
+  }, [modelos])
+  const modelosMat = useMemo(() => modelos.filter((m) => m.materialCod === mat), [modelos, mat])
+  const nombreMat = materiales.find((m) => m.cod === mat)?.nombre ?? ''
+  const esCalzado = nombreMat === 'CALZADO'
+  // Solapas simple/doble solo si el material tiene de los dos (calzado: zapatillas y chanclas)
+  const conSolapas = useMemo(() => {
+    let simple = false, doble = false
+    for (const m of modelosMat) for (const t of m.talles.keys()) { if (esDoble(t)) doble = true; else simple = true }
+    return simple && doble
+  }, [modelosMat])
+  const vaEnSolapa = useCallback((t: string) => !conSolapas || esDoble(t) === (tab === 'doble'), [conSolapas, tab])
+
+  useEffect(() => { setGrupo(''); setTemporada(''); setTab('simple') }, [mat])
+
   const tallesTab = useMemo(() => {
     const set = new Set<string>()
-    for (const m of modelos) for (const t of m.talles.keys()) if (esDoble(t) === (tab === 'doble')) set.add(t)
+    for (const m of modelosMat) for (const t of m.talles.keys()) if (vaEnSolapa(t)) set.add(t)
     return [...set].sort((a, b) => valorTalle(a) - valorTalle(b) || a.localeCompare(b))
-  }, [modelos, tab])
+  }, [modelosMat, vaEnSolapa])
 
-  const grupos = useMemo(() => [...new Set(modelos.map((m) => m.grupo).filter(Boolean))].sort(), [modelos])
-  const temporadas = useMemo(() => [...new Set(modelos.map((m) => m.temporada).filter(Boolean))].sort(), [modelos])
+  const grupos = useMemo(() => [...new Set(modelosMat.map((m) => m.grupo).filter(Boolean))].sort(), [modelosMat])
+  const temporadas = useMemo(() => [...new Set(modelosMat.map((m) => m.temporada).filter(Boolean))].sort(), [modelosMat])
 
   const visibles = useMemo(() => {
     const q = busca.trim().toUpperCase()
-    return modelos.filter((m) => {
-      if (![...m.talles.keys()].some((t) => esDoble(t) === (tab === 'doble'))) return false
+    return modelosMat.filter((m) => {
+      if (![...m.talles.keys()].some(vaEnSolapa)) return false
       if (grupo && m.grupo !== grupo) return false
       if (temporada && m.temporada !== temporada) return false
       if (!q) return true
       return `${m.art} ${m.descrip} ${m.color}`.toUpperCase().includes(q)
     })
-  }, [modelos, tab, grupo, temporada, busca])
+  }, [modelosMat, vaEnSolapa, grupo, temporada, busca])
 
   const precioDe = (m: Modelo, talle: string) => precios.sku.get(claveSku(m.art, m.color, talle)) ?? precios.art.get(m.art) ?? 0
 
@@ -233,7 +267,7 @@ export default function MayoristaFranquiciasMateriales() {
         out.push({
           art: m.art,
           descrip: m.descrip,
-          material: 'CALZADO',
+          material: m.material,
           color: m.color,
           talle,
           stockCli: 0,
@@ -268,7 +302,7 @@ export default function MayoristaFranquiciasMateriales() {
       <div className="px-3 pt-3 md:px-4 md:pt-4">
         <FranquiciasHeader
           titulo="Reposición de materiales"
-          descripcion="Calzado por curva de talles con el stock real de MITO. Armá la reposición y mandale el link al cliente."
+          descripcion="Cualquier material por curva de talles con el stock real de MITO. Armá la reposición y mandale el link al cliente."
         />
 
         <div id="frame" className="overflow-hidden rounded-2xl border border-line bg-paper p-3">
@@ -315,22 +349,29 @@ export default function MayoristaFranquiciasMateriales() {
           )}
 
           <div className="mb-3 flex flex-wrap items-center gap-2">
-            <div className="flex rounded-full border border-line bg-surface p-1">
+            <label className="flex items-center gap-2 text-xs text-sub">
+              Material
+              <select value={mat} onChange={(e) => setMat(e.target.value)} disabled={materiales.length === 0} className="max-w-[260px] rounded-full border border-line2 bg-surface px-3 py-1.5 text-xs text-ink disabled:opacity-50">
+                {materiales.length === 0 && <option value="">{cargando ? 'Cargando…' : 'Sin materiales con stock'}</option>}
+                {materiales.map((m) => <option key={m.cod} value={m.cod}>{m.cod !== m.nombre ? `${m.cod} · ${m.nombre}` : m.nombre} ({fmt(m.modelos)})</option>)}
+              </select>
+            </label>
+            {conSolapas && <div className="flex rounded-full border border-line bg-surface p-1">
               <button
                 type="button"
                 onClick={() => setTab('simple')}
                 className={`rounded-full px-3 py-1 text-xs font-semibold ${tab === 'simple' ? 'bg-surface2 text-ink shadow-sm' : 'text-sub hover:text-ink'}`}
               >
-                Zapatillas · talle simple
+                {esCalzado ? 'Zapatillas · talle simple' : 'Talle simple'}
               </button>
               <button
                 type="button"
                 onClick={() => setTab('doble')}
                 className={`rounded-full px-3 py-1 text-xs font-semibold ${tab === 'doble' ? 'bg-surface2 text-ink shadow-sm' : 'text-sub hover:text-ink'}`}
               >
-                Chanclas y slippers · talle doble
+                {esCalzado ? 'Chanclas y slippers · talle doble' : 'Talle doble'}
               </button>
-            </div>
+            </div>}
             <label className="flex min-w-[180px] flex-1 items-center gap-2 rounded-full border border-line2 bg-surface px-3 py-1.5 text-xs text-sub">
               <Search size={13} aria-hidden />
               <input
@@ -356,7 +397,7 @@ export default function MayoristaFranquiciasMateriales() {
 
           <div className="mb-3 flex flex-wrap gap-2 text-xs">
             <span className="rounded-full border border-line bg-surface px-3 py-1 text-sub">Modelos: <b className="text-ink">{fmt(visibles.length)}</b></span>
-            <span className="rounded-full border border-line bg-surface px-3 py-1 text-sub">Pares pedidos: <b className="text-ink">{fmt(pares)}</b></span>
+            <span className="rounded-full border border-line bg-surface px-3 py-1 text-sub">Unidades pedidas: <b className="text-ink">{fmt(pares)}</b></span>
             <span className="rounded-full border border-line bg-surface px-3 py-1 text-sub">Importe: <b className="text-ink">{cargandoPrecios ? '…' : fmtPesos(importe)}</b></span>
             {pares > 0 && (
               <button type="button" onClick={() => setCarrito({})} className="rounded-full border border-line2 bg-surface px-3 py-1 font-semibold text-sub hover:text-ink">Limpiar pedido</button>
@@ -436,7 +477,7 @@ export default function MayoristaFranquiciasMateriales() {
                 </tbody>
                 <tfoot className="bg-surface">
                   <tr className="text-[12px]">
-                    <td colSpan={5 + tallesTab.length} className="px-3 py-2 font-semibold text-ink">{fmt(visibles.length)} modelos · {fmt(pares)} pares</td>
+                    <td colSpan={5 + tallesTab.length} className="px-3 py-2 font-semibold text-ink">{fmt(visibles.length)} modelos · {fmt(pares)} unidades</td>
                     <td className="whitespace-nowrap px-3 py-2 text-right text-sm font-bold tabular-nums text-emerald-500">{cargandoPrecios ? '…' : fmtPesos(importe)}</td>
                   </tr>
                 </tfoot>
