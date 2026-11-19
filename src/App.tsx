@@ -70,6 +70,9 @@ import PausasPendientes from '@/pages/PausasPendientes'
 import MapeoEscanear from '@/pages/MapeoEscanear'
 import MapeoOrden from '@/pages/MapeoOrden'
 import MapeoUbicaciones from '@/pages/MapeoUbicaciones'
+import MapeoCajasEscanear from '@/pages/MapeoCajasEscanear'
+import MapeoCajasOrden from '@/pages/MapeoCajasOrden'
+import MapeoCajasLista from '@/pages/MapeoCajasLista'
 import ConsultaArticulos from '@/pages/ConsultaArticulos'
 import CargaNovedades from '@/pages/CargaNovedades'
 import ResumenNovedades from '@/pages/ResumenNovedades'
@@ -547,6 +550,38 @@ export default function App() {
                 <Suspense fallback={null}>
                   <OrdenesCompra />
                 </Suspense>
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/deposito/mapeo-cajas"
+            element={
+              <PermissionRoute permiso="deposito.cajas.view">
+                <CarpetaArea carpetaId="deposito-mapeo-cajas" titulo="Mapeo de cajas" color="#ea580c" />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/deposito/mapeo-cajas/escanear"
+            element={
+              <PermissionRoute permiso="deposito.cajas.escanear">
+                <MapeoCajasEscanear />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/deposito/mapeo-cajas/orden"
+            element={
+              <PermissionRoute permiso="deposito.cajas.view">
+                <MapeoCajasOrden />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/deposito/mapeo-cajas/lista"
+            element={
+              <PermissionRoute permiso="deposito.cajas.view">
+                <MapeoCajasLista />
               </PermissionRoute>
             }
           />

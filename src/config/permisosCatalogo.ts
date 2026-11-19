@@ -168,6 +168,16 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
     icon: PackageCheck, color: '#0d9488', acciones: { ver: 'picking.view' },
   },
   {
+    id: 'deposito-mapeo-cajas', areaId: 'deposito', titulo: 'Mapeo de cajas', descripcion: 'Artículos por número de caja',
+    icon: MapIcon, color: '#f97316',
+    acciones: { ver: 'deposito.cajas.view' },
+    especiales: [
+      { clave: 'deposito.cajas.escanear', label: 'Escanear' },
+      { clave: 'deposito.cajas.gestionar', label: 'Crear/borrar números de caja' },
+      { clave: 'deposito.cajas.borrar', label: 'Borrar del mapeo' },
+    ],
+  },
+  {
     id: 'deposito-repo-escaneo', areaId: 'deposito', titulo: 'Reposición por escaneo', descripcion: 'Escanear prendas y ver en qué caja va cada una',
     icon: ScanLine, color: '#0284c7',
     acciones: { ver: 'repo_escaneo.view', crear: 'repo_escaneo.cargar' },
