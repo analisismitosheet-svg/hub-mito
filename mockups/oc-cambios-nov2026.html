@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maqueta · Cambios en OC (19/11)</title>
+<style>
+  :root { --bg:#08080c; --panel:#0c0c11; --s2:#16161e; --line:#26262f; --ink:#ececf1; --sub:#9a9aa8; --lime:#a3e635; --red:#f87171; --amber:#fbbf24; --sky:#38bdf8; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; padding:24px 16px; }
+  .wrap { max-width:1100px; margin:0 auto; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .nota { color:var(--sub); font-size:12.5px; margin:0 0 18px; }
+  .grid { display:grid; grid-template-columns: minmax(0,1.1fr) minmax(0,1fr); gap:18px; align-items:start; }
+  @media (max-width: 900px) { .grid { grid-template-columns:1fr; } }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:22px; overflow:hidden; margin-bottom:18px; }
+  .card h2 { font-size:15px; margin:0; padding:13px 18px; border-bottom:1px solid var(--line); }
+  .body { padding:14px 18px; }
+  .tipo { border:1px solid var(--line); background:var(--s2); border-radius:16px; padding:10px 12px; margin-bottom:10px; }
+  .tipo b { display:block; font-size:13px; margin-bottom:8px; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .chip { font-size:12px; padding:4px 10px; border-radius:999px; border:1px solid var(--line); background:#101017; }
+  .chip.nuevo { border-color:rgba(163,230,53,.5); background:rgba(163,230,53,.1); color:var(--lime); }
+  .chip.renom { border-color:rgba(56,189,248,.5); background:rgba(56,189,248,.1); color:var(--sky); }
+  .chip.fuera { border-color:rgba(248,113,113,.4); color:var(--red); text-decoration:line-through; opacity:.75; }
+  .chip small { opacity:.75; margin-left:4px; }
+  .ref { display:flex; gap:12px; flex-wrap:wrap; font-size:12px; color:var(--sub); margin-bottom:12px; }
+  .lbl { display:block; margin-bottom:4px; font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--sub); }
+  .sec { grid-column:1/-1; margin:6px 0 0; padding-top:10px; border-top:1px solid var(--line); font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--lime); }
+  .form { display:grid; grid-template-columns:1fr 1fr; gap:10px 12px; }
+  input, select { height:36px; width:100%; border-radius:12px; border:1px solid var(--line); background:var(--s2); color:var(--ink); padding:0 12px; font:inherit; font-size:13px; color-scheme:dark; }
+  .auto { border-color:rgba(163,230,53,.6); }
+  .falta { border-color:rgba(248,113,113,.7); }
+  .ayuda { font-size:11.5px; color:var(--sub); margin-top:4px; }
+  .ayuda.ok { color:var(--lime); }
+  .err { grid-column:1/-1; border:1px solid rgba(248,113,113,.45); background:rgba(248,113,113,.08); color:#fecaca; border-radius:12px; padding:9px 12px; font-size:12.5px; }
+  .btn { grid-column:1/-1; height:40px; border:0; border-radius:12px; background:var(--lime); color:#111; font-weight:700; cursor:pointer; }
+  .demo { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
+  .demo button { font:inherit; font-size:12px; padding:5px 10px; border-radius:999px; border:1px solid var(--line); background:var(--s2); color:var(--ink); cursor:pointer; }
+  .demo button.on { border-color:var(--lime); color:var(--lime); }
+  ul { margin:0; padding-left:18px; color:var(--sub); font-size:12.5px; }
+  li { margin:3px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Órdenes de compra · cambios pedidos</h1>
+  <p class="nota">Maqueta para revisar antes de subir. Nada de esto está aplicado todavía.</p>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Tipos y subtipos</h2>
+      <div class="body">
+        <div class="ref"><span class="chip nuevo">nuevo</span><span class="chip renom">renombrado</span><span class="chip fuera">sale</span><span class="chip">queda igual</span></div>
+
+        <div class="tipo"><b>Producto</b><div class="chips">
+          <span class="chip">Consignación</span><span class="chip">Reposición</span>
+          <span class="chip nuevo">Mercadería</span><span class="chip nuevo">Insumos de producción</span>
+          <span class="chip fuera">Alquiler</span>
+        </div></div>
+
+        <div class="tipo"><b>Gastos</b><div class="chips">
+          <span class="chip renom">Mantenimiento<small>(antes «y lámparas»)</small></span>
+          <span class="chip nuevo">Librería</span><span class="chip nuevo">Viáticos</span><span class="chip nuevo">Marketing</span>
+          <span class="chip fuera">Limpieza<small>(pasa a Servicios)</small></span><span class="chip fuera">Alquiler</span><span class="chip fuera">Procesos de producción</span>
+          <span class="chip fuera">Envíos (OCA, Epick)</span><span class="chip fuera">Honorarios</span>
+        </div></div>
+
+        <div class="tipo"><b>Servicios</b><div class="chips">
+          <span class="chip">Vidrieras</span>
+          <span class="chip renom">Mantenimiento<small>(antes Reparaciones)</small></span>
+          <span class="chip nuevo">Transportes</span><span class="chip nuevo">Honorarios</span><span class="chip nuevo">Comex</span>
+          <span class="chip nuevo">Limpieza</span><span class="chip nuevo">Marketing</span><span class="chip nuevo">Abono mensual</span><span class="chip nuevo">Diseño</span>
+        </div></div>
+
+        <div class="tipo"><b>Talleres</b><div class="chips">
+          <span class="chip">Confección</span><span class="chip">Terminado y planchado</span><span class="chip">Muestras</span>
+          <span class="chip nuevo">Proceso de estampa</span><span class="chip nuevo">Limpieza de producción</span>
+        </div></div>
+
+        <ul>
+          <li>Los que salen quedan desactivados, no borrados: las OC viejas los conservan.</li>
+          <li>Los renombrados mantienen los autorizadores que ya tenían elegidos.</li>
+          <li>En <b>Servicios</b> el método de pago (sin anticipo / con anticipo / compra directa) ya no está bloqueado; en Talleres sigue fijo.</li>
+          <li>Al leer una factura, «flete/envío/OCA» va a Servicios › Transportes y «reparación» a Servicios › Mantenimiento.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Formulario de OC nueva</h2>
+      <div class="body">
+        <span class="lbl">Probar como</span>
+        <div class="demo" id="usuarios">
+          <button data-area="Marketing" class="on">Usuario de Marketing</button>
+          <button data-area="RRHH">Usuario de RRHH</button>
+          <button data-area="Producción">Usuario de Producción</button>
+          <button data-area="">Admin</button>
+        </div>
+        <div class="form">
+          <div><span class="lbl">Responsable</span><input value="LUCÍA" readonly></div>
+          <div><span class="lbl">Área</span>
+            <select id="area" class="auto">
+              <option value="">—</option>
+              <option>Compras</option><option>Depósito</option><option>Diseño</option><option>Arquitectura</option><option>Administración</option>
+              <option>Marketing</option><option>RRHH</option><option>Sistemas</option><option>Recepción</option><option>Producción</option>
+            </select>
+            <div class="ayuda ok" id="areaAyuda">Se completó sola según el usuario</div></div>
+
+          <p class="sec">Fechas, pago y monto</p>
+          <div><span class="lbl">Fecha de compra</span><input type="date" id="fc" value="2026-11-19"></div>
+          <div><span class="lbl">Fecha de entrega *</span><input type="date" id="fe"></div>
+          <div class="err" id="err" hidden></div>
+          <button class="btn" id="guardar">Guardar OC</button>
+        </div>
+        <ul style="margin-top:12px">
+          <li>Áreas nuevas en la lista: Marketing, RRHH, Sistemas, Recepción y Producción.</li>
+          <li>Cada persona ve también las OC de su área.</li>
+          <li>Sin fecha de entrega (o con una anterior a la de compra) no se guarda.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  const area = document.getElementById('area'), ayuda = document.getElementById('areaAyuda')
+  const fc = document.getElementById('fc'), fe = document.getElementById('fe'), err = document.getElementById('err')
+  function usar(b) {
+    document.querySelectorAll('#usuarios button').forEach((x) => x.classList.toggle('on', x === b))
+    area.value = b.dataset.area
+    area.classList.toggle('auto', !!b.dataset.area)
+    ayuda.textContent = b.dataset.area ? 'Se completó sola según el usuario' : 'El admin ve todas las áreas: la elige a mano'
+    ayuda.className = 'ayuda' + (b.dataset.area ? ' ok' : '')
+  }
+  document.querySelectorAll('#usuarios button').forEach((b) => b.onclick = () => usar(b))
+  area.onchange = () => area.classList.remove('auto')
+  document.getElementById('guardar').onclick = () => {
+    let msg = ''
+    if (!fc.value || !fe.value) msg = 'Completá la fecha de compra y la fecha de entrega: sin las fechas no se puede guardar la OC.'
+    else if (fe.value < fc.value) msg = 'La fecha de entrega no puede ser anterior a la fecha de compra.'
+    fe.classList.toggle('falta', !!msg)
+    err.hidden = !msg
+    err.textContent = msg
+    if (!msg) { err.hidden = false; err.style.cssText = 'border-color:rgba(163,230,53,.5);background:rgba(163,230,53,.08);color:#d9f99d'; err.textContent = 'OC guardada (en la maqueta).' }
+    else err.style.cssText = ''
+  }
+</script>
+</body>
+</html>

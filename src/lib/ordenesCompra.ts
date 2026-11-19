@@ -105,7 +105,13 @@ export const PASOS: PasoDef[] = [
 export const QUIEN_TXT = { compras: 'Compras', autorizador: 'Autorizador', administracion: 'Administración' } as const
 
 export const TIPOS = ['Producto', 'Gastos', 'Servicios', 'Talleres'] as const
-export const AREAS = ['Compras', 'Depósito', 'Diseño', 'Arquitectura', 'Administración'] as const
+export const AREAS = ['Compras', 'Depósito', 'Diseño', 'Arquitectura', 'Administración', 'Marketing', 'RRHH', 'Sistemas', 'Recepción', 'Producción'] as const
+/** Permiso de área del menú -> área de la OC (mismo orden que private.oc_mis_areas en la base). */
+export const AREA_POR_PERMISO: Array<[string, (typeof AREAS)[number]]> = [
+  ['area_compras.view', 'Compras'], ['area_deposito.view', 'Depósito'], ['area_diseno.view', 'Diseño'],
+  ['area_arquitectura.view', 'Arquitectura'], ['area_administracion.view', 'Administración'], ['area_marketing.view', 'Marketing'],
+  ['area_rrhh.view', 'RRHH'], ['area_sistemas.view', 'Sistemas'], ['area_recepcion.view', 'Recepción'], ['area_produccion.view', 'Producción'],
+]
 
 /** Formas de pago y plazos de la planilla (hoja «Formas de Pagos»). */
 export const PLAZOS: Record<string, string[]> = {

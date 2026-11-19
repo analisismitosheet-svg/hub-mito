@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { FileText, Loader2, Paperclip, Plus, ScanText, Trash2, X } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import {
-  AREAS, BASES_DRAGON, CONDICIONES_DRAGON, IVA, LISTAS_DRAGON, MOTIVOS_DRAGON, PLAZOS, PLAZO_A_CONDICION, TIPOS,
+  AREAS, AREA_POR_PERMISO, BASES_DRAGON, CONDICIONES_DRAGON, IVA, LISTAS_DRAGON, MOTIVOS_DRAGON, PLAZOS, PLAZO_A_CONDICION, TIPOS,
   buscarArticulos, buscarProveedoresDragon, buscarProveedoresOc, datosArticulosDragon, datosProveedorDragon, datosProveedorHistorial, datosProveedorPorCodigo, guardarOrden, leerTxtArticulos, mandarADragon, pedirAutorizacion, pesos,
   cargarSubtipos, netoItem, separarVariante, subirArchivo, totalItems, variantesArticulo, type SubtipoOc,
   type ArticuloBusqueda, type DatosProveedor, type ItemDragon, type OrdenCompra, type ProveedorDragon, type Variantes,
@@ -86,12 +86,16 @@ function InputPorcentaje({ valor, onCambio, disabled, className }: { valor: numb
 
 /** Palabras de la factura -> subtipo del árbol de autorizadores ([texto, tipo, nombre del subtipo]) */
 const REGLAS_SUBTIPO: Array<[RegExp, string, RegExp]> = [
-  [/\b(FLETES?|ENV[IÍ]OS?|ENCOMIENDAS?|CORREO|OCA|ANDREANI|EPICK|CARGAS?|COURIER)\b/i, 'Gastos', /env[ií]o/i],
-  [/\bHONORARIOS?\b/i, 'Gastos', /honorario/i],
-  [/\bLIMPIEZA\b/i, 'Gastos', /limpieza/i],
+  [/\b(FLETES?|ENV[IÍ]OS?|ENCOMIENDAS?|CORREO|OCA|ANDREANI|EPICK|CARGAS?|COURIER|TRANSPORTES?)\b/i, 'Servicios', /transporte/i],
+  [/\bHONORARIOS?\b/i, 'Servicios', /honorario/i],
+  [/\b(COMEX|DESPACHANTE|ADUANA)\b/i, 'Servicios', /comex/i],
+  [/\bABONO\b/i, 'Servicios', /abono/i],
+  [/\bESTAMPA(DO|DOS)?\b/i, 'Talleres', /estampa/i],
+  [/\bLIMPIEZA\b/i, 'Servicios', /^limpieza$/i],
+  [/\bREPARACI[OÓ]N(ES)?\b/i, 'Servicios', /mantenimiento/i],
   [/\b(MANTENIMIENTO|L[AÁ]MPARAS?)\b/i, 'Gastos', /mantenimiento/i],
-  [/\bALQUILER(ES)?\b/i, 'Gastos', /alquiler/i],
-  [/\bREPARACI[OÓ]N(ES)?\b/i, 'Servicios', /reparaci/i],
+  [/\b(LIBRER[IÍ]A|PAPELER[IÍ]A|RESMAS?)\b/i, 'Gastos', /librer/i],
+  [/\bVI[AÁ]TICOS?\b/i, 'Gastos', /vi[aá]tico/i],
   [/\bVIDRIERAS?\b/i, 'Servicios', /vidriera/i],
   [/\bCONFECCI[OÓ]N\b/i, 'Talleres', /confecci/i],
   [/\b(PLANCHADO|TERMINADO)\b/i, 'Talleres', /terminado|planchado/i],
@@ -118,12 +122,15 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
   /* Responsable de una OC nueva: el usuario que la crea. La cuenta del admin (se llama «admin») no es una persona:
      ahí queda vacío para que se escriba quién es el responsable. */
   const responsableInicial = isAdmin ? '' : nombreUsuario.trim().toUpperCase()
+  /* Área de una OC nueva: la del usuario según sus permisos de área del menú (la primera, si tiene varias).
+     El admin ve todas las áreas: ahí queda vacía para elegirla. */
+  const areaInicial = isAdmin ? '' : AREA_POR_PERMISO.find(([permiso]) => can(permiso))?.[1] ?? ''
   const [f, setF] = useState(() => ({
     tipo: oc?.tipo ?? 'Producto',
     subtipo_id: oc?.subtipo_id ?? null as number | null,
     planificable: oc?.planificable ?? true,
     metodo: oc?.metodo ?? 'Sin anticipo',
-    area: oc?.area ?? '',
+    area: oc ? oc.area ?? '' : areaInicial,
     responsable: oc ? oc.responsable ?? '' : responsableInicial,
     proveedor: oc?.proveedor ?? '',
     proveedor_cuit: oc?.proveedor_cuit ?? '',
@@ -161,6 +168,7 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
 
   // Si el perfil terminó de cargar después de abrir el formulario, el responsable se completa igual (si sigue vacío)
   useEffect(() => { if (!oc && responsableInicial) setF((x) => (x.responsable.trim() ? x : { ...x, responsable: responsableInicial })) }, [oc, responsableInicial])
+  useEffect(() => { if (!oc && areaInicial) setF((x) => (x.area ? x : { ...x, area: areaInicial })) }, [oc, areaInicial])
   /** Subtipos del árbol de autorizadores (Autorizadores → «Quién autoriza cada tipo»). */
   const [subtipos, setSubtipos] = useState<SubtipoOc[]>([])
   useEffect(() => { void cargarSubtipos().then(setSubtipos).catch(() => setSubtipos([])) }, [])
@@ -302,6 +310,8 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
 
   const guardar = async (despues?: 'pedir' | 'dragon') => {
     if (subsDelTipo.length > 0 && f.subtipo_id == null) { setError(`Elegí el subtipo de ${f.tipo}: define a quién le llega la autorización.`); return }
+    if (!f.fecha_compra || !f.fecha_entrega) { setError('Completá la fecha de compra y la fecha de entrega: sin las fechas no se puede guardar la OC.'); return }
+    if (f.fecha_entrega < f.fecha_compra) { setError('La fecha de entrega no puede ser anterior a la fecha de compra.'); return }
     setGuardando(despues ?? 'guardar')
     setError(null)
     try {
@@ -394,7 +404,8 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
         if (sub) {
           n.tipo = sub.tipo as typeof x.tipo
           n.subtipo_id = sub.id
-          if (sub.tipo === 'Servicios' || sub.tipo === 'Talleres') { n.planificable = true; n.metodo = 'Sin anticipo' }
+          if (sub.tipo === 'Servicios') n.planificable = true
+          if (sub.tipo === 'Talleres') { n.planificable = true; n.metodo = 'Sin anticipo' }
           campos.push(`Tipo (${sub.tipo} · ${sub.nombre})`)
         }
         if (x.dragon && !x.dragon_proveedor && deDragon?.dragon) {
@@ -495,7 +506,7 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
           </div>
           <p className="text-[10.5px] font-bold uppercase tracking-wide text-lime-400 sm:col-span-2">Qué se compra</p>
           <div className="sm:col-span-2"><span className={lbl}>Tipo de compra</span>
-            {seg([...TIPOS], f.tipo, (v) => setF((x) => ({ ...x, tipo: v as typeof x.tipo, subtipo_id: v === x.tipo ? x.subtipo_id : null, ...(v === 'Servicios' || v === 'Talleres' ? { planificable: true, metodo: 'Sin anticipo' as const } : {}) })))}</div>
+            {seg([...TIPOS], f.tipo, (v) => setF((x) => ({ ...x, tipo: v as typeof x.tipo, subtipo_id: v === x.tipo ? x.subtipo_id : null, ...(v === 'Talleres' ? { planificable: true, metodo: 'Sin anticipo' as const } : v === 'Servicios' ? { planificable: true } : {}) })))}</div>
           {(subsDelTipo.length > 0 || f.subtipo_id != null) && (
             <div className="sm:col-span-2"><span className={lbl}>Subtipo{subsDelTipo.length > 0 && ' *'}</span>
               {/* Botones en vez de <select>: la lista nativa del navegador se veía sin letra (06/11/2026) */}
@@ -514,7 +525,7 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
             {seg(['Sí', 'No'], f.planificable ? 'Sí' : 'No', (v) => set('planificable', v === 'Sí'), f.tipo === 'Servicios' || f.tipo === 'Talleres')}
             <p className={`mt-1 text-xs ${f.planificable ? 'text-lime-300' : 'text-sub'}`}>{f.planificable ? 'Se envía OC formal al proveedor.' : 'No se envía OC formal.'}</p></div>
           <div><span className={lbl}>Método</span>
-            {seg(['Sin anticipo', 'Con anticipo', 'Compra directa'], f.metodo, (v) => set('metodo', v as typeof f.metodo), f.tipo === 'Servicios' || f.tipo === 'Talleres')}
+            {seg(['Sin anticipo', 'Con anticipo', 'Compra directa'], f.metodo, (v) => set('metodo', v as typeof f.metodo), f.tipo === 'Talleres')}
             <p className="mt-1 text-xs text-sub">{f.metodo === 'Sin anticipo' ? 'Se paga después de recibir la factura.' : f.metodo === 'Con anticipo' ? 'Se paga antes de recibir la factura.' : 'Primero se compra y después se pasa el comprobante.'}</p></div>
           <div className="sm:col-span-2"><span className={lbl}>Observación (qué se compra)</span>
             <textarea value={f.observacion} onChange={(e) => set('observacion', e.target.value)} className="min-h-[60px] w-full rounded-xl border border-line bg-surface2 p-2.5 text-sm text-ink outline-none"
@@ -536,7 +547,7 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
 
           <p className="mt-2 border-t border-line pt-3 text-[10.5px] font-bold uppercase tracking-wide text-lime-400 sm:col-span-2">Fechas, pago y monto</p>
           <div><span className={lbl}>Fecha de compra</span><input type="date" value={f.fecha_compra} onChange={(e) => set('fecha_compra', e.target.value)} className={campoCls} /></div>
-          <div><span className={lbl}>Fecha de entrega</span><input type="date" value={f.fecha_entrega} onChange={(e) => set('fecha_entrega', e.target.value)} className={campoCls} /></div>
+          <div><span className={lbl}>Fecha de entrega *</span><input type="date" required value={f.fecha_entrega} onChange={(e) => set('fecha_entrega', e.target.value)} className={campoCls} /></div>
           <div><span className={lbl}>Forma de pago</span>
             <select value={f.forma_pago} onChange={(e) => setF((x) => ({ ...x, forma_pago: e.target.value, plazo: PLAZOS[e.target.value]?.[0] ?? '' }))} className={campoCls}>
               {Object.keys(PLAZOS).map((p) => <option key={p}>{p}</option>)}
