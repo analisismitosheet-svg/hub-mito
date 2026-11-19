@@ -134,6 +134,8 @@ export default function FranquiciasVentaStock() {
   const [recarga, setRecarga] = useState(0)
   const [pestana, setPestana] = useState<'stock' | 'venta'>('stock')
   const [busca, setBusca] = useState('')
+  /** filtro por código de artículo (vale para Stock y Venta); varios separados por espacio o coma */
+  const [codigo, setCodigo] = useState('')
   /** color elegido en «Artículos más vendidos» ('' = todos) */
   const [colorTop, setColorTop] = useState('')
   const [vistaStock, setVistaStock] = useState<'con' | 'agotados' | 'todo'>('con')
@@ -254,8 +256,11 @@ export default function FranquiciasVentaStock() {
     if (dim === 'talle') return talle || SIN
     return info.get(art)?.[dim] || SIN
   }, [info, nombresColor])
-  const hayFiltros = DIMS.some((x) => filtros[x.id].size > 0)
-  const okSku = useCallback((art: string, color: string, talle: string) => DIMS.every((x) => !filtros[x.id].size || filtros[x.id].has(valorDe(x.id, art, color, talle))), [filtros, valorDe])
+  const codigos = useMemo(() => codigo.toUpperCase().split(/[\s,;]+/).filter(Boolean), [codigo])
+  const hayFiltros = codigos.length > 0 || DIMS.some((x) => filtros[x.id].size > 0)
+  const okSku = useCallback((art: string, color: string, talle: string) =>
+    (codigos.length === 0 || codigos.some((c) => art.includes(c))) &&
+    DIMS.every((x) => !filtros[x.id].size || filtros[x.id].has(valorDe(x.id, art, color, talle))), [filtros, valorDe, codigos])
   function alternarFiltro(dim: Dim, valor: string) {
     setFiltros((f) => { const n = { ...f, [dim]: new Set(f[dim]) }; if (n[dim].has(valor)) n[dim].delete(valor); else n[dim].add(valor); return n })
   }
@@ -561,6 +566,11 @@ export default function FranquiciasVentaStock() {
           {/* Filtros por atributo: valen para Stock y Venta */}
           <div className="flex w-full flex-wrap items-center gap-1.5 border-t border-line pt-3">
             <span className="mr-1 inline-flex items-center gap-1 text-xs text-sub"><Filter size={13} aria-hidden /> Filtros</span>
+            <span className="relative">
+              <input type="search" value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="Código de artículo" aria-label="Filtrar por código de artículo"
+                title="Uno o varios códigos (separados por espacio o coma). Vale para Stock y Venta."
+                className={`w-44 rounded-full border px-3 py-1 text-xs text-ink outline-none placeholder:text-sub ${codigos.length ? 'border-sky-500/60 bg-sky-500/10' : 'border-line2 bg-surface'}`} />
+            </span>
             {DIMS.map(({ id, label }) => (
               <div key={id} className="relative">
                 <button type="button" onClick={() => setAbierto(abierto === id ? null : id)} aria-expanded={abierto === id}
@@ -598,7 +608,7 @@ export default function FranquiciasVentaStock() {
                     {label}: {v} <X size={11} aria-hidden />
                   </button>
                 )))}
-                <button type="button" onClick={() => setFiltros(filtrosVacios())} className="text-xs font-semibold text-sub underline hover:text-ink">Limpiar todo</button>
+                <button type="button" onClick={() => { setFiltros(filtrosVacios()); setCodigo('') }} className="text-xs font-semibold text-sub underline hover:text-ink">Limpiar todo</button>
               </>
             )}
           </div>
