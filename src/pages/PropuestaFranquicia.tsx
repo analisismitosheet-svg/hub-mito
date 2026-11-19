@@ -18,6 +18,8 @@ interface ItemPub {
   talle: string | null
   sugerido: number
   vendido: number
+  /** stock del local al armar la propuesta (sql/franquicias_link_stock_local.sql); falta en links viejos */
+  stock_cli?: number | null
   maximo: number
   precio: number | null
   elegido: boolean | null
@@ -186,8 +188,13 @@ export default function PropuestaFranquicia() {
                         <p className="mt-0.5 text-[11px] text-neutral-600">
                           Color {i.color || 'U'} · Talle {i.talle || '—'}{i.precio ? ` · ${fmtPesos(i.precio)} c/u` : ''}
                         </p>
-                        <p className="mt-0.5 text-[12px] font-semibold text-neutral-800">
-                          Venta cliente {i.vendido} · te proponemos {i.sugerido}
+                        <p className="mt-1 flex flex-wrap gap-1 text-[11.5px] font-semibold">
+                          {i.stock_cli != null && (
+                            <span className="rounded-md bg-sky-100 px-1.5 py-0.5 text-sky-800">Stock local = {i.stock_cli}</span>
+                          )}
+                          <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-amber-800">Venta = {i.vendido}</span>
+                          <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-emerald-800">Propuesta de reposición = {i.sugerido}</span>
+                          <span className="rounded-md bg-violet-100 px-1.5 py-0.5 text-violet-800" title="Es lo máximo que podés pedir de este artículo">Disponible MITO = {i.maximo}</span>
                         </p>
                       </div>
                       {v === true && i.precio ? <p className="shrink-0 text-sm font-bold tabular-nums">{fmtPesos(c * i.precio)}</p> : null}
