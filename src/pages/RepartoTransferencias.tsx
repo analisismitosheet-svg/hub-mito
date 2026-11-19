@@ -8,6 +8,8 @@ import FiltroDesplegable from '@/components/reparto/FiltroDesplegable'
 import {
   BASE_TRACKING,
   FILTROS,
+  esProvMito,
+  type Origen,
   OPCIONES_SUGERENCIA,
   bajarExcelRemitos,
   calcularMovimientos,
@@ -59,6 +61,7 @@ export default function RepartoTransferencias() {
   )
   const [locSel, setLocSel] = useState<Set<string>>(new Set())
   const [art, setArt] = useState('')
+  const [origen, setOrigen] = useState<Origen>('')
   const [dias, setDias] = useState(14)
   const [desde, setDesde] = useState(() => menosDias(14))
   const [hasta, setHasta] = useState(() => menosDias(1))
@@ -81,7 +84,7 @@ export default function RepartoTransferencias() {
   const [fTalle, setFTalle] = useState('')
   const [fGrupo, setFGrupo] = useState('')
 
-  const [verTransporte, setVerTransporte] = useState(true)
+  const [verTransporte, setVerTransporte] = useState(false)
   const [rutas, setRutas] = useState<RutaVehiculo[]>([])
   const [semaforo, setSemaforo] = useState({ on: false, verde: 15, amarillo: 45, colores: { v: true, a: true, r: true } })
   const [opSug, setOpSug] = useState<OpcionesSugerencia>(OPCIONES_SUGERENCIA)
@@ -103,7 +106,7 @@ export default function RepartoTransferencias() {
 
   // Ruta de la Master y la Mercedes (se relee cada 60 s con la pestaña visible)
   useEffect(() => {
-    if (!datos) return
+    if (!datos || !verTransporte) return // apagado: no se consulta el Tracking
     let vivo = true
     const leer = () => cargarRutas().then((r) => vivo && setRutas(r)).catch((e) => console.warn('[reparto] tracking:', e))
     leer() // la primera vez siempre; después cada 60 s solo con la pestaña visible, y al volver a ella
@@ -111,17 +114,26 @@ export default function RepartoTransferencias() {
     const alVolver = () => document.visibilityState === 'visible' && leer()
     document.addEventListener('visibilitychange', alVolver)
     return () => { vivo = false; clearInterval(t); document.removeEventListener('visibilitychange', alVolver) }
-  }, [datos])
+  }, [datos, verTransporte])
 
+  // Con MITO o Marcas elegido, el desplegable de proveedor muestra solo los de ese lado
+  const provDelOrigen = (cod: string) => !origen || (origen === 'MITO') === esProvMito(cod)
   const opcionesDe = (k: ClaveFiltro) =>
-    (opciones?.[k] ?? []).map((o) => ({ id: o.cod, label: o.nom ? `${o.cod} ${o.nom}` : o.cod }))
+    (opciones?.[k] ?? [])
+      .filter((o) => k !== 'prov' || provDelOrigen(o.cod))
+      .map((o) => ({ id: o.cod, label: o.nom ? `${o.cod} ${o.nom}` : o.cod }))
+  const elegirOrigen = (o: Origen) => {
+    setOrigen(o)
+    // si ya había proveedores elegidos del otro lado, se sacan
+    setSel((p) => ({ ...p, prov: new Set([...p.prov].filter((c) => c === '\u0000' || !o || (o === 'MITO') === esProvMito(c))) }))
+  }
   const hayNinguno = Object.values(sel).some((s) => s.has('\u0000')) || locSel.has('\u0000')
-  const hayFiltroArt = FILTROS.some((f) => sel[f.k].size > 0) || art.trim() !== ''
+  const hayFiltroArt = FILTROS.some((f) => sel[f.k].size > 0) || art.trim() !== '' || origen !== ''
   const localesElegidos = locSel.size ? TODOS_LOCALES.filter((l) => locSel.has(l)) : TODOS_LOCALES
   const motivoNoArmar = hayNinguno
     ? 'Hay un filtro en «Ninguno»: elegí algo o volvé a «Seleccionar todo».'
     : !hayFiltroArt
-      ? 'Elegí al menos un filtro de artículo (proveedor, material, temporada, año, línea, familia, género, grupo o artículo).'
+      ? 'Elegí al menos un filtro de artículo (MITO o marcas, proveedor, material, temporada, año, línea, familia, género, grupo o artículo).'
       : localesElegidos.length < 2
         ? 'Elegí al menos 2 locales.'
         : desde > hasta
@@ -136,7 +148,7 @@ export default function RepartoTransferencias() {
     cancelado.current = false
     try {
       const filtros = Object.fromEntries(FILTROS.map((f) => [f.k, [...sel[f.k]]])) as Record<ClaveFiltro, string[]>
-      const r = await cargarStock({ ...filtros, art: art.trim().toUpperCase() }, desde, hasta, setEsperando, () => cancelado.current)
+      const r = await cargarStock({ ...filtros, art: art.trim().toUpperCase(), origen }, desde, hasta, setEsperando, () => cancelado.current)
       if (r.estado === 'demasiados') {
         setError(
           r.motivo === 'peso'
@@ -269,8 +281,9 @@ export default function RepartoTransferencias() {
   }
 
   const paso = datos ? 2 : 1
-  const resumenFiltro = FILTROS.filter((f) => sel[f.k].size)
-    .map((f) => `${f.titulo.replace('ID proveedor descripción', 'Proveedor')}: ${[...sel[f.k]].join(', ')}`)
+  const resumenFiltro = (origen ? [origen === 'MITO' ? 'Artículos MITO' : 'Marcas'] : [])
+    .concat(FILTROS.filter((f) => sel[f.k].size)
+      .map((f) => `${f.titulo.replace('ID proveedor descripción', 'Proveedor')}: ${[...sel[f.k]].join(', ')}`))
     .concat(art.trim() ? [`Artículo: ${art.trim().toUpperCase()}`] : [])
     .join(' · ')
 
@@ -312,6 +325,23 @@ export default function RepartoTransferencias() {
             ))}
           </div>
 
+          <p className="mb-1 mt-4 text-[11px] font-medium uppercase tracking-wider text-sub/80">Artículos</p>
+          <div className="inline-flex overflow-hidden rounded-lg border border-line" role="radiogroup" aria-label="Artículos MITO o marcas">
+            {([['', 'Todos'], ['MITO', 'MITO'], ['MARCAS', 'Marcas']] as [Origen, string][]).map(([v, t]) => (
+              <button
+                key={t}
+                type="button"
+                role="radio"
+                aria-checked={origen === v}
+                onClick={() => elegirOrigen(v)}
+                title={v === 'MITO' ? 'Proveedores que empiezan con MO' : v === 'MARCAS' ? 'Todos los proveedores que no empiezan con MO' : undefined}
+                className={`h-9 px-4 text-xs ${origen === v ? 'bg-orange-500/15 font-semibold text-orange-300' : 'text-sub hover:text-ink'} ${v ? 'border-l border-line' : ''}`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+
           <div className="mt-3 grid gap-x-5 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
             <FiltroDesplegable titulo="Locales" todos="Todos" opciones={TODOS_LOCALES.map((l) => ({ id: l, label: NOMBRE_LOCAL[l] ?? l }))} valor={locSel} onChange={setLocSel} />
             {FILTROS.map((f) => (
@@ -323,7 +353,7 @@ export default function RepartoTransferencias() {
               Artículo (opcional)
               <input value={art} onChange={(e) => setArt(e.target.value)} placeholder="Código o parte, ej. CF1662" className="mt-1 block h-9 w-72 rounded-lg border border-line bg-surface2 px-2.5 text-sm normal-case tracking-normal text-ink" />
             </label>
-            <button type="button" className="h-9 text-xs text-sky-400" onClick={() => { setSel(Object.fromEntries(FILTROS.map((f) => [f.k, new Set<string>()])) as Record<ClaveFiltro, Set<string>>); setLocSel(new Set()); setArt('') }}>
+            <button type="button" className="h-9 text-xs text-sky-400" onClick={() => { setSel(Object.fromEntries(FILTROS.map((f) => [f.k, new Set<string>()])) as Record<ClaveFiltro, Set<string>>); setLocSel(new Set()); setArt(''); setOrigen('') }}>
               Limpiar todos los filtros
             </button>
           </div>

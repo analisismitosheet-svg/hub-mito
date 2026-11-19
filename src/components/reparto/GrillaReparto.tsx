@@ -238,6 +238,19 @@ export default function GrillaReparto({
   const rutaClase = (s: number) => (faltaPasar?.[locales[s]] ?? []).map((m) => ` rp-${m.clase}`).join('')
   const rutaTip = (s: number) => (faltaPasar?.[locales[s]] ?? []).map((m) => `${m.vehiculo} le falta pasar${m.hora ? ` (límite ${m.hora})` : ''}`)
 
+  // Fondo alternado por artículo + color (como una tabla de Excel con bandas): cambia cada vez
+  // que termina un artículo-color y empieza otro. Se calcula sobre todas las filas para que no
+  // salte al hacer scroll (la grilla solo dibuja las visibles).
+  const banda = useMemo(() => {
+    const b = new Uint8Array(filas.length)
+    let g = 0
+    for (let i = 1; i < filas.length; i++) {
+      if (filas[i].articulo !== filas[i - 1].articulo || filas[i].color !== filas[i - 1].color) g ^= 1
+      b[i] = g
+    }
+    return b
+  }, [filas])
+
   const filasHtml = useMemo(() => {
     const out: JSX.Element[] = []
     for (let ri = desde; ri < hasta; ri++) {
@@ -247,7 +260,7 @@ export default function GrillaReparto({
       const elegido = artSel && f.articulo === artSel.art && f.color === artSel.col
       const rem = suma(f.base) - suma(f.cur)
       out.push(
-        <tr key={`${f.articulo}|${f.color}|${f.talle}`} className={(nuevoGrupo ? 'rp-ng' : '') + (elegido ? ' rp-sel-art' : '')}>
+        <tr key={`${f.articulo}|${f.color}|${f.talle}`} className={(nuevoGrupo ? 'rp-ng' : '') + (banda[ri] ? ' rp-alt' : '') + (elegido ? ' rp-sel-art' : '')}>
           <td className="rp-c0" title={`Tocá para elegir ${f.articulo} color ${f.color} y pedir una sugerencia`} onClick={() => onElegirArt(f.articulo, f.color)}>
             {f.articulo}
           </td>
@@ -315,7 +328,7 @@ export default function GrillaReparto({
     }
     return out
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filas, locales, desde, hasta, sel, activa, buffer, version, faltaPasar, semaforo, artSel])
+  }, [filas, banda, locales, desde, hasta, sel, activa, buffer, version, faltaPasar, semaforo, artSel])
 
   const filaResumen = (titulo: string, vals: number[], conColor = false) => (
     <tr className="rp-sum">
@@ -391,7 +404,11 @@ const CSS = `
 .rp-tabla td.rp-c2{text-align:center;cursor:zoom-in;text-decoration:underline dotted rgba(148,163,184,.6);text-underline-offset:3px}
 .rp-tabla td.rp-c3{text-align:center;border-right:1px solid var(--line2)}
 .rp-tabla th.rp-c0,.rp-tabla th.rp-c1{text-align:left}
-.rp-tabla tr.rp-ng td{border-top:1px solid var(--line2)}
+.rp-tabla tr.rp-ng td{border-top:2px solid rgba(148,163,184,.7)}
+tr.rp-alt>td{background:rgba(148,163,184,.24)}
+.light .rp-wrap{background:#fff}
+.light tr.rp-alt>td{background:rgba(100,116,139,.17)}
+.light .rp-tabla tr.rp-ng td{border-top-color:rgba(71,85,105,.6)}
 .rp-tabla tr.rp-sel-art td.rp-c0,.rp-tabla tr.rp-sel-art td.rp-c1,.rp-tabla tr.rp-sel-art td.rp-c2,.rp-tabla tr.rp-sel-art td.rp-c3{background:rgba(249,115,22,.16);color:#fed7aa}
 .rp-tabla tr.rp-sel-art td.rp-c0{box-shadow:inset 3px 0 0 #f97316;font-weight:700}
 .rp-cell{position:relative;text-align:center;cursor:cell;outline:none;color:var(--ink)}

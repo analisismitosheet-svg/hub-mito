@@ -3,7 +3,7 @@
  *
  *   accion 'reparto_opciones' -> { opciones: { prov:[{cod,nom}], mat, temp, anio, linea, flia, grupo, gen } }
  *       sql/reparto-opciones.sql (~6 s), se guarda 1 hora.
- *   accion 'reparto_stock' body: { filtros:{prov[],mat[],temp[],anio[],linea[],flia[],grupo[],gen[],art}, desde, hasta }
+ *   accion 'reparto_stock' body: { filtros:{prov[],mat[],temp[],anio[],linea[],flia[],grupo[],gen[],art,origen:'MITO'|'MARCAS'|''}, desde, hasta }
  *       -> { estado:'calculando', desde } mientras lee el DWH (~1-2 min, por detrás)
  *       -> { estado:'listo', locales:[20 códigos], filas:[{a,c,t,s,v,tr,u}], arts:{ID_ART:{...}}, ... }
  *       -> { estado:'demasiados', articulos, motivo? } si el filtro trae más de MAX_ARTICULOS o la respuesta pasa ~4 MB
@@ -60,9 +60,10 @@ function limpiarFiltros(f) {
     prov: lista(f?.prov), mat: lista(f?.mat), temp: lista(f?.temp), anio: lista(f?.anio),
     linea: lista(f?.linea), flia: lista(f?.flia), grupo: lista(f?.grupo), gen: lista(f?.gen),
     art: /^[A-Z0-9]{1,20}$/.test(art) ? art : '',
+    origen: ['MITO', 'MARCAS'].includes(txt(f?.origen).toUpperCase()) ? txt(f?.origen).toUpperCase() : '',
   }
 }
-const hayFiltroDeArticulo = (f) => !!f.art || ['prov', 'mat', 'temp', 'anio', 'linea', 'flia', 'grupo', 'gen'].some((k) => f[k].length)
+const hayFiltroDeArticulo = (f) => !!f.art || !!f.origen || ['prov', 'mat', 'temp', 'anio', 'linea', 'flia', 'grupo', 'gen'].some((k) => f[k].length)
 
 function crear(deps) {
   // deps.sql se lee en cada uso: el puente puede cambiar de driver (tedious / msnodesqlv8) al arrancar
@@ -187,7 +188,12 @@ function crear(deps) {
         req.input('hasta', V, hasta)
         req.input('desde_ult', V, diaLocal(DIAS_ULTIMA_VENTA))
         req.input('max', V, String(MAX_ARTICULOS))
-        const r = await req.query(fs.readFileSync(SQL_STOCK, 'utf8'))
+        // origen ya viene validado ('MITO' | 'MARCAS' | ''): texto fijo, nada del usuario
+        const origen =
+          f.origen === 'MITO' ? "AND LTRIM(a.ID_PROV) LIKE 'MO%'"
+          : f.origen === 'MARCAS' ? "AND LTRIM(ISNULL(a.ID_PROV, '')) NOT LIKE 'MO%'"
+          : ''
+        const r = await req.query(fs.readFileSync(SQL_STOCK, 'utf8').replace('/*ORIGEN*/', origen))
         const articulos = Number(r.recordsets?.[0]?.[0]?.articulos) || 0
         if (articulos > MAX_ARTICULOS) foto.datos = { estado: 'demasiados', articulos, max: MAX_ARTICULOS }
         else {

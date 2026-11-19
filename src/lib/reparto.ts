@@ -13,7 +13,10 @@ import { supabase } from './supabase'
 export interface OpcionFiltro { cod: string; nom: string }
 export type ClaveFiltro = 'prov' | 'mat' | 'temp' | 'anio' | 'linea' | 'flia' | 'gen' | 'grupo'
 export type Opciones = Record<ClaveFiltro, OpcionFiltro[]>
-export type Filtros = Record<ClaveFiltro, string[]> & { art: string }
+/** MITO = proveedores que empiezan con MO; MARCAS = el resto; '' = todos */
+export type Origen = '' | 'MITO' | 'MARCAS'
+export const esProvMito = (cod: string) => cod.trim().toUpperCase().startsWith('MO')
+export type Filtros = Record<ClaveFiltro, string[]> & { art: string; origen?: Origen }
 
 export interface FilaPuente { a: string; c: string; t: string; s: number[]; v: number[]; tr: number[]; u: (number | null)[] }
 export interface ArtPuente { nombre: string; desc: string; prov: string; grupo: string; material: string; linea: string; temporada: string }
@@ -189,7 +192,8 @@ export interface OpcionesSugerencia {
   huecosSinVenta: boolean
 }
 export const OPCIONES_SUGERENCIA: OpcionesSugerencia = {
-  donaMito: true, donaIndo: true, donaPolo: true, segunIdeal: true, minEnvio: 2, abrirColores: false, huecosSinVenta: false,
+  // todos los tildes arrancan sin tildar (pedido del usuario); el que quiera los prende
+  donaMito: false, donaIndo: false, donaPolo: false, segunIdeal: false, minEnvio: 2, abrirColores: false, huecosSinVenta: false,
 }
 
 export interface ResultadoSugerencia {

@@ -4,6 +4,7 @@
  *
  * Parámetros (varchar; listas separadas por '|', vacío = sin filtro):
  *   @prov @mat @temp @anio @linea @flia @grupo @gen   atributos del artículo (como el tablero de PBI)
+ *   marca ORIGEN  reparto.js la cambia por la condición de MITO (proveedor MO…) o MARCAS (el resto)
  *   @art     código o principio de código (opcional)
  *   @desde @hasta  período de venta 'YYYY-MM-DD'
  *   @desde_ult     desde cuándo se busca la última venta (días sin venta, ~180 días)
@@ -30,6 +31,8 @@ SELECT DISTINCT LTRIM(RTRIM(a.ID_ART))
   FROM DWH.dbo.vw_DIM_ARTICULO a
  WHERE CHARINDEX(' ', RTRIM(a.ID_ART)) = 0
    AND (@prov  = '' OR LTRIM(RTRIM(a.ID_PROV))      IN (SELECT value FROM STRING_SPLIT(@prov, '|')))
+   -- origen (MITO = proveedor MO…, MARCAS = el resto): reparto.js reemplaza la marca de abajo
+   /*ORIGEN*/
    AND (@mat   = '' OR LTRIM(RTRIM(a.ID_MATERIAL))  IN (SELECT value FROM STRING_SPLIT(@mat, '|')))
    AND (@temp  = '' OR LTRIM(RTRIM(a.ID_TEMPORADA)) IN (SELECT value FROM STRING_SPLIT(@temp, '|')))
    AND (@anio  = '' OR CAST(CAST(a.[AÑO] AS int) AS varchar(10)) IN (SELECT value FROM STRING_SPLIT(@anio, '|')))
