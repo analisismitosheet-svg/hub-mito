@@ -14,7 +14,8 @@ export default function PermissionRoute({
   oDeposito = false,
   children,
 }: {
-  permiso: string
+  /** una clave, o varias: alcanza con tener una */
+  permiso: string | string[]
   /** además del permiso, solo cuentas de legajo (y administradores) */
   soloLegajo?: boolean
   /** también entra quien ve Mi repo en Depósito (rol deposito o legajo de Depósito Indo) */
@@ -31,7 +32,7 @@ export default function PermissionRoute({
   if (configured && !user) return <Navigate to="/login" replace />
   if (configured && user && !isApproved) return <Navigate to="/acceso" replace />
   if (configured && oDeposito && veMiRepoDeposito) return <>{children}</>
-  if (!can(permiso)) return <Navigate to="/denegado" replace />
+  if (!(Array.isArray(permiso) ? permiso.some((p) => can(p)) : can(permiso))) return <Navigate to="/denegado" replace />
   if (configured && soloLegajo && !esLegajo && !isAdmin) return <Navigate to="/denegado" replace />
   return <>{children}</>
 }

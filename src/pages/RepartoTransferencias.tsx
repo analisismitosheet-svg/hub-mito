@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, Download, Loader2, Maximize2, Minimize2, Redo2, Send, Sparkles, Undo2 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
+import { useAuth } from '@/context/AuthContext'
 import GrillaReparto, { type Cambio, type MarcaRuta } from '@/components/reparto/GrillaReparto'
 import GraficoStockVenta from '@/components/reparto/GraficoStockVenta'
 import FiltroDesplegable from '@/components/reparto/FiltroDesplegable'
@@ -59,6 +60,9 @@ const btn = 'btn-press inline-flex h-8 items-center gap-1.5 rounded-lg border bo
 const tilde = 'flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-ink'
 
 export default function RepartoTransferencias() {
+  // Solo ver (rol mayorista, permiso transferencias.reparto): reparte en pantalla pero no carga lotes ni pedidos
+  const { isAdmin, can } = useAuth()
+  const soloVer = !isAdmin && !can('transferencias.import')
   /* ---------- paso 1: filtros ---------- */
   const [opciones, setOpciones] = useState<Opciones | null>(null)
   const [errOpciones, setErrOpciones] = useState<string | null>(null)
@@ -246,8 +250,8 @@ export default function RepartoTransferencias() {
     if (movsMito.length && !obsDragon) setObsDragon(`REPARTO MANUAL ${nombreLote}`.trim())
   }, [movsMito.length, obsDragon, nombreLote])
   useEffect(() => {
-    if (movsMito.length && !motivos) motivosDragon().then(setMotivos).catch((e: Error) => setErrDragon(`No se pudieron leer los motivos de Dragon: ${e.message}`))
-  }, [movsMito.length, motivos])
+    if (!soloVer && movsMito.length && !motivos) motivosDragon().then(setMotivos).catch((e: Error) => setErrDragon(`No se pudieron leer los motivos de Dragon: ${e.message}`))
+  }, [movsMito.length, motivos, soloVer])
   const obsPedido = obsDragon.replace(/\s+/g, ' ').trim().slice(0, 250)
   const negativos = useMemo(
     () => modelo.current.filter((f) => f.cur.reduce((a, b) => a + b, 0) > f.base.reduce((a, b) => a + b, 0)).length,
@@ -619,6 +623,15 @@ export default function RepartoTransferencias() {
                 </table>
               </div>
             </section>
+            {soloVer ? (
+            <section className="rounded-2xl border border-line bg-surface p-4">
+              <h2 className="text-[15px] font-bold text-ink">Solo ver</h2>
+              <p className="mt-2 text-sm text-sub">Podés armar el reparto, probar la sugerencia y bajar el Excel, pero cargar el lote en Transferencias o los pedidos en Dragon lo hace quien importa transferencias.</p>
+              <button type="button" disabled={!movimientos.length} onClick={() => void bajarExcelRemitos(movimientos, locales)} className={btn + ' mt-3 h-9'}>
+                <Download size={13} aria-hidden /> Excel de remitos
+              </button>
+            </section>
+            ) : (
             <section className="rounded-2xl border border-line bg-surface p-4">
               <h2 className="text-[15px] font-bold text-ink">Cargar</h2>
               <label className="mt-2 block text-[11px] font-medium uppercase tracking-wider text-sub/80">
@@ -647,8 +660,9 @@ export default function RepartoTransferencias() {
                 {movsMito.length > 0 && <li>Lo que sale de MITO no va en el lote: se carga abajo como pedido de venta en Dragon.</li>}
               </ol>
             </section>
+            )}
 
-            {movsMito.length > 0 && (
+            {!soloVer && movsMito.length > 0 && (
               <section className="rounded-2xl border border-sky-500/30 bg-surface p-4 xl:col-span-2">
                 <h2 className="text-[15px] font-bold text-ink">Pedidos de venta de MITO en Dragon</h2>
                 <p className="text-xs text-sub">

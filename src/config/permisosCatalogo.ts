@@ -180,7 +180,10 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
     icon: ArrowRightLeft, color: '#d97706',
     acciones: { ver: 'transferencias.view', crear: 'transferencias.import' },
     etiquetas: { crear: 'Importar' },
-    especiales: [{ clave: 'transferencias.ver_todo', label: 'Ver todos los locales' }],
+    especiales: [
+      { clave: 'transferencias.ver_todo', label: 'Ver todos los locales' },
+      { clave: 'transferencias.reparto', label: 'Ver Reparto manual (sin cargar lotes ni pedidos)' },
+    ],
   },
   {
     id: 'pedidos-compra', areaId: 'compras', titulo: 'Pedidos de compra', descripcion: 'Órdenes de compra, cancelaciones y estado',

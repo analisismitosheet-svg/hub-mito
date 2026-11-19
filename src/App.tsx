@@ -220,7 +220,7 @@ export default function App() {
           <Route
             path="/transferencias/reparto"
             element={
-              <PermissionRoute permiso="transferencias.import">
+              <PermissionRoute permiso={['transferencias.import', 'transferencias.reparto']}>
                 <Suspense fallback={null}>
                   <RepartoTransferencias />
                 </Suspense>
