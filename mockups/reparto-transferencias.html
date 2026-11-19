@@ -1,0 +1,890 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mockup · Reparto manual de transferencias</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --paper:#050508; --surface:rgba(255,255,255,.035); --surface2:rgba(255,255,255,.07); --solid:#0d0d12;
+    --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.18);
+    --ink:#f8fafc; --sub:#94a3b8; --orange:#f97316; --red:#f87171; --sky:#38bdf8; --lime:#a3e635; --amber:#fbbf24;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:20px clamp(10px,2vw,28px) 64px;background:
+    radial-gradient(900px 500px at 10% -10%, rgba(217,119,6,.14), transparent 60%), var(--paper);
+    color:var(--ink);font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:14px;line-height:1.45}
+  h1{margin:0;font-size:22px;font-weight:800;letter-spacing:-.02em}
+  h2{margin:0 0 4px;font-size:15px;font-weight:700}
+  p{margin:0} button,input,select{font-family:inherit}
+  button{cursor:pointer}
+  .sub{color:var(--sub)} .small{font-size:12px}
+  .back{color:var(--sub);font-size:13px;margin-bottom:8px;display:inline-block}
+  .nota{border:1px dashed rgba(251,191,36,.45);background:rgba(251,191,36,.07);color:#fde68a;border-radius:12px;padding:10px 12px;font-size:12.5px;margin:0 0 16px}
+  .card{border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:14px}
+  /* tarjetas del TransferenciasHub */
+  .hub{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin:10px 0 22px}
+  .tj{border:1px solid var(--line);background:var(--surface);border-radius:14px;padding:12px;display:flex;gap:10px;align-items:flex-start}
+  .tj.nueva{border-color:rgba(167,139,250,.55);background:rgba(167,139,250,.08);box-shadow:0 0 0 3px rgba(167,139,250,.08)}
+  .ico{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-size:17px;flex:none}
+  .tj b{display:block;font-size:13.5px}
+  .tj span{font-size:12px;color:var(--sub)}
+  .badge{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;background:#a78bfa;color:#1e1b4b;border-radius:999px;padding:1px 7px;margin-left:6px}
+
+  .top{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between}
+  .barra{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+  .btn{height:34px;border:1px solid var(--line2);border-radius:9px;background:var(--surface2);color:var(--ink);font-weight:600;padding:0 12px;font-size:13px}
+  .btn:hover{border-color:rgba(255,255,255,.3)}
+  .btn.pri{background:var(--orange);border-color:var(--orange);color:#fff}
+  .btn.ok{background:rgba(163,230,53,.16);border-color:rgba(163,230,53,.5);color:#d9f99d}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .seg{display:inline-flex;border:1px solid var(--line2);border-radius:9px;overflow:hidden}
+  .seg button{height:32px;border:0;background:transparent;color:var(--sub);padding:0 11px;font-size:12.5px;font-weight:600}
+  .seg button.on{background:var(--surface2);color:var(--ink)}
+  label.f{display:flex;flex-direction:column;gap:3px;font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:rgba(148,163,184,.8)}
+  textarea{border-radius:9px;border:1px solid var(--line);background:var(--surface2);color:var(--ink);padding:8px 10px;font:inherit;font-size:13px;resize:vertical;text-transform:none;letter-spacing:0}
+  input,select{height:34px;border-radius:9px;border:1px solid var(--line);background:var(--surface2);color:var(--ink);padding:0 10px;font-size:13px;color-scheme:dark}
+  input[type=search]{min-width:220px}
+  .estado{margin-top:10px;font-size:12.5px;color:var(--sub);display:flex;gap:8px;align-items:center}
+  .pill{border-radius:999px;padding:2px 9px;font-size:11.5px;font-weight:700}
+  .pill.sky{background:rgba(56,189,248,.14);color:#7dd3fc}
+  .ley{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--sub);margin:12px 0 8px}
+  .ley i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-2px}
+
+  /* grilla */
+  /* sin desplazamiento horizontal: la tabla ocupa el ancho y las columnas se reparten */
+  .grid{overflow-y:auto;overflow-x:hidden;max-height:62vh;border:1px solid var(--line);border-radius:14px;background:rgba(0,0,0,.25)}
+  table{width:100%;table-layout:fixed;border-collapse:separate;border-spacing:0;font-size:clamp(10.5px,.82vw,12.5px);font-variant-numeric:tabular-nums}
+  th,td{height:26px;padding:0 3px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  thead tr:nth-child(4) th{font-size:clamp(9px,.68vw,11px);letter-spacing:-.02em;padding:0 1px}
+  thead th{position:sticky;background:var(--solid);z-index:2;font-weight:600;color:var(--sub);font-size:11.5px}
+  thead tr:nth-child(1) th{top:0} thead tr:nth-child(2) th{top:27px} thead tr:nth-child(3) th{top:54px} thead tr:nth-child(4) th{top:81px;color:var(--ink)}
+  .sum th{text-align:center;font-weight:700}
+  .sum th.slbl{text-align:right;color:var(--sub);font-weight:600}
+  .pos{color:var(--lime)!important} .neg{color:var(--red)!important}
+  .st{background:var(--solid)}
+  thead .st{z-index:3}
+  .c0{text-align:left} .c2,.c3{text-align:center} .c3{border-right:1px solid var(--line2)}
+  td.c1{color:var(--sub)}
+  tr.ng td{border-top:1px solid var(--line2)}
+  td.cell{text-align:center;cursor:cell;outline:none}
+  td.cell:focus{box-shadow:inset 0 0 0 2px var(--orange)}
+  td.sold{background:rgba(248,113,113,.18)}
+  td.transit{color:var(--sky);font-weight:700}
+  /* toda celda con algo en camino muestra el camioncito con la cantidad (ej. «3 🚚1»; en 0 no es hueco) */
+  .tr-mk{font-size:.8em;color:var(--sky);font-weight:700;opacity:.9;white-space:nowrap}
+  td.cell{position:relative}
+  /* celda cambiada: cuánto se movió, arriba a la izquierda (verde = recibe, rojo = dona) */
+  .delta{position:absolute;top:0;left:1px;font-size:8.5px;line-height:1;font-weight:800;pointer-events:none}
+  .delta.mas{color:#86efac} .delta.menos{color:#fca5a5}
+  /* con stock: chiquito en la esquina de arriba a la derecha, así el número sigue entero y centrado */
+  .tr-mk.esq{position:absolute;top:0;right:1px;font-size:8.5px;line-height:1;opacity:1;pointer-events:none}
+  td.moved{background:rgba(167,139,250,.2);font-weight:700}
+  td.sold.moved{background:linear-gradient(135deg,rgba(248,113,113,.22),rgba(167,139,250,.28))}
+  td.sel{box-shadow:inset 0 0 0 1px rgba(249,115,22,.6);background:rgba(249,115,22,.12)}
+  td.rem{text-align:center;font-weight:700}
+  td.rem.on{color:var(--amber)} td.rem.neg{color:#fff;background:rgba(248,113,113,.55)}
+
+  /* panel de movimientos */
+  .lado{display:grid;grid-template-columns:1fr;gap:14px;margin-top:16px}
+  @media(min-width:1100px){.lado{grid-template-columns:1.2fr .8fr}}
+  .mov table{width:100%;font-size:13px}
+  .mov th{position:static;background:none;text-align:left;border:0;padding:6px 8px 6px 0;font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:rgba(148,163,184,.7)}
+  .mov td{border:0;border-top:1px solid var(--line);padding:6px 8px 6px 0;height:auto}
+  .flecha{color:var(--sub);padding:0 4px}
+  .kpis{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 12px}
+  .kpi{border:1px solid var(--line);border-radius:12px;padding:8px 12px;min-width:110px}
+  .kpi b{display:block;font-size:20px;font-weight:800}
+  .kpi span{font-size:11.5px;color:var(--sub)}
+  .aviso{border:1px solid rgba(248,113,113,.4);background:rgba(248,113,113,.08);border-radius:10px;padding:8px 10px;font-size:12.5px;margin-bottom:10px;color:#fecaca}
+  .ok-msg{border:1px solid rgba(163,230,53,.4);background:rgba(163,230,53,.08);border-radius:10px;padding:10px 12px;font-size:13px;color:#d9f99d;margin-top:10px;display:none}
+  .pasos{display:flex;align-items:center;gap:8px;margin:14px 0}
+  .paso{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--sub);font-weight:600}
+  .paso b{width:24px;height:24px;border-radius:999px;display:grid;place-items:center;border:1px solid var(--line2);font-size:12px}
+  .paso.on{color:var(--ink)} .paso.on b{background:var(--orange);border-color:var(--orange);color:#fff}
+  .paso.hecho b{background:rgba(163,230,53,.2);border-color:rgba(163,230,53,.5);color:#d9f99d}
+  .raya{flex:0 1 40px;height:1px;background:var(--line2)}
+  .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:rgba(148,163,184,.75);margin:14px 0 6px;display:flex;justify-content:space-between;align-items:center}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{border:1px solid var(--line);background:var(--surface);color:var(--sub);border-radius:8px;padding:5px 10px;font-size:12.5px}
+  .chip:hover{color:var(--ink)}
+  .chip.on{border-color:rgba(249,115,22,.55);background:rgba(249,115,22,.16);color:#fdba74;font-weight:600}
+  .chip.dep.on{border-color:rgba(56,189,248,.55);background:rgba(56,189,248,.14);color:#7dd3fc}
+  .links button{background:none;border:0;color:var(--sky);font-size:12px;padding:0 0 0 10px;text-transform:none;letter-spacing:0}
+  .filtros{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px 22px}
+  @media(max-width:900px){.filtros{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media(max-width:560px){.filtros{grid-template-columns:1fr}}
+  .dd{position:relative}
+  .dd-btn{width:100%;height:36px;display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid var(--line2);border-radius:9px;background:var(--surface2);color:var(--ink);padding:0 10px;font-size:13px;text-align:left}
+  .dd-btn span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .dd-btn.activo{border-color:rgba(249,115,22,.6);background:rgba(249,115,22,.12);color:#fdba74;font-weight:600}
+  .dd-btn i{font-style:normal;color:var(--sub);flex:none}
+  .dd-pan{display:none;position:absolute;z-index:20;top:40px;left:0;right:0;background:#111118;border:1px solid var(--line2);border-radius:10px;padding:8px;box-shadow:0 12px 30px rgba(0,0,0,.5)}
+  .dd.abierto .dd-pan{display:block}
+  .dd-pan input{width:100%;height:30px;margin-bottom:6px}
+  .dd-lista{max-height:220px;overflow:auto}
+  .dd-op{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:6px;font-size:13px;cursor:pointer;text-transform:none;letter-spacing:0;color:var(--ink)}
+  .dd-op:hover{background:var(--surface2)}
+  .dd-op input{width:15px;height:15px;margin:0;accent-color:var(--orange)}
+  .dd-op.todo{border-bottom:1px solid var(--line);border-radius:0;margin-bottom:4px;font-weight:600}
+  .btn.grande{height:42px;padding:0 28px;font-size:15px}
+  /* ruta del vehículo (tracking) */
+  .ruta{border:1px solid var(--line);background:var(--surface);border-radius:14px;padding:10px 12px;margin:0 0 10px}
+  .ruta-top{display:flex;flex-wrap:wrap;gap:12px;align-items:center;font-size:12.5px}
+  .ruta-top select{height:30px}
+  .ruta-ley{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--sub);margin-top:8px}
+  .ruta-ley i{display:inline-block;width:14px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-2px}
+  .ruta-linea{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;font-size:12px}
+  .parada{border:1px solid var(--line2);border-radius:999px;padding:2px 9px;display:inline-flex;gap:5px;align-items:center}
+  .parada small{color:var(--sub)}
+  /* un color por vehículo (ninguno repite los de la grilla: rojo venta, azul tránsito, violeta cambio) */
+  .sw-m1,.parada.m1{background:rgba(234,179,8,.5)!important;border-color:#eab308;color:#fff}
+  .sw-m2,.parada.m2{background:rgba(236,72,153,.5)!important;border-color:#ec4899;color:#fff}
+  .sw-ambos{background:linear-gradient(135deg,#eab308 50%,#ec4899 50%)!important}
+  .veh-fila{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px;font-size:12px}
+  .veh-nom{font-weight:700;min-width:150px;display:flex;gap:6px;align-items:center}
+  .veh-nom i{width:12px;height:12px;border-radius:3px;display:inline-block}
+  /* tildes de la tabla: transporte y semáforo de días sin venta */
+  .vistas{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;margin-right:auto;font-size:12.5px}
+  .donan{display:inline-flex;gap:8px;align-items:center;color:var(--sub);font-size:12.5px;border:1px solid var(--line);border-radius:9px;padding:3px 8px}
+  .tilde{display:flex;gap:6px;align-items:center;cursor:pointer;font-weight:600}
+  .tilde input{width:16px;height:16px;margin:0;accent-color:var(--orange)}
+  .semaf-cfg{display:none;gap:5px;align-items:center;color:var(--sub);font-size:12px}
+  .semaf-cfg.on{display:inline-flex}
+  .semaf-cfg input{width:48px;height:26px;padding:0 6px}
+  .tilde-sv{display:inline-flex;align-items:center;gap:4px;cursor:pointer;color:var(--ink);font-weight:600;margin-left:8px}
+  .tilde-sv input{width:15px;height:15px;margin:0;accent-color:var(--orange)}
+  .tilde-sv .sv{margin-left:0}
+  .sv{display:inline-block;width:11px;height:11px;border-radius:999px;margin-left:6px}
+  .sv-v{background:#16a34a} .sv-a{background:#f59e0b} .sv-r{background:#dc2626}
+  /* con el semáforo prendido: el relleno de la celda es cuánto hace que ese local no vende ese SKU (solo celdas con stock) */
+  .semaforo #tbody td.sold{background:none}
+  .semaforo #tbody td.s-v{background:rgba(22,163,74,.32)}
+  .semaforo #tbody td.s-a{background:rgba(245,158,11,.32)}
+  .semaforo #tbody td.s-r{background:rgba(220,38,38,.38)}
+  .semaforo #tbody td.moved{outline:2px dashed rgba(167,139,250,.9);outline-offset:-3px}
+  #zonaTabla.sin-transporte .ruta{display:none}
+  /* en la grilla: la línea donde está el mouse (con «Ver transporte» prendido) */
+  #tbody tr:hover td.r-m1{box-shadow:inset 0 0 0 2px #eab308;background-color:rgba(234,179,8,.2)}
+  #tbody tr:hover td.r-m2{box-shadow:inset 0 0 0 2px #ec4899;background-color:rgba(236,72,153,.2)}
+  #tbody tr:hover td.r-m1.r-m2{box-shadow:inset 0 0 0 2px #eab308,inset 0 0 0 4px #ec4899;background:linear-gradient(135deg,rgba(234,179,8,.25) 50%,rgba(236,72,153,.25) 50%)}
+  #tbody tr:hover td:not(.cell){background:rgba(255,255,255,.04)}
+  .hov thead th.r-m1{background:#ca8a04;color:#fff}
+  .hov thead th.r-m2{background:#db2777;color:#fff}
+  .hov thead th.r-m1.r-m2{background:linear-gradient(135deg,#ca8a04 50%,#db2777 50%);color:#fff}
+  /* gráfico Stock y venta x locales (doble clic en el color) */
+  td.col-graf{cursor:zoom-in;text-decoration:underline dotted rgba(148,163,184,.6);text-underline-offset:3px}
+  td.col-graf:hover{color:var(--ink);background:rgba(255,255,255,.08)}
+  /* pantalla completa de la tabla (ruta de los vehículos + grilla) */
+  /* sugerencia por artículo (tocar el código) */
+  td.c0{cursor:pointer}
+  td.c0:hover{color:#fdba74;text-decoration:underline}
+  #tbody tr.art-sel td.c0,#tbody tr.art-sel td.c1,#tbody tr.art-sel td.c2,#tbody tr.art-sel td.c3{background:rgba(249,115,22,.16);color:#fed7aa}
+  #tbody tr.art-sel td.c0{box-shadow:inset 3px 0 0 var(--orange);font-weight:700}
+  .btn.sug:not(:disabled){background:linear-gradient(135deg,#f97316,#a855f7);border-color:transparent;color:#fff}
+  .sug-msg{display:none;margin:0 0 8px;border:1px solid rgba(168,85,247,.45);background:rgba(168,85,247,.1);border-radius:10px;padding:8px 10px;font-size:12.5px}
+  .sug-msg.on{display:block}
+  .sug-msg b{color:#e9d5ff}
+  .sug-msg button{background:none;border:0;color:var(--sky);font-size:12.5px;padding:0;margin-left:8px}
+  .zona-cab{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:10px;margin:0 0 8px}
+  .zona-tit{display:none;font-weight:700;font-size:13px;margin-right:auto}
+  #zonaTabla.completa{position:fixed;inset:0;z-index:40;background:var(--paper);padding:10px 12px;display:flex;flex-direction:column;overflow:hidden}
+  #zonaTabla.completa .zona-tit{display:block}
+  #zonaTabla.completa .ruta{flex:none}
+  #zonaTabla.completa .grid{flex:1;min-height:0;max-height:none}
+  #zonaTabla.completa #btnPantalla{background:var(--orange);border-color:var(--orange);color:#fff}
+  body.sin-scroll{overflow:hidden}
+  /* panel chico: ancho de la columna Descripción y alto de la pantalla, sin scroll adentro */
+  .modal-fondo{position:fixed;inset:0;display:none;z-index:50;pointer-events:none}   /* no tapa la grilla */
+  .modal-fondo .modal{pointer-events:auto}
+  .modal-fondo.on{display:block}
+  .modal{position:fixed;background:#0b0b10;border:1px solid var(--line2);border-radius:12px;display:flex;flex-direction:column;box-shadow:0 14px 40px rgba(0,0,0,.65);overflow:hidden}
+  .modal-cab{display:flex;justify-content:space-between;gap:6px;align-items:flex-start;padding:7px 8px 3px}
+  .g-art{min-width:0}
+  .g-cod{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;font-size:16px;font-weight:800;letter-spacing:-.01em;line-height:1.15}
+  .g-col{font-size:14px;font-weight:800;color:#fdba74}
+  .g-nom{font-size:13px;font-weight:700;line-height:1.2;margin-top:3px;color:var(--ink)}
+  .g-fec{font-size:9.5px;color:var(--sub);margin-top:3px}
+  .modal-cab h3{margin:0;font-size:12px;font-weight:800;line-height:1.2}
+  .modal-cab .sub{font-size:10px;line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .modal-cab button{background:none;border:0;color:var(--sub);font-size:14px;line-height:1;padding:0}
+  .graf-ley{display:flex;flex-wrap:wrap;gap:2px 8px;font-size:9.5px;color:var(--sub);padding:0 8px 4px}
+  .graf-ley i{display:inline-block;width:7px;height:7px;border-radius:999px;margin-right:3px}
+  .graf{flex:1;min-height:0;display:flex;flex-direction:column;padding:0 8px 4px}
+  .gfila{flex:1;min-height:0;display:grid;grid-template-columns:auto 1fr;gap:5px;align-items:center;border-bottom:1px dashed rgba(255,255,255,.05)}
+  .gfila .loc{text-align:right;font-size:9.5px;color:var(--ink);font-weight:600;width:46px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .gfila .loc small{display:block;font-weight:400;color:#c4b5fd;font-size:8.5px}
+  .gfila .bars{display:flex;flex-direction:column;gap:1px;justify-content:center}
+  .gfila .bars>div{display:flex;align-items:center;line-height:1}
+  .barra-g{height:max(3px,min(8px,1.1vh));border-radius:1px;min-width:2px}
+  .gval{font-size:9px;color:var(--sub);margin-left:3px}
+  .b-stock{background:#facc15} .b-venta{background:#22c55e}
+  .graf-tot{font-size:9.5px;color:var(--sub);padding:3px 8px 6px;border-top:1px solid var(--line)}
+  ol{margin:6px 0 0 18px;padding:0;color:var(--sub);font-size:12.5px} li{margin:3px 0}
+</style>
+</head>
+<body>
+
+<a class="back" href="#">← Reposiciones / Transferencias</a>
+<div class="nota">Maqueta para charlar · datos de ejemplo · <b>nada se graba</b>. Plan completo en <code>docs/borradores/reparto-transferencias.md</code>.</div>
+
+<!-- Así quedaría el TransferenciasHub con la tarjeta nueva -->
+<div class="sub small" style="text-transform:uppercase;letter-spacing:.08em">Reposiciones / Transferencias</div>
+<div class="hub">
+  <div class="tj"><div class="ico" style="background:rgba(217,119,6,.18)">⇄</div><div><b>Transferencias</b><span>Lotes cargados; cada local marca lo que envió.</span></div></div>
+  <div class="tj"><div class="ico" style="background:rgba(14,165,233,.18)">📦</div><div><b>Reposición diaria</b><span>Repo MITO desde el DWH → Dragon.</span></div></div>
+  <div class="tj"><div class="ico" style="background:rgba(16,185,129,.18)">🌊</div><div><b>Transferencia diaria</b><span>Cascada entre locales → Transferencias.</span></div></div>
+  <div class="tj nueva"><div class="ico" style="background:rgba(167,139,250,.22)">▦</div><div><b>Reparto manual <span class="badge">nuevo</span></b><span>Repartí el stock entre locales como en Excel y cargalo como lote.</span></div></div>
+</div>
+
+<div class="top">
+  <div>
+    <h1>Reparto manual</h1>
+    <p class="sub small">Elegí qué querés repartir, tocá Armar y el hub trae el stock y la venta de cada local y del depósito.</p>
+  </div>
+</div>
+
+<div class="pasos">
+  <div class="paso on" id="p1"><b>1</b> Filtrar</div><div class="raya"></div>
+  <div class="paso" id="p2"><b>2</b> Armar y repartir</div><div class="raya"></div>
+  <div class="paso" id="p3"><b>3</b> Lote</div>
+</div>
+
+<!-- PASO 1: filtros -->
+<div class="card" id="secFiltros">
+  <h2>¿Qué querés repartir?</h2>
+  <p class="sub small">Las opciones salen del maestro de artículos del hub (al instante). Tenés que elegir al menos un filtro de artículo.</p>
+
+  <div class="lbl">Venta a mirar</div>
+  <div class="barra" style="margin:0">
+    <label class="f">Desde<input type="date" id="d1" value="2026-11-10"></label>
+    <label class="f">Hasta<input type="date" id="d2" value="2026-11-17"></label>
+    <div class="chips" style="align-self:flex-end"><button class="chip" data-dias="7">Últimos 7 días</button><button class="chip on" data-dias="14">14</button><button class="chip" data-dias="30">30</button></div>
+  </div>
+
+  <!-- Los mismos filtros que el tablero de Power BI: listas desplegables con selección múltiple -->
+  <div class="filtros" id="dds"></div>
+  <div style="margin-top:6px"><div class="lbl">Artículo (opcional)</div><input type="search" id="fArt" placeholder="Código o parte, ej. CF1662" style="width:100%;max-width:420px"></div>
+  <div class="links small" style="margin-top:8px"><button id="limpiar" style="padding:0">Limpiar todos los filtros</button></div>
+
+  <div class="lbl">Opciones</div>
+  <div class="chips">
+    <button class="chip on" data-op="vendidos">Solo artículos con stock en algún local</button>
+    <button class="chip" data-op="sinTransito">Ocultar SKU en tránsito</button>
+  </div>
+
+  <div class="barra" style="justify-content:space-between;margin-top:16px">
+    <span class="sub small" id="resFiltro">≈ 3 artículos · 22 SKU · 20 locales</span>
+    <button class="btn pri grande" id="armar">Armar</button>
+  </div>
+</div>
+
+<!-- PASO 2: grilla -->
+<div id="secGrilla" style="display:none">
+<div class="estado" id="estado"></div>
+
+<div class="barra">
+  <input type="search" id="q" placeholder="Buscar artículo o descripción…">
+  <select id="fColor"><option value="">Color: todos</option></select>
+  <select id="fTalle"><option value="">Talle: todos</option></select>
+  <select id="fGrupo"><option value="">Grupo: todos</option></select>
+  <div class="seg"><button class="on" data-o="venta">Por venta</button><button data-o="codigo">Por código</button></div>
+  <button class="btn" id="reset">Descartar cambios</button>
+  <button class="btn" id="volver">← Cambiar filtros</button>
+</div>
+
+<div class="ley">
+  <span><i style="background:rgba(248,113,113,.35)"></i>vendió en el período</span>
+  <span><i style="background:var(--sky)"></i>en tránsito (🚚1 = le llega 1)</span>
+  <span><i style="background:rgba(167,139,250,.5)"></i>celda cambiada (<b style="color:#86efac">+1</b> recibe · <b style="color:#fca5a5">−2</b> dona)</span>
+  <span><i style="background:rgba(248,113,113,.7)"></i>Rem. negativo = te pasaste</span>
+  <span>· tipeá el número · flechas / Enter / Tab · Shift+flechas = rango · Ctrl+C / Ctrl+V · Supr · Ctrl+Z · doble clic en el color = gráfico</span>
+</div>
+
+<!-- Ruta del vehículo (Tracking de transporte): se marca en la línea donde está el mouse -->
+<div id="zonaTabla">
+<div class="zona-cab">
+  <span class="zona-tit" id="zonaTit"></span>
+  <div class="vistas">
+    <label class="tilde"><input type="checkbox" id="verTransporte" checked> 🚚 Ver transporte</label>
+    <label class="tilde"><input type="checkbox" id="verSemaforo"> 🚦 Días sin venta</label>
+    <span class="semaf-cfg" id="semafCfg">
+      <label class="tilde-sv"><input type="checkbox" id="svV" checked><span class="sv sv-v"></span>Verde</label> hasta <input type="number" id="umV" value="15" min="1"> días
+      <label class="tilde-sv"><input type="checkbox" id="svA" checked><span class="sv sv-a"></span>Amarillo</label> hasta <input type="number" id="umA" value="45" min="2"> días
+      <label class="tilde-sv"><input type="checkbox" id="svR" checked><span class="sv sv-r"></span>Rojo</label> más o nunca
+    </span>
+  </div>
+  <!-- Volver / Adelante adentro de la zona de la tabla: se ven también en pantalla completa -->
+  <div class="seg" title="Ctrl+Z / Ctrl+Y"><button id="undo" disabled>↶ Volver</button><button id="redo" disabled>↷ Adelante</button></div>
+  <label class="tilde" title="El stock ideal ordena: recibe primero el local que más lejos está de su ideal (Dif. ideal más negativa) y dona primero el que más le sobra. No deja a nadie afuera."><input type="checkbox" id="usaIdeal" checked> Según stock ideal</label>
+  <span class="donan" title="Qué depósitos donan en la sugerencia">Donan:
+    <label class="tilde"><input type="checkbox" id="donaMito" checked> MITO</label>
+    <label class="tilde"><input type="checkbox" id="donaIndo" checked> Indo</label>
+    <label class="tilde"><input type="checkbox" id="donaPolo" checked> Polo</label>
+  </span>
+  <label class="tilde" title="Cada par local donante → local receptor tiene que sumar al menos esto (regla de la Cascada; MITO, Indo y Polo no cuentan). 1 = sin mínimo.">Mín. por envío <input type="number" id="minEnvio" value="2" min="1" max="10" style="width:48px;height:28px"></label>
+  <label class="tilde" title="Apagado (como la Cascada): solo tapa huecos de talles que se vendieron en el período. Prendido: también completa talles sin venta, si el local tiene el talle de al lado."><input type="checkbox" id="huecosSinVenta"> Tapar huecos de talles sin venta</label>
+  <label class="tilde" title="Si el local no tiene ningún talle de ese color, le manda la curva (1 por talle). Va después de venta y huecos."><input type="checkbox" id="abrirColores"> Abrir colores que el local no tiene</label>
+  <button class="btn sug" id="btnSugerir" disabled title="Tocá un código para habilitarlo">✨ Sugerencia</button>
+  <button class="btn" id="btnPantalla" title="Ver la tabla en pantalla completa (Esc para salir)">⛶ Pantalla completa</button>
+</div>
+<div class="ruta" id="ruta">
+  <div class="ruta-top">
+    <b>Locales por los que todavía tienen que pasar hoy</b>
+    <span class="ruta-ley" style="margin:0"><span><i class="sw-m1"></i>Master</span><span><i class="sw-m2"></i>Mercedes</span><span><i class="sw-ambos"></i>los dos</span></span>
+  </div>
+  <div id="rutaLinea"></div>
+</div>
+<div class="sug-msg" id="sugMsg"></div>
+
+<div class="grid" id="wrap"><table><colgroup id="cols"></colgroup><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
+</div><!-- /zonaTabla -->
+
+<div class="lado">
+  <div class="card mov">
+    <h2>Movimientos que salen del reparto</h2>
+    <p class="sub small">Lo que bajó en un local va a donde subió. Esto es lo que se carga como lote.</p>
+    <div class="kpis">
+      <div class="kpi"><b id="kMov">0</b><span>renglones</span></div>
+      <div class="kpi"><b id="kUni">0</b><span>unidades</span></div>
+      <div class="kpi"><b id="kOri">0</b><span>locales origen</span></div>
+    </div>
+    <div id="avisoNeg" class="aviso" style="display:none"></div>
+    <table><thead><tr><th>Artículo</th><th>Color</th><th>Talle</th><th>Origen → destino</th><th style="text-align:right">Unid.</th></tr></thead><tbody id="movs"></tbody></table>
+  </div>
+  <div class="card">
+    <h2>Cargar</h2>
+    <label class="f" style="margin-top:8px">Nombre del lote<input id="nom" value="261118 - REPARTO invierno"></label>
+    <label class="f" style="margin-top:10px">Observación <span style="text-transform:none;letter-spacing:0">(opcional · la ven los locales en el lote)</span>
+      <textarea id="obs" rows="3" maxlength="300" placeholder="Ej.: buzos W26 para reforzar locales del centro antes del finde"></textarea></label>
+    <div class="sub small" style="text-align:right"><span id="obsN">0</span>/300</div>
+    <div class="barra">
+      <button class="btn ok" id="cargar" disabled>Cargar en Transferencias</button>
+      <button class="btn" id="xls" disabled>Excel de remitos</button>
+    </div>
+    <div class="ok-msg" id="okMsg"></div>
+    <ol>
+      <li>Crea el lote en Transferencias (origen = el que bajó, destino = el que subió).</li>
+      <li>A los locales origen les suena la campana hasta que marquen el primer renglón.</li>
+      <li>Si sale o llega a DEPO, avisa a Depósito Indo.</li>
+      <li>No se repite: el mismo nombre en 7 días no crea otro lote.</li>
+      <li>Excel de remitos (opcional): una hoja por local origen.</li>
+    </ol>
+  </div>
+</div>
+</div>
+
+<!-- Doble clic en el color: Stock y venta x locales (como el tablero de Power BI) -->
+<div class="modal-fondo" id="grafFondo">
+  <div class="modal" role="dialog" aria-label="Stock y venta por local">
+    <div class="modal-cab"><div class="g-art">
+      <div class="g-cod"><span id="gCod"></span><span class="g-col" id="gCol"></span></div>
+      <div class="g-nom" id="gNom"></div>
+      <div class="g-fec" id="grafSub"></div>
+    </div><button id="grafCerrar" title="Cerrar">✕</button></div>
+    <div class="graf-ley"><span><i class="b-stock"></i>Stock+tránsito</span><span><i class="b-venta"></i>Venta</span><span id="grafOrden">· por venta</span></div>
+    <div class="graf" id="graf"></div>
+    <div class="graf-tot" id="grafTot"></div>
+  </div>
+</div>
+
+<script>
+let STORES=[];
+const TODOS=["VCPD","WALMARTD","DINOD","RIVERAD","CFRA","RUTA9D","CFR9","BUSTOD","CFD","CFPO","GRALPAZ","MUNOZ","9DEJULIO","LIBERD","ESPINOD","NVOCED","CFR4","DEPO","MAYORD","POLO52"];
+const TALLES=["XS","S","M","L","XL","XXL","3XL","U"];
+const tRank=t=>{const i=TALLES.indexOf(t);return i<0?99:i};
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let MODEL=[],VIEW=[],ORDEN="venta",FIL={q:"",color:"",talle:"",grupo:""},SEL=null,ANCHOR=null,HIST=[],FUT=[];
+
+function demo(){
+  let seed=11;const rnd=n=>{seed=(seed*9301+49297)%233280;return Math.floor(seed/233280*n)};
+  const arts=[{a:"CF166217",d:"()THE PULSE OF THE SEA HOODIE CAPTAIN FIN - W26-M(H62)",c:["02","05"],t:["S","M","L","XL"]},
+    {a:"ZH169603",d:"()JORDAN JACKET ZIMITH - W26-I(H96)",c:["02","07"],t:["M","L","XL","XXL"]},
+    {a:"CF235806",d:"()BASIC OVER T-SHIRT CAPTAIN FIN - CYBER20(H58)",c:["02"],t:["S","M","L","XL","XXL","3XL"]}];
+  for(const a of arts)for(const c of a.c)for(const t of a.t){
+    const base={},vend={},trans={},dsv={};
+    STORES.forEach(s=>{base[s]=rnd(5)===0?0:rnd(4);vend[s]=rnd(9)===0?1+rnd(2):0;trans[s]=rnd(14)===0?1:0;if(s==="DEPO")base[s]=4+rnd(10);if(s==="MAYORD")base[s]=rnd(6);
+      const k=rnd(10);dsv[s]=vend[s]?rnd(8):k<3?8+rnd(30):k<6?40+rnd(120):k<8?null:2+rnd(12)});
+    const grupo=(a.d.match(/\(([^)]*)\)\s*$/)||[])[1]||"";
+    MODEL.push({articulo:a.a,color:c,talle:t,desc:a.d,grupo,base,cur:{...base},vend,trans,dsv});
+  }
+  MODEL.forEach(f=>{f.ventaTotal=STORES.reduce((x,s)=>x+f.vend[s],0);f.baseTotal=STORES.reduce((x,s)=>x+f.base[s],0)});
+}
+const sum=o=>STORES.reduce((a,s)=>a+(o[s]||0),0);
+function fill(id,vals,lbl){const el=document.getElementById(id);el.innerHTML=`<option value="">${lbl}: todos</option>`+[...new Set(vals)].sort().map(v=>`<option>${esc(v)}</option>`).join("")}
+function view(){
+  VIEW=MODEL.filter(f=>(!FIL.color||f.color===FIL.color)&&(!FIL.talle||f.talle===FIL.talle)&&(!FIL.grupo||f.grupo===FIL.grupo)&&(!FIL.q||(f.articulo+" "+f.desc).toLowerCase().includes(FIL.q.toLowerCase())));
+  const av={};MODEL.forEach(f=>av[f.articulo]=(av[f.articulo]||0)+f.ventaTotal);
+  VIEW.sort((a,b)=>(ORDEN==="venta"?av[b.articulo]-av[a.articulo]:0)||a.articulo.localeCompare(b.articulo)||a.color.localeCompare(b.color)||tRank(a.talle)-tRank(b.talle));
+}
+function resumen(){
+  const R={pos:{},st:{},v:{},ideal:{},dif:{}};const ps={};
+  STORES.forEach(s=>{R.st[s]=0;R.v[s]=0;ps[s]=new Set()});
+  VIEW.forEach(f=>STORES.forEach(s=>{R.st[s]+=f.cur[s];R.v[s]+=f.vend[s];if(f.cur[s]>0)ps[s].add(f.articulo+f.color)}));
+  const iD=TODOS.indexOf("DEPO"),iC=TODOS.indexOf("CFR4");let tS=0,tV=0;
+  STORES.forEach(s=>{const i=TODOS.indexOf(s);if(i<=iD)tS+=R.st[s];if(i<=iC)tV+=R.v[s]});
+  // Stock ideal en números redondos; la diferencia se calcula contra ese redondo (también entera)
+  STORES.forEach(s=>{R.pos[s]=ps[s].size;R.ideal[s]=tV?Math.round(R.v[s]/tV*tS):0;R.dif[s]=R.st[s]-R.ideal[s]});
+  return R;
+}
+const r1=n=>Math.round(n*10)/10;
+function head(){
+  const R=resumen();
+  // anchos: datos del artículo fijos en %, los locales se reparten lo que queda (igual para todos)
+  document.getElementById("cols").innerHTML='<col style="width:6.5%"><col style="width:12%"><col style="width:2.6%"><col style="width:3%">'+STORES.map(()=>"<col>").join("")+'<col style="width:3%">';
+  const fila=(lbl,fn,col)=>`<tr class="sum"><th class="st c0 slbl" colspan="4">${lbl}</th>`+STORES.map(s=>{const v=fn(s);return `<th class="${col?(v>0?"pos":v<0?"neg":""):""}">${v||""}</th>`}).join("")+"<th></th></tr>";
+  const CORTO={WALMARTD:"WALMRT","9DEJULIO":"9DEJUL",GRALPAZ:"GPAZ"};
+  document.getElementById("thead").innerHTML=fila("Posturas",s=>R.pos[s])+fila('<span title="Diferencia entre el stock real y el ideal">Dif. ideal</span>',s=>R.dif[s],true)+fila("Stock ideal",s=>R.ideal[s])+
+    `<tr><th class="st c0">Artículo</th><th class="st c1">Descripción</th><th class="st c2">Col.</th><th class="st c3">Talle</th>`+STORES.map(s=>`<th class="${RC(s)}" title="${s}${TIP(s)?" · "+TIP(s):""}">${CORTO[s]||s}</th>`).join("")+`<th>Rem.</th></tr>`;
+}
+function inSel(r,c){return SEL&&r>=SEL.r1&&r<=SEL.r2&&c>=SEL.c1&&c<=SEL.c2}
+function body(){
+  document.getElementById("tbody").innerHTML=VIEW.map((f,ri)=>{
+    const ng=ri>0&&(f.articulo+f.color)!==(VIEW[ri-1].articulo+VIEW[ri-1].color)?"ng":"";
+    const rem=f.baseTotal-sum(f.cur);
+    return `<tr class="${ng}${SELART&&f.articulo===SELART.art&&f.color===SELART.col?" art-sel":""}"><td class="st c0" data-art="${f.articulo}" data-col="${f.color}" title="Tocá para elegir ${f.articulo} color ${f.color} y pedir una sugerencia">${f.articulo}</td><td class="st c1" title="${esc(f.desc)}">${esc(f.desc)}</td><td class="st c2 col-graf" data-r="${ri}" title="Doble clic: stock y venta por local de ${f.articulo} color ${f.color}">${f.color}</td><td class="st c3">${f.talle}</td>`+
+      STORES.map((s,si)=>{let c="cell "+RC(s)+" "+SV(f,s);if(f.vend[s])c+=" sold";if(f.trans[s])c+=" transit";if(f.cur[s]!==f.base[s])c+=" moved";if(inSel(ri,si))c+=" sel";
+        const tip=[f.trans[s]?"En tránsito: "+f.trans[s]+(f.cur[s]?"":" (no es hueco, ya le llega)"):"",TIP(s),SEMAF&&(f.cur[s]||f.base[s])?(f.dsv[s]==null?"Sin venta en 180 días":f.dsv[s]===0?"Vendió hoy":"Última venta hace "+f.dsv[s]+" días"):""].filter(Boolean).join(" · ");
+        return `<td class="${c}" tabindex="0" data-r="${ri}" data-s="${si}"${tip?` title="${tip}"`:""}>${f.cur[s]||""}${f.cur[s]!==f.base[s]?`<span class="delta ${f.cur[s]>f.base[s]?"mas":"menos"}">${f.cur[s]>f.base[s]?"+":"−"}${Math.abs(f.cur[s]-f.base[s])}</span>`:""}${f.trans[s]?`<span class="tr-mk${f.cur[s]?" esq":""}">🚚${f.trans[s]}</span>`:""}</td>`}).join("")+
+      `<td class="rem ${rem>0?"on":rem<0?"neg":""}">${rem||""}</td></tr>`}).join("");
+}
+function remitos(){
+  const out=[];
+  MODEL.forEach(f=>{const src=[],dst=[];STORES.forEach(s=>{const d=f.cur[s]-f.base[s];if(d<0)src.push([s,-d]);else if(d>0)dst.push([s,d])});
+    let i=0,j=0;while(i<src.length&&j<dst.length){const q=Math.min(src[i][1],dst[j][1]);out.push({...f,desde:src[i][0],hacia:dst[j][0],cantidad:q});src[i][1]-=q;dst[j][1]-=q;if(!src[i][1])i++;if(!dst[j][1])j++}});
+  return out;
+}
+function panel(){
+  const m=remitos();
+  document.getElementById("kMov").textContent=m.length;
+  document.getElementById("kUni").textContent=m.reduce((a,x)=>a+x.cantidad,0);
+  document.getElementById("kOri").textContent=new Set(m.map(x=>x.desde)).size;
+  document.getElementById("movs").innerHTML=m.length?m.map(x=>`<tr><td>${x.articulo}</td><td>${x.color}</td><td>${x.talle}</td><td><b>${x.desde}</b><span class="flecha">→</span><b>${x.hacia}</b></td><td style="text-align:right">${x.cantidad}</td></tr>`).join(""):`<tr><td colspan="5" class="sub">Todavía no moviste nada. Bajá el número en un local y subilo en otro.</td></tr>`;
+  const neg=MODEL.filter(f=>f.baseTotal-sum(f.cur)<0);
+  const av=document.getElementById("avisoNeg");
+  av.style.display=neg.length?"block":"none";
+  av.textContent=neg.length?`⚠ ${neg.length} SKU con Rem. negativo (repartiste más de lo que hay). No se puede cargar hasta corregirlo.`:"";
+  document.getElementById("cargar").disabled=!m.length||neg.length>0;
+  document.getElementById("xls").disabled=!m.length;
+  document.getElementById("undo").disabled=!HIST.length;document.getElementById("redo").disabled=!FUT.length;
+}
+function render(){view();head();body();panel()}
+function setCell(ri,si,val,acc){const f=VIEW[ri];if(!f)return;const s=STORES[si];const nv=Math.max(0,Math.round(+val||0));if(nv===f.cur[s])return;acc.push({f,s,o:f.cur[s],n:nv});f.cur[s]=nv}
+function commit(acc){if(acc.length){HIST.push(acc);FUT=[]}}
+function focusCell(r,s,ext){
+  if(r<0||r>=VIEW.length||s<0||s>=STORES.length)return;
+  if(ext&&ANCHOR)SEL={r1:Math.min(ANCHOR.r,r),r2:Math.max(ANCHOR.r,r),c1:Math.min(ANCHOR.s,s),c2:Math.max(ANCHOR.s,s)};
+  else{ANCHOR={r,s};SEL={r1:r,r2:r,c1:s,c2:s}}
+  body();const td=document.querySelector(`td.cell[data-r="${r}"][data-s="${s}"]`);td&&td.focus();
+}
+let buf="";
+const tb=document.getElementById("tbody");
+tb.addEventListener("mousedown",e=>{const td=e.target.closest("td.cell");if(!td)return;e.preventDefault();buf="";focusCell(+td.dataset.r,+td.dataset.s,e.shiftKey)});
+
+/* ---- Sugerencia por CÓDIGO + COLOR = Repo diaria + Cascada, con las mismas reglas ----
+   Corre sobre lo que hay en la grilla en ese momento (respeta lo que ya moviste) y entra como UNA
+   acción («↶ Volver» la deshace). Mismo orden que el hub (puente-sql/repo-diaria.js y cascada.js):
+   ETAPA 1 · REPO MITO (columna MAYORD = depósito MITO): cubre la VENTA de cada local por prioridad
+     de local, solo artículos de proveedores MITO (MOCF/MOZH/MOFR), sin topes.
+   ETAPA 2 · CASCADA sobre lo que faltó (faltante = venta − lo que mandó MITO):
+     pase 0  · INDOD (columna DEPO) y después POLO52, donantes principales: por prioridad, todo su
+               stock, sin topes. Tildes «Donan: MITO / Indo / Polo» prenden o apagan cada depósito.
+     pase 1  · locales donantes (no GRALPAZ): se quedan con lo que vendieron del talle (mínimo 1) y
+               dan el resto, hasta 2 por SKU. Orden: el que más le sobra (stock ideal) o más stock del artículo. No recibe: si lo tiene en tránsito, si ya tiene ≥ 2 del
+               SKU, o si es CFR4/CFR9/CFD/CFPO/CFRA y el artículo no es de MOCF/MOZH/MOFR.
+     extra   · NVOCED, si no recibió nada, acepta donantes que tienen 1 sola.
+     huecos  · 1 unidad de un talle vendido que el local no tiene (ni en tránsito) si tiene un talle
+               de al lado (completa la curva). No a GRALPAZ. Primero DEPO, después locales.
+               Tilde «Tapar huecos de talles sin venta»: también talles que nadie vendió.
+     mínimo  · cada par local donante → receptor tiene que sumar al menos «Mín. por envío» (2) unidades (contando lo
+               que ya está movido en la grilla); si no, ese envío se descarta.
+   + tilde «Abrir colores que el local no tiene» (opcional, al final).
+   SOLO LO QUE FALTA (18/11): a cada local se le repone venta − (su stock + tránsito). Si ya tiene igual
+   o más de lo que vendió, no recibe nada, en NINGUNA etapa (Repo MITO, Indo, locales). Sin topes fijos.
+   En el hub, los parámetros salen de los guardados de la Cascada (repo_auto_config.cascada_params). */
+let SELART=null;
+const NO_RECIBEN=new Set(["DEPO","MAYORD","POLO52"]);
+tb.addEventListener("click",e=>{
+  const td=e.target.closest("td.c0");if(!td)return;
+  const art=td.dataset.art,col=td.dataset.col;                   // se elige por CÓDIGO + COLOR
+  SELART=SELART&&SELART.art===art&&SELART.col===col?null:{art,col};   // tocar de nuevo = soltar
+  const b=document.getElementById("btnSugerir");
+  b.disabled=!SELART;b.textContent=SELART?"✨ Sugerencia "+art+" · color "+col:"✨ Sugerencia";
+  b.title=SELART?"Repartir "+art+" color "+col+" cubriendo venta y huecos":"Tocá un código para habilitarlo";
+  body();
+});
+const PRIORIDAD=["CFD","CFPO","CFRA","CFR4","CFR9","NVOCED","ESPINOD","LIBERD","9DEJULIO","BUSTOD","MUNOZ","RIVERAD","RUTA9D","DINOD","WALMARTD","VCPD","GRALPAZ"];
+const P_CASC={no_donan:["GRALPAZ"],donante_queda:1,tope_sku:2,receptor_max:2,min_envio:2,
+  restriccion:{receptores:["CFR4","CFR9","CFD","CFPO","CFRA"],proveedores:["MOCF","MOZH","MOFR"]},
+  pase_extra:["NVOCED"],huecos_no_reciben:["GRALPAZ"]};
+const provDe=art=>art.startsWith("CF")?"MOCF":art.startsWith("ZH")?"MOZH":art.startsWith("FY")?"MOFR":"OTRO";   // en el hub: articulos.id_prov
+function pasada(art,col,orig,agg){
+  const filas=MODEL.filter(f=>f.articulo===art&&f.color===col).sort((a,b)=>tRank(a.talle)-tRank(b.talle));
+  if(!filas.length)return;
+  const prov=provDe(art),deMito=P_CASC.restriccion.proveedores.includes(prov);
+  const prio=PRIORIDAD.filter(s=>STORES.includes(s)),PR=s=>prio.indexOf(s);
+  // STOCK IDEAL (18/11): la misma «Dif. ideal» de arriba de la grilla (stock real − ideal, sobre lo que se ve).
+  // Se va actualizando con cada envío: el que recibe se acerca a su ideal y el que dona se aleja.
+  const USA_IDEAL=document.getElementById("usaIdeal").checked;
+  const DIF={};if(USA_IDEAL){const Rs=resumen();prio.forEach(s=>DIF[s]=Rs.dif[s])}
+  const ordRec=(a,b)=>USA_IDEAL?(DIF[a]-DIF[b])||PR(a)-PR(b):PR(a)-PR(b);   // recibe primero el que más le falta
+  const ini=new Map(filas.map(f=>[f,{...f.cur}]));             // stock al empezar (lo recibido no se vuelve a donar)
+  // stock que le queda a cada donante. Un local no dona lo que recibió en esta misma sugerencia:
+  // como mucho dona de lo que tenía antes de apretar (orig).
+  const DEPOS=["MAYORD","DEPO","POLO52"];
+  const disp=new Map(filas.map(f=>{const o={...f.cur},og=orig.get(f);for(const s in o)if(!DEPOS.includes(s))o[s]=Math.min(o[s],og[s]);return [f,o]}));
+  const envios=[];                                            // {f,de,a,n,etapa}
+  const enviar=(f,de,a,n,etapa)=>{disp.get(f)[de]-=n;envios.push({f,de,a,n,etapa});
+    if(USA_IDEAL){if(a in DIF)DIF[a]+=n;if(de in DIF)DIF[de]-=n}};
+  const R={yaCubre:0,repo:0,indo:0,locales:0,extra:0,huecos:0,abre:0,descartadas:0,motivos:{transito:0,ya_tiene:0,restriccion:0,sin_donante:0}};
+  // pares local-SKU con venta (receptores = locales de la prioridad)
+  const pares=[];
+  // Lo que necesita = lo que vendió − lo que ya tiene (stock + tránsito). Si tiene igual o más, no recibe.
+  for(const f of filas)for(const s of prio)if(f.vend[s]>0){
+    const tiene=(ini.get(f)[s]||0)+(f.trans[s]||0),falta=Math.max(0,f.vend[s]-tiene);
+    R.yaCubre+=f.vend[s]-falta;
+    pares.push({f,s,venta:f.vend[s],falta});
+  }
+  const asignado=new Set();const kA=(s,f)=>s+"|"+f.talle;
+  // Depósitos que donan (tildes «Donan: MITO / Indo / Polo»)
+  const dona=id=>document.getElementById(id).checked;
+  const usaMito=dona("donaMito")&&STORES.includes("MAYORD");
+  // Donantes principales de la cascada, en este orden: Indo y después Polo 52 (sin quedarse con nada ni topes)
+  const PRINC=[dona("donaIndo")&&"DEPO",dona("donaPolo")&&"POLO52"].filter(d=>d&&STORES.includes(d));
+  // ETAPA 1 · REPO MITO
+  if(deMito&&usaMito){
+    for(const p of [...pares].sort((a,b)=>tRank(a.f.talle)-tRank(b.f.talle)||ordRec(a.s,b.s)||b.venta-a.venta)){
+      const n=Math.min(p.falta,disp.get(p.f).MAYORD);if(n<=0)continue;
+      enviar(p.f,"MAYORD",p.s,n,"repo");p.falta-=n;R.repo+=n;asignado.add(kA(p.s,p.f));
+    }
+  }
+  // ETAPA 2 · CASCADA — pase 0: donantes principales (Indo, Polo) por prioridad de local
+  R.polo=0;
+  for(const d of PRINC){
+    for(const p of [...pares].sort((a,b)=>ordRec(a.s,b.s)||tRank(a.f.talle)-tRank(b.f.talle))){
+      const n=Math.min(p.falta,disp.get(p.f)[d]);if(n<=0)continue;
+      enviar(p.f,d,p.s,n,d==="DEPO"?"indo":"polo");p.falta-=n;if(d==="DEPO")R.indo+=n;else R.polo+=n;asignado.add(kA(p.s,p.f));
+    }
+  }
+  const stockArt=s=>MODEL.filter(f=>f.articulo===art).reduce((x,f)=>x+(f.cur[s]||0),0);
+  const donantes=prio.filter(s=>!P_CASC.no_donan.includes(s));
+  const donado=new Map();
+  // Para juntar unidades por envío: primero los donantes que ya le están mandando algo a ese receptor
+  const yaManda=(d,r)=>envios.some(e=>e.de===d&&e.a===r);
+  // Dona cualquier local que tenga de más EN ESE TALLE: se queda con lo que vendió en el período (mínimo 1)
+  // y dona el resto (18/11: «si vendió 1 y le quedan 2 puede donar; si la venta supera al stock, no»),
+  // sin importar su Dif. ideal total (18/11: «mirar el talle, no el total»). La Dif. solo ordena:
+  // con stock ideal dona primero el que más le sobra; sin, el que más stock tiene del artículo.
+  const donantesPara=r=>[...donantes]
+    .sort((a,b)=>yaManda(b,r)-yaManda(a,r)||(USA_IDEAL?DIF[b]-DIF[a]:stockArt(b)-stockArt(a))||PR(a)-PR(b));
+  const dar=(p,queda)=>{let falta=p.falta;
+    for(const d of donantesPara(p.s)){if(d===p.s)continue;const k=d+"|"+p.f.talle,ya=donado.get(k)||0;if(ya>=P_CASC.tope_sku)continue;
+      const n=Math.min(disp.get(p.f)[d]-Math.max(queda,p.f.vend[d]||0),falta,P_CASC.tope_sku-ya);if(n<=0)continue;
+      enviar(p.f,d,p.s,n,"locales");donado.set(k,ya+n);asignado.add(kA(p.s,p.f));falta-=n;if(falta<=0)break}
+    return falta};
+  // pase 1: venta que faltó (con stock ideal: el que más le falta primero; sin: alfabético, como la cascada)
+  const motivo=new Map();
+  for(const p of [...pares].sort((a,b)=>(USA_IDEAL?ordRec(a.s,b.s):a.s.localeCompare(b.s))||tRank(a.f.talle)-tRank(b.f.talle))){
+    if(p.falta<=0)continue;let m="sin_donante";
+    if(P_CASC.restriccion.receptores.includes(p.s)&&!deMito)m="restriccion";
+    motivo.set(p,m);if(m==="sin_donante")p.falta=dar(p,P_CASC.donante_queda);
+  }
+  // pase extra: NVOCED acepta donantes con 1 si no recibió nada
+  for(const p of pares){if(!P_CASC.pase_extra.includes(p.s)||p.falta<=0||motivo.get(p)!=="sin_donante"||asignado.has(kA(p.s,p.f)))continue;
+    const antes=p.falta;p.falta=dar(p,0);R.extra+=antes-p.falta}
+  pares.forEach(p=>{if(p.falta>0&&motivo.has(p))R.motivos[motivo.get(p)]+=p.falta});
+  // huecos: talle vendido (por algún local) que el receptor no tiene, con un talle de al lado en stock
+  const curva=filas.map(f=>f.talle);
+  const vecinos=f=>{const i=curva.indexOf(f.talle);return [filas[i-1],filas[i+1]].filter(Boolean)};
+  // Tilde «Tapar huecos de talles sin venta»: prendido, también completa talles que nadie vendió en el período.
+  const SIN_VENTA=document.getElementById("huecosSinVenta").checked;
+  const vendido=f=>STORES.some(s=>f.vend[s]>0);
+  R.huecosPend=0;R.huecosSinVentaPosibles=0;
+  for(const f of filas){
+    const esHuecoPosible=r=>!P_CASC.huecos_no_reciben.includes(r)&&!(ini.get(f)[r]>0||f.trans[r]>0)&&vecinos(f).some(v=>ini.get(v)[r]>0);
+    if(!vendido(f)&&!SIN_VENTA){const n=prio.filter(esHuecoPosible).length;R.huecosSinVentaPosibles+=n;if(n)(R.tallesSinVenta=R.tallesSinVenta||[]).push(f.talle);continue}
+    for(const r of [...prio].sort(ordRec)){
+      // Regla de la Cascada: los de huecos.no_reciben (GRALPAZ) no reciben huecos. Se cuentan para avisarlo.
+      if(P_CASC.huecos_no_reciben.includes(r)){if(!(ini.get(f)[r]>0||f.trans[r]>0)&&vecinos(f).some(v=>ini.get(v)[r]>0)){R.noRecHuecos=R.noRecHuecos||{};R.noRecHuecos[r]=(R.noRecHuecos[r]||[]).concat(f.talle)}continue}
+      if(asignado.has(kA(r,f)))continue;
+      // (18/11) El stock ideal solo ORDENA: los huecos se tapan también en locales arriba de su ideal.
+      if(ini.get(f)[r]>0||f.trans[r]>0)continue;
+      if(P_CASC.restriccion.receptores.includes(r)&&!deMito)continue;
+      if(!vecinos(f).some(v=>ini.get(v)[r]>0))continue;
+      let dio=false;
+      const pd=PRINC.find(d=>disp.get(f)[d]>=1);
+      R.huecosPend++;
+      if(pd){enviar(f,pd,r,1,"hueco-principal");dio=true}
+      else for(const d of donantesPara(r)){if(d===r)continue;const k=d+"|"+f.talle,ya=donado.get(k)||0;
+        if(ya>=P_CASC.tope_sku||disp.get(f)[d]-Math.max(P_CASC.donante_queda,f.vend[d]||0)<1)continue;enviar(f,d,r,1,"hueco");donado.set(k,ya+1);dio=true;break}
+      if(dio){asignado.add(kA(r,f));R.huecos++}
+    }
+  }
+  // opcional: abrir el color en locales que no lo tienen (DEPO primero, después locales)
+  if(document.getElementById("abrirColores").checked){
+    const ventaArt=s=>MODEL.filter(f=>f.articulo===art).reduce((x,f)=>x+(f.vend[s]||0),0);
+    for(const r of prio.filter(s=>!P_CASC.huecos_no_reciben.includes(s)).sort((a,b)=>USA_IDEAL?ordRec(a,b):ventaArt(b)-ventaArt(a))){
+      if(filas.some(f=>ini.get(f)[r]>0||f.trans[r]>0||envios.some(e=>e.f===f&&e.a===r)))continue;
+      for(const f of filas){
+        const pd=PRINC.find(d=>disp.get(f)[d]>=1);
+        if(pd){enviar(f,pd,r,1,"abre-principal");R.abre++;continue}
+        for(const d of donantesPara(r)){if(d===r)continue;const k=d+"|"+f.talle,ya=donado.get(k)||0;
+          if(ya>=P_CASC.tope_sku||disp.get(f)[d]-Math.max(P_CASC.donante_queda,f.vend[d]||0)<1)continue;enviar(f,d,r,1,"abre");donado.set(k,ya+1);R.abre++;break}
+      }
+    }
+  }
+  // mínimo por envío entre locales (MITO e INDOD no cuentan), sumando lo que ya está movido en la grilla
+  const yaMovido=new Map();remitos().forEach(m=>yaMovido.set(m.desde+"|"+m.hacia,(yaMovido.get(m.desde+"|"+m.hacia)||0)+m.cantidad));
+  const MIN_ENVIO=Math.max(1,+document.getElementById("minEnvio").value||1);
+  const principal=e=>e.de==="MAYORD"||e.de==="DEPO"||e.de==="POLO52";
+  const porPar=new Map();envios.filter(e=>!principal(e)).forEach(e=>porPar.set(e.de+"|"+e.a,(porPar.get(e.de+"|"+e.a)||0)+e.n));
+  const finales=envios.filter(e=>principal(e)||(porPar.get(e.de+"|"+e.a)+(yaMovido.get(e.de+"|"+e.a)||0))>=MIN_ENVIO);
+  R.descartadas=envios.filter(e=>!finales.includes(e)).reduce((x,e)=>x+e.n,0);
+  R.locales=finales.filter(e=>e.etapa==="locales").reduce((x,e)=>x+e.n,0);
+  R.huecos=finales.filter(e=>e.etapa.startsWith("hueco")).reduce((x,e)=>x+e.n,0);
+  R.abre=finales.filter(e=>e.etapa.startsWith("abre")).reduce((x,e)=>x+e.n,0);
+  // aplicar en la grilla (las pasadas se juntan en una sola acción de «Volver»)
+  finales.forEach(e=>{agg.toca(e.f,e.de);agg.toca(e.f,e.a);e.f.cur[e.de]-=e.n;e.f.cur[e.a]+=e.n});
+  const tot=finales.reduce((x,e)=>x+e.n,0);
+  ["repo","indo","polo","locales","extra","huecos","abre"].forEach(k=>agg.R[k]=(agg.R[k]||0)+(R[k]||0));
+  if(agg.pasadas===0)agg.R.yaCubre=R.yaCubre;                 // lo que cubría el stock ANTES de sugerir
+  agg.R.motivos=R.motivos;agg.R.descartadas=R.descartadas;agg.R.sinIdeal=R.sinIdeal;agg.R.huecosPend=R.huecosPend;agg.R.huecosSinVentaPosibles=R.huecosSinVentaPosibles;agg.R.tallesSinVenta=R.tallesSinVenta||[];agg.R.noRecHuecos=R.noRecHuecos||{};   // los de la última pasada
+  agg.ctx={usaMito,deMito,PRINC,MIN_ENVIO,USA_IDEAL};agg.tot+=tot;agg.pasadas++;
+  return tot;
+}
+/* Un solo clic = el resultado final. Repite pasadas mientras aparezca algo nuevo (al recibir, un local
+   puede empezar a tener «el talle de al lado» y aparecen huecos que la primera pasada no veía, o cambia
+   su Dif. ideal). Máximo 6 pasadas. Todo entra como UNA acción de «↶ Volver». */
+function sugerir(art,col){
+  const filas=MODEL.filter(f=>f.articulo===art&&f.color===col);if(!filas.length)return;
+  const orig=new Map(filas.map(f=>[f,{...f.cur}]));
+  const acc=[];
+  const agg={R:{},tot:0,pasadas:0,ctx:{},toca:(f,s)=>{if(!acc.some(x=>x.f===f&&x.s===s))acc.push({f,s,o:f.cur[s],n:null})}};
+  while(agg.pasadas<6){if(!pasada(art,col,orig,agg))break}
+  acc.forEach(x=>x.n=x.f.cur[x.s]);commit(acc.filter(x=>x.o!==x.n));render();
+  const R=agg.R,{usaMito,deMito,PRINC,MIN_ENVIO,USA_IDEAL}=agg.ctx;
+  // cartel
+  const tot=agg.tot,M=R.motivos,sinCub=M.transito+M.ya_tiene+M.restriccion+M.sin_donante;
+  const m=document.getElementById("sugMsg");m.classList.add("on");
+  m.innerHTML=tot?`✨ <b>Sugerencia ${art} · color ${col}</b>: ${tot} unidades.${R.yaCubre?` <span class="sub">(${R.yaCubre} de la venta ya la cubre el stock o el tránsito de cada local: no se mandan)</span>`:""}<br>
+    <b>Repo MITO</b> ${!usaMito?"apagado":R.repo+(deMito?"":" (no es de MOCF/MOZH/MOFR: MITO no repone)")} · <b>Cascada</b>: Indo ${PRINC.includes("DEPO")?R.indo:"apagado"} · Polo ${PRINC.includes("POLO52")?R.polo:"apagado"} · locales ${R.locales}${R.extra?` (pase extra NVOCED ${R.extra})`:""} · huecos ${R.huecos}${R.abre?` · abrir colores ${R.abre}`:""}.`+
+    (R.descartadas?`<br><span style="color:#fcd34d">Descartadas ${R.descartadas} por el mínimo de ${MIN_ENVIO} por envío entre locales (bajalo a 1 para mandarlas).</span>`:"")+
+    (sinCub?`<br><span style="color:#fca5a5">Venta sin cubrir ${sinCub}: restricción de proveedor ${M.restriccion} · sin stock de dónde sacar ${M.sin_donante}.</span>`:"")+
+    ``+(USA_IDEAL?`<br><span class="sub">Según stock ideal: recibe primero el que más le falta; dona primero el que más le sobra (cualquier local al que le sobra el talle: se queda con lo que vendió, mínimo 1).</span>`:"")+``+(Object.keys(R.noRecHuecos||{}).length?`<br><span class="sub">${Object.entries(R.noRecHuecos).map(([l,t])=>l+" no recibe huecos (regla de la Cascada): quedó sin "+t.join(", ")).join(" · ")}.</span>`:"")+(R.huecosSinVentaPosibles?`<br><span style="color:#fcd34d">Quedan ${R.huecosSinVentaPosibles} huecos en talles que nadie vendió en el período (${R.tallesSinVenta.join(", ")}): prendé «Tapar huecos de talles sin venta» para completarlos.</span>`:"")+`<br>Revisalo en la grilla (celdas en violeta); «↶ Volver» la deshace entera.<button id="sugCerrar">Ocultar</button>`
+    :`✨ <b>${art} · color ${col}</b>: no se mandó nada.`+
+      (R.descartadas?` <span style="color:#fcd34d">Había ${R.descartadas} unidades (huecos o venta) pero salían de locales con menos de ${MIN_ENVIO} por envío y se descartaron: bajá «Mín. por envío» a 1${!usaMito&&!PRINC.length?" o prendé MITO / Indo / Polo":""}.</span>`
+       :(R.huecosPend||sinCub)?` <span style="color:#fcd34d">Hay ${R.huecosPend?R.huecosPend+" huecos":""}${R.huecosPend&&sinCub?" y ":""}${sinCub?sinCub+" de venta":""} sin tapar porque nadie tiene de sobra de esos talles${!usaMito&&!PRINC.length?" (MITO, Indo y Polo están apagados)":""}.</span>`
+       :` No queda venta sin cubrir ni huecos para tapar.`+(R.huecosSinVentaPosibles?` <span style="color:#fcd34d">Hay ${R.huecosSinVentaPosibles} huecos en talles que nadie vendió en el período (${R.tallesSinVenta.join(", ")}): prendé «Tapar huecos de talles sin venta» para completarlos.</span>`:""))+
+      (sinCub?` <span style="color:#fca5a5">Venta sin cubrir ${sinCub}.</span>`:"")+`<button id="sugCerrar">Ocultar</button>`;
+  document.getElementById("sugCerrar").onclick=()=>m.classList.remove("on");
+}
+document.getElementById("btnSugerir").onclick=()=>{if(SELART)sugerir(SELART.art,SELART.col)};
+
+/* ---- pantalla completa de la tabla ---- */
+const zona=document.getElementById("zonaTabla");
+function pantallaCompleta(on){
+  zona.classList.toggle("completa",on);document.body.classList.toggle("sin-scroll",on);
+  // el gráfico del doble clic tiene que quedar adentro de la zona para verse en pantalla completa
+  const gf=document.getElementById("grafFondo");(on?zona:document.body).appendChild(gf);
+  document.getElementById("btnPantalla").textContent=on?"✕ Salir de pantalla completa":"⛶ Pantalla completa";
+  document.getElementById("zonaTit").textContent=on?document.getElementById("estado").innerText.split("\n").join(" · "):"";
+  if(on&&zona.requestFullscreen&&!document.fullscreenElement)zona.requestFullscreen().catch(()=>{});   // si el navegador no deja, queda igual a toda la ventana
+  if(!on&&document.fullscreenElement)document.exitFullscreen().catch(()=>{});
+}
+document.getElementById("btnPantalla").onclick=()=>pantallaCompleta(!zona.classList.contains("completa"));
+document.addEventListener("fullscreenchange",()=>{if(!document.fullscreenElement&&zona.classList.contains("completa"))pantallaCompleta(false)});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&zona.classList.contains("completa")&&!document.getElementById("grafFondo").classList.contains("on")&&!document.fullscreenElement)pantallaCompleta(false)});
+
+/* ---- doble clic en el color: Stock y venta x locales del artículo + color (todos los talles) ---- */
+/* El panel va encima de la columna Descripción y con el mismo alto que la tabla (la parte visible) */
+function ubicarGrafico(){
+  const m=document.querySelector("#grafFondo .modal");
+  const th=document.querySelector("thead th.c1"),c=th.getBoundingClientRect();
+  const t=document.getElementById("wrap").getBoundingClientRect();
+  const top=Math.max(4,t.top),bot=Math.min(innerHeight-4,t.bottom);
+  m.style.left=Math.max(4,c.left)+"px";m.style.width=Math.max(140,c.width)+"px";
+  m.style.top=top+"px";m.style.height=Math.max(220,bot-top)+"px";
+}
+addEventListener("resize",()=>{if(document.getElementById("grafFondo").classList.contains("on"))ubicarGrafico()});
+addEventListener("scroll",()=>{if(document.getElementById("grafFondo").classList.contains("on"))ubicarGrafico()},{passive:true});
+function abrirGrafico(art,col){
+  const filas=MODEL.filter(f=>f.articulo===art&&f.color===col);if(!filas.length)return;
+  const datos=STORES.map(s=>({loc:s,
+    stock:filas.reduce((a,f)=>a+(f.base[s]||0)+(f.trans[s]||0),0),   // como el PBI: stock + tránsito (antes de repartir)
+    venta:filas.reduce((a,f)=>a+(f.vend[s]||0),0),
+    rep:filas.reduce((a,f)=>a+(f.cur[s]||0)-(f.base[s]||0),0)}))     // lo que se le mueve en este reparto
+    .sort((a,b)=>b.venta-a.venta||b.stock-a.stock||a.loc.localeCompare(b.loc));
+  const max=Math.max(1,...datos.map(d=>Math.max(d.stock,d.venta)));
+  document.getElementById("gCod").textContent=art;
+  document.getElementById("gCol").textContent="Color "+col;
+  // nombre sin los paréntesis de familia/grupo del Dragon: «()JORDAN JACKET ZIMITH - W26-I(H96)» → «JORDAN JACKET ZIMITH»
+  document.getElementById("gNom").textContent=String(filas[0].desc||"").replace(/^\([^)]*\)/,"").replace(/\s+-\s+\S*$/,"").trim()||filas[0].desc;
+  document.getElementById("grafSub").textContent=`Venta ${document.getElementById("d1").value.split("-").reverse().slice(0,2).join("/")} al ${document.getElementById("d2").value.split("-").reverse().slice(0,2).join("/")}`;
+  document.getElementById("graf").innerHTML=datos.map(d=>`<div class="gfila"><div class="loc">${d.loc}${d.rep?`<small>${d.rep>0?"+":""}${d.rep} rep.</small>`:""}</div><div class="bars">
+    <div><span class="barra-g b-stock" style="width:${d.stock/max*80}%"></span><span class="gval">${d.stock}</span></div>
+    <div><span class="barra-g b-venta" style="width:${d.venta/max*80}%"></span><span class="gval">${d.venta}</span></div></div></div>`).join("");
+  const tS=datos.reduce((a,d)=>a+d.stock,0),tV=datos.reduce((a,d)=>a+d.venta,0);
+  document.getElementById("grafTot").textContent=`Total: ${tS} stock · ${tV} venta`;
+  // se pega a la columna Descripción: mismo izquierdo y mismo ancho
+  ubicarGrafico();
+  document.getElementById("grafFondo").classList.add("on");
+}
+const cerrarGrafico=()=>document.getElementById("grafFondo").classList.remove("on");
+tb.addEventListener("dblclick",e=>{const td=e.target.closest("td.col-graf");if(!td)return;const f=VIEW[+td.dataset.r];if(f)abrirGrafico(f.articulo,f.color)});
+document.getElementById("grafCerrar").onclick=cerrarGrafico;
+// Se cierra SOLO con la cruz: ni Esc ni tocar afuera (pedido del 18/11). La grilla sigue usable con el panel abierto.
+tb.addEventListener("keydown",e=>{
+  const td=e.target.closest("td.cell");if(!td)return;let r=+td.dataset.r,s=+td.dataset.s;const k=e.key;
+  const flush=()=>{if(buf!==""){const acc=[];setCell(r,s,buf,acc);commit(acc);buf="";head();panel()}};
+  if((e.ctrlKey||e.metaKey)&&/^[zy]$/i.test(k)){e.preventDefault();flush();(k.toLowerCase()==="y"||e.shiftKey)?redo():undo();return}
+  if(/^[0-9]$/.test(k)){e.preventDefault();buf+=k;td.textContent=buf;td.classList.add("moved");return}
+  if(k==="Backspace"){e.preventDefault();buf=buf.slice(0,-1);td.textContent=buf;return}
+  if(k==="Delete"){e.preventDefault();const acc=[];for(let a=SEL.r1;a<=SEL.r2;a++)for(let b=SEL.c1;b<=SEL.c2;b++)setCell(a,b,0,acc);commit(acc);render();focusCell(r,s);return}
+  if(k==="Escape"){buf="";body();focusCell(r,s);return}
+  const mv={ArrowRight:[0,1],ArrowLeft:[0,-1],ArrowUp:[-1,0],ArrowDown:[1,0],Enter:[1,0],Tab:[0,e.shiftKey?-1:1]}[k];
+  if(mv){e.preventDefault();flush();focusCell(r+mv[0],s+mv[1],e.shiftKey&&k.startsWith("Arrow"))}
+});
+tb.addEventListener("focusout",e=>{const td=e.target.closest("td.cell");if(td&&buf!==""){const acc=[];setCell(+td.dataset.r,+td.dataset.s,buf,acc);commit(acc);buf="";render()}});
+document.addEventListener("copy",e=>{if(!SEL||!tb.contains(document.activeElement))return;const L=[];for(let a=SEL.r1;a<=SEL.r2;a++){const c=[];for(let b=SEL.c1;b<=SEL.c2;b++)c.push(VIEW[a].cur[STORES[b]]);L.push(c.join("\t"))}e.clipboardData.setData("text/plain",L.join("\n"));e.preventDefault()});
+document.addEventListener("paste",e=>{const td=document.activeElement;if(!td||!td.classList.contains("cell"))return;e.preventDefault();
+  const g=e.clipboardData.getData("text").replace(/\r/g,"").split("\n").filter(Boolean).map(l=>l.split("\t"));const acc=[];
+  const multi=SEL&&(SEL.r2>SEL.r1||SEL.c2>SEL.c1);const R1=multi?SEL.r1:+td.dataset.r,C1=multi?SEL.c1:+td.dataset.s,R2=multi?SEL.r2:R1+g.length-1,C2=multi?SEL.c2:C1+Math.max(...g.map(x=>x.length))-1;
+  for(let a=R1;a<=R2;a++)for(let b=C1;b<=C2;b++){const v=g[(a-R1)%g.length][(b-C1)%g[0].length];if(v!==undefined&&v.trim()!=="")setCell(a,b,v,acc)}commit(acc);render()});
+function undo(){const a=HIST.pop();if(!a)return;a.forEach(c=>c.f.cur[c.s]=c.o);FUT.push(a);render()}
+function redo(){const a=FUT.pop();if(!a)return;a.forEach(c=>c.f.cur[c.s]=c.n);HIST.push(a);render()}
+document.getElementById("undo").onclick=undo;document.getElementById("redo").onclick=redo;
+document.getElementById("reset").onclick=()=>{MODEL.forEach(f=>f.cur={...f.base});HIST=[];FUT=[];render()};
+document.querySelectorAll(".seg [data-o]").forEach(b=>b.onclick=()=>{ORDEN=b.dataset.o;document.querySelectorAll(".seg [data-o]").forEach(x=>x.classList.toggle("on",x===b));render()});
+document.getElementById("q").oninput=e=>{FIL.q=e.target.value;render()};
+["Color","Talle","Grupo"].forEach(k=>document.getElementById("f"+k).onchange=e=>{FIL[k.toLowerCase()]=e.target.value;render()});
+/* ---- ruta del vehículo (en el hub: Tracking de transporte, ver el plan) ----
+   estado: ahora = el GPS está dentro del radio del local · prox = el próximo que le toca
+           falta = le toca hoy y todavía no pasó · vencido = pasó la hora límite sin entrar
+           paso = ya entró hoy (primera vez en el radio, tracking_controles_dia) */
+const RUTAS={
+  Master:{senal:"hace 2 min",estado:"En ruta",paradas:[
+    {loc:"DEPO",e:"paso",h:"08:05"},{loc:"CFD",e:"paso",h:"09:40"},{loc:"CFPO",e:"paso",h:"10:15"},
+    {loc:"RIVERAD",e:"vencido",h:"límite 11:00"},{loc:"NVOCED",e:"ahora",h:"llegó 14:28"},
+    {loc:"LIBERD",e:"prox",h:"límite 15:30"},{loc:"ESPINOD",e:"falta",h:"límite 16:00"},{loc:"9DEJULIO",e:"falta",h:""},{loc:"MAYORD",e:"falta",h:"vuelta"}]},
+  Mercedes:{senal:"hace 25 min",estado:"Sin señal",paradas:[
+    {loc:"DEPO",e:"paso",h:"07:50"},{loc:"VCPD",e:"paso",h:"09:10"},{loc:"WALMARTD",e:"paso",h:"09:55"},
+    {loc:"DINOD",e:"falta",h:"límite 15:00"},{loc:"ESPINOD",e:"falta",h:"límite 17:00"},{loc:"RUTA9D",e:"falta",h:""},{loc:"CFR9",e:"falta",h:""}]},
+};
+const TXT={prox:"le falta pasar",falta:"le falta pasar",vencido:"le falta pasar",ahora:"",paso:""};
+const VEHS=[{n:"Master",c:"m1"},{n:"Mercedes",c:"m2"}];   // los dos a la vez, un color cada uno
+const PEND=new Set(["prox","falta","vencido"]);   // todo lo que todavía no tocó
+let FALTA={};                                     // local -> [{veh, clase, h}]
+let VER_TRANSP=true;
+const RC=s=>VER_TRANSP?(FALTA[s]||[]).map(x=>"r-"+x.c).join(" "):"";
+const TIP=s=>(VER_TRANSP?FALTA[s]||[]:[]).map(x=>x.veh+" le falta pasar"+(x.h?" ("+x.h+")":"")).join(" · ");
+function cargarRuta(){
+  FALTA={};
+  document.getElementById("rutaLinea").innerHTML=VEHS.map(v=>{
+    const r=RUTAS[v.n], falta=r.paradas.filter(p=>PEND.has(p.e));
+    falta.forEach(p=>(FALTA[p.loc]=FALTA[p.loc]||[]).push({veh:v.n,c:v.c,h:p.h}));
+    return `<div class="veh-fila"><span class="veh-nom"><i class="sw-${v.c}"></i>${v.n} <span class="pill sky">${r.estado} · ${r.senal}</span></span>`+
+      (falta.length?falta.map((p,i)=>`${i?'<span class="sub">›</span>':""}<span class="parada ${v.c}">${p.loc}${p.h?` <small>${p.h}</small>`:""}${STORES.length&&!STORES.includes(p.loc)?' <small>(no está en el reparto)</small>':""}</span>`).join(""):'<span class="sub">ya pasó por todos los locales de hoy</span>')+`</div>`;
+  }).join("");
+}
+/* ---- tildes: ver transporte / semáforo de días sin venta ---- */
+let SEMAF=false;
+function SV(f,s){
+  if(!SEMAF||!(f.cur[s]||f.base[s]))return "";            // sin stock no hay nada que vender
+  const d=f.dsv[s],v=+document.getElementById("umV").value||15,a=+document.getElementById("umA").value||45;
+  const k=d==null||d>a?"r":d>v?"a":"v";
+  return document.getElementById("sv"+k.toUpperCase()).checked?"s-"+k:"";   // cada color se prende y apaga con su tilde
+}
+document.getElementById("verTransporte").onchange=e=>{VER_TRANSP=e.target.checked;document.getElementById("zonaTabla").classList.toggle("sin-transporte",!VER_TRANSP);render()};
+document.getElementById("verSemaforo").onchange=e=>{SEMAF=e.target.checked;document.getElementById("wrap").classList.toggle("semaforo",SEMAF);document.getElementById("semafCfg").classList.toggle("on",SEMAF);render()};
+["umV","umA","svV","svA","svR"].forEach(id=>document.getElementById(id).addEventListener(id.startsWith("um")?"input":"change",()=>{if(SEMAF)render()}));
+document.getElementById("tbody").addEventListener("mouseover",()=>document.getElementById("wrap").classList.add("hov"));
+document.getElementById("wrap").addEventListener("mouseleave",()=>document.getElementById("wrap").classList.remove("hov"));
+cargarRuta();
+
+/* ---- paso 1: filtros ---- */
+const $=id=>document.getElementById(id);
+const pasos=n=>[1,2,3].forEach(i=>{$("p"+i).classList.toggle("on",i===n);$("p"+i).classList.toggle("hecho",i<n)});
+/* Filtros como el tablero de Power BI. Opciones de ejemplo; en el hub salen de la tabla `articulos`
+   (y de `locales`). Vacío = «Todas». */
+const FILTROS=[
+  {k:"loc",t:"Locales",ops:TODOS},
+  {k:"prov",t:"ID proveedor descripción",ops:["MOCF - CAPTAIN FIN","MOZH - ZIMITH","MOFR - FREEDOM","INDO - INDONESIA","PROV. VARIOS"]},
+  {k:"mat",t:"Material",ops:["1 REMERAS","2 PANTALONES","3 BUZOS","4 CAMPERAS","5 CALZADO","6 ACCESORIOS"],sel:["2 PANTALONES"]},
+  {k:"temp",t:"Temporada",ops:["Verano","Continuo","Invierno","Primavera"],sel:["Invierno","Continuo"]},
+  {k:"anio",t:"Año",ops:["2023","2024","2025","2026","2027"]},
+  {k:"lin",t:"Línea",ops:["W26-M","W26-I","S27-M","S27-I","CYBER20","X-W27"],sel:["W26-M","W26-I"]},
+  {k:"flia",t:"Familia",ops:["SLIM-STR","RELAXED","BAGGY","CARGO","POLAR","ACTIVE"]},
+  {k:"gen",t:"Género",ops:["HOMBRE","MUJER","UNISEX","NIÑO"]},
+  {k:"gru",t:"Grupo",ops:["H21 Jeans","H22 Pantalones","H25 Joggers","H58 Remeras","H61 Crew","H62 Buzos","H96 Camperas","H12 Zapatillas"]},
+];
+const SELF={};FILTROS.forEach(f=>SELF[f.k]=new Set(f.sel||[]));
+function textoDD(f){const s=SELF[f.k];if(s.has("\u0000"))return "Ninguno";if(!s.size||s.size===f.ops.length)return f.k==="loc"?"Todos":"Todas";return s.size===1?[...s][0]:"Selección múltiple ("+s.size+")"}
+function pintarDD(){
+  $("dds").innerHTML=FILTROS.map(f=>`<div><div class="lbl">${f.t}</div><div class="dd" data-k="${f.k}">
+    <button class="dd-btn${SELF[f.k].size&&SELF[f.k].size<f.ops.length?" activo":""}"><span>${esc(textoDD(f))}</span><i>⌄</i></button>
+    <div class="dd-pan"><input type="search" placeholder="Buscar"><div class="dd-lista">
+      <label class="dd-op todo"><input type="checkbox" data-todo ${!SELF[f.k].size||SELF[f.k].size===f.ops.length?"checked":""}> Seleccionar todo</label>
+      ${f.ops.map(o=>`<label class="dd-op" data-txt="${esc(o.toLowerCase())}"><input type="checkbox" value="${esc(o)}" ${!SELF[f.k].size||SELF[f.k].has(o)?"checked":""}> ${esc(o)}</label>`).join("")}
+    </div></div></div></div>`).join("");
+}
+pintarDD();
+$("dds").addEventListener("click",e=>{
+  const btn=e.target.closest(".dd-btn");if(!btn)return;
+  const dd=btn.parentElement,ya=dd.classList.contains("abierto");
+  document.querySelectorAll(".dd.abierto").forEach(x=>x.classList.remove("abierto"));
+  if(!ya){dd.classList.add("abierto");dd.querySelector(".dd-pan input").focus()}
+});
+$("dds").addEventListener("change",e=>{
+  const dd=e.target.closest(".dd");const k=dd.dataset.k;const f=FILTROS.find(x=>x.k===k);
+  if(e.target.dataset.todo!==undefined){SELF[k]=e.target.checked?new Set():new Set(["\u0000"])}   // «Seleccionar todo»: tildado = sin filtro; destildado = nada
+  else{
+    if(!SELF[k].size)SELF[k]=new Set(f.ops);                    // venía «Todas»: arranca con todo tildado
+    SELF[k].delete("\u0000");
+    e.target.checked?SELF[k].add(e.target.value):SELF[k].delete(e.target.value);
+    if(SELF[k].size===f.ops.length)SELF[k]=new Set();
+    else if(!SELF[k].size)SELF[k]=new Set(["\u0000"]);          // nada elegido
+  }
+  pintarDD();document.querySelector(`.dd[data-k="${k}"]`).classList.add("abierto");resFiltro();
+});
+$("dds").addEventListener("input",e=>{if(e.target.type!=="search")return;const q=e.target.value.toLowerCase();e.target.closest(".dd").querySelectorAll(".dd-op[data-txt]").forEach(o=>o.style.display=o.dataset.txt.includes(q)?"":"none")});
+document.addEventListener("click",e=>{if(!e.target.closest(".dd"))document.querySelectorAll(".dd.abierto").forEach(x=>x.classList.remove("abierto"))});
+$("limpiar").onclick=()=>{FILTROS.forEach(f=>SELF[f.k]=new Set());$("fArt").value="";pintarDD();resFiltro()};
+document.querySelectorAll("#secFiltros .chip").forEach(b=>b.addEventListener("click",()=>{
+  if(b.dataset.dias){document.querySelectorAll("[data-dias]").forEach(x=>x.classList.toggle("on",x===b));const h=new Date("2026-11-17");const d=new Date(h);d.setDate(h.getDate()-(+b.dataset.dias)+1);$("d1").value=d.toISOString().slice(0,10);$("d2").value="2026-11-17";}
+  else b.classList.toggle("on");resFiltro();}));
+$("fArt").oninput=resFiltro;
+const localesElegidos=()=>SELF.loc.size?TODOS.filter(s=>SELF.loc.has(s)):TODOS.slice();
+// «Selección múltiple (n)»: cuando quedan casi todos, mejor decir cuáles faltan
+const _textoDD=textoDD;textoDD=f=>{const s=SELF[f.k];if(s.size&&!s.has("\u0000")&&f.ops.length-s.size>0&&f.ops.length-s.size<=2&&s.size>2)return "Todos menos "+f.ops.filter(o=>!s.has(o)).join(", ");return _textoDD(f)};
+$("obs").oninput=e=>$("obsN").textContent=e.target.value.length;
+function resFiltro(){
+  const loc=localesElegidos().length;
+  const hayArt=FILTROS.some(f=>f.k!=="loc"&&SELF[f.k].size>0)||$("fArt").value.trim()!=="";
+  $("resFiltro").innerHTML=!hayArt?'<span style="color:var(--red)">Elegí al menos un filtro de artículo (proveedor, material, temporada, año, línea, familia, género, grupo o artículo).</span>':loc<2?'<span style="color:var(--red)">Elegí al menos 2 locales.</span>':`≈ 3 artículos · 22 SKU · ${loc} locales`;
+  $("armar").disabled=!hayArt||loc<2;
+}
+/* ---- paso 2: Armar ---- */
+$("armar").onclick=()=>{
+  STORES=localesElegidos();
+  $("armar").disabled=true;$("armar").textContent="Armando…";
+  $("resFiltro").innerHTML='<span class="pill sky">Calculando…</span> Leyendo stock y venta de cada local y del depósito (~1 minuto).';
+  setTimeout(()=>{
+    MODEL=[];HIST=[];FUT=[];demo();cargarRuta();fill("fColor",MODEL.map(f=>f.color),"Color");fill("fTalle",MODEL.map(f=>f.talle),"Talle");fill("fGrupo",MODEL.map(f=>f.grupo),"Grupo");
+    $("secFiltros").style.display="none";$("secGrilla").style.display="block";pasos(2);
+    const fil=FILTROS.filter(f=>f.k!=="loc"&&SELF[f.k].size).map(f=>f.t.replace("ID proveedor descripción","Proveedor")+": "+[...SELF[f.k]].join(", ")).join(" · ");
+    $("estado").innerHTML=`<span class="pill sky">Foto ${new Date().toTimeString().slice(0,5)}</span> ${esc(fil)} · ${MODEL.length} SKU · ${STORES.length} locales · venta del ${$("d1").value.split("-").reverse().slice(0,2).join("/")} al ${$("d2").value.split("-").reverse().slice(0,2).join("/")}`;
+    $("armar").textContent="Armar";$("armar").disabled=false;$("okMsg").style.display="none";render();resFiltro();
+  },1200);
+};
+$("volver").onclick=()=>{if(HIST.length&&!confirm("Vas a perder lo que repartiste. ¿Seguro?"))return;$("secGrilla").style.display="none";$("secFiltros").style.display="block";pasos(1)};
+document.getElementById("cargar").onclick=()=>{pasos(3);const m=remitos();const ok=document.getElementById("okMsg");ok.style.display="block";
+  const obs=document.getElementById("obs").value.trim();
+  ok.innerHTML=`✓ (simulado) Lote <b>${esc(document.getElementById("nom").value)}</b>${obs?` · <i>${esc(obs)}</i>`:""} creado:${m.length} renglones, ${m.reduce((a,x)=>a+x.cantidad,0)} unidades. Les sonó la campana a ${[...new Set(m.map(x=>x.desde))].join(", ")}.`};
+document.getElementById("xls").onclick=()=>alert("En el hub baja remitos.xlsx: una hoja por local origen (FECHA / Articulo / Descripcion adicional macro / Color / Talle / locales).");
+
+resFiltro();
+</script>
+</body>
+</html>

@@ -35,6 +35,9 @@
  *                   (renglones de un pedido de venta, en vivo de Dragonfish: los viejos ya no se copian)
  *   POST /          body: { accion: 'repo_diaria', fechas?, forzar? } -> { estado: 'calculando' } | { estado: 'listo', filas, resumen, ... }
  *                   (Compras > Repo diaria: sql/repo-diaria.sql + repo-diaria.js; stock MITO real = físico - comprometido)
+ *   POST /          body: { accion: 'reparto_opciones' } -> { opciones } (filtros del Reparto manual, sql/reparto-opciones.sql)
+ *   POST /          body: { accion: 'reparto_stock', filtros, desde, hasta } -> { estado: 'calculando' } | { estado: 'listo', locales, filas, arts }
+ *                   (Reposiciones / Transferencias > Reparto manual: sql/reparto-stock.sql + reparto.js, SOLO LECTURA)
  *   POST /          body: { accion: 'ventas_articulos', fechas, local?, agrupar?, top? } -> { estado: 'calculando' } | { estado: 'listo', ranking, ... }
  *                     (lee las bases Dragon directo con sql/ventas-articulos.sql; si falla, la foto de la repo diaria)
  *   POST /          body: { accion: 'repo_diaria_dragon', modo: 'revisar'|'cargar'|'estado', fechas, foto, locales?, confirmo? }
@@ -1030,9 +1033,12 @@ async function stockValorizadoDeBase(base) {
  * para cambiar de día sin volver al SQL; "Actualizar" (forzar) saca una nueva.
  */
 const repoDiaria = require('./repo-diaria')
+// Reparto manual del hub (se arma más abajo, cuando ya existen sql y conexionLarga)
+let repartoManual = null
 const cascadaLocales = require('./cascada')
 const programador = require('./programador')
 const SCRIPT_REPO_DIARIA = path.join(__dirname, 'sql', 'repo-diaria.sql')
+repartoManual = require('./reparto').crear({ get sql() { return sql }, conexionLarga: () => conexionLarga() })
 const REPO_DIARIA_CACHE_MS = 5 * 60_000
 const REPO_DIARIA_DIAS = 12
 let fotoRepo = { en: 0, foto: null, segundos: null, error: null }
@@ -1775,6 +1781,22 @@ const server = http.createServer(async (req, res) => {
     // Los artículos de una sola base (el desplegable de la tabla por sucursal)
     if (body?.accion === 'stock_valorizado_base') {
       return enviar(res, 200, await stockValorizadoDeBase(body?.base))
+    }
+
+    // Reparto manual (hub): opciones de los filtros y stock/venta de cada local. Solo lectura.
+    if (body?.accion === 'reparto_opciones') {
+      try {
+        return enviar(res, 200, await repartoManual.accionOpciones())
+      } catch (e) {
+        return enviar(res, 500, { error: e.message })
+      }
+    }
+    if (body?.accion === 'reparto_stock') {
+      try {
+        return enviar(res, 200, repartoManual.accionStock(body))
+      } catch (e) {
+        return enviar(res, 400, { error: e.message })
+      }
     }
 
     // Repo diaria: reposición de MITO a los locales con la venta del día anterior

@@ -96,6 +96,7 @@ const OrdenesCompra = lazy(() => import('@/pages/OrdenesCompra'))
 const ReposicionEscaneo = lazy(() => import('@/pages/ReposicionEscaneo'))
 const StockValorizado = lazy(() => import('@/pages/StockValorizado'))
 const RepoDiariaMito = lazy(() => import('@/pages/RepoDiariaMito'))
+const RepartoTransferencias = lazy(() => import('@/pages/RepartoTransferencias'))
 const VentasWeb = lazy(() => import('@/pages/VentasWeb'))
 const ChatIa = lazy(() => import('@/pages/ChatIa'))
 const TareasTablero = lazy(() => import('@/pages/TareasTablero'))
@@ -210,6 +211,16 @@ export default function App() {
               <PermissionRoute permiso="transferencias.import">
                 <Suspense fallback={null}>
                   <RepoDiariaMito key="cascada" modo="cascada" />
+                </Suspense>
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/transferencias/reparto"
+            element={
+              <PermissionRoute permiso="transferencias.import">
+                <Suspense fallback={null}>
+                  <RepartoTransferencias />
                 </Suspense>
               </PermissionRoute>
             }

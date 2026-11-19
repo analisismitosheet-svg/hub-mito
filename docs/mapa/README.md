@@ -45,6 +45,7 @@ El detalle largo y la historia de cada módulo siguen en `CONTEXTO.md` (raíz de
 | `/compras/estado-pedidos` | EstadoPedidos.tsx | idem |
 | `/mayorista/pedidos-venta` | PedidosVenta.tsx | idem + [[Armado de pedidos]] |
 | `/transferencias`, `/transferencias/estadisticas` | Transferencias.tsx, EstadisticasTransferencias.tsx | [[Transferencias]] |
+| `/transferencias/reparto` | RepartoTransferencias.tsx | [[Transferencias]] (Reparto manual) |
 | `/mayorista` , `/mayorista/mi-repo`, `/mayorista/estadisticas` | Mayorista.tsx, MiRepo.tsx, EstadisticasRendimiento.tsx | [[Repos Mayorista y Mi repo]] |
 | `/mayorista/pausas` | PausasPendientes.tsx | [[Repos Mayorista y Mi repo]] |
 | `/mayorista/franquicias` (+ `/propuestas`, `/materiales`) | MayoristaFranquicias, MayoristaFranquiciasPropuestas, MayoristaFranquiciasMateriales | [[Franquicias]] |

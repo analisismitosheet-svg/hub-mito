@@ -1,5 +1,5 @@
 import { Navigate } from 'react-router-dom'
-import { PackageCheck, Shuffle } from 'lucide-react'
+import { Grid3x3, PackageCheck, Shuffle } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import AppCard from '@/components/AppCard'
@@ -36,6 +36,16 @@ const OPCIONES: AppDef[] = [
     kind: 'internal',
     target: '/transferencias/transferencia-diaria',
     color: '#8b5cf6',
+  },
+  {
+    id: 'reparto-manual',
+    areaId: 'compras',
+    title: 'Reparto manual',
+    description: 'Repartí el stock entre locales como en Excel (con sugerencia) y cargalo como lote.',
+    icon: Grid3x3,
+    kind: 'internal',
+    target: '/transferencias/reparto',
+    color: '#f97316',
   },
 ]
 
