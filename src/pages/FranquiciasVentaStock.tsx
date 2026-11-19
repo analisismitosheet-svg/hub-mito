@@ -11,7 +11,8 @@ import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import FotoArticulo from '@/components/FotoArticulo'
 import { supabase } from '@/lib/supabase'
-import { leerVista, type FilaSql } from '@/lib/sqlApi'
+import { leerVista, leerVistaFiltrada, type FilaSql } from '@/lib/sqlApi'
+import { VISTA_ARTICULOS } from '@/lib/articulosConsulta'
 import { cargarMapaFranquicias, type BaseFranquicia } from '@/lib/franquicias'
 import { cargarStockSku, claveSku, stockArticuloDe, stockSkuDe, type StockSku } from '@/lib/stockSku'
 import { coloresUnicos } from '@/lib/coloresUnicos'
@@ -42,6 +43,33 @@ const fmtPesosCorto = (n: number) => new Intl.NumberFormat('es-AR', { style: 'cu
 const fmtDia = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
 const TALLES = ['XXXS', 'XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '2XL', 'XXXL', '3XL', 'U']
 const ordenTalle = (t: string) => { const i = TALLES.indexOf(t); return i >= 0 ? i : 100 + (Number(t.split('/')[0]) || 0) }
+/** Precio mayorista (PRECIO de vw_ARTICULOS_MITO) por artículo|color y por artículo; se pide por artículo y queda en memoria. */
+const preciosMay = new Map<string, number>()
+const preciosPedidos = new Set<string>()
+const precioNum = (v: unknown) => Number(v) || 0
+async function traerPrecios(arts: string[]) {
+  const cola = arts.filter((a) => a && !preciosPedidos.has(a))
+  for (const a of cola) preciosPedidos.add(a)
+  async function trabajador() {
+    for (let a = cola.shift(); a; a = cola.shift()) {
+      try {
+        const filas = await leerVistaFiltrada(VISTA_ARTICULOS, { donde: ['ID_ARTICULO'], valor: a, coincide: 'igual' })
+        let max = 0
+        for (const r of filas) {
+          const p = precioNum(r.PRECIO)
+          if (p <= 0) continue
+          const k = `${a}|${txt(r.COLOR_CODIGO).toUpperCase()}`
+          preciosMay.set(k, Math.max(preciosMay.get(k) ?? 0, p))
+          max = Math.max(max, p)
+        }
+        preciosMay.set(a, max)
+      } catch {
+        preciosPedidos.delete(a)
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: 6 }, trabajador))
+}
 const nombreBase = (b: BaseFranquicia) => b.nombre || b.base.replace(/^DRAGONFISH_/, '')
 
 /** Tooltip con los colores del tema (el de recharts viene blanco). */
@@ -502,6 +530,23 @@ export default function FranquiciasVentaStock() {
     return [...l].sort((a, b) => (ordenStock === 'vendido' ? b.vendido - a.vendido : 0) || b.total - a.total || a.art.localeCompare(b.art))
   }, [stock, busca, vistaStock, ordenStock, info])
 
+  // Precio mayorista de lo que está a la vista (más vendidos + primeras 200 filas de stock)
+  const [, setVerPrecios] = useState(0)
+  const [cargandoPrecios, setCargandoPrecios] = useState(false)
+  const artsVisibles = useMemo(() => [...new Set([...topArts.map((a) => a.art), ...stockFiltrado.slice(0, 200).map((x) => x.art)])].sort().join(','), [topArts, stockFiltrado])
+  useEffect(() => {
+    const faltan = artsVisibles.split(',').filter((a) => a && !preciosPedidos.has(a))
+    if (!faltan.length) return
+    let activo = true
+    setCargandoPrecios(true)
+    void traerPrecios(faltan).finally(() => { if (activo) { setCargandoPrecios(false); setVerPrecios((n) => n + 1) } })
+    return () => { activo = false }
+  }, [artsVisibles])
+  const precioMay = (art: string, color?: string) => {
+    const p = (color !== undefined ? preciosMay.get(`${art}|${color}`) : undefined) ?? preciosMay.get(art)
+    return p ? fmtPesos(p) : preciosMay.has(art) ? '—' : cargandoPrecios ? '…' : '—'
+  }
+
   const colores = useMemo(() => coloresUnicos(['#0ea5e9', '#22c55e', '#a855f7', '#eab308', '#14b8a6', '#ec4899']), [])
   const kpis: { label: string; valor: string; actual: number; anterior: number | null; Icon: LucideIcon; ayuda: string }[] = [
     { label: 'Venta neta', valor: fmtPesosCorto(d.r.importe), actual: d.r.importe, anterior: d.ra.importe, Icon: DollarSign, ayuda: fmtPesos(d.r.importe) },
@@ -653,10 +698,11 @@ export default function FranquiciasVentaStock() {
                   <th className={`text-right ${th}`}>Stock</th>
                   <th className={`text-left ${th}`}>Color · talle <span className="normal-case">(stock · <span className="text-amber-400">vendido</span> · rojo = vendido y en 0)</span></th>
                   <th className={`text-right ${th}`}>Vendido</th>
+                  <th className={`text-right ${th}`}>Precio mayorista</th>
                   <th className={`text-right ${th}`}>Stock MITO</th>
                 </tr></thead>
                 <tbody className="divide-y divide-line/50">
-                  {stockFiltrado.length === 0 && <tr><td colSpan={5} className="px-3 py-8 text-center text-sub">No hay artículos con ese filtro.</td></tr>}
+                  {stockFiltrado.length === 0 && <tr><td colSpan={6} className="px-3 py-8 text-center text-sub">No hay artículos con ese filtro.</td></tr>}
                   {stockFiltrado.slice(0, 200).map((x) => (
                     <tr key={x.art} className="align-top hover:bg-white/5">
                       <td className="px-3 py-2">
@@ -688,6 +734,7 @@ export default function FranquiciasVentaStock() {
                         </div>
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums text-sub">{x.vendido ? fmt(x.vendido) : '—'}</td>
+                      <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-ink">{precioMay(x.art)}</td>
                       <td className={`px-3 py-2 text-right tabular-nums ${x.mito > 0 ? 'text-emerald-400' : 'text-sub'}`}>{fmt(x.mito)}</td>
                     </tr>
                   ))}
@@ -809,10 +856,11 @@ export default function FranquiciasVentaStock() {
                     <th className={`text-right ${th}`}>Venta</th>
                     <th className={`text-right ${th}`}>Stock local</th>
                     <th className={`text-right ${th}`}>Cobertura</th>
+                    <th className={`text-right ${th}`}>Precio mayorista</th>
                     <th className={`text-right ${th}`}>Stock MITO</th>
                   </tr></thead>
                   <tbody className="divide-y divide-line/50">
-                    {topArts.length === 0 && <tr><td colSpan={9} className="px-3 py-8 text-center text-sub">{colorTop ? 'Sin ventas de ese color en el rango.' : 'Sin ventas en el rango.'}</td></tr>}
+                    {topArts.length === 0 && <tr><td colSpan={10} className="px-3 py-8 text-center text-sub">{colorTop ? 'Sin ventas de ese color en el rango.' : 'Sin ventas en el rango.'}</td></tr>}
                     {topArts.map((a, i) => (
                       <tr key={a.key} className="hover:bg-white/5">
                         <td className="px-3 py-2 text-[11px] tabular-nums text-sub">{i + 1}</td>
@@ -831,6 +879,7 @@ export default function FranquiciasVentaStock() {
                         <td className="px-3 py-2 text-right font-semibold tabular-nums text-ink">{fmtPesos(a.importe)}</td>
                         <td className={`px-3 py-2 text-right tabular-nums ${a.stock <= 0 ? 'font-semibold text-red-400' : 'text-ink'}`}>{fmt(a.stock)}</td>
                         <td className={`px-3 py-2 text-right font-semibold tabular-nums ${coberturaCls(a.cobertura)}`}>{a.cobertura == null ? '—' : `${fmt(a.cobertura)} d`}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-ink">{precioMay(a.art, a.color)}</td>
                         <td className="px-3 py-2 text-right tabular-nums text-sub">{fmt(a.stockMito)}</td>
                       </tr>
                     ))}
