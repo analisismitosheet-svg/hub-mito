@@ -81,6 +81,9 @@
   .cajachip{font-size:11px;font-weight:800;border-radius:7px;padding:1px 6px;background:rgba(249,115,22,.15);color:var(--or)}
   .ok-b{width:30px;height:30px;border-radius:8px;background:#059669;display:grid;place-items:center;color:#fff}
   .x-b{width:30px;height:30px;border-radius:8px;background:#dc2626;display:grid;place-items:center;color:#fff}
+  .chipc.azul{border-color:rgba(14,165,233,.5);background:rgba(14,165,233,.1);color:#38bdf8}
+  .chipc.azul small,.chipc.verde small{color:inherit;opacity:.85}
+  .grupo{font-size:12px;font-weight:700;margin:0 0 6px}
   .nuevo-sec{border:2px solid rgba(249,115,22,.55);box-shadow:0 0 0 4px rgba(249,115,22,.1)}
 </style>
 </head>
@@ -175,13 +178,16 @@
       <h2>4 · ¿Dónde guardo? <span class="badge">NUEVO</span></h2>
       <div class="pantalla stack nuevo-sec">
         <div class="back">← Volver</div>
-        <div><h1>¿Dónde guardo?</h1><p class="sub" style="font-size:13px">Las cajas que tienen lugar (sin el tilde de llena). Escaneá el artículo para ver si ya hay una caja con ese mismo artículo.</p></div>
+        <div><h1>¿Dónde guardo?</h1><p class="sub" style="font-size:13px">Escaneá el artículo que entra y te digo qué cajas pueden tener lugar. Las cajas con el tilde de llena no se ofrecen.</p></div>
         <div class="card stack">
-          <div class="input"><div>🔍&nbsp; Escaneá el artículo nuevo (opcional)…</div><i>📷</i><i>↻</i></div>
-          <div class="sug"><span style="font-size:20px">✨</span><div style="flex:1"><p class="sub" style="font-size:12px">Ya hay 25010044 en esa caja: guardalo junto</p><div class="num" style="font-size:24px;font-weight:800">Caja 15</div></div><div class="btn em" style="padding:0 12px;height:38px">Guardar ahí</div></div>
-          <div style="border:1px solid var(--line);background:var(--surface2);border-radius:12px;padding:10px">
-            <b>25010044</b>
-            <div class="wrap" style="margin-top:8px"><span class="chipc verde num"><b>15</b><small style="color:#34d399">con lugar</small></span><span class="chipc roja num"><b>14</b><small>LLENA</small></span></div>
+          <div class="input"><div>▥&nbsp; Escaneá el artículo a guardar…</div><i>📷</i><i>↻</i></div>
+          <div class="sug"><span style="font-size:20px">✨</span><div style="flex:1"><p class="sub" style="font-size:12px">Ya hay 25010044 ahí: guardalo junto</p><div class="num" style="font-size:24px;font-weight:800">Caja 15</div></div><div class="btn em" style="padding:0 12px;height:38px">Guardar ahí</div></div>
+          <div class="stack" style="border:1px solid var(--line);background:var(--surface2);border-radius:12px;padding:12px">
+            <div style="display:flex;gap:8px"><div style="flex:1"><p class="sub" style="font-size:12px">Cajas con lugar para</p><b style="font-size:18px">25010044</b><p class="sub" style="font-size:12px">JEAN MOM TIRO ALTO</p></div><span class="sub" style="font-size:18px">✕</span></div>
+            <div><p class="grupo" style="color:#34d399">1 · Ya tienen este artículo</p><div class="wrap num"><span class="chipc verde"><b>15</b><small>mismo art.</small></span></div></div>
+            <div><p class="grupo" style="color:#38bdf8">👕 2 · Tienen otras prendas JEAN</p><div class="wrap num"><span class="chipc azul"><b>19</b><small>4 JEAN</small></span><span class="chipc azul"><b>7</b><small>2 JEAN</small></span><span class="chipc azul"><b>23</b><small>1 JEAN</small></span></div></div>
+            <div><p class="grupo sub">Vacías</p><div class="wrap num"><span class="chipc"><b>37</b></span><span class="chipc"><b>38</b></span><span class="chipc"><b>41</b></span><span class="chipc"><b>44</b></span><span class="sub" style="align-self:center;font-size:12px">+2 más abajo</span></div></div>
+            <p style="font-size:12px;color:var(--rojo)">También está en la caja <b>14</b>, pero está llena.</p>
           </div>
         </div>
         <div class="card">
