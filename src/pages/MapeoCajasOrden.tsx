@@ -373,8 +373,9 @@ export default function MapeoCajasOrden() {
 
         <ConfirmDialog
           open={!!borrar}
-          title="¿Quitar de la caja?"
-          message={borrar ? `${borrar.codigo} sale de la caja ${borrar.caja}.` : ''}
+          title={borrar ? `¿Estás seguro de quitar ${borrar.codigo} de la caja ${borrar.caja}?` : ''}
+          message="Deja de figurar en esa caja. Para volver a ponerlo hay que escanearlo de nuevo."
+          confirmarCon="Sí, estoy seguro"
           confirmLabel="Quitar"
           busy={borrando}
           onCancel={() => setBorrar(null)}

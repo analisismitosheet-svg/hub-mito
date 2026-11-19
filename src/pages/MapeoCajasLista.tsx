@@ -77,6 +77,8 @@ export default function MapeoCajasLista() {
   const [tam, setTam] = useState(tamanoMembrete)
 
   const [borrarTramo, setBorrarTramo] = useState<{ desde: number; hasta: number } | null>(null)
+  /** Cuántos artículos hay mapeados en esas cajas (para el aviso); null = contando */
+  const [mapeadosTramo, setMapeadosTramo] = useState<number | null>(null)
   const [borrando, setBorrando] = useState(false)
 
   const cargar = useCallback(async () => {
@@ -140,6 +142,22 @@ export default function MapeoCajasLista() {
     setSel(new Set(nuevas.map((x) => x.numero)))
     void cargar()
   }
+
+  // Al pedir borrar un tramo: cuenta lo mapeado adentro para avisarlo
+  useEffect(() => {
+    setMapeadosTramo(null)
+    if (!borrarTramo || !supabase) return
+    let vivo = true
+    supabase
+      .from('mapeo_cajas')
+      .select('id', { count: 'exact', head: true })
+      .gte('caja', borrarTramo.desde)
+      .lte('caja', borrarTramo.hasta)
+      .then(({ count }) => { if (vivo) setMapeadosTramo(count ?? 0) })
+    return () => { vivo = false }
+  }, [borrarTramo])
+
+  const cajasDelTramo = borrarTramo ? lista.filter((n) => n >= borrarTramo.desde && n <= borrarTramo.hasta).length : 0
 
   async function confirmarBorrarTramo() {
     if (!borrarTramo || !supabase) return
@@ -343,9 +361,18 @@ export default function MapeoCajasLista() {
 
       <ConfirmDialog
         open={borrarTramo != null}
-        title={borrarTramo ? `¿Borrar las cajas ${borrarTramo.desde}–${borrarTramo.hasta}?` : ''}
-        message="Se sacan de la lista de cajas. Lo ya mapeado adentro no se toca."
-        confirmLabel="Borrar"
+        title={borrarTramo ? `¿Estás seguro de borrar las cajas ${borrarTramo.desde}–${borrarTramo.hasta}?` : ''}
+        message={
+          `Se borran ${cajasDelTramo} ${cajasDelTramo === 1 ? 'caja' : 'cajas'} de la lista y no se puede deshacer ` +
+          '(habría que volver a crearlas).\n' +
+          (mapeadosTramo == null
+            ? 'Contando lo que tienen adentro…'
+            : mapeadosTramo > 0
+              ? `Tienen ${mapeadosTramo} ${mapeadosTramo === 1 ? 'artículo mapeado' : 'artículos mapeados'}: eso no se borra.`
+              : 'No tienen nada mapeado adentro.')
+        }
+        confirmarCon="Sí, estoy seguro"
+        confirmLabel="Borrar cajas"
         busy={borrando}
         onCancel={() => setBorrarTramo(null)}
         onConfirm={() => void confirmarBorrarTramo()}
