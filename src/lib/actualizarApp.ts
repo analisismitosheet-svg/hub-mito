@@ -14,7 +14,10 @@ const CADA_MS = 5 * 60 * 1000
 const MARCA = 'hub-app-actualizada'
 
 /** Pantallas sin nada a medio cargar: se puede recargar apenas se vuelve a la app. */
-const esPantallaSegura = (path: string) => path === '/' || path.startsWith('/area/') || path === '/login'
+const CARGA = Date.now()
+/** Link público de propuesta (/p/:token): se actualiza solo recién abierto, antes de que el cliente elija nada. */
+const esLinkRecienAbierto = (path: string) => path.startsWith('/p/') && Date.now() - CARGA < 20_000
+const esPantallaSegura = (path: string) => path === '/' || path.startsWith('/area/') || path === '/login' || esLinkRecienAbierto(path)
 
 export function iniciarActualizacionAutomatica() {
   if (!('serviceWorker' in navigator)) return

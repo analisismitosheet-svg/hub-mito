@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Check, Loader2, Minus, Plus, X } from 'lucide-react'
+import { Check, Loader2, Minus, Plus, Search, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import FotoArticulo from '@/components/FotoArticulo'
 
@@ -60,6 +60,7 @@ export default function PropuestaFranquicia() {
   // por ítem: true = sí, false = no, null = sin responder; y la cantidad
   const [si, setSi] = useState<Record<number, boolean | null>>({})
   const [cant, setCant] = useState<Record<number, number>>({})
+  const [busca, setBusca] = useState('')
   const [comentario, setComentario] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [hecho, setHecho] = useState<{ unidades: number; total: number } | null>(null)
@@ -78,6 +79,14 @@ export default function PropuestaFranquicia() {
       setCargando(false)
     })
   }, [token, recarga])
+
+  // Buscador: filtra solo lo que se ve; lo elegido de los demás artículos se mantiene
+  const visibles = useMemo(() => {
+    const q = busca.trim().toUpperCase()
+    const items = prop?.items ?? []
+    if (!q) return items
+    return items.filter((i) => `${i.art} ${i.descrip ?? ''} ${i.color ?? ''}`.toUpperCase().includes(q))
+  }, [prop, busca])
 
   const cerrado = Boolean(prop?.confirmada || prop?.vencida || hecho)
   const elegidos = useMemo(() => (prop?.items ?? []).filter((i) => si[i.id] === true && (cant[i.id] ?? 0) > 0), [prop, si, cant])
@@ -176,8 +185,28 @@ export default function PropuestaFranquicia() {
               </>
             )}
 
+            {prop.items.length > 1 && (
+              <label className="sticky top-0 z-10 mb-2 flex items-center gap-2 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm shadow-sm">
+                <Search size={15} className="shrink-0 text-neutral-400" aria-hidden />
+                <input
+                  type="search"
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  placeholder="Buscar artículo o nombre"
+                  aria-label="Buscar artículo o nombre"
+                  className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-neutral-400"
+                />
+                {busca && (
+                  <button type="button" onClick={() => setBusca('')} aria-label="Borrar búsqueda" className="text-neutral-400"><X size={15} aria-hidden /></button>
+                )}
+              </label>
+            )}
+            {visibles.length === 0 && (
+              <p className="rounded-xl border border-dashed border-neutral-300 bg-white p-4 text-center text-sm text-neutral-500">Ningún artículo coincide con «{busca}».</p>
+            )}
+
             <ul className="flex flex-col gap-2">
-              {prop.items.map((i) => {
+              {visibles.map((i) => {
                 const v = si[i.id]
                 const c = cant[i.id] ?? 0
                 return (
