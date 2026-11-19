@@ -134,6 +134,8 @@ export default function FranquiciasVentaStock() {
   const [recarga, setRecarga] = useState(0)
   const [pestana, setPestana] = useState<'stock' | 'venta'>('stock')
   const [busca, setBusca] = useState('')
+  /** color elegido en «Artículos más vendidos» ('' = todos) */
+  const [colorTop, setColorTop] = useState('')
   const [vistaStock, setVistaStock] = useState<'con' | 'agotados' | 'todo'>('con')
   const [ordenStock, setOrdenStock] = useState<'stock' | 'vendido'>('stock')
   const [filtros, setFiltros] = useState<Filtros>(filtrosVacios)
@@ -349,7 +351,7 @@ export default function FranquiciasVentaStock() {
       x.unidades += v.cant
       x.importe += v.importe
     }
-    const topArts = [...porArt.values()].filter((x) => x.unidades > 0).sort((a, b) => b.importe - a.importe).slice(0, 15).map((x) => {
+    const topArts = [...porArt.values()].filter((x) => x.unidades > 0).sort((a, b) => b.importe - a.importe).map((x) => {
       const st = stockArt.get(x.art) ?? 0
       const vd = x.unidades / largo
       return { ...x, stock: st, cobertura: vd > 0 ? st / vd : null, stockMito: stockArticuloDe(stockMito, x.art) ?? 0 }
@@ -396,8 +398,52 @@ export default function FranquiciasVentaStock() {
         : l.sort((a, b) => b.stock + b.venta - (a.stock + a.venta))
     }
 
-    return { largo, antDesde, antHasta, r, ra, stockTotal, cobertura, serie, porBase, topArts, materiales, quiebres, quietos, unidadesQuietas, porDim }
+    return { largo, antDesde, antHasta, r, ra, stockTotal, cobertura, serie, porBase, topArts, materiales, quiebres, quietos, unidadesQuietas, porDim, actual, stockLocal }
   }, [ventasF, stockSucF, stockMito, info, elegidas, bases, basesSet, desde, hasta, valorDe])
+
+  // Artículos más vendidos: con un color elegido se cuentan solo la venta y el stock de ese color.
+  // Sin filtros muestra los 15 primeros; con algún filtro (material, grupo, color…) muestra todos.
+  const coloresTop = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const v of d.actual) m.set(v.color, (m.get(v.color) ?? 0) + v.cant)
+    return [...m].filter(([, u]) => u > 0).map(([c]) => c).sort((a, b) => a.localeCompare(b))
+  }, [d.actual])
+  useEffect(() => { if (colorTop && !coloresTop.includes(colorTop)) setColorTop('') }, [coloresTop, colorTop])
+  const todosTop = hayFiltros || colorTop !== ''
+  const topArts = useMemo(() => {
+    let lista = d.topArts
+    if (colorTop) {
+      const porArt = new Map<string, { art: string; txt: string; unidades: number; importe: number }>()
+      for (const v of d.actual) {
+        if (v.color !== colorTop) continue
+        let x = porArt.get(v.art)
+        if (!x) { x = { art: v.art, txt: v.txt, unidades: 0, importe: 0 }; porArt.set(v.art, x) }
+        x.unidades += v.cant
+        x.importe += v.importe
+      }
+      const stockColor = new Map<string, number>()
+      for (const [k, q] of d.stockLocal) {
+        const [a, c] = k.split('|')
+        if (q > 0 && c === colorTop) stockColor.set(a, (stockColor.get(a) ?? 0) + q)
+      }
+      // Stock MITO del color: la lib indexa UNICO también con talle vacío, no se cuenta dos veces
+      const mitoColor = new Map<string, number>()
+      if (stockMito) {
+        for (const [k, q] of stockMito.porSku) {
+          const [a, c, t] = k.split('|')
+          if (c !== colorTop || !porArt.has(a)) continue
+          if (t === '' && stockMito.porSku.has(`${a}|${c}|UNICO`)) continue
+          mitoColor.set(a, (mitoColor.get(a) ?? 0) + q)
+        }
+      }
+      lista = [...porArt.values()].filter((x) => x.unidades > 0).sort((a, b) => b.importe - a.importe).map((x) => {
+        const st = stockColor.get(x.art) ?? 0
+        const vd = x.unidades / d.largo
+        return { ...x, stock: st, cobertura: vd > 0 ? st / vd : null, stockMito: mitoColor.get(x.art) ?? 0 }
+      })
+    }
+    return todosTop ? lista : lista.slice(0, 15)
+  }, [d, colorTop, todosTop, stockMito])
 
   // Stock del local por artículo, con el detalle color/talle y lo vendido en el rango
   const stock = useMemo(() => {
@@ -723,11 +769,24 @@ export default function FranquiciasVentaStock() {
 
             {/* Top artículos */}
             <section className={`${card} mb-4`}>
-              <h2 className="font-display text-base font-semibold text-ink">Artículos más vendidos</h2>
-              <p className="mb-3 text-xs text-sub">Los 15 que más facturan, con lo que queda en el local y en MITO.</p>
-              <div className="overflow-x-auto rounded-xl border border-line">
+              <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+                <div>
+                  <h2 className="font-display text-base font-semibold text-ink">Artículos más vendidos</h2>
+                  <p className="text-xs text-sub">
+                    {todosTop ? `Todos los que se vendieron con ese filtro (${fmt(topArts.length)})` : 'Los 15 que más facturan'}, con lo que queda en el local y en MITO.
+                  </p>
+                </div>
+                <label className="flex items-center gap-2 text-xs text-sub">
+                  Color
+                  <select value={colorTop} onChange={(e) => setColorTop(e.target.value)} className="max-w-[220px] rounded-full border border-line2 bg-surface px-3 py-1.5 text-xs text-ink">
+                    <option value="">Todos los colores</option>
+                    {coloresTop.map((c) => <option key={c} value={c}>{c ? `${c}${nombresColor.get(c) ? ` · ${nombresColor.get(c)}` : ''}` : 'Sin color'}</option>)}
+                  </select>
+                </label>
+              </div>
+              <div className="max-h-[70vh] overflow-auto rounded-xl border border-line">
                 <table className="w-full border-collapse text-[12.5px]">
-                  <thead className="bg-surface"><tr>
+                  <thead className="sticky top-0 z-10 bg-surface"><tr>
                     <th className={`w-8 text-left ${th}`}>#</th>
                     <th className={`text-left ${th}`}>Artículo</th>
                     <th className={`text-left ${th}`}>Material</th>
@@ -738,8 +797,8 @@ export default function FranquiciasVentaStock() {
                     <th className={`text-right ${th}`}>Stock MITO</th>
                   </tr></thead>
                   <tbody className="divide-y divide-line/50">
-                    {d.topArts.length === 0 && <tr><td colSpan={8} className="px-3 py-8 text-center text-sub">Sin ventas en el rango.</td></tr>}
-                    {d.topArts.map((a, i) => (
+                    {topArts.length === 0 && <tr><td colSpan={8} className="px-3 py-8 text-center text-sub">{colorTop ? 'Sin ventas de ese color en el rango.' : 'Sin ventas en el rango.'}</td></tr>}
+                    {topArts.map((a, i) => (
                       <tr key={a.art} className="hover:bg-white/5">
                         <td className="px-3 py-2 text-[11px] tabular-nums text-sub">{i + 1}</td>
                         <td className="px-3 py-1.5">
