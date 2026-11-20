@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Loader2, MapPin, Search, Trash2, Download, RefreshCw, ChevronDown, Layers } from 'lucide-react'
+import { Loader2, MapPin, Search, Trash2, Download, RefreshCw, ChevronDown, Layers, PackageX } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
@@ -68,6 +68,85 @@ function chipStock(v: number | null) {
   )
 }
 
+interface ItemSinStock {
+  id: string | number
+  codigo: string
+  /** Dónde estaba mapeado: "Caja 12", "PB-A3"… */
+  lugar: string
+}
+
+/**
+ * Sección «Sin stock» de Mayorista > Orden mapeado (propia de esta pantalla).
+ *
+ * Los artículos que llegan a stock 0 (MITO) salen de su posición y se listan acá
+ * con el lugar donde estaban. NO se borran del mapeo: si el stock vuelve, el
+ * artículo vuelve solo a su lugar. Quitar del todo sigue siendo a mano (tacho).
+ */
+function SeccionSinStock({
+  items,
+  descDe,
+  abiertaForzada,
+  onQuitar,
+}: {
+  items: ItemSinStock[]
+  descDe: (codigo: string) => string
+  /** Buscando, se abre sola para mostrar lo encontrado */
+  abiertaForzada?: boolean
+  /** Si viene, se muestra el tacho para quitarlo del mapeo */
+  onQuitar?: (item: ItemSinStock) => void
+}) {
+  const [abierta, setAbierta] = useState(false)
+  if (items.length === 0) return null
+  const ver = abierta || !!abiertaForzada
+  const ordenados = [...items].sort((a, b) => a.codigo.localeCompare(b.codigo) || a.lugar.localeCompare(b.lugar))
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-brand-600/30 bg-surface">
+      <button
+        onClick={() => setAbierta((v) => !v)}
+        aria-expanded={ver}
+        className="flex min-h-[3.25rem] w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-surface2"
+      >
+        <PackageX size={18} aria-hidden className="shrink-0 text-brand-400" />
+        <span className="flex-1 font-display text-base font-bold text-ink">
+          Sin stock
+          <span className="ml-2 text-sm font-medium text-sub">quedaron en 0 y salieron de su posición</span>
+        </span>
+        <span className="shrink-0 rounded-full bg-brand-600/15 px-2.5 py-0.5 text-xs font-semibold tabular-nums text-brand-400">
+          {items.length} {items.length === 1 ? 'código' : 'códigos'}
+        </span>
+        <ChevronDown size={18} aria-hidden className={`shrink-0 text-sub transition-transform ${ver ? 'rotate-180' : ''}`} />
+      </button>
+      {ver && (
+        <ul className="divide-y divide-line/40 border-t border-line">
+          {ordenados.map((i) => (
+            <li key={i.id} className="flex items-start gap-2 py-2 pl-4 pr-2">
+              <span className="min-w-0 flex-1">
+                <span className="flex flex-wrap items-center gap-1.5">
+                  <span className="truncate text-sm font-semibold text-ink">{i.codigo}</span>
+                  <span className="shrink-0 rounded-md bg-brand-600/15 px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-brand-400">0</span>
+                  <span className="shrink-0 rounded-md bg-surface2 px-1.5 py-0.5 text-[11px] font-medium text-sub">estaba en {i.lugar}</span>
+                </span>
+                {descDe(i.codigo) && <span className="block text-[11px] leading-tight text-sub">{descDe(i.codigo)}</span>}
+              </span>
+              {onQuitar && (
+                <button
+                  onClick={() => onQuitar(i)}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sub transition hover:bg-brand-600/10 hover:text-brand-400"
+                  title="Quitar del mapeo"
+                  aria-label={`Quitar ${i.codigo} del mapeo`}
+                >
+                  <Trash2 size={15} aria-hidden />
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 /** Mapeo depósito · Orden mapeado: planta → pasillo (desplegables) → niveles en columnas */
 export default function MapeoOrden() {
   const { isAdmin, can } = useAuth()
@@ -90,12 +169,10 @@ export default function MapeoOrden() {
   const [stock, setStock] = useState<StockArticulos | null>(null)
   /** Aviso del stock: qué falló o qué vino cortado */
   const [stockAviso, setStockAviso] = useState<string | null>(null)
-  /** Los de stock 0 no se muestran (siguen en el mapeo); con la tilde se revelan */
-  const [verSinStock, setVerSinStock] = useState(false)
-
-  // Los de stock 0 NO se borran: solo no se muestran (si el stock viene mal,
-  // borrarlos hacía perder artículos que sí están en el estante). Quitar del
-  // mapeo es siempre a mano.
+  // Los de stock 0 salen de su posición y pasan a la sección «Sin stock».
+  // NO se borran del mapeo (si el stock viene mal, borrarlos hacía perder
+  // artículos que sí están en el estante): si el stock vuelve, vuelven solos
+  // a su lugar. Quitar del mapeo es siempre a mano.
 
   const cargar = useCallback(async () => {
     setCargando(true)
@@ -142,29 +219,31 @@ export default function MapeoOrden() {
     void cargar()
   }, [cargar])
 
-  /** Cuántos mapeados están en stock 0 ahora mismo (ocultos, no borrados) */
-  const cantSinStock = useMemo(
-    () => (stock ? filas.filter((f) => (stockDe(stock, f.codigo) ?? 1) === 0).length : 0),
+  /** Mapeados en stock 0 ahora mismo: van a la sección «Sin stock» (no se borran) */
+  const sinStock = useMemo(
+    () => (stock ? filas.filter((f) => (stockDe(stock, f.codigo) ?? 1) === 0) : []),
     [stock, filas],
   )
+  const cantSinStock = sinStock.length
 
-  /** Lo que se muestra: todo el mapeo, menos los de stock 0 (si no se pidió verlos) */
+  /** Lo que va en las posiciones: todo el mapeo menos los de stock 0 */
   const visibles = useMemo(() => {
-    if (!stock || verSinStock) return filas
+    if (!stock) return filas
     return filas.filter((f) => (stockDe(stock, f.codigo) ?? 1) !== 0)
-  }, [stock, verSinStock, filas])
+  }, [stock, filas])
 
   // Búsqueda: por ubicación deja la ubicación entera; por código o descripción, solo lo que coincide
   const q = busqueda.trim().toUpperCase()
-  const filtradas = useMemo(() => {
-    if (!q) return visibles
-    return visibles.filter(
-      (f) =>
-        (f.ubicacion ?? SIN_UBICACION).toUpperCase().includes(q) ||
-        f.codigo.toUpperCase().includes(q) ||
-        descDe(f.codigo).toUpperCase().includes(q),
-    )
-  }, [visibles, q, descDe])
+  const coincide = useCallback(
+    (f: Mapeo) =>
+      !q ||
+      (f.ubicacion ?? SIN_UBICACION).toUpperCase().includes(q) ||
+      f.codigo.toUpperCase().includes(q) ||
+      descDe(f.codigo).toUpperCase().includes(q),
+    [q, descDe],
+  )
+  const filtradas = useMemo(() => visibles.filter(coincide), [visibles, coincide])
+  const sinStockFiltrados = useMemo(() => sinStock.filter(coincide), [sinStock, coincide])
 
   // Árbol planta → pasillo → nivel, en el orden del depósito
   const plantas = useMemo<Planta[]>(() => {
@@ -256,6 +335,12 @@ export default function MapeoOrden() {
         }
       })
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(datos), 'Mapeo')
+    if (sinStock.length > 0) {
+      const ceros = [...sinStock]
+        .sort((a, b) => a.codigo.localeCompare(b.codigo))
+        .map((f) => ({ Artículo: f.codigo, Descripción: descDe(f.codigo), 'Estaba en': f.ubicacion ?? SIN_UBICACION }))
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ceros), 'Sin stock')
+    }
     XLSX.writeFile(wb, `mapeo_deposito_${new Date().toISOString().slice(0, 10)}.xlsx`)
   }
 
@@ -303,36 +388,12 @@ export default function MapeoOrden() {
           </button>
           <button
             onClick={() => void exportar()}
-            disabled={visibles.length === 0}
+            disabled={filas.length === 0}
             className="btn-press inline-flex h-11 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-sm font-medium text-ink transition hover:bg-surface2 disabled:opacity-60"
           >
             <Download size={16} aria-hidden /> Excel
           </button>
-          <label
-            className="inline-flex h-11 cursor-pointer select-none items-center gap-2 rounded-xl border border-line bg-surface px-3 text-sm font-medium text-ink transition hover:bg-surface2"
-            title="Los que están en stock 0 no se muestran (no se borran): acá se revelan"
-          >
-            <input
-              type="checkbox"
-              checked={verSinStock}
-              onChange={(e) => setVerSinStock(e.target.checked)}
-              className="h-4 w-4 accent-brand-600"
-            />
-            Ver sin stock
-            {cantSinStock > 0 && (
-              <span className="rounded-full bg-brand-600/15 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-brand-400">
-                {cantSinStock}
-              </span>
-            )}
-          </label>
         </div>
-
-        {!verSinStock && cantSinStock > 0 && (
-          <p className="rounded-xl border border-line bg-surface2 p-3 text-sm text-sub">
-            {cantSinStock} {cantSinStock === 1 ? 'artículo mapeado está' : 'artículos mapeados están'} en stock 0 y{' '}
-            {cantSinStock === 1 ? 'no se muestra' : 'no se muestran'} (siguen en el mapeo). Tildá «Ver sin stock» para verlos.
-          </p>
-        )}
 
         {error && (
           <p role="alert" className="rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>
@@ -349,9 +410,11 @@ export default function MapeoOrden() {
         ) : plantas.length === 0 ? (
           <p className="rounded-2xl border border-line bg-surface px-4 py-10 text-center text-sm text-sub">
             {busqueda
-              ? 'No hay ubicaciones ni códigos que coincidan.'
-              : !verSinStock && cantSinStock > 0
-                ? 'Todo lo que está mapeado tiene stock 0: tildá «Ver sin stock» para verlo.'
+              ? sinStockFiltrados.length > 0
+                ? 'En las posiciones no hay nada que coincida: mirá la sección «Sin stock».'
+                : 'No hay ubicaciones ni códigos que coincidan.'
+              : cantSinStock > 0
+                ? 'Todo lo mapeado quedó sin stock: está en la sección «Sin stock».'
                 : 'Todavía no hay nada mapeado.'}
           </p>
         ) : (
@@ -453,6 +516,13 @@ export default function MapeoOrden() {
             })}
           </div>
         )}
+
+        <SeccionSinStock
+          items={sinStockFiltrados.map((f) => ({ id: f.id, codigo: f.codigo, lugar: f.ubicacion ?? SIN_UBICACION }))}
+          descDe={descDe}
+          abiertaForzada={!!q}
+          onQuitar={veBorrar ? (it) => setBorrar(sinStock.find((f) => f.id === it.id) ?? null) : undefined}
+        />
 
         <ConfirmDialog
           open={!!borrar}

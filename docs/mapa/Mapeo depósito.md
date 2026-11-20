@@ -7,3 +7,4 @@
 - Borrar a mano: `veBorrar = isAdmin || can('mayorista.mapeo.borrar')`. Ese permiso lo tiene solo puesto3indo@gmail.com (individual) además del admin.
 - Permisos `mayorista.mapeo.view` / `.escanear` / `.borrar`. Ver [[Permisos y usuarios]].
 - El detalle de **no mandados** de Eficiencia mayorista muestra la ubicación de cada artículo desde `mapeo_deposito` (por artículo, con todas sus ubicaciones juntas) — ver `sql/vtd_no_mandados_det.sql`.
+- Desde 20/11/2026 los de stock 0 ya no se esconden con la tilde «Ver sin stock»: salen de su caja/posición y aparecen en la sección **Sin stock** de cada pantalla («estaba en …», tacho para quitar). Cada pantalla tiene su propia sección (Cajas = depósito INDOD, Orden mapeado = MITO); no compartir componente. No se borra nada: si vuelve el stock, vuelve solo a su lugar. El Excel suma una hoja «Sin stock».
