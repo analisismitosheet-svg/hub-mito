@@ -88,13 +88,14 @@ function Foto({ url, className }: { url?: string; className?: string }) {
 }
 
 /** Avisos pendientes de hoy (para el cartel rojo de la pestaña Conversión) */
-export function useAvisosPendientes() {
+export function useAvisosPendientes(activo = true) {
   const [avisos, setAvisos] = useState<AvisoNoGrata[]>([])
   const cargar = useCallback(async () => {
+    if (!activo) return setAvisos([])
     const { data } = await sb().from('no_gratas_avisos').select('*').eq('estado', 'pendiente')
       .gte('created_at', hoyIso() + 'T00:00:00').order('created_at', { ascending: false }).limit(10)
     setAvisos((data as AvisoNoGrata[]) ?? [])
-  }, [])
+  }, [activo])
   useEffect(() => {
     void cargar()
     const t = setInterval(() => { if (document.visibilityState === 'visible') void cargar() }, 30000)

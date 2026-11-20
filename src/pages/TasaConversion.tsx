@@ -11,6 +11,7 @@ import { CLAVE_VISTA, aVentas, type Venta, type Dispositivo } from '@/pages/Cont
 import { ErrorVideo, pedirPase, urlVideo } from '@/lib/videoContador'
 import { LOCALES_FUERA_DEL_CONTADOR } from '@/lib/informeConversion'
 import { coloresUnicos } from '@/lib/coloresUnicos'
+import { useAuth } from '@/context/AuthContext'
 import PersonasNoGratas, { CartelAviso, useAvisosPendientes, type NoGrata } from '@/components/PersonasNoGratas'
 
 /**
@@ -84,8 +85,10 @@ export default function TasaConversion() {
   const [horaSel, setHoraSel] = useState<number | null>(null)
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const pestana = params.get('tab') === 'no-gratas' ? 'no-gratas' : 'conversion'
-  const { avisos: avisosPend, recargar: recargarAvisos } = useAvisosPendientes()
+  // Personas no gratas: por ahora solo el admin (pedido del 20/11/2026)
+  const { isAdmin } = useAuth()
+  const pestana = isAdmin && params.get('tab') === 'no-gratas' ? 'no-gratas' : 'conversion'
+  const { avisos: avisosPend, recargar: recargarAvisos } = useAvisosPendientes(isAdmin)
   const [personasAviso, setPersonasAviso] = useState<Map<number, NoGrata>>(new Map())
   const idsAviso = avisosPend.map((a) => a.no_grata_id).join(',')
   useEffect(() => {
@@ -267,7 +270,7 @@ export default function TasaConversion() {
         </div>
       </header>
 
-      <div className="mb-4 flex flex-wrap gap-1.5" role="tablist">
+      {isAdmin && <div className="mb-4 flex flex-wrap gap-1.5" role="tablist">
         <button role="tab" aria-selected={pestana === 'conversion'} onClick={() => irA('conversion')}
           className={'inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-sm font-medium ' +
             (pestana === 'conversion' ? 'bg-brand-600 text-white' : 'border border-line bg-surface text-sub hover:text-ink')}>
@@ -279,7 +282,7 @@ export default function TasaConversion() {
           <ShieldAlert size={14} aria-hidden /> Personas no gratas
           {avisosPend.length > 0 && <span className="rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">{avisosPend.length}</span>}
         </button>
-      </div>
+      </div>}
 
       {error && <p role="alert" className="mb-4 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
 
