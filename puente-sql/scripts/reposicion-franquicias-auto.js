@@ -17,7 +17,7 @@
  *   - stock Polo 52: vw_STOCK_SKU_POLO (sql/vw_STOCK_SKU_POLO.sql), completa lo que MITO no cubre
  *   - sugerido = máx(0, mín(vendido − stock cliente, stock MITO + stock Polo))
  *     stock_mito se manda como disponible total (MITO + Polo) y stock_polo aparte: al cargarse el
- *     pedido en Dragon, lo que pasa el stock de MITO sale de Polo como transferencia POLO52 → MAYORD
+ *     pedido en Dragon, lo que pasa el stock de MITO sale de Polo como transferencia POLO52 → MITO
  *     (franquicias_resultado_dragon, sql/franquicias_stock_polo.sql)
  * Todo en el SQL de ESTA PC con el usuario de Windows (sqlcmd -E), solo lectura.
  *

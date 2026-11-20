@@ -3,7 +3,7 @@
 
    Lo usa la Reposicion de franquicias (sugerida y automatica): lo que
    MITO no llega a cubrir sale de Polo y se carga como transferencia
-   POLO52 -> MAYORD, como en el reparto de locales.
+   POLO52 -> MITO, como en el reparto de locales.
 
    Sale de DWH.dbo.vw_FACT_VENTAS_STOCK (servidor MITO), Tienda =
    DRAGONFISH_POLO52, filas STOCK sin transito: es el mismo numero que

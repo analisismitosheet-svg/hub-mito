@@ -6,7 +6,7 @@
 --                así que el link y la confirmación no cambian.
 --   stock_polo = la parte de ese disponible que está en Polo.
 -- Al cargarse el pedido de venta en Dragon (franquicias_resultado_dragon), lo que pidió el cliente
--- por encima del stock de MITO sale de Polo: se crea un lote en Transferencias POLO52 → MAYORD,
+-- por encima del stock de MITO sale de Polo: se crea un lote en Transferencias POLO52 → MITO,
 -- como en el reparto de locales. Primero MITO, Polo completa.
 
 alter table public.franquicias_propuesta_items
@@ -87,7 +87,7 @@ begin
   if not found then return null; end if;
 
   select jsonb_agg(jsonb_build_object(
-           'origen', 'POLO52', 'destino', 'MAYORD', 'articulo', x.art, 'descripcion', x.descrip,
+           'origen', 'POLO52', 'destino', 'MITO', 'articulo', x.art, 'descripcion', x.descrip,
            'material', x.material, 'color', x.color, 'talle', x.talle, 'cantidad', x.polo, 'tipo', 'VENTA')
          order by x.orden)
     into v_items

@@ -22,7 +22,7 @@ export type FilaReposicion = {
   vendido: number
   /** stock MITO del SKU */
   stock: number
-  /** stock de Polo 52 del SKU: completa lo que MITO no cubre (va como transferencia POLO52 → MAYORD) */
+  /** stock de Polo 52 del SKU: completa lo que MITO no cubre (va como transferencia POLO52 → MITO) */
   stockPolo: number
   stockCli: number
   /** total a reponer (MITO + Polo) */

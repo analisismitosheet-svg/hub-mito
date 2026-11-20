@@ -15,7 +15,7 @@
 
 - Sugerida, Propuesta y automática: **primero MITO, Polo completa**. Sugerido = mín(vendido − stock cliente, stock MITO + stock Polo); columna «Stock Polo» y «N de Polo» bajo el sugerido.
 - Polo sale de `VISTAS_CONSOLIDADAS.dbo.vw_STOCK_SKU_POLO` (`sql/vw_STOCK_SKU_POLO.sql`, OPENQUERY a `DWH.dbo.vw_FACT_VENTAS_STOCK`, Tienda `DRAGONFISH_POLO52`, sin tránsito; habilitada en `config_app.sql_vistas` con `sql/sql_vistas_stock_polo.sql`). Si falla, sigue solo con MITO y avisa.
-- En los ítems: `stock_mito` = disponible total (tope del link) y `stock_polo` = parte de Polo. Al cargarse el pedido en Dragon, `franquicias_resultado_dragon` llama `private.franquicias_lote_polo`: crea en Transferencias el lote «AAMMDD - FRANQUICIA X N° n - POLO» con **POLO52 → MAYORD** por lo que pidió el cliente por encima del stock de MITO. SQL: `sql/franquicias_stock_polo.sql` (aplicado).
+- En los ítems: `stock_mito` = disponible total (tope del link) y `stock_polo` = parte de Polo. Al cargarse el pedido en Dragon, `franquicias_resultado_dragon` llama `private.franquicias_lote_polo`: crea en Transferencias el lote «AAMMDD - FRANQUICIA X N° n - POLO» con **POLO52 → MITO** por lo que pidió el cliente por encima del stock de MITO. SQL: `sql/franquicias_stock_polo.sql` (aplicado).
 
 ## Pantallas anteriores (fuera del menú)
 
