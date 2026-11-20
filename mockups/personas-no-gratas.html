@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Personas no gratas · aviso en la puerta</title>
+<style>
+  :root{--paper:#050508;--surface:rgba(255,255,255,.04);--surface2:rgba(255,255,255,.06);--line:rgba(255,255,255,.09);--ink:#f8fafc;--sub:#94a3b8;
+    --rojo:#f87171;--ambar:#fbbf24;--verde:#34d399;--celeste:#38bdf8;--violeta:#a78bfa;--marca:#2563eb}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Segoe UI',system-ui,sans-serif;font-size:14px;padding:18px 16px 60px}
+  .wrap{max-width:1180px;margin:0 auto}
+  .badge{display:inline-block;padding:3px 10px;border-radius:999px;background:rgba(37,99,235,.18);color:#93c5fd;border:1px solid rgba(37,99,235,.45);font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+  header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0 14px}
+  h1{font-size:22px;margin:0}
+  .tabs{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+  .tab{height:32px;padding:0 12px;border-radius:8px;font-size:12px;font-weight:500;border:1px solid var(--line);background:var(--surface2);color:var(--sub);cursor:pointer}
+  .tab.on{background:var(--marca);border-color:transparent;color:#fff}
+  .tab .n{display:inline-block;min-width:18px;height:18px;line-height:18px;border-radius:9px;background:var(--rojo);color:#fff;font-size:10px;font-weight:800;margin-left:6px;text-align:center}
+  .vista{display:none}.vista.on{display:block}
+  .card{border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:16px}
+  .card h3{margin:0 0 12px;font-size:14px;font-weight:600}
+  .sub{color:var(--sub);font-size:12px}
+
+  /* ---------- Aviso ---------- */
+  .alerta{border:1px solid rgba(248,113,113,.55);background:linear-gradient(180deg,rgba(248,113,113,.14),rgba(248,113,113,.04));border-radius:18px;padding:16px;margin-bottom:16px;animation:latido 2s ease-in-out infinite}
+  @keyframes latido{0%,100%{box-shadow:0 0 0 0 rgba(248,113,113,.0)}50%{box-shadow:0 0 0 6px rgba(248,113,113,.15)}}
+  .alerta .tit{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .alerta .tit b{font-size:18px;color:#fecaca;letter-spacing:.02em}
+  .chip{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 9px;border-radius:999px;font-size:11px;font-weight:700}
+  .chip.rojo{background:rgba(248,113,113,.2);color:#fecaca;border:1px solid rgba(248,113,113,.5)}
+  .chip.ambar{background:rgba(251,191,36,.15);color:#fde68a;border:1px solid rgba(251,191,36,.45)}
+  .chip.verde{background:rgba(52,211,153,.15);color:#a7f3d0;border:1px solid rgba(52,211,153,.4)}
+  .chip.gris{background:var(--surface2);color:var(--sub);border:1px solid var(--line)}
+  .alerta .hora{margin-left:auto;font-size:12px;color:#fca5a5}
+  .comparar{display:grid;grid-template-columns:1fr auto 1fr 1.3fr;gap:14px;align-items:center;margin-top:14px}
+  @media(max-width:860px){.comparar{grid-template-columns:1fr 1fr}.comparar .vs{display:none}.comparar .datos{grid-column:1/-1}}
+  .foto{border-radius:12px;overflow:hidden;border:1px solid var(--line);background:#0b0b12;aspect-ratio:3/4;position:relative}
+  .foto svg{width:100%;height:100%;display:block}
+  .foto .pie{position:absolute;left:0;right:0;bottom:0;padding:6px 8px;font-size:11px;background:linear-gradient(0deg,rgba(0,0,0,.8),transparent);color:#e2e8f0}
+  .foto .caja{position:absolute;border:2px solid var(--rojo);border-radius:6px;left:30%;top:14%;width:40%;height:30%}
+  .vs{text-align:center}
+  .vs .pct{font-size:30px;font-weight:800;color:var(--rojo)}
+  .vs .pl{font-size:11px;color:var(--sub)}
+  .datos dl{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;margin:0;font-size:13px}
+  .datos dt{color:var(--sub)}
+  .datos dd{margin:0;font-weight:500}
+  .acciones{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+  .btn{height:36px;padding:0 14px;border-radius:10px;font-size:13px;font-weight:600;border:1px solid var(--line);background:var(--surface2);color:var(--ink);cursor:pointer}
+  .btn.rojo{background:#dc2626;border-color:transparent}
+  .btn.verde{background:rgba(52,211,153,.15);border-color:rgba(52,211,153,.45);color:#a7f3d0}
+  .aviso-legal{font-size:11px;color:var(--sub);margin-top:10px}
+
+  .fila-tasa{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
+  @media(max-width:760px){.fila-tasa{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .kp{border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:12px}
+  .kp .l{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:rgba(148,163,184,.7)}
+  .kp .v{font-size:24px;font-weight:800;margin-top:2px}
+
+  .dos{display:grid;grid-template-columns:1.4fr 1fr;gap:16px}
+  @media(max-width:900px){.dos{grid-template-columns:1fr}}
+  .vivo{position:relative;border-radius:12px;overflow:hidden;aspect-ratio:16/9;background:#0b0b12;border:1px solid var(--line)}
+  .vivo svg{width:100%;height:100%;display:block}
+  .vivo .rec{position:absolute;top:8px;left:8px;font-size:11px;background:rgba(0,0,0,.6);padding:3px 8px;border-radius:6px}
+  .vivo .rec i{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--rojo);margin-right:5px}
+  .hist li{display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line);font-size:13px}
+  .hist li:first-child{border-top:0}
+  .hist ul{list-style:none;margin:0;padding:0}
+  .mini{width:36px;height:46px;border-radius:6px;overflow:hidden;flex:none;border:1px solid var(--line)}
+  .mini svg{width:100%;height:100%}
+  .hist .t{color:var(--sub);font-size:12px;margin-left:auto;white-space:nowrap}
+
+  /* ---------- Lista ---------- */
+  .barra{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px}
+  .field span{display:block;font-size:11px;color:var(--sub);margin-bottom:3px;font-weight:500}
+  .field input,.field select,.field textarea{height:34px;border-radius:8px;border:1px solid var(--line);background:var(--surface2);color:var(--ink);font:inherit;font-size:13px;padding:0 10px;width:100%}
+  .field textarea{height:70px;padding:8px 10px;resize:vertical}
+  .grilla{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+  .ficha{border:1px solid var(--line);background:var(--surface);border-radius:14px;overflow:hidden}
+  .ficha .img{aspect-ratio:1/1;background:#0b0b12;position:relative}
+  .ficha .img svg{width:100%;height:100%}
+  .ficha .img .chip{position:absolute;top:8px;left:8px}
+  .ficha .cuerpo{padding:10px 12px}
+  .ficha .cuerpo b{display:block;font-size:14px}
+  .ficha .cuerpo .sub{margin-top:3px;line-height:1.45}
+  .ficha .pie{display:flex;gap:6px;padding:0 12px 12px}
+  .ficha .pie .btn{height:30px;font-size:12px;padding:0 10px}
+
+  /* ---------- Cargar ---------- */
+  .form{display:grid;grid-template-columns:260px 1fr;gap:18px}
+  @media(max-width:760px){.form{grid-template-columns:1fr}}
+  .subir{border:2px dashed rgba(148,163,184,.35);border-radius:14px;aspect-ratio:3/4;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--sub);text-align:center;padding:14px;font-size:13px}
+  .subir .ic{font-size:34px}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:560px){.cols{grid-template-columns:1fr}}
+  .check{display:flex;gap:8px;align-items:flex-start;font-size:13px;color:#cbd5e1;margin-top:6px}
+  .calidad{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+
+  .nota{margin-top:18px;font-size:13px;color:#cbd5e1;line-height:1.55;border:1px solid rgba(37,99,235,.35);background:rgba(37,99,235,.08);border-radius:14px;padding:12px 14px}
+  .nota b{color:#93c5fd}
+  .nota ul{margin:6px 0 0;padding-left:18px}
+  .nota li{margin:3px 0}
+
+  /* aviso flotante (lo que aparece en cualquier pantalla del hub) */
+  .toast{position:fixed;right:16px;bottom:16px;width:330px;max-width:calc(100vw - 32px);border:1px solid rgba(248,113,113,.6);background:#1a0b0e;border-radius:14px;padding:12px;display:flex;gap:10px;box-shadow:0 10px 40px rgba(0,0,0,.6);z-index:9}
+  .toast .mini{width:46px;height:58px}
+  .toast b{color:#fecaca;font-size:13px}
+  .toast .sub{font-size:12px;margin-top:2px}
+  .toast button{margin-top:6px;height:26px;font-size:12px;padding:0 10px;border-radius:8px;background:#dc2626;border:0;color:#fff;font-weight:600;cursor:pointer}
+  .toast .x{position:absolute;top:6px;right:10px;color:var(--sub);cursor:pointer;font-size:14px}
+</style>
+</head>
+<body>
+<!-- Silueta genérica reutilizable (no son personas reales) -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="sil" viewBox="0 0 120 160">
+      <rect width="120" height="160" fill="#141420"/>
+      <circle cx="60" cy="58" r="26" fill="#3b3b52"/>
+      <path d="M14 160c4-38 22-58 46-58s42 20 46 58z" fill="#3b3b52"/>
+    </symbol>
+    <symbol id="sil2" viewBox="0 0 120 160">
+      <rect width="120" height="160" fill="#1a1622"/>
+      <path d="M30 70c0-26 12-42 30-42s30 16 30 42c0 10-2 22-4 30H34c-2-8-4-20-4-30z" fill="#4a3a52"/>
+      <circle cx="60" cy="62" r="22" fill="#5b4a66"/>
+      <path d="M14 160c4-36 22-56 46-56s42 20 46 56z" fill="#4a3a52"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="wrap">
+  <span class="badge">Maqueta · todavía no está en el hub</span>
+
+  <header>
+    <h1>🚨 Personas no gratas</h1>
+    <div class="tabs">
+      <button class="tab on" data-v="aviso">Aviso en Tasa de conversión <span class="n">1</span></button>
+      <button class="tab" data-v="lista">Lista</button>
+      <button class="tab" data-v="cargar">+ Cargar foto</button>
+    </div>
+  </header>
+
+  <!-- ===================== AVISO ===================== -->
+  <section class="vista on" id="v-aviso">
+    <div class="alerta">
+      <div class="tit">
+        <span style="font-size:24px">⚠️</span>
+        <b>PERSONA NO GRATA EN EL LOCAL</b>
+        <span class="chip rojo">Coincidencia alta · 91 %</span>
+        <span class="hora">hoy 17:42:08 · hace 12 s</span>
+      </div>
+      <div class="comparar">
+        <div class="foto">
+          <svg><use href="#sil2"/></svg>
+          <div class="pie">Foto cargada · Espinosa · 02/11</div>
+        </div>
+        <div class="vs"><div class="pct">91%</div><div class="pl">parecido<br>de cara</div></div>
+        <div class="foto">
+          <svg><use href="#sil2"/></svg>
+          <div class="caja"></div>
+          <div class="pie">Cámara · Nueva Córdoba Puerta</div>
+        </div>
+        <div class="datos">
+          <dl>
+            <dt>Local</dt><dd>Nueva Córdoba (NVOCED)</dd>
+            <dt>Entró por</dt><dd>Puerta principal · 17:42</dd>
+            <dt>Motivo</dt><dd>Hurto de prendas (2 camperas) — la cargó Espinosa el 02/11</dd>
+            <dt>Antecedentes</dt><dd>3 avisos en otros locales (Liberdad 14/11, 9 de Julio 08/11)</dd>
+            <dt>Señas</dt><dd>Suele venir con bolso grande, en pareja</dd>
+          </dl>
+        </div>
+      </div>
+      <div class="acciones">
+        <button class="btn rojo">✔ Sí, es ella — avisé al personal</button>
+        <button class="btn verde">✖ No es (falsa alarma)</button>
+        <button class="btn">📹 Ver cámara en vivo</button>
+        <button class="btn">📄 Ver ficha</button>
+      </div>
+      <div class="aviso-legal">Es una <b>posible coincidencia</b> por parecido de cara: confirmalo mirando antes de actuar. Nunca increpar ni negar el ingreso solo por este aviso.</div>
+    </div>
+
+    <div class="fila-tasa">
+      <div class="kp"><div class="l">Visitas hoy</div><div class="v">184</div></div>
+      <div class="kp"><div class="l">Tickets</div><div class="v">41</div></div>
+      <div class="kp"><div class="l">Conversión</div><div class="v">22,3 %</div></div>
+      <div class="kp"><div class="l">Avisos no grata hoy</div><div class="v" style="color:var(--rojo)">1</div></div>
+    </div>
+
+    <div class="dos">
+      <div class="card">
+        <h3>Nueva Córdoba Puerta <span class="sub">· en vivo</span></h3>
+        <div class="vivo">
+          <svg viewBox="0 0 320 180">
+            <rect width="320" height="180" fill="#0d0f17"/>
+            <rect x="0" y="120" width="320" height="60" fill="#151826"/>
+            <rect x="110" y="20" width="100" height="110" fill="#10131f" stroke="#2a2f45"/>
+            <g transform="translate(60 52) scale(.55)"><use href="#sil" width="120" height="160"/></g>
+            <g transform="translate(150 40) scale(.65)"><use href="#sil2" width="120" height="160"/></g>
+            <rect x="148" y="38" width="82" height="108" fill="none" stroke="#f87171" stroke-width="2" rx="3"/>
+            <rect x="148" y="26" width="82" height="13" fill="#f87171"/>
+            <text x="152" y="36" font-size="9" fill="#fff" font-family="Segoe UI" font-weight="700">NO GRATA 91%</text>
+            <rect x="58" y="50" width="70" height="92" fill="none" stroke="#34d399" stroke-width="1.5" rx="3"/>
+            <text x="61" y="47" font-size="8" fill="#34d399" font-family="Segoe UI">cliente #412</text>
+          </svg>
+          <div class="rec"><i></i>EN VIVO</div>
+        </div>
+      </div>
+      <div class="card hist">
+        <h3>Últimos avisos <span class="sub">· todos los locales</span></h3>
+        <ul>
+          <li><div class="mini"><svg><use href="#sil2"/></svg></div><div><b>Nueva Córdoba</b><div class="sub">91 % · sin confirmar</div></div><span class="chip ambar">Pendiente</span><span class="t">17:42</span></li>
+          <li><div class="mini"><svg><use href="#sil"/></svg></div><div><b>Liberdad</b><div class="sub">88 % · confirmó Laura</div></div><span class="chip rojo">Era ella</span><span class="t">14/11</span></li>
+          <li><div class="mini"><svg><use href="#sil"/></svg></div><div><b>Bustos</b><div class="sub">79 % · descartó Juan</div></div><span class="chip verde">Falsa alarma</span><span class="t">12/11</span></li>
+          <li><div class="mini"><svg><use href="#sil2"/></svg></div><div><b>9 de Julio</b><div class="sub">86 % · confirmó Sofía</div></div><span class="chip rojo">Era ella</span><span class="t">08/11</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== LISTA ===================== -->
+  <section class="vista" id="v-lista">
+    <div class="card">
+      <div class="barra">
+        <label class="field" style="flex:1;min-width:180px"><span>Buscar</span><input placeholder="Motivo, señas, local…" /></label>
+        <label class="field"><span>Cargada por</span><select><option>Todos los locales</option><option>Espinosa</option><option>Liberdad</option></select></label>
+        <label class="field"><span>Estado</span><select><option>Activas</option><option>Vencidas</option><option>Dadas de baja</option></select></label>
+      </div>
+      <div class="grilla">
+        <div class="ficha">
+          <div class="img"><svg><use href="#sil2"/></svg><span class="chip rojo">3 avisos</span></div>
+          <div class="cuerpo"><b>Hurto de 2 camperas</b><div class="sub">Cargó Espinosa · 02/11<br>Vence 02/05/2027 · bolso grande, en pareja</div></div>
+          <div class="pie"><button class="btn">Editar</button><button class="btn">Dar de baja</button></div>
+        </div>
+        <div class="ficha">
+          <div class="img"><svg><use href="#sil"/></svg><span class="chip gris">Sin avisos</span></div>
+          <div class="cuerpo"><b>Saca alarmas en probador</b><div class="sub">Cargó Bustos · 10/11<br>Vence 10/05/2027</div></div>
+          <div class="pie"><button class="btn">Editar</button><button class="btn">Dar de baja</button></div>
+        </div>
+        <div class="ficha">
+          <div class="img"><svg><use href="#sil"/></svg><span class="chip ambar">Foto de baja calidad</span></div>
+          <div class="cuerpo"><b>Hurto de zapatillas</b><div class="sub">Cargó 9 de Julio · 05/11<br>Conviene subir otra foto más de frente</div></div>
+          <div class="pie"><button class="btn">Sumar foto</button><button class="btn">Dar de baja</button></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== CARGAR ===================== -->
+  <section class="vista" id="v-cargar">
+    <div class="card">
+      <h3>Cargar persona no grata</h3>
+      <div class="form">
+        <div>
+          <div class="subir"><div class="ic">📷</div>Sacá o subí la foto<br><span class="sub">De la cámara del local (captura) o del celular. Mejor de frente y con la cara visible.</span></div>
+          <div class="calidad"><span class="chip verde">Cara detectada</span><span class="chip verde">Nitidez OK</span><span class="chip ambar">Algo de perfil</span></div>
+          <div class="sub" style="margin-top:8px">Podés sumar hasta 5 fotos de la misma persona: mejora la detección.</div>
+        </div>
+        <div>
+          <div class="cols">
+            <label class="field"><span>Local que la carga</span><select><option>Espinosa (ESPINOD)</option></select></label>
+            <label class="field"><span>Fecha del hecho</span><input type="date" value="2026-11-02"/></label>
+            <label class="field"><span>Motivo</span><select><option>Hurto</option><option>Intento de hurto</option><option>Agresión al personal</option><option>Otro</option></select></label>
+            <label class="field"><span>Vence en</span><select><option>6 meses</option><option>1 año</option><option>3 meses</option></select></label>
+          </div>
+          <label class="field" style="margin-top:12px"><span>Qué pasó / señas (sin nombre ni DNI)</span><textarea>Se llevó 2 camperas escondidas en un bolso grande. Vino con un hombre que distraía a la vendedora.</textarea></label>
+          <label class="check"><input type="checkbox" checked /> Confirmo que la vi en el hecho (cámara o personal) y que es para prevención interna.</label>
+          <div class="acciones"><button class="btn rojo">Guardar y avisar a todos los locales</button><button class="btn">Cancelar</button></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="nota">
+    <b>Cómo funcionaría</b>
+    <ul>
+      <li><b>Cargar:</b> cualquier local sube 1 a 5 fotos con el motivo. La PC del contador saca la "huella" de la cara (un vector de números) y la guarda; la foto queda en un bucket privado.</li>
+      <li><b>Detectar:</b> el contador ya ve cada persona que cruza la puerta. Cuando entra alguien, recorta la cara, saca su huella y la compara con la lista. Si se parece más del umbral (≈ 85 %), manda el aviso.</li>
+      <li><b>Avisar:</b> sale el cartel rojo en Tasa de conversión del local, un aviso flotante en cualquier pantalla del hub (el de abajo a la derecha) y opcional por Telegram al encargado.</li>
+      <li><b>Confirmar:</b> el local marca "era ella" o "falsa alarma". Con eso medimos qué tan bien anda y ajustamos el umbral.</li>
+      <li><b>Quién ve qué:</b> cada local ve los avisos de su local y la lista entera (para reconocerla); el admin ve todo. Vencen solas a los 6 meses.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="toast" id="toast">
+  <span class="x" onclick="this.parentNode.remove()">✕</span>
+  <div class="mini"><svg><use href="#sil2"/></svg></div>
+  <div>
+    <b>⚠ Persona no grata en Nueva Córdoba</b>
+    <div class="sub">Entró 17:42 · parecido 91 % · Hurto (Espinosa 02/11)</div>
+    <button>Ver aviso</button>
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll('.tab').forEach(function(t){
+    t.addEventListener('click',function(){
+      document.querySelectorAll('.tab').forEach(function(x){x.classList.toggle('on',x===t)});
+      document.querySelectorAll('.vista').forEach(function(v){v.classList.toggle('on',v.id==='v-'+t.dataset.v)});
+    });
+  });
+</script>
+</body>
+</html>
