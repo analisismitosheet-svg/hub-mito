@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
-import { Boxes, ChevronDown, Download, EyeOff, FileText, Loader2, Package, RefreshCw, RotateCcw, Search, Truck, Users, Wallet, Warehouse } from 'lucide-react'
+import { ArrowDown, ArrowUp, ArrowUpDown, Boxes, ChevronDown, Download, EyeOff, FileText, Loader2, Package, RefreshCw, RotateCcw, Search, Truck, Users, Wallet, Warehouse } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { supabase } from '@/lib/supabase'
 import Layout from '@/components/Layout'
@@ -80,6 +80,17 @@ interface Oculto {
 const claveLinea = (l: { remito: number; cli: string; a: string; c: string; t: string }) => `${l.remito}|${l.cli}|${l.a}|${l.c}|${l.t}`
 const claveOculto = (o: Oculto) => `${o.remito}|${o.cliente}|${o.articulo}|${o.color}|${o.talle}`
 
+/** Copia ordenada por la clave (números de menor a mayor, textos A→Z con números naturales). */
+function ordenarPor<T>(lista: T[], val: (x: T) => string | number, asc: boolean): T[] {
+  const f = asc ? 1 : -1
+  return [...lista].sort((x, y) => {
+    const a = val(x)
+    const b = val(y)
+    const c = typeof a === 'number' && typeof b === 'number' ? a - b : String(a).localeCompare(String(b), 'es', { numeric: true, sensitivity: 'base' })
+    return c * f
+  })
+}
+
 const fechaCorta = (f: string) => `${f.slice(8, 10)}/${f.slice(5, 7)}/${f.slice(2, 4)}`
 
 export default function MayoristaStock() {
@@ -94,8 +105,11 @@ export default function MayoristaStock() {
   const [provSel, setProvSel] = useState<Set<string>>(new Set())
   /** Tapera: clientes elegidos (vacío = todos). */
   const [cliSel, setCliSel] = useState<Set<string>>(new Set())
-  const { can, perfil } = useAuth()
-  const puedeAjustar = can('mayorista.stock.ajustar')
+  const { perfil, isAdmin } = useAuth()
+  /** «Sacar» de Tapera: solo el admin (pedido del 20/11/2026). */
+  const puedeAjustar = isAdmin
+  /** Orden elegido tocando el encabezado de una columna (null = el de siempre). */
+  const [orden, setOrden] = useState<{ col: string; asc: boolean } | null>(null)
   const [ocultos, setOcultos] = useState<Oculto[]>([])
   const [verSacados, setVerSacados] = useState(false)
   const [verRepoloc, setVerRepoloc] = useState(false)
@@ -307,7 +321,36 @@ export default function MayoristaStock() {
     return m
   }, [datos, ocultosSet])
 
+  const depOrdenado = useMemo(() => {
+    if (!orden) return depFiltrado
+    const val = (g: GrupoDep): string | number =>
+      orden.col === 'a' ? g.a : orden.col === 'des' ? desDe(g.a) : orden.col === 'color' ? colorDe(g.c) : orden.col === 'curva' ? g.curva.length : orden.col === 'tr' ? g.tr : g.u
+    return ordenarPor(depFiltrado, val, orden.asc)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [depFiltrado, orden, arts, colores])
+
+  const tapArtOrdenado = useMemo(() => {
+    if (!orden) return tapPorArt
+    const val = (g: GrupoTap): string | number =>
+      orden.col === 'a' ? g.a : orden.col === 'des' ? desDe(g.a) : orden.col === 'color' ? colorDe(g.c) : orden.col === 'curva' ? g.curva.length : orden.col === 'cli' ? new Set(g.lineas.map((l) => l.cli)).size : g.u
+    return ordenarPor(tapPorArt, val, orden.asc)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tapPorArt, orden, arts, colores])
+
+  const tapCliOrdenado = useMemo(() => {
+    if (!orden) return tapPorCli
+    const val = (g: GrupoCli): string | number =>
+      orden.col === 'nom' ? g.nom || g.cli : orden.col === 'remitos' ? g.remitos.length : orden.col === 'vieja' ? g.vieja : orden.col === 'u' ? g.u : g.pesos
+    return ordenarPor(tapPorCli, val, orden.asc)
+  }, [tapPorCli, orden])
+
+  /** Primer toque: de mayor a menor en números, A→Z en textos; el segundo lo da vuelta. */
+  function ordenarCol(col: string, numerica: boolean) {
+    setOrden((o) => (o?.col === col ? { col, asc: !o.asc } : { col, asc: !numerica }))
+  }
+
   function cambiarSolapa(s: Solapa) {
+    setOrden(null)
     setSolapa(s)
     setAbierta(null)
     setBusqueda('')
@@ -411,6 +454,25 @@ export default function MayoristaStock() {
   const th = 'px-3 py-2 text-left text-[11px] font-medium uppercase tracking-wide text-sub'
   const thR = `${th} text-right`
 
+  /** Encabezado que ordena al tocarlo (flecha arriba = ascendente). */
+  const thOrden = (col: string, texto: string, numerica = false) => {
+    const activo = orden?.col === col
+    const Icono = !activo ? ArrowUpDown : orden.asc ? ArrowUp : ArrowDown
+    return (
+      <th className={numerica ? thR : th} aria-sort={activo ? (orden.asc ? 'ascending' : 'descending') : 'none'}>
+        <button
+          type="button"
+          onClick={() => ordenarCol(col, numerica)}
+          title={activo ? (orden.asc ? 'Ascendente · tocá para descendente' : 'Descendente · tocá para ascendente') : 'Ordenar por esta columna'}
+          className={`inline-flex items-center gap-1 uppercase tracking-wide transition hover:text-ink ${activo ? 'text-ink' : ''}`}
+        >
+          {texto}
+          <Icono size={11} className={activo ? '' : 'opacity-40'} aria-hidden />
+        </button>
+      </th>
+    )
+  }
+
   return (
     <Layout>
       <BackButton />
@@ -498,6 +560,7 @@ export default function MayoristaStock() {
                     type="button"
                     onClick={() => {
                       setVista(v.id)
+                      setOrden(null)
                       setAbierta(null)
                     }}
                     className={`btn-press h-9 rounded-lg px-3 text-xs font-medium transition ${
@@ -543,16 +606,16 @@ export default function MayoristaStock() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-line">
-                    <th className={th}>Artículo</th>
-                    <th className={th}>Descripción</th>
-                    <th className={th}>Color</th>
-                    <th className={th}>Curva</th>
-                    <th className={thR}>Tránsito</th>
-                    <th className={thR}>Stock</th>
+                    {thOrden('a', 'Artículo')}
+                    {thOrden('des', 'Descripción')}
+                    {thOrden('color', 'Color')}
+                    {thOrden('curva', 'Curva', true)}
+                    {thOrden('tr', 'Tránsito', true)}
+                    {thOrden('u', 'Stock', true)}
                   </tr>
                 </thead>
                 <tbody>
-                  {depFiltrado.slice(0, TOPE).map((g) => {
+                  {depOrdenado.slice(0, TOPE).map((g) => {
                     const abierto = abierta === g.clave
                     const enTapera = tapPorArtTotal.get(g.a) ?? 0
                     return (
@@ -630,16 +693,16 @@ export default function MayoristaStock() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-line">
-                    <th className={th}>Artículo</th>
-                    <th className={th}>Descripción</th>
-                    <th className={th}>Color</th>
-                    <th className={th}>Curva remitida</th>
-                    <th className={thR}>Clientes</th>
-                    <th className={thR}>Sin facturar</th>
+                    {thOrden('a', 'Artículo')}
+                    {thOrden('des', 'Descripción')}
+                    {thOrden('color', 'Color')}
+                    {thOrden('curva', 'Curva remitida', true)}
+                    {thOrden('cli', 'Clientes', true)}
+                    {thOrden('u', 'Sin facturar', true)}
                   </tr>
                 </thead>
                 <tbody>
-                  {tapPorArt.slice(0, TOPE).map((g) => {
+                  {tapArtOrdenado.slice(0, TOPE).map((g) => {
                     const abierto = abierta === g.clave
                     const nCli = new Set(g.lineas.map((l) => l.cli)).size
                     return (
@@ -735,15 +798,15 @@ export default function MayoristaStock() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-line">
-                    <th className={th}>Cliente</th>
-                    <th className={th}>Remitos</th>
-                    <th className={th}>Más viejo</th>
-                    <th className={thR}>Unidades</th>
-                    <th className={thR}>A facturar</th>
+                    {thOrden('nom', 'Cliente')}
+                    {thOrden('remitos', 'Remitos', true)}
+                    {thOrden('vieja', 'Más viejo')}
+                    {thOrden('u', 'Unidades', true)}
+                    {thOrden('pesos', 'A facturar', true)}
                   </tr>
                 </thead>
                 <tbody>
-                  {tapPorCli.map((c) => {
+                  {tapCliOrdenado.map((c) => {
                     const abierto = abierta === c.cli
                     return (
                       <Fragment key={c.cli}>

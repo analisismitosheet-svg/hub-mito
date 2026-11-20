@@ -133,7 +133,7 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
   {
     id: 'mayorista-stock', areaId: 'mayorista', titulo: 'Stock', descripcion: 'Depósito y Tapera (remitido sin facturar)',
     icon: Warehouse, color: '#0284c7', acciones: { ver: 'mayorista.stock.view' },
-    especiales: [{ clave: 'mayorista.stock.ajustar', label: 'Sacar líneas de Tapera' }],
+    // «Sacar líneas de Tapera» quedó solo para el admin (20/11/2026): ya no se da por usuario.
   },
   {
     id: 'mayorista-articulos', areaId: 'mayorista', titulo: 'F12 Consulta artículos', descripcion: 'Stock y datos de artículos',
