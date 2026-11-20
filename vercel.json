@@ -139,6 +139,19 @@
           "value": "same-origin-allow-popups"
         }
       ]
+    },
+    {
+      "source": "/api/sql/stock-publico",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "https://www.indonesiashop.com.ar"
+        },
+        {
+          "key": "Vary",
+          "value": "Origin"
+        }
+      ]
     }
   ]
 }
