@@ -65,6 +65,13 @@
   .vivo svg{width:100%;height:100%;display:block}
   .vivo .rec{position:absolute;top:8px;left:8px;font-size:11px;background:rgba(0,0,0,.6);padding:3px 8px;border-radius:6px}
   .vivo .rec i{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--rojo);margin-right:5px}
+  .vivo .sigue{position:absolute;top:8px;right:8px;font-size:11px;font-weight:700;background:rgba(220,38,38,.85);padding:3px 9px;border-radius:6px}
+  .vivo .punto{display:inline-block;width:7px;height:7px;border-radius:50%;background:#fff;margin-right:5px;animation:titila 1s infinite}
+  @keyframes titila{50%{opacity:.2}}
+  .vivo .mira{position:absolute;left:50%;top:50%;width:26px;height:26px;margin:-13px 0 0 -13px;border:1px dashed rgba(248,113,113,.7);border-radius:50%}
+  .ptz{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px}
+  .ptz-btns{display:flex;gap:6px;flex-wrap:wrap;width:100%}
+  .ptz-btns .btn{height:30px;font-size:12px;padding:0 10px}
   .hist li{display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line);font-size:13px}
   .hist li:first-child{border-top:0}
   .hist ul{list-style:none;margin:0;padding:0}
@@ -205,6 +212,17 @@
             <text x="61" y="47" font-size="8" fill="#34d399" font-family="Segoe UI">cliente #412</text>
           </svg>
           <div class="rec"><i></i>EN VIVO</div>
+          <div class="sigue"><span class="punto"></span>🎯 Siguiendo a la persona · 00:47</div>
+          <div class="mira"></div>
+        </div>
+        <div class="ptz">
+          <span class="chip rojo">Cámara motorizada siguiéndola</span>
+          <span class="sub">Si la pierde de vista 20 s, vuelve sola a la puerta</span>
+          <div class="ptz-btns">
+            <button class="btn">⏸ Dejar de seguir</button>
+            <button class="btn">🏠 Volver a la puerta</button>
+            <button class="btn">📸 Guardar clip</button>
+          </div>
         </div>
       </div>
       <div class="card hist">
@@ -278,6 +296,7 @@
       <li><b>Cargar:</b> cualquier local sube 1 a 5 fotos con el motivo. La PC del contador saca la "huella" de la cara (un vector de números) y la guarda; la foto queda en un bucket privado.</li>
       <li><b>Detectar:</b> el contador ya ve cada persona que cruza la puerta. Cuando entra alguien, recorta la cara, saca su huella y la compara con la lista. Si se parece más del umbral (≈ 85 %), manda el aviso.</li>
       <li><b>Avisar:</b> sale el cartel rojo en Tasa de conversión del local, un aviso flotante en cualquier pantalla del hub (el de abajo a la derecha) y opcional por Telegram al encargado.</li>
+      <li><b>Seguir:</b> si la cámara es motorizada, apenas la reconoce la sigue sola (gira para mantenerla en el centro) y graba el clip. Si la pierde 20 s o alguien toca "Volver a la puerta", vuelve a su posición para seguir contando.</li>
       <li><b>Confirmar:</b> el local marca "era ella" o "falsa alarma". Con eso medimos qué tan bien anda y ajustamos el umbral.</li>
       <li><b>Quién ve qué:</b> cada local ve los avisos de su local y la lista entera (para reconocerla); el admin ve todo. Vencen solas a los 6 meses.</li>
     </ul>
