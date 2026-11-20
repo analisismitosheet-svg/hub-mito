@@ -93,7 +93,7 @@ begin
   select coalesce(array_agg(distinct d order by d), '{}') into v_dias
     from unnest(coalesce(p_dias, '{}')) d where d between 1 and 7;
   if p_activo and cardinality(v_tels) = 0 then
-    raise exception 'Cargá al menos un WhatsApp para activar el envío automático';
+    raise exception 'Cargá al menos un teléfono para activar el envío automático';
   end if;
   if p_activo and cardinality(v_dias) = 0 then
     raise exception 'Elegí al menos un día de salida';

@@ -238,10 +238,19 @@ export default function FranquiciasReposicionAuto() {
   async function guardar() {
     if (!supabase) return
     if (!form.cliente) { setAviso({ ok: false, txt: 'Elegí el cliente.' }); return }
+    // Número escrito sin tocar «+»: se suma solo al guardar
+    let telefonos = form.telefonos
+    if (nuevoWa.trim()) {
+      if (!telefonoValido(nuevoWa)) { setAviso({ ok: false, txt: `El número escrito no es válido: corregilo o borralo (ej. 5492901554321).` }); return }
+      const t = normalizarTelefono(nuevoWa)
+      if (!telefonos.includes(t)) telefonos = [...telefonos, t]
+      setForm((f) => ({ ...f, telefonos }))
+      setNuevoWa('')
+    }
     setGuardando(true)
     setAviso(null)
     const { error } = await supabase.rpc('franquicias_guardar_auto', {
-      p_cliente: form.cliente, p_base: form.base, p_sucursal: form.sucursal, p_telefonos: form.telefonos,
+      p_cliente: form.cliente, p_base: form.base, p_sucursal: form.sucursal, p_telefonos: telefonos,
       p_activo: form.activo, p_dias: form.dias, p_hora: form.hora,
     })
     setGuardando(false)
