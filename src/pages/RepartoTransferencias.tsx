@@ -5,6 +5,7 @@ import BackButton from '@/components/BackButton'
 import GrillaReparto, { type Cambio, type MarcaRuta } from '@/components/reparto/GrillaReparto'
 import GraficoStockVenta from '@/components/reparto/GraficoStockVenta'
 import FiltroDesplegable from '@/components/reparto/FiltroDesplegable'
+import FiltroArticulos from '@/components/reparto/FiltroArticulos'
 import {
   BASE_TRACKING,
   FILTROS,
@@ -54,6 +55,8 @@ const menosDias = (n: number) => {
   d.setDate(d.getDate() - n)
   return d.toISOString().slice(0, 10)
 }
+/** Filtro de la grilla: vacío = todos; '\u0000' = ninguno (lo arma FiltroDesplegable) */
+const pasa = (s: Set<string>, v: string) => !s.size || s.has(v)
 const fechaCorta = (iso: string) => iso.split('-').reverse().slice(0, 2).join('/')
 const TODOS_LOCALES = ['VCPD', 'WALMARTD', 'DINOD', 'RIVERAD', 'CFRA', 'RUTA9D', 'CFR9', 'BUSTOD', 'CFD', 'CFPO', 'GRALPAZ', 'MUNOZ', '9DEJULIO', 'LIBERD', 'ESPINOD', 'NVOCED', 'CFR4', 'DEPO', 'MAYORD', 'POLO52']
 const NOMBRE_LOCAL: Record<string, string> = { DEPO: 'DEPO (Indo)', MAYORD: 'MITO', POLO52: 'POLO52 (Polo)' }
@@ -68,7 +71,7 @@ export default function RepartoTransferencias() {
     Object.fromEntries(FILTROS.map((f) => [f.k, new Set<string>()])) as Record<ClaveFiltro, Set<string>>,
   )
   const [locSel, setLocSel] = useState<Set<string>>(new Set())
-  const [art, setArt] = useState('')
+  const [arts, setArts] = useState<string[]>([])
   const [origen, setOrigen] = useState<Origen>('')
   const [dias, setDias] = useState(14)
   const [desde, setDesde] = useState(() => menosDias(14))
@@ -91,6 +94,11 @@ export default function RepartoTransferencias() {
   const [fColor, setFColor] = useState('')
   const [fTalle, setFTalle] = useState('')
   const [fGrupo, setFGrupo] = useState('')
+  // filtros de la grilla (también en pantalla completa): uno o varios de cada uno
+  const [gLinea, setGLinea] = useState<Set<string>>(new Set())
+  const [gFlia, setGFlia] = useState<Set<string>>(new Set())
+  const [gProv, setGProv] = useState<Set<string>>(new Set())
+  const [gArts, setGArts] = useState<string[]>([])
 
   const [verTransporte, setVerTransporte] = useState(false)
   const [rutas, setRutas] = useState<RutaVehiculo[]>([])
@@ -151,13 +159,17 @@ export default function RepartoTransferencias() {
     (opciones?.[k] ?? [])
       .filter((o) => k !== 'prov' || provDelOrigen(o.cod))
       .map((o) => ({ id: o.cod, label: o.nom ? `${o.cod} ${o.nom}` : o.cod }))
+  const sugArts = useMemo(
+    () => (opciones?.art ?? []).filter((o) => !origen || (origen === 'MITO') === esProvMito(o.prov ?? '')).map((o) => ({ id: o.cod, label: o.nom ? `${o.cod} ${o.nom}` : o.cod })),
+    [opciones, origen],
+  )
   const elegirOrigen = (o: Origen) => {
     setOrigen(o)
     // si ya había proveedores elegidos del otro lado, se sacan
     setSel((p) => ({ ...p, prov: new Set([...p.prov].filter((c) => c === '\u0000' || !o || (o === 'MITO') === esProvMito(c))) }))
   }
   const hayNinguno = Object.values(sel).some((s) => s.has('\u0000')) || locSel.has('\u0000')
-  const hayFiltroArt = FILTROS.some((f) => sel[f.k].size > 0) || art.trim() !== '' || origen !== ''
+  const hayFiltroArt = FILTROS.some((f) => sel[f.k].size > 0) || arts.length > 0 || origen !== ''
   const localesElegidos = locSel.size ? TODOS_LOCALES.filter((l) => locSel.has(l)) : TODOS_LOCALES
   const motivoNoArmar = hayNinguno
     ? 'Hay un filtro en «Ninguno»: elegí algo o volvé a «Seleccionar todo».'
@@ -177,7 +189,7 @@ export default function RepartoTransferencias() {
     cancelado.current = false
     try {
       const filtros = Object.fromEntries(FILTROS.map((f) => [f.k, [...sel[f.k]]])) as Record<ClaveFiltro, string[]>
-      const r = await cargarStock({ ...filtros, art: art.trim().toUpperCase(), origen }, desde, hasta, setEsperando, () => cancelado.current)
+      const r = await cargarStock({ ...filtros, art: arts.join('|'), origen }, desde, hasta, setEsperando, () => cancelado.current)
       if (r.estado === 'demasiados') {
         setError(
           r.motivo === 'peso'
@@ -198,6 +210,7 @@ export default function RepartoTransferencias() {
       futuro.current = []
       setLocales(proy.locales)
       setDatos(proy)
+      setGLinea(new Set()); setGFlia(new Set()); setGProv(new Set()); setGArts([])
       setArtSel(null)
       setSugerencia(null)
       setResultado(null)
@@ -235,16 +248,35 @@ export default function RepartoTransferencias() {
   }, [aplicar])
 
   /* ---------- vista ---------- */
+  // Desplegables de la grilla: solo lo que hay en lo armado, con el nombre de las opciones del paso 1
+  const opcionesGrilla = useMemo(() => {
+    const nombre = (k: ClaveFiltro) => new Map((opciones?.[k] ?? []).map((o) => [o.cod, o.nom]))
+    const de = (k: 'linea' | 'flia' | 'prov') => {
+      const nom = nombre(k)
+      return [...new Set(modelo.current.map((f) => f[k]).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, 'es', { numeric: true }))
+        .map((c) => ({ id: c, label: nom.get(c) ? `${c} ${nom.get(c)}` : c }))
+    }
+    const vistos = new Map<string, string>()
+    for (const f of modelo.current) if (!vistos.has(f.articulo)) vistos.set(f.articulo, f.nombre)
+    return {
+      linea: de('linea'), flia: de('flia'), prov: de('prov'),
+      arts: [...vistos].sort((a, b) => a[0].localeCompare(b[0])).map(([c, n]) => ({ id: c, label: n && n !== c ? `${c} ${n}` : c })),
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [datos, opciones])
   const visibles = useMemo(() => {
     const q = buscar.trim().toLowerCase()
     const f = modelo.current.filter(
       (x) =>
         (!fColor || x.color === fColor) && (!fTalle || x.talle === fTalle) && (!fGrupo || x.grupo === fGrupo) &&
+        pasa(gLinea, x.linea) && pasa(gFlia, x.flia) && pasa(gProv, x.prov) &&
+        (!gArts.length || gArts.some((a) => x.articulo.startsWith(a))) &&
         (!q || x.articulo.toLowerCase().includes(q) || x.desc.toLowerCase().includes(q)),
     )
     return ordenar(f, orden)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [datos, buscar, fColor, fTalle, fGrupo, orden])
+  }, [datos, buscar, fColor, fTalle, fGrupo, gLinea, gFlia, gProv, gArts, orden])
   const res = useMemo(() => calcularResumen(visibles, locales), [visibles, locales, version])
   const movimientos = useMemo(() => calcularMovimientos(modelo.current, locales, historial.current), [locales, version])
   // lo que sale de MITO va a Dragon como pedido de venta; el resto es el lote de Transferencias
@@ -363,7 +395,7 @@ export default function RepartoTransferencias() {
   const resumenFiltro = (origen ? [origen === 'MITO' ? 'Artículos MITO' : 'Marcas'] : [])
     .concat(FILTROS.filter((f) => sel[f.k].size)
       .map((f) => `${f.titulo.replace('ID proveedor descripción', 'Proveedor')}: ${[...sel[f.k]].join(', ')}`))
-    .concat(art.trim() ? [`Artículo: ${art.trim().toUpperCase()}`] : [])
+    .concat(arts.length ? [`Artículo: ${arts.join(', ')}`] : [])
     .join(' · ')
 
   return (
@@ -428,11 +460,8 @@ export default function RepartoTransferencias() {
             ))}
           </div>
           <div className="mt-3 flex flex-wrap items-end gap-3">
-            <label className="text-[11px] font-medium uppercase tracking-wider text-sub/80">
-              Artículo (opcional)
-              <input value={art} onChange={(e) => setArt(e.target.value)} placeholder="Código o parte, ej. CF1662" className="mt-1 block h-9 w-72 rounded-lg border border-line bg-surface2 px-2.5 text-sm normal-case tracking-normal text-ink" />
-            </label>
-            <button type="button" className="h-9 text-xs text-sky-400" onClick={() => { setSel(Object.fromEntries(FILTROS.map((f) => [f.k, new Set<string>()])) as Record<ClaveFiltro, Set<string>>); setLocSel(new Set()); setArt(''); setOrigen('') }}>
+            <FiltroArticulos titulo="Artículos (opcional, uno o varios)" valor={arts} onChange={setArts} sugerencias={sugArts} ancho="w-full sm:w-[28rem]" />
+            <button type="button" className="h-9 text-xs text-sky-400" onClick={() => { setSel(Object.fromEntries(FILTROS.map((f) => [f.k, new Set<string>()])) as Record<ClaveFiltro, Set<string>>); setLocSel(new Set()); setArts([]); setOrigen('') }}>
               Limpiar todos los filtros
             </button>
           </div>
@@ -512,6 +541,19 @@ export default function RepartoTransferencias() {
               <button type="button" className={btn} onClick={() => pantallaCompleta(!completa)}>
                 {completa ? <><Minimize2 size={13} aria-hidden /> Salir de pantalla completa</> : <><Maximize2 size={13} aria-hidden /> Pantalla completa</>}
               </button>
+            </div>
+
+            {/* Filtros de la grilla (uno o varios de cada uno; la goma borra ese solo) */}
+            <div className="mb-2 grid gap-x-3 gap-y-2 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1.4fr_auto] xl:items-end">
+              <FiltroDesplegable titulo="Línea" opciones={opcionesGrilla.linea} valor={gLinea} onChange={setGLinea} />
+              <FiltroDesplegable titulo="Familia" opciones={opcionesGrilla.flia} valor={gFlia} onChange={setGFlia} />
+              <FiltroDesplegable titulo="Proveedor" opciones={opcionesGrilla.prov} valor={gProv} onChange={setGProv} todos="Todos" />
+              <FiltroArticulos titulo="Artículos" valor={gArts} onChange={setGArts} sugerencias={opcionesGrilla.arts} placeholder="Buscar y elegir uno o varios" ancho="w-full" />
+              {(gLinea.size > 0 || gFlia.size > 0 || gProv.size > 0 || gArts.length > 0) && (
+                <button type="button" className="h-9 text-xs text-sky-400" onClick={() => { setGLinea(new Set()); setGFlia(new Set()); setGProv(new Set()); setGArts([]) }}>
+                  Limpiar
+                </button>
+              )}
             </div>
 
             {/* Sugerencia */}

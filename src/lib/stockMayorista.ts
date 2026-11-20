@@ -29,6 +29,12 @@ export interface LineaTapera {
   precio: number
 }
 
+/** Línea descontada de Tapera porque pasó a REPOLOC (remitos a REPOLOC con el cliente en la observación). */
+export interface LineaRepoloc extends LineaTapera {
+  /** N° de los remitos a REPOLOC que la descuentan, separados por coma */
+  rp_remitos: string
+}
+
 export interface ArticuloInfo {
   a: string
   des: string
@@ -43,6 +49,8 @@ export interface StockMayorista {
   tapera: LineaTapera[]
   articulos: ArticuloInfo[]
   colores: { c: string; des: string }[]
+  /** Falta con un puente sin reiniciar */
+  repoloc: LineaRepoloc[]
   calculado: string | null
   cacheado?: boolean
   segundos?: number
@@ -64,6 +72,7 @@ export async function cargarStockMayorista(forzar = false): Promise<StockMayoris
     tapera: body.tapera ?? [],
     articulos: body.articulos ?? [],
     colores: body.colores ?? [],
+    repoloc: body.repoloc ?? [],
     calculado: body.calculado ?? null,
     cacheado: body.cacheado === true,
     segundos: body.segundos,

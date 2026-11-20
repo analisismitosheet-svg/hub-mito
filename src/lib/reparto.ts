@@ -12,14 +12,16 @@ import { supabase } from './supabase'
 
 export interface OpcionFiltro { cod: string; nom: string }
 export type ClaveFiltro = 'prov' | 'mat' | 'temp' | 'anio' | 'linea' | 'flia' | 'gen' | 'grupo'
-export type Opciones = Record<ClaveFiltro, OpcionFiltro[]>
+/** art: artículos con stock o venta de la foto general del Puente (si ya está; si no, no viene) */
+export type Opciones = Record<ClaveFiltro, OpcionFiltro[]> & { art?: (OpcionFiltro & { prov?: string })[] }
 /** MITO = proveedores que empiezan con MO; MARCAS = el resto; '' = todos */
 export type Origen = '' | 'MITO' | 'MARCAS'
 export const esProvMito = (cod: string) => cod.trim().toUpperCase().startsWith('MO')
+/** art = códigos o principios de código separados por «|» (el Puente busca cada uno con LIKE 'X%') */
 export type Filtros = Record<ClaveFiltro, string[]> & { art: string; origen?: Origen }
 
 export interface FilaPuente { a: string; c: string; t: string; s: number[]; v: number[]; tr: number[]; u: (number | null)[] }
-export interface ArtPuente { nombre: string; desc: string; prov: string; grupo: string; material: string; linea: string; temporada: string }
+export interface ArtPuente { nombre: string; desc: string; prov: string; grupo: string; material: string; linea: string; temporada: string; flia?: string }
 export interface DatosReparto {
   estado: 'listo'
   locales: string[]
@@ -43,6 +45,8 @@ export interface Fila {
   grupo: string
   prov: string
   material: string
+  linea: string
+  flia: string
   base: number[] // stock al armar
   cur: number[] // stock después de repartir (lo que se edita)
   vend: number[] // venta del período
@@ -110,6 +114,9 @@ export function construirModelo(d: DatosReparto): Fila[] {
     return {
       articulo: f.a, color: f.c, talle: f.t,
       desc: a?.desc ?? f.a, nombre: a?.nombre ?? f.a, grupo: a?.grupo ?? '', prov: a?.prov ?? '', material: a?.material ?? '',
+      linea: a?.linea ?? '',
+      // familia: la manda el Puente; los puentes viejos solo la traen dentro de desc «(FLIA)…»
+      flia: a?.flia ?? /^\(([^)]*)\)/.exec(a?.desc ?? '')?.[1] ?? '',
       base: f.s.slice(), cur: f.s.slice(), vend: f.v.slice(), trans: f.tr.slice(), ult: f.u.slice(),
     }
   })

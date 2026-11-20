@@ -7,7 +7,11 @@
  *       -> { estado:'calculando', desde } mientras lee el DWH (~1-2 min, por detrás)
  *       -> { estado:'listo', locales:[20 códigos], filas:[{a,c,t,s,v,tr,u}], arts:{ID_ART:{...}}, ... }
  *       -> { estado:'demasiados', articulos, motivo? } si el filtro trae más de MAX_ARTICULOS o la respuesta pasa ~4 MB
- *       sql/reparto-stock.sql. Cada foto (por filtro + fechas) dura 5 minutos.
+ *       Sale de la FOTO GENERAL (sql/reparto-foto.sql: todos los artículos, se lee una vez y se
+ *       renueva cada 15 min mientras alguien usa el reparto): el armado tarda segundos. Si la foto
+ *       no cubre las fechas pedidas (venta de hace más de ~60 días) o no se pudo leer, se lee solo
+ *       lo filtrado con sql/reparto-stock.sql (~1-2 min, cada foto por filtro dura 5 minutos).
+ *       filtros.art = uno o varios códigos (o principios de código) separados por «|».
  *
  * Columnas = los 20 locales del reparto (mismos que la PWA vieja y que el Excel de remitos).
  * DEPO = INDOD (Indo), MAYORD = MITO (stock REAL = físico − comprometido de la COMB, como la
@@ -39,6 +43,14 @@ const CACHE_MS = 5 * 60_000
 const OPCIONES_MS = 60 * 60_000
 const SQL_STOCK = path.join(__dirname, 'sql', 'reparto-stock.sql')
 const SQL_OPCIONES = path.join(__dirname, 'sql', 'reparto-opciones.sql')
+const SQL_FOTO = path.join(__dirname, 'sql', 'reparto-foto.sql')
+// Foto general: nueva = menos de 15 min; hasta 30 min se usa igual (y se renueva por detrás);
+// más vieja, el armado espera la nueva. Se mantiene al día sola mientras alguien usó el reparto
+// en las últimas 3 horas (abrir la pantalla ya la pide).
+const FOTO_NUEVA_MS = 15 * 60_000
+const FOTO_USABLE_MS = 30 * 60_000
+const FOTO_USO_MS = 3 * 60 * 60_000
+const FOTO_VENTA_DIAS = 62
 
 function diaLocal(menos = 0) {
   const d = new Date()
@@ -55,15 +67,51 @@ function limpiarFiltros(f) {
       .filter((x) => /^[A-Z0-9 ._\-/]{1,30}$/.test(x))
       .slice(0, 200)
       .sort()
-  const art = txt(f?.art).toUpperCase()
+  const art = (Array.isArray(f?.art) ? f.art : txt(f?.art).split('|'))
+    .map((x) => txt(x).toUpperCase())
+    .filter((x) => /^[A-Z0-9]{1,20}$/.test(x))
+    .slice(0, 200)
+    .sort()
   return {
     prov: lista(f?.prov), mat: lista(f?.mat), temp: lista(f?.temp), anio: lista(f?.anio),
     linea: lista(f?.linea), flia: lista(f?.flia), grupo: lista(f?.grupo), gen: lista(f?.gen),
-    art: /^[A-Z0-9]{1,20}$/.test(art) ? art : '',
+    art,
     origen: ['MITO', 'MARCAS'].includes(txt(f?.origen).toUpperCase()) ? txt(f?.origen).toUpperCase() : '',
   }
 }
-const hayFiltroDeArticulo = (f) => !!f.art || !!f.origen || ['prov', 'mat', 'temp', 'anio', 'linea', 'flia', 'grupo', 'gen'].some((k) => f[k].length)
+const hayFiltroDeArticulo = (f) => f.art.length > 0 || !!f.origen || ['prov', 'mat', 'temp', 'anio', 'linea', 'flia', 'grupo', 'gen'].some((k) => f[k].length)
+
+/** Datos del artículo para el hub (desc = «Descripción adicional macro» del PBIX). */
+function artInfo(r) {
+  const adic = txt(r.ARTICULO_ADICIONAL) || txt(r.ARTICULO)
+  return {
+    nombre: adic,
+    // "Descripción adicional macro" del PBIX: (familia)adicional - línea(grupo)
+    desc: `(${txt(r.ID_FLIA)})${adic} - ${txt(r.ID_LINEA)}(${txt(r.ID_GRUPO)})`,
+    prov: txt(r.ID_PROV).toUpperCase(),
+    grupo: txt(r.ID_GRUPO),
+    material: txt(r.ID_MATERIAL),
+    linea: txt(r.ID_LINEA),
+    flia: txt(r.ID_FLIA),
+    temporada: TEMPORADA[Number(txt(r.ID_TEMPORADA))] ?? txt(r.ID_TEMPORADA),
+  }
+}
+
+/** Solo SKUs con algo (stock, venta o tránsito) y en el formato compacto que espera el hub. */
+function compactar(filas) {
+  // Formato compacto (18/11): [art, color, talle, stock[], venta[] | 0, tránsito "0101…" | 0, últimaVenta[] (-1 = sin venta) | 0]
+  // 0 = toda la fila vacía. El hub lo vuelve a armar en src/lib/reparto.ts (desarmarFilas).
+  return filas
+    .filter((f) => f.s.some((x) => x > 0) || f.v.some((x) => x > 0) || f.tr.some((x) => x > 0))
+    .map((f) => [
+      f.a, f.c, f.t, f.s,
+      f.v.some((x) => x > 0) ? f.v : 0,
+      f.tr.some((x) => x > 0) ? f.tr.join('') : 0,
+      f.u.some((x) => x != null) ? f.u.map((x) => (x == null ? -1 : x)) : 0,
+    ])
+}
+
+const diasDesde = (hoyMs, dia) => Math.max(0, Math.round((hoyMs - new Date(`${dia}T12:00:00`).getTime()) / 86_400_000))
 
 function crear(deps) {
   // deps.sql se lee en cada uso: el puente puede cambiar de driver (tedious / msnodesqlv8) al arrancar
@@ -92,14 +140,172 @@ function crear(deps) {
   }
 
   async function accionOpciones() {
-    if (opciones.datos && Date.now() - opciones.en < OPCIONES_MS) return { opciones: opciones.datos }
-    if (!opciones.enCurso) {
-      opciones.enCurso = leerOpciones()
-        .then((datos) => { opciones = { en: Date.now(), datos, enCurso: null } })
-        .catch((e) => { opciones = { ...opciones, enCurso: null }; throw e })
+    // abrir la pantalla ya pide la foto general: cuando terminan de elegir filtros suele estar lista
+    ultimoUso = Date.now()
+    if (!general.enCurso && edadGeneral() > FOTO_NUEVA_MS) lanzarGeneral()
+    if (!(opciones.datos && Date.now() - opciones.en < OPCIONES_MS)) {
+      if (!opciones.enCurso) {
+        opciones.enCurso = leerOpciones()
+          .then((datos) => { opciones = { en: Date.now(), datos, enCurso: null } })
+          .catch((e) => { opciones = { ...opciones, enCurso: null }; throw e })
+      }
+      await opciones.enCurso
     }
-    await opciones.enCurso
-    return { opciones: opciones.datos }
+    return { opciones: { ...opciones.datos, art: general.datos?.listaArts ?? undefined }, foto: estadoGeneral() }
+  }
+
+  /* ------------------------------ foto general ------------------------------ */
+
+  let general = { en: 0, datos: null, error: null, enCurso: null, inicio: 0, segundos: null }
+  let ultimoUso = 0
+  const edadGeneral = () => (general.datos ? Date.now() - general.en : Infinity)
+  const estadoGeneral = () => ({
+    en: general.datos ? new Date(general.en).toISOString() : null,
+    leyendo: !!general.enCurso,
+    segundos: general.segundos,
+    error: general.error,
+  })
+
+  /** Lee el DWH entero una vez y lo deja en memoria, indexado por artículo. */
+  async function leerGeneral() {
+    const t0 = Date.now()
+    const desdeVenta = diaLocal(FOTO_VENTA_DIAS - 1)
+    const pool = await conexionLarga()
+    let r
+    try {
+      const req = pool.request()
+      const V = deps.sql.VarChar(deps.sql.MAX)
+      req.input('desde_ult', V, diaLocal(DIAS_ULTIMA_VENTA))
+      req.input('desde_venta', V, desdeVenta)
+      r = await req.query(fs.readFileSync(SQL_FOTO, 'utf8'))
+    } finally {
+      await pool.close().catch(() => {})
+    }
+    const [stock = [], venta = [], ultima = [], mito = [], maestro = []] = r.recordsets ?? []
+    const n = LOCALES.length
+    const skus = new Map() // 'a|c|t' -> { a, c, t, s[], tr[], v: [[dia, tienda, cant]], u: [día | null] | null }
+    const porArt = new Map() // a -> [sku]
+    const sku = (a, c, t) => {
+      const k = `${a}|${c}|${t}`
+      let x = skus.get(k)
+      if (!x) {
+        x = { a, c, t, s: Array(n).fill(0), tr: Array(n).fill(0), v: [], u: null }
+        skus.set(k, x)
+        if (!porArt.has(a)) porArt.set(a, [])
+        porArt.get(a).push(x)
+      }
+      return x
+    }
+    // la venta se suma por tienda y recién después se recorta a > 0 (como reparto-stock.sql)
+    const tiendas = [] // id -> columna
+    const idTienda = new Map()
+    const tid = (t) => {
+      if (!idTienda.has(t)) { idTienda.set(t, tiendas.length); tiendas.push(IDX.get(columna(t))) }
+      return idTienda.get(t)
+    }
+    for (const x of stock) {
+      const col = columna(x.Tienda)
+      if (!IDX.has(col) || col === 'MAYORD') continue // MITO sale de la COMB (stock real)
+      const f = sku(txt(x.ID_ART), txt(x.ID_COLOR), txt(x.ID_TALLE))
+      f.s[IDX.get(col)] += Math.max(0, Number(x.stock) || 0)
+      if (Number(x.transito) >= 1) f.tr[IDX.get(col)] = 1
+    }
+    for (const x of venta) {
+      if (!IDX.has(columna(x.Tienda))) continue
+      sku(txt(x.ID_ART), txt(x.ID_COLOR), txt(x.ID_TALLE)).v.push([txt(x.dia), tid(txt(x.Tienda)), Number(x.venta) || 0])
+    }
+    for (const x of mito) {
+      const q = Number(x.stock) || 0
+      if (q > 0) sku(txt(x.ID_ART), txt(x.ID_COLOR), txt(x.ID_TALLE)).s[IDX.get('MAYORD')] += q
+    }
+    for (const x of ultima) {
+      const col = columna(x.Tienda)
+      if (!IDX.has(col)) continue
+      const f = skus.get(`${txt(x.ID_ART)}|${txt(x.ID_COLOR)}|${txt(x.ID_TALLE)}`)
+      if (!f) continue // sin stock ni venta reciente: no aparece en la grilla
+      const i = IDX.get(col), d = txt(x.ultima)
+      if (!f.u) f.u = Array(n).fill(null)
+      if (!f.u[i] || d > f.u[i]) f.u[i] = d
+    }
+    const arts = new Map()
+    for (const x of maestro) {
+      const a = txt(x.ID_ART)
+      if (!a || arts.has(a)) continue
+      arts.set(a, {
+        info: artInfo(x),
+        // para filtrar igual que reparto-stock.sql (los filtros llegan en mayúsculas)
+        prov: txt(x.ID_PROV).toUpperCase(), mat: txt(x.ID_MATERIAL).toUpperCase(), temp: txt(x.ID_TEMPORADA).toUpperCase(),
+        anio: txt(x.ANIO), linea: txt(x.ID_LINEA).toUpperCase(), flia: txt(x.ID_FLIA).toUpperCase(),
+        grupo: txt(x.ID_GRUPO).toUpperCase(), gen: txt(x.GEN).toUpperCase(),
+      })
+    }
+    // lista para el buscador de artículos del hub: solo los que tienen stock o venta
+    const listaArts = [...porArt.keys()]
+      .filter((a) => arts.has(a) && porArt.get(a).some((f) => f.s.some((q) => q > 0) || f.v.length))
+      .sort()
+      .map((a) => ({ cod: a, nom: arts.get(a).info.nombre, prov: arts.get(a).prov }))
+    return { skus: skus.size, porArt, arts, tiendas, desdeVenta, listaArts, segundos: Math.round((Date.now() - t0) / 100) / 10 }
+  }
+
+  function lanzarGeneral() {
+    if (general.enCurso) return general.enCurso
+    general.inicio = Date.now()
+    general.enCurso = leerGeneral()
+      .then((datos) => {
+        general = { en: Date.now(), datos, error: null, enCurso: null, inicio: general.inicio, segundos: datos.segundos }
+        console.log(`[puente] reparto: foto general lista (${datos.skus} SKU, ${datos.arts.size} artículos, ${datos.segundos} s)`)
+      })
+      .catch((e) => {
+        console.error('[puente] reparto: foto general:', e.message)
+        general = { ...general, error: e.message, enCurso: null }
+      })
+    return general.enCurso
+  }
+
+  // Se mantiene al día sola mientras alguien usó el reparto en las últimas 3 horas
+  const reloj = setInterval(() => {
+    if (Date.now() - ultimoUso < FOTO_USO_MS && !general.enCurso && edadGeneral() > FOTO_NUEVA_MS) lanzarGeneral()
+  }, 60_000)
+  if (reloj.unref) reloj.unref()
+
+  const cumple = (lista, v) => !lista.length || lista.includes(v)
+  /** El reparto de un filtro sacado de la foto general (mismo resultado que reparto-stock.sql). */
+  function armarDesdeGeneral(f, desde, hasta) {
+    const g = general.datos
+    const elegidos = []
+    for (const [a, x] of g.arts) {
+      if (
+        cumple(f.prov, x.prov) && cumple(f.mat, x.mat) && cumple(f.temp, x.temp) && cumple(f.anio, x.anio) &&
+        cumple(f.linea, x.linea) && cumple(f.flia, x.flia) && cumple(f.grupo, x.grupo) && cumple(f.gen, x.gen) &&
+        (!f.art.length || f.art.some((p) => a.startsWith(p))) &&
+        (f.origen === 'MITO' ? x.prov.startsWith('MO') : f.origen === 'MARCAS' ? !x.prov.startsWith('MO') : true)
+      ) elegidos.push(a)
+    }
+    if (elegidos.length > MAX_ARTICULOS) return { estado: 'demasiados', articulos: elegidos.length, max: MAX_ARTICULOS }
+    const n = LOCALES.length
+    const hoy = diaLocal(0)
+    const hoyMs = new Date(`${hoy}T12:00:00`).getTime()
+    const filas = []
+    const arts = {}
+    for (const a of elegidos) {
+      const lista = g.porArt.get(a)
+      if (!lista) continue
+      for (const x of lista) {
+        const porTienda = new Map()
+        for (const [dia, t, q] of x.v) if (dia >= desde && dia <= hasta) porTienda.set(t, (porTienda.get(t) ?? 0) + q)
+        const v = Array(n).fill(0)
+        for (const [t, q] of porTienda) if (q > 0) v[g.tiendas[t]] += q
+        filas.push({ a: x.a, c: x.c, t: x.t, s: x.s.slice(), v, tr: x.tr.slice(), u: x.u ? x.u.map((d) => (d ? diasDesde(hoyMs, d) : null)) : Array(n).fill(null) })
+      }
+      arts[a] = g.arts.get(a).info
+    }
+    const compactas = compactar(filas)
+    const usados = new Set(compactas.map((c) => c[0]))
+    for (const a of Object.keys(arts)) if (!usados.has(a)) delete arts[a]
+    const datos = { estado: 'listo', articulos: elegidos.length, locales: LOCALES, filas: compactas, formato: 2, arts, desde, hasta, hoy, segundos: general.segundos }
+    const bytes = JSON.stringify(datos).length
+    if (bytes > MAX_BYTES) return { estado: 'demasiados', articulos: elegidos.length, max: MAX_ARTICULOS, motivo: 'peso', bytes }
+    return { ...datos, foto_en: new Date(general.en).toISOString(), foto_general: true }
   }
 
   /** Arma la respuesta compacta (arrays alineados con LOCALES). */
@@ -139,35 +345,15 @@ function crear(deps) {
       const k = `${txt(r.ID_ART)}|${txt(r.ID_COLOR)}|${txt(r.ID_TALLE)}`
       const f = filas.get(k)
       if (!f) continue // sin stock ni venta: no aparece en la grilla
-      const d = Math.max(0, Math.round((hoyMs - new Date(`${txt(r.ultima)}T12:00:00`).getTime()) / 86_400_000))
-      f.u[IDX.get(col)] = d
+      f.u[IDX.get(col)] = diasDesde(hoyMs, txt(r.ultima))
     }
     const arts = {}
     for (const r of maestro) {
       const a = txt(r.ID_ART)
       if (!a || arts[a]) continue
-      const adic = txt(r.ARTICULO_ADICIONAL) || txt(r.ARTICULO)
-      arts[a] = {
-        nombre: adic,
-        // "Descripción adicional macro" del PBIX: (familia)adicional - línea(grupo)
-        desc: `(${txt(r.ID_FLIA)})${adic} - ${txt(r.ID_LINEA)}(${txt(r.ID_GRUPO)})`,
-        prov: txt(r.ID_PROV).toUpperCase(),
-        grupo: txt(r.ID_GRUPO),
-        material: txt(r.ID_MATERIAL),
-        linea: txt(r.ID_LINEA),
-        temporada: TEMPORADA[Number(txt(r.ID_TEMPORADA))] ?? txt(r.ID_TEMPORADA),
-      }
+      arts[a] = artInfo(r)
     }
-    // Solo SKUs con algo: stock, venta o tránsito en algún local
-    const lista = [...filas.values()].filter((f) => f.s.some((x) => x > 0) || f.v.some((x) => x > 0) || f.tr.some((x) => x > 0))
-    // Formato compacto (18/11): [art, color, talle, stock[], venta[] | 0, tránsito "0101…" | 0, últimaVenta[] (-1 = sin venta) | 0]
-    // 0 = toda la fila vacía. El hub lo vuelve a armar en src/lib/reparto.ts (desarmarFilas).
-    const compactas = lista.map((f) => [
-      f.a, f.c, f.t, f.s,
-      f.v.some((x) => x > 0) ? f.v : 0,
-      f.tr.some((x) => x > 0) ? f.tr.join('') : 0,
-      f.u.some((x) => x != null) ? f.u.map((x) => (x == null ? -1 : x)) : 0,
-    ])
+    const compactas = compactar([...filas.values()])
     return { articulos, locales: LOCALES, filas: compactas, formato: 2, arts }
   }
 
@@ -183,7 +369,7 @@ function crear(deps) {
         const sql = deps.sql
         const V = sql.VarChar(sql.MAX)
         for (const k of ['prov', 'mat', 'temp', 'anio', 'linea', 'flia', 'grupo', 'gen']) req.input(k, V, f[k].join('|'))
-        req.input('art', V, f.art)
+        req.input('art', V, f.art.join('|'))
         req.input('desde', V, desde)
         req.input('hasta', V, hasta)
         req.input('desde_ult', V, diaLocal(DIAS_ULTIMA_VENTA))
@@ -223,6 +409,25 @@ function crear(deps) {
     const hasta = esDia(body?.hasta) ? body.hasta : diaLocal(1)
     const desde = esDia(body?.desde) ? body.desde : diaLocal(14)
     if (desde > hasta) throw new Error('La fecha «desde» es posterior a «hasta»')
+    ultimoUso = Date.now()
+
+    // 1) Foto general: si cubre las fechas, el armado sale de memoria en segundos
+    const cubre = desde >= diaLocal(FOTO_VENTA_DIAS - 1)
+    if (cubre && !general.error) {
+      // «Foto nueva»: se pide otra salvo que la que hay tenga menos de 1 minuto
+      if (body?.forzar && !general.enCurso && edadGeneral() > 60_000) lanzarGeneral()
+      const edad = edadGeneral()
+      if (general.datos && desde >= general.datos.desdeVenta && edad < FOTO_USABLE_MS && !(body?.forzar && general.enCurso)) {
+        if (edad > FOTO_NUEVA_MS) lanzarGeneral() // se usa igual y se renueva por detrás
+        return armarDesdeGeneral(f, desde, hasta)
+      }
+      lanzarGeneral()
+      return { estado: 'calculando', desde: new Date(general.inicio).toISOString() }
+    }
+    // la foto general falló: este armado va por el camino de siempre y la próxima vez se reintenta
+    if (general.error) general.error = null
+
+    // 2) Solo lo filtrado (venta de hace más de ~60 días, o la foto general no se pudo leer)
     const clave = JSON.stringify({ f, desde, hasta })
     // limpieza: fotos vencidas
     for (const [k, v] of fotos) if (!v.enCurso && Date.now() - v.en > CACHE_MS) fotos.delete(k)

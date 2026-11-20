@@ -5,7 +5,7 @@
  * Parámetros (varchar; listas separadas por '|', vacío = sin filtro):
  *   @prov @mat @temp @anio @linea @flia @grupo @gen   atributos del artículo (como el tablero de PBI)
  *   marca ORIGEN  reparto.js la cambia por la condición de MITO (proveedor MO…) o MARCAS (el resto)
- *   @art     código o principio de código (opcional)
+ *   @art     códigos o principios de código separados por '|' (opcional)
  *   @desde @hasta  período de venta 'YYYY-MM-DD'
  *   @desde_ult     desde cuándo se busca la última venta (días sin venta, ~180 días)
  *   @max           tope de artículos (si se pasa, devuelve solo el recordset 1 con la cantidad)
@@ -39,7 +39,7 @@ SELECT DISTINCT LTRIM(RTRIM(a.ID_ART))
    AND (@linea = '' OR LTRIM(RTRIM(a.ID_LINEA))     IN (SELECT value FROM STRING_SPLIT(@linea, '|')))
    AND (@flia  = '' OR LTRIM(RTRIM(a.ID_FLIA))      IN (SELECT value FROM STRING_SPLIT(@flia, '|')))
    AND (@grupo = '' OR UPPER(LTRIM(RTRIM(a.ID_GRUPO))) IN (SELECT value FROM STRING_SPLIT(@grupo, '|')))
-   AND (@art   = '' OR LTRIM(RTRIM(a.ID_ART)) LIKE @art + '%')
+   AND (@art   = '' OR EXISTS (SELECT 1 FROM STRING_SPLIT(@art, '|') x WHERE LTRIM(RTRIM(a.ID_ART)) LIKE x.value + '%'))
    AND (@gen   = '' OR EXISTS (SELECT 1 FROM DRAGONFISH_MITO.ZooLogic.ART z
                                 WHERE RTRIM(z.ARTCOD) = RTRIM(a.ID_ART)
                                   AND LTRIM(RTRIM(z.CATEARTI)) IN (SELECT value FROM STRING_SPLIT(@gen, '|'))));

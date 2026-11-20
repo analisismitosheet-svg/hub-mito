@@ -98,6 +98,7 @@ export default function MayoristaStock() {
   const puedeAjustar = can('mayorista.stock.ajustar')
   const [ocultos, setOcultos] = useState<Oculto[]>([])
   const [verSacados, setVerSacados] = useState(false)
+  const [verRepoloc, setVerRepoloc] = useState(false)
   const [sacando, setSacando] = useState(false)
 
   const cargarOcultos = useCallback(async () => {
@@ -854,6 +855,51 @@ export default function MayoristaStock() {
             )}
           </div>
 
+          {solapa === 'tapera' && (datos.repoloc ?? []).length > 0 && (
+            <div className="rounded-2xl border border-line bg-surface p-3 text-xs">
+              <button type="button" onClick={() => setVerRepoloc((v) => !v)} className="inline-flex flex-wrap items-center gap-1.5 font-medium text-ink">
+                {flecha(verRepoloc)} Descontado porque pasó a REPOLOC ({numero(datos.repoloc.reduce((s, l) => s + l.u, 0))} u.)
+                <span className="font-normal text-sub/70">· remitos a REPOLOC con el código del cliente en la observación</span>
+              </button>
+              {verRepoloc && (
+                <div className="mt-2 overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="text-[10px] uppercase text-sub">
+                      <tr>
+                        <th className="py-1 text-left">Remito cliente</th>
+                        <th className="text-left">Fecha</th>
+                        <th className="text-left">Cliente</th>
+                        <th className="text-left">Artículo</th>
+                        <th className="text-left">Color · Talle</th>
+                        <th className="text-right">Descontado</th>
+                        <th className="pl-3 text-left">Remito a REPOLOC</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {datos.repoloc.map((l, i) => (
+                        <tr key={i} className="border-t border-line/60">
+                          <td className="py-1.5 font-medium text-ink">R {l.remito}</td>
+                          <td className="text-sub">{fechaCorta(l.fecha)}</td>
+                          <td className="text-ink">
+                            {l.cli_nom} <span className="text-sub/70">{l.cli}</span>
+                          </td>
+                          <td className="text-ink">
+                            <b>{l.a}</b> <span className="text-sub">{desDe(l.a)}</span>
+                          </td>
+                          <td className="text-sub">
+                            {colorDe(l.c)} · {l.t}
+                          </td>
+                          <td className="text-right font-semibold tabular-nums text-ink">{l.u}</td>
+                          <td className="pl-3 text-sub">{l.rp_remitos ? l.rp_remitos.split(',').map((n) => `R ${n}`).join(', ') : '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
           {solapa === 'tapera' && ocultos.length > 0 && (
             <div className="rounded-2xl border border-line bg-surface p-3 text-xs">
               <button type="button" onClick={() => setVerSacados((v) => !v)} className="inline-flex flex-wrap items-center gap-1.5 font-medium text-ink">
@@ -913,7 +959,7 @@ export default function MayoristaStock() {
           <p className="text-[11px] text-sub/70">
             {solapa === 'deposito'
               ? 'Depósito = stock de DRAGONFISH_MITO. Tocá una fila para ver el detalle por talle y cuánto de ese artículo está en Tapera. Talle en 0 = rojo.'
-              : 'Tapera = mercadería remitida a clientes mayoristas que todavía no se facturó: remitos de venta de DRAGONFISH_MITO no anulados, menos lo que les descontaron las facturas y cancelaciones. Antigüedad: verde hasta 15 días, ámbar hasta 30, rojo más de 30.'}
+              : 'Tapera = mercadería remitida a clientes mayoristas que todavía no se facturó: remitos de venta de DRAGONFISH_MITO no anulados, menos lo que les descontaron las facturas y cancelaciones, y menos lo que pasó a REPOLOC (remito a REPOLOC con el código del cliente en la observación). Antigüedad: verde hasta 15 días, ámbar hasta 30, rojo más de 30.'}
           </p>
         </div>
       )}

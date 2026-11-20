@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ChevronDown, Search } from 'lucide-react'
+import { ChevronDown, Eraser, Search } from 'lucide-react'
 
 export interface OpcionDesplegable { id: string; label: string }
 
@@ -8,6 +8,7 @@ export interface OpcionDesplegable { id: string; label: string }
  * Filtro como los del tablero de Power BI: lista desplegable con buscador, «Seleccionar todo» y
  * casillas. Vacío = «Todas» (se dibuja todo tildado; destildar uno lo saca). Muestra «Todas»,
  * el elegido, «Todos menos X, Y» o «Selección múltiple (n)». Activo = naranja.
+ * Con algo elegido aparece la goma junto al título: borra solo ese filtro.
  */
 export default function FiltroDesplegable({
   titulo,
@@ -74,7 +75,10 @@ export default function FiltroDesplegable({
 
   return (
     <div>
-      <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-sub/80">{titulo}</p>
+      <div className="mb-1 flex h-4 items-center justify-between gap-2">
+        <p className="truncate text-[11px] font-medium uppercase tracking-wider text-sub/80">{titulo}</p>
+        {activo && <Goma titulo={titulo} onClick={() => onChange(new Set())} />}
+      </div>
       <button
         ref={boton}
         type="button"
@@ -114,5 +118,20 @@ export default function FiltroDesplegable({
           document.body,
         )}
     </div>
+  )
+}
+
+/** Goma: borra un solo filtro (vuelve a «Todas»). */
+export function Goma({ titulo, onClick }: { titulo: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={`Borrar el filtro ${titulo}`}
+      aria-label={`Borrar el filtro ${titulo}`}
+      className="btn-press inline-flex h-4 shrink-0 items-center gap-1 rounded px-1 text-[10.5px] font-semibold text-orange-300 hover:bg-orange-500/15"
+    >
+      <Eraser size={12} aria-hidden /> borrar
+    </button>
   )
 }

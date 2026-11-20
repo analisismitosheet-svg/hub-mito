@@ -877,7 +877,7 @@ async function stockMayorista(forzar) {
     } finally {
       await pool.close().catch(() => {})
     }
-    const [dep = [], tap = [], arts = [], cols = []] = r.recordsets ?? []
+    const [dep = [], tap = [], arts = [], cols = [], rep = []] = r.recordsets ?? []
     const s = (v) => String(v ?? '').trim()
     const n = (v) => Number(v) || 0
     const datos = {
@@ -890,6 +890,11 @@ async function stockMayorista(forzar) {
         a: s(f.a), des: s(f.des), mat: s(f.mat), mat_nom: s(f.mat_nom), prov: s(f.prov), prov_nom: s(f.prov_nom),
       })),
       colores: cols.map((f) => ({ c: s(f.c), des: s(f.des) })),
+      // Lo descontado de Tapera porque pasó a REPOLOC (remito a REPOLOC con el cliente en la observación)
+      repoloc: rep.map((f) => ({
+        remito: n(f.remito), fecha: s(f.fecha), cli: s(f.cli), cli_nom: s(f.cli_nom),
+        a: s(f.a), c: s(f.c), t: s(f.t), u: n(f.u), precio: n(f.precio), rp_remitos: s(f.rp_remitos),
+      })),
       calculado: new Date().toISOString(),
       segundos: Math.round((Date.now() - t0) / 100) / 10,
     }
