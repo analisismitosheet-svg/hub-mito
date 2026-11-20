@@ -22,7 +22,7 @@ export default async function tiendaTelegram(req: Req, res: Res) {
   if (!clave || !mismoSecreto(primero(req.headers['x-mayorista-token']), clave)) return res.status(401).json({ error: 'No autorizado' })
   if (!telegramActivo()) return res.status(500).json({ error: 'El bot de Telegram no está configurado en el hub' })
 
-  let b: { telefono?: unknown; url?: unknown } = {}
+  let b: { telefono?: unknown; url?: unknown; motivo?: unknown } = {}
   try {
     b = (typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body ?? {}) as typeof b
   } catch {
@@ -33,9 +33,13 @@ export default async function tiendaTelegram(req: Req, res: Res) {
   if (!/^\+?\d{10,15}$/.test(telefono)) return res.status(400).json({ error: 'Teléfono inválido' })
   if (!url.startsWith(TIENDA) || url.length > 600) return res.status(400).json({ error: 'Link inválido' })
 
+  // motivo 'aprobado': el primer link, cuando el admin aprueba el registro
+  const aprobado = b.motivo === 'aprobado'
   const r = await enviarTelegram(
     telefono,
-    'Tu link para entrar a la tienda mayorista Captain Fin + Zimith. Vence en 10 minutos. Si no lo pediste, ignoralo.',
+    aprobado
+      ? '¡Listo! Tu cuenta de la tienda mayorista Captain Fin + Zimith fue aprobada. Entrá con este link (vence en 10 minutos). Después, cuando quieras, pedí otro desde la tienda con tu número.'
+      : 'Tu link para entrar a la tienda mayorista Captain Fin + Zimith. Vence en 10 minutos. Si no lo pediste, ignoralo.',
     null,
     [[{ text: 'Entrar a la tienda', url }]],
   )
