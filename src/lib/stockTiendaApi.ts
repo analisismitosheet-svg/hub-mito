@@ -70,7 +70,8 @@ export default async function stockTienda(req: Req, res: Res) {
  * POST /api/sql/tienda-dragon (misma clave X-Mayorista-Token): lo único de Dragon que la tienda puede pedirle al puente.
  *   { accion: 'dragon_articulos', codigos: [...] | texto }  -> buscar códigos en INDOD (solo lectura)
  *   { accion: 'dragon_alta_articulo', articulo: {...} }     -> alta de artículo en INDOD (el puente valida todo)
- * Cualquier otra acción se rechaza, y la base siempre es INDOD.
+ *   { accion: 'dragon_cliente', codigo }                    -> ficha comercial del cliente en MITO (solo lectura)
+ * Cualquier otra acción se rechaza; los artículos siempre van a INDOD y los clientes se leen de MITO.
  */
 export async function tiendaDragon(req: Req & { body?: unknown }, res: Res) {
   res.setHeader('Cache-Control', 'no-store')
@@ -88,6 +89,11 @@ export async function tiendaDragon(req: Req & { body?: unknown }, res: Res) {
   } else if (b.accion === 'dragon_alta_articulo') {
     if (!b.articulo || typeof b.articulo !== 'object') return res.status(400).json({ error: 'Falta el artículo' })
     cuerpo = { accion: 'dragon_alta_articulo', articulo: b.articulo }
+  } else if (b.accion === 'dragon_cliente') {
+    // ficha comercial de un cliente en DRAGONFISH_MITO, solo lectura (panel de Clientes de la tienda)
+    const codigo = String(b.codigo ?? '').trim()
+    if (!/^[A-Za-z0-9]{1,10}$/.test(codigo)) return res.status(400).json({ error: 'Código de cliente inválido' })
+    cuerpo = { accion: 'dragon_cliente', codigo }
   } else {
     return res.status(400).json({ error: 'Acción no permitida' })
   }

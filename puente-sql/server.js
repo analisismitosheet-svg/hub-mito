@@ -45,6 +45,8 @@
  *   POST /          body: { accion: 'repo_diaria_dragon', modo: 'revisar'|'cargar'|'estado', fechas, foto, locales?, confirmo? }
  *                   -> { carga: { obs, locales: [{ cliente, unidades, estado, numero }] } }
  *                   (carga la repo como pedidos de venta VTD en DRAGONFISH_MITO por la API, uno por local)
+ *   POST /          body: { accion: 'dragon_cliente', codigo } -> { existe, razonSocial, lista, descuento, condicionPago, ... }
+ *                   (tienda mayorista, panel de Clientes: ficha comercial del cliente en DRAGONFISH_MITO, SOLO LECTURA)
  *   POST /          body: { accion: 'stock_mayorista', forzar? } -> { deposito, tapera, articulos, colores, calculado }
  *                   (Mayorista > Stock: sql/stock-mayorista.sql, DRAGONFISH_MITO, cache 1 min)
  *   POST /          body: { accion: 'stock_tienda', prefijos|articulos, locales? } -> { filas } (tienda cf-zimith-mayorista)
@@ -1898,6 +1900,15 @@ const server = http.createServer(async (req, res) => {
         const r = await dragon.crearArticulo(body?.articulo)
         console.log(`[puente] alta de artículo ${r.codigo}: ${r.ok ? 'OK' : 'con errores'} · ${r.pasos.map((p) => `${p.paso}=${p.ok ? 'ok' : 'ERROR'}`).join(', ')}`)
         return enviar(res, 200, r)
+      } catch (e) {
+        return enviar(res, 400, { error: e.message })
+      }
+    }
+
+    // Tienda mayorista: ficha comercial de un cliente en DRAGONFISH_MITO (SOLO LECTURA, panel de Clientes)
+    if (body?.accion === 'dragon_cliente') {
+      try {
+        return enviar(res, 200, await dragon.leerCliente(body?.codigo))
       } catch (e) {
         return enviar(res, 400, { error: e.message })
       }

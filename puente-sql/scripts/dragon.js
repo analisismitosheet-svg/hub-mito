@@ -212,7 +212,75 @@ async function crearArticulo(a) {
   return { ok: pasos.every((p) => p.ok), codigo, pasos }
 }
 
-module.exports = { crearPedido, crearPedidoCompra, crearArticulo }
+/* -------------------------------------------------------------------------
+ * Tienda mayorista: ficha de un cliente en DRAGONFISH_MITO. SOLO LECTURA (GET): nunca modifica.
+ * Devuelve lo comercial que muestra el panel de la tienda, con los nombres de lista, condición de pago,
+ * vendedor, transportista y clasificación ya resueltos (esas tablas se guardan 10 minutos).
+ * ------------------------------------------------------------------------- */
+async function llamarMito(ruta) {
+  const r = await fetch(`${URL_API}/${ruta}`, { headers: { IdCliente: ID, Authorization: TOKEN, BaseDeDatos: BASE }, signal: AbortSignal.timeout(20_000) })
+  const texto = await r.text()
+  let json = null
+  try { json = JSON.parse(texto) } catch { /* no era JSON */ }
+  return { ok: r.ok, status: r.status, json, texto }
+}
+const nombresCache = new Map() // tabla -> { vence, mapa: Map(codigo -> nombre) }
+async function nombres(tabla) {
+  const c = nombresCache.get(tabla)
+  if (c && c.vence > Date.now()) return c.mapa
+  const mapa = new Map()
+  for (let pag = 1; pag <= 10; pag++) {
+    const r = await llamarMito(`${tabla}/?limit=500&page=${pag}`)
+    const filas = (r.ok && r.json && r.json.Resultados) || []
+    for (const f of filas) mapa.set(String(f.Codigo).trim(), String(f.Descripcion || f.Nombre || '').trim())
+    if (filas.length < 500) break
+  }
+  nombresCache.set(tabla, { vence: Date.now() + 10 * 60_000, mapa })
+  return mapa
+}
+
+async function leerCliente(codigo) {
+  if (!ID || !TOKEN) throw new Error('Faltan DRAGON_API_IDCLIENTE / DRAGON_API_TOKEN en puente-sql/.env')
+  const cod = String(codigo ?? '').trim()
+  if (!/^[A-Za-z0-9]{1,10}$/.test(cod)) throw new Error('Código de cliente inválido')
+  const r = await llamarMito(`Cliente/${encodeURIComponent(cod)}/`)
+  if (r.status === 404 || (r.ok && !r.json)) return { existe: false, codigo: cod }
+  if (!r.ok) throw new Error(`Dragon respondió ${r.status} al leer el cliente`)
+  const c = r.json
+  const [listas, condiciones, vendedores, transportes, clasif] = await Promise.all(
+    ['Listadeprecios', 'Condiciondepago', 'Vendedor', 'Transportista', 'Clasificacioncliente'].map((t) => nombres(t).catch(() => new Map())),
+  )
+  const con = (mapa, v) => { const k = String(v ?? '').trim(); return k ? { codigo: k, nombre: mapa.get(k) || '' } : null }
+  const t = (v) => String(v ?? '').trim()
+  const direccion = [t(c.Calle), c.Numero ? String(c.Numero) : '', t(c.Piso) && `piso ${t(c.Piso)}`, t(c.Departamento) && `dto ${t(c.Departamento)}`].filter(Boolean).join(' ')
+  return {
+    existe: true,
+    codigo: t(c.Codigo) || cod,
+    razonSocial: t(c.Nombre),
+    fantasia: t(c.CodNombreFantasia),
+    cuit: t(c.CUIT),
+    situacionFiscal: c.SituacionFiscal ?? null,
+    mail: t(c.EMail),
+    telefono: t(c.Telefono),
+    movil: t(c.Movil),
+    direccion,
+    localidad: t(c.Localidad),
+    codigoPostal: t(c.CodigoPostal),
+    provincia: t(c.Provincia),
+    lista: con(listas, c.ListaDePrecio),
+    descuento: t(c.DescuentoPreferente),
+    condicionPago: con(condiciones, c.CondicionDePago),
+    vendedor: con(vendedores, c.Vendedor),
+    transportista: con(transportes, c.Transportista),
+    clasificacion: con(clasif, c.Clasificacion),
+    limiteCredito: c.TopeCtaCte ?? null,
+    inactivo: !!c.InactivoFW,
+    otrasDirecciones: (c.OtrasDirecciones || []).length,
+    observacion: t(c.Observacion).slice(0, 500),
+  }
+}
+
+module.exports = { crearPedido, crearPedidoCompra, crearArticulo, leerCliente }
 
 // Prueba manual: node scripts/dragon.js --prueba
 if (require.main === module && process.argv.includes('--prueba')) {
