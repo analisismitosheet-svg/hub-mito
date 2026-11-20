@@ -32,3 +32,7 @@ manuales/
 
 # Contactos de proveedores sacados de la planilla (se regenera con scripts/importar-contactos-oc.py)
 sql/ordenes_compra_import_contactos.sql
+
+# Lo genera tsc desde vite.config.ts; Vite lo prefiere al .ts y quedaria desactualizado
+vite.config.js
+vite.config.d.ts
