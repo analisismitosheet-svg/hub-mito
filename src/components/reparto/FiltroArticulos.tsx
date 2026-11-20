@@ -45,7 +45,7 @@ export default function FiltroArticulos({
   }, [sugerencias, t])
 
   const agregar = (ids: string[]) => {
-    const nuevos = ids.filter((x) => !elegidos.has(x))
+    const nuevos = [...new Set(ids)].filter((x) => !elegidos.has(x))
     if (nuevos.length) onChange([...valor, ...nuevos])
   }
   const alternar = (id: string) => (elegidos.has(id) ? onChange(valor.filter((x) => x !== id)) : agregar([id]))
@@ -128,7 +128,7 @@ export default function FiltroArticulos({
               )}
               <div className="max-h-64 overflow-y-auto">
                 {lista.map((o) => (
-                  <button key={o.id} type="button" onClick={() => alternar(o.id)} className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-xs text-ink hover:bg-surface2">
+                  <button key={o.id} type="button" onClick={() => { alternar(o.id); setTexto('') }} className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-xs text-ink hover:bg-surface2">
                     <span className={`grid h-3.5 w-3.5 shrink-0 place-items-center rounded border ${elegidos.has(o.id) ? 'border-orange-500 bg-orange-500 text-white' : 'border-line2'}`}>
                       {elegidos.has(o.id) && <Check size={10} aria-hidden />}
                     </span>
@@ -139,7 +139,8 @@ export default function FiltroArticulos({
               </div>
             </div>
           </>,
-          document.body,
+          // en pantalla completa solo se ve lo que está adentro del elemento en pantalla completa
+          document.fullscreenElement ?? document.body,
         )}
     </div>
   )

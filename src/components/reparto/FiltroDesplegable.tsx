@@ -115,7 +115,8 @@ export default function FiltroDesplegable({
               </div>
             </div>
           </>,
-          document.body,
+          // en pantalla completa solo se ve lo que está adentro del elemento en pantalla completa
+          document.fullscreenElement ?? document.body,
         )}
     </div>
   )

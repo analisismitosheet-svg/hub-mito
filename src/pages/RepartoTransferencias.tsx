@@ -214,6 +214,7 @@ export default function RepartoTransferencias() {
       setLocales(proy.locales)
       setDatos(proy)
       setFotoNueva(false)
+      if (r.foto_en) setFoto((f) => ({ en: r.foto_en!, leyendo: false, segundos: f?.segundos ?? null, error: null }))
       setGLinea(new Set()); setGFlia(new Set()); setGProv(new Set()); setGArts([])
       setArtSel(null)
       setSugerencia(null)

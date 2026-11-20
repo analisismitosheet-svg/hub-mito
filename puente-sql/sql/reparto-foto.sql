@@ -79,15 +79,9 @@ SELECT DISTINCT LTRIM(RTRIM(COART)) FROM DRAGONFISH_MITO.ZooLogic.COMB c
  WHERE BDALTAFW = 'MITO' AND BDMODIFW = 'MITO' AND LTRIM(RTRIM(COART)) <> ''
    AND NOT EXISTS (SELECT 1 FROM #ids i WHERE i.ID_ART = LTRIM(RTRIM(c.COART)));
 
--- género = categoría en Dragon, de una sola pasada (antes era una subconsulta por artículo: ~8 min)
-IF OBJECT_ID('tempdb..#g') IS NOT NULL DROP TABLE #g;
-SELECT LTRIM(RTRIM(z.ARTCOD)) AS ID_ART, MAX(LTRIM(RTRIM(z.CATEARTI))) AS GEN
-  INTO #g
-  FROM DRAGONFISH_MITO.ZooLogic.ART z
-  JOIN #ids i ON i.ID_ART = LTRIM(RTRIM(z.ARTCOD)) COLLATE DATABASE_DEFAULT
- GROUP BY LTRIM(RTRIM(z.ARTCOD));
-
--- 5) maestro (mismos criterios que el filtro de reparto-stock.sql; género = categoría en Dragon)
+-- Maestro y género: primero a tablas temporales (la vista sola tarda ~2 s; cruzarla directo con
+-- #ids tardaba ~4 min) y recién ahí se cruzan
+IF OBJECT_ID('tempdb..#m') IS NOT NULL DROP TABLE #m;
 SELECT LTRIM(RTRIM(a.ID_ART))             AS ID_ART,
        LTRIM(RTRIM(a.ARTICULO_ADICIONAL)) AS ARTICULO_ADICIONAL,
        LTRIM(RTRIM(a.ARTICULO))           AS ARTICULO,
@@ -97,12 +91,24 @@ SELECT LTRIM(RTRIM(a.ID_ART))             AS ID_ART,
        LTRIM(RTRIM(a.ID_LINEA))           AS ID_LINEA,
        LTRIM(RTRIM(a.ID_MATERIAL))        AS ID_MATERIAL,
        LTRIM(RTRIM(a.ID_TEMPORADA))       AS ID_TEMPORADA,
-       CAST(CAST(a.[AÑO] AS int) AS varchar(10)) AS ANIO,
-       g.GEN
+       CAST(CAST(a.[AÑO] AS int) AS varchar(10)) AS ANIO
+  INTO #m
   FROM DWH.dbo.vw_DIM_ARTICULO a
-  JOIN #ids i ON i.ID_ART = LTRIM(RTRIM(a.ID_ART)) COLLATE DATABASE_DEFAULT
-  LEFT JOIN #g g ON g.ID_ART = i.ID_ART
  WHERE CHARINDEX(' ', RTRIM(a.ID_ART)) = 0;
 
+-- género = categoría del artículo en Dragon
+IF OBJECT_ID('tempdb..#g') IS NOT NULL DROP TABLE #g;
+SELECT LTRIM(RTRIM(z.ARTCOD)) AS ID_ART, MAX(LTRIM(RTRIM(z.CATEARTI))) AS GEN
+  INTO #g
+  FROM DRAGONFISH_MITO.ZooLogic.ART z
+ GROUP BY LTRIM(RTRIM(z.ARTCOD));
+
+-- 5) maestro de los artículos con algo (mismos criterios que el filtro de reparto-stock.sql)
+SELECT m.*, g.GEN
+  FROM #m m
+  JOIN #ids i ON i.ID_ART = m.ID_ART COLLATE DATABASE_DEFAULT
+  LEFT JOIN #g g ON g.ID_ART COLLATE DATABASE_DEFAULT = m.ID_ART COLLATE DATABASE_DEFAULT;
+
+DROP TABLE #m;
 DROP TABLE #g;
 DROP TABLE #ids;
