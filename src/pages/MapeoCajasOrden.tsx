@@ -44,7 +44,7 @@ function chipStock(v: number | null) {
   )
 }
 
-/** Mapeo de cajas · Cajas mapeadas: tramos de 50 (desplegables) → cada caja en una columna */
+/** Mapeo de cajas · Cajas mapeadas: tramos de 50 (desplegables) → las cajas una debajo de la otra */
 export default function MapeoCajasOrden() {
   const { isAdmin, can } = useAuth()
   const veBorrar = isAdmin || can('deposito.cajas.borrar')
@@ -306,10 +306,10 @@ export default function MapeoCajasOrden() {
                   </button>
 
                   {abierto && (
-                    <div className="overflow-x-auto border-t border-line bg-surface2/50 px-3 py-3">
-                      <div className="flex gap-3">
+                    <div className="border-t border-line bg-surface2/50 px-3 py-3">
+                      <div className="flex flex-col gap-3">
                         {t.cajas.map((c) => (
-                          <div key={c.caja} className="flex w-56 shrink-0 flex-col overflow-hidden rounded-xl border border-line bg-surface">
+                          <div key={c.caja} className="flex w-full flex-col overflow-hidden rounded-xl border border-line bg-surface">
                             <div className={`border-b border-line px-3 py-2 ${llenas.has(c.caja) ? 'bg-brand-600/10' : ''}`}>
                               <div className="flex items-center justify-between gap-2">
                                 <span className="font-display text-base font-bold tabular-nums text-ink">Caja {c.caja}</span>

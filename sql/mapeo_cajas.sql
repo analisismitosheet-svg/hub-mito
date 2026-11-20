@@ -38,13 +38,15 @@ INSERT INTO public.permisos (clave, modulo, accion, label, orden) VALUES
   ('deposito.cajas.gestionar', 'deposito', 'cajas.gestionar', 'Crear/borrar números de caja', 833)
 ON CONFLICT (clave) DO NOTHING;
 
--- El rol Depósito ve el mapeo y escanea (borrar y gestionar quedan para el admin
--- o para quien se le dé a mano).
+-- El rol Depósito tiene lo mismo que el admin en el mapeo de cajas: ver,
+-- escanear, borrar artículos y crear/borrar números de caja (20/11/2026).
 INSERT INTO public.rol_permisos (rol, permiso_clave)
 SELECT 'deposito', p.clave
 FROM (VALUES
   ('deposito.cajas.view'),
-  ('deposito.cajas.escanear')
+  ('deposito.cajas.escanear'),
+  ('deposito.cajas.borrar'),
+  ('deposito.cajas.gestionar')
 ) AS p(clave)
 WHERE NOT EXISTS (SELECT 1 FROM public.rol_permisos WHERE rol = 'deposito' AND permiso_clave = p.clave);
 

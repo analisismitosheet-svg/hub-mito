@@ -91,7 +91,7 @@ export default function MapeoCajasEscanear() {
 
   const fijarCaja = useCallback((n: number | null, bruto: string) => {
     if (n == null) {
-      setMensaje({ ok: false, texto: `«${bruto}» no es un número de caja.` })
+      setMensaje({ ok: false, texto: `«${bruto}» no es un número de caja. Primero escaneá la caja y después los artículos.` })
       return
     }
     if (validasRef.current.size > 0 && !validasRef.current.has(n)) {
@@ -163,13 +163,17 @@ export default function MapeoCajasEscanear() {
   }, [])
 
   /** Cada lectura (lector, teclado o cámara): ¿caja o artículo?
-   *  Sin caja elegida, lo que entra es el número de caja. Con caja, solo un QR
-   *  o algo con prefijo CAJA: la cambia (los códigos de barra también son números). */
+   *  Sin caja elegida, lo que entra es el número de caja. Con caja, la cambia algo
+   *  con prefijo CAJA: o un QR que sea un número de caja; cualquier otro QR (los
+   *  artículos también traen QR) va como artículo. */
   const procesar = useCallback(
     (texto: string, formato?: string) => {
       const bruto = texto.trim()
       if (!bruto) return
-      const esCaja = cajaRef.current == null || formato === 'QR_CODE' || PREFIJO_CAJA.test(bruto)
+      const esCaja =
+        cajaRef.current == null ||
+        PREFIJO_CAJA.test(bruto) ||
+        (formato === 'QR_CODE' && leerNumeroCaja(bruto) != null)
       if (esCaja) fijarCaja(leerNumeroCaja(bruto), bruto)
       else void escanearArticulo(bruto)
     },
