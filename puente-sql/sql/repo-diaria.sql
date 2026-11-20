@@ -105,11 +105,14 @@ SELECT LTRIM(RTRIM(a.ID_ART))              AS ID_ART,
   OUTER APPLY (SELECT TOP 1 DESCRIP FROM DRAGONFISH_MITO.ZooLogic.MARCAS    t WHERE RTRIM(t.CODIGO) = RTRIM(d.MARCA))     ma
  WHERE LTRIM(RTRIM(ISNULL(a.ARTICULO, ''))) <> '';
 
--- 5) CASCADA: stock de cada local (sin tránsito, renglones > 0) de los artículos vendidos.
+-- 5) CASCADA: stock de cada local (renglones > 0) de los artículos vendidos.
 --    Todo el artículo (no solo el SKU): los donantes se ordenan por su stock del artículo.
+--    CANT es el stock del local y ENTRANSITO la CANTIDAD que le viene en camino (no es 0/1).
+--    Hasta el 20/11 se filtraba ENTRANSITO = 0 y un talle con algo en camino quedaba sin stock
+--    (~7.500 unidades en ~2.000 local+talle que la cascada no veía).
 SELECT Tienda, ID_ART, ID_COLOR, ID_TALLE, SUM(CANT) AS cant
   FROM #f
- WHERE Tipo = 'STOCK' AND ENTRANSITO = 0 AND CANT > 0
+ WHERE Tipo = 'STOCK' AND CANT > 0
    AND ID_ART IN (SELECT ID_ART FROM #f WHERE Tipo = 'VENTA')
  GROUP BY Tienda, ID_ART, ID_COLOR, ID_TALLE;
 
