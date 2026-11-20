@@ -14,7 +14,11 @@
  *     notas de crédito restan)
  *   - stock del cliente: vw_STOCK_SUCURSALES_REAL por BD_ORIGEN = sucursal de la base
  *   - stock MITO: vw_STOCK_SKU_MITO · precio y descripción: vw_ARTICULOS_MITO
- *   - sugerido = máx(0, mín(vendido − stock cliente, stock MITO))
+ *   - stock Polo 52: vw_STOCK_SKU_POLO (sql/vw_STOCK_SKU_POLO.sql), completa lo que MITO no cubre
+ *   - sugerido = máx(0, mín(vendido − stock cliente, stock MITO + stock Polo))
+ *     stock_mito se manda como disponible total (MITO + Polo) y stock_polo aparte: al cargarse el
+ *     pedido en Dragon, lo que pasa el stock de MITO sale de Polo como transferencia POLO52 → MAYORD
+ *     (franquicias_resultado_dragon, sql/franquicias_stock_polo.sql)
  * Todo en el SQL de ESTA PC con el usuario de Windows (sqlcmd -E), solo lectura.
  *
  * Después le avisa al hub (/api/informe?evento=franquicias) para que salga el WhatsApp ya,
@@ -153,6 +157,20 @@ function armarItems(c) {
     stockMito.set(sku(f.a, f.c, f.t), Number(f.n) || 0)
   }
 
+  // Stock de Polo 52 por SKU. Si la vista falla se sigue solo con MITO.
+  const stockPolo = new Map()
+  try {
+    for (const f of leerJson(`
+      SELECT ID_ARTICULO AS a, COLOR_CODIGO AS c, TALLE_CODIGO AS t, SUM(STOCK_POLO) AS n
+        FROM ${VC}.vw_STOCK_SKU_POLO WHERE ID_ARTICULO IN (${enArts})
+       GROUP BY ID_ARTICULO, COLOR_CODIGO, TALLE_CODIGO FOR JSON PATH`)) {
+      const n = Number(f.n) || 0
+      if (n > 0) stockPolo.set(sku(f.a, f.c, f.t), n)
+    }
+  } catch (e) {
+    anotar(`Stock Polo no disponible (sigue solo con MITO): ${e.message}`)
+  }
+
   // Precio por SKU (y el mayor del artículo si el SKU no tiene) + descripción y material
   const precioSku = new Map()
   const infoArt = new Map()
@@ -175,7 +193,8 @@ function armarItems(c) {
       const a = infoArt.get(parte(v.art))
       const vendido = Number(v.vendido) || 0
       const sc = stockCli.get(k) ?? 0
-      const sm = stockMito.get(k) ?? 0
+      const sm = Math.max(0, stockMito.get(k) ?? 0)
+      const sp = stockPolo.get(k) ?? 0
       return {
         art: parte(v.art),
         descrip: a?.descrip || txt(v.txt),
@@ -184,8 +203,9 @@ function armarItems(c) {
         talle: parte(v.talle),
         vendido,
         stock_cli: sc,
-        stock_mito: sm,
-        sugerido: Math.max(0, Math.min(vendido - sc, sm)),
+        stock_mito: sm + sp,
+        stock_polo: sp,
+        sugerido: Math.max(0, Math.min(vendido - sc, sm + sp)),
         precio: precioSku.get(k) ?? a?.precio ?? null,
       }
     })

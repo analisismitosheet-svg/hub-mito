@@ -11,6 +11,12 @@
 - **Envío**: una fila por número en `franquicias_propuesta_envios`, cada una con **su token**. `/api/informe?evento=franquicias` (pg_cron `franquicias-whatsapp` cada 5 min, y el puente apenas arma) manda la plantilla `reposicion_franquicia` (es_AR, 6 variables: cliente, N°, venta del, artículos, unidades, link) — `src/lib/franquiciasWhatsapp.ts`. Reintenta 12 veces (~1 h). Desde la pantalla: «Enviar por WhatsApp los que faltan» (POST `/api/informe {franquicias: id}`) o «WhatsApp a mano» (wa.me con el link de ese número).
 - **Bloqueo**: `/p/:token` acepta el token de la propuesta o el de un envío. El primero que confirma guarda `confirmada_por` (su número); a los demás el link les muestra «🔒 Este pedido ya fue aceptado por +…» con lo que se pidió. SQL: `sql/franquicias_reposicion_auto.sql`, `sql/franquicias_whatsapp_cron.sql`.
 
+## Stock de Polo 52 en la reposición (19/11/2026)
+
+- Sugerida, Propuesta y automática: **primero MITO, Polo completa**. Sugerido = mín(vendido − stock cliente, stock MITO + stock Polo); columna «Stock Polo» y «N de Polo» bajo el sugerido.
+- Polo sale de `VISTAS_CONSOLIDADAS.dbo.vw_STOCK_SKU_POLO` (`sql/vw_STOCK_SKU_POLO.sql`, OPENQUERY a `DWH.dbo.vw_FACT_VENTAS_STOCK`, Tienda `DRAGONFISH_POLO52`, sin tránsito; habilitada en `config_app.sql_vistas` con `sql/sql_vistas_stock_polo.sql`). Si falla, sigue solo con MITO y avisa.
+- En los ítems: `stock_mito` = disponible total (tope del link) y `stock_polo` = parte de Polo. Al cargarse el pedido en Dragon, `franquicias_resultado_dragon` llama `private.franquicias_lote_polo`: crea en Transferencias el lote «AAMMDD - FRANQUICIA X N° n - POLO» con **POLO52 → MAYORD** por lo que pidió el cliente por encima del stock de MITO. SQL: `sql/franquicias_stock_polo.sql` (aplicado).
+
 ## Pantallas anteriores (fuera del menú)
 
 - **Reposición franquicias sugerida** (antes «Reposición diaria»; vuelve al menú de Franquicias el 19/11/2026) — `/mayorista/franquicias/diaria`, `MayoristaFranquicias.tsx`.

@@ -61,7 +61,7 @@ export default function MayoristaFranquiciasPropuestas() {
   }, [selMats, grupo, temporada, busca])
 
   const sugeridos = useMemo(() => {
-    const list = filas.filter((f) => f.stock > 0 && f.sugerido > 0 && pasaFiltro(f))
+    const list = filas.filter((f) => f.sugerido > 0 && pasaFiltro(f))
     list.sort((a, b) => b.vendido - a.vendido || b.sugerido - a.sugerido)
     return list
   }, [filas, pasaFiltro])
@@ -70,7 +70,7 @@ export default function MayoristaFranquiciasPropuestas() {
   const items = useMemo<ItemPropuesta[]>(() => {
     const list: ItemPropuesta[] = sugeridos.map((f) => ({
       art: f.art, descrip: f.descrip, material: f.material, color: f.color, talle: f.talle,
-      stockCli: f.stockCli, vendido: f.vendido, stock: f.stock, sugerido: f.sugerido, precio: f.precio,
+      stockCli: f.stockCli, vendido: f.vendido, stock: f.stock, stockPolo: f.stockPolo, sugerido: f.sugerido, precio: f.precio,
     }))
     const ya = new Set(list.map((i) => `${i.art}|${i.color}|${i.talle}`))
     for (const p of extras.values()) {
@@ -246,16 +246,17 @@ export default function MayoristaFranquiciasPropuestas() {
                         <th className={`text-center ${th}`}>Vendido</th>
                         <th className={`text-center ${th}`}>Stock cliente</th>
                         <th className={`text-center ${th}`}>Stock MITO</th>
+                        <th className={`text-center ${th}`} title="Stock de Polo 52: completa lo que MITO no cubre y se carga como transferencia Polo → MITO">Stock Polo</th>
                         <th className={`text-center ${th}`}>Sugerido</th>
                         <th className={`text-right ${th}`}>Precio</th>
                       </tr>
                     </thead>
                     <tbody>
                       {cargando && (
-                        <tr><td colSpan={8} className="px-3 py-8 text-center text-sub"><Loader2 size={15} className="mr-2 inline animate-spin" aria-hidden />Trayendo la sugerencia…</td></tr>
+                        <tr><td colSpan={9} className="px-3 py-8 text-center text-sub"><Loader2 size={15} className="mr-2 inline animate-spin" aria-hidden />Trayendo la sugerencia…</td></tr>
                       )}
                       {!cargando && items.length === 0 && (
-                        <tr><td colSpan={8} className="px-3 py-8 text-center text-sub">No hay artículos para proponer en ese rango.</td></tr>
+                        <tr><td colSpan={9} className="px-3 py-8 text-center text-sub">No hay artículos para proponer en ese rango.</td></tr>
                       )}
                       {!cargando && items.slice(0, 20).map((f) => (
                         <tr key={`${f.art}|${f.color}|${f.talle}`} className="border-t border-line/60">
@@ -272,14 +273,18 @@ export default function MayoristaFranquiciasPropuestas() {
                           <td className="px-3 py-1.5 text-center tabular-nums text-ink">{fmt(f.vendido)}</td>
                           <td className="px-3 py-1.5 text-center tabular-nums text-sky-400">{fmt(f.stockCli)}</td>
                           <td className="px-3 py-1.5 text-center tabular-nums text-sub">{fmt(f.stock)}</td>
-                          <td className="px-3 py-1.5 text-center font-bold tabular-nums text-emerald-500">{fmt(f.sugerido)}</td>
+                          <td className={`px-3 py-1.5 text-center tabular-nums ${f.stockPolo ? 'text-violet-400' : 'text-sub'}`}>{f.stockPolo ? fmt(f.stockPolo) : '—'}</td>
+                          <td className="px-3 py-1.5 text-center font-bold tabular-nums text-emerald-500">
+                            {fmt(f.sugerido)}
+                            {f.sugerido > Math.max(0, f.stock) && <span className="block text-[10px] font-semibold text-violet-400">{fmt(f.sugerido - Math.max(0, f.stock))} de Polo</span>}
+                          </td>
                           <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums text-sub">{f.precio ? fmtPesos(f.precio) : cargandoPrecios ? '…' : '—'}</td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot className="bg-surface">
                       <tr>
-                        <td colSpan={6} className="px-3 py-2 text-xs font-semibold text-ink">{fmt(items.length)} artículos{extras.size > 0 ? ` (incluye ${fmt(extras.size)} posturas que faltaban)` : ''} · {items.length > 20 ? `se muestran los primeros 20` : 'todo lo sugerido'}</td>
+                        <td colSpan={7} className="px-3 py-2 text-xs font-semibold text-ink">{fmt(items.length)} artículos{extras.size > 0 ? ` (incluye ${fmt(extras.size)} posturas que faltaban)` : ''} · {items.length > 20 ? `se muestran los primeros 20` : 'todo lo sugerido'}</td>
                         <td className="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">{fmt(totalSug)}</td>
                         <td className="px-3 py-2 text-right text-xs font-semibold tabular-nums text-ink">{cargandoPrecios ? '…' : fmtPesos(totalPesos)}</td>
                       </tr>

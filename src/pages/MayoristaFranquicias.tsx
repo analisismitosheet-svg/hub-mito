@@ -10,12 +10,15 @@ import { useReposicionFranquicia, type FilaReposicion } from '@/hooks/useReposic
 const fmt = (n: number) => new Intl.NumberFormat('es-AR').format(n)
 const fmtPesos = (n: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n)
 
-/** Urgente: el cliente no tiene nada, vendió y en MITO hay más de 1 para reponer. */
-const esUrgente = (f: FilaReposicion) => f.stockCli <= 0 && f.vendido >= 1 && f.stock > 1
+/** Disponible para reponer: MITO + Polo */
+const disp = (f: FilaReposicion) => Math.max(0, f.stock) + f.stockPolo
+
+/** Urgente: el cliente no tiene nada, vendió y entre MITO y Polo hay más de 1 para reponer. */
+const esUrgente = (f: FilaReposicion) => f.stockCli <= 0 && f.vendido >= 1 && disp(f) > 1
 
 const estadoF = (f: FilaReposicion) => {
   if (esUrgente(f)) return { txt: 'Urgente', cls: 'text-red-500', dot: '#ef4444' }
-  if (f.stock < f.vendido) return { txt: 'Normal', cls: 'text-amber-400', dot: '#fbbf24' }
+  if (disp(f) < f.vendido) return { txt: 'Normal', cls: 'text-amber-400', dot: '#fbbf24' }
   return { txt: 'Normal', cls: 'text-emerald-500', dot: '#34d399' }
 }
 
@@ -25,7 +28,7 @@ export default function MayoristaFranquicias() {
   const {
     disponibles, franq, clienteSel, setClienteSel,
     desde, setDesde, hasta, setHasta,
-    filas, cargando, cargandoPrecios, cargandoMapa, error,
+    filas, cargando, cargandoPrecios, cargandoMapa, error, poloError,
   } = useReposicionFranquicia()
 
   const [selMats, setSelMats] = useState<Set<string>>(new Set())
@@ -36,11 +39,11 @@ export default function MayoristaFranquicias() {
   const selMat = [...selMats].join(', ')
 
   const filtrar = () => {
-    let list = filas.filter((f) => f.stock > 0 && f.sugerido > 0)
+    let list = filas.filter((f) => f.sugerido > 0)
     if (selMats.size) list = list.filter((f) => selMats.has(f.material))
     list.sort((a, b) => {
-      const urgA = a.stock <= 0 ? 1 : a.stock < a.vendido ? 0 : -1
-      const urgB = b.stock <= 0 ? 1 : b.stock < b.vendido ? 0 : -1
+      const urgA = disp(a) <= 0 ? 1 : disp(a) < a.vendido ? 0 : -1
+      const urgB = disp(b) <= 0 ? 1 : disp(b) < b.vendido ? 0 : -1
       return urgB - urgA || b.vendido - a.vendido || b.sugerido - a.sugerido
     })
     return list
@@ -48,6 +51,7 @@ export default function MayoristaFranquicias() {
 
   const visibles = filtrar().slice(0, 40)
   const totalSug = filtrar().reduce((s, f) => s + f.sugerido, 0)
+  const totalPolo = filtrar().reduce((s, f) => s + f.dePolo, 0)
   const subtotal = (f: FilaReposicion) => (f.precio ? f.precio * f.sugerido : 0)
   const totalPesos = filtrar().reduce((s, f) => s + subtotal(f), 0)
   const count = filtrar().length
@@ -62,9 +66,9 @@ export default function MayoristaFranquicias() {
     const rango = `${fmtDia(desde)} al ${fmtDia(hasta)}`
     let msg = `REPOSICIÓN DIARIA - ${franq.nombre.toUpperCase()} · ${franq.clienteNombre} (${rango})\nArtículos para reponer (solo con stock en MITO)${selMat ? ' - Material: ' + selMat : ''}:\n\n`
     list.forEach((f, i) => {
-      msg += `${i + 1}. ${f.art} ${(f.color || 'U')}/${f.talle || '-'} | Stock ${franq.id}:${f.stockCli || 0} | Vend:${f.vendido} | Stock MITO:${f.stock} | Sug.reposición:${f.sugerido} | Precio:${f.precio ? fmtPesos(f.precio) : '-'} | Subtotal:${fmtPesos(subtotal(f))} | Estado:${esUrgente(f) ? 'Urgente' : 'Normal'} | Mat:${f.material} | ${f.descrip || ''}\n`
+      msg += `${i + 1}. ${f.art} ${(f.color || 'U')}/${f.talle || '-'} | Stock ${franq.id}:${f.stockCli || 0} | Vend:${f.vendido} | Stock MITO:${f.stock} | Polo:${f.stockPolo} | Sug.reposición:${f.sugerido}${f.dePolo ? ` (${f.dePolo} de Polo)` : ''} | Precio:${f.precio ? fmtPesos(f.precio) : '-'} | Subtotal:${fmtPesos(subtotal(f))} | Estado:${esUrgente(f) ? 'Urgente' : 'Normal'} | Mat:${f.material} | ${f.descrip || ''}\n`
     })
-    if (list.length === 0) msg += '(Sin sugeridos con stock en MITO)\n'
+    if (list.length === 0) msg += '(Sin sugeridos con stock en MITO ni Polo)\n'
     msg += `\nTotal sugerencia reposición: ${list.reduce((s, f) => s + f.sugerido, 0)} u. · Total: ${fmtPesos(list.reduce((s, f) => s + subtotal(f), 0))}`
     const tel = franq.telefono ? normalizarTelefono(franq.telefono) : ''
     window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msg)}`, '_blank')
@@ -73,9 +77,9 @@ export default function MayoristaFranquicias() {
   const exportExcel = () => {
     if (!franq) return
     const list = filtrar()
-    const header = ['Artículo', 'Descripción', 'Material', 'Color', 'Talle', 'Stock cliente', 'Vendido', 'Stock MITO', 'Sugerencia reposición', 'Precio', 'Subtotal', 'Estado']
-    const rows = list.map((f) => [f.art, f.descrip || '', f.material || '', f.color || 'U', f.talle || '', String(f.stockCli), String(f.vendido), String(f.stock), String(f.sugerido), f.precio ? String(f.precio) : '', String(subtotal(f)), esUrgente(f) ? 'Urgente' : 'Normal'])
-    rows.push(['', 'TOTAL', '', '', '', '', '', '', String(list.reduce((s, f) => s + f.sugerido, 0)), '', String(list.reduce((s, f) => s + subtotal(f), 0)), ''])
+    const header = ['Artículo', 'Descripción', 'Material', 'Color', 'Talle', 'Stock cliente', 'Vendido', 'Stock MITO', 'Stock Polo', 'Sugerencia reposición', 'De Polo (transferencia)', 'Precio', 'Subtotal', 'Estado']
+    const rows = list.map((f) => [f.art, f.descrip || '', f.material || '', f.color || 'U', f.talle || '', String(f.stockCli), String(f.vendido), String(f.stock), String(f.stockPolo), String(f.sugerido), String(f.dePolo), f.precio ? String(f.precio) : '', String(subtotal(f)), esUrgente(f) ? 'Urgente' : 'Normal'])
+    rows.push(['', 'TOTAL', '', '', '', '', '', '', '', String(list.reduce((s, f) => s + f.sugerido, 0)), String(list.reduce((s, f) => s + f.dePolo, 0)), '', String(list.reduce((s, f) => s + subtotal(f), 0)), ''])
     const csv = [header.join(','), ...rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','))].join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
@@ -194,6 +198,7 @@ export default function MayoristaFranquicias() {
                     <th className={`text-center ${th}`}>Stock cliente</th>
                     <th className={`text-center ${th}`}>Vendido</th>
                     <th className={`text-center ${th}`}>Stock MITO</th>
+                    <th className={`text-center ${th}`} title="Stock de Polo 52: completa lo que MITO no cubre y se carga como transferencia Polo → MITO">Stock Polo</th>
                     <th className={`text-center ${th}`}>Sugerencia reposición</th>
                     <th className={`text-right ${th}`}>Precio</th>
                     <th className={`text-right ${th}`}>Subtotal</th>
@@ -202,7 +207,7 @@ export default function MayoristaFranquicias() {
                 <tbody>
                   {cargando && (
                     <tr>
-                      <td colSpan={14} className="px-3 py-10 text-center text-sub">
+                      <td colSpan={15} className="px-3 py-10 text-center text-sub">
                         <Loader2 size={16} className="mr-2 inline animate-spin" aria-hidden />
                         Trayendo ventas y stock…
                       </td>
@@ -210,7 +215,7 @@ export default function MayoristaFranquicias() {
                   )}
                   {!cargando && !error && visibles.length === 0 && (
                     <tr>
-                      <td colSpan={14} className="px-3 py-10 text-center text-sub">No hay nada para reponer en ese rango.</td>
+                      <td colSpan={15} className="px-3 py-10 text-center text-sub">No hay nada para reponer en ese rango.</td>
                     </tr>
                   )}
                   {visibles.map((f, i) => {
@@ -233,7 +238,11 @@ export default function MayoristaFranquicias() {
                         <td className={`px-3 py-2 text-center tabular-nums ${f.stockCli === 0 ? 'text-sub' : 'text-sky-400'}`}>{fmt(f.stockCli)}</td>
                         <td className="px-3 py-2 text-center tabular-nums text-ink">{fmt(f.vendido)}</td>
                         <td className={`px-3 py-2 text-center tabular-nums ${f.stock <= 0 ? 'font-semibold text-red-400' : 'text-sub'}`}>{fmt(f.stock)}</td>
-                        <td className={`px-3 py-2 text-center font-bold tabular-nums ${f.sugerido > 0 ? 'text-emerald-500' : 'text-sub'}`}>{f.sugerido > 0 ? fmt(f.sugerido) : '—'}</td>
+                        <td className={`px-3 py-2 text-center tabular-nums ${f.stockPolo > 0 ? 'text-violet-400' : 'text-sub'}`}>{f.stockPolo > 0 ? fmt(f.stockPolo) : '—'}</td>
+                        <td className={`px-3 py-2 text-center font-bold tabular-nums ${f.sugerido > 0 ? 'text-emerald-500' : 'text-sub'}`}>
+                          {f.sugerido > 0 ? fmt(f.sugerido) : '—'}
+                          {f.dePolo > 0 && <span className="block text-[10px] font-semibold text-violet-400">{fmt(f.dePolo)} de Polo</span>}
+                        </td>
                         <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-sub">{f.precio ? fmtPesos(f.precio) : cargandoPrecios ? '…' : '—'}</td>
                         <td className="whitespace-nowrap px-3 py-2 text-right font-semibold tabular-nums text-ink">{f.precio ? fmtPesos(subtotal(f)) : cargandoPrecios ? '…' : '—'}</td>
                       </tr>
@@ -242,7 +251,7 @@ export default function MayoristaFranquicias() {
                 </tbody>
                 <tfoot className="bg-surface">
                   <tr className="text-[12px]">
-                    <td colSpan={10} className="px-3 py-2 font-semibold text-ink">{fmt(count)} SKU a reponer (con stock en MITO)</td>
+                    <td colSpan={11} className="px-3 py-2 font-semibold text-ink">{fmt(count)} SKU a reponer (con stock en MITO o Polo){totalPolo > 0 ? ` · ${fmt(totalPolo)} u. salen de Polo` : ''}</td>
                     <td className="px-3 py-2 text-center font-bold tabular-nums text-emerald-500">{fmt(totalSug)}</td>
                     <td className="px-3 py-2 text-right text-[11px] font-semibold uppercase text-sub">Total</td>
                     <td className="whitespace-nowrap px-3 py-2 text-right text-sm font-bold tabular-nums text-emerald-500">{cargandoPrecios ? '…' : fmtPesos(totalPesos)}</td>
@@ -255,7 +264,8 @@ export default function MayoristaFranquicias() {
 
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
             <p className="text-[11px] text-sub">
-              Solo se muestran los SKU con <b className="text-ink">stock en MITO &gt; 0</b> y sugerido &gt; 0 (máximo 40). Sugerido = vendido − stock del cliente, sin pasar el stock de MITO.
+              Solo se muestran los SKU con sugerido &gt; 0 (máximo 40). Sugerido = vendido − stock del cliente: primero sale de MITO y lo que MITO no tiene lo completa <b className="text-violet-400">Polo</b>. Lo de Polo se carga solo como transferencia Polo → MITO cuando el pedido entra en Dragon.
+              {poloError && <span className="block text-amber-400">No se pudo leer el stock de Polo ({poloError}): por ahora sugiere solo con MITO.</span>}
             </p>
             <div className="flex flex-wrap gap-2">
               <button onClick={exportExcel} className="inline-flex items-center gap-2 rounded-full border border-line2 bg-surface px-3 py-1 text-xs font-semibold text-ink">⬇ Excel</button>

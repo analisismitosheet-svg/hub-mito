@@ -20,9 +20,15 @@ export type FilaReposicion = {
   color: string
   talle: string
   vendido: number
+  /** stock MITO del SKU */
   stock: number
+  /** stock de Polo 52 del SKU: completa lo que MITO no cubre (va como transferencia POLO52 → MAYORD) */
+  stockPolo: number
   stockCli: number
+  /** total a reponer (MITO + Polo) */
   sugerido: number
+  /** parte del sugerido que sale de Polo */
+  dePolo: number
   material: string
   /** código de material (el filtro muestra código · nombre) */
   materialCod: string
@@ -66,6 +72,8 @@ type InfoArticulo = { descripcion: string; material: string; materialCod: string
 const VISTA_VENTAS = 'DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.venta_franquicias'
 const VISTA_STOCK_SUC = 'DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.vw_STOCK_SUCURSALES_REAL'
 const VISTA_MATERIALES = 'DWH.dbo.vw_DIM_MATERIAL'
+/** Stock de Polo 52 por SKU (sql/vw_STOCK_SKU_POLO.sql, sale de DWH.dbo.vw_FACT_VENTAS_STOCK) */
+const VISTA_STOCK_POLO = 'DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.vw_STOCK_SKU_POLO'
 
 const txt = (v: unknown) => String(v ?? '').trim()
 const num = (v: unknown) => Number(v) || 0
@@ -92,6 +100,9 @@ export function useReposicionFranquicia() {
   const [ventas, setVentas] = useState<Venta[]>([])
   const [stockPorSucursal, setStockPorSucursal] = useState<Map<string, Map<string, number>>>(new Map())
   const [stockMito, setStockMito] = useState<StockSku | null>(null)
+  // Polo: si la vista no responde la reposición sigue solo con MITO (poloError lo avisa)
+  const [stockPolo, setStockPolo] = useState<Map<string, number>>(new Map())
+  const [poloError, setPoloError] = useState<string | null>(null)
   const [articulos, setArticulos] = useState<Map<string, InfoArticulo>>(new Map())
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -141,13 +152,15 @@ export function useReposicionFranquicia() {
     let activo = true
     ;(async () => {
       try {
-        const [filasV, filasS, stock, filasM, filasG] = await Promise.all([
+        let errPolo: string | null = null
+        const [filasV, filasS, stock, filasM, filasG, filasP] = await Promise.all([
           leerVista(VISTA_VENTAS),
           leerVista(VISTA_STOCK_SUC),
           cargarStockSku(),
           leerVista(VISTA_MATERIALES).catch(() => [] as FilaSql[]),
           // Nombres de grupo: si la vista no está habilitada en Datos SQL, el filtro muestra solo el código
           leerVista(VISTA_GRUPOS).catch(() => [] as FilaSql[]),
+          leerVista(VISTA_STOCK_POLO).catch((e: unknown) => { errPolo = e instanceof Error ? e.message : String(e); return [] as FilaSql[] }),
         ])
         if (!activo) return
 
@@ -206,7 +219,22 @@ export function useReposicionFranquicia() {
         }
         await Promise.all(Array.from({ length: 4 }, trabajador))
         if (!activo) return
+        // Polo por SKU; el talle único se indexa también vacío, como la lib de stock MITO
+        const sp = new Map<string, number>()
+        for (const f of filasP) {
+          const n = num(f.STOCK_POLO)
+          if (n <= 0) continue
+          const k = claveSku(f.ID_ARTICULO, f.COLOR_CODIGO, f.TALLE_CODIGO)
+          sp.set(k, (sp.get(k) ?? 0) + n)
+          const t = txt(f.TALLE_CODIGO).toUpperCase()
+          if (t === 'UNICO' || t === '') {
+            const otra = claveSku(f.ID_ARTICULO, f.COLOR_CODIGO, t === '' ? 'UNICO' : '')
+            if (!sp.has(otra)) sp.set(otra, n)
+          }
+        }
         setVentas(vs)
+        setStockPolo(sp)
+        setPoloError(errPolo)
         setStockPorSucursal(sc)
         setStockMito(stock)
         setArticulos(info)
@@ -231,20 +259,22 @@ export function useReposicionFranquicia() {
       let f = porSku.get(k)
       if (!f) {
         const a = articulos.get(v.art)
-        f = { art: v.art, descrip: a?.descripcion || v.txt, color: v.color, talle: v.talle, vendido: 0, stock: 0, stockCli: 0, sugerido: 0, material: a?.material || '', materialCod: a?.materialCod || '', grupo: a?.grupo || '', temporada: a?.temporada || '', precio: null }
+        f = { art: v.art, descrip: a?.descripcion || v.txt, color: v.color, talle: v.talle, vendido: 0, stock: 0, stockPolo: 0, stockCli: 0, sugerido: 0, dePolo: 0, material: a?.material || '', materialCod: a?.materialCod || '', grupo: a?.grupo || '', temporada: a?.temporada || '', precio: null }
         porSku.set(k, f)
       }
       f.vendido += v.cant
     }
     for (const [k, f] of porSku) {
       f.stock = stockSkuDe(stockMito, f.art, f.color, f.talle) ?? 0
+      f.stockPolo = stockPolo.get(k) ?? 0
       f.stockCli = stockCli.get(k) ?? 0
-      // Reponer lo vendido menos lo que el cliente todavía tiene, sin pasarse del stock de MITO
-      f.sugerido = Math.max(0, Math.min(f.vendido - f.stockCli, f.stock))
+      // Reponer lo vendido menos lo que el cliente todavía tiene: primero MITO, lo que falta lo completa Polo
+      f.sugerido = Math.max(0, Math.min(f.vendido - f.stockCli, Math.max(0, f.stock) + f.stockPolo))
+      f.dePolo = Math.max(0, f.sugerido - Math.max(0, f.stock))
       f.precio = precios.sku.get(k) ?? precios.art.get(f.art) ?? null
     }
     return [...porSku.values()]
-  }, [ventas, desde, hasta, articulos, stockMito, stockPorSucursal, precios, franq?.base, franq?.origenStock])
+  }, [ventas, desde, hasta, articulos, stockMito, stockPolo, stockPorSucursal, precios, franq?.base, franq?.origenStock])
 
   // Surtido: todas las posturas (artículo + color) con stock en MITO, con lo que tiene el cliente de cada una
   const posturas = useMemo<Postura[]>(() => {
@@ -289,7 +319,7 @@ export function useReposicionFranquicia() {
   // vw_ARTICULOS_MITO pesa ~6,8 MB: no se trae entera, se pide el precio de cada
   // artículo que se va a reponer (filtro por ID_ARTICULO, de a 6 a la vez).
   const artsAReponer = useMemo(
-    () => [...new Set([...filas.filter((f) => f.stock > 0 && f.sugerido > 0).map((f) => f.art), ...artsExtra])].sort().join(','),
+    () => [...new Set([...filas.filter((f) => f.sugerido > 0).map((f) => f.art), ...artsExtra])].sort().join(','),
     [filas, artsExtra],
   )
   useEffect(() => {
@@ -336,6 +366,6 @@ export function useReposicionFranquicia() {
     clienteSel, setClienteSel,
     desde, setDesde, hasta, setHasta,
     filas, posturas, precioDe, setArtsExtra,
-    cargando, cargandoPrecios, error,
+    cargando, cargandoPrecios, error, poloError,
   }
 }

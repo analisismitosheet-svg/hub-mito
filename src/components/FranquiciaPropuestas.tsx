@@ -19,7 +19,10 @@ export interface ItemPropuesta {
   talle: string
   stockCli: number
   vendido: number
+  /** stock MITO */
   stock: number
+  /** stock de Polo 52 (completa lo que MITO no cubre; sale como transferencia Polo → MITO) */
+  stockPolo?: number
   sugerido: number
   precio: number | null
 }
@@ -172,7 +175,8 @@ export default function FranquiciaPropuestas({ franquicia, nombre, desde, hasta,
         items.map((f, i) => ({
           propuesta_id: prop.id, orden: i, art: f.art, descrip: f.descrip || null, material: f.material || null,
           color: f.color || null, talle: f.talle || null, stock_cli: f.stockCli, vendido: f.vendido,
-          stock_mito: f.stock, sugerido: f.sugerido, precio: f.precio,
+          // stock_mito = disponible total (tope del link); stock_polo = la parte que está en Polo
+          stock_mito: Math.max(0, f.stock) + (f.stockPolo ?? 0), stock_polo: f.stockPolo ?? 0, sugerido: f.sugerido, precio: f.precio,
         })),
       )
       if (eItems) throw new Error(eItems.message)
