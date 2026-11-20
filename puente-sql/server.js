@@ -2002,8 +2002,11 @@ const server = http.createServer(async (req, res) => {
   }
 })
 
-server.listen(Number(PUENTE_PORT), () => {
-  console.log(`[puente] Escuchando en http://localhost:${PUENTE_PORT}`)
+// Solo dentro de esta PC: el Funnel de Tailscale y el túnel de Cloudflare entran por 127.0.0.1.
+// Así nadie de la red del local llega directo a 192.168.0.118:3128. PUENTE_HOST=0.0.0.0 lo vuelve a abrir.
+const PUENTE_HOST = process.env.PUENTE_HOST || '127.0.0.1'
+server.listen(Number(PUENTE_PORT), PUENTE_HOST, () => {
+  console.log(`[puente] Escuchando en http://${PUENTE_HOST}:${PUENTE_PORT}`)
   // Repo diaria y cascada programadas (Compras > Repo diaria > Automático). PUENTE_PROGRAMADOR=0 lo apaga.
   iniciarFotoManana()
   // Venta de los días cerrados guardada en D:\memoria ia (se completa por detrás)

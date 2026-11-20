@@ -70,11 +70,37 @@ const esAbort = (e: unknown) =>
  *
  * El body es un string, así que se reusa entre intentos sin ninguna complicación.
  */
+/**
+ * La clave del puente solo viaja a nuestros túneles (Funnel de Tailscale o Cloudflare de respaldo)
+ * o a la PC en desarrollo. Si alguien guarda otra URL en sql_conexion (ej. una cuenta admin robada
+ * que apunta a un servidor propio), el pedido sale sin la clave y no la puede capturar.
+ */
+export function destinoDelPuenteConfiable(url: string): boolean {
+  try {
+    const u = new URL(url)
+    const h = u.hostname.toLowerCase()
+    // ts.net: solo nuestra red de Tailscale (cualquiera puede tener su propio *.ts.net).
+    // trycloudflare: la URL del respaldo cambia sola y no se puede fijar; queda como riesgo menor.
+    if (u.protocol === 'https:' && (h.endsWith('.tail8a2a01.ts.net') || h.endsWith('.trycloudflare.com'))) return true
+    return u.protocol === 'http:' && (h === 'localhost' || h === '127.0.0.1')
+  } catch {
+    return false
+  }
+}
+
+function sinClaveSiNoEsConfiable(url: string, headers: Record<string, string>): Record<string, string> {
+  if (destinoDelPuenteConfiable(url)) return headers
+  const limpio: Record<string, string> = {}
+  for (const [k, v] of Object.entries(headers)) if (k.toLowerCase() !== 'x-puente-token') limpio[k] = v
+  return limpio
+}
+
 async function pedir(
   url: string,
-  init: { method: 'GET' | 'POST'; headers: Record<string, string>; body?: string },
+  init0: { method: 'GET' | 'POST'; headers: Record<string, string>; body?: string },
   opciones: Opciones,
 ): Promise<Resultado> {
+  const init = { ...init0, headers: sinClaveSiNoEsConfiable(url, init0.headers) }
   const intentos = opciones.intentos ?? OP.intentos()
   const rapido = opciones.rapidoMs ?? OP.rapidoMs()
   const tope = opciones.timeoutMs ?? OP.timeoutMs()
