@@ -252,7 +252,7 @@ export default function TasaConversion() {
             ? `Filtrado de ${horaSel}:00 a ${horaSel}:59 hs · entradas vs tickets y ventas de esa hora`
             : 'Hoy · entradas por cámara vs tickets'}
         </span>
-        <div className="ml-auto flex items-center gap-1.5">
+        <div className={'ml-auto items-center gap-1.5 ' + (pestana === 'conversion' ? 'flex' : 'hidden')}>
           <span className="text-xs text-sub">
             {horaSel != null && <><strong className="text-emerald-400">{horaSel}h</strong> · </>}
             Total: <strong className="text-ink">{nf(totEntradas)}</strong> entradas
