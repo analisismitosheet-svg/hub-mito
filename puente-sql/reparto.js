@@ -243,7 +243,7 @@ function crear(deps) {
     const listaArts = [...porArt.keys()]
       .filter((a) => arts.has(a) && porArt.get(a).some((f) => f.s.some((q) => q > 0) || f.v.length))
       .sort()
-      .map((a) => ({ cod: a, nom: arts.get(a).info.nombre, prov: arts.get(a).prov }))
+      .map((a) => [a, arts.get(a).info.nombre, arts.get(a).prov]) // compacto: [código, nombre, proveedor]
     return { skus: skus.size, porArt, arts, tiendas, desdeVenta, listaArts, segundos: Math.round((Date.now() - t0) / 100) / 10 }
   }
 

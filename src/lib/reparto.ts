@@ -12,8 +12,8 @@ import { supabase } from './supabase'
 
 export interface OpcionFiltro { cod: string; nom: string }
 export type ClaveFiltro = 'prov' | 'mat' | 'temp' | 'anio' | 'linea' | 'flia' | 'gen' | 'grupo'
-/** art: artículos con stock o venta de la foto general del Puente (si ya está; si no, no viene) */
-export type Opciones = Record<ClaveFiltro, OpcionFiltro[]> & { art?: (OpcionFiltro & { prov?: string })[] }
+/** art: artículos con stock o venta de la foto general del Puente, [código, nombre, proveedor] (si ya está; si no, no viene) */
+export type Opciones = Record<ClaveFiltro, OpcionFiltro[]> & { art?: [string, string, string][] }
 /** MITO = proveedores que empiezan con MO; MARCAS = el resto; '' = todos */
 export type Origen = '' | 'MITO' | 'MARCAS'
 export const esProvMito = (cod: string) => cod.trim().toUpperCase().startsWith('MO')
@@ -579,11 +579,14 @@ async function token(): Promise<string> {
   return t
 }
 
-export async function cargarOpciones(): Promise<Opciones> {
+/** Estado de la foto general del Puente (todos los artículos en memoria: el armado sale en segundos). */
+export interface EstadoFoto { en: string | null; leyendo: boolean; segundos: number | null; error: string | null }
+
+export async function cargarOpciones(): Promise<{ opciones: Opciones; foto: EstadoFoto | null }> {
   const res = await fetch('/api/sql/reparto', { headers: { Authorization: `Bearer ${await token()}` } })
-  const b = (await res.json().catch(() => null)) as { opciones?: Opciones; error?: string } | null
+  const b = (await res.json().catch(() => null)) as { opciones?: Opciones; foto?: EstadoFoto; error?: string } | null
   if (!res.ok || !b?.opciones) throw new Error(b?.error ?? `Error ${res.status} leyendo los filtros`)
-  return b.opciones
+  return { opciones: b.opciones, foto: b.foto ?? null }
 }
 
 export type RespuestaStock = DatosReparto | { estado: 'demasiados'; articulos: number; max: number; motivo?: 'peso'; bytes?: number }
@@ -611,6 +614,7 @@ export async function cargarStock(
   hasta: string,
   alEsperar?: (segundos: number) => void,
   cancelado?: () => boolean,
+  forzar = false,
 ): Promise<RespuestaStock> {
   const t = await token()
   const inicio = Date.now()
@@ -618,7 +622,8 @@ export async function cargarStock(
     const res = await fetch('/api/sql/reparto', {
       method: 'POST',
       headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filtros, desde, hasta }),
+      // forzar solo en el primer pedido: los siguientes esperan esa misma foto
+      body: JSON.stringify({ filtros, desde, hasta, forzar: forzar && Date.now() - inicio < 1000 }),
     })
     const b = (await res.json().catch(() => null)) as (RespuestaStock & { estado?: string; error?: string }) | { estado: 'calculando'; error?: string } | null
     if (!res.ok || !b) throw new Error((b as { error?: string } | null)?.error ?? `Error ${res.status} leyendo stock y venta`)

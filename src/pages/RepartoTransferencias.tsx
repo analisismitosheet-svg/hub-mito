@@ -31,6 +31,7 @@ import {
   sugerir,
   CORTO,
   type ClaveFiltro,
+  type EstadoFoto,
   type DatosReparto,
   type Fila,
   type Opciones,
@@ -67,6 +68,8 @@ export default function RepartoTransferencias() {
   /* ---------- paso 1: filtros ---------- */
   const [opciones, setOpciones] = useState<Opciones | null>(null)
   const [errOpciones, setErrOpciones] = useState<string | null>(null)
+  const [foto, setFoto] = useState<EstadoFoto | null>(null)
+  const [fotoNueva, setFotoNueva] = useState(false)
   const [sel, setSel] = useState<Record<ClaveFiltro, Set<string>>>(() =>
     Object.fromEntries(FILTROS.map((f) => [f.k, new Set<string>()])) as Record<ClaveFiltro, Set<string>>,
   )
@@ -138,7 +141,7 @@ export default function RepartoTransferencias() {
   }, [])
 
   useEffect(() => {
-    cargarOpciones().then(setOpciones).catch((e: Error) => setErrOpciones(e.message))
+    cargarOpciones().then((r) => { setOpciones(r.opciones); setFoto(r.foto) }).catch((e: Error) => setErrOpciones(e.message))
   }, [])
 
   // Ruta de la Master y la Mercedes (se relee cada 60 s con la pestaña visible)
@@ -160,7 +163,7 @@ export default function RepartoTransferencias() {
       .filter((o) => k !== 'prov' || provDelOrigen(o.cod))
       .map((o) => ({ id: o.cod, label: o.nom ? `${o.cod} ${o.nom}` : o.cod }))
   const sugArts = useMemo(
-    () => (opciones?.art ?? []).filter((o) => !origen || (origen === 'MITO') === esProvMito(o.prov ?? '')).map((o) => ({ id: o.cod, label: o.nom ? `${o.cod} ${o.nom}` : o.cod })),
+    () => (opciones?.art ?? []).filter(([, , prov]) => !origen || (origen === 'MITO') === esProvMito(prov ?? '')).map(([cod, nom]) => ({ id: cod, label: nom ? `${cod} ${nom}` : cod })),
     [opciones, origen],
   )
   const elegirOrigen = (o: Origen) => {
@@ -189,7 +192,7 @@ export default function RepartoTransferencias() {
     cancelado.current = false
     try {
       const filtros = Object.fromEntries(FILTROS.map((f) => [f.k, [...sel[f.k]]])) as Record<ClaveFiltro, string[]>
-      const r = await cargarStock({ ...filtros, art: arts.join('|'), origen }, desde, hasta, setEsperando, () => cancelado.current)
+      const r = await cargarStock({ ...filtros, art: arts.join('|'), origen }, desde, hasta, setEsperando, () => cancelado.current, fotoNueva)
       if (r.estado === 'demasiados') {
         setError(
           r.motivo === 'peso'
@@ -210,6 +213,7 @@ export default function RepartoTransferencias() {
       futuro.current = []
       setLocales(proy.locales)
       setDatos(proy)
+      setFotoNueva(false)
       setGLinea(new Set()); setGFlia(new Set()); setGProv(new Set()); setGArts([])
       setArtSel(null)
       setSugerencia(null)
@@ -466,10 +470,23 @@ export default function RepartoTransferencias() {
             </button>
           </div>
 
+          {foto && (
+            <p className="mt-4 flex flex-wrap items-center gap-2 text-xs text-sub">
+              <span className="rounded-full bg-sky-500/15 px-2 py-0.5 font-bold text-sky-300">
+                {foto.en ? `Foto del stock ${new Date(foto.en).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}` : foto.leyendo ? 'Sacando la foto del stock…' : 'Sin foto del stock todavía'}
+              </span>
+              {foto.en ? 'Se renueva sola cada 15 minutos mientras se usa el reparto.' : foto.leyendo ? 'Tarda 1 o 2 minutos; mientras, elegí los filtros.' : 'La primera vez tarda 1 o 2 minutos.'}
+              {foto.en && (
+                <label className="inline-flex cursor-pointer items-center gap-1.5 font-semibold text-ink" title="Vuelve a leer el stock de todos los locales antes de armar (1 o 2 minutos)">
+                  <input type="checkbox" className="h-3.5 w-3.5 accent-orange-500" checked={fotoNueva} onChange={(e) => setFotoNueva(e.target.checked)} /> Sacar una foto nueva al armar
+                </label>
+              )}
+            </p>
+          )}
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
             <p className={`text-xs ${motivoNoArmar ? 'text-red-300' : 'text-sub'}`}>
               {armando ? (
-                <span className="inline-flex items-center gap-2 text-sky-300"><Loader2 size={14} className="animate-spin" aria-hidden /> Leyendo stock y venta de cada local y del depósito… {esperando ? `${esperando} s` : ''} (tarda 1 o 2 minutos)</span>
+                <span className="inline-flex items-center gap-2 text-sky-300"><Loader2 size={14} className="animate-spin" aria-hidden /> Sacando la foto del stock y la venta de todos los locales… {esperando ? `${esperando} s` : ''} (1 o 2 minutos; después cada armado sale en segundos)</span>
               ) : (
                 motivoNoArmar || `${localesElegidos.length} locales · venta del ${fechaCorta(desde)} al ${fechaCorta(hasta)}`
               )}

@@ -16,7 +16,7 @@
  *   2) venta neta por día, tienda y SKU desde @desde_venta (devoluciones restan; solo <> 0)
  *   3) última venta (> 0) por tienda y SKU desde @desde_ult
  *   4) stock MITO REAL por SKU = físico − comprometido (COMB de DRAGONFISH_MITO), solo > 0
- *   5) maestro de TODOS los artículos (atributos para filtrar, como reparto-stock.sql)
+ *   5) maestro de los artículos con stock, venta o stock MITO (atributos para filtrar, como reparto-stock.sql)
  */
 SET NOCOUNT ON;
 
@@ -56,6 +56,11 @@ SELECT Tienda, ID_ART, ID_COLOR, ID_TALLE, MAX(dia) AS ultima
  WHERE Tipo = 'VENTA' AND CANT > 0
  GROUP BY Tienda, ID_ART, ID_COLOR, ID_TALLE;
 
+-- artículos con algo en la foto (los del maestro sin stock ni venta no aparecen en ningún reparto)
+IF OBJECT_ID('tempdb..#ids') IS NOT NULL DROP TABLE #ids;
+CREATE TABLE #ids (ID_ART varchar(60) COLLATE DATABASE_DEFAULT PRIMARY KEY);
+INSERT #ids (ID_ART) SELECT DISTINCT ID_ART FROM #f WHERE ID_ART <> '';
+
 DROP TABLE #f;
 
 -- 4) stock MITO real = físico − comprometido (cada parte del comprometido con piso 0)
@@ -69,6 +74,19 @@ SELECT ID_ART, ID_COLOR, ID_TALLE, stock
          GROUP BY LTRIM(RTRIM(COART)), LTRIM(RTRIM(COCOL)), LTRIM(RTRIM(TALLE))) x
  WHERE stock > 0;
 
+INSERT #ids (ID_ART)
+SELECT DISTINCT LTRIM(RTRIM(COART)) FROM DRAGONFISH_MITO.ZooLogic.COMB c
+ WHERE BDALTAFW = 'MITO' AND BDMODIFW = 'MITO' AND LTRIM(RTRIM(COART)) <> ''
+   AND NOT EXISTS (SELECT 1 FROM #ids i WHERE i.ID_ART = LTRIM(RTRIM(c.COART)));
+
+-- género = categoría en Dragon, de una sola pasada (antes era una subconsulta por artículo: ~8 min)
+IF OBJECT_ID('tempdb..#g') IS NOT NULL DROP TABLE #g;
+SELECT LTRIM(RTRIM(z.ARTCOD)) AS ID_ART, MAX(LTRIM(RTRIM(z.CATEARTI))) AS GEN
+  INTO #g
+  FROM DRAGONFISH_MITO.ZooLogic.ART z
+  JOIN #ids i ON i.ID_ART = LTRIM(RTRIM(z.ARTCOD)) COLLATE DATABASE_DEFAULT
+ GROUP BY LTRIM(RTRIM(z.ARTCOD));
+
 -- 5) maestro (mismos criterios que el filtro de reparto-stock.sql; género = categoría en Dragon)
 SELECT LTRIM(RTRIM(a.ID_ART))             AS ID_ART,
        LTRIM(RTRIM(a.ARTICULO_ADICIONAL)) AS ARTICULO_ADICIONAL,
@@ -80,7 +98,11 @@ SELECT LTRIM(RTRIM(a.ID_ART))             AS ID_ART,
        LTRIM(RTRIM(a.ID_MATERIAL))        AS ID_MATERIAL,
        LTRIM(RTRIM(a.ID_TEMPORADA))       AS ID_TEMPORADA,
        CAST(CAST(a.[AÑO] AS int) AS varchar(10)) AS ANIO,
-       (SELECT TOP 1 LTRIM(RTRIM(z.CATEARTI)) FROM DRAGONFISH_MITO.ZooLogic.ART z
-         WHERE RTRIM(z.ARTCOD) = RTRIM(a.ID_ART)) AS GEN
+       g.GEN
   FROM DWH.dbo.vw_DIM_ARTICULO a
+  JOIN #ids i ON i.ID_ART = LTRIM(RTRIM(a.ID_ART)) COLLATE DATABASE_DEFAULT
+  LEFT JOIN #g g ON g.ID_ART = i.ID_ART
  WHERE CHARINDEX(' ', RTRIM(a.ID_ART)) = 0;
+
+DROP TABLE #g;
+DROP TABLE #ids;
