@@ -12,7 +12,7 @@
  * Datos: sql/franquicias_reposicion_auto.sql.
  */
 import { enviarWhatsappPlantilla } from './informesServidor.js'
-import { enviarTelegram, telegramActivo } from './telegram.js'
+import { enviarTelegram, escaparHtml, telegramActivo } from './telegram.js'
 import { claveTelefono } from './informes.js'
 
 /** Reintentos de un envío que falla (plantilla en revisión, Meta caído…): cada 5 min → ~1 h. */
@@ -50,6 +50,26 @@ const hubUrl = () => (process.env.HUB_URL || 'https://hub-mito.vercel.app').repl
 const dia = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
 const ventaDe = (p: PropuestaEnvio) =>
   !p.desde || !p.hasta ? 'los últimos días' : p.desde === p.hasta ? dia(p.hasta) : `${dia(p.desde)} al ${dia(p.hasta)}`
+
+const DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
+/** '2026-11-19' -> 'jueves 19/11' */
+const diaLargo = (iso: string) => `${DIAS_SEMANA[new Date(`${iso}T12:00:00Z`).getUTCDay()]} ${dia(iso)}`
+/** Ayer en Argentina, 'AAAA-MM-DD'. */
+const ayerAr = () => new Date(Date.now() - 86_400_000).toLocaleDateString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' })
+
+/** Encabezado que deja claro de qué día es la venta (la reposición es diaria: casi siempre, ayer). */
+function encabezadoVenta(p: PropuestaEnvio): { titulo: string; frase: string } {
+  if (!p.desde || !p.hasta) return { titulo: 'REPOSICIÓN DIARIA', frase: 'según lo que vendiste' }
+  if (p.desde === p.hasta) {
+    return p.hasta === ayerAr()
+      ? { titulo: `VENTA DE AYER · ${diaLargo(p.hasta).toUpperCase()}`, frase: `según lo que vendiste ayer (${diaLargo(p.hasta)})` }
+      : { titulo: `VENTA DEL ${diaLargo(p.hasta).toUpperCase()}`, frase: `según lo que vendiste el ${diaLargo(p.hasta)}` }
+  }
+  return {
+    titulo: `VENTA DEL ${diaLargo(p.desde).toUpperCase()} AL ${diaLargo(p.hasta).toUpperCase()}`,
+    frase: `según lo que vendiste del ${diaLargo(p.desde)} al ${diaLargo(p.hasta)}`,
+  }
+}
 
 /** Artículos y unidades que van en el link (sugerido > 0). */
 async function totalesDe(propuestaId: string): Promise<{ articulos: number; unidades: number }> {
@@ -100,12 +120,14 @@ export async function enviarPendientesFranquicias(propuestaId?: string, ids?: nu
     const cliente = p.cliente_nombre || p.franquicia_nombre
     const link = `${hubUrl()}/p/${e.token}`
     const texto = `Hola ${cliente}, te armamos la reposición ${p.numero} según la venta del ${ventaDe(p)}: ${t.articulos} artículos, ${t.unidades} unidades.\n\nMirala y confirmala acá:\n${link}`
+    const enc = encabezadoVenta(p)
     const res = telegramActivo()
       ? await enviarTelegram(
           e.telefono,
-          `Hola ${cliente}, te armamos la reposición ${p.numero} según la venta del ${ventaDe(p)}: ${t.articulos} artículos, ${t.unidades} unidades.\n\nMirala, ajustá lo que quieras y confirmala con el botón.`,
+          `<b>📅 REPOSICIÓN DIARIA</b>\n<b>🛍️ ${enc.titulo}</b>\n\nHola ${escaparHtml(cliente)}, ${enc.frase} te armamos la reposición ${escaparHtml(p.numero)}: ${t.articulos} artículos, ${t.unidades} unidades.\n\nMirala, ajustá lo que quieras y confirmala con el botón.`,
           null,
           [[{ text: '🛒 Ver y confirmar el pedido', url: link }]],
+          true,
         )
       : await enviarWhatsappPlantilla(
           e.telefono,

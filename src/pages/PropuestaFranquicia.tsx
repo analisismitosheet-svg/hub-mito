@@ -31,6 +31,8 @@ interface PropuestaPub {
   franquicia: string
   cliente: string | null
   tipo: 'reposicion' | 'calzado' | 'materiales' | null
+  /** 'auto' = reposición diaria automática */
+  origen?: string | null
   desde: string | null
   hasta: string | null
   vence_at: string
@@ -45,6 +47,11 @@ interface PropuestaPub {
   comentario: string | null
   items: ItemPub[]
 }
+
+const DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
+/** '2026-11-19' -> 'jueves 19/11' */
+const diaLargo = (iso: string) => `${DIAS_SEMANA[new Date(`${iso}T12:00:00`).getDay()]} ${iso.slice(8, 10)}/${iso.slice(5, 7)}`
+const ayerAr = () => new Date(Date.now() - 86_400_000).toLocaleDateString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' })
 
 const fmtPesos = (n: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n)
 const diaIso = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
@@ -130,12 +137,26 @@ export default function PropuestaFranquicia() {
       <header className="bg-neutral-950 px-4 pb-4 pt-5 text-white">
         <div className="mx-auto max-w-xl">
           <p className="font-display text-xl font-black tracking-tight text-red-500">MITO</p>
-          <h1 className="mt-1 text-lg font-bold">{prop?.tipo === 'calzado' || prop?.tipo === 'materiales' ? 'Reposición de materiales' : 'Propuesta de reposición'}</h1>
+          <h1 className="mt-1 text-lg font-bold">{prop?.tipo === 'calzado' || prop?.tipo === 'materiales' ? 'Reposición de materiales' : prop?.hasta && prop.desde === prop.hasta ? 'Reposición diaria' : 'Propuesta de reposición'}</h1>
           {prop && (
             <p className="text-xs text-white/70">
               {prop.cliente || prop.franquicia} · N° {prop.numero}
               {!prop.confirmada && !prop.vencida && ` · válida hasta el ${fmtFecha(prop.vence_at)}`}
             </p>
+          )}
+          {/* Reposición diaria: que se vea de qué día es la venta (casi siempre, ayer) */}
+          {prop && prop.tipo !== 'calzado' && prop.tipo !== 'materiales' && prop.hasta && (
+            <div className="mt-3 flex items-center gap-3 rounded-2xl bg-amber-400 px-3 py-2.5 text-neutral-950">
+              <span className="text-2xl leading-none" aria-hidden>📅</span>
+              <div className="min-w-0 leading-tight">
+                <p className="text-[11px] font-extrabold uppercase tracking-wide">
+                  {prop.desde && prop.desde !== prop.hasta ? 'Tu venta de estos días' : prop.hasta === ayerAr() ? 'Tu venta de ayer' : 'Tu venta del día'}
+                </p>
+                <p className="text-lg font-black first-letter:uppercase">
+                  {prop.desde && prop.desde !== prop.hasta ? `${diaLargo(prop.desde)} al ${diaLargo(prop.hasta)}` : diaLargo(prop.hasta)}
+                </p>
+              </div>
+            </div>
           )}
         </div>
       </header>
@@ -175,7 +196,9 @@ export default function PropuestaFranquicia() {
             {!cerrado && (
               <>
                 <p className="mb-2 text-xs text-neutral-600">
-                  {prop.desde && prop.hasta && <>Según tu venta del <b>{diaIso(prop.desde)} al {diaIso(prop.hasta)}</b>. </>}
+                  {prop.desde && prop.hasta && (prop.desde === prop.hasta
+                    ? <>Según lo que vendiste {prop.hasta === ayerAr() ? 'ayer' : 'el'} <b>{diaLargo(prop.hasta)}</b>. </>
+                    : <>Según tu venta del <b>{diaIso(prop.desde)} al {diaIso(prop.hasta)}</b>. </>)}
                   Marcá lo que querés que te enviemos. Podés cambiar las cantidades (hasta lo que hay en stock).
                 </p>
                 <div className="mb-3 flex gap-2">

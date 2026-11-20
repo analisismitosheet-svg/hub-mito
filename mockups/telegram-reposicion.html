@@ -70,7 +70,7 @@
 <div class="wrap">
   <p class="eyebrow">Mayorista · Franquicias</p>
   <h1>Así le llega la reposición por Telegram</h1>
-  <p class="lead">Maqueta con los datos de la reposición P-007 (ARGENTINA S.R.L). Tocá el botón del mensaje y probá la página: Sí / No, − / +, Quiero todo y Confirmar. No manda nada.</p>
+  <p class="lead">Maqueta de la reposición diaria de ARGENTINA S.R.L con la venta de ayer (jueves 19/11). Tocá el botón del mensaje y probá la página: Sí / No, − / +, Quiero todo y Confirmar. No manda nada.</p>
 
   <div class="pasos">
     <div style="display:flex;flex-direction:column;align-items:center">
@@ -84,7 +84,9 @@
         <div class="tg-chat">
           <div class="tg-fecha"><span>20 de noviembre</span></div>
           <div class="tg-msg">
-            Hola ARGENTINA S.R.L, te armamos la reposición P-007 según la venta del 09/11 al 19/11: 31 artículos, 31 unidades.<br><br>
+            <b>📅 REPOSICIÓN DIARIA</b><br>
+            <b>🛍️ VENTA DE AYER · JUEVES 19/11</b><br><br>
+            Hola ARGENTINA S.R.L, según lo que vendiste ayer (jueves 19/11) te armamos la reposición P-008: 5 artículos, 6 unidades.<br><br>
             Mirala, ajustá lo que quieras y confirmala con el botón.
             <div class="tg-hora">09:00</div>
           </div>
@@ -100,11 +102,15 @@
         <div class="pg">
           <div class="pg-head">
             <div class="pg-logo">MITO</div>
-            <h2>Propuesta de reposición</h2>
-            <p>ARGENTINA S.R.L · N° P-007 · válida hasta el 26/11</p>
+            <h2>Reposición diaria</h2>
+            <p>ARGENTINA S.R.L · N° P-008 · válida hasta el 27/11</p>
+            <div style="margin-top:10px;display:flex;align-items:center;gap:10px;background:#fbbf24;color:#0a0a0a;border-radius:14px;padding:9px 12px">
+              <span style="font-size:24px;line-height:1">📅</span>
+              <div style="line-height:1.2"><div style="font-size:11px;font-weight:800;letter-spacing:.05em">TU VENTA DE AYER</div><div style="font-size:18px;font-weight:900">Jueves 19/11</div></div>
+            </div>
           </div>
           <div class="pg-body">
-            <p>Según tu venta del <b>09/11 al 19/11</b>. Marcá lo que querés que te enviemos. Podés cambiar las cantidades (hasta lo que hay en stock).</p>
+            <p>Según lo que vendiste ayer <b>jueves 19/11</b>. Marcá lo que querés que te enviemos. Podés cambiar las cantidades (hasta lo que hay en stock).</p>
             <div class="fila"><button class="b" id="todo">✓ Quiero todo</button><button class="b" id="nada">✕ Nada</button></div>
             <input class="buscar" id="buscar" placeholder="🔍 Buscar artículo o nombre">
             <div id="lista"></div>
@@ -137,6 +143,7 @@
     { cod:'ZH060301', desc:'SKECH BOXER ZIMITH', color:'03', talle:'M', precio:7500, local:1, venta:2, prop:1, disp:154, foto:'🩲' },
     { cod:'ZN265112', desc:'STATE T-SHIRT KID ZIMITH', color:'02', talle:'16', precio:12500, local:0, venta:1, prop:1, disp:23, foto:'👕' },
     { cod:'CF165211', desc:'BOARDSHORT CAPTAIN FIN', color:'02', talle:'L', precio:29900, local:0, venta:2, prop:2, disp:149, foto:'🩳' },
+
     { cod:'CF170044', desc:'GORRA TRUCKER CAPTAIN FIN', color:'01', talle:'U', precio:15900, local:1, venta:1, prop:1, disp:40, foto:'🧢' },
   ]
   const est = arts.map(a => ({ si: null, cant: a.prop }))
