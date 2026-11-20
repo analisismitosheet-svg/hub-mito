@@ -452,7 +452,7 @@ export default function CampanaNotificaciones() {
         const { data } = await sb.from('franquicias_propuestas').select('id,numero,franquicia_nombre,unidades_confirmadas,confirmada_at,dragon_pedido').in('estado', ['confirmada', 'en_dragon']).is('revisada_at', null)
         if (activo && data) {
           for (const p of data as { id: string; numero: string; franquicia_nombre: string; unidades_confirmadas: number | null; confirmada_at: string; dragon_pedido: string | null }[]) {
-            notis.push({ id: `fq-${p.id}`, tipo: 'franquicias', titulo: `${p.franquicia_nombre} confirmó su pedido`, detalle: `${p.numero} · ${p.unidades_confirmadas ?? 0} u.${p.dragon_pedido ? ` · pedido Dragon ${p.dragon_pedido}` : ''}`, ruta: '/mayorista/franquicias/auto', fecha: p.confirmada_at, destinoId: p.id })
+            notis.push({ id: `fq-${p.id}`, tipo: 'franquicias', titulo: `${p.franquicia_nombre} confirmó su pedido`, detalle: `${p.numero} · ${p.unidades_confirmadas ?? 0} u.${p.dragon_pedido ? ` · pedido Dragon ${p.dragon_pedido}` : ''}`, ruta: `/mayorista/franquicias/auto?abrir=${p.id}`, fecha: p.confirmada_at, destinoId: p.id })
           }
         }
       }

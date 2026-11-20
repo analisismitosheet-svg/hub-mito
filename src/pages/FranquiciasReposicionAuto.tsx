@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   CalendarClock, ChevronDown, ChevronRight, Copy, ExternalLink, Loader2, Minus, Pencil, Plus, RefreshCw, Save, Send, X, Zap,
 } from 'lucide-react'
@@ -278,12 +279,52 @@ export default function FranquiciasReposicionAuto() {
 
   const enviosDe = (id: string) => envios.filter((e) => e.propuesta_id === id)
 
-  async function abrirFecha(p: Propuesta) {
-    setFechasAbiertas((s) => { const n = new Set(s); if (n.has(p.id)) n.delete(p.id); else n.add(p.id); return n })
+  /** Marca como vista una confirmada (saca el aviso de la campana). */
+  function marcarRevisada(p: Propuesta) {
+    if (!supabase || (p.estado !== 'confirmada' && p.estado !== 'en_dragon')) return
+    void supabase.from('franquicias_propuestas').update({ revisada_at: new Date().toISOString() }).eq('id', p.id).is('revisada_at', null)
+  }
+
+  async function cargarItems(p: Propuesta) {
     if (items[p.id] || !supabase) return
     const { data } = await supabase.from('franquicias_propuesta_items').select('id,art,descrip,material,color,talle,vendido,stock_cli,stock_mito,sugerido,precio,cantidad').eq('propuesta_id', p.id).order('orden')
     setItems((s) => ({ ...s, [p.id]: (data as Item[] | null) ?? [] }))
   }
+
+  async function abrirFecha(p: Propuesta) {
+    const abrir = !fechasAbiertas.has(p.id)
+    setFechasAbiertas((s) => { const n = new Set(s); if (n.has(p.id)) n.delete(p.id); else n.add(p.id); return n })
+    if (abrir) marcarRevisada(p)
+    await cargarItems(p)
+  }
+
+  // Desde la campana (?abrir=<id>): abre el cliente y el resumen del pedido, y lo lleva a la vista
+  const [searchParams, setSearchParams] = useSearchParams()
+  const buscandoAbrir = useRef<string | null>(null)
+  useEffect(() => {
+    const id = searchParams.get('abrir')
+    if (!id || cargando || !supabase) return
+    const p = propuestas.find((x) => x.id === id)
+    if (!p) {
+      // Más vieja que las que se listan: se trae sola
+      if (buscandoAbrir.current === id) { setSearchParams({}, { replace: true }); return }
+      buscandoAbrir.current = id
+      void supabase.from('franquicias_propuestas').select('id,numero,franquicia,cliente_id,cliente_nombre,origen,desde,hasta,estado,token,vence_at,unidades_propuestas,total_propuesto,unidades_confirmadas,total_confirmado,confirmada_at,confirmada_por,dragon_pedido,dragon_error,dragon_anulado_at,dragon_anulado_por,comentario,creado_at')
+        .eq('id', id).maybeSingle().then(({ data }) => {
+          if (data) setPropuestas((ps) => (ps.some((x) => x.id === id) ? ps : [...ps, data as Propuesta]))
+          else setSearchParams({}, { replace: true })
+        })
+      return
+    }
+    const cli = [...porCliente.entries()].find(([, ps]) => ps.some((x) => x.id === id))?.[0]
+    if (cli) setAbiertos((s) => new Set(s).add(cli))
+    setFechasAbiertas((s) => new Set(s).add(id))
+    marcarRevisada(p)
+    void cargarItems(p)
+    setSearchParams({}, { replace: true })
+    window.setTimeout(() => document.getElementById(`prop-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, cargando, propuestas, porCliente])
 
   /** Cambia lo que va en el link (solo mientras nadie la aceptó). */
   async function cambiarSugerido(p: Propuesta, it: Item, valor: number) {
@@ -539,7 +580,7 @@ export default function FranquiciasReposicionAuto() {
                           const confirmada = p.estado === 'confirmada' || p.estado === 'en_dragon'
                           const vendidoTot = (lista ?? []).reduce((s, i) => s + i.vendido, 0)
                           return (
-                            <div key={p.id} className={`rounded-xl border ${fAbierta ? 'border-sky-500/30' : 'border-line'} bg-paper`}>
+                            <div key={p.id} id={`prop-${p.id}`} className={`scroll-mt-20 rounded-xl border ${fAbierta ? 'border-sky-500/30' : 'border-line'} bg-paper`}>
                               <div className="flex flex-wrap items-center gap-2 px-3 py-2">
                                 <button type="button" onClick={() => void abrirFecha(p)} className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-left" aria-expanded={fAbierta}>
                                   {fAbierta ? <ChevronDown size={14} className="text-sky-400" aria-hidden /> : <ChevronRight size={14} className="text-sub" aria-hidden />}
