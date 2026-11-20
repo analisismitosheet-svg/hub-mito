@@ -10,6 +10,7 @@
  *   GET /api/sql/repo-diaria[?fechas=&forzar=1] -> repo diaria desde el DWH (Compras; responde "calculando" hasta tenerla)
  *   GET|POST /api/sql/reparto                  -> Reparto manual: opciones de filtros / stock y venta por local (solo lectura)
  *   GET /api/sql/stock-mayorista[?forzar=1]    -> Mayorista > Stock: depósito y tapera (remitido sin facturar) de MITO
+ *   GET /api/sql/stock-tienda?prefijos=|articulos=[&locales=1] -> tienda cf-zimith-mayorista (clave X-Mayorista-Token, sin sesión)
  *   GET /api/sql/pedido-venta-items?codigo=    -> renglones de un pedido de venta viejo, en vivo de Dragonfish
  *   GET /api/sql/dragon-variantes?base=&articulo= -> colores y talles de un artículo en Dragon (Órdenes de compras)
  *   GET /api/sql/dragon-articulos?base=&q=|codigos= -> artículos en vivo de Dragon (buscador e importar txt de Órdenes de compras)
@@ -38,6 +39,7 @@ import pedidoVentaItems from '../../src/lib/pedidoVentaItemsApi.js'
 import dragonVariantes, { dragonArticulos } from '../../src/lib/dragonVariantesApi.js'
 import stockPublico from '../../src/lib/stockPublicoApi.js'
 import stockMayorista from '../../src/lib/stockMayoristaApi.js'
+import stockTienda from '../../src/lib/stockTiendaApi.js'
 
 type Req = {
   method?: string
@@ -104,6 +106,8 @@ export default async function handler(req: Req, res: Res) {
 
   if (ruta === 'ping') return ping(res)
   if (ruta === 'stock-publico') return stockPublico(req, res)
+  // tienda mayorista web: con clave privada (X-Mayorista-Token), no con sesión
+  if (ruta === 'stock-tienda') return stockTienda(req, res)
 
   if (ruta === 'status') return status(req, res)
   if (ruta === 'catalogo') return catalogo(req, res)

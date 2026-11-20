@@ -47,6 +47,7 @@
  *                   (carga la repo como pedidos de venta VTD en DRAGONFISH_MITO por la API, uno por local)
  *   POST /          body: { accion: 'stock_mayorista', forzar? } -> { deposito, tapera, articulos, colores, calculado }
  *                   (Mayorista > Stock: sql/stock-mayorista.sql, DRAGONFISH_MITO, cache 1 min)
+ *   POST /          body: { accion: 'stock_tienda', prefijos|articulos, locales? } -> { filas } (tienda cf-zimith-mayorista)
  *   POST /          body: { accion: 'stock_valorizado', forzar? } -> { bases, articulos, costo, calculado }
  *                   (Administradores > Stock valorizado: sql/stock-valorizado.sql contra el
  *                    servidor principal, recorre todas las bases DRAGONFISH_*; cache 10 min)
@@ -907,6 +908,108 @@ async function stockMayorista(forzar) {
   } finally {
     stockMayoristaEnCurso = null
   }
+}
+
+/**
+ * Stock MAYORISTA para la tienda web (Captain Fin + Zimith): depósito MITO, stock REAL por artículo, color y talle.
+ * Misma fórmula que el Reparto manual (sql/reparto-stock.sql, paso 5): físico − comprometido, cada parte del
+ * comprometido (PEDIDO, PREPARADO) con piso 0; solo filas de MITO (BDALTAFW/BDMODIFW = 'MITO'). SOLO LECTURA.
+ *   body: { accion:'stock_tienda', prefijos:['CF','ZH'] }  (o articulos:[...], hasta 200)
+ *   -> { filas: [{ a, c, t, s }], en }   (s > 0; a = artículo, c = color, t = talle)
+ * Cache de 60 s por pedido: la tienda pregunta seguido y el número no cambia tan rápido.
+ */
+const cacheStockTienda = new Map()
+
+
+async function stockTienda(prefijos, articulos) {
+  const pre = [...new Set((Array.isArray(prefijos) ? prefijos : []).map((p) => String(p).trim().toUpperCase()))].filter(Boolean)
+  const arts = [...new Set((Array.isArray(articulos) ? articulos : []).map((a) => String(a).trim().toUpperCase()))].filter(Boolean)
+  if (!pre.length && !arts.length) throw new Error('Pasá prefijos o articulos')
+  if (pre.length > 10 || pre.some((p) => !/^[A-Z]{1,4}$/.test(p))) throw new Error('Prefijos inválidos')
+  if (arts.length > 200 || arts.some((a) => !ARTICULO_DRAGON.test(a))) throw new Error('Artículos inválidos')
+  const clave = JSON.stringify([pre.sort(), arts.sort()])
+  const c = cacheStockTienda.get(clave)
+  if (c && Date.now() - c.en < 60_000) return c.datos
+
+  const srv = SERVIDORES.get(ALIAS_PRINCIPAL.toUpperCase())
+  await asegurarConexion(srv)
+  const p = srv.pool.request()
+  pre.forEach((x, i) => p.input(`p${i}`, srv.sql.VarChar(10), x + '%'))
+  arts.forEach((x, i) => p.input(`a${i}`, srv.sql.VarChar(40), x))
+  const filtro = [
+    ...pre.map((_, i) => `LTRIM(RTRIM(COART)) LIKE @p${i}`),
+    ...(arts.length ? [`LTRIM(RTRIM(COART)) IN (${arts.map((_, i) => `@a${i}`).join(',')})`] : []),
+  ].join(' OR ')
+  const r = await p.query(
+    `SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+     SELECT LTRIM(RTRIM(COART)) AS a, LTRIM(RTRIM(COCOL)) AS c, LTRIM(RTRIM(TALLE)) AS t,
+            SUM(CAST(ISNULL(COCANT, 0) AS int))
+          - SUM(CASE WHEN ISNULL(PEDIDO, 0) > 0 THEN CAST(PEDIDO AS int) ELSE 0 END
+              + CASE WHEN ISNULL(PREPARADO, 0) > 0 THEN CAST(PREPARADO AS int) ELSE 0 END) AS s
+       FROM DRAGONFISH_MITO.ZooLogic.COMB
+      WHERE BDALTAFW = 'MITO' AND BDMODIFW = 'MITO' AND (${filtro})
+      GROUP BY LTRIM(RTRIM(COART)), LTRIM(RTRIM(COCOL)), LTRIM(RTRIM(TALLE))
+     HAVING SUM(CAST(ISNULL(COCANT, 0) AS int))
+          - SUM(CASE WHEN ISNULL(PEDIDO, 0) > 0 THEN CAST(PEDIDO AS int) ELSE 0 END
+              + CASE WHEN ISNULL(PREPARADO, 0) > 0 THEN CAST(PREPARADO AS int) ELSE 0 END) > 0`,
+  )
+  const datos = { filas: (r.recordset ?? []).map((f) => ({ a: f.a, c: f.c, t: f.t, s: Number(f.s) || 0 })), en: new Date().toISOString() }
+  cacheStockTienda.set(clave, { en: Date.now(), datos })
+  if (cacheStockTienda.size > 50) cacheStockTienda.delete(cacheStockTienda.keys().next().value)
+  return datos
+}
+
+/**
+ * Stock REAL de los LOCALES (los 17 de la consulta pública) para los artículos de la tienda mayorista que tienen
+ * el tilde "sumar stock de locales". Misma fórmula que MITO (físico − pedido − preparado, con piso 0 en cada parte).
+ * Sin reserva: se ofrece todo. Lo que se venda de un local entra en el pedido de MITO y el hub genera la
+ * transferencia local → MITO. SOLO LECTURA. Cada base con tope de 12 s; si una falla, va en sin_datos.
+ *   body: { accion:'stock_tienda', articulos:[...hasta 60], locales:true }
+ *   -> { filas: [{ l, a, c, t, s }], sin_datos: [locales], en }
+ */
+const cacheStockLocalesTienda = new Map()
+async function stockLocalesTienda(articulos) {
+  const arts = [...new Set((Array.isArray(articulos) ? articulos : []).map((a) => String(a).trim().toUpperCase()))].filter(Boolean)
+  if (!arts.length || arts.length > 60 || arts.some((a) => !ARTICULO_DRAGON.test(a))) throw new Error('Artículos inválidos (1 a 60)')
+  const clave = arts.sort().join(',')
+  const c = cacheStockLocalesTienda.get(clave)
+  if (c && Date.now() - c.en < 60_000) return c.datos
+
+  const principal = SERVIDORES.get(ALIAS_PRINCIPAL.toUpperCase())
+  const local = [...SERVIDORES.values()].find((s) => !s.principal) ?? principal
+  const leer = async (srv, base) => {
+    await asegurarConexion(srv)
+    const p = srv.pool.request()
+    arts.forEach((x, i) => p.input(`a${i}`, srv.sql.VarChar(40), x))
+    const r = await p.query(
+      `SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+       SELECT LTRIM(RTRIM(COART)) AS a, LTRIM(RTRIM(COCOL)) AS c, LTRIM(RTRIM(TALLE)) AS t,
+              SUM(CAST(ISNULL(COCANT, 0) AS int))
+            - SUM(CASE WHEN ISNULL(PEDIDO, 0) > 0 THEN CAST(PEDIDO AS int) ELSE 0 END
+                + CASE WHEN ISNULL(PREPARADO, 0) > 0 THEN CAST(PREPARADO AS int) ELSE 0 END) AS s
+         FROM [${base}].[ZooLogic].[COMB]
+        WHERE LTRIM(RTRIM(COART)) IN (${arts.map((_, i) => `@a${i}`).join(',')})
+        GROUP BY LTRIM(RTRIM(COART)), LTRIM(RTRIM(COCOL)), LTRIM(RTRIM(TALLE))`,
+    )
+    return r.recordset ?? []
+  }
+  const res = await Promise.allSettled(
+    STOCK_PUBLICO_LOCALES.map(([, base, donde]) => conTope(leer(donde === 'local' ? local : principal, base), 12_000, base)),
+  )
+  const filas = []
+  const sinDatos = []
+  res.forEach((r, i) => {
+    const l = STOCK_PUBLICO_LOCALES[i][0]
+    if (r.status !== 'fulfilled') return void sinDatos.push(l)
+    for (const f of r.value) {
+      const s = Number(f.s) || 0
+      if (s > 0) filas.push({ l, a: f.a, c: f.c, t: f.t, s })
+    }
+  })
+  const datos = { filas, sin_datos: sinDatos, en: new Date().toISOString() }
+  cacheStockLocalesTienda.set(clave, { en: Date.now(), datos })
+  if (cacheStockLocalesTienda.size > 200) cacheStockLocalesTienda.delete(cacheStockLocalesTienda.keys().next().value)
+  return datos
 }
 
 /**
@@ -1836,6 +1939,16 @@ const server = http.createServer(async (req, res) => {
 
     // Stock valorizado a costo por sucursal (Administradores > Stock valorizado)
     // Mayorista > Stock: Depósito y Tapera (remitido sin facturar) de DRAGONFISH_MITO
+    // Tienda mayorista web (cf-zimith-mayorista): stock real por SKU de MITO, o de los 17 locales con locales:true. Solo lectura.
+    if (body?.accion === 'stock_tienda') {
+      try {
+        if (body?.locales === true) return enviar(res, 200, await stockLocalesTienda(body?.articulos))
+        return enviar(res, 200, await stockTienda(body?.prefijos, body?.articulos))
+      } catch (e) {
+        return enviar(res, 400, { error: e.message })
+      }
+    }
+
     if (body?.accion === 'stock_mayorista') {
       return enviar(res, 200, await stockMayorista(body?.forzar === true))
     }
