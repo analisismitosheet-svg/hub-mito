@@ -646,6 +646,17 @@ export const APPS: AppDef[] = [
     permiso: 'deposito.view',
   },
   {
+    id: 'deposito-consulta-articulos',
+    areaId: 'deposito',
+    title: 'F12 Consulta artículos INDO',
+    description: 'Stock de Depósito Indo por artículo + color + talle: caja, Lista 1 y Lista 4.',
+    icon: PackageSearch,
+    kind: 'internal',
+    target: '/deposito/consulta-articulos',
+    color: '#ea580c',
+    permiso: 'deposito.view',
+  },
+  {
     id: 'deposito-rma',
     areaId: 'deposito',
     title: 'RMA',

@@ -1,6 +1,9 @@
-import { useMemo, useState, type ReactNode } from 'react'
-import { ArrowRightLeft, BarChart3, Check, ChevronRight, X } from 'lucide-react'
+import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { ArrowRightLeft, BarChart3, ChevronRight, Store } from 'lucide-react'
 import { horasHabilesEntre } from '@/lib/horasHabiles'
+import { compararTalles } from '@/lib/ordenPiso'
+import { useCajasMapeo } from '@/lib/useCajasMapeo'
+import LocalTransferDeposito, { listasDeRenglon, type CambioRenglonDeposito } from '@/components/LocalTransferDeposito'
 
 export type EstadoTransfer = 'pendiente' | 'hecho' | 'faltante' | 'senado'
 
@@ -22,6 +25,8 @@ export interface RenglonTransfer {
   hecho_por: string | null
   hecho_por_nombre: string | null
   hecho_por_legajo: string | null
+  /** unidades escaneadas (transfer_escaneos_deposito) */
+  escaneadas?: number
 }
 
 const num2 = (n: number) => n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -41,21 +46,36 @@ function Celda({ label, children }: { label: string; children: ReactNode }) {
  * Un lote de transferencias que sale de Depósito Indo, dentro de Repos Depósito.
  * Estadísticas como la Eficiencia mayorista: horas del primer al último tilde
  * (L-V 9 a 17, como los repos del depósito), personas que marcaron, prendas/hora
- * y una fila por persona. La tabla de Reposición es la misma que la de los repos:
- * artículos en filas, locales en columnas, ✓ / ✕ por celda. Es el mismo dato que Mi repo.
+ * y una fila por persona. «Por local» (20/11/2026) es como Mi repo del mayorista:
+ * una tarjeta por local y, al abrirla, lo que hay que sacar agrupado por número de
+ * caja (Mapeo de cajas), escaneando, escribiendo el código o tildando ✓ / ✕.
+ * Es el mismo dato que Mi repo del Depósito.
  */
 export default function TransferenciaDepositoLote({
   renglones,
   puedeMarcar,
   onMarcar,
+  onCambio,
 }: {
   renglones: RenglonTransfer[]
   puedeMarcar: boolean
-  onMarcar: (ids: string[], estado: 'pendiente' | 'hecho' | 'faltante') => void
+  onMarcar: (ids: string[], estado: 'pendiente' | 'hecho' | 'faltante') => void | Promise<void>
+  /** escaneo / deshacer desde el local abierto */
+  onCambio: (c: CambioRenglonDeposito) => void
 }) {
   const [abierto, setAbierto] = useState(false)
   const [sub, setSub] = useState<'stats' | 'repo' | null>('repo')
+  /** Local abierto (destino) */
+  const [local, setLocal] = useState<string | null>(null)
   const r0 = renglones[0]
+
+  // Cajas del Mapeo de cajas: recorrido por número de caja
+  const codigos = useMemo(() => renglones.map((r) => String(r.articulo ?? '')), [renglones])
+  const cajas = useCajasMapeo(codigos)
+  const cajasDe = useCallback(
+    (r: { articulo: string | null }) => cajas.get(String(r.articulo ?? '').trim().toUpperCase()) ?? [],
+    [cajas],
+  )
 
   const st = useMemo(() => {
     const u = (rs: RenglonTransfer[]) => rs.reduce((s, r) => s + (r.cantidad || 1), 0)
@@ -102,17 +122,35 @@ export default function TransferenciaDepositoLote({
     }
   }, [renglones])
 
-  // Matriz: artículo × destino
-  const filas = useMemo(() => {
-    const m = new Map<string, { articulo: string; desc: string; color: string; talle: string; porDestino: Map<string, RenglonTransfer> }>()
-    for (const r of renglones) {
-      const k = [r.articulo, r.descripcion, r.color, r.talle].join('|')
-      let f = m.get(k)
-      if (!f) { f = { articulo: r.articulo ?? '', desc: r.descripcion ?? '', color: r.color ?? '', talle: r.talle ?? '', porDestino: new Map() }; m.set(k, f) }
-      f.porDestino.set(r.destino, r)
+  // Por local: renglones de cada destino en orden de caja → artículo → color → talle
+  const locales = useMemo(() => {
+    const t = (v: unknown) => String(v ?? '').trim().toUpperCase()
+    const orden = (a: RenglonTransfer, b: RenglonTransfer) => {
+      const ca = cajasDe(a)[0]
+      const cb = cajasDe(b)[0]
+      const porCaja = ca != null && cb != null ? ca - cb : ca != null ? -1 : cb != null ? 1 : 0
+      return (
+        porCaja ||
+        t(a.articulo).localeCompare(t(b.articulo), 'es', { numeric: true }) ||
+        t(a.color).localeCompare(t(b.color), 'es', { numeric: true }) ||
+        compararTalles(a.talle, b.talle)
+      )
     }
-    return [...m.values()].sort((a, b) => a.articulo.localeCompare(b.articulo) || a.color.localeCompare(b.color) || a.talle.localeCompare(b.talle, 'es', { numeric: true }))
-  }, [renglones])
+    const m = new Map<string, RenglonTransfer[]>()
+    for (const r of renglones) m.set(r.destino, [...(m.get(r.destino) ?? []), r])
+    return [...m.entries()]
+      .map(([destino, rs]) => {
+        const ordenados = [...rs].sort(orden)
+        return {
+          destino,
+          renglones: ordenados,
+          total: rs.reduce((s, r) => s + r.cantidad, 0),
+          listas: rs.reduce((s, r) => s + listasDeRenglon(r), 0),
+          articulos: new Set(rs.map((r) => r.articulo)).size,
+        }
+      })
+      .sort((a, b) => a.destino.localeCompare(b.destino, 'es'))
+  }, [renglones, cajasDe])
 
   if (!r0) return null
   const resueltos = st.hecho + st.faltante
@@ -210,69 +248,61 @@ export default function TransferenciaDepositoLote({
             )}
           </div>
 
-          {/* Reposición: artículos × locales */}
-          <div className="flex items-center border-b border-line">
-            <button onClick={() => setSub(sub === 'repo' ? null : 'repo')} className="flex flex-1 items-center gap-2 px-4 py-2.5 text-left hover:bg-surface2">
-              <ChevronRight size={15} aria-hidden className={`shrink-0 text-sub transition-transform ${sub === 'repo' ? 'rotate-90' : ''}`} />
-              <ArrowRightLeft size={15} aria-hidden className="text-sub" />
-              <span className="font-display font-semibold text-ink">Reposición</span>
-            </button>
-            {puedeMarcar && st.pendientes.length > 0 && (
-              <button
-                onClick={() => onMarcar(st.pendientes.map((r) => r.id), 'hecho')}
-                className="flex shrink-0 items-center gap-1 border-l border-line px-3 py-2.5 text-xs font-medium text-emerald-400 hover:bg-emerald-500/10"
-                title="Marcar todo listo"
-              >
-                <Check size={14} aria-hidden /> Todo listo
-              </button>
-            )}
-          </div>
+          {/* Por local: tarjetas y, abierta, lo que hay que sacar por caja */}
+          <button onClick={() => setSub(sub === 'repo' ? null : 'repo')} className="flex w-full items-center gap-2 border-b border-line px-4 py-2.5 text-left hover:bg-surface2">
+            <ChevronRight size={15} aria-hidden className={`shrink-0 text-sub transition-transform ${sub === 'repo' ? 'rotate-90' : ''}`} />
+            <Store size={15} aria-hidden className="text-sub" />
+            <span className="font-display font-semibold text-ink">Por local</span>
+            <span className="text-xs text-sub">· en orden de caja</span>
+          </button>
           {sub === 'repo' && (
-            <div className="overflow-x-auto px-3 pb-2">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-line text-left text-[11px] uppercase text-sub">
-                    <th className="px-2 py-1.5">Código</th>
-                    <th className="px-2 py-1.5">Descripción</th>
-                    <th className="px-2 py-1.5">Color</th>
-                    <th className="px-2 py-1.5">Talle</th>
-                    {st.destinos.map((d) => <th key={d} className="px-2 py-1.5 text-center">{d}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filas.map((f, i) => (
-                    <tr key={i} className="border-b border-line/50">
-                      <td className="px-2 py-1 font-mono text-xs">{f.articulo}</td>
-                      <td className="px-2 py-1 text-xs">{f.desc}</td>
-                      <td className="px-2 py-1 text-xs">{f.color}</td>
-                      <td className="px-2 py-1 text-xs">{f.talle}</td>
-                      {st.destinos.map((d) => {
-                        const r = f.porDestino.get(d)
-                        if (!r) return <td key={d} className="px-2 py-1 text-center text-sub/30">—</td>
-                        const esHecho = r.estado === 'hecho'
-                        const esFaltante = r.estado === 'faltante'
-                        return (
-                          <td key={d} className="px-2 py-1 text-center" title={r.hecho_por_nombre ? `Marcó ${r.hecho_por_nombre}` : undefined}>
-                            <div className="flex items-center justify-center gap-0.5">
-                              <span className={`tabular-nums ${esHecho ? 'text-emerald-400 line-through' : esFaltante ? 'text-brand-400 line-through' : ''}`}>{r.cantidad}</span>
-                              {puedeMarcar && (
-                                <>
-                                  <button onClick={() => onMarcar([r.id], esHecho ? 'pendiente' : 'hecho')} title="Hecho" className={`rounded p-0.5 transition-colors ${esHecho ? 'bg-emerald-500/20 text-emerald-400' : 'text-sub/40 hover:text-emerald-400'}`}>
-                                    <Check size={11} aria-hidden />
-                                  </button>
-                                  <button onClick={() => onMarcar([r.id], esFaltante ? 'pendiente' : 'faltante')} title="Faltante" className={`rounded p-0.5 transition-colors ${esFaltante ? 'bg-brand-600/20 text-brand-400' : 'text-sub/40 hover:text-brand-400'}`}>
-                                    <X size={11} aria-hidden />
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </td>
-                        )
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="px-3 py-3 sm:px-4">
+              {(() => {
+                const abiertaL = local ? locales.find((l) => l.destino === local) ?? null : null
+                if (abiertaL) {
+                  return (
+                    <LocalTransferDeposito
+                      loteId={r0.lote_id}
+                      loteNombre={r0.lote_nombre}
+                      destino={abiertaL.destino}
+                      renglones={abiertaL.renglones}
+                      cajasDe={cajasDe}
+                      puedeMarcar={puedeMarcar}
+                      textoVolver="Todos los locales"
+                      onVolver={() => setLocal(null)}
+                      onMarcar={onMarcar}
+                      onCambio={onCambio}
+                    />
+                  )
+                }
+                return (
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+                    {locales.map((l) => {
+                      const p = l.total > 0 ? Math.round((l.listas / l.total) * 100) : 0
+                      return (
+                        <button
+                          key={l.destino}
+                          onClick={() => setLocal(l.destino)}
+                          className={`rounded-xl border px-3 py-2.5 text-left transition active:scale-[0.99] ${
+                            p === 100 ? 'border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/15' : 'border-line bg-surface2/60 hover:bg-surface2'
+                          }`}
+                        >
+                          <p className="flex items-center justify-between gap-1 font-display font-bold text-ink">
+                            <span className="truncate">{l.destino}</span>
+                            {p === 100 && <span className="shrink-0 text-xs font-semibold text-emerald-400">✓</span>}
+                          </p>
+                          <p className="mt-0.5 text-[11.5px] tabular-nums text-sub">
+                            {l.listas}/{l.total} u · {l.articulos} {l.articulos === 1 ? 'artículo' : 'artículos'}
+                          </p>
+                          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-line">
+                            <div className={`h-full rounded-full ${p === 100 ? 'bg-emerald-500' : 'bg-orange-500'}`} style={{ width: `${p}%` }} />
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
             </div>
           )}
         </div>

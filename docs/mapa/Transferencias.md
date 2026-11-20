@@ -69,3 +69,8 @@
 
 ## MAYORD = MITO (20/11/2026)
 - Trigger `transfer_items_mayord_a_mito` (`sql/transfer_mayord_a_mito.sql`, aplicado): todo renglón que entra con origen o destino MAYORD (Excel, Reparto manual, Cascada, franquicias) se graba como **MITO**. Los lotes viejos siguen con MAYORD; el sinónimo MAYORD/MITO (grupo MITO en `locales_sinonimos`) los une en estadísticas y filtros.
+
+## Depósito: transferencia por local y por caja (20/11/2026)
+- **Repos Depósito** (`TransferenciaDepositoLote.tsx`): la grilla artículos × locales se cambió por **«Por local»**: una tarjeta por destino con su avance y, al tocarla, `src/components/LocalTransferDeposito.tsx` (lo que falta **agrupado por caja** del Mapeo de cajas, de menor a mayor; «Sin caja» al final). Se escanea con lector, se escribe el código o se usa la cámara (`transferencia_escanear_deposito`, 1 lectura = 1 unidad, deshacer) o se tilda ✓/✕/Todo, como Mi repo del mayorista.
+- El mismo panel lo usa **Mi repo del Depósito** (`TransferenciasDeposito.tsx`). Es solo del área Depósito.
+- `deposito_transferencias()` ahora devuelve `escaneadas` (`sql/deposito_transferencias.sql`, aplicado).

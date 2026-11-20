@@ -75,6 +75,7 @@ import MapeoCajasOrden from '@/pages/MapeoCajasOrden'
 import MapeoCajasLista from '@/pages/MapeoCajasLista'
 import MapeoCajasLugar from '@/pages/MapeoCajasLugar'
 import ConsultaArticulos from '@/pages/ConsultaArticulos'
+import ConsultaArticulosIndo from '@/pages/ConsultaArticulosIndo'
 import CargaNovedades from '@/pages/CargaNovedades'
 import ResumenNovedades from '@/pages/ResumenNovedades'
 import MotivosNovedades from '@/pages/MotivosNovedades'
@@ -386,6 +387,14 @@ export default function App() {
             element={
               <PermissionRoute permiso="mayorista.articulos.view">
                 <ConsultaArticulos />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/deposito/consulta-articulos"
+            element={
+              <PermissionRoute permiso="deposito.view">
+                <ConsultaArticulosIndo />
               </PermissionRoute>
             }
           />

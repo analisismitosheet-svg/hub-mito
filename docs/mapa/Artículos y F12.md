@@ -11,6 +11,10 @@
 - Solo busca lo escrito (no carga todo al entrar). Una columna color y otra talle; color como `02 NEGRO`; fondo alterno al cambiar de color; tilde "sin stock"; talles ordenados por tamaño.
 - Permiso `mayorista.articulos.view`.
 
+## F12 Consulta artículos INDO (`/deposito/consulta-articulos`, 20/11/2026)
+- Pantalla propia de Depósito (`ConsultaArticulosIndo.tsx`, permiso `deposito.view`), copia del F12 del mayorista: misma búsqueda y tabla, pero stock de **DRAGONFISH_INDOD** (`vw_ARTICULOS_INDOD`, `sql/vw_ARTICULOS_INDOD.sql`), columna **Caja** (Mapeo de cajas, `cajasDeArticulos`) y dos precios **Lista 1** y **Lista 4**.
+- Los precios NO están en la vista: calcularlos ahí (ROW_NUMBER u OUTER APPLY sobre ~630 000 filas de PRECIOAR por el linked server) hacía tardar la búsqueda por nombre más de 15 s. Se piden aparte por artículo a `vw_PRECIOS_INDOD` (filtro `ARTICULO =` que viaja a Dragon, 6 en paralelo) y `preciosIndo()` elige el vigente (color o general, FECHAVIG más nueva). Lib: `consultarArticulos(q, { indo: true })` en `articulosConsulta.ts`.
+
 ## Stock
 - Stock = `COCANT - PEDIDO - PREPARADO`, piso 0, solo sucursal MITO. **No usar `vw_PRODUCTOS_WEB`.** Precio = lista `LISTA2` (MAYOR).
 - `vw_STOCK_SKU_MITO` (por SKU, `src/lib/stockSku.ts`, columna Stock de pedidos de venta) y `vw_STOCK_ARTICULO_MITO` (por artículo, `src/lib/stockArticulos.ts`, [[Mapeo depósito]]).

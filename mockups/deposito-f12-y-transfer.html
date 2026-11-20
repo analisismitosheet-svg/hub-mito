@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Maqueta · F12 y transferencia diaria (Depósito)</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{--paper:#050508;--surface:#0e0e13;--surface2:#16161d;--line:rgba(255,255,255,.09);--ink:#f8fafc;--sub:#94a3b8;--or:#f97316;--am:#f59e0b;--em:#10b981;--rojo:#f87171;--sky:#38bdf8}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:14px;line-height:1.45;padding:20px clamp(12px,3vw,36px) 64px}
+  h1{font-size:24px;margin:0;font-weight:700;letter-spacing:-.02em}
+  h2{font-size:15px;margin:34px 0 10px;font-weight:800;color:#fdba74;letter-spacing:.02em;text-transform:uppercase}
+  p{margin:0}.sub{color:var(--sub)}.num{font-variant-numeric:tabular-nums}.mono{font-family:ui-monospace,Consolas,monospace}
+  .nota{border:1px dashed rgba(249,115,22,.5);background:rgba(249,115,22,.07);color:#fdba74;border-radius:12px;padding:9px 12px;font-size:12.5px;margin:8px 0 16px;max-width:980px}
+  .nota b{color:#fed7aa}
+  .pregunta{border:1px solid rgba(56,189,248,.45);background:rgba(56,189,248,.08);color:#bae6fd;border-radius:12px;padding:9px 12px;font-size:12.5px;margin:8px 0;max-width:980px}
+  .pantalla{border:1px solid var(--line);border-radius:22px;background:#08080c;padding:16px;max-width:1180px}
+  .back{font-size:12.5px;color:var(--sub);margin-bottom:6px}
+  .barra{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+  .bus{flex:1;min-width:200px;height:44px;border-radius:12px;border:1px solid #3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.2);background:var(--surface);display:flex;align-items:center;padding:0 12px;gap:8px}
+  .b{height:44px;border-radius:12px;border:1px solid var(--line);background:var(--surface);display:flex;align-items:center;gap:6px;padding:0 12px;font-size:13px;font-weight:600}
+  .resumen{display:flex;flex-wrap:wrap;gap:6px 16px;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:8px 12px;font-size:12px;color:var(--sub);margin-bottom:12px}
+  .resumen b{color:var(--ink)}
+  .tabla{border:1px solid var(--line);border-radius:16px;overflow:auto;background:var(--surface)}
+  table{border-collapse:collapse;width:100%;min-width:1000px}
+  th{background:var(--surface2);text-align:left;font-size:12px;font-weight:600;color:var(--sub);padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+  td{padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:top}
+  .r{text-align:right}
+  tr.osc td{background:rgba(255,255,255,.025)}
+  tr.ini td{border-top:2px solid rgba(255,255,255,.12)}
+  .foto{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,#1f2937,#111827);display:grid;place-items:center;font-size:18px}
+  .chip{display:inline-block;font-size:11.5px;font-weight:600;border-radius:7px;padding:2px 7px;background:var(--surface2);border:1px solid var(--line)}
+  .chip.nar{background:rgba(249,115,22,.12);border-color:rgba(249,115,22,.3);color:#fdba74}
+  .caja{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;border-radius:7px;padding:2px 7px;background:rgba(249,115,22,.15);color:var(--or)}
+  .verde{color:#34d399;font-weight:700}.gris{color:#64748b}.amb{color:var(--am);font-weight:700}
+  .nuevo{outline:2px solid rgba(56,189,248,.7);outline-offset:-2px;border-radius:6px}
+  /* transfer */
+  .lote{border:1px solid var(--line);border-radius:16px;background:var(--surface);overflow:hidden}
+  .lote-h{display:flex;align-items:center;gap:10px;padding:12px 14px;flex-wrap:wrap}
+  .pill{font-size:12px;font-weight:700;border-radius:99px;padding:2px 10px;background:rgba(249,115,22,.15);color:var(--or)}
+  .tabs{display:flex;gap:6px;padding:0 14px 12px}
+  .tab{font-size:12.5px;font-weight:700;border-radius:10px;padding:6px 12px;border:1px solid var(--line);background:var(--surface2);color:var(--sub)}
+  .tab.on{background:#ea580c;border-color:#ea580c;color:#fff}
+  .locales{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;padding:12px 14px 14px;border-top:1px solid var(--line);background:rgba(22,22,29,.5)}
+  .loc{border:1px solid var(--line);background:var(--surface);border-radius:14px;padding:10px 12px}
+  .loc.on{border-color:rgba(249,115,22,.7);box-shadow:0 0 0 3px rgba(249,115,22,.15)}
+  .loc b{font-size:14px}.loc .det{font-size:11.5px;color:var(--sub);margin-top:2px}
+  .prog{height:6px;border-radius:99px;background:var(--surface2);margin-top:8px;overflow:hidden}
+  .prog i{display:block;height:100%;background:var(--em)}
+  .abierto{border-top:1px solid var(--line);padding:12px 14px 16px}
+  .abierto-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+  .btn{height:40px;border-radius:12px;display:inline-flex;align-items:center;gap:6px;padding:0 14px;font-weight:700;font-size:13px;border:1px solid var(--line);background:var(--surface2)}
+  .btn.em{background:#059669;border-color:#059669;color:#fff}
+  .grupo{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:10px;background:var(--surface)}
+  .grupo-h{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:rgba(249,115,22,.08);border-bottom:1px solid var(--line)}
+  .grupo-h b{font-size:15px}
+  .grupo.sin .grupo-h{background:var(--surface2)}
+  .ren{display:flex;align-items:center;gap:10px;padding:8px 12px;border-top:1px solid rgba(255,255,255,.05)}
+  .ren:first-of-type{border-top:0}
+  .ren .info{flex:1;min-width:0}
+  .ren .cod{font-weight:700}.ren small{display:block;color:var(--sub);font-size:11.5px}
+  .cant{min-width:42px;text-align:center;font-size:18px;font-weight:800}
+  .mk{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;font-weight:800;font-size:17px;border:1px solid var(--line);background:var(--surface2)}
+  .mk.ok{color:#34d399;border-color:rgba(16,185,129,.4)}.mk.no{color:var(--rojo);border-color:rgba(248,113,113,.4)}
+  .ren.hecho{opacity:.55}.ren.hecho .cod{text-decoration:line-through}
+  .tag-ok{font-size:11px;font-weight:700;color:#34d399;background:rgba(16,185,129,.12);border-radius:7px;padding:2px 7px}
+  .otra{font-size:11px;color:var(--sub)}
+  @media (max-width:640px){.locales{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<h1>Depósito · F12 con stock INDO y transferencia diaria por local</h1>
+<p class="sub">Maqueta para aprobar. Datos reales de hoy: stock de DRAGONFISH_INDOD, cajas del Mapeo de cajas y el lote «261120 - CASCADA 19-11».</p>
+
+<!-- ============================================================ -->
+<h2>1 · F12 · Consulta artículos INDO (área Depósito)</h2>
+<div class="nota">
+  <b>Tarjeta nueva en Depósito</b> → <span class="mono">/deposito/consulta-articulos</span>. Es la misma pantalla que el F12 del mayorista:
+  el mismo buscador (código, nombre o escaneo), la misma tabla y el mismo Excel. Cambian tres cosas:
+  el <b>stock sale de DRAGONFISH_INDOD</b>, la columna <b>Ubicación pasa a Caja</b> (del Mapeo de cajas) y la vista es <span class="mono">vw_ARTICULOS_INDOD</span> (nueva).
+  Es una pantalla aparte de la del mayorista: cada área ve la suya.
+</div>
+<div class="pantalla">
+  <div class="back">← Volver</div>
+  <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px;flex-wrap:wrap">
+    <div>
+      <h1 style="font-size:22px">🔎 F12 · Consulta artículos INDO</h1>
+      <p class="sub" style="font-size:12.5px;margin-top:2px">Stock de Depósito Indo por artículo + color + talle.</p>
+    </div>
+    <span class="b">⬇ Excel</span>
+  </div>
+  <div class="barra">
+    <div class="bus">🔍 <span>RC2614</span></div>
+    <span class="b">↻ Consultar</span>
+    <span class="b">☐ Sin stock</span>
+  </div>
+  <div class="resumen">
+    <span><b class="num">4</b> SKU</span><span><b class="num">4</b> con stock</span><span>Total <b class="num">38</b> unidades</span><span><b class="num">4</b> con caja</span>
+    <span>· 5 sin stock ocultos (marcá "Sin stock" para verlos)</span>
+  </div>
+  <div class="tabla">
+    <table>
+      <thead><tr><th>Foto</th><th>ID artículo</th><th>Color</th><th>Talle</th><th>Nombre completo</th><th>Material</th><th>Grupo</th><th class="r">Stock en INDO</th><th class="r">Pedido</th><th class="nuevo">Caja</th><th class="r">Precio</th></tr></thead>
+      <tbody>
+        <tr><td><div class="foto">🩴</div></td><td class="mono"><b>HA261306</b></td><td><span class="chip nar">13 ROSA</span></td><td><span class="chip">378</span></td><td>OJOTAS SLIM ARCILLA PURPURA</td><td class="sub">CAUCHO</td><td class="sub">OJOTAS</td><td class="r verde num">11</td><td class="r gris">0</td><td><span class="caja">📦 1</span></td><td class="r num">$ 18.900</td></tr>
+        <tr><td><div class="foto">🩴</div></td><td class="mono"><b>HA261306</b></td><td><span class="chip nar">13 ROSA</span></td><td><span class="chip">390</span></td><td>OJOTAS SLIM ARCILLA PURPURA</td><td class="sub">CAUCHO</td><td class="sub">OJOTAS</td><td class="r verde num">12</td><td class="r gris">0</td><td><span class="caja">📦 1</span></td><td class="r num">$ 18.900</td></tr>
+        <tr class="osc ini"><td><div class="foto">🩴</div></td><td class="mono"><b>RC261400</b></td><td><span class="chip nar">02 NEGRO</span></td><td><span class="chip">390</span></td><td>RC SAND SLIDE WETTIE</td><td class="sub">EVA</td><td class="sub">OJOTAS</td><td class="r verde num">7</td><td class="r gris">0</td><td><span class="caja">📦 3</span></td><td class="r num">$ 24.500</td></tr>
+        <tr class="osc"><td><div class="foto">🩴</div></td><td class="mono"><b>RC261400</b></td><td><span class="chip nar">02 NEGRO</span></td><td><span class="chip">412</span></td><td>RC SAND SLIDE WETTIE</td><td class="sub">EVA</td><td class="sub">OJOTAS</td><td class="r verde num">8</td><td class="r gris">0</td><td><span class="caja">📦 3</span></td><td class="r num">$ 24.500</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="sub" style="font-size:11.5px;margin-top:8px">Material, grupo y precio de la maqueta son de ejemplo; en la pantalla salen de INDOD.</p>
+</div>
+<div class="pregunta">❓ <b>Precio:</b> el F12 del mayorista muestra la LISTA2 (Mayor). Para Depósito propongo la misma <b>LISTA2</b>. Si preferís Contado (LISTA1) u otra, decime.</div>
+
+<!-- ============================================================ -->
+<h2>2 · Repos Depósito · transferencia diaria por local, en orden de caja</h2>
+<div class="nota">
+  Hoy en <b>Repos Depósito</b> cada lote se ve como una grilla (artículos en filas × locales en columnas).
+  Pasa a verse como en el mayorista: <b>una tarjeta por local</b> con su avance; tocás el local y se abre
+  <b>lo que hay que sacar, agrupado por número de caja de menor a mayor</b> (caja 2, 7, 8, 12…), con ✓ hecho / ✕ faltante por renglón y «✓ Todo el local».
+  Los artículos que no están en ninguna caja van al final, en «Sin caja». La pestaña de Estadísticas (horas, personas, prend/hs) queda igual.
+  Es el mismo dato que Mi repo del Depósito: lo que se marca en uno se ve en el otro.
+</div>
+<div class="pantalla">
+  <div class="back">← Volver</div>
+  <h1 style="font-size:22px">Repos Depósito</h1>
+  <p class="sub" style="font-size:12.5px;margin:2px 0 12px">Transferencias que salen de Indo (últimos 30 días).</p>
+
+  <div class="lote">
+    <div class="lote-h">
+      <span style="font-size:18px">⇄</span>
+      <div style="flex:1">
+        <b style="font-size:15px">261120 - CASCADA 19-11</b>
+        <div class="sub" style="font-size:12px">20/11 · 13 locales · 39 unidades · <span class="verde">6 hechas</span></div>
+      </div>
+      <span class="pill">15 %</span>
+    </div>
+    <div class="tabs"><span class="tab on">Por local</span><span class="tab">Estadísticas</span></div>
+
+    <div class="locales">
+      <div class="loc"><b>9DEJULIO</b><div class="det">8 u · 6 artículos</div><div class="prog"><i style="width:0"></i></div></div>
+      <div class="loc"><b>BUSTOD</b><div class="det">1 u · 1 artículo</div><div class="prog"><i style="width:100%"></i></div></div>
+      <div class="loc"><b>ESPINOD</b><div class="det">6 u · 6 artículos</div><div class="prog"><i style="width:0"></i></div></div>
+      <div class="loc"><b>GRALPAZ</b><div class="det">2 u · 2 artículos</div><div class="prog"><i style="width:0"></i></div></div>
+      <div class="loc"><b>LIBERD</b><div class="det">1 u · 1 artículo</div><div class="prog"><i style="width:0"></i></div></div>
+      <div class="loc on"><b>MUNOZ</b><div class="det">7 u · 6 artículos · <span class="verde">3 hechas</span></div><div class="prog"><i style="width:43%"></i></div></div>
+      <div class="loc"><b>NVOCED</b><div class="det">4 u · 4 artículos</div><div class="prog"><i style="width:0"></i></div></div>
+      <div class="loc"><b>RIVERAD</b><div class="det">2 u · 2 artículos</div><div class="prog"><i style="width:0"></i></div></div>
+      <div class="loc"><b>RUTA9D2</b><div class="det">4 u · 1 artículo</div><div class="prog"><i style="width:0"></i></div></div>
+      <div class="loc"><b>VCPD</b><div class="det">1 u · 1 artículo</div><div class="prog"><i style="width:0"></i></div></div>
+      <div class="loc"><b>WALMARTD</b><div class="det">7 u · 7 artículos · <span class="verde">2 hechas</span></div><div class="prog"><i style="width:29%"></i></div></div>
+    </div>
+
+    <div class="abierto">
+      <div class="abierto-h">
+        <b style="font-size:17px">MUNOZ</b>
+        <span class="sub" style="font-size:12.5px">faltan 4 de 7 unidades · recorrido por caja</span>
+        <span style="flex:1"></span>
+        <span class="btn em">✓ Todo el local</span>
+      </div>
+
+      <div class="grupo">
+        <div class="grupo-h"><b>📦 Caja 2</b><span class="sub" style="font-size:12px">2 u</span></div>
+        <div class="ren hecho"><div class="info"><span class="cod mono">SR030802</span> <span class="chip">00 · U</span><small>CINTO SR CUERO NEGRO</small></div><div class="cant num">2</div><span class="tag-ok">✓ Hecho</span><span class="mk">↺</span></div>
+      </div>
+      <div class="grupo">
+        <div class="grupo-h"><b>📦 Caja 7</b><span class="sub" style="font-size:12px">1 u</span></div>
+        <div class="ren"><div class="info"><span class="cod mono">SR080803</span> <span class="chip">00 · U</span><small>BILLETERA SR LONA</small></div><div class="cant num">1</div><span class="mk ok">✓</span><span class="mk no">✕</span></div>
+      </div>
+      <div class="grupo">
+        <div class="grupo-h"><b>📦 Caja 12</b><span class="sub" style="font-size:12px">1 u</span></div>
+        <div class="ren"><div class="info"><span class="cod mono">VS263501</span> <span class="chip">21 · S</span> <span class="otra">también en caja 13</span><small>REMERA VS BÁSICA</small></div><div class="cant num">1</div><span class="mk ok">✓</span><span class="mk no">✕</span></div>
+      </div>
+      <div class="grupo">
+        <div class="grupo-h"><b>📦 Caja 20</b><span class="sub" style="font-size:12px">1 u</span></div>
+        <div class="ren hecho"><div class="info"><span class="cod mono">RJ265301</span> <span class="chip">02 · 16</span><small>JEAN RJ NIÑO</small></div><div class="cant num">1</div><span class="tag-ok">✓ Hecho</span><span class="mk">↺</span></div>
+      </div>
+      <div class="grupo">
+        <div class="grupo-h"><b>📦 Caja 21</b><span class="sub" style="font-size:12px">1 u</span></div>
+        <div class="ren"><div class="info"><span class="cod mono">RU265107</span> <span class="chip">05 · M</span><small>BUZO RU CANGURO</small></div><div class="cant num">1</div><span class="mk ok">✓</span><span class="mk no">✕</span></div>
+      </div>
+      <div class="grupo sin">
+        <div class="grupo-h"><b>Sin caja</b><span class="sub" style="font-size:12px">1 u · no están en el Mapeo de cajas</span></div>
+        <div class="ren"><div class="info"><span class="cod mono">C118001B</span> <span class="chip">00 · 5.5</span><small>ZAPATILLA C118 BLANCA</small></div><div class="cant num">1</div><span class="mk ok">✓</span><span class="mk no">✕</span></div>
+      </div>
+      <p class="sub" style="font-size:11.5px;margin-top:8px">Descripciones de la maqueta inventadas; en la pantalla salen del maestro de artículos.</p>
+    </div>
+  </div>
+</div>
+<div class="pregunta">❓ <b>Escaneo:</b> en Mi repo del Depósito ya se escanea prenda por prenda (cada lectura suma 1). En Repos Depósito propongo <b>solo ✓ / ✕ con el dedo</b> (es la vista del encargado). Si querés también el escaneo acá, lo sumo.</div>
+</body>
+</html>

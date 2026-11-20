@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase'
 import { COLUMNAS_BUSQUEDA, leerVista, leerVistaFiltrada, type FilaSql } from '@/lib/sqlApi'
 import { compararUbicaciones, ubicacionesDeArticulos } from '@/lib/mapeo'
+import { cajasDeArticulos } from '@/lib/mapeoCajas'
 
 /**
  * ============================================================
@@ -33,6 +34,19 @@ export const VISTA_ARTICULOS =
   (import.meta.env.VITE_SQL_VISTA_ARTICULOS as string | undefined)?.trim() ||
   'DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.vw_ARTICULOS_MITO'
 
+/**
+ * F12 de Depósito (/deposito/consulta-articulos): mismo armado pero con el
+ * stock de DRAGONFISH_INDOD (sql/vw_ARTICULOS_INDOD.sql) y la caja del Mapeo
+ * de cajas en vez de la ubicación. Los precios LISTA1 y LISTA4 van aparte,
+ * por artículo (preciosIndo + sql/vw_PRECIOS_INDOD.sql).
+ */
+export const VISTA_ARTICULOS_INDOD =
+  (import.meta.env.VITE_SQL_VISTA_ARTICULOS_INDOD as string | undefined)?.trim() ||
+  'DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.vw_ARTICULOS_INDOD'
+export const VISTA_PRECIOS_INDOD =
+  (import.meta.env.VITE_SQL_VISTA_PRECIOS_INDOD as string | undefined)?.trim() ||
+  'DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.vw_PRECIOS_INDOD'
+
 /** Tope de filas cuando se busca un término (el proxy lo recorta a SQL_MAX_ROWS). */
 const TOP_BUSQUEDA = 500
 /** Tope de filas cuando el destino no filtra y hay que acotar en el navegador. */
@@ -56,6 +70,8 @@ export interface Articulo {
   pedido: number | null
   precio: number | null
   ubicaciones: string[]
+  /** F12 de Depósito: cajas del Mapeo de cajas (el mayorista las deja vacías) */
+  cajas: number[]
 }
 
 export interface ResultadoConsulta {
@@ -270,7 +286,7 @@ function compararTalles(a: Articulo, b: Articulo): number {
 const COLUMNAS_ESPERADAS = 'ID_ARTICULO, COLOR, TALLE, NOMBRE_COMPLETO, MATERIAL, GRUPO, STOCK_FISICO, EN_PEDIDO, PRECIO'
 
 /** Arma las filas ya con el complemento de Supabase (descripción, ubicación) y las ordena. */
-async function armar(crudas: FilaSql[], q: string): Promise<Articulo[]> {
+async function armar(crudas: FilaSql[], q: string, indo = false): Promise<Articulo[]> {
   const base: Articulo[] = []
   let recognized = false
 
@@ -300,6 +316,7 @@ async function armar(crudas: FilaSql[], q: string): Promise<Articulo[]> {
       pedido: num(val('pedido')),
       precio: num(val('precio')),
       ubicaciones: [],
+      cajas: [],
     })
   }
 
@@ -311,9 +328,10 @@ async function armar(crudas: FilaSql[], q: string): Promise<Articulo[]> {
   }
 
   const codigos = base.map((f) => f.idArticulo).filter(Boolean)
-  const [maestro, ubis] = await Promise.all([
+  const [maestro, ubis, cajas] = await Promise.all([
     maestroDe(codigos).catch(() => new Map<string, Maestro>()),
-    ubicacionesDeArticulos(codigos).catch(() => new Map<string, string[]>()),
+    indo ? Promise.resolve(new Map<string, string[]>()) : ubicacionesDeArticulos(codigos).catch(() => new Map<string, string[]>()),
+    indo ? cajasDeArticulos(codigos).catch(() => new Map<string, number[]>()) : Promise.resolve(new Map<string, number[]>()),
   ])
 
   for (const fila of base) {
@@ -323,8 +341,9 @@ async function armar(crudas: FilaSql[], q: string): Promise<Articulo[]> {
       fila.nombre = m.descripcion || fila.nombre
       fila.material = fila.material || m.material
       fila.grupo = fila.grupo || m.grupo
-      fila.precio = fila.precio ?? m.precio
+      if (!indo) fila.precio = fila.precio ?? m.precio
     }
+    if (indo) fila.cajas = [...(cajas.get(fila.idArticulo.trim().toUpperCase()) ?? [])]
     // La ubicación del mapeo es del artículo entero (código): va en todos sus colores y talles
     fila.ubicaciones = [...(ubis.get(fila.idArticulo.trim().toUpperCase()) ?? [])].sort(compararUbicaciones)
   }
@@ -347,7 +366,9 @@ async function armar(crudas: FilaSql[], q: string): Promise<Articulo[]> {
  * nada, se reintenta sin filtro y se acota en el navegador: por eso el
  * `filtradoEnCliente` del resultado.
  */
-export async function consultarArticulos(termino: string): Promise<ResultadoConsulta> {
+export async function consultarArticulos(termino: string, opts: { indo?: boolean } = {}): Promise<ResultadoConsulta> {
+  const indo = !!opts.indo
+  const vista = indo ? VISTA_ARTICULOS_INDOD : VISTA_ARTICULOS
   const q = termino.trim()
   let crudas: FilaSql[] = []
   let filtradoEnCliente = false
@@ -356,7 +377,7 @@ export async function consultarArticulos(termino: string): Promise<ResultadoCons
   if (q.length < 2) return { filas: [], truncado: false, filtradoEnCliente: false }
 
   try {
-    crudas = await leerVistaFiltrada(VISTA_ARTICULOS, {
+    crudas = await leerVistaFiltrada(vista, {
       donde: COLUMNAS_BUSQUEDA,
       valor: q,
       coincide: 'contiene',
@@ -371,11 +392,11 @@ export async function consultarArticulos(termino: string): Promise<ResultadoCons
   // solo quedan las coincidencias).
   if (crudas.length === 0) {
     filtradoEnCliente = true
-    crudas = await leerVista(VISTA_ARTICULOS, TOP_LISTA)
+    crudas = await leerVista(vista, TOP_LISTA)
   }
 
   const tope = filtradoEnCliente ? TOP_LISTA : TOP_BUSQUEDA
-  return { filas: await armar(crudas, q), truncado: crudas.length >= tope, filtradoEnCliente }
+  return { filas: await armar(crudas, q, indo), truncado: crudas.length >= tope, filtradoEnCliente }
 }
 
 /** "02 NEGRO": código + descripción del color (sin repetir si son iguales). */
@@ -399,4 +420,60 @@ export function filasParaExcel(filas: Articulo[]): Record<string, string | numbe
     Ubicación: f.ubicaciones.join(' · '),
     Precio: f.precio ?? '',
   }))
+}
+
+/* ------------------------------------------------------------------ */
+/*  F12 de Depósito: precios LISTA1 y LISTA4 de INDOD                  */
+/* ------------------------------------------------------------------ */
+
+export interface PreciosIndo {
+  lista1: number | null
+  lista4: number | null
+}
+
+/**
+ * Precio vigente de LISTA1 y LISTA4 de cada artículo + color de INDOD:
+ * el del color si tiene, si no el general del artículo; el de FECHAVIG más
+ * nueva. Un pedido por artículo (el filtro ARTICULO = x viaja al servidor de
+ * Dragon), de a 6 en paralelo. Clave del mapa: "ARTICULO|COLOR".
+ */
+export async function preciosIndo(articulos: Articulo[]): Promise<Map<string, PreciosIndo>> {
+  const codigos = [...new Set(articulos.map((a) => a.idArticulo).filter(Boolean))]
+  type Fila = { color: string; lista: string; precio: number; orden: string }
+  const porArticulo = new Map<string, Fila[]>()
+  const PARALELO = 6
+  for (let i = 0; i < codigos.length; i += PARALELO) {
+    await Promise.all(
+      codigos.slice(i, i + PARALELO).map(async (cod) => {
+        const crudas = await leerVistaFiltrada(VISTA_PRECIOS_INDOD, { donde: ['ARTICULO'], valor: cod, coincide: 'igual', limit: 500 }).catch(
+          () => [] as FilaSql[],
+        )
+        porArticulo.set(
+          cod,
+          crudas
+            .map((f) => ({
+              color: txt(f.CCOLOR),
+              lista: txt(f.LISTAPRE).toUpperCase(),
+              precio: num(f.PDIRECTO),
+              orden: `${txt(f.FECHAVIG)}|${txt(f.HMODIFW)}`,
+            }))
+            .filter((f): f is Fila => f.precio !== null),
+        )
+      }),
+    )
+  }
+  const vigente = (filas: Fila[], lista: string, color: string): number | null => {
+    const de = (c: string) =>
+      filas
+        .filter((f) => f.lista === lista && f.color === c)
+        .sort((a, b) => (new Date(b.orden.split('|')[0]).getTime() || 0) - (new Date(a.orden.split('|')[0]).getTime() || 0) || b.orden.localeCompare(a.orden))[0]
+    return (de(color) ?? de(''))?.precio ?? null
+  }
+  const out = new Map<string, PreciosIndo>()
+  for (const a of articulos) {
+    const filas = porArticulo.get(a.idArticulo) ?? []
+    const clave = `${a.idArticulo}|${a.colorCodigo}`
+    if (!out.has(clave)) out.set(clave, { lista1: vigente(filas, 'LISTA1', a.colorCodigo), lista4: vigente(filas, 'LISTA4', a.colorCodigo) })
+  }
+  return out
 }

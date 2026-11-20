@@ -208,7 +208,7 @@ export default function Deposito() {
     if (!supabase || !ids.length) return
     const at = estado === 'pendiente' ? null : new Date().toISOString()
     setTransfer((arr) => arr.map((r) => (ids.includes(r.id)
-      ? { ...r, estado, hecho_at: at, hecho_por: estado === 'pendiente' ? null : perfil?.id ?? null, hecho_por_nombre: estado === 'pendiente' ? null : perfil?.nombre ?? null, hecho_por_legajo: estado === 'pendiente' ? null : perfil?.legajo ?? null }
+      ? { ...r, estado, hecho_at: at, escaneadas: estado === 'pendiente' ? 0 : r.escaneadas, hecho_por: estado === 'pendiente' ? null : perfil?.id ?? null, hecho_por_nombre: estado === 'pendiente' ? null : perfil?.nombre ?? null, hecho_por_legajo: estado === 'pendiente' ? null : perfil?.legajo ?? null }
       : r)))
     const { error: e } = await supabase.rpc('transferencia_marcar_deposito', { p_ids: ids, p_estado: estado })
     if (e) { setError(e.message); await cargarTransfer() }
@@ -437,7 +437,15 @@ export default function Deposito() {
       ) : (
         <div className="space-y-3">
           {transferPorLote.map((rs) => (
-            <TransferenciaDepositoLote key={rs[0].lote_id} renglones={rs} puedeMarcar={puedeMarcar} onMarcar={(ids, estado) => void marcarTransfer(ids, estado)} />
+            <TransferenciaDepositoLote
+              key={rs[0].lote_id}
+              renglones={rs}
+              puedeMarcar={puedeMarcar}
+              onMarcar={(ids, estado) => marcarTransfer(ids, estado)}
+              onCambio={(c) => setTransfer((arr) => arr.map((r) => (r.id === c.id
+                ? { ...r, escaneadas: c.escaneadas, estado: c.estado, hecho_at: c.hecho_at ?? r.hecho_at, hecho_por: c.estado === 'hecho' ? perfil?.id ?? r.hecho_por : r.hecho_por, hecho_por_nombre: c.estado === 'hecho' ? perfil?.nombre ?? r.hecho_por_nombre : r.hecho_por_nombre }
+                : r)))}
+            />
           ))}
           {lotes.map((lote) => {
             const its = itemsPorLote.get(lote.id) ?? []

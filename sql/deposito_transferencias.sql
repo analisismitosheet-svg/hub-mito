@@ -28,10 +28,14 @@ AS $$
   END
 $$;
 
-CREATE OR REPLACE FUNCTION public.deposito_transferencias()
+-- 20/11/2026: suma `escaneadas` (transfer_escaneos_deposito, ver
+-- sql/transferencias_deposito_escaneo.sql) para escanear por local desde Repos Depósito.
+DROP FUNCTION IF EXISTS public.deposito_transferencias();
+CREATE FUNCTION public.deposito_transferencias()
 RETURNS TABLE(id uuid, lote_id uuid, lote_nombre text, lote_motivo text, lote_creado timestamptz,
               destino text, articulo text, descripcion text, color text, talle text, cantidad integer,
-              estado text, hecho_at timestamptz, hecho_por uuid, hecho_por_nombre text, hecho_por_legajo text)
+              estado text, hecho_at timestamptz, hecho_por uuid, hecho_por_nombre text, hecho_por_legajo text,
+              escaneadas integer)
 LANGUAGE plpgsql STABLE SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
@@ -43,9 +47,10 @@ BEGIN
   SELECT i.id, l.id, l.nombre, l.motivo, l.created_at,
          i.destino, i.articulo, i.descripcion, i.color, i.talle, i.cantidad,
          coalesce(i.estado, 'pendiente'), i.hecho_at, i.hecho_por,
-         coalesce(e.nombre, u.nombre, u.email), u.legajo
+         coalesce(e.nombre, u.nombre, u.email), u.legajo, coalesce(es.escaneadas, 0)
     FROM public.transfer_lotes l
     JOIN public.transfer_items i ON i.lote_id = l.id
+    LEFT JOIN public.transfer_escaneos_deposito es ON es.item_id = i.id
     LEFT JOIN public.usuarios u ON u.id = i.hecho_por
     LEFT JOIN LATERAL (
       SELECT em.nombre FROM public.empleados em
