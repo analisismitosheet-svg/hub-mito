@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { descripcionesDeArticulos } from '@/lib/mapeo'
 import { cargarCajasLlenas, cargarMapeoCajas, marcarCajaLlena, tramoDe, type MapeoCaja } from '@/lib/mapeoCajas'
-import { cargarStockArticulos, stockDe, type StockArticulos } from '@/lib/stockArticulos'
+import { cargarStockArticulos, stockDe, VISTA_STOCK_ARTICULO_INDOD, type StockArticulos } from '@/lib/stockArticulos'
 
 interface Caja {
   caja: number
@@ -32,13 +32,13 @@ function chipStock(v: number | null) {
   }
   if (v <= 0) {
     return (
-      <span className="shrink-0 rounded-md bg-brand-600/15 px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-brand-400" title="Sin stock en MITO">
+      <span className="shrink-0 rounded-md bg-brand-600/15 px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-brand-400" title="Sin stock en INDOD">
         0
       </span>
     )
   }
   return (
-    <span className="shrink-0 rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-emerald-400" title="Stock en MITO">
+    <span className="shrink-0 rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-emerald-400" title="Stock en INDOD">
       {v.toLocaleString('es-AR')}
     </span>
   )
@@ -78,7 +78,7 @@ export default function MapeoCajasOrden() {
       descripcionesDeArticulos(todas.map((f) => f.codigo))
         .then(setDescripciones)
         .catch(() => { /* sin descripciones */ })
-      cargarStockArticulos()
+      cargarStockArticulos(VISTA_STOCK_ARTICULO_INDOD)
         .then((st) => {
           setStock(st)
           if (!st.completo) {

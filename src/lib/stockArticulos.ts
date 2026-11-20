@@ -15,7 +15,8 @@ import { estadoConexion, leerVista, type FilaSql } from '@/lib/sqlApi'
  * `vw_STOCK_ARTICULO_REAL` (vista agregada sobre `vw_STOCK_SUCURSALES_REAL`:
  * suma CANTIDAD_REAL por artículo, sin importar color, talle ni base).
  * OJO: `VISTA_STOCK_ARTICULO_REAL` es SOLO para Comparativa de precios. Mapeo
- * depósito usa la de por defecto (`vw_STOCK_ARTICULO_MITO`); no mezclar.
+ * depósito > Orden mapeado usa la de por defecto (`vw_STOCK_ARTICULO_MITO`) y
+ * Cajas mapeadas usa `VISTA_STOCK_ARTICULO_INDOD` (base DRAGONFISH_INDOD); no mezclar.
  *
  * Hay que habilitar la vista en Configuraciones > Conexión SQL (si no, el proxy
  * contesta "Vista no habilitada"). Esta lib pide como máximo 60 000 filas y si
@@ -37,6 +38,14 @@ export const VISTA_STOCK_ARTICULO =
 export const VISTA_STOCK_ARTICULO_REAL =
   (import.meta.env.VITE_SQL_VISTA_STOCK_ARTICULO_REAL as string | undefined)?.trim() ||
   'DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.vw_STOCK_ARTICULO_REAL'
+
+/**
+ * Stock FÍSICO por artículo de la base DRAGONFISH_INDOD (sql/vw_STOCK_ARTICULO_INDOD.sql).
+ * Lo usa SOLO Mapeo depósito > Cajas mapeadas. Misma forma (ID_ARTICULO, STOCK_MITO).
+ */
+export const VISTA_STOCK_ARTICULO_INDOD =
+  (import.meta.env.VITE_SQL_VISTA_STOCK_ARTICULO_INDOD as string | undefined)?.trim() ||
+  'DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.vw_STOCK_ARTICULO_INDOD'
 
 /** Techo propio de esta lib. El servidor recorta antes con sql_conexion.max_rows
  *  (29 900 000 hoy): el que corte primero manda y eso se detecta con `limite`. */

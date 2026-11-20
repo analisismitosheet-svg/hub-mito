@@ -35,7 +35,11 @@ await build({
   platform: 'node',
   outfile: salida,
   logLevel: 'warning',
-  define: { 'import.meta.env.VITE_SQL_VISTA_STOCK_ARTICULO': 'undefined' },
+  define: {
+    'import.meta.env.VITE_SQL_VISTA_STOCK_ARTICULO': 'undefined',
+    'import.meta.env.VITE_SQL_VISTA_STOCK_ARTICULO_REAL': 'undefined',
+    'import.meta.env.VITE_SQL_VISTA_STOCK_ARTICULO_INDOD': 'undefined',
+  },
   alias,
 })
 
