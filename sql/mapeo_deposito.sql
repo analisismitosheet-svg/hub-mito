@@ -24,6 +24,11 @@ CREATE TABLE IF NOT EXISTS public.mapeo_deposito (
   escaneado_at    timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS mapeo_deposito_orden_idx ON public.mapeo_deposito (orden);
+-- Sin stock (20/11/2026): cuando Orden mapeado ve el artículo en stock 0 (MITO)
+-- lo marca acá y pierde la posición. Si vuelve a tener stock aparece «Sin
+-- posición» con la posición vacía más cercana; al escanearlo de nuevo, la fila
+-- marcada se borra sola (mapeo_escanear).
+ALTER TABLE public.mapeo_deposito ADD COLUMN IF NOT EXISTS sin_stock_at timestamptz;
 -- Versión anterior: el código era único en toda la tabla
 ALTER TABLE public.mapeo_deposito DROP CONSTRAINT IF EXISTS mapeo_deposito_codigo_key;
 CREATE UNIQUE INDEX IF NOT EXISTS mapeo_deposito_codigo_ubic_uq
@@ -155,6 +160,11 @@ BEGIN
   -- Un escaneo a la vez: el orden no se pisa entre dos lectores
   PERFORM pg_advisory_xact_lock(hashtext('mapeo_deposito'));
 
+  -- Las filas que quedaron sin stock ya no tienen posición: al volver a
+  -- escanearlo se descartan y el artículo entra como nuevo donde se escanea
+  DELETE FROM public.mapeo_deposito m
+   WHERE m.codigo = v_p.codigo AND m.sin_stock_at IS NOT NULL;
+
   SELECT * INTO v_aca FROM public.mapeo_deposito m
    WHERE m.codigo = v_p.codigo AND coalesce(m.ubicacion, '') = coalesce(v_ubic, '');
 
@@ -191,5 +201,27 @@ END;
 $$;
 REVOKE ALL ON FUNCTION public.mapeo_escanear(text, text, text, text[]) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.mapeo_escanear(text, text, text, text[]) TO authenticated;
+
+-- ============================================================
+-- Marcar sin stock: Orden mapeado pasa los id que vio en stock 0.
+-- Solo pone la fecha (si no la tenía); no borra ni mueve nada.
+-- ============================================================
+CREATE OR REPLACE FUNCTION public.mapeo_marcar_sin_stock(p_ids uuid[])
+RETURNS integer
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $$
+DECLARE v_n integer;
+BEGIN
+  IF NOT (private.tengo_permiso('mayorista.mapeo.view') OR private.tengo_permiso('mayorista.mapeo.escanear')) THEN
+    RAISE EXCEPTION 'Sin permiso para el mapeo';
+  END IF;
+  UPDATE public.mapeo_deposito m SET sin_stock_at = now()
+   WHERE m.id = ANY (coalesce(p_ids, '{}')) AND m.sin_stock_at IS NULL;
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  RETURN v_n;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.mapeo_marcar_sin_stock(uuid[]) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.mapeo_marcar_sin_stock(uuid[]) TO authenticated;
 
 COMMIT;

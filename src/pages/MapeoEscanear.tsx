@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Loader2, Check, AlertTriangle, Camera, CameraOff, MapPin, MoveDown, QrCode, Plus,
 } from 'lucide-react'
@@ -67,6 +68,20 @@ export default function MapeoEscanear() {
     setRepetido(null)
     setMensaje({ ok: true, texto: `Ubicación ${u}: ahora escaneá los artículos.` })
   }, [])
+
+  // Viene de Orden mapeado («Sin posición») con ?ubicacion=PB-A3: arranca con
+  // esa ubicación elegida (después de cargar la lista, para validarla)
+  const [params] = useSearchParams()
+  const ubicacionInicial = params.get('ubicacion')
+  useEffect(() => {
+    if (!ubicacionInicial) return
+    let vivo = true
+    cargarUbicaciones()
+      .then((l) => { if (vivo) validasRef.current = new Set(l.map((u) => u.codigo.toUpperCase())) })
+      .catch(() => { /* sin lista: se acepta cualquier ubicación */ })
+      .finally(() => { if (vivo) fijarUbicacion(limpiarUbicacion(ubicacionInicial)) })
+    return () => { vivo = false }
+  }, [ubicacionInicial, fijarUbicacion])
 
   const escanearArticulo = useCallback(async (codigo: string, accion?: AccionRepetido, ubicacionFija?: string, sacarDeUbic?: string[]) => {
     // Al resolver un repetido se usa la ubicación del momento en que se escaneó

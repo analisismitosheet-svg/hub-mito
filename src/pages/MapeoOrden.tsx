@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Loader2, MapPin, Search, Trash2, Download, RefreshCw, ChevronDown, Layers, PackageX } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Loader2, MapPin, Search, Trash2, Download, RefreshCw, ChevronDown, Layers, PackageX, PackagePlus } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import {
-  cargarMapeo, compararUbicaciones, descripcionesDeArticulos, nombrePlanta, ordenPlanta, type Mapeo,
+  cargarMapeo, cargarUbicaciones, compararUbicaciones, descripcionesDeArticulos, marcarSinStockMapeo, nombrePlanta, ordenPlanta,
+  posicionMasCercana, type Mapeo, type Ubicacion,
 } from '@/lib/mapeo'
 import { cargarStockArticulos, stockDe, type StockArticulos } from '@/lib/stockArticulos'
 
@@ -79,8 +81,8 @@ interface ItemSinStock {
  * Sección «Sin stock» de Mayorista > Orden mapeado (propia de esta pantalla).
  *
  * Los artículos que llegan a stock 0 (MITO) salen de su posición y se listan acá
- * con el lugar donde estaban. NO se borran del mapeo: si el stock vuelve, el
- * artículo vuelve solo a su lugar. Quitar del todo sigue siendo a mano (tacho).
+ * con la posición donde estaban (quedan marcados en la base). Si el stock vuelve
+ * NO vuelven a la posición: pasan a «Sin posición». Quitar del todo es a mano (tacho).
  */
 function SeccionSinStock({
   items,
@@ -110,7 +112,7 @@ function SeccionSinStock({
         <PackageX size={18} aria-hidden className="shrink-0 text-brand-400" />
         <span className="flex-1 font-display text-base font-bold text-ink">
           Sin stock
-          <span className="ml-2 text-sm font-medium text-sub">quedaron en 0 y salieron de su posición</span>
+          <span className="ml-2 text-sm font-medium text-sub">quedaron en 0 y salieron de su posición (si vuelve el stock pasan a «Sin posición»)</span>
         </span>
         <span className="shrink-0 rounded-full bg-brand-600/15 px-2.5 py-0.5 text-xs font-semibold tabular-nums text-brand-400">
           {items.length} {items.length === 1 ? 'código' : 'códigos'}
@@ -147,6 +149,91 @@ function SeccionSinStock({
   )
 }
 
+/**
+ * Sección «Sin posición» de Mayorista > Orden mapeado: artículos que quedaron
+ * en stock 0 (perdieron la posición) y volvieron a tener stock en MITO. Sugiere
+ * la posición vacía más cercana a la que tenían; el chip lleva a escanearlo ahí.
+ * Al escanearlo en cualquier posición deja de figurar acá.
+ */
+function SeccionSinPosicion({
+  items,
+  descDe,
+  stockDe: stockDeCodigo,
+  sugerida,
+  abiertaForzada,
+}: {
+  items: Mapeo[]
+  descDe: (codigo: string) => string
+  stockDe: (codigo: string) => number | null
+  sugerida: (ubicacion: string | null) => string | null
+  abiertaForzada?: boolean
+}) {
+  const [abierta, setAbierta] = useState(true)
+  if (items.length === 0) return null
+  const ver = abierta || !!abiertaForzada
+  const ordenados = [...items].sort(
+    (a, b) => a.codigo.localeCompare(b.codigo) || compararUbicaciones(a.ubicacion ?? SIN_UBICACION, b.ubicacion ?? SIN_UBICACION),
+  )
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-sky-500/40 bg-surface">
+      <button
+        onClick={() => setAbierta((v) => !v)}
+        aria-expanded={ver}
+        className="flex min-h-[3.25rem] w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-surface2"
+      >
+        <PackagePlus size={18} aria-hidden className="shrink-0 text-sky-400" />
+        <span className="flex-1 font-display text-base font-bold text-ink">
+          Sin posición
+          <span className="ml-2 text-sm font-medium text-sub">volvieron a tener stock: hay que ubicarlos</span>
+        </span>
+        <span className="shrink-0 rounded-full bg-sky-500/15 px-2.5 py-0.5 text-xs font-semibold tabular-nums text-sky-400">
+          {items.length} {items.length === 1 ? 'código' : 'códigos'}
+        </span>
+        <ChevronDown size={18} aria-hidden className={`shrink-0 text-sub transition-transform ${ver ? 'rotate-180' : ''}`} />
+      </button>
+      {ver && (
+        <ul className="divide-y divide-line/40 border-t border-line">
+          {ordenados.map((i) => {
+            const sug = sugerida(i.ubicacion)
+            const st = stockDeCodigo(i.codigo)
+            return (
+              <li key={i.id} className="flex items-center gap-2 py-2 pl-4 pr-2">
+                <span className="min-w-0 flex-1">
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <span className="truncate text-sm font-semibold text-ink">{i.codigo}</span>
+                    {st !== null && (
+                      <span className="shrink-0 rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-emerald-400">
+                        {st.toLocaleString('es-AR')}
+                      </span>
+                    )}
+                    <span className="shrink-0 rounded-md bg-surface2 px-1.5 py-0.5 text-[11px] font-medium text-sub">
+                      estaba en {i.ubicacion ?? SIN_UBICACION}
+                    </span>
+                  </span>
+                  {descDe(i.codigo) && <span className="block text-[11px] leading-tight text-sub">{descDe(i.codigo)}</span>}
+                </span>
+                {sug !== null ? (
+                  <Link
+                    to={`/mayorista/mapeo/escanear?ubicacion=${encodeURIComponent(sug)}`}
+                    className="btn-press inline-flex min-h-[2.75rem] shrink-0 flex-col items-center justify-center rounded-xl border border-sky-500/50 bg-sky-500/10 px-3 py-1 text-sky-400 transition hover:bg-sky-500/20"
+                    title={`Ubicarlo en ${sug}`}
+                  >
+                    <span className="text-[10px] font-medium leading-none opacity-80">sugerida</span>
+                    <span className="font-display text-base font-bold leading-tight">{sug}</span>
+                  </Link>
+                ) : (
+                  <span className="shrink-0 text-xs text-sub">No hay posiciones creadas</span>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 /** Mapeo depósito · Orden mapeado: planta → pasillo (desplegables) → niveles en columnas */
 export default function MapeoOrden() {
   const { isAdmin, can } = useAuth()
@@ -169,10 +256,12 @@ export default function MapeoOrden() {
   const [stock, setStock] = useState<StockArticulos | null>(null)
   /** Aviso del stock: qué falló o qué vino cortado */
   const [stockAviso, setStockAviso] = useState<string | null>(null)
-  // Los de stock 0 salen de su posición y pasan a la sección «Sin stock».
-  // NO se borran del mapeo (si el stock viene mal, borrarlos hacía perder
-  // artículos que sí están en el estante): si el stock vuelve, vuelven solos
-  // a su lugar. Quitar del mapeo es siempre a mano.
+  /** Posiciones creadas (para sugerir dónde ubicar los «Sin posición») */
+  const [ubicaciones, setUbicaciones] = useState<Ubicacion[]>([])
+  // Los de stock 0 salen de su posición y pasan a la sección «Sin stock» (se
+  // marcan en la base con sin_stock_at, no se borran). Si el stock vuelve NO
+  // vuelven a su posición: quedan «Sin posición» hasta que se escaneen de nuevo.
+  // Quitar del mapeo es siempre a mano.
 
   const cargar = useCallback(async () => {
     setCargando(true)
@@ -181,6 +270,7 @@ export default function MapeoOrden() {
     try {
       const todas = await cargarMapeo()
       setFilas(todas)
+      cargarUbicaciones().then(setUbicaciones).catch(() => { /* sin sugerencias */ })
       // No frenan la carga: si fallan, se ven solo los códigos
       descripcionesDeArticulos(todas.map((f) => f.codigo))
         .then(setDescripciones)
@@ -188,6 +278,15 @@ export default function MapeoOrden() {
       cargarStockArticulos()
         .then(async (st) => {
           setStock(st)
+          // Los que se ven en 0 pierden la posición (queda guardado en la base)
+          const aMarcar = todas.filter((f) => !f.sin_stock_at && stockDe(st, f.codigo) === 0)
+          if (aMarcar.length > 0) {
+            const ahora = new Date().toISOString()
+            const ids = new Set(aMarcar.map((f) => f.id))
+            marcarSinStockMapeo([...ids])
+              .then(() => setFilas((prev) => prev.map((f) => (ids.has(f.id) ? { ...f, sin_stock_at: ahora } : f))))
+              .catch(() => { /* se reintenta la próxima vez que se abra */ })
+          }
           if (!st.completo) {
             setStockAviso(
               st.limite
@@ -221,16 +320,29 @@ export default function MapeoOrden() {
 
   /** Mapeados en stock 0 ahora mismo: van a la sección «Sin stock» (no se borran) */
   const sinStock = useMemo(
-    () => (stock ? filas.filter((f) => (stockDe(stock, f.codigo) ?? 1) === 0) : []),
+    () => (stock ? filas.filter((f) => stockDe(stock, f.codigo) === 0) : []),
     [stock, filas],
   )
   const cantSinStock = sinStock.length
 
-  /** Lo que va en las posiciones: todo el mapeo menos los de stock 0 */
-  const visibles = useMemo(() => {
-    if (!stock) return filas
-    return filas.filter((f) => (stockDe(stock, f.codigo) ?? 1) !== 0)
-  }, [stock, filas])
+  /** Marcados sin stock que volvieron a tener: ya no tienen posición */
+  const sinPosicion = useMemo(
+    () => filas.filter((f) => f.sin_stock_at && (!stock || stockDe(stock, f.codigo) !== 0)),
+    [stock, filas],
+  )
+
+  /** Lo que va en las posiciones: todo el mapeo menos los de stock 0 y los sin posición */
+  const visibles = useMemo(
+    () => filas.filter((f) => !f.sin_stock_at && (!stock || stockDe(stock, f.codigo) !== 0)),
+    [stock, filas],
+  )
+
+  /** Posición vacía más cercana: las ocupadas son las que tienen algo en las posiciones */
+  const ocupadas = useMemo(() => new Set(visibles.map((f) => (f.ubicacion ?? '').toUpperCase()).filter(Boolean)), [visibles])
+  const sugerida = useCallback(
+    (u: string | null) => posicionMasCercana(u ?? '', ubicaciones, ocupadas),
+    [ubicaciones, ocupadas],
+  )
 
   // Búsqueda: por ubicación deja la ubicación entera; por código o descripción, solo lo que coincide
   const q = busqueda.trim().toUpperCase()
@@ -244,6 +356,7 @@ export default function MapeoOrden() {
   )
   const filtradas = useMemo(() => visibles.filter(coincide), [visibles, coincide])
   const sinStockFiltrados = useMemo(() => sinStock.filter(coincide), [sinStock, coincide])
+  const sinPosicionFiltrados = useMemo(() => sinPosicion.filter(coincide), [sinPosicion, coincide])
 
   // Árbol planta → pasillo → nivel, en el orden del depósito
   const plantas = useMemo<Planta[]>(() => {
@@ -341,6 +454,18 @@ export default function MapeoOrden() {
         .map((f) => ({ Artículo: f.codigo, Descripción: descDe(f.codigo), 'Estaba en': f.ubicacion ?? SIN_UBICACION }))
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ceros), 'Sin stock')
     }
+    if (sinPosicion.length > 0) {
+      const sp = [...sinPosicion]
+        .sort((a, b) => a.codigo.localeCompare(b.codigo))
+        .map((f) => ({
+          Artículo: f.codigo,
+          Descripción: descDe(f.codigo),
+          Stock: stockDe(stock, f.codigo) ?? '',
+          'Estaba en': f.ubicacion ?? SIN_UBICACION,
+          'Posición sugerida': sugerida(f.ubicacion) ?? '',
+        }))
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sp), 'Sin posición')
+    }
     XLSX.writeFile(wb, `mapeo_deposito_${new Date().toISOString().slice(0, 10)}.xlsx`)
   }
 
@@ -361,6 +486,12 @@ export default function MapeoOrden() {
             <>
               {' · '}
               <span className="font-semibold text-brand-400">{cantSinStock} sin stock</span>
+            </>
+          )}
+          {sinPosicion.length > 0 && (
+            <>
+              {' · '}
+              <span className="font-semibold text-sky-400">{sinPosicion.length} sin posición</span>
             </>
           )}
         </p>
@@ -402,6 +533,14 @@ export default function MapeoOrden() {
         {stockAviso && (
           <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-500">{stockAviso}</p>
         )}
+
+        <SeccionSinPosicion
+          items={sinPosicionFiltrados}
+          descDe={descDe}
+          stockDe={(c) => stockDe(stock, c)}
+          sugerida={sugerida}
+          abiertaForzada={!!q}
+        />
 
         {cargando && filas.length === 0 ? (
           <div className="flex items-center justify-center gap-2 py-12 text-sub">

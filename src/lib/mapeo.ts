@@ -17,6 +17,8 @@ export interface Mapeo {
   talle: string | null
   ubicacion: string | null
   escaneado_at: string
+  /** Fecha en que se vio en stock 0 (MITO): desde ahí ya no tiene posición */
+  sin_stock_at: string | null
 }
 
 /** Fila de public.mapeo_ubicaciones (lista de pasillos / niveles).
@@ -60,7 +62,7 @@ export interface FilaEscaneo {
 /** Qué hacer con un artículo que ya está en otra ubicación */
 export type AccionRepetido = 'mover' | 'agregar'
 
-const COLUMNAS = 'id,orden,codigo,color,talle,ubicacion,escaneado_at'
+const COLUMNAS = 'id,orden,codigo,color,talle,ubicacion,escaneado_at,sin_stock_at'
 
 /** Todo el mapeo en orden de recorrido (paginado: Supabase corta en 1000 filas) */
 export async function cargarMapeo(): Promise<Mapeo[]> {
@@ -96,6 +98,37 @@ export async function cargarUbicaciones(): Promise<Ubicacion[]> {
     (a, b) =>
       ordenPlanta(a.planta) - ordenPlanta(b.planta) || a.planta.localeCompare(b.planta) || a.pasillo - b.pasillo || a.nivel - b.nivel,
   )
+}
+
+/**
+ * Marca como «sin stock» las filas que se vieron en stock 0: pierden la posición.
+ * Si el stock vuelve, Orden mapeado las muestra «Sin posición». No borra nada.
+ */
+export async function marcarSinStockMapeo(ids: string[]): Promise<number> {
+  if (!supabase || ids.length === 0) return 0
+  const { data, error } = await supabase.rpc('mapeo_marcar_sin_stock', { p_ids: ids })
+  if (error) throw new Error(error.message)
+  return (data as number | null) ?? 0
+}
+
+/**
+ * Posición vacía (creada y sin nada mapeado) más cercana a `desde`: primero la
+ * misma planta, después el pasillo más próximo y dentro de él el nivel más
+ * próximo. Si no hay ninguna vacía, la misma `desde` (si existe). null si no hay.
+ */
+export function posicionMasCercana(desde: string, ubicaciones: Ubicacion[], ocupadas: Set<string>): string | null {
+  const m = /^([A-Z0-9]+)-([A-Z])(\d+)$/.exec(desde.trim().toUpperCase())
+  const origen = m ? { planta: m[1], pasillo: m[2].charCodeAt(0) - 64, nivel: Number(m[3]) } : null
+  let mejor: { codigo: string; d: number } | null = null
+  for (const u of ubicaciones) {
+    if (ocupadas.has(u.codigo.toUpperCase())) continue
+    const d = origen
+      ? (u.planta === origen.planta ? 0 : 1_000_000) + Math.abs(u.pasillo - origen.pasillo) * 1000 + Math.abs(u.nivel - origen.nivel)
+      : ordenPlanta(u.planta) * 1_000_000 + u.pasillo * 1000 + u.nivel
+    if (!mejor || d < mejor.d) mejor = { codigo: u.codigo, d }
+  }
+  if (mejor) return mejor.codigo
+  return ubicaciones.some((u) => u.codigo.toUpperCase() === desde.toUpperCase()) ? desde : null
 }
 
 /** Código de una ubicación: planta baja, pasillo A, nivel 2 -> "PB-A2" */
@@ -136,6 +169,7 @@ export async function ubicacionesDeArticulos(codigos: string[]): Promise<Map<str
       .from('mapeo_deposito')
       .select('codigo,ubicacion')
       .in('codigo', unicos.slice(i, i + TANDA))
+      .is('sin_stock_at', null) // los que quedaron sin stock ya no tienen posición
       .range(0, 9999)
     if (error) throw new Error(error.message)
     for (const r of (data as { codigo: string; ubicacion: string | null }[] | null) ?? []) {
