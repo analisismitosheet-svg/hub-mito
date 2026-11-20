@@ -449,7 +449,10 @@ export default function CampanaNotificaciones() {
       }
       // 5b) Franquicias que confirmaron su propuesta y nadie la miró todavía (si no tiene permiso, RLS no devuelve nada)
       if (esMayorista || isAdmin) {
-        const { data } = await sb.from('franquicias_propuestas').select('id,numero,franquicia_nombre,unidades_confirmadas,confirmada_at,dragon_pedido').in('estado', ['confirmada', 'en_dragon']).is('revisada_at', null)
+        let qf = sb.from('franquicias_propuestas').select('id,numero,franquicia_nombre,unidades_confirmadas,confirmada_at,dragon_pedido').in('estado', ['confirmada', 'en_dragon']).is('revisada_at', null)
+        // Admin: pasado un día de confirmado, el aviso se va solo
+        if (isAdmin) qf = qf.gte('confirmada_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+        const { data } = await qf
         if (activo && data) {
           for (const p of data as { id: string; numero: string; franquicia_nombre: string; unidades_confirmadas: number | null; confirmada_at: string; dragon_pedido: string | null }[]) {
             notis.push({ id: `fq-${p.id}`, tipo: 'franquicias', titulo: `${p.franquicia_nombre} confirmó su pedido`, detalle: `${p.numero} · ${p.unidades_confirmadas ?? 0} u.${p.dragon_pedido ? ` · pedido Dragon ${p.dragon_pedido}` : ''}`, ruta: `/mayorista/franquicias/auto?abrir=${p.id}`, fecha: p.confirmada_at, destinoId: p.id })
