@@ -1,5 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
-import { Boxes, ChevronDown, Download, FileText, Loader2, Package, RefreshCw, Search, Truck, Users, Wallet, Warehouse } from 'lucide-react'
+import { Boxes, ChevronDown, Download, EyeOff, FileText, Loader2, Package, RefreshCw, RotateCcw, Search, Truck, Users, Wallet, Warehouse } from 'lucide-react'
+import { useAuth } from '@/context/AuthContext'
+import { supabase } from '@/lib/supabase'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import MultiselectFiltro, { type OpcionMulti } from '@/components/MultiselectFiltro'
@@ -63,6 +65,21 @@ function curvaDe(pares: [string, number][]): [string, number][] {
   return [...m.entries()].sort((x, y) => compararTalles(x[0], y[0]))
 }
 
+/** Línea sacada a mano de Tapera (tabla tapera_ocultos): Dragon la sigue teniendo sin facturar. */
+interface Oculto {
+  remito: number
+  cliente: string
+  articulo: string
+  color: string
+  talle: string
+  nota: string | null
+  por_nombre: string | null
+  creado_at: string
+}
+
+const claveLinea = (l: { remito: number; cli: string; a: string; c: string; t: string }) => `${l.remito}|${l.cli}|${l.a}|${l.c}|${l.t}`
+const claveOculto = (o: Oculto) => `${o.remito}|${o.cliente}|${o.articulo}|${o.color}|${o.talle}`
+
 const fechaCorta = (f: string) => `${f.slice(8, 10)}/${f.slice(5, 7)}/${f.slice(2, 4)}`
 
 export default function MayoristaStock() {
@@ -77,6 +94,61 @@ export default function MayoristaStock() {
   const [provSel, setProvSel] = useState<Set<string>>(new Set())
   /** Tapera: clientes elegidos (vacío = todos). */
   const [cliSel, setCliSel] = useState<Set<string>>(new Set())
+  const { can, perfil } = useAuth()
+  const puedeAjustar = can('mayorista.stock.ajustar')
+  const [ocultos, setOcultos] = useState<Oculto[]>([])
+  const [verSacados, setVerSacados] = useState(false)
+  const [sacando, setSacando] = useState(false)
+
+  const cargarOcultos = useCallback(async () => {
+    if (!supabase) return
+    const { data } = await supabase
+      .from('tapera_ocultos')
+      .select('remito,cliente,articulo,color,talle,nota,por_nombre,creado_at')
+      .order('creado_at', { ascending: false })
+    setOcultos((data as Oculto[] | null) ?? [])
+  }, [])
+
+  useEffect(() => {
+    void cargarOcultos()
+  }, [cargarOcultos])
+
+  const ocultosSet = useMemo(() => new Set(ocultos.map(claveOculto)), [ocultos])
+
+  /** Saca de Tapera esas líneas (Dragon no se toca). Pide el motivo. */
+  async function sacar(lineas: LineaTapera[], que: string) {
+    if (!supabase || lineas.length === 0) return
+    const nota = window.prompt(`Sacar de Tapera ${que}.\n¿Por qué?`, 'Pasó a REPOLOC')
+    if (nota === null) return
+    setSacando(true)
+    const { error: err } = await supabase.from('tapera_ocultos').upsert(
+      lineas.map((l) => ({
+        remito: l.remito,
+        cliente: l.cli,
+        articulo: l.a,
+        color: l.c,
+        talle: l.t,
+        nota: nota.trim() || null,
+        por_nombre: perfil?.nombre ?? null,
+      })),
+      { onConflict: 'remito,cliente,articulo,color,talle', ignoreDuplicates: true },
+    )
+    setSacando(false)
+    if (err) setError(`No se pudo sacar: ${err.message}`)
+    await cargarOcultos()
+  }
+
+  async function volverASumar(o: Oculto) {
+    if (!supabase) return
+    setSacando(true)
+    const { error: err } = await supabase
+      .from('tapera_ocultos')
+      .delete()
+      .match({ remito: o.remito, cliente: o.cliente, articulo: o.articulo, color: o.color, talle: o.talle })
+    setSacando(false)
+    if (err) setError(`No se pudo volver a sumar: ${err.message}`)
+    await cargarOcultos()
+  }
 
   const cargar = useCallback(async (forzar = false) => {
     setCargando(true)
@@ -162,12 +234,13 @@ export default function MayoristaStock() {
     () =>
       (datos?.tapera ?? []).filter(
         (l) =>
+          !ocultosSet.has(claveLinea(l)) &&
           pasaFiltros(l.a) &&
           (cliSel.size === 0 || cliSel.has(l.cli)) &&
           (!q || `${l.a} ${desDe(l.a)} ${l.cli} ${l.cli_nom} ${l.remito}`.toLowerCase().includes(q)),
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [datos, pasaFiltros, q, arts, cliSel],
+    [datos, pasaFiltros, q, arts, cliSel, ocultosSet],
   )
 
   const tapPorArt = useMemo<GrupoTap[]>(() => {
@@ -227,9 +300,11 @@ export default function MayoristaStock() {
   }, [datos])
   const tapPorArtTotal = useMemo(() => {
     const m = new Map<string, number>()
-    ;(datos?.tapera ?? []).forEach((l) => m.set(l.a, (m.get(l.a) ?? 0) + l.u))
+    ;(datos?.tapera ?? []).forEach((l) => {
+      if (!ocultosSet.has(claveLinea(l))) m.set(l.a, (m.get(l.a) ?? 0) + l.u)
+    })
     return m
-  }, [datos])
+  }, [datos, ocultosSet])
 
   function cambiarSolapa(s: Solapa) {
     setSolapa(s)
@@ -315,6 +390,22 @@ export default function MayoristaStock() {
   const flecha = (abierto: boolean) => (
     <ChevronDown size={14} style={{ color: cViolet }} className={`shrink-0 transition ${abierto ? '' : '-rotate-90'}`} aria-hidden />
   )
+
+  const botonSacar = (lineas: LineaTapera[], que: string, texto = 'Sacar') =>
+    puedeAjustar ? (
+      <button
+        type="button"
+        disabled={sacando}
+        onClick={(e) => {
+          e.stopPropagation()
+          void sacar(lineas, que)
+        }}
+        title={`Sacar de Tapera ${que} (no toca Dragon)`}
+        className="btn-press inline-flex items-center gap-1 rounded-md border border-line px-1.5 py-0.5 text-[11px] text-sub transition hover:border-rose-500/50 hover:text-rose-500 disabled:opacity-50"
+      >
+        <EyeOff size={11} aria-hidden /> {texto}
+      </button>
+    ) : null
 
   const th = 'px-3 py-2 text-left text-[11px] font-medium uppercase tracking-wide text-sub'
   const thR = `${th} text-right`
@@ -589,6 +680,7 @@ export default function MayoristaStock() {
                                       <th className="text-left">Talle</th>
                                       <th className="text-left">Antigüedad</th>
                                       <th className="text-right">Sin facturar</th>
+                                      {puedeAjustar && <th />}
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -602,6 +694,7 @@ export default function MayoristaStock() {
                                         <td className="text-ink">{l.t}</td>
                                         <td>{antiguedad(l.fecha)}</td>
                                         <td className="text-right font-semibold tabular-nums text-ink">{l.u}</td>
+                                        {puedeAjustar && <td className="pl-2 text-right">{botonSacar([l], `R ${l.remito} · ${l.a} ${l.t}`)}</td>}
                                       </tr>
                                     ))}
                                   </tbody>
@@ -685,7 +778,18 @@ export default function MayoristaStock() {
                           <tr className="border-b border-line/60">
                             <td colSpan={5} className="px-3 pb-3">
                               <div className="overflow-x-auto rounded-xl bg-surface2/50 p-3 text-xs">
-                                <p className="mb-2 font-medium text-ink">Lo que tiene remitido sin facturar · {c.nom || c.cli}</p>
+                                <div className="mb-2 flex flex-wrap items-center gap-2">
+                                  <p className="font-medium text-ink">Lo que tiene remitido sin facturar · {c.nom || c.cli}</p>
+                                  {c.remitos.map((r) => (
+                                    <Fragment key={r}>
+                                      {botonSacar(
+                                        c.lineas.filter((l) => l.remito === r),
+                                        `el remito R ${r} entero de ${c.nom || c.cli}`,
+                                        `Sacar R ${r} entero`,
+                                      )}
+                                    </Fragment>
+                                  ))}
+                                </div>
                                 <table className="w-full">
                                   <thead className="text-[10px] uppercase text-sub">
                                     <tr>
@@ -695,6 +799,7 @@ export default function MayoristaStock() {
                                       <th className="text-left">Color · Talle</th>
                                       <th className="text-right">Sin facturar</th>
                                       <th className="text-right">Importe</th>
+                                      {puedeAjustar && <th />}
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -712,6 +817,7 @@ export default function MayoristaStock() {
                                         <td className="text-right tabular-nums" style={{ color: cAmber }}>
                                           {pesos(l.u * l.precio)}
                                         </td>
+                                        {puedeAjustar && <td className="pl-2 text-right">{botonSacar([l], `R ${l.remito} · ${l.a} ${l.t}`)}</td>}
                                       </tr>
                                     ))}
                                   </tbody>
@@ -747,6 +853,62 @@ export default function MayoristaStock() {
               </table>
             )}
           </div>
+
+          {solapa === 'tapera' && ocultos.length > 0 && (
+            <div className="rounded-2xl border border-line bg-surface p-3 text-xs">
+              <button type="button" onClick={() => setVerSacados((v) => !v)} className="inline-flex flex-wrap items-center gap-1.5 font-medium text-ink">
+                {flecha(verSacados)} Sacados a mano de Tapera ({numero(ocultos.length)} líneas)
+                <span className="font-normal text-sub/70">· siguen sin facturar en Dragon, el hub no las suma</span>
+              </button>
+              {verSacados && (
+                <div className="mt-2 overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="text-[10px] uppercase text-sub">
+                      <tr>
+                        <th className="py-1 text-left">Remito</th>
+                        <th className="text-left">Cliente</th>
+                        <th className="text-left">Artículo</th>
+                        <th className="text-left">Color · Talle</th>
+                        <th className="text-left">Motivo</th>
+                        <th className="text-left">Quién · cuándo</th>
+                        {puedeAjustar && <th />}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ocultos.map((o) => (
+                        <tr key={claveOculto(o)} className="border-t border-line/60">
+                          <td className="py-1.5 font-medium text-ink">R {o.remito}</td>
+                          <td className="text-ink">{o.cliente}</td>
+                          <td className="text-ink">
+                            <b>{o.articulo}</b> <span className="text-sub">{desDe(o.articulo)}</span>
+                          </td>
+                          <td className="text-sub">
+                            {colorDe(o.color)} · {o.talle}
+                          </td>
+                          <td className="text-sub">{o.nota ?? '—'}</td>
+                          <td className="text-sub">
+                            {o.por_nombre ?? '—'} · {new Date(o.creado_at).toLocaleDateString('es-AR')}
+                          </td>
+                          {puedeAjustar && (
+                            <td className="pl-2 text-right">
+                              <button
+                                type="button"
+                                disabled={sacando}
+                                onClick={() => void volverASumar(o)}
+                                className="btn-press inline-flex items-center gap-1 rounded-md border border-line px-1.5 py-0.5 text-[11px] text-sub transition hover:text-ink disabled:opacity-50"
+                              >
+                                <RotateCcw size={11} aria-hidden /> Volver a sumar
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
 
           <p className="text-[11px] text-sub/70">
             {solapa === 'deposito'

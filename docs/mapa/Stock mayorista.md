@@ -9,6 +9,7 @@
 ## Cómo se calcula Tapera
 - Remitos de venta (`COMPROBANTEV.FACTTIPO = 11`) no anulados, **solo clientes con código numérico** (los locales propios y cuentas internas tipo `NCEND2`, `POLO52`, `REPOLOC`, `FABRICA` tienen letras: sus remitos son reposiciones y nunca se facturan; eran ~275.000 u. en 2026).
 - Pendiente de cada línea = `FCANT` − lo que le descuentan las facturas y cancelaciones que la afectan (`COMPROBANTEVDET.AFE_COD`/`AFENROITEM` con `AFETIPOCOM = 11`).
+- **Sacar líneas a mano** (20/11/2026): hay mercadería que Dragon sigue teniendo como remitida sin facturar pero ya no está en el cliente (caso: remito 2620 del cliente 00891, que pasó a REPOLOC sin ningún comprobante que lo vincule). Con `mayorista.stock.ajustar` (admin, o individual) aparecen botones **Sacar** por línea y **Sacar R n entero** en la vista por cliente; piden el motivo y van a la tabla `tapera_ocultos` (`sql/tapera_ocultos.sql`, clave remito + cliente + artículo + color + talle). Abajo de Tapera, «Sacados a mano» los lista con quién y cuándo, y **Volver a sumar**. Dragon no se toca.
 - **El `AFESALDO` del remito no sirve**: Dragon no lo descuenta al facturar (en todos los remitos es igual a lo remitido).
 
 ## Flujo
