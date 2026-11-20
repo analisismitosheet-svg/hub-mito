@@ -76,7 +76,6 @@ export default function RepartoTransferencias() {
     Object.fromEntries(FILTROS.map((f) => [f.k, new Set<string>()])) as Record<ClaveFiltro, Set<string>>,
   )
   const [locSel, setLocSel] = useState<Set<string>>(new Set())
-  const [arts, setArts] = useState<string[]>([])
   const [origen, setOrigen] = useState<Origen>('')
   const [conX, setConX] = useState<FiltroX>('')
   const [dias, setDias] = useState(14)
@@ -186,22 +185,18 @@ export default function RepartoTransferencias() {
     (opciones?.[k] ?? [])
       .filter((o) => k !== 'prov' || provDelOrigen(o.cod))
       .map((o) => ({ id: o.cod, label: o.nom ? `${o.cod} ${o.nom}` : o.cod }))
-  const sugArts = useMemo(
-    () => (opciones?.art ?? []).filter(([, , prov]) => !origen || (origen === 'MITO') === esProvMito(prov ?? '')).map(([cod, nom]) => ({ id: cod, label: nom ? `${cod} ${nom}` : cod })),
-    [opciones, origen],
-  )
   const elegirOrigen = (o: Origen) => {
     setOrigen(o)
     // si ya había proveedores elegidos del otro lado, se sacan
     setSel((p) => ({ ...p, prov: new Set([...p.prov].filter((c) => c === '\u0000' || !o || (o === 'MITO') === esProvMito(c))) }))
   }
   const hayNinguno = Object.values(sel).some((s) => s.has('\u0000')) || locSel.has('\u0000')
-  const hayFiltroArt = FILTROS.some((f) => sel[f.k].size > 0) || arts.length > 0 || origen !== '' || conX !== ''
+  const hayFiltroArt = FILTROS.some((f) => sel[f.k].size > 0) || origen !== '' || conX !== ''
   const localesElegidos = locSel.size ? TODOS_LOCALES.filter((l) => locSel.has(l)) : TODOS_LOCALES
   const motivoNoArmar = hayNinguno
     ? 'Hay un filtro en «Ninguno»: elegí algo o volvé a «Seleccionar todo».'
     : !hayFiltroArt
-      ? 'Elegí al menos un filtro de artículo (MITO o marcas, proveedor, material, temporada, año, línea, familia, género, grupo o artículo).'
+      ? 'Elegí al menos un filtro de artículo (MITO o marcas, proveedor, material, temporada, año, línea, familia, género, grupo o código con X).'
       : localesElegidos.length < 2
         ? 'Elegí al menos 2 locales.'
         : desde > hasta
@@ -216,7 +211,7 @@ export default function RepartoTransferencias() {
     cancelado.current = false
     try {
       const filtros = Object.fromEntries(FILTROS.map((f) => [f.k, [...sel[f.k]]])) as Record<ClaveFiltro, string[]>
-      const r = await cargarStock({ ...filtros, art: arts.join('|'), origen, x: conX }, desde, hasta, setEsperando, () => cancelado.current, fotoNueva)
+      const r = await cargarStock({ ...filtros, art: '', origen, x: conX }, desde, hasta, setEsperando, () => cancelado.current, fotoNueva)
       if (r.estado === 'demasiados') {
         setError(
           r.motivo === 'peso'
@@ -424,7 +419,6 @@ export default function RepartoTransferencias() {
   const resumenFiltro = (origen ? [origen === 'MITO' ? 'Artículos MITO' : 'Marcas'] : [])
     .concat(FILTROS.filter((f) => sel[f.k].size)
       .map((f) => `${f.titulo.replace('ID proveedor descripción', 'Proveedor')}: ${[...sel[f.k]].join(', ')}`))
-    .concat(arts.length ? [`Artículo: ${arts.join(', ')}`] : [])
     .concat(conX ? [conX === 'CON' ? 'Código con X' : 'Código sin X'] : [])
     .join(' · ')
 
@@ -503,8 +497,7 @@ export default function RepartoTransferencias() {
             ))}
           </div>
           <div className="mt-3 flex flex-wrap items-end gap-3">
-            <FiltroArticulos titulo="Artículos (opcional, uno o varios)" valor={arts} onChange={setArts} sugerencias={sugArts} ancho="w-full sm:w-[28rem]" />
-            <button type="button" className="h-9 text-xs text-sky-400" onClick={() => { setSel(Object.fromEntries(FILTROS.map((f) => [f.k, new Set<string>()])) as Record<ClaveFiltro, Set<string>>); setLocSel(new Set()); setArts([]); setOrigen(''); setConX('') }}>
+            <button type="button" className="h-9 text-xs text-sky-400" onClick={() => { setSel(Object.fromEntries(FILTROS.map((f) => [f.k, new Set<string>()])) as Record<ClaveFiltro, Set<string>>); setLocSel(new Set()); setOrigen(''); setConX('') }}>
               Limpiar todos los filtros
             </button>
           </div>

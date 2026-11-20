@@ -1852,7 +1852,7 @@ const server = http.createServer(async (req, res) => {
     // Reparto manual (hub): opciones de los filtros y stock/venta de cada local. Solo lectura.
     if (body?.accion === 'reparto_opciones') {
       try {
-        return enviar(res, 200, await repartoManual.accionOpciones())
+        return enviar(res, 200, await repartoManual.accionOpciones(body))
       } catch (e) {
         return enviar(res, 500, { error: e.message })
       }

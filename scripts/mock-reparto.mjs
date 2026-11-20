@@ -34,7 +34,7 @@ http
     }
     try {
       let cuerpo
-      if (req.method === 'GET') cuerpo = { accion: 'reparto_opciones' }
+      if (req.method === 'GET') cuerpo = /[?&]articulos=/.test(req.url ?? '') ? { accion: 'reparto_opciones', articulos: true } : { accion: 'reparto_opciones' }
       else {
         const b = JSON.parse((await leer(req)) || '{}')
         cuerpo = b.dragon

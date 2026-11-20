@@ -74,7 +74,8 @@ export default async function handler(req: Req, res: Res) {
 
   let cuerpo: Record<string, unknown>
   if (req.method === 'GET') {
-    cuerpo = { accion: 'reparto_opciones' }
+    // ?articulos=1: solo la lista del buscador de artículos (va aparte: es ~650 KB)
+    cuerpo = req.query.articulos ? { accion: 'reparto_opciones', articulos: true } : { accion: 'reparto_opciones' }
   } else {
     const b = (typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body ?? {}) as Record<string, unknown>
     if (b.dragon) {

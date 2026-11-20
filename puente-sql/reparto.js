@@ -48,8 +48,9 @@ const SQL_STOCK = path.join(__dirname, 'sql', 'reparto-stock.sql')
 const SQL_OPCIONES = path.join(__dirname, 'sql', 'reparto-opciones.sql')
 const SQL_FOTO = path.join(__dirname, 'sql', 'reparto-foto.sql')
 // Foto general: nueva = menos de 15 min; hasta 30 min se usa igual (y se renueva por detrás);
-// más vieja, el armado espera la nueva. Se mantiene al día sola mientras alguien usó el reparto
-// en las últimas 3 horas (abrir la pantalla ya la pide).
+// más vieja, el armado espera la nueva. Se mantiene al día sola en horario de trabajo (lunes a
+// sábado de 8 a 20, también recién arrancado el puente) y fuera de horario mientras alguien usó
+// el reparto en las últimas 3 horas (abrir la pantalla ya la pide).
 const FOTO_NUEVA_MS = 15 * 60_000
 const FOTO_USABLE_MS = 30 * 60_000
 const FOTO_USO_MS = 3 * 60 * 60_000
@@ -164,7 +165,13 @@ function crear(deps) {
     return opciones.enCurso
   }
 
-  async function accionOpciones() {
+  /** body.articulos: solo la lista del buscador de artículos (~650 KB: va aparte para que la
+   *  pantalla abra con los filtros solos, ~75 KB). */
+  async function accionOpciones(body) {
+    if (body?.articulos) {
+      ultimoUso = Date.now()
+      return { art: general.datos?.listaArts ?? null, foto: estadoGeneral() }
+    }
     // abrir la pantalla ya pide la foto general: cuando terminan de elegir filtros suele estar lista
     ultimoUso = Date.now()
     const pedirFoto = () => { if (!general.enCurso && edadGeneral() > FOTO_NUEVA_MS) lanzarGeneral() }
@@ -177,7 +184,7 @@ function crear(deps) {
       if (Date.now() - opciones.en > OPCIONES_MS) refrescarOpciones().catch((e) => console.error('[puente] reparto opciones:', e.message))
       pedirFoto()
     }
-    return { opciones: { ...opciones.datos, art: general.datos?.listaArts ?? undefined }, foto: estadoGeneral() }
+    return { opciones: opciones.datos, foto: estadoGeneral() }
   }
 
   /* ------------------------------ foto general ------------------------------ */
@@ -288,10 +295,19 @@ function crear(deps) {
     return general.enCurso
   }
 
-  // Se mantiene al día sola mientras alguien usó el reparto en las últimas 3 horas
-  const reloj = setInterval(() => {
-    if (Date.now() - ultimoUso < FOTO_USO_MS && !general.enCurso && edadGeneral() > FOTO_NUEVA_MS) lanzarGeneral()
-  }, 60_000)
+  // Se mantiene al día sola: en horario de trabajo siempre (así el primer «Armar» del día no espera
+  // la foto entera) y fuera de horario solo si alguien usó el reparto en las últimas 3 horas
+  const horarioDeTrabajo = () => {
+    const d = new Date()
+    return d.getDay() >= 1 && d.getDay() <= 6 && d.getHours() >= 8 && d.getHours() < 20
+  }
+  const mantener = () => {
+    if ((horarioDeTrabajo() || Date.now() - ultimoUso < FOTO_USO_MS) && !general.enCurso && edadGeneral() > FOTO_NUEVA_MS) lanzarGeneral()
+  }
+  const reloj = setInterval(mantener, 60_000)
+  // recién arrancado el puente: a los 20 s (que termine de levantar) si es horario de trabajo
+  const arranque = setTimeout(() => { if (horarioDeTrabajo()) mantener() }, 20_000)
+  if (arranque.unref) arranque.unref()
   if (reloj.unref) reloj.unref()
 
   const cumple = (lista, v) => !lista.length || lista.includes(v)
