@@ -70,6 +70,8 @@ export default defineConfig({
       '/api/sql/stock-valorizado': 'http://localhost:4175',
       // Compras > Repo diaria y Cascada: `node scripts/mock-repo-diaria.mjs` (+ una copia del Puente en :3199)
       '/api/sql/repo-diaria': 'http://localhost:4176',
+      // Mayorista > Stock: `node scripts/mock-stock-mayorista.mjs` (+ Puente en :3128 o una copia en :3199)
+      '/api/sql/stock-mayorista': 'http://localhost:4178',
     },
   },
 })

@@ -21,6 +21,7 @@
 - `mayorista.repos_piso` → piso / Mi repo ([[Repos Mayorista y Mi repo]], [[Armado de pedidos]]).
 - `mayorista.franquicias.view` → Franquicias: reposición sugerida, propuestas por link y alta en Dragon. Dado al rol `mayorista` (21/10/2026); antes compartía `mayorista.repos_piso`, con lo que el rol `empleado` también la veía.
 - `mayorista.articulos.view` → [[Artículos y F12]].
+- `mayorista.stock.view` → [[Stock mayorista]] (Depósito y Tapera), rol `mayorista` (20/11/2026).
 - `mayorista.mapeo.view` / `.escanear` / `.borrar` → [[Mapeo depósito]]. **`.borrar` solo admin + puesto3indo@gmail.com (individual)**; se sacó del rol `mayorista`.
 - `mayorista.pausas.autorizar` → autorizar pausas del piso (`/mayorista/pausas`), dado a puesto3 ([[Repos Mayorista y Mi repo]]).
 - `mayorista.faltantes.ver` → aviso de faltantes de stock al cerrar un armado, dado a puesto3; admin siempre ([[Armado de pedidos]]).

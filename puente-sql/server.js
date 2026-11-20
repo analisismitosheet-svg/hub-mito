@@ -45,6 +45,8 @@
  *   POST /          body: { accion: 'repo_diaria_dragon', modo: 'revisar'|'cargar'|'estado', fechas, foto, locales?, confirmo? }
  *                   -> { carga: { obs, locales: [{ cliente, unidades, estado, numero }] } }
  *                   (carga la repo como pedidos de venta VTD en DRAGONFISH_MITO por la API, uno por local)
+ *   POST /          body: { accion: 'stock_mayorista', forzar? } -> { deposito, tapera, articulos, colores, calculado }
+ *                   (Mayorista > Stock: sql/stock-mayorista.sql, DRAGONFISH_MITO, cache 1 min)
  *   POST /          body: { accion: 'stock_valorizado', forzar? } -> { bases, articulos, costo, calculado }
  *                   (Administradores > Stock valorizado: sql/stock-valorizado.sql contra el
  *                    servidor principal, recorre todas las bases DRAGONFISH_*; cache 10 min)
@@ -850,6 +852,56 @@ async function conexionLarga() {
   })
   pool.on('error', (err) => console.error('[puente] Error de pool (stock valorizado):', err.message))
   return pool.connect()
+}
+
+/* =========================================================================
+ * Mayorista > Stock (hub /mayorista/stock): Depósito y Tapera de DRAGONFISH_MITO.
+ * Corre sql/stock-mayorista.sql (≈4 s). Cache de 1 minuto; "Actualizar" lo saltea.
+ * Solo lectura. Ver el .sql para qué es cada resultado.
+ * ========================================================================= */
+const SCRIPT_STOCK_MAYORISTA = path.join(__dirname, 'sql', 'stock-mayorista.sql')
+const cacheStockMayorista = { en: 0, datos: null }
+let stockMayoristaEnCurso = null
+
+async function stockMayorista(forzar) {
+  const hay = cacheStockMayorista.datos
+  if (!forzar && hay && Date.now() - cacheStockMayorista.en < 60_000) return { ...hay, cacheado: true }
+  if (stockMayoristaEnCurso) return stockMayoristaEnCurso
+  stockMayoristaEnCurso = (async () => {
+    if (!fs.existsSync(SCRIPT_STOCK_MAYORISTA)) throw new Error('Falta sql/stock-mayorista.sql junto a server.js')
+    const t0 = Date.now()
+    const pool = await conexionLarga()
+    let r
+    try {
+      r = await pool.request().query(fs.readFileSync(SCRIPT_STOCK_MAYORISTA, 'utf8'))
+    } finally {
+      await pool.close().catch(() => {})
+    }
+    const [dep = [], tap = [], arts = [], cols = []] = r.recordsets ?? []
+    const s = (v) => String(v ?? '').trim()
+    const n = (v) => Number(v) || 0
+    const datos = {
+      deposito: dep.map((f) => ({ a: s(f.a), c: s(f.c), t: s(f.t), u: n(f.u), tr: n(f.tr) })),
+      tapera: tap.map((f) => ({
+        remito: n(f.remito), fecha: s(f.fecha), cli: s(f.cli), cli_nom: s(f.cli_nom),
+        a: s(f.a), c: s(f.c), t: s(f.t), u: n(f.u), precio: n(f.precio),
+      })),
+      articulos: arts.map((f) => ({
+        a: s(f.a), des: s(f.des), mat: s(f.mat), mat_nom: s(f.mat_nom), prov: s(f.prov), prov_nom: s(f.prov_nom),
+      })),
+      colores: cols.map((f) => ({ c: s(f.c), des: s(f.des) })),
+      calculado: new Date().toISOString(),
+      segundos: Math.round((Date.now() - t0) / 100) / 10,
+    }
+    cacheStockMayorista.datos = datos
+    cacheStockMayorista.en = Date.now()
+    return datos
+  })()
+  try {
+    return await stockMayoristaEnCurso
+  } finally {
+    stockMayoristaEnCurso = null
+  }
 }
 
 /**
@@ -1778,6 +1830,11 @@ const server = http.createServer(async (req, res) => {
     }
 
     // Stock valorizado a costo por sucursal (Administradores > Stock valorizado)
+    // Mayorista > Stock: Depósito y Tapera (remitido sin facturar) de DRAGONFISH_MITO
+    if (body?.accion === 'stock_mayorista') {
+      return enviar(res, 200, await stockMayorista(body?.forzar === true))
+    }
+
     if (body?.accion === 'stock_valorizado') {
       return enviar(res, 200, await stockValorizado(body?.forzar === true))
     }

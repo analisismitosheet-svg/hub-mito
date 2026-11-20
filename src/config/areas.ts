@@ -447,6 +447,17 @@ export const APPS: AppDef[] = [
     permiso: 'pedidos_venta.view',
   },
   {
+    id: 'mayorista-stock',
+    areaId: 'mayorista',
+    title: 'Stock',
+    description: 'Stock del depósito y de Tapera (lo remitido a clientes sin facturar) de Dragonfish MITO.',
+    icon: Warehouse,
+    kind: 'internal',
+    target: '/mayorista/stock',
+    color: '#0284c7',
+    permiso: 'mayorista.stock.view',
+  },
+  {
     id: 'mayorista-consulta-articulos',
     areaId: 'mayorista',
     title: 'F12 Consulta artículos',

@@ -25,6 +25,7 @@ El detalle largo y la historia de cada módulo siguen en `CONTEXTO.md` (raíz de
 - [[Informes por WhatsApp]]: Envío informes y reportes (Sistemas)
 - [[Tracking de transporte]]: área Administradores, GPS de los choferes (Traccar), puntos de control
 - [[Stock valorizado]]: área Administradores, unidades y plata a costo por sucursal
+- [[Stock mayorista]]: Mayorista → Stock, solapas Depósito y Tapera (remitido a clientes sin facturar)
 - [[Ventas web (Tiendanube)]]: área WEB (rol `web`), pedidos de la tienda online (sync cada 20 min)
 - [[Requerimientos]]: arreglos que piden los locales; Arquitectura programa, mantenimiento hace, el local confirma
 - [[Otros módulos]]: RRHH, RMA, contador de clientes, encuestas, QR, réplicas

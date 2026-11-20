@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mayorista · Stock</title>
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<style>
+  body { background: #0b1020; font-family: system-ui, sans-serif; }
+  .glow { position: fixed; border-radius: 9999px; filter: blur(90px); opacity: .35; pointer-events: none; }
+  .glass { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); backdrop-filter: blur(14px); }
+  .tab-on { background: rgba(255,255,255,.16); color: #fff; }
+  .row-open { background: rgba(255,255,255,.05); }
+</style>
+</head>
+<body class="min-h-screen text-slate-100">
+<div class="glow" style="width:420px;height:420px;background:#2563eb;top:-120px;left:-120px"></div>
+<div class="glow" style="width:380px;height:380px;background:#a21caf;bottom:-140px;right:-100px"></div>
+
+<main class="relative mx-auto w-full max-w-6xl p-4">
+  <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Maqueta · datos de ejemplo</p>
+  <div class="mt-1 flex items-center gap-2 text-xs text-slate-400">
+    <span>Mayorista</span><span>›</span><span class="text-slate-200">Stock</span>
+  </div>
+
+  <div class="mt-2 flex flex-wrap items-center justify-between gap-3">
+    <div class="flex items-center gap-3">
+      <div class="grid h-11 w-11 place-items-center rounded-2xl bg-sky-500/20 text-sky-300">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg>
+      </div>
+      <div>
+        <h1 class="text-xl font-bold">Stock</h1>
+        <p id="subt" class="text-xs text-slate-400"></p>
+      </div>
+    </div>
+    <button class="glass rounded-xl px-3 py-2 text-xs font-semibold hover:bg-white/10">↻ Actualizar</button>
+  </div>
+
+  <!-- Solapas -->
+  <div class="glass mt-4 inline-flex rounded-2xl p-1 text-sm font-semibold">
+    <button data-tab="deposito" class="tab rounded-xl px-5 py-2 text-slate-300">Depósito</button>
+    <button data-tab="tapera" class="tab rounded-xl px-5 py-2 text-slate-300">Tapera</button>
+  </div>
+
+  <!-- Tarjetas -->
+  <section id="kpis" class="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4"></section>
+
+  <!-- Filtros -->
+  <section class="mt-4 flex flex-wrap items-center gap-2">
+    <div id="vista" class="glass hidden rounded-xl p-0.5 text-xs font-semibold">
+      <button data-v="art" class="vbtn rounded-lg px-3 py-1.5">Por artículo</button>
+      <button data-v="cli" class="vbtn rounded-lg px-3 py-1.5">Por cliente</button>
+    </div>
+    <input id="q" class="glass w-full rounded-xl px-3 py-2 text-sm placeholder:text-slate-500 focus:outline-none md:w-80">
+    <button class="glass rounded-xl px-3 py-2 text-xs font-semibold">Material ▾</button>
+    <button class="glass rounded-xl px-3 py-2 text-xs font-semibold">Proveedor ▾</button>
+    <label id="soloWrap" class="glass flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold"><input id="solo" type="checkbox" class="accent-sky-400"> Solo con stock</label>
+    <button class="ml-auto rounded-xl bg-emerald-500/90 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-500">⬇ Excel</button>
+  </section>
+
+  <!-- Tabla -->
+  <section class="glass mt-3 overflow-hidden rounded-2xl">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead id="thead" class="text-left text-[11px] uppercase tracking-wide text-slate-400"></thead>
+        <tbody id="tbody"></tbody>
+        <tfoot id="tfoot"></tfoot>
+      </table>
+    </div>
+  </section>
+
+  <p id="nota" class="mt-3 text-[11px] text-slate-500"></p>
+</main>
+
+<script>
+// Depósito: stock de DRAGONFISH_MITO (COMB)
+const deposito = [
+  ['MOC1234','MOCHILA URBANA 20L','NEGRO',{UNICO:374},12],
+  ['ZAP0456','ZAPATILLA RUNNER','BLANCO',{38:14,39:22,40:0,41:18,42:9},6],
+  ['BUZ0789','BUZO CANGURO FRISA','GRIS MELANGE',{S:40,M:65,L:58,XL:21},0],
+  ['REM0110','REMERA BÁSICA ALGODÓN','AZUL',{S:120,M:210,L:180,XL:0},40],
+  ['CAM0221','CAMPERA ROMPEVIENTO','VERDE',{S:8,M:0,L:11,XL:3},0],
+  ['PAN0332','PANTALÓN CARGO','BEIGE',{38:16,40:24,42:19,44:7},10],
+  ['GOR0443','GORRA TRUCKER','NEGRO',{UNICO:96},0],
+];
+// Tapera: líneas de remitos de venta (tipo 11) de DRAGONFISH_MITO con saldo sin facturar (AFESALDO > 0)
+// [remito, fecha, cliente, nombre, articulo, desc, color, talle, sin facturar, precio]
+const tapera = [
+  [4512,'2026-11-18','C0145','DISTRIBUIDORA DEL SUR','MOC1234','MOCHILA URBANA 20L','NEGRO','UNICO',24,45000],
+  [4512,'2026-11-18','C0145','DISTRIBUIDORA DEL SUR','BUZ0789','BUZO CANGURO FRISA','GRIS MELANGE','M',6,38000],
+  [4512,'2026-11-18','C0145','DISTRIBUIDORA DEL SUR','BUZ0789','BUZO CANGURO FRISA','GRIS MELANGE','L',6,38000],
+  [4498,'2026-11-12','C0210','LA ESQUINA SPORT','ZAP0456','ZAPATILLA RUNNER','BLANCO','40',4,62000],
+  [4498,'2026-11-12','C0210','LA ESQUINA SPORT','ZAP0456','ZAPATILLA RUNNER','BLANCO','41',2,62000],
+  [4498,'2026-11-12','C0210','LA ESQUINA SPORT','REM0110','REMERA BÁSICA ALGODÓN','AZUL','M',20,12000],
+  [4467,'2026-10-29','C0077','MODA NORTE SRL','REM0110','REMERA BÁSICA ALGODÓN','AZUL','S',12,12000],
+  [4467,'2026-10-29','C0077','MODA NORTE SRL','REM0110','REMERA BÁSICA ALGODÓN','AZUL','L',12,12000],
+  [4467,'2026-10-29','C0077','MODA NORTE SRL','MOC1234','MOCHILA URBANA 20L','NEGRO','UNICO',28,45000],
+  [4430,'2026-10-15','C0145','DISTRIBUIDORA DEL SUR','GOR0443','GORRA TRUCKER','NEGRO','UNICO',30,15000],
+];
+const HOY = new Date('2026-11-20');
+let tab = 'deposito', vista = 'art', abierta = null;
+const fmt = n => n.toLocaleString('es-AR');
+const pesos = n => '$ ' + Math.round(n).toLocaleString('es-AR');
+const tot = c => Object.values(c).reduce((a,b)=>a+b,0);
+const dias = f => Math.round((HOY - new Date(f)) / 864e5);
+const fch = f => f.slice(8,10)+'/'+f.slice(5,7);
+const $ = id => document.getElementById(id);
+const th = (t, r) => `<th class="px-3 py-2 ${r?'text-right':''}">${t}</th>`;
+const kpi = (t, v, c) => `<div class="glass rounded-2xl p-3"><p class="text-[11px] uppercase tracking-wide text-slate-400">${t}</p><p class="mt-1 text-2xl font-bold ${c}">${v}</p></div>`;
+const chip = (k, v, rojo) => `<span class="rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${rojo?'bg-rose-500/20 text-rose-300':'bg-white/10 text-slate-200'}">${k}<b class="ml-1">${v}</b></span>`;
+const antig = d => `<span class="rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${d>30?'bg-rose-500/20 text-rose-300':d>15?'bg-amber-500/20 text-amber-300':'bg-emerald-500/15 text-emerald-300'}">${d} días</span>`;
+
+function agruparTapera(lineas){
+  const m = new Map();
+  lineas.forEach(l=>{
+    const k = l[4]+'|'+l[6];
+    if(!m.has(k)) m.set(k,{cod:l[4],desc:l[5],color:l[6],curva:{},u:0,pesos:0,lineas:[]});
+    const g = m.get(k); g.curva[l[7]]=(g.curva[l[7]]||0)+l[8]; g.u+=l[8]; g.pesos+=l[8]*l[9]; g.lineas.push(l);
+  });
+  return [...m.values()].sort((a,b)=>b.u-a.u);
+}
+function agruparClientes(lineas){
+  const m = new Map();
+  lineas.forEach(l=>{
+    if(!m.has(l[2])) m.set(l[2],{cli:l[2],nom:l[3],remitos:new Map(),u:0,pesos:0,vieja:l[1]});
+    const g = m.get(l[2]); g.u+=l[8]; g.pesos+=l[8]*l[9]; if(l[1]<g.vieja) g.vieja=l[1];
+    if(!g.remitos.has(l[0])) g.remitos.set(l[0],{n:l[0],f:l[1],u:0,pesos:0}); const r=g.remitos.get(l[0]); r.u+=l[8]; r.pesos+=l[8]*l[9];
+  });
+  return [...m.values()].sort((a,b)=>b.pesos-a.pesos);
+}
+
+function render(){
+  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('tab-on', b.dataset.tab===tab));
+  document.querySelectorAll('.vbtn').forEach(b=>b.classList.toggle('tab-on', b.dataset.v===vista));
+  $('vista').classList.toggle('hidden', tab!=='tapera');
+  $('soloWrap').classList.toggle('hidden', tab==='tapera');
+  const q = $('q').value.toLowerCase();
+  const tb = $('tbody'); tb.innerHTML='';
+
+  if(tab==='deposito'){
+    $('subt').textContent = 'Stock del depósito · DRAGONFISH_MITO · actualizado hoy 10:42';
+    $('q').placeholder = 'Buscar código o descripción…';
+    const filas = deposito.filter(r => (r[0]+' '+r[1]).toLowerCase().includes(q) && (!$('solo').checked || tot(r[3])>0));
+    let uni=0, tra=0, cero=0;
+    $('thead').innerHTML = `<tr class="border-b border-white/10">${th('Artículo')}${th('Descripción')}${th('Color')}${th('Curva')}${th('Tránsito',1)}${th('Stock',1)}</tr>`;
+    filas.forEach(([cod,desc,color,curva,tr])=>{
+      const t = tot(curva); uni+=t; tra+=tr; cero += Object.values(curva).filter(v=>v===0).length;
+      const row = document.createElement('tr');
+      row.className = 'cursor-pointer border-b border-white/5 hover:bg-white/5' + (abierta===cod?' row-open':'');
+      row.innerHTML = `<td class="px-3 py-2 font-bold">${cod}</td><td class="px-3 py-2 text-slate-300">${desc}</td><td class="px-3 py-2 text-slate-400">${color}</td><td class="px-3 py-2"><div class="flex flex-wrap gap-1">${Object.entries(curva).map(([k,v])=>chip(k,v,v===0)).join(' ')}</div></td><td class="px-3 py-2 text-right ${tr?'text-violet-300':'text-slate-600'}">${tr?fmt(tr):'—'}</td><td class="px-3 py-2 text-right font-bold ${t?'':'text-rose-300'}">${fmt(t)}</td>`;
+      row.onclick = ()=>{ abierta = abierta===cod?null:cod; render(); };
+      tb.appendChild(row);
+      if(abierta===cod){
+        const enTap = tapera.filter(l=>l[4]===cod).reduce((a,l)=>a+l[8],0);
+        const det = document.createElement('tr');
+        det.innerHTML = `<td colspan="6" class="px-3 pb-3"><div class="rounded-xl bg-black/20 p-3 text-xs">
+          <p class="mb-2 font-semibold text-slate-300">Detalle por talle · ${cod}</p>
+          <div class="grid grid-cols-3 gap-2 md:grid-cols-6">${Object.entries(curva).map(([k,v])=>`<div class="rounded-lg bg-white/5 p-2 text-center"><p class="text-slate-400">${k}</p><p class="text-lg font-bold ${v===0?'text-rose-300':''}">${v}</p></div>`).join('')}</div>
+          <p class="mt-2 text-slate-400">En Tapera (remitido sin facturar): <b class="text-amber-300">${enTap?fmt(enTap)+' u.':'nada'}</b></p></div></td>`;
+        tb.appendChild(det);
+      }
+    });
+    $('kpis').innerHTML = kpi('Artículos',fmt(filas.length),'text-sky-300')+kpi('Unidades',fmt(uni),'text-emerald-300')+kpi('En tránsito',fmt(tra),'text-violet-300')+kpi('Talles en 0',fmt(cero),'text-rose-300');
+    $('tfoot').innerHTML = `<tr class="border-t border-white/10 font-bold"><td class="px-3 py-2" colspan="4">Total</td><td class="px-3 py-2 text-right text-violet-300">${fmt(tra)}</td><td class="px-3 py-2 text-right text-emerald-300">${fmt(uni)}</td></tr>`;
+    $('nota').textContent = 'Depósito = stock de DRAGONFISH_MITO. Tocá una fila para ver el detalle por talle y cuánto de ese artículo está en Tapera. Talle en 0 = rojo · tránsito = violeta.';
+    if(!filas.length) tb.innerHTML = '<tr><td colspan="6" class="px-3 py-6 text-center text-slate-500">Sin artículos con ese filtro</td></tr>';
+    return;
+  }
+
+  // ---- TAPERA ----
+  $('subt').textContent = 'Remitido a clientes sin facturar · DRAGONFISH_MITO · actualizado hoy 10:42';
+  const lineas = tapera.filter(l => (l[2]+' '+l[3]+' '+l[4]+' '+l[5]+' '+l[0]).toLowerCase().includes(q));
+  const uTot = lineas.reduce((a,l)=>a+l[8],0), pTot = lineas.reduce((a,l)=>a+l[8]*l[9],0);
+  const nRem = new Set(lineas.map(l=>l[0])).size, nCli = new Set(lineas.map(l=>l[2])).size;
+  $('kpis').innerHTML = kpi('Remitos sin facturar',fmt(nRem),'text-sky-300')+kpi('Clientes',fmt(nCli),'text-violet-300')+kpi('Unidades',fmt(uTot),'text-emerald-300')+kpi('A facturar',pesos(pTot),'text-amber-300');
+
+  if(vista==='art'){
+    $('q').placeholder = 'Buscar artículo, cliente o N° de remito…';
+    $('thead').innerHTML = `<tr class="border-b border-white/10">${th('Artículo')}${th('Descripción')}${th('Color')}${th('Curva remitida')}${th('Clientes',1)}${th('Sin facturar',1)}</tr>`;
+    const grupos = agruparTapera(lineas);
+    grupos.forEach(g=>{
+      const k = g.cod+'|'+g.color, ncli = new Set(g.lineas.map(l=>l[2])).size;
+      const row = document.createElement('tr');
+      row.className = 'cursor-pointer border-b border-white/5 hover:bg-white/5' + (abierta===k?' row-open':'');
+      row.innerHTML = `<td class="px-3 py-2 font-bold">${g.cod}</td><td class="px-3 py-2 text-slate-300">${g.desc}</td><td class="px-3 py-2 text-slate-400">${g.color}</td><td class="px-3 py-2"><div class="flex flex-wrap gap-1">${Object.entries(g.curva).map(([t,v])=>chip(t,v)).join(' ')}</div></td><td class="px-3 py-2 text-right text-violet-300">${ncli}</td><td class="px-3 py-2 text-right font-bold text-emerald-300">${fmt(g.u)}</td>`;
+      row.onclick = ()=>{ abierta = abierta===k?null:k; render(); };
+      tb.appendChild(row);
+      if(abierta===k){
+        const det = document.createElement('tr');
+        det.innerHTML = `<td colspan="6" class="px-3 pb-3"><div class="rounded-xl bg-black/20 p-3 text-xs">
+          <p class="mb-2 font-semibold text-slate-300">A quién se remitió · ${g.cod} ${g.color}</p>
+          <table class="w-full"><thead class="text-[10px] uppercase text-slate-500"><tr><th class="py-1 text-left">Remito</th><th class="text-left">Fecha</th><th class="text-left">Cliente</th><th class="text-left">Talle</th><th class="text-left">Antigüedad</th><th class="text-right">Sin facturar</th></tr></thead><tbody>
+          ${g.lineas.map(l=>`<tr class="border-t border-white/5"><td class="py-1.5 font-semibold">R ${l[0]}</td><td class="text-slate-400">${fch(l[1])}</td><td>${l[3]} <span class="text-slate-500">${l[2]}</span></td><td>${l[7]}</td><td>${antig(dias(l[1]))}</td><td class="text-right font-bold">${l[8]}</td></tr>`).join('')}
+          </tbody></table>
+          <p class="mt-2 text-slate-400">En Depósito: <b class="text-sky-300">${(()=>{const d=deposito.find(x=>x[0]===g.cod);return d?fmt(tot(d[3]))+' u.':'sin stock'})()}</b></p></div></td>`;
+        tb.appendChild(det);
+      }
+    });
+    $('tfoot').innerHTML = `<tr class="border-t border-white/10 font-bold"><td class="px-3 py-2" colspan="5">Total</td><td class="px-3 py-2 text-right text-emerald-300">${fmt(uTot)}</td></tr>`;
+    if(!grupos.length) tb.innerHTML = '<tr><td colspan="6" class="px-3 py-6 text-center text-slate-500">Nada remitido sin facturar con ese filtro</td></tr>';
+  } else {
+    $('q').placeholder = 'Buscar cliente o N° de remito…';
+    $('thead').innerHTML = `<tr class="border-b border-white/10">${th('Cliente')}${th('Remitos')}${th('Más viejo')}${th('Unidades',1)}${th('A facturar',1)}</tr>`;
+    const cls = agruparClientes(lineas);
+    cls.forEach(c=>{
+      const row = document.createElement('tr');
+      row.className = 'cursor-pointer border-b border-white/5 hover:bg-white/5' + (abierta===c.cli?' row-open':'');
+      row.innerHTML = `<td class="px-3 py-2"><b>${c.nom}</b> <span class="text-xs text-slate-500">${c.cli}</span></td><td class="px-3 py-2"><div class="flex flex-wrap gap-1">${[...c.remitos.values()].map(r=>`<span class="rounded-md bg-white/10 px-1.5 py-0.5 text-[11px] font-semibold">R ${r.n}</span>`).join(' ')}</div></td><td class="px-3 py-2">${antig(dias(c.vieja))}</td><td class="px-3 py-2 text-right font-bold text-emerald-300">${fmt(c.u)}</td><td class="px-3 py-2 text-right font-bold text-amber-300">${pesos(c.pesos)}</td>`;
+      row.onclick = ()=>{ abierta = abierta===c.cli?null:c.cli; render(); };
+      tb.appendChild(row);
+      if(abierta===c.cli){
+        const det = document.createElement('tr');
+        const ls = lineas.filter(l=>l[2]===c.cli);
+        det.innerHTML = `<td colspan="5" class="px-3 pb-3"><div class="rounded-xl bg-black/20 p-3 text-xs">
+          <p class="mb-2 font-semibold text-slate-300">Lo que tiene remitido sin facturar · ${c.nom}</p>
+          <table class="w-full"><thead class="text-[10px] uppercase text-slate-500"><tr><th class="py-1 text-left">Remito</th><th class="text-left">Fecha</th><th class="text-left">Artículo</th><th class="text-left">Color · Talle</th><th class="text-right">Sin facturar</th><th class="text-right">$</th></tr></thead><tbody>
+          ${ls.map(l=>`<tr class="border-t border-white/5"><td class="py-1.5 font-semibold">R ${l[0]}</td><td class="text-slate-400">${fch(l[1])}</td><td><b>${l[4]}</b> <span class="text-slate-400">${l[5]}</span></td><td class="text-slate-300">${l[6]} · ${l[7]}</td><td class="text-right font-bold">${l[8]}</td><td class="text-right text-amber-300">${pesos(l[8]*l[9])}</td></tr>`).join('')}
+          </tbody></table></div></td>`;
+        tb.appendChild(det);
+      }
+    });
+    $('tfoot').innerHTML = `<tr class="border-t border-white/10 font-bold"><td class="px-3 py-2" colspan="3">Total</td><td class="px-3 py-2 text-right text-emerald-300">${fmt(uTot)}</td><td class="px-3 py-2 text-right text-amber-300">${pesos(pTot)}</td></tr>`;
+    if(!cls.length) tb.innerHTML = '<tr><td colspan="5" class="px-3 py-6 text-center text-slate-500">Nada remitido sin facturar con ese filtro</td></tr>';
+  }
+  $('nota').textContent = 'Tapera = mercadería remitida a clientes que todavía no se facturó: remitos de venta de DRAGONFISH_MITO (no anulados) con saldo pendiente de facturar en cada línea. Antigüedad: verde hasta 15 días · ámbar hasta 30 · rojo más de 30.';
+}
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{ tab=b.dataset.tab; abierta=null; $('q').value=''; render(); });
+document.querySelectorAll('.vbtn').forEach(b=>b.onclick=()=>{ vista=b.dataset.v; abierta=null; render(); });
+$('q').oninput = render;
+$('solo').onchange = render;
+render();
+</script>
+</body>
+</html>

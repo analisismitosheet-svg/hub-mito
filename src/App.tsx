@@ -101,6 +101,7 @@ const TrackingKm = lazy(() => import('@/pages/TrackingKm'))
 const OrdenesCompra = lazy(() => import('@/pages/OrdenesCompra'))
 const ReposicionEscaneo = lazy(() => import('@/pages/ReposicionEscaneo'))
 const StockValorizado = lazy(() => import('@/pages/StockValorizado'))
+const MayoristaStock = lazy(() => import('@/pages/MayoristaStock'))
 const RepoDiariaMito = lazy(() => import('@/pages/RepoDiariaMito'))
 const RepartoTransferencias = lazy(() => import('@/pages/RepartoTransferencias'))
 const VentasWeb = lazy(() => import('@/pages/VentasWeb'))
@@ -425,6 +426,16 @@ export default function App() {
             element={
               <PermissionRoute permiso="mayorista.estadisticas.view">
                 <EstadisticasRendimiento />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/mayorista/stock"
+            element={
+              <PermissionRoute permiso="mayorista.stock.view">
+                <Suspense fallback={null}>
+                  <MayoristaStock />
+                </Suspense>
               </PermissionRoute>
             }
           />

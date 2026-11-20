@@ -131,6 +131,10 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
     acciones: { ver: 'mayorista.transportes.view', crear: 'mayorista.transportes.create', editar: 'mayorista.transportes.edit', borrar: 'mayorista.transportes.delete' },
   },
   {
+    id: 'mayorista-stock', areaId: 'mayorista', titulo: 'Stock', descripcion: 'Depósito y Tapera (remitido sin facturar)',
+    icon: Warehouse, color: '#0284c7', acciones: { ver: 'mayorista.stock.view' },
+  },
+  {
     id: 'mayorista-articulos', areaId: 'mayorista', titulo: 'F12 Consulta artículos', descripcion: 'Stock y datos de artículos',
     icon: PackageSearch, color: '#d97706', acciones: { ver: 'mayorista.articulos.view' },
   },
