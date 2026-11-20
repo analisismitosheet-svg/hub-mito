@@ -42,6 +42,12 @@ interface Pedido {
   total: number | null
   anulado: boolean
   usuario: string | null
+  /** Anulado en Dragon: quién y cuándo (de Dragon) y el motivo que se carga en el hub (sql/pedidos_venta_anulados.sql) */
+  anulado_at: string | null
+  anulado_por: string | null
+  anulado_motivo: string | null
+  anulado_motivo_por: string | null
+  anulado_motivo_at: string | null
 }
 
 /** Filtro "sin motivo" (los demás usan el código de Dragonfish) */
@@ -79,6 +85,9 @@ const $ = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFrac
 const n0 = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 })
 const plata = (v: number | null | undefined) => (v == null ? '—' : $.format(v))
 const fechaCorta = (f: string | null) => (f ? f.split('-').reverse().join('/') : '—')
+/** '2026-11-20T21:08:40+00:00' -> '20/11 18:08' (hora de Argentina) */
+const fechaHora = (iso: string) =>
+  new Date(iso).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 
 /** Renglones de un pedido viejo (fuera de los 120 días que guarda Supabase), en vivo por el Puente SQL. */
 async function itemsDesdeDragonfish(codigo: string): Promise<ItemPedido[]> {
@@ -205,7 +214,7 @@ export default function PedidosVenta() {
       for (let desde = 0; desde < MAX_PEDIDOS; desde += PAGINA) {
         let consulta = supabase
           .from('pedidos_venta')
-          .select('codigo,motivo,motivo_nombre,numero,descripcion,fecha,fecha_alta,cliente,cliente_nombre,vendedor,observacion,total,anulado,usuario')
+          .select('codigo,motivo,motivo_nombre,numero,descripcion,fecha,fecha_alta,cliente,cliente_nombre,vendedor,observacion,total,anulado,usuario,anulado_at,anulado_por,anulado_motivo,anulado_motivo_por,anulado_motivo_at')
         if (fDesde) consulta = consulta.gte('fecha', fDesde)
         if (fHasta) consulta = consulta.lt('fecha', fHasta)
         const { data, error: e } = await consulta
@@ -565,6 +574,32 @@ export default function PedidosVenta() {
 
   const idx = visibles.findIndex((p) => p.codigo === sel)
   const pedido = pedidos.find((p) => p.codigo === sel) ?? null
+
+  // Motivo de anulación (lo pide el cartel del pedido anulado)
+  const [textoMotivo, setTextoMotivo] = useState('')
+  const [editMotivo, setEditMotivo] = useState(false)
+  const [guardandoMotivo, setGuardandoMotivo] = useState(false)
+  useEffect(() => {
+    setTextoMotivo('')
+    setEditMotivo(false)
+  }, [sel])
+
+  async function guardarMotivoAnulacion(codigo: string) {
+    if (!supabase || !textoMotivo.trim()) return
+    setGuardandoMotivo(true)
+    const { error: e } = await supabase.rpc('pedido_venta_motivo_anulacion', { p_codigo: codigo, p_motivo: textoMotivo.trim() })
+    if (!e) {
+      const { data } = await supabase
+        .from('pedidos_venta')
+        .select('anulado_motivo,anulado_motivo_por,anulado_motivo_at')
+        .eq('codigo', codigo)
+        .maybeSingle()
+      if (data) setPedidos((l) => l.map((p) => (p.codigo === codigo ? { ...p, ...(data as Partial<Pedido>) } : p)))
+      setEditMotivo(false)
+    }
+    setGuardandoMotivo(false)
+    if (e) window.alert(`No se pudo guardar el motivo: ${e.message}`)
+  }
   /** Estado del armado de este pedido (si está pedido a armar). */
   /**
    * El admin pasa a verde una línea que quedó en rojo (o deshace la marca). Queda en una
@@ -916,7 +951,9 @@ export default function PedidosVenta() {
                               </span>
                             )}
                             {p.anulado && (
-                              <span className="rounded-md bg-brand-600/15 px-1.5 py-0.5 text-[10px] font-semibold text-brand-400">ANULADO</span>
+                              <span className="rounded-md bg-rose-500/20 px-1.5 py-0.5 text-[10px] font-bold text-rose-400">
+                                ANULADO{p.anulado_motivo ? '' : ' · falta el motivo'}
+                              </span>
                             )}
                             {terminado && (
                               <span className="rounded-md bg-emerald-500/25 px-1.5 py-0.5 text-[10px] font-bold text-emerald-400">
@@ -953,7 +990,7 @@ export default function PedidosVenta() {
                             </span>
                           </span>
                         </span>
-                        <span className="shrink-0 text-right text-xs font-semibold tabular-nums text-ink">$ {plata(p.total)}</span>
+                        <span className={`shrink-0 text-right text-xs font-semibold tabular-nums ${p.anulado ? 'text-sub line-through' : 'text-ink'}`}>$ {plata(p.total)}</span>
                       </button>
                     </li>
                   )
@@ -1015,7 +1052,7 @@ export default function PedidosVenta() {
                   </button>
                   <button
                     onClick={() => pedirArmadoDe([pedido.codigo])}
-                    disabled={(!!armPedido && armPedido.estado !== 'hecho') || (!isAdmin && esCompleto(pedido.codigo))}
+                    disabled={pedido.anulado || (!!armPedido && armPedido.estado !== 'hecho') || (!isAdmin && esCompleto(pedido.codigo))}
                     className={`btn-press inline-flex h-10 items-center gap-1.5 rounded-xl px-3 text-sm font-semibold transition disabled:opacity-50 ${
                       armPedido && armPedido.estado !== 'hecho'
                         ? 'border border-emerald-500/40 bg-emerald-500/15 text-emerald-400'
@@ -1083,9 +1120,68 @@ export default function PedidosVenta() {
                   </div>
                 </div>
                 {pedido.anulado && (
-                  <p className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-brand-600/15 px-2.5 py-1 text-xs font-semibold text-brand-400">
-                    <Ban size={13} aria-hidden /> Pedido anulado
-                  </p>
+                  <div className="mt-3 rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-sm">
+                    <p className="inline-flex flex-wrap items-center gap-1.5 font-semibold text-rose-400">
+                      <Ban size={14} aria-hidden /> Pedido anulado en Dragon
+                      {(pedido.anulado_por || pedido.anulado_at) && (
+                        <span className="font-normal text-sub">
+                          {pedido.anulado_por ? `por ${pedido.anulado_por}` : ''}
+                          {pedido.anulado_at ? ` · ${fechaHora(pedido.anulado_at)}` : ''}
+                        </span>
+                      )}
+                    </p>
+                    {pedido.anulado_motivo && !editMotivo ? (
+                      <div className="mt-2 flex flex-wrap items-start gap-2">
+                        <p className="min-w-0 flex-1 text-ink">
+                          <span className="text-sub">Por qué: </span>
+                          {pedido.anulado_motivo}
+                          <span className="ml-1.5 text-xs text-sub">
+                            ({pedido.anulado_motivo_por ?? '—'}{pedido.anulado_motivo_at ? ` · ${fechaHora(pedido.anulado_motivo_at)}` : ''})
+                          </span>
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTextoMotivo(pedido.anulado_motivo ?? '')
+                            setEditMotivo(true)
+                          }}
+                          className="text-xs font-semibold text-sub underline hover:text-ink"
+                        >
+                          Cambiar
+                        </button>
+                      </div>
+                    ) : (
+                      <form
+                        className="mt-2 flex flex-wrap items-center gap-2"
+                        onSubmit={(e) => {
+                          e.preventDefault()
+                          void guardarMotivoAnulacion(pedido.codigo)
+                        }}
+                      >
+                        <label className="sr-only" htmlFor="motivo-anulacion">¿Por qué se anuló?</label>
+                        <input
+                          id="motivo-anulacion"
+                          value={textoMotivo}
+                          onChange={(e) => setTextoMotivo(e.target.value)}
+                          maxLength={500}
+                          placeholder="¿Por qué se anuló? (obligatorio)"
+                          className="h-9 min-w-0 flex-1 rounded-lg border border-line bg-surface px-3 text-sm text-ink placeholder:text-sub focus:border-rose-500/60 focus:outline-none"
+                        />
+                        <button
+                          type="submit"
+                          disabled={guardandoMotivo || !textoMotivo.trim()}
+                          className="btn-press inline-flex h-9 items-center rounded-lg bg-rose-600 px-3 text-sm font-semibold text-white disabled:opacity-50"
+                        >
+                          {guardandoMotivo ? 'Guardando…' : 'Guardar motivo'}
+                        </button>
+                        {editMotivo && (
+                          <button type="button" onClick={() => setEditMotivo(false)} className="text-xs font-semibold text-sub hover:text-ink">
+                            Cancelar
+                          </button>
+                        )}
+                      </form>
+                    )}
+                  </div>
                 )}
 
                 {/* Armado: lo pide el mayorista y lo va marcando el legajo */}

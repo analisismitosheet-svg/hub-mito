@@ -274,6 +274,30 @@ async function main() {
   })
   anotar(`OK: ${lista.length} pedidos (${filas.length} ítems, ${alcance}) en Supabase, ${borrados} viejos borrados (${Math.round((Date.now() - t0) / 1000)} s)`)
 
+  // Anulados: Dragon les borra las líneas y el cliente, así que no vienen en la consulta de arriba.
+  // Se marcan en el hub conservando lo que ya estaba copiado (sql/pedidos_venta_anulados.sql).
+  try {
+    const anulados = leerJson(
+      `SELECT C.CODIGO, C.UMODIFW, CONVERT(varchar(10), C.FMODIFW, 23) AS FMODIFW, C.HMODIFW
+         FROM ${b}.[COMPROBANTEV] C
+        WHERE C.DESCFW LIKE 'PEDIDO %' AND C.ANULADO = 1 AND C.FFCH >= '${desde}'
+        FOR JSON PATH, INCLUDE_NULL_VALUES`,
+    ).map((a) => {
+      const hora = txt(a.HMODIFW)
+      return {
+        codigo: txt(a.CODIGO),
+        por: txt(a.UMODIFW),
+        cuando: a.FMODIFW ? `${txt(a.FMODIFW)}T${/^\d{1,2}:\d{2}(:\d{2})?$/.test(hora) ? hora : '00:00:00'}-03:00` : '',
+      }
+    })
+    if (anulados.length) {
+      const n = await rpc('pedidos_venta_marcar_anulados', { p_token: token, p_anulados: anulados })
+      anotar(`Anulados en Dragon: ${anulados.length} en el período, ${n} marcados ahora en el hub`)
+    }
+  } catch (err) {
+    anotar(`Anulados: ERROR ${err instanceof Error ? err.message : String(err)}`)
+  }
+
   // Después de los pedidos, las cancelaciones de venta (si fallan no marcan error en los pedidos)
   try {
     await require('./sync-cancelaciones-venta').sincronizarCancelacionesVenta({ completa: COMPLETA })
