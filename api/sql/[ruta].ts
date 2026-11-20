@@ -12,6 +12,7 @@
  *   GET /api/sql/stock-mayorista[?forzar=1]    -> Mayorista > Stock: depósito y tapera (remitido sin facturar) de MITO
  *   GET /api/sql/stock-tienda?prefijos=|articulos=[&locales=1] -> tienda cf-zimith-mayorista (clave X-Mayorista-Token, sin sesión)
  *   POST /api/sql/tienda-dragon                -> tienda: buscar códigos / alta de artículo en Dragon INDOD (misma clave)
+ *   POST /api/sql/tienda-telegram              -> tienda: link de ingreso por el bot de Telegram (misma clave)
  *   GET /api/sql/pedido-venta-items?codigo=    -> renglones de un pedido de venta viejo, en vivo de Dragonfish
  *   GET /api/sql/dragon-variantes?base=&articulo= -> colores y talles de un artículo en Dragon (Órdenes de compras)
  *   GET /api/sql/dragon-articulos?base=&q=|codigos= -> artículos en vivo de Dragon (buscador e importar txt de Órdenes de compras)
@@ -41,6 +42,7 @@ import dragonVariantes, { dragonArticulos } from '../../src/lib/dragonVariantesA
 import stockPublico from '../../src/lib/stockPublicoApi.js'
 import stockMayorista from '../../src/lib/stockMayoristaApi.js'
 import stockTienda, { tiendaDragon } from '../../src/lib/stockTiendaApi.js'
+import tiendaTelegram from '../../src/lib/tiendaTelegramApi.js'
 
 type Req = {
   method?: string
@@ -110,6 +112,7 @@ export default async function handler(req: Req, res: Res) {
   // tienda mayorista web: con clave privada (X-Mayorista-Token), no con sesión
   if (ruta === 'stock-tienda') return stockTienda(req, res)
   if (ruta === 'tienda-dragon') return tiendaDragon(req, res)
+  if (ruta === 'tienda-telegram') return tiendaTelegram(req, res)
 
   if (ruta === 'status') return status(req, res)
   if (ruta === 'catalogo') return catalogo(req, res)
