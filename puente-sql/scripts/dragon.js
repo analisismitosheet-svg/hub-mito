@@ -110,7 +110,109 @@ async function crearPedidoCompra({ base = 'INDOD', numero, proveedor, motivo, co
   }
 }
 
-module.exports = { crearPedido, crearPedidoCompra }
+/* ---------------------------------------------------------------------------
+ * ALTA DE ARTÍCULOS (tienda mayorista cf-zimith-mayorista, 20/11/2026). Siempre en INDOD.
+ * Carga como los artículos de temporada que ya están en Dragon (ej. CF264132): artículo con su
+ * clasificación + un precio por lista a nivel artículo. Sin códigos de barras (esos artículos no tienen).
+ * Solo ALTAS: si el código ya existe, no toca nada. Colores y talles nuevos se crean solo si no existen.
+ * ------------------------------------------------------------------------- */
+const BASE_ALTA = 'INDOD'
+const LISTAS_ALTA = new Set(['LISTA2', 'LISTA3', 'EXPOR', 'LISTA1'])
+const CLASIF_ALTA = ['Temporada', 'Linea', 'Material', 'Grupo', 'Familia', 'CategoriaDeArticulo', 'Clasificacion', 'TipodeArticulo', 'Proveedor']
+
+async function llamarIndod(metodo, ruta, cuerpo) {
+  const r = await fetch(`${URL_API}/${ruta}`, {
+    method: metodo,
+    headers: { 'Content-Type': 'application/json', IdCliente: ID, Authorization: TOKEN, BaseDeDatos: BASE_ALTA },
+    ...(cuerpo ? { body: JSON.stringify(cuerpo).replace(/"\/Date\(([^)]*)\)\/"/g, '"\\/Date($1)\\/"') } : {}),
+    signal: AbortSignal.timeout(30_000),
+  })
+  const texto = await r.text()
+  return { ok: r.ok, status: r.status, texto, info: r.headers.get('InformacionAdicional') || '' }
+}
+const existe = async (ruta) => {
+  const r = await llamarIndod('GET', ruta)
+  if (r.status === 404) return false
+  if (r.ok) return true
+  throw new Error(`Dragon no respondió bien (${r.status}) al consultar ${ruta}`)
+}
+const textoOk = (v, max) => typeof v === 'string' && v.trim().length > 0 && v.trim().length <= max
+const codigoOk = (v, max) => typeof v === 'string' && new RegExp(`^[A-Z0-9]{1,${max}}$`).test(v)
+
+/**
+ * a: { codigo, descripcion, ano, Temporada, Linea, Material, Grupo, Familia, CategoriaDeArticulo, Clasificacion,
+ *      TipodeArticulo, Proveedor, precios: [{ lista, precio }], colores: [{ codigo, descripcion }], talles: [codigo] }
+ * colores/talles = SOLO los nuevos que hay que crear. Devuelve { ok, codigo, pasos: [{ paso, ok, detalle }] }.
+ */
+async function crearArticulo(a) {
+  if (!ID || !TOKEN) throw new Error('Faltan DRAGON_API_IDCLIENTE / DRAGON_API_TOKEN en puente-sql/.env')
+  const codigo = String(a?.codigo ?? '').trim().toUpperCase()
+  if (!codigoOk(codigo, 15)) throw new Error('Código inválido (letras y números, hasta 15)')
+  const descripcion = String(a?.descripcion ?? '').trim().toUpperCase()
+  if (!textoOk(descripcion, 100)) throw new Error('Falta la descripción (hasta 100)')
+  const ano = Number(a?.ano)
+  if (!Number.isInteger(ano) || ano < 0 || ano > 99) throw new Error('Año inválido (2 dígitos)')
+  const clasif = {}
+  for (const c of CLASIF_ALTA) {
+    const v = String(a?.[c] ?? '').trim()
+    if (v.length > 10 || /[^\wÑñ .\-]/.test(v)) throw new Error(`${c} inválido`)
+    if (v) clasif[c] = v
+  }
+  if (!clasif.Proveedor || !clasif.Grupo || !clasif.Temporada) throw new Error('Faltan proveedor, grupo o temporada')
+  const precios = (Array.isArray(a?.precios) ? a.precios : []).map((p) => ({ lista: String(p?.lista ?? ''), precio: Number(p?.precio) }))
+  if (!precios.length || precios.some((p) => !LISTAS_ALTA.has(p.lista) || !(p.precio > 0 && p.precio < 1e9))) throw new Error('Precios inválidos')
+  if (!precios.some((p) => p.lista === 'LISTA2')) throw new Error('Falta el precio MAYOR (LISTA2)')
+  const colores = (Array.isArray(a?.colores) ? a.colores : []).map((c) => ({ codigo: String(c?.codigo ?? '').trim().toUpperCase(), descripcion: String(c?.descripcion ?? '').trim().toUpperCase() }))
+  if (colores.length > 30 || colores.some((c) => !codigoOk(c.codigo, 6) || !textoOk(c.descripcion, 50))) throw new Error('Colores nuevos inválidos')
+  const talles = (Array.isArray(a?.talles) ? a.talles : []).map((t) => String(t ?? '').trim().toUpperCase())
+  if (talles.length > 30 || talles.some((t) => !/^[A-Z0-9.\/]{1,5}$/.test(t))) throw new Error('Talles nuevos inválidos')
+
+  const pasos = []
+  // 1) el código tiene que estar libre (re-verificación justo antes de crear)
+  if (await existe(`Articulo/${encodeURIComponent(codigo)}/`)) {
+    return { ok: false, codigo, pasos: [{ paso: 'Verificar código', ok: false, detalle: `${codigo} ya existe en Dragon: no se tocó nada` }] }
+  }
+  pasos.push({ paso: 'Verificar código', ok: true, detalle: `${codigo} libre en INDOD` })
+
+  // 2) colores y talles nuevos (si ya existen, se saltean)
+  for (const c of colores) {
+    if (await existe(`Color/${encodeURIComponent(c.codigo)}/`)) { pasos.push({ paso: `Color ${c.codigo}`, ok: true, detalle: 'ya existía' }); continue }
+    const r = await llamarIndod('POST', 'Color/', { Codigo: c.codigo, Descripcion: c.descripcion })
+    pasos.push({ paso: `Color ${c.codigo}`, ok: r.ok, detalle: r.ok ? 'creado' : `${r.status} ${r.info} ${r.texto.slice(0, 200)}`.trim() })
+    if (!r.ok) return { ok: false, codigo, pasos }
+  }
+  for (const t of talles) {
+    if (await existe(`Talle/${encodeURIComponent(t)}/`)) { pasos.push({ paso: `Talle ${t}`, ok: true, detalle: 'ya existía' }); continue }
+    const r = await llamarIndod('POST', 'Talle/', { Codigo: t, Descripcion: t })
+    pasos.push({ paso: `Talle ${t}`, ok: r.ok, detalle: r.ok ? 'creado' : `${r.status} ${r.info} ${r.texto.slice(0, 200)}`.trim() })
+    if (!r.ok) return { ok: false, codigo, pasos }
+  }
+
+  // 3) el artículo, con los mismos datos fijos que los de temporada (IVA, imprime despacho)
+  const art = {
+    Codigo: codigo,
+    Descripcion: descripcion,
+    DescripcionAdicional: descripcion,
+    Ano: ano,
+    ...clasif,
+    CondicionIvaVentas: 1,
+    CondicionIvaCompras: 1,
+    ImprimeDespacho: true,
+  }
+  const ra = await llamarIndod('POST', 'Articulo/', art)
+  pasos.push({ paso: 'Artículo', ok: ra.ok, detalle: ra.ok ? `${codigo} · ${descripcion}` : `${ra.status} ${ra.info} ${ra.texto.slice(0, 300)}`.trim() })
+  if (!ra.ok) return { ok: false, codigo, pasos }
+
+  // 4) un precio por lista, vigente desde hoy
+  const hoy = fechaWcf(new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10))
+  for (const p of precios) {
+    const r = await llamarIndod('POST', 'Preciodearticulo/', { Articulo: codigo, Color: '', Talle: '', ListaDePrecio: p.lista, PrecioDirecto: p.precio, FechaVigencia: hoy })
+    pasos.push({ paso: `Precio ${p.lista}`, ok: r.ok, detalle: r.ok ? `$ ${p.precio}` : `${r.status} ${r.info} ${r.texto.slice(0, 200)}`.trim() })
+  }
+  return { ok: pasos.every((p) => p.ok), codigo, pasos }
+}
+
+module.exports = { crearPedido, crearPedidoCompra, crearArticulo }
 
 // Prueba manual: node scripts/dragon.js --prueba
 if (require.main === module && process.argv.includes('--prueba')) {

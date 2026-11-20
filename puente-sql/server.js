@@ -1892,6 +1892,17 @@ const server = http.createServer(async (req, res) => {
     if (body?.accion === 'precios_local_publico') {
       return enviar(res, 200, await preciosLocalPublico(body?.local, body?.articulos))
     }
+    // Alta de artículo en Dragon INDOD por la API REST (tienda mayorista). Solo altas; si el código existe no toca nada.
+    if (body?.accion === 'dragon_alta_articulo') {
+      try {
+        const r = await dragon.crearArticulo(body?.articulo)
+        console.log(`[puente] alta de artículo ${r.codigo}: ${r.ok ? 'OK' : 'con errores'} · ${r.pasos.map((p) => `${p.paso}=${p.ok ? 'ok' : 'ERROR'}`).join(', ')}`)
+        return enviar(res, 200, r)
+      } catch (e) {
+        return enviar(res, 400, { error: e.message })
+      }
+    }
+
     if (body?.accion === 'dragon_articulos') {
       return enviar(res, 200, body?.codigos ? await dragonDatosArticulos(body?.base, body.codigos, body?.lista) : await dragonBuscarArticulos(body?.base, body?.texto, body?.lista))
     }

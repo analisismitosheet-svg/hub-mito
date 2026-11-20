@@ -65,3 +65,44 @@ export default async function stockTienda(req: Req, res: Res) {
   }
   return res.status(200).json(cuerpo)
 }
+
+/**
+ * POST /api/sql/tienda-dragon (misma clave X-Mayorista-Token): lo único de Dragon que la tienda puede pedirle al puente.
+ *   { accion: 'dragon_articulos', codigos: [...] | texto }  -> buscar códigos en INDOD (solo lectura)
+ *   { accion: 'dragon_alta_articulo', articulo: {...} }     -> alta de artículo en INDOD (el puente valida todo)
+ * Cualquier otra acción se rechaza, y la base siempre es INDOD.
+ */
+export async function tiendaDragon(req: Req & { body?: unknown }, res: Res) {
+  res.setHeader('Cache-Control', 'no-store')
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' })
+  const clave = process.env.STOCK_MAYORISTA_TOKEN ?? ''
+  if (!clave || !mismoSecreto(primero(req.headers['x-mayorista-token']), clave)) return res.status(401).json({ error: 'No autorizado' })
+
+  const b = (typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body ?? {}) as Record<string, unknown>
+  let cuerpo: Record<string, unknown>
+  if (b.accion === 'dragon_articulos') {
+    const codigos = Array.isArray(b.codigos) ? b.codigos.map(String).slice(0, 50) : undefined
+    const texto = typeof b.texto === 'string' ? b.texto.slice(0, 20) : undefined
+    if (!codigos && !texto) return res.status(400).json({ error: 'Pasá codigos o texto' })
+    cuerpo = { accion: 'dragon_articulos', base: 'INDOD', ...(codigos ? { codigos } : { texto }) }
+  } else if (b.accion === 'dragon_alta_articulo') {
+    if (!b.articulo || typeof b.articulo !== 'object') return res.status(400).json({ error: 'Falta el artículo' })
+    cuerpo = { accion: 'dragon_alta_articulo', articulo: b.articulo }
+  } else {
+    return res.status(400).json({ error: 'Acción no permitida' })
+  }
+
+  const destino = await urlDestino()
+  const tokenPuente = process.env.SQL_BRIDGE_TOKEN ?? ''
+  if (!destino || !tokenPuente) return res.status(500).json({ error: 'Falta configurar el Puente SQL' })
+  // el alta no se reintenta: si el puente lo recibió y tardó, repetirlo podría duplicar colores o precios
+  const r0 = await postAlPuente(
+    destino,
+    { headers: { 'Content-Type': 'application/json', 'X-Puente-Token': tokenPuente }, body: JSON.stringify(cuerpo) },
+    { timeoutMs: 60_000, intentos: cuerpo.accion === 'dragon_alta_articulo' ? 1 : 2 },
+  )
+  if (!r0.ok) return res.status(502).json({ error: 'No se pudo contactar la PC del SQL' })
+  const datos = await r0.res.json().catch(() => null)
+  if (datos === null) return res.status(502).json({ error: `Puente SQL: respuesta ${r0.res.status}` })
+  return res.status(r0.res.status).json(datos)
+}
