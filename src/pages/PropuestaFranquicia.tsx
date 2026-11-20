@@ -146,7 +146,7 @@ export default function PropuestaFranquicia() {
           )}
           {/* Reposición diaria: que se vea de qué día es la venta (casi siempre, ayer) */}
           {prop && prop.tipo !== 'calzado' && prop.tipo !== 'materiales' && prop.hasta && (
-            <div className="mt-3 flex items-center gap-3 rounded-2xl bg-amber-400 px-3 py-2.5 text-neutral-950">
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl bg-amber-400 px-3 py-2.5 text-neutral-950">
               <span className="text-2xl leading-none" aria-hidden>📅</span>
               <div className="min-w-0 leading-tight">
                 <p className="text-[11px] font-extrabold uppercase tracking-wide">
@@ -155,6 +155,16 @@ export default function PropuestaFranquicia() {
                 <p className="text-lg font-black first-letter:uppercase">
                   {prop.desde && prop.desde !== prop.hasta ? `${diaLargo(prop.desde)} al ${diaLargo(prop.hasta)}` : diaLargo(prop.hasta)}
                 </p>
+              </div>
+              <div className="ml-auto flex shrink-0 gap-1.5 text-center">
+                <div className="rounded-xl bg-neutral-950/10 px-2 py-1 leading-tight">
+                  <p className="text-[9.5px] font-extrabold uppercase tracking-wide">Venta total</p>
+                  <p className="text-base font-black tabular-nums">{prop.items.reduce((s, i) => s + (Number(i.vendido) || 0), 0)} <span className="text-[10px] font-bold">u.</span></p>
+                </div>
+                <div className="rounded-xl bg-neutral-950 px-2 py-1 leading-tight text-amber-300">
+                  <p className="text-[9.5px] font-extrabold uppercase tracking-wide">Disponible a reponer</p>
+                  <p className="text-base font-black tabular-nums">{prop.items.reduce((s, i) => s + Math.max(0, Math.min(i.sugerido, i.maximo)), 0)} <span className="text-[10px] font-bold">u.</span></p>
+                </div>
               </div>
             </div>
           )}

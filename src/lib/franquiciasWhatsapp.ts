@@ -72,10 +72,15 @@ function encabezadoVenta(p: PropuestaEnvio): { titulo: string; frase: string } {
 }
 
 /** Artículos y unidades que van en el link (sugerido > 0). */
-async function totalesDe(propuestaId: string): Promise<{ articulos: number; unidades: number }> {
-  const r = await rest(`franquicias_propuesta_items?propuesta_id=eq.${propuestaId}&sugerido=gt.0&select=sugerido`)
-  const filas = r.ok ? ((await r.json()) as Array<{ sugerido: number }>) : []
-  return { articulos: filas.length, unidades: filas.reduce((s, f) => s + (Number(f.sugerido) || 0), 0) }
+async function totalesDe(propuestaId: string): Promise<{ articulos: number; unidades: number; vendido: number }> {
+  const r = await rest(`franquicias_propuesta_items?propuesta_id=eq.${propuestaId}&select=sugerido,vendido`)
+  const filas = r.ok ? ((await r.json()) as Array<{ sugerido: number; vendido: number }>) : []
+  const conRepo = filas.filter((f) => Number(f.sugerido) > 0)
+  return {
+    articulos: conRepo.length,
+    unidades: conRepo.reduce((s, f) => s + (Number(f.sugerido) || 0), 0),
+    vendido: filas.reduce((s, f) => s + (Number(f.vendido) || 0), 0),
+  }
 }
 
 export interface ResultadoFranquicias {
@@ -99,7 +104,7 @@ export async function enviarPendientesFranquicias(propuestaId?: string, ids?: nu
   const envios = (await r.json()) as Envio[]
   const plantilla = process.env.WHATSAPP_PLANTILLA_FRANQUICIAS || 'reposicion_franquicia'
   const idioma = process.env.WHATSAPP_PLANTILLA_FRANQUICIAS_IDIOMA || 'es_AR'
-  const totales = new Map<string, { articulos: number; unidades: number }>()
+  const totales = new Map<string, { articulos: number; unidades: number; vendido: number }>()
   const out: ResultadoFranquicias = { enviados: 0, errores: 0, detalle: [] }
 
   for (const e of envios) {
@@ -124,7 +129,7 @@ export async function enviarPendientesFranquicias(propuestaId?: string, ids?: nu
     const res = telegramActivo()
       ? await enviarTelegram(
           e.telefono,
-          `<b>📅 REPOSICIÓN DIARIA</b>\n<b>🛍️ ${enc.titulo}</b>\n\nHola ${escaparHtml(cliente)}, ${enc.frase} te armamos la reposición ${escaparHtml(p.numero)}: ${t.articulos} artículos, ${t.unidades} unidades.\n\nMirala, ajustá lo que quieras y confirmala con el botón.`,
+          `<b>📅 REPOSICIÓN DIARIA</b>\n<b>🛍️ ${enc.titulo}</b>\n📊 Venta total: <b>${t.vendido} u.</b> · Disponible a reponer: <b>${t.unidades} u.</b>\n\nHola ${escaparHtml(cliente)}, ${enc.frase} te armamos la reposición ${escaparHtml(p.numero)}: ${t.articulos} artículos, ${t.unidades} unidades.\n\nMirala, ajustá lo que quieras y confirmala con el botón.`,
           null,
           [[{ text: '🛒 Ver y confirmar el pedido', url: link }]],
           true,
