@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
-  Loader2, RefreshCw, Percent, Gauge, LogIn, Footprints, Receipt, VideoOff, Video, ChevronRight, Info, Target, TrendingUp, Users,
+  Loader2, RefreshCw, Percent, ShieldAlert, Gauge, LogIn, Footprints, Receipt, VideoOff, Video, ChevronRight, Info, Target, TrendingUp, Users,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
@@ -11,6 +11,7 @@ import { CLAVE_VISTA, aVentas, type Venta, type Dispositivo } from '@/pages/Cont
 import { ErrorVideo, pedirPase, urlVideo } from '@/lib/videoContador'
 import { LOCALES_FUERA_DEL_CONTADOR } from '@/lib/informeConversion'
 import { coloresUnicos } from '@/lib/coloresUnicos'
+import PersonasNoGratas, { CartelAviso, useAvisosPendientes, type NoGrata } from '@/components/PersonasNoGratas'
 
 /**
  * Tasa de conversión (Locales): video en vivo de la puerta con el conteo
@@ -83,6 +84,21 @@ export default function TasaConversion() {
   const [horaSel, setHoraSel] = useState<number | null>(null)
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const pestana = params.get('tab') === 'no-gratas' ? 'no-gratas' : 'conversion'
+  const { avisos: avisosPend, recargar: recargarAvisos } = useAvisosPendientes()
+  const [personasAviso, setPersonasAviso] = useState<Map<number, NoGrata>>(new Map())
+  const idsAviso = avisosPend.map((a) => a.no_grata_id).join(',')
+  useEffect(() => {
+    if (!idsAviso) return
+    void sb().from('no_gratas').select('*').in('id', idsAviso.split(',').map(Number)).then(({ data }) =>
+      setPersonasAviso(new Map(((data as NoGrata[]) ?? []).map((p) => [p.id, p]))))
+  }, [idsAviso])
+  const irA = (tab: 'conversion' | 'no-gratas') => {
+    const n = new URLSearchParams(params)
+    if (tab === 'conversion') n.delete('tab')
+    else n.set('tab', tab)
+    setParams(n, { replace: true })
+  }
 
   const cargar = useCallback(async () => {
     setCargando(true)
@@ -251,9 +267,33 @@ export default function TasaConversion() {
         </div>
       </header>
 
+      <div className="mb-4 flex flex-wrap gap-1.5" role="tablist">
+        <button role="tab" aria-selected={pestana === 'conversion'} onClick={() => irA('conversion')}
+          className={'inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-sm font-medium ' +
+            (pestana === 'conversion' ? 'bg-brand-600 text-white' : 'border border-line bg-surface text-sub hover:text-ink')}>
+          <Percent size={14} aria-hidden /> Conversión
+        </button>
+        <button role="tab" aria-selected={pestana === 'no-gratas'} onClick={() => irA('no-gratas')}
+          className={'inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-sm font-medium ' +
+            (pestana === 'no-gratas' ? 'bg-brand-600 text-white' : 'border border-line bg-surface text-sub hover:text-ink')}>
+          <ShieldAlert size={14} aria-hidden /> Personas no gratas
+          {avisosPend.length > 0 && <span className="rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">{avisosPend.length}</span>}
+        </button>
+      </div>
+
       {error && <p role="alert" className="mb-4 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">{error}</p>}
 
-      {!datos ? (
+      {pestana === 'conversion' && avisosPend.length > 0 && (
+        <div className="mb-4 flex flex-col gap-3">
+          {avisosPend.slice(0, 3).map((a) => (
+            <CartelAviso key={a.id} aviso={a} persona={personasAviso.get(a.no_grata_id)} nombres={nombres} onResuelto={() => void recargarAvisos()} />
+          ))}
+        </div>
+      )}
+
+      {pestana === 'no-gratas' ? (
+        <PersonasNoGratas nombres={nombres} />
+      ) : !datos ? (
         <div className="flex items-center justify-center gap-2 py-10 text-sub"><Loader2 size={18} className="animate-spin" aria-hidden /> Cargando...</div>
       ) : locales.length === 0 ? (
         <div className="rounded-2xl border border-line bg-surface p-4 text-sm text-sub">
