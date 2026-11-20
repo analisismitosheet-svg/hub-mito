@@ -37,6 +37,7 @@ import {
   type ResultadoSugerencia,
   type RutaVehiculo,
 } from '@/lib/reparto'
+import { bloquearActualizacion } from '@/lib/actualizarApp'
 
 /**
  * Reposiciones / Transferencias > Reparto manual (/transferencias/reparto).
@@ -114,6 +115,19 @@ export default function RepartoTransferencias() {
   const [estDragon, setEstDragon] = useState<CargaDragon | null>(null)
   const [ocupDragon, setOcupDragon] = useState(false)
   const [errDragon, setErrDragon] = useState<string | null>(null)
+
+  // Mientras está abierta esta pantalla la app no se actualiza sola (se perdería lo repartido);
+  // y si hay algo movido, avisa antes de recargar o cerrar la pestaña a mano.
+  useEffect(() => bloquearActualizacion(), [])
+  useEffect(() => {
+    const alSalir = (e: BeforeUnloadEvent) => {
+      if (!historial.current.length) return
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', alSalir)
+    return () => window.removeEventListener('beforeunload', alSalir)
+  }, [])
 
   useEffect(() => {
     cargarOpciones().then(setOpciones).catch((e: Error) => setErrOpciones(e.message))
