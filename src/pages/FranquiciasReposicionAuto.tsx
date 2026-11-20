@@ -10,10 +10,10 @@ import { cargarClientes, cargarMapaFranquicias, type BaseFranquicia, type Client
 
 /* ------------------------------------------------------------------ */
 /*  Mayorista → Franquicias → Reposición diaria automática.             */
-/*  Paso 1: cliente ↔ base, sus WhatsApps y días/hora de salida.        */
+/*  Paso 1: cliente ↔ base, sus teléfonos de Telegram y días/hora de salida.        */
 /*  Paso 2: por cliente, una reposición por fecha de venta, con su      */
-/*  tabla, el estado de cada WhatsApp y si ya la aceptaron.             */
-/*  La arma el puente (reposicion-franquicias-auto.js) y el WhatsApp    */
+/*  tabla, el estado de cada envío por Telegram y si ya la aceptaron.             */
+/*  La arma el puente (reposicion-franquicias-auto.js) y el Telegram    */
 /*  sale por /api/informe?evento=franquicias.                           */
 /*  Datos: sql/franquicias_reposicion_auto.sql.                         */
 /* ------------------------------------------------------------------ */
@@ -136,8 +136,9 @@ export default function FranquiciasReposicionAuto() {
   // Telegram: si el bot está cargado, el link sale por ahí y solo le llega a quien se vinculó
   const [tg, setTg] = useState<EstadoTelegram | null>(null)
   const [vinculados, setVinculados] = useState<Set<string>>(new Set())
-  const porTelegram = Boolean(tg?.configurado)
-  const canal = porTelegram ? 'Telegram' : 'WhatsApp'
+  // Siempre Telegram: si el estado del bot no se pudo leer, igual se muestra como Telegram
+  const porTelegram = tg ? tg.configurado : true
+  const canal = 'Telegram'
   const vinculado = (t: string) => vinculados.has(claveTelefono(t))
 
   const cargarVinculos = useCallback(async (tels: string[]) => {
@@ -395,7 +396,7 @@ export default function FranquiciasReposicionAuto() {
               <input id="ra-suc" value={form.sucursal} onChange={(e) => setForm((f) => ({ ...f, sucursal: e.target.value }))} placeholder="BD_ORIGEN" className={inp} title="Sucursal del stock del cliente (columna BD_ORIGEN); es la misma para todos los clientes de esa base" />
             </div>
             <div>
-              <label className={lbl} htmlFor="ra-wa">4. {porTelegram ? 'Teléfonos destino (Telegram)' : 'WhatsApps destino'}</label>
+              <label className={lbl} htmlFor="ra-wa">4. Teléfonos destino (Telegram)</label>
               <div className="flex gap-2">
                 <input id="ra-wa" type="tel" inputMode="tel" value={nuevoWa} onChange={(e) => setNuevoWa(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); agregarWa() } }} placeholder="Ej. 5492901554321 (dueño, encargado…)" className={inp} />
                 <button type="button" onClick={agregarWa} aria-label="Agregar número" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-600 text-white hover:bg-emerald-500"><Plus size={18} aria-hidden /></button>
@@ -490,7 +491,7 @@ export default function FranquiciasReposicionAuto() {
                       {abierto ? <ChevronDown size={16} className="shrink-0 text-amber-400" aria-hidden /> : <ChevronRight size={16} className="shrink-0 text-sub" aria-hidden />}
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-bold text-ink">{c.cliente_id} · {nombreCliente(c.cliente_id) || 'Cliente'}</span>
-                        <span className="block truncate text-[11px] text-sub">{porTelegram ? 'Telegram' : 'WhatsApps'} ({tels.length}): {tels.length === 0 && <b className="text-emerald-400">—</b>}
+                        <span className="block truncate text-[11px] text-sub">Telegram ({tels.length}): {tels.length === 0 && <b className="text-emerald-400">—</b>}
                           {tels.map((t, i) => (
                             <b key={t} className={porTelegram && !vinculado(t) ? 'text-red-300' : 'text-emerald-400'}>{i > 0 && ' · '}+{t}{porTelegram ? (vinculado(t) ? ' ✓' : ' (sin vincular)') : ''}</b>
                           ))}
@@ -620,7 +621,7 @@ export default function FranquiciasReposicionAuto() {
                                           <b className="text-ink">+{en.telefono}</b>
                                           <span className={en.estado === 'enviado' ? 'text-emerald-400' : en.estado === 'error' ? 'text-amber-400' : 'text-violet-300'}>
                                             {en.estado === 'enviado'
-                                              ? `${en.detalle?.includes('Telegram') ? 'Telegram' : 'WhatsApp'} enviado ${en.enviado_at ? fmtHora(en.enviado_at) : ''}`
+                                              ? `Telegram enviado ${en.enviado_at ? fmtHora(en.enviado_at) : ''}`
                                               : en.estado === 'error'
                                                 ? (porTelegram && !vinculado(en.telefono) ? 'Sin Telegram vinculado: le sale solo apenas se vincule' : `No salió: ${en.detalle ?? ''}`)
                                                 : 'En cola'}
@@ -631,7 +632,7 @@ export default function FranquiciasReposicionAuto() {
                                             <a href={linkDe(en.token)} target="_blank" rel="noreferrer" className={btnSec}><ExternalLink size={12} aria-hidden /> Ver link</a>
                                             <button type="button" className={btnSec} onClick={() => { void navigator.clipboard?.writeText(linkDe(en.token)); setAviso({ ok: true, txt: `Link de +${en.telefono} copiado.` }) }}><Copy size={12} aria-hidden /> Copiar</button>
                                             {editable && porTelegram && !vinculado(en.telefono) && tg?.usuario && <button type="button" className={btnSec} onClick={() => invitar(en.telefono)} title="Abre tu WhatsApp con la invitación al bot de Telegram">Invitar a Telegram</button>}
-                                            {editable && <button type="button" className={btnSec} onClick={() => whatsappManual(p, en)} title="Abre tu WhatsApp con el mensaje y el link de este número">WhatsApp a mano</button>}
+                                            {editable && <button type="button" className={btnSec} onClick={() => whatsappManual(p, en)} title="Abre tu WhatsApp con el mensaje y el link de este número">Mandar a mano</button>}
                                           </span>
                                         </li>
                                       ))}

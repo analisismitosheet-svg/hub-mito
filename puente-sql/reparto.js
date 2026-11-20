@@ -21,6 +21,7 @@
  * no entran.
  */
 const fs = require('fs')
+const memoria = require('./memoria-ia')
 const path = require('path')
 
 const LOCALES = [
@@ -143,17 +144,38 @@ function crear(deps) {
     }
   }
 
+  // Las opciones se guardan en disco (D:\memoria ia): después de reiniciar el puente se contestan al
+  // instante. Con la lectura en frío + la foto general a la vez, la primera apertura llegó a tardar
+  // más de un minuto y Vercel cortaba con 504 (20/11).
+  try {
+    const guardadas = memoria.leer('reparto-opciones')
+    if (guardadas?.datos) opciones = { en: Number(guardadas.en) || 0, datos: guardadas.datos, enCurso: null }
+  } catch { /* sin memoria: se leen del SQL */ }
+
+  function refrescarOpciones() {
+    if (!opciones.enCurso) {
+      opciones.enCurso = leerOpciones()
+        .then((datos) => {
+          opciones = { en: Date.now(), datos, enCurso: null }
+          memoria.guardar('reparto-opciones', { en: opciones.en, datos })
+        })
+        .catch((e) => { opciones = { ...opciones, enCurso: null }; throw e })
+    }
+    return opciones.enCurso
+  }
+
   async function accionOpciones() {
     // abrir la pantalla ya pide la foto general: cuando terminan de elegir filtros suele estar lista
     ultimoUso = Date.now()
-    if (!general.enCurso && edadGeneral() > FOTO_NUEVA_MS) lanzarGeneral()
-    if (!(opciones.datos && Date.now() - opciones.en < OPCIONES_MS)) {
-      if (!opciones.enCurso) {
-        opciones.enCurso = leerOpciones()
-          .then((datos) => { opciones = { en: Date.now(), datos, enCurso: null } })
-          .catch((e) => { opciones = { ...opciones, enCurso: null }; throw e })
-      }
-      await opciones.enCurso
+    const pedirFoto = () => { if (!general.enCurso && edadGeneral() > FOTO_NUEVA_MS) lanzarGeneral() }
+    if (!opciones.datos) {
+      // primera vez (sin nada guardado): primero las opciones y recién después la foto, para que no
+      // compitan por el SQL
+      try { await refrescarOpciones() } finally { pedirFoto() }
+    } else {
+      // hay opciones (aunque sean viejas): se contestan ya y, si pasó la hora, se renuevan por detrás
+      if (Date.now() - opciones.en > OPCIONES_MS) refrescarOpciones().catch((e) => console.error('[puente] reparto opciones:', e.message))
+      pedirFoto()
     }
     return { opciones: { ...opciones.datos, art: general.datos?.listaArts ?? undefined }, foto: estadoGeneral() }
   }

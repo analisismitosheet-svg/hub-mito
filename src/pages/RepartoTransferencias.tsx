@@ -144,9 +144,29 @@ export default function RepartoTransferencias() {
     return () => window.removeEventListener('beforeunload', alSalir)
   }, [])
 
-  useEffect(() => {
-    cargarOpciones().then((r) => { setOpciones(r.opciones); setFoto(r.foto) }).catch((e: Error) => setErrOpciones(e.message))
+  // Filtros del paso 1. Si el Puente no contesta (se estaba reiniciando, 504 de Vercel) reintenta
+  // solo 3 veces antes de mostrar el error con el botón «Reintentar».
+  const [leyendoOpciones, setLeyendoOpciones] = useState(false)
+  const leerOpciones = useCallback(async () => {
+    setErrOpciones(null)
+    setLeyendoOpciones(true)
+    let ultimo: Error | null = null
+    for (let intento = 0; intento < 3; intento++) {
+      if (intento) await new Promise((r) => setTimeout(r, 4000))
+      try {
+        const r = await cargarOpciones()
+        setOpciones(r.opciones)
+        setFoto(r.foto)
+        setLeyendoOpciones(false)
+        return
+      } catch (e) {
+        ultimo = e as Error
+      }
+    }
+    setErrOpciones(ultimo?.message ?? 'sin respuesta')
+    setLeyendoOpciones(false)
   }, [])
+  useEffect(() => { void leerOpciones() }, [leerOpciones])
 
   // Ruta de la Master y la Mercedes (se relee cada 60 s con la pestaña visible)
   useEffect(() => {
@@ -433,7 +453,17 @@ export default function RepartoTransferencias() {
         <section className="rounded-2xl border border-line bg-surface p-4">
           <h2 className="text-[15px] font-bold text-ink">¿Qué querés repartir?</h2>
           <p className="text-xs text-sub">Los mismos filtros del tablero. Tenés que elegir al menos un filtro de artículo.</p>
-          {errOpciones && <p className="mt-2 text-xs text-red-300">No se pudieron leer los filtros: {errOpciones}</p>}
+          {errOpciones && (
+            <p className="mt-2 flex flex-wrap items-center gap-2 text-xs text-red-300">
+              No se pudieron leer los filtros: {errOpciones}
+              <button type="button" disabled={leyendoOpciones} onClick={() => void leerOpciones()} className={btn}>
+                {leyendoOpciones ? <Loader2 size={13} className="animate-spin" aria-hidden /> : null} Reintentar
+              </button>
+            </p>
+          )}
+          {!opciones && !errOpciones && leyendoOpciones && (
+            <p className="mt-2 inline-flex items-center gap-2 text-xs text-sub"><Loader2 size={13} className="animate-spin" aria-hidden /> Leyendo los filtros…</p>
+          )}
 
           <p className="mb-1 mt-4 text-[11px] font-medium uppercase tracking-wider text-sub/80">Venta a mirar</p>
           <div className="flex flex-wrap items-end gap-2">
