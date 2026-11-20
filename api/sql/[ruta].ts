@@ -58,7 +58,8 @@ function primero(q: string | string[] | undefined): string {
 }
 
 /**
- * GET /api/sql/ping -> { ok } : ¿el puente responde desde afuera? (Vercel -> Funnel -> puente)
+ * GET /api/sql/ping -> { ok, respaldo, alguna } : ¿el puente responde desde afuera? ok = salida principal
+ * (Vercel -> Funnel -> puente), respaldo = túnel de Cloudflare (null si no hay).
  * Sin datos ni secretos, sin sesión: lo usa el vigilante de la PC del puente
  * (puente-sql/scripts/vigilante.ps1) para detectar el Funnel caído y reactivarlo.
  */
@@ -67,26 +68,35 @@ async function ping(res: Res) {
   const url = process.env.SUPABASE_URL
   const service = process.env.SUPABASE_SERVICE_ROLE_KEY
   let destino = process.env.SQL_LOGICAPP_URL?.trim() || ''
+  let respaldo = ''
   if (url && service) {
     try {
-      const r = await fetch(`${url}/rest/v1/sql_conexion?id=eq.1&select=logicapp_url`, {
+      const r = await fetch(`${url}/rest/v1/sql_conexion?id=eq.1&select=logicapp_url,respaldo_url`, {
         headers: { Authorization: `Bearer ${service}`, apikey: service },
       })
-      const filas = (await r.json().catch(() => null)) as Array<{ logicapp_url?: string | null }> | null
+      const filas = (await r.json().catch(() => null)) as Array<{ logicapp_url?: string | null; respaldo_url?: string | null }> | null
       destino = filas?.[0]?.logicapp_url?.trim() || destino
+      respaldo = filas?.[0]?.respaldo_url?.trim() || ''
     } catch {
       /* respaldo: env */
     }
   }
   if (!destino) return res.status(500).json({ ok: false })
   // La URL guardada termina en /health (o se le agrega): GET sin token
-  const salud = /\/health\/?$/.test(destino) ? destino : destino.replace(/\/?$/, '/health')
-  try {
-    const r = await fetch(salud, { signal: AbortSignal.timeout(8000) })
-    return res.status(r.ok ? 200 : 502).json({ ok: r.ok })
-  } catch {
-    return res.status(504).json({ ok: false })
+  const probar = async (u: string): Promise<boolean | null> => {
+    if (!u) return null
+    const salud = /\/health\/?$/.test(u) ? u : u.replace(/\/?$/, '/health')
+    try {
+      const r = await fetch(salud, { signal: AbortSignal.timeout(8000) })
+      return r.ok
+    } catch {
+      return false
+    }
   }
+  // `ok` es la salida principal (el Funnel): es lo que mira el vigilante de la PC para re-publicarlo.
+  // `respaldo` es el túnel de Cloudflare; con cualquiera de las dos el hub llega (`alguna`).
+  const [ok, okRespaldo] = await Promise.all([probar(destino), probar(respaldo)])
+  return res.status(ok ? 200 : 502).json({ ok: ok === true, respaldo: okRespaldo, alguna: ok === true || okRespaldo === true })
 }
 
 export default async function handler(req: Req, res: Res) {

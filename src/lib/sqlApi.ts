@@ -256,6 +256,8 @@ export async function muestraObjeto(nombreCompleto: string): Promise<FilaSql[]> 
 /** Fila única de configuración de la conexión (tabla sql_conexion, solo admins por RLS). */
 export interface ConexionSql {
   logicapp_url: string | null
+  /** Salida de respaldo del puente (túnel de Cloudflare): se usa sola si la principal no llega. */
+  respaldo_url?: string | null
   max_rows: number | null
 }
 
@@ -263,7 +265,7 @@ export async function cargarConexion(): Promise<ConexionSql | null> {
   if (!supabase) return null
   const { data } = await supabase
     .from('sql_conexion')
-    .select('logicapp_url,max_rows')
+    .select('logicapp_url,respaldo_url,max_rows')
     .eq('id', 1)
     .maybeSingle()
   return (data as ConexionSql | null) ?? null
@@ -273,17 +275,20 @@ export async function cargarConexion(): Promise<ConexionSql | null> {
 export async function guardarConexion(
   logicappUrl: string,
   maxRows: number | null,
+  respaldoUrl = '',
 ): Promise<{ error: string | null }> {
   if (!supabase) return { error: 'Supabase no está configurado.' }
   const url = logicappUrl.trim()
   if (url && !/^https:\/\/.+/i.test(url)) return { error: 'La URL debe empezar con https://' }
+  const respaldo = respaldoUrl.trim()
+  if (respaldo && !/^https:\/\/.+/i.test(respaldo)) return { error: 'La URL de respaldo debe empezar con https://' }
   if (!url && !confirm('Vas a borrar la URL guardada: se usará la variable de entorno SQL_LOGICAPP_URL (si existe). ¿Continuar?')) {
     return { error: null }
   }
   const { error } = await supabase
     .from('sql_conexion')
     .upsert(
-      { id: 1, logicapp_url: url || null, max_rows: maxRows, updated_at: new Date().toISOString() },
+      { id: 1, logicapp_url: url || null, respaldo_url: respaldo || null, max_rows: maxRows, updated_at: new Date().toISOString() },
       { onConflict: 'id' },
     )
   return { error: error?.message ?? null }

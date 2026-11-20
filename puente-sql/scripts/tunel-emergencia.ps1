@@ -4,9 +4,8 @@
 #   127.0.0.1:4000 -> Servidor de agentes IA (el chat del hub)
 # Lo lanza la tarea "MITO - Tunel emergencia" (ver instalar-tunel.ps1).
 #
-# Si el Funnel de Tailscale esta sano (el hub llega solo a /api/sql/ping), los tuneles quedan
-# levantados como respaldo pero NO se toca la URL que usa el hub. Recien si el hub no llega se
-# publica la del tunel.
+# El del puente SQL se publica siempre como RESPALDO (sql_conexion.respaldo_url): el hub usa el
+# Funnel y, si no llega, prueba solo por este tunel. El de agentes se publica recien si el hub no llega.
 #
 # Las URL que da Cloudflare son gratis y publicas (https://algo-algo.trycloudflare.com) pero CAMBIAN
 # en cada arranque. Quedan en data\tunel-url.txt (puente) y data\tunel-url-agentes.txt (agentes),
@@ -124,7 +123,11 @@ while ($true) {
     if ($url) {
       $anterior = if (Test-Path $urlArch) { (Get-Content $urlArch -Raw).Trim() } else { '' }
       Set-Content -Path $urlArch -Encoding utf8 -Value $url
-      if (HubYaLlega) {
+      # Puente: la URL de Cloudflare se publica SIEMPRE. publicar_urls_puente la guarda como
+      # respaldo (sql_conexion.respaldo_url) sin pisar al Funnel, y el hub cambia de salida
+      # solo si una no anda (sql/puente_dos_salidas.sql, 20/11/2026).
+      # Agentes: sigue como antes, solo si el hub no llega.
+      if ($s.campo -ne 'p_url_puente' -and (HubYaLlega)) {
         Anotar "Tunel de $($s.nombre) levantado ($url$($s.sufijo)) pero el hub ya llega solo: no se toca su URL"
         continue
       }

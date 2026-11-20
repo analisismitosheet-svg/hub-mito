@@ -33,3 +33,10 @@
 | (cancelaciones) | sync-cancelaciones.js | ver instalar-tarea.ps1 | `cancelaciones`, `cancelaciones_items` |
 
 Los scripts leen del SQL Server y hacen upsert en Supabase con la service role (en `puente-sql/.env`).
+
+## Dos salidas: Funnel + Cloudflare (20/11/2026)
+- `sql_conexion.logicapp_url` = **principal** (Funnel de Tailscale, `https://desktop-oa4gu6i.tail8a2a01.ts.net/sql-bridge/health`); `sql_conexion.respaldo_url` = **respaldo** (quick tunnel de Cloudflare, cambia en cada arranque). Las dos se ven y se editan en Configuraciones → Conexión SQL.
+- `postAlPuente` (`src/lib/puenteRetry.ts`) prueba la otra salida si el pedido no llegó al puente (fallo de red rápido, 530 de Cloudflare o 502–504 que no es JSON del puente) y por 2 minutos arranca por la que anduvo. Un timeout NO cambia de salida (hay acciones que cargan en Dragon y no se pueden duplicar).
+- `publicar_urls_puente` (`sql/puente_dos_salidas.sql`): una URL `trycloudflare.com` va a `respaldo_url` y una `ts.net` a la principal; `tunel-emergencia.ps1` publica siempre la de Cloudflare, así el túnel nunca pisa al Funnel.
+- `/api/sql/ping` → `{ ok, respaldo, alguna }`: `ok` sigue siendo solo la principal (lo usa el vigilante para re-publicar el Funnel).
+

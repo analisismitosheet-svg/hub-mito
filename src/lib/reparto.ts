@@ -157,25 +157,133 @@ export function resumen(filas: Fila[], locales: string[]) {
   return { posturas, stock, venta, ideal, dif: stock.map((s, i) => (sinIdeal(i) ? 0 : s - ideal[i])) }
 }
 
-/** Movimientos origen → destino: lo que bajó en un local va a donde subió (mismo talle). */
-export function calcularMovimientos(filas: Fila[], locales: string[]): Movimiento[] {
-  const out: Movimiento[] = []
-  for (const f of filas) {
-    const src: [number, number][] = [], dst: [number, number][] = []
-    f.cur.forEach((c, i) => {
-      const d = c - f.base[i]
-      if (d < 0) src.push([i, -d])
-      else if (d > 0) dst.push([i, d])
-    })
-    let i = 0, j = 0
-    while (i < src.length && j < dst.length) {
-      const q = Math.min(src[i][1], dst[j][1])
-      out.push({ articulo: f.articulo, color: f.color, talle: f.talle, desc: f.nombre, material: f.material, desde: locales[src[i][0]], hacia: locales[dst[j][0]], cantidad: q })
-      src[i][1] -= q
-      dst[j][1] -= q
-      if (!src[i][1]) i++
-      if (!dst[j][1]) j++
+type EdicionCelda = { fila: Fila; i: number; antes: number; despues: number }
+
+/** Movimientos por diferencia neta, emparejando en orden de columnas (respaldo). */
+function movimientosNetos(f: Fila, locales: string[], out: Movimiento[]) {
+  const src: [number, number][] = [], dst: [number, number][] = []
+  f.cur.forEach((c, i) => {
+    const d = c - f.base[i]
+    if (d < 0) src.push([i, -d])
+    else if (d > 0) dst.push([i, d])
+  })
+  let i = 0, j = 0
+  while (i < src.length && j < dst.length) {
+    const q = Math.min(src[i][1], dst[j][1])
+    out.push({ articulo: f.articulo, color: f.color, talle: f.talle, desc: f.nombre, material: f.material, desde: locales[src[i][0]], hacia: locales[dst[j][0]], cantidad: q })
+    src[i][1] -= q
+    dst[j][1] -= q
+    if (!src[i][1]) i++
+    if (!dst[j][1]) j++
+  }
+}
+
+/**
+ * Reproduce las ediciones en el orden en que se hicieron y empareja cada baja con la suba que la
+ * acompaña (lo que bajaste en DINOD y subiste en BUSTOD va DINOD → BUSTOD), sin cascada.
+ * Si después corregís una celda, primero se deshace lo que esa celda ya tenía emparejado.
+ */
+function movimientosPorEdicion(historial: EdicionCelda[][]) {
+  type Est = { movs: { de: number; a: number; n: number }[]; src: { i: number; n: number }[]; dst: { i: number; n: number }[] }
+  const est = new Map<Fila, Est>()
+  const mover = (e: Est, de: number, a: number, n: number) => {
+    if (de === a || n <= 0) return
+    const m = e.movs.find((x) => x.de === de && x.a === a)
+    if (m) m.n += n
+    else e.movs.push({ de, a, n })
+  }
+  const sumarPend = (l: { i: number; n: number }[], i: number, n: number) => {
+    const p = l.find((x) => x.i === i)
+    if (p) p.n += n
+    else l.push({ i, n })
+  }
+  // origen nuevo: primero cubre subas que esperaban origen (en orden), el resto queda esperando destino
+  const darDesde = (e: Est, i: number, n: number) => {
+    while (n > 0 && e.dst.length) {
+      const d = e.dst[0], q = Math.min(n, d.n)
+      mover(e, i, d.i, q)
+      n -= q
+      if (!(d.n -= q)) e.dst.shift()
     }
+    if (n > 0) sumarPend(e.src, i, n)
+  }
+  const recibirEn = (e: Est, i: number, n: number) => {
+    while (n > 0 && e.src.length) {
+      const s = e.src[0], q = Math.min(n, s.n)
+      mover(e, s.i, i, q)
+      n -= q
+      if (!(s.n -= q)) e.src.shift()
+    }
+    if (n > 0) sumarPend(e.dst, i, n)
+  }
+  const sacarPend = (l: { i: number; n: number }[], i: number, n: number) => {
+    const p = l.find((x) => x.i === i)
+    if (!p) return n
+    const q = Math.min(n, p.n)
+    p.n -= q
+    if (!p.n) l.splice(l.indexOf(p), 1)
+    return n - q
+  }
+  for (const accion of historial)
+    for (const c of accion) {
+      const e = est.get(c.fila) ?? { movs: [], src: [], dst: [] }
+      est.set(c.fila, e)
+      let n = Math.abs(c.despues - c.antes)
+      if (c.despues < c.antes) {
+        // baja: deshace primero lo que esa celda había recibido
+        n = sacarPend(e.dst, c.i, n)
+        for (let k = e.movs.length - 1; k >= 0 && n > 0; k--) {
+          const m = e.movs[k]
+          if (m.a !== c.i) continue
+          const q = Math.min(n, m.n)
+          m.n -= q
+          n -= q
+          darDesde(e, m.de, q) // el origen de ese envío queda libre otra vez
+        }
+        if (n > 0) darDesde(e, c.i, n)
+      } else {
+        // suba: deshace primero lo que esa celda había dado
+        n = sacarPend(e.src, c.i, n)
+        for (let k = e.movs.length - 1; k >= 0 && n > 0; k--) {
+          const m = e.movs[k]
+          if (m.de !== c.i) continue
+          const q = Math.min(n, m.n)
+          m.n -= q
+          n -= q
+          recibirEn(e, m.a, q)
+        }
+        if (n > 0) recibirEn(e, c.i, n)
+      }
+      e.movs = e.movs.filter((m) => m.n > 0)
+    }
+  return est
+}
+
+/**
+ * Movimientos origen → destino (mismo talle) tal como se movieron a mano: si bajaste en DINOD y
+ * subiste en BUSTOD, sale DINOD → BUSTOD. Sin `historial` (o si no cierra con la grilla) empareja
+ * por diferencia neta en orden de columnas.
+ */
+export function calcularMovimientos(filas: Fila[], locales: string[], historial: EdicionCelda[][] = []): Movimiento[] {
+  const out: Movimiento[] = []
+  const est = movimientosPorEdicion(historial)
+  for (const f of filas) {
+    const e = est.get(f)
+    if (!e) {
+      if (f.cur.some((c, i) => c !== f.base[i])) movimientosNetos(f, locales, out)
+      continue
+    }
+    // control: lo emparejado + lo que quedó suelto tiene que dar la diferencia de cada local
+    const neto = f.base.map(() => 0)
+    for (const m of e.movs) { neto[m.de] -= m.n; neto[m.a] += m.n }
+    for (const s of e.src) neto[s.i] -= s.n
+    for (const d of e.dst) neto[d.i] += d.n
+    if (neto.some((x, i) => x !== f.cur[i] - f.base[i])) {
+      movimientosNetos(f, locales, out)
+      continue
+    }
+    for (const m of e.movs)
+      out.push({ articulo: f.articulo, color: f.color, talle: f.talle, desc: f.nombre, material: f.material, desde: locales[m.de], hacia: locales[m.a], cantidad: m.n })
   }
   return out
 }

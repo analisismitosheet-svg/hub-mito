@@ -21,6 +21,7 @@ export default function SqlConexion() {
 
   // Configuración de conexión
   const [url, setUrl] = useState('')
+  const [respaldo, setRespaldo] = useState('')
   const [maxRowsInput, setMaxRowsInput] = useState('')
   const [verUrl, setVerUrl] = useState(false)
   const [guardandoConn, setGuardandoConn] = useState(false)
@@ -52,6 +53,7 @@ export default function SqlConexion() {
     void cargar()
     void cargarConexion().then((c) => {
       setUrl(c?.logicapp_url ?? '')
+      setRespaldo(c?.respaldo_url ?? '')
       setMaxRowsInput(c?.max_rows != null ? String(c.max_rows) : '')
     })
   }, [cargar])
@@ -70,7 +72,7 @@ export default function SqlConexion() {
     setError(null)
     setOkMsg(null)
     const n = parseInt(maxRowsInput, 10)
-    const { error: err } = await guardarConexion(url, Number.isFinite(n) && n > 0 ? n : null)
+    const { error: err } = await guardarConexion(url, Number.isFinite(n) && n > 0 ? n : null, respaldo)
     setGuardandoConn(false)
     if (err) {
       setError(err)
@@ -203,6 +205,17 @@ export default function SqlConexion() {
                 {verUrl ? <EyeOff size={14} aria-hidden /> : <Eye size={14} aria-hidden />}
               </button>
             </div>
+          </label>
+          <label className="block min-w-[260px] flex-1">
+            <span className="mb-1 block text-xs font-medium text-sub">URL de respaldo (si la principal no anda)</span>
+            <input
+              type={verUrl ? 'text' : 'password'}
+              value={respaldo}
+              onChange={(e) => setRespaldo(e.target.value)}
+              autoComplete="off"
+              placeholder="https://xxxx.trycloudflare.com/health (la PC la carga sola)"
+              className="w-full rounded-lg border border-line bg-surface2 px-2 py-1.5 font-mono text-xs text-ink outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
+            />
           </label>
           <label className="block w-28">
             <span className="mb-1 block text-xs font-medium text-sub">Filas máx.</span>

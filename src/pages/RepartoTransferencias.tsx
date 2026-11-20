@@ -232,7 +232,7 @@ export default function RepartoTransferencias() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [datos, buscar, fColor, fTalle, fGrupo, orden])
   const res = useMemo(() => calcularResumen(visibles, locales), [visibles, locales, version])
-  const movimientos = useMemo(() => calcularMovimientos(modelo.current, locales), [locales, version])
+  const movimientos = useMemo(() => calcularMovimientos(modelo.current, locales, historial.current), [locales, version])
   // lo que sale de MITO va a Dragon como pedido de venta; el resto es el lote de Transferencias
   const movsLote = useMemo(() => movimientos.filter((m) => !esDeMito(m)), [movimientos])
   const movsMito = useMemo(() => movimientos.filter(esDeMito), [movimientos])

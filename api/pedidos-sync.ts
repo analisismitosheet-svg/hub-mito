@@ -18,6 +18,8 @@
  * SUPABASE_SERVICE_ROLE_KEY, SQL_BRIDGE_TOKEN (+ SQL_LOGICAPP_URL como respaldo).
  */
 
+import { postAlPuente } from '../src/lib/puenteRetry.js'
+
 type Req = {
   method?: string
   headers: { authorization?: string }
@@ -97,17 +99,17 @@ export default async function handler(req: Req, res: Res) {
     return res.status(500).json({ error: 'Falta SQL_BRIDGE_TOKEN en Vercel' })
   }
 
-  let r: Response
-  try {
-    r = await fetch(destino, {
-      method: 'POST',
+  // Por postAlPuente: si la salida principal no llega, prueba la de respaldo
+  const r0 = await postAlPuente(
+    destino,
+    {
       headers: { 'Content-Type': 'application/json', 'X-Puente-Token': process.env.SQL_BRIDGE_TOKEN },
       body: JSON.stringify({ accion }),
-      signal: AbortSignal.timeout(55_000),
-    })
-  } catch {
-    return res.status(504).json({ error: 'No se pudo contactar la PC del SQL (¿está prendida?)' })
-  }
+    },
+    { intentos: 1, timeoutMs: 55_000 },
+  )
+  if (!r0.ok) return res.status(504).json({ error: 'No se pudo contactar la PC del SQL (¿está prendida?)' })
+  const r = r0.res
   const cuerpo = (await r.json().catch(() => null)) as { ok?: boolean; mensaje?: string; error?: string } | null
   if (!r.ok || !cuerpo?.ok) {
     return res.status(502).json({ error: cuerpo?.error ?? cuerpo?.mensaje ?? `El puente respondió ${r.status}` })
