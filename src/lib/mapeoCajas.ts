@@ -14,6 +14,8 @@ export interface MapeoCaja {
   color: string | null
   talle: string | null
   escaneado_at: string
+  /** Fecha en que se vio en stock 0 (INDOD): desde ahí ya no tiene caja */
+  sin_stock_at: string | null
 }
 
 /** Lo que devuelve mapeo_cajas_escanear() */
@@ -57,7 +59,7 @@ export async function cargarMapeoCajas(): Promise<MapeoCaja[]> {
   for (let desde = 0; ; desde += paso) {
     const { data, error } = await supabase
       .from('mapeo_cajas')
-      .select('id,orden,caja,codigo,color,talle,escaneado_at')
+      .select('id,orden,caja,codigo,color,talle,escaneado_at,sin_stock_at')
       .order('orden', { ascending: true })
       .range(desde, desde + paso - 1)
     if (error) throw new Error(error.message)
@@ -113,6 +115,32 @@ export async function marcarCajaLlena(caja: number, llena: boolean): Promise<voi
   if (error) throw new Error(error.message)
 }
 
+/**
+ * Marca como «sin stock» las filas que se vieron en stock 0: pierden la caja.
+ * Si el stock vuelve, Cajas mapeadas las muestra «Sin posición». No borra nada.
+ */
+export async function marcarSinStockCajas(ids: string[]): Promise<number> {
+  if (!supabase || ids.length === 0) return 0
+  const { data, error } = await supabase.rpc('mapeo_cajas_marcar_sin_stock', { p_ids: ids })
+  if (error) throw new Error(error.message)
+  return (data as number | null) ?? 0
+}
+
+/**
+ * Caja más cercana (por número) a `desde` que tenga lugar: creada en la lista
+ * y sin el tilde de llena. Empate: la de número más bajo. null si no hay.
+ */
+export function cajaMasCercanaConLugar(desde: number, lista: number[], llenas: Set<number>): number | null {
+  let mejor: number | null = null
+  for (const n of lista) {
+    if (llenas.has(n)) continue
+    if (mejor === null || Math.abs(n - desde) < Math.abs(mejor - desde) || (Math.abs(n - desde) === Math.abs(mejor - desde) && n < mejor)) {
+      mejor = n
+    }
+  }
+  return mejor
+}
+
 /* ------------------------------------------------------------------ */
 /*  Cajas de cada artículo (para Mi repo / transferencias de Depósito) */
 /* ------------------------------------------------------------------ */
@@ -128,6 +156,7 @@ export async function cajasDeArticulos(codigos: string[]): Promise<Map<string, n
       .from('mapeo_cajas')
       .select('codigo,caja')
       .in('codigo', unicos.slice(i, i + TANDA))
+      .is('sin_stock_at', null) // los que quedaron sin stock ya no tienen caja
       .range(0, 9999)
     if (error) throw new Error(error.message)
     for (const r of (data as { codigo: string; caja: number }[] | null) ?? []) {

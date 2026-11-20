@@ -80,7 +80,8 @@ export default function MapeoCajasLugar() {
     setError(null)
     try {
       const [m, l, ll] = await Promise.all([cargarMapeoCajas(), cargarListaCajas(), cargarCajasLlenas()])
-      setFilas(m)
+      // Los que quedaron sin stock ya no ocupan su caja
+      setFilas(m.filter((f) => !f.sin_stock_at))
       setLista(l)
       setLlenas(ll)
       // Para "prendas parecidas": no frena la pantalla si falla

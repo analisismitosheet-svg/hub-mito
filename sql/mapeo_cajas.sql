@@ -30,6 +30,12 @@ CREATE TABLE IF NOT EXISTS public.mapeo_cajas (
 CREATE INDEX IF NOT EXISTS mapeo_cajas_orden_idx ON public.mapeo_cajas (orden);
 CREATE INDEX IF NOT EXISTS mapeo_cajas_caja_idx ON public.mapeo_cajas (caja);
 
+-- Sin stock (20/11/2026): cuando Cajas mapeadas ve el artículo en stock 0
+-- (INDOD) lo marca acá y pierde la caja. Si vuelve a tener stock, aparece
+-- «Sin posición» con la caja más cercana que tenga lugar; al escanearlo de
+-- nuevo en una caja, la fila marcada se borra sola (mapeo_cajas_escanear).
+ALTER TABLE public.mapeo_cajas ADD COLUMN IF NOT EXISTS sin_stock_at timestamptz;
+
 -- ---- Permisos ----
 INSERT INTO public.permisos (clave, modulo, accion, label, orden) VALUES
   ('deposito.cajas.view',      'deposito', 'cajas.view',      'Ver mapeo de cajas',          830),
@@ -223,6 +229,11 @@ BEGIN
   -- Un escaneo a la vez: el orden no se pisa entre dos lectores
   PERFORM pg_advisory_xact_lock(hashtext('mapeo_cajas'));
 
+  -- Las filas que quedaron sin stock ya no tienen caja: al volver a
+  -- escanearlo se descartan y el artículo entra como nuevo donde se escanea
+  DELETE FROM public.mapeo_cajas m
+   WHERE m.codigo = v_p.codigo AND m.sin_stock_at IS NOT NULL;
+
   SELECT * INTO v_aca FROM public.mapeo_cajas m
    WHERE m.codigo = v_p.codigo AND m.caja = p_caja;
 
@@ -259,5 +270,27 @@ END;
 $$;
 REVOKE ALL ON FUNCTION public.mapeo_cajas_escanear(text, integer, text, integer[]) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.mapeo_cajas_escanear(text, integer, text, integer[]) TO authenticated;
+
+-- ============================================================
+-- Marcar sin stock: Cajas mapeadas pasa los id que vio en stock 0.
+-- Solo pone la fecha (si no la tenía); no borra ni mueve nada.
+-- ============================================================
+CREATE OR REPLACE FUNCTION public.mapeo_cajas_marcar_sin_stock(p_ids uuid[])
+RETURNS integer
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $$
+DECLARE v_n integer;
+BEGIN
+  IF NOT (private.tengo_permiso('deposito.cajas.view') OR private.tengo_permiso('deposito.cajas.escanear')) THEN
+    RAISE EXCEPTION 'Sin permiso para el mapeo de cajas';
+  END IF;
+  UPDATE public.mapeo_cajas m SET sin_stock_at = now()
+   WHERE m.id = ANY (coalesce(p_ids, '{}')) AND m.sin_stock_at IS NULL;
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  RETURN v_n;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.mapeo_cajas_marcar_sin_stock(uuid[]) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.mapeo_cajas_marcar_sin_stock(uuid[]) TO authenticated;
 
 COMMIT;
