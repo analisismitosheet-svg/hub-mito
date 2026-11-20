@@ -414,7 +414,8 @@ async function datosConversion(fecha: string): Promise<DatosConversion> {
     const o = num(f.objetivo)
     const v = num(f.venta)
     if (o != null) objetivoMes.set(local, (objetivoMes.get(local) ?? 0) + o)
-    if (o != null && dia <= fecha) objetivoMesAlDia.set(local, (objetivoMesAlDia.get(local) ?? 0) + o)
+    // Como Locales → Objetivos: un día pasado sin venta (no abrió o no informó) no suma objetivo
+    if (o != null && dia <= fecha && v) objetivoMesAlDia.set(local, (objetivoMesAlDia.get(local) ?? 0) + o)
     if (v != null && dia <= fecha) ventaMes.set(local, (ventaMes.get(local) ?? 0) + v)
     if (dia !== fecha) continue
     if (o != null) objetivos.set(local, o)

@@ -28,7 +28,7 @@ export interface DatosConversion {
   objetivoMes?: Map<string, number>
   /** Venta acumulada del mes de objetivos hasta el día del informe, por local */
   ventaMes?: Map<string, number>
-  /** Objetivo del mes de objetivos sumado hasta el día del informe: da el color de «% obj. mes» */
+  /** Objetivo del mes de objetivos sumado hasta el día del informe (sin los días sin venta): base de «% cumpl. mes» */
   objetivoMesAlDia?: Map<string, number>
 }
 
@@ -128,23 +128,24 @@ export function bloquesConversion(d: DatosConversion): { subtitulo: string; bloq
     const p = (100 * v) / o - 100
     return `${p >= 0 ? '+' : '-'}${nf(Math.abs(p), dec)}%`
   }
-  /** % completado del objetivo del mes («40%») */
+  /** % cumplido del mes: lo acumulado contra el objetivo hasta el día («80%», igual que Locales → Objetivos) */
   const completado = (v: number | undefined, o: number | undefined) => (o && v != null ? `${nf((100 * v) / o)}%` : '—')
-  // Mes de objetivos (26 al 25): venta acumulada hasta el día y objetivo del mes entero
+  // Mes de objetivos (26 al 25): venta acumulada hasta el día contra lo que pedía el objetivo
+  // hasta ese día (no contra el mes entero), igual que «% cumplido a la fecha» de Locales → Objetivos
   const conMes = Boolean(d.objetivoMes?.size)
   const acumMes = (local: string) => d.ventaMes?.get(local)
-  const objMes = (local: string) => d.objetivoMes?.get(local)
-  const acumMesTot = todas.reduce((s, f) => s + (acumMes(f.local) ?? 0), 0)
-  const objMesTot = todas.reduce((s, f) => s + (objMes(f.local) ?? 0), 0)
-  // Color del mes: lo acumulado contra lo que pedía el objetivo hasta hoy (no contra el mes entero)
   const objAlDia = (local: string) => d.objetivoMesAlDia?.get(local)
   const colorMes = (v: number | undefined, o: number | undefined) => (v != null && o ? colorDif(v, o) : null)
   const conAlDia = todas.filter((f) => objAlDia(f.local) != null)
-  const colorMesTot = colorMes(conAlDia.reduce((s, f) => s + (acumMes(f.local) ?? 0), 0), conAlDia.reduce((s, f) => s + (objAlDia(f.local) ?? 0), 0))
+  const acumMesTot = todas.reduce((s, f) => s + (acumMes(f.local) ?? 0), 0)
+  const acumAlDiaTot = conAlDia.reduce((s, f) => s + (acumMes(f.local) ?? 0), 0)
+  const objAlDiaTot = conAlDia.reduce((s, f) => s + (objAlDia(f.local) ?? 0), 0)
+  const cumplidoTot = objAlDiaTot ? pct((100 * acumAlDiaTot) / objAlDiaTot) : '—'
+  const colorMesTot = colorMes(acumAlDiaTot, objAlDiaTot)
   const fila = (f: Fila) => {
     const o = obj(f.local)
     const am = acumMes(f.local)
-    const om = objMes(f.local)
+    const om = objAlDia(f.local)
     return [
       nombreCorto(f.nombre),
       f.entradas != null ? nf(f.entradas) : '-', nf(f.tickets), f.entradas != null ? pct(f.conv) : '-', pesos(f.total),
@@ -157,12 +158,12 @@ export function bloquesConversion(d: DatosConversion): { subtitulo: string; bloq
     'Total', nf(ent), nf(tkTodos), pct(convTot), pesos(totTodos),
     ...(conObj ? [pesos(objTot), conObjetivo.length ? desvio(factObjTot, objTot, 1) : '—', conObjetivo.length ? difTxt(factObjTot - objTot) : '—'] : []),
     tkTodos ? pesos(totTodos / tkTodos) : '—',
-    ...(conMes ? [pesos(acumMesTot), objMesTot ? pct((100 * acumMesTot) / objMesTot) : '—'] : []),
+    ...(conMes ? [pesos(acumMesTot), cumplidoTot] : []),
   ]
   bloques.push({
     tipo: 'tabla',
     // Con objetivo son 9 columnas en 1000 px: «Conv.» abreviado para que entren los montos
-    columnas: ['Local', 'Entradas', 'Tickets', conObj ? 'Conv.' : 'Conversión', 'Facturado', ...(conObj ? ['Objetivo', '% obj.', 'Diferencia'] : []), conObj ? 'Promedio' : 'Ticket prom.', ...(conMes ? ['Acum. mes', '% obj. mes'] : [])],
+    columnas: ['Local', 'Entradas', 'Tickets', conObj ? 'Conv.' : 'Conversión', 'Facturado', ...(conObj ? ['Objetivo', '% obj.', 'Diferencia'] : []), conObj ? 'Promedio' : 'Ticket prom.', ...(conMes ? ['Acum. mes', '% cumpl. mes'] : [])],
     anchos: [...(conObj ? [conMes ? 19 : 17.5, 8.5, 7.5, 6, 12.5, 12.5, 6.5, conMes ? 14 : 12.5, 9.5] : [24, 10, 10, 12, 16, 14]), ...(conMes ? [16, 10] : [])],
     alinear: ['izq', 'der', 'der', 'der', 'der', ...(conObj ? (['der', 'der', 'der'] as const) : []), 'der', ...(conMes ? (['der', 'der'] as const) : [])],
     colores: [null, '#2563eb', '#7c3aed', '#16a34a', null, ...(conObj ? ['#475569', null, null] : []), '#475569', ...(conMes ? [null, null] : [])],
@@ -182,9 +183,9 @@ export function bloquesConversion(d: DatosConversion): { subtitulo: string; bloq
     `*Tasa de conversión* — ${corta(d.fecha)}`,
     `Total: ${pct(convTot)} (${nf(tk)} tickets / ${nf(ent)} entradas en locales con cámara)${convAntTot != null ? ` · ${puntos(convTot, convAntTot)} vs ${diaCorto(d.antes)}` : ''}`,
     ...(avanceObj != null ? [`Objetivo: ${pct(avanceObj)} (${pesos(factObjTot)} de ${pesos(objTot)})`] : []),
-    ...(conMes && objMesTot ? [`Mes: ${pesos(acumMesTot)} acumulado, ${pct((100 * acumMesTot) / objMesTot)} del objetivo del mes`] : []),
+    ...(conMes && objAlDiaTot ? [`Mes: ${pesos(acumMesTot)} acumulado, ${cumplidoTot} cumplido a la fecha (objetivo hasta hoy ${pesos(objAlDiaTot)})`] : []),
     '',
-    ...todas.map((f) => { const o = obj(f.local); return `• ${f.nombre}: ${f.entradas != null ? `${pct(f.conv)} (${nf(f.tickets)}/${nf(f.entradas)})` : `sin cámara (${nf(f.tickets)} tickets)`} · ${pesos(f.total)}${o != null ? ` (obj. ${pesos(o)}, ${desvio(f.total, o)}, ${difTxt(f.total - o)})` : ''}${completado(acumMes(f.local), objMes(f.local)) !== '—' ? ` · mes ${completado(acumMes(f.local), objMes(f.local))}` : ''}` }),
+    ...todas.map((f) => { const o = obj(f.local); return `• ${f.nombre}: ${f.entradas != null ? `${pct(f.conv)} (${nf(f.tickets)}/${nf(f.entradas)})` : `sin cámara (${nf(f.tickets)} tickets)`} · ${pesos(f.total)}${o != null ? ` (obj. ${pesos(o)}, ${desvio(f.total, o)}, ${difTxt(f.total - o)})` : ''}${completado(acumMes(f.local), objAlDia(f.local)) !== '—' ? ` · mes ${completado(acumMes(f.local), objAlDia(f.local))}` : ''}` }),
   ].join('\n')
   // Con las columnas del mes son 11: la imagen va más ancha para que entren los montos enteros
   return { subtitulo, bloques, texto, ancho: conMes ? 1300 : undefined }
