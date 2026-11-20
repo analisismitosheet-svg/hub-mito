@@ -44,6 +44,8 @@ interface PropuestaPub {
   /** true si la confirmó este mismo número: si no, el cartel es de bloqueo */
   confirmada_por_mi?: boolean
   dragon_pedido?: string | null
+  /** el pedido se anuló en Dragon (sql/franquicias_dragon_anulado.sql) */
+  dragon_anulado_at?: string | null
   comentario: string | null
   items: ItemPub[]
 }
@@ -185,7 +187,14 @@ export default function PropuestaFranquicia() {
 
         {prop && !hecho && (
           <>
-            {prop.confirmada && prop.confirmada_por_mi === false ? (
+            {prop.dragon_anulado_at ? (
+              <div role="status" className="mb-3 rounded-xl border-2 border-red-300 bg-red-50 p-3 text-red-800">
+                <p className="text-base font-extrabold">✕ Este pedido fue anulado</p>
+                <p className="mt-1 text-sm leading-relaxed">
+                  MITO anuló el pedido{prop.dragon_pedido ? <> N° <b>{prop.dragon_pedido}</b></> : ''} el <b>{fmtFecha(prop.dragon_anulado_at)}</b>: no se va a preparar ni enviar. Abajo quedan las cantidades que se habían confirmado.
+                </p>
+              </div>
+            ) : prop.confirmada && prop.confirmada_por_mi === false ? (
               <div role="status" className="mb-3 rounded-xl border-2 border-amber-400 bg-amber-50 p-3 text-amber-900">
                 <p className="text-base font-extrabold">🔒 Este pedido ya fue aceptado</p>
                 <p className="mt-1 text-sm leading-relaxed">

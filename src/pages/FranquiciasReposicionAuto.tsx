@@ -59,6 +59,8 @@ interface Propuesta {
   confirmada_por: string | null
   dragon_pedido: string | null
   dragon_error: string | null
+  dragon_anulado_at: string | null
+  dragon_anulado_por: string | null
   comentario: string | null
   creado_at: string
 }
@@ -102,6 +104,7 @@ const invitacionTelegram = (usuario: string) =>
   `Hola! Las reposiciones de MITO te van a llegar por Telegram. Para activarlo abrí https://t.me/${usuario} , tocá «Iniciar» y después «Compartir mi número». Se hace una sola vez.`
 
 function chipEstado(p: Propuesta, envios: Envio[], canal: string) {
+  if (p.dragon_anulado_at) return { txt: `✕ Anulado en Dragon (PV ${p.dragon_pedido ?? ''}) · ${fmtHora(p.dragon_anulado_at)}${p.dragon_anulado_por ? ` por ${p.dragon_anulado_por}` : ''}`, cls: 'border-red-500/40 bg-red-500/10 text-red-400' }
   if (p.estado === 'en_dragon') return { txt: `✓ Aceptado${p.confirmada_por ? ` por +${p.confirmada_por}` : ''} · En Dragon (PV ${p.dragon_pedido ?? ''})`, cls: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400' }
   if (p.estado === 'confirmada' && p.dragon_error) return { txt: `Aceptado · error al cargar en Dragon`, cls: 'border-red-500/40 bg-red-500/10 text-red-400' }
   if (p.estado === 'confirmada') return { txt: `✓ Aceptado${p.confirmada_por ? ` por +${p.confirmada_por}` : ''} · cargando en Dragon…`, cls: 'border-teal-500/40 bg-teal-500/10 text-teal-400' }
@@ -153,7 +156,7 @@ export default function FranquiciasReposicionAuto() {
     if (!supabase) return
     const [cfg, props] = await Promise.all([
       supabase.from('franquicias_clientes').select('cliente_id,base,telefono,telefonos,auto_activo,auto_dias,auto_hora,auto_ultimo_hasta,auto_pedido_at,auto_error').order('cliente_id'),
-      supabase.from('franquicias_propuestas').select('id,numero,franquicia,cliente_id,cliente_nombre,origen,desde,hasta,estado,token,vence_at,unidades_propuestas,total_propuesto,unidades_confirmadas,total_confirmado,confirmada_at,confirmada_por,dragon_pedido,dragon_error,comentario,creado_at')
+      supabase.from('franquicias_propuestas').select('id,numero,franquicia,cliente_id,cliente_nombre,origen,desde,hasta,estado,token,vence_at,unidades_propuestas,total_propuesto,unidades_confirmadas,total_confirmado,confirmada_at,confirmada_por,dragon_pedido,dragon_error,dragon_anulado_at,dragon_anulado_por,comentario,creado_at')
         .eq('tipo', 'reposicion').order('hasta', { ascending: false, nullsFirst: false }).order('creado_at', { ascending: false }).limit(120),
     ])
     if (cfg.error) setAviso({ ok: false, txt: cfg.error.message })
