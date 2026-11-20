@@ -6,7 +6,8 @@ export interface OpcionDesplegable { id: string; label: string }
 
 /**
  * Filtro como los del tablero de Power BI: lista desplegable con buscador, «Seleccionar todo» y
- * casillas. Vacío = «Todas» (se dibuja todo tildado; destildar uno lo saca). Muestra «Todas»,
+ * casillas. Vacío = «Todas» («Seleccionar todo» tildado); tocar opciones elige una o varias
+ * (sacar la última vuelve a «Todas»: nunca queda en «Ninguno» ni vacía la grilla). Muestra «Todas»,
  * el elegido, «Todos menos X, Y» o «Selección múltiple (n)». Activo = naranja.
  * Con algo elegido aparece la goma junto al título: borra solo ese filtro.
  */
@@ -34,7 +35,7 @@ export default function FiltroDesplegable({
   }, [opciones, busq])
 
   const ninguno = valor.has('\u0000')
-  const tildada = (id: string) => !ninguno && (valor.size === 0 || valor.has(id))
+  const tildada = (id: string) => !ninguno && valor.has(id)
   const activo = valor.size > 0
   const faltan = opciones.filter((o) => !valor.has(o.id))
   const texto = ninguno
@@ -48,12 +49,13 @@ export default function FiltroDesplegable({
           : `Selección múltiple (${valor.size})`
 
   function toggle(id: string) {
-    const base = valor.size === 0 || ninguno ? new Set(ninguno ? [] : opciones.map((o) => o.id)) : new Set(valor)
+    // Con «Todas» (vacío) tocar una opción ELIGE solo esa (antes la destildaba: con una sola
+    // opción quedaba en «Ninguno» y se vaciaba la grilla). Después se suman o sacan de a una.
+    const base = valor.size === 0 || ninguno ? new Set<string>() : new Set(valor)
     if (base.has(id)) base.delete(id)
     else base.add(id)
     if (base.size === opciones.length) onChange(new Set())
-    else if (base.size === 0) onChange(new Set(['\u0000']))
-    else onChange(base)
+    else onChange(base) // vacío = «Todas»
   }
 
   useLayoutEffect(() => {
@@ -101,7 +103,7 @@ export default function FiltroDesplegable({
                 <input autoFocus value={busq} onChange={(e) => setBusq(e.target.value)} placeholder="Buscar" className="h-8 w-full bg-transparent text-xs text-ink outline-none placeholder:text-sub/60" />
               </div>
               <label className="flex cursor-pointer items-center gap-2 border-b border-line px-1.5 py-1.5 text-xs font-semibold text-ink">
-                <input type="checkbox" className="h-3.5 w-3.5 accent-orange-500" checked={valor.size === 0} onChange={(e) => onChange(e.target.checked ? new Set() : new Set(['\u0000']))} />
+                <input type="checkbox" className="h-3.5 w-3.5 accent-orange-500" checked={valor.size === 0} onChange={() => onChange(new Set())} />
                 Seleccionar todo
               </label>
               <div className="max-h-64 overflow-y-auto">
