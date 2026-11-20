@@ -12,7 +12,7 @@
  *   @desde_venta  primer día de venta que se guarda día por día (~62 días)
  *
  * Resultados:
- *   1) stock por tienda y SKU (STOCK sin tránsito) + marca de tránsito
+ *   1) stock por tienda y SKU (CANT) + cantidad en tránsito (ENTRANSITO)
  *   2) venta neta por día, tienda y SKU desde @desde_venta (devoluciones restan; solo <> 0)
  *   3) última venta (> 0) por tienda y SKU desde @desde_ult
  *   4) stock MITO REAL por SKU = físico − comprometido (COMB de DRAGONFISH_MITO), solo > 0
@@ -36,12 +36,15 @@ SELECT LEFT(Fecha, 10)                AS dia,
 
 -- 1) stock actual y tránsito
 SELECT Tienda, ID_ART, ID_COLOR, ID_TALLE,
-       SUM(CASE WHEN ENTRANSITO = 0 THEN CANT ELSE 0 END) AS stock,
-       MAX(CASE WHEN ENTRANSITO >= 1 THEN 1 ELSE 0 END)   AS transito
+       -- CANT = stock del local; ENTRANSITO = CANTIDAD que le viene en camino (no es 0/1).
+       -- Hasta el 20/11 se sumaba solo CANT de los renglones sin tránsito: un talle con algo en
+       -- camino quedaba con stock 0 (ej. CF165211 02 L en Polo 52: 149 en el local, el reparto daba 0)
+       SUM(CANT)                                              AS stock,
+       SUM(CASE WHEN ENTRANSITO > 0 THEN ENTRANSITO ELSE 0 END) AS transito
   FROM #f
  WHERE Tipo = 'STOCK'
  GROUP BY Tienda, ID_ART, ID_COLOR, ID_TALLE
-HAVING SUM(CASE WHEN ENTRANSITO = 0 THEN CANT ELSE 0 END) <> 0 OR MAX(ENTRANSITO) >= 1;
+HAVING SUM(CANT) <> 0 OR SUM(CASE WHEN ENTRANSITO > 0 THEN ENTRANSITO ELSE 0 END) > 0;
 
 -- 2) venta neta por día
 SELECT dia, Tienda, ID_ART, ID_COLOR, ID_TALLE, SUM(CANT) AS venta

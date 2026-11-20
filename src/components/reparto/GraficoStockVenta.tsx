@@ -65,7 +65,7 @@ export default function GraficoStockVenta({
   const datos = locales
     .map((loc, i) => ({
       loc,
-      stock: mias.reduce((x, f) => x + (f.base[i] || 0) + (f.trans[i] ? 1 : 0), 0),
+      stock: mias.reduce((x, f) => x + (f.base[i] || 0) + (f.trans[i] || 0), 0),
       venta: mias.reduce((x, f) => x + (f.vend[i] || 0), 0),
       rep: mias.reduce((x, f) => x + (f.cur[i] || 0) - (f.base[i] || 0), 0),
     }))

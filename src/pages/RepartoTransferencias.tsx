@@ -4,12 +4,14 @@ import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import GrillaReparto, { type Cambio, type MarcaRuta } from '@/components/reparto/GrillaReparto'
 import GraficoStockVenta from '@/components/reparto/GraficoStockVenta'
-import FiltroDesplegable from '@/components/reparto/FiltroDesplegable'
+import FiltroDesplegable, { Goma } from '@/components/reparto/FiltroDesplegable'
 import FiltroArticulos from '@/components/reparto/FiltroArticulos'
 import {
   BASE_TRACKING,
   FILTROS,
   esProvMito,
+  pasaX,
+  type FiltroX,
   esDeMito,
   motivosDragon,
   cargaDragon,
@@ -76,6 +78,7 @@ export default function RepartoTransferencias() {
   const [locSel, setLocSel] = useState<Set<string>>(new Set())
   const [arts, setArts] = useState<string[]>([])
   const [origen, setOrigen] = useState<Origen>('')
+  const [conX, setConX] = useState<FiltroX>('')
   const [dias, setDias] = useState(14)
   const [desde, setDesde] = useState(() => menosDias(14))
   const [hasta, setHasta] = useState(() => menosDias(1))
@@ -102,6 +105,7 @@ export default function RepartoTransferencias() {
   const [gFlia, setGFlia] = useState<Set<string>>(new Set())
   const [gProv, setGProv] = useState<Set<string>>(new Set())
   const [gArts, setGArts] = useState<string[]>([])
+  const [gX, setGX] = useState<FiltroX>('')
 
   const [verTransporte, setVerTransporte] = useState(false)
   const [rutas, setRutas] = useState<RutaVehiculo[]>([])
@@ -172,7 +176,7 @@ export default function RepartoTransferencias() {
     setSel((p) => ({ ...p, prov: new Set([...p.prov].filter((c) => c === '\u0000' || !o || (o === 'MITO') === esProvMito(c))) }))
   }
   const hayNinguno = Object.values(sel).some((s) => s.has('\u0000')) || locSel.has('\u0000')
-  const hayFiltroArt = FILTROS.some((f) => sel[f.k].size > 0) || arts.length > 0 || origen !== ''
+  const hayFiltroArt = FILTROS.some((f) => sel[f.k].size > 0) || arts.length > 0 || origen !== '' || conX !== ''
   const localesElegidos = locSel.size ? TODOS_LOCALES.filter((l) => locSel.has(l)) : TODOS_LOCALES
   const motivoNoArmar = hayNinguno
     ? 'Hay un filtro en «Ninguno»: elegí algo o volvé a «Seleccionar todo».'
@@ -192,7 +196,7 @@ export default function RepartoTransferencias() {
     cancelado.current = false
     try {
       const filtros = Object.fromEntries(FILTROS.map((f) => [f.k, [...sel[f.k]]])) as Record<ClaveFiltro, string[]>
-      const r = await cargarStock({ ...filtros, art: arts.join('|'), origen }, desde, hasta, setEsperando, () => cancelado.current, fotoNueva)
+      const r = await cargarStock({ ...filtros, art: arts.join('|'), origen, x: conX }, desde, hasta, setEsperando, () => cancelado.current, fotoNueva)
       if (r.estado === 'demasiados') {
         setError(
           r.motivo === 'peso'
@@ -215,7 +219,7 @@ export default function RepartoTransferencias() {
       setDatos(proy)
       setFotoNueva(false)
       if (r.foto_en) setFoto((f) => ({ en: r.foto_en!, leyendo: false, segundos: f?.segundos ?? null, error: null }))
-      setGLinea(new Set()); setGFlia(new Set()); setGProv(new Set()); setGArts([])
+      setGLinea(new Set()); setGFlia(new Set()); setGProv(new Set()); setGArts([]); setGX('')
       setArtSel(null)
       setSugerencia(null)
       setResultado(null)
@@ -276,12 +280,12 @@ export default function RepartoTransferencias() {
       (x) =>
         (!fColor || x.color === fColor) && (!fTalle || x.talle === fTalle) && (!fGrupo || x.grupo === fGrupo) &&
         pasa(gLinea, x.linea) && pasa(gFlia, x.flia) && pasa(gProv, x.prov) &&
-        (!gArts.length || gArts.some((a) => x.articulo.startsWith(a))) &&
+        (!gArts.length || gArts.some((a) => x.articulo.startsWith(a))) && pasaX(gX, x.articulo) &&
         (!q || x.articulo.toLowerCase().includes(q) || x.desc.toLowerCase().includes(q)),
     )
     return ordenar(f, orden)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [datos, buscar, fColor, fTalle, fGrupo, gLinea, gFlia, gProv, gArts, orden])
+  }, [datos, buscar, fColor, fTalle, fGrupo, gLinea, gFlia, gProv, gArts, gX, orden])
   const res = useMemo(() => calcularResumen(visibles, locales), [visibles, locales, version])
   const movimientos = useMemo(() => calcularMovimientos(modelo.current, locales, historial.current), [locales, version])
   // lo que sale de MITO va a Dragon como pedido de venta; el resto es el lote de Transferencias
@@ -401,6 +405,7 @@ export default function RepartoTransferencias() {
     .concat(FILTROS.filter((f) => sel[f.k].size)
       .map((f) => `${f.titulo.replace('ID proveedor descripción', 'Proveedor')}: ${[...sel[f.k]].join(', ')}`))
     .concat(arts.length ? [`Artículo: ${arts.join(', ')}`] : [])
+    .concat(conX ? [conX === 'CON' ? 'Código con X' : 'Código sin X'] : [])
     .join(' · ')
 
   return (
@@ -442,7 +447,8 @@ export default function RepartoTransferencias() {
           </div>
 
           <p className="mb-1 mt-4 text-[11px] font-medium uppercase tracking-wider text-sub/80">Artículos</p>
-          <div className="inline-flex overflow-hidden rounded-lg border border-line" role="radiogroup" aria-label="Artículos MITO o marcas">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="inline-flex overflow-hidden rounded-lg border border-line" role="radiogroup" aria-label="Artículos MITO o marcas">
             {([['', 'Todos'], ['MITO', 'MITO'], ['MARCAS', 'Marcas']] as [Origen, string][]).map(([v, t]) => (
               <button
                 key={t}
@@ -457,6 +463,8 @@ export default function RepartoTransferencias() {
               </button>
             ))}
           </div>
+            <SelectorX valor={conX} onChange={setConX} sinTitulo />
+          </div>
 
           <div className="mt-3 grid gap-x-5 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
             <FiltroDesplegable titulo="Locales" todos="Todos" opciones={TODOS_LOCALES.map((l) => ({ id: l, label: NOMBRE_LOCAL[l] ?? l }))} valor={locSel} onChange={setLocSel} />
@@ -466,7 +474,7 @@ export default function RepartoTransferencias() {
           </div>
           <div className="mt-3 flex flex-wrap items-end gap-3">
             <FiltroArticulos titulo="Artículos (opcional, uno o varios)" valor={arts} onChange={setArts} sugerencias={sugArts} ancho="w-full sm:w-[28rem]" />
-            <button type="button" className="h-9 text-xs text-sky-400" onClick={() => { setSel(Object.fromEntries(FILTROS.map((f) => [f.k, new Set<string>()])) as Record<ClaveFiltro, Set<string>>); setLocSel(new Set()); setArts([]); setOrigen('') }}>
+            <button type="button" className="h-9 text-xs text-sky-400" onClick={() => { setSel(Object.fromEntries(FILTROS.map((f) => [f.k, new Set<string>()])) as Record<ClaveFiltro, Set<string>>); setLocSel(new Set()); setArts([]); setOrigen(''); setConX('') }}>
               Limpiar todos los filtros
             </button>
           </div>
@@ -529,7 +537,7 @@ export default function RepartoTransferencias() {
           </div>
           <p className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-sub">
             <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-red-400/40 align-[-1px]" />vendió en el período</span>
-            <span>🚚 en tránsito (en 0: no es hueco, ya le llega)</span>
+            <span><b className="text-sky-400">🚚3</b> = le llegan 3 en tránsito (en 0: no es hueco, ya le llega; con stock va en la esquina)</span>
             <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-violet-400/50 align-[-1px]" />cambiada (<b className="text-green-300">+1</b> recibe · <b className="text-red-300">−2</b> dona)</span>
             <span>· tipeá el número · flechas / Enter / Tab · Shift+flechas = rango · Ctrl+C / Ctrl+V · Supr · Ctrl+Z · tocar el código = sugerencia · doble clic en el color = gráfico</span>
           </p>
@@ -562,13 +570,14 @@ export default function RepartoTransferencias() {
             </div>
 
             {/* Filtros de la grilla (uno o varios de cada uno; la goma borra ese solo) */}
-            <div className="mb-2 grid gap-x-3 gap-y-2 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1.4fr_auto] xl:items-end">
+            <div className="mb-2 grid gap-x-3 gap-y-2 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1.4fr_auto_auto] xl:items-end">
               <FiltroDesplegable titulo="Línea" opciones={opcionesGrilla.linea} valor={gLinea} onChange={setGLinea} />
               <FiltroDesplegable titulo="Familia" opciones={opcionesGrilla.flia} valor={gFlia} onChange={setGFlia} />
               <FiltroDesplegable titulo="Proveedor" opciones={opcionesGrilla.prov} valor={gProv} onChange={setGProv} todos="Todos" />
               <FiltroArticulos titulo="Artículos" valor={gArts} onChange={setGArts} sugerencias={opcionesGrilla.arts} placeholder="Buscar y elegir uno o varios" ancho="w-full" />
-              {(gLinea.size > 0 || gFlia.size > 0 || gProv.size > 0 || gArts.length > 0) && (
-                <button type="button" className="h-9 text-xs text-sky-400" onClick={() => { setGLinea(new Set()); setGFlia(new Set()); setGProv(new Set()); setGArts([]) }}>
+              <SelectorX valor={gX} onChange={setGX} />
+              {(gLinea.size > 0 || gFlia.size > 0 || gProv.size > 0 || gArts.length > 0 || gX !== '') && (
+                <button type="button" className="h-9 text-xs text-sky-400" onClick={() => { setGLinea(new Set()); setGFlia(new Set()); setGProv(new Set()); setGArts([]); setGX('') }}>
                   Limpiar
                 </button>
               )}
@@ -789,6 +798,36 @@ export default function RepartoTransferencias() {
         </>
       )}
     </Layout>
+  )
+}
+
+/** Código del artículo con X o sin X (uno a la vez); «Todos» = sin filtro. */
+function SelectorX({ valor, onChange, sinTitulo }: { valor: FiltroX; onChange: (v: FiltroX) => void; sinTitulo?: boolean }) {
+  return (
+    <div>
+      {!sinTitulo && (
+        <div className="mb-1 flex h-4 items-center justify-between gap-2">
+          <p className="text-[11px] font-medium uppercase tracking-wider text-sub/80">Código</p>
+          {valor && <Goma titulo="Código con X" onClick={() => onChange('')} />}
+        </div>
+      )}
+      <div className="inline-flex overflow-hidden rounded-lg border border-line" role="radiogroup" aria-label="Código del artículo con X o sin X">
+        {sinTitulo && <span className="inline-flex h-9 items-center border-r border-line px-2.5 text-[11px] text-sub">Código</span>}
+        {([['', 'Todos'], ['CON', 'Con X'], ['SIN', 'Sin X']] as [FiltroX, string][]).map(([v, t], i) => (
+          <button
+            key={t}
+            type="button"
+            role="radio"
+            aria-checked={valor === v}
+            onClick={() => onChange(v)}
+            title={v === 'CON' ? 'Solo los artículos cuyo código tiene una X' : v === 'SIN' ? 'Solo los artículos cuyo código no tiene X' : undefined}
+            className={`h-9 px-3.5 text-xs ${valor === v ? 'bg-orange-500/15 font-semibold text-orange-300' : 'text-sub hover:text-ink'} ${i ? 'border-l border-line' : ''}`}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+    </div>
   )
 }
 

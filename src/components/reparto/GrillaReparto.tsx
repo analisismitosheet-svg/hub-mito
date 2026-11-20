@@ -7,7 +7,7 @@ import { CORTO, suma, type Fila } from '@/lib/reparto'
  * Ctrl+Z / Ctrl+Y), scroll virtual (solo dibuja las filas que se ven) y sin scroll horizontal:
  * la tabla ocupa el ancho y los locales se reparten parejo.
  *
- * Marcas: relleno rojo = vendió en el período · 🚚 = tiene algo en tránsito (en 0: no es hueco) ·
+ * Marcas: relleno rojo = vendió en el período · 🚚N = le llegan N en tránsito (en 0: no es hueco) ·
  * violeta + «+1»/«−2» = celda cambiada (recibe / dona) · amarillo/rosa en la línea del mouse =
  * a la Master / Mercedes todavía le falta pasar por ese local hoy · semáforo de días sin venta.
  */
@@ -275,12 +275,12 @@ export default function GrillaReparto({
             const movida = v !== f.base[si]
             let c = 'rp-cell' + rutaClase(si) + semClase(f, si)
             if (f.vend[si] > 0) c += ' rp-sold'
-            if (f.trans[si]) c += ' rp-tr'
+            if (f.trans[si]) c += v ? ' rp-tr rp-tr-con' : ' rp-tr'
             if (movida) c += ' rp-moved'
             if (enSel(ri, si)) c += ' rp-insel'
             const tip = [
               f.vend[si] > 0 ? `Vendió ${f.vend[si]}` : '',
-              f.trans[si] ? `En tránsito${v ? '' : ' (no es hueco, ya le llega)'}` : '',
+              f.trans[si] ? `En tránsito: ${f.trans[si]}${v ? '' : ' (no es hueco, ya le llega)'}` : '',
               semaforo.on && (v || f.base[si]) ? (f.ult[si] == null ? 'Sin venta en 180 días' : f.ult[si] === 0 ? 'Vendió hoy' : `Última venta hace ${f.ult[si]} días`) : '',
               ...rutaTip(si),
               movida ? `Antes: ${f.base[si]}` : '',
@@ -316,7 +316,7 @@ export default function GrillaReparto({
                     {Math.abs(v - f.base[si])}
                   </span>
                 )}
-                {f.trans[si] ? <span className={'rp-trmk' + (v ? ' esq' : '')}>🚚</span> : null}
+                {f.trans[si] ? <span className={'rp-trmk' + (v ? ' esq' : '')}>🚚{f.trans[si]}</span> : null}
               </td>
             )
           })}
@@ -414,13 +414,14 @@ tr.rp-alt>td{background:rgba(148,163,184,.24)}
 .rp-cell{position:relative;text-align:center;cursor:cell;outline:none;color:var(--ink)}
 .rp-cell:focus{box-shadow:inset 0 0 0 2px #f97316}
 .rp-cell.rp-sold{background:rgba(248,113,113,.18)}
-.rp-cell.rp-tr{color:#38bdf8;font-weight:700}
+/* tránsito: el camión lleva la cantidad; con stock el número queda normal y se corre para dejarle lugar */
+.rp-cell.rp-tr-con{padding-right:24px}
 .rp-cell.rp-moved{background:rgba(167,139,250,.22);font-weight:700}
 .rp-cell.rp-insel{box-shadow:inset 0 0 0 1px rgba(249,115,22,.6);background:rgba(249,115,22,.12)}
 .rp-delta{position:absolute;top:0;left:1px;font-size:8.5px;line-height:1;font-weight:800;pointer-events:none}
 .rp-delta.mas{color:#86efac}.rp-delta.menos{color:#fca5a5}
-.rp-trmk{font-size:.8em;pointer-events:none}
-.rp-trmk.esq{position:absolute;top:0;right:1px;font-size:8.5px;line-height:1}
+.rp-trmk{font-size:.95em;font-weight:800;color:#38bdf8;pointer-events:none;white-space:nowrap}
+.rp-trmk.esq{position:absolute;top:1px;right:1px;font-size:9.5px;line-height:1;background:rgba(14,165,233,.2);border-radius:4px;padding:1px 2px}
 .rp-rem{text-align:center;font-weight:700}.rp-rem.on{color:#fbbf24}.rp-rem.neg{color:#fff;background:rgba(248,113,113,.55)}
 .rp-wrap.rp-sv .rp-cell.rp-sold{background:none}
 .rp-wrap.rp-sv .rp-cell.rp-moved{outline:2px dashed rgba(167,139,250,.9);outline-offset:-3px}

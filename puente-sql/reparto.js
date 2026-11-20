@@ -12,6 +12,8 @@
  *       no cubre las fechas pedidas (venta de hace más de ~60 días) o no se pudo leer, se lee solo
  *       lo filtrado con sql/reparto-stock.sql (~1-2 min, cada foto por filtro dura 5 minutos).
  *       filtros.art = uno o varios códigos (o principios de código) separados por «|».
+ *       filtros.x = 'CON' (solo códigos con X) | 'SIN' (sin X) | ''.
+ *       tránsito = CANTIDAD en camino por local (ENTRANSITO), no una marca.
  *
  * Columnas = los 20 locales del reparto (mismos que la PWA vieja y que el Excel de remitos).
  * DEPO = INDOD (Indo), MAYORD = MITO (stock REAL = físico − comprometido de la COMB, como la
@@ -76,10 +78,11 @@ function limpiarFiltros(f) {
     prov: lista(f?.prov), mat: lista(f?.mat), temp: lista(f?.temp), anio: lista(f?.anio),
     linea: lista(f?.linea), flia: lista(f?.flia), grupo: lista(f?.grupo), gen: lista(f?.gen),
     art,
+    x: ['CON', 'SIN'].includes(txt(f?.x).toUpperCase()) ? txt(f?.x).toUpperCase() : '',
     origen: ['MITO', 'MARCAS'].includes(txt(f?.origen).toUpperCase()) ? txt(f?.origen).toUpperCase() : '',
   }
 }
-const hayFiltroDeArticulo = (f) => f.art.length > 0 || !!f.origen || ['prov', 'mat', 'temp', 'anio', 'linea', 'flia', 'grupo', 'gen'].some((k) => f[k].length)
+const hayFiltroDeArticulo = (f) => f.art.length > 0 || !!f.x || !!f.origen || ['prov', 'mat', 'temp', 'anio', 'linea', 'flia', 'grupo', 'gen'].some((k) => f[k].length)
 
 /** Datos del artículo para el hub (desc = «Descripción adicional macro» del PBIX). */
 function artInfo(r) {
@@ -99,14 +102,15 @@ function artInfo(r) {
 
 /** Solo SKUs con algo (stock, venta o tránsito) y en el formato compacto que espera el hub. */
 function compactar(filas) {
-  // Formato compacto (18/11): [art, color, talle, stock[], venta[] | 0, tránsito "0101…" | 0, últimaVenta[] (-1 = sin venta) | 0]
+  // Formato compacto (20/11): [art, color, talle, stock[], venta[] | 0, tránsito[] (cantidad en camino) | 0, últimaVenta[] (-1 = sin venta) | 0]
+  // (hasta el 20/11 el tránsito iba como texto "0101…" = solo si había algo; el hub entiende los dos)
   // 0 = toda la fila vacía. El hub lo vuelve a armar en src/lib/reparto.ts (desarmarFilas).
   return filas
     .filter((f) => f.s.some((x) => x > 0) || f.v.some((x) => x > 0) || f.tr.some((x) => x > 0))
     .map((f) => [
       f.a, f.c, f.t, f.s,
       f.v.some((x) => x > 0) ? f.v : 0,
-      f.tr.some((x) => x > 0) ? f.tr.join('') : 0,
+      f.tr.some((x) => x > 0) ? f.tr : 0,
       f.u.some((x) => x != null) ? f.u.map((x) => (x == null ? -1 : x)) : 0,
     ])
 }
@@ -208,7 +212,7 @@ function crear(deps) {
       if (!IDX.has(col) || col === 'MAYORD') continue // MITO sale de la COMB (stock real)
       const f = sku(txt(x.ID_ART), txt(x.ID_COLOR), txt(x.ID_TALLE))
       f.s[IDX.get(col)] += Math.max(0, Number(x.stock) || 0)
-      if (Number(x.transito) >= 1) f.tr[IDX.get(col)] = 1
+      f.tr[IDX.get(col)] += Math.max(0, Number(x.transito) || 0) // cantidad en camino
     }
     for (const x of venta) {
       if (!IDX.has(columna(x.Tienda))) continue
@@ -278,6 +282,7 @@ function crear(deps) {
         cumple(f.prov, x.prov) && cumple(f.mat, x.mat) && cumple(f.temp, x.temp) && cumple(f.anio, x.anio) &&
         cumple(f.linea, x.linea) && cumple(f.flia, x.flia) && cumple(f.grupo, x.grupo) && cumple(f.gen, x.gen) &&
         (!f.art.length || f.art.some((p) => a.startsWith(p))) &&
+        (f.x === 'CON' ? /X/i.test(a) : f.x === 'SIN' ? !/X/i.test(a) : true) &&
         (f.origen === 'MITO' ? x.prov.startsWith('MO') : f.origen === 'MARCAS' ? !x.prov.startsWith('MO') : true)
       ) elegidos.push(a)
     }
@@ -328,7 +333,7 @@ function crear(deps) {
       if (!IDX.has(col) || col === 'MAYORD') continue // MITO sale de la COMB (stock real)
       const f = fila(txt(r.ID_ART), txt(r.ID_COLOR), txt(r.ID_TALLE))
       f.s[IDX.get(col)] += Math.max(0, Number(r.stock) || 0)
-      if (Number(r.transito) >= 1) f.tr[IDX.get(col)] = 1
+      f.tr[IDX.get(col)] += Math.max(0, Number(r.transito) || 0) // cantidad en camino
     }
     for (const r of venta) {
       const col = columna(r.Tienda)
@@ -370,6 +375,7 @@ function crear(deps) {
         const V = sql.VarChar(sql.MAX)
         for (const k of ['prov', 'mat', 'temp', 'anio', 'linea', 'flia', 'grupo', 'gen']) req.input(k, V, f[k].join('|'))
         req.input('art', V, f.art.join('|'))
+        req.input('x', V, f.x)
         req.input('desde', V, desde)
         req.input('hasta', V, hasta)
         req.input('desde_ult', V, diaLocal(DIAS_ULTIMA_VENTA))

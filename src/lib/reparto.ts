@@ -16,9 +16,12 @@ export type ClaveFiltro = 'prov' | 'mat' | 'temp' | 'anio' | 'linea' | 'flia' | 
 export type Opciones = Record<ClaveFiltro, OpcionFiltro[]> & { art?: [string, string, string][] }
 /** MITO = proveedores que empiezan con MO; MARCAS = el resto; '' = todos */
 export type Origen = '' | 'MITO' | 'MARCAS'
+/** Código del artículo con X o sin X ('' = todos) */
+export type FiltroX = '' | 'CON' | 'SIN'
+export const pasaX = (x: FiltroX, articulo: string) => !x || (x === 'CON') === /x/i.test(articulo)
 export const esProvMito = (cod: string) => cod.trim().toUpperCase().startsWith('MO')
 /** art = códigos o principios de código separados por «|» (el Puente busca cada uno con LIKE 'X%') */
-export type Filtros = Record<ClaveFiltro, string[]> & { art: string; origen?: Origen }
+export type Filtros = Record<ClaveFiltro, string[]> & { art: string; origen?: Origen; x?: FiltroX }
 
 export interface FilaPuente { a: string; c: string; t: string; s: number[]; v: number[]; tr: number[]; u: (number | null)[] }
 export interface ArtPuente { nombre: string; desc: string; prov: string; grupo: string; material: string; linea: string; temporada: string; flia?: string }
@@ -50,7 +53,7 @@ export interface Fila {
   base: number[] // stock al armar
   cur: number[] // stock después de repartir (lo que se edita)
   vend: number[] // venta del período
-  trans: number[] // 1 = tiene algo en tránsito
+  trans: number[] // cantidad en tránsito hacia ese local (Puentes viejos: 1 = hay algo)
   ult: (number | null)[] // días desde la última venta (null = sin venta en 180 días)
 }
 
@@ -591,7 +594,8 @@ export async function cargarOpciones(): Promise<{ opciones: Opciones; foto: Esta
 
 export type RespuestaStock = DatosReparto | { estado: 'demasiados'; articulos: number; max: number; motivo?: 'peso'; bytes?: number }
 
-type FilaCompacta = [string, string, string, number[], number[] | 0, string | 0, number[] | 0]
+// tránsito: cantidad por local (desde el 20/11) o el texto viejo "0101…" (solo si había algo)
+type FilaCompacta = [string, string, string, number[], number[] | 0, number[] | string | 0, number[] | 0]
 /** El Puente manda las filas compactas (formato 2, puente-sql/reparto.js): se vuelven a armar. */
 function desarmarFilas(filas: unknown[], n: number): FilaPuente[] {
   const ceros = () => Array(n).fill(0)
@@ -601,7 +605,7 @@ function desarmarFilas(filas: unknown[], n: number): FilaPuente[] {
     return {
       a, c, t, s,
       v: v || ceros(),
-      tr: tr ? tr.split('').map(Number) : ceros(),
+      tr: Array.isArray(tr) ? tr : tr ? tr.split('').map(Number) : ceros(),
       u: u ? u.map((d) => (d < 0 ? null : d)) : Array(n).fill(null),
     }
   })

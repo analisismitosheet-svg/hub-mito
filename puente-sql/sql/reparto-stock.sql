@@ -6,6 +6,7 @@
  *   @prov @mat @temp @anio @linea @flia @grupo @gen   atributos del artículo (como el tablero de PBI)
  *   marca ORIGEN  reparto.js la cambia por la condición de MITO (proveedor MO…) o MARCAS (el resto)
  *   @art     códigos o principios de código separados por '|' (opcional)
+ *   @x       'CON' = solo códigos con X · 'SIN' = sin X · '' = todos
  *   @desde @hasta  período de venta 'YYYY-MM-DD'
  *   @desde_ult     desde cuándo se busca la última venta (días sin venta, ~180 días)
  *   @max           tope de artículos (si se pasa, devuelve solo el recordset 1 con la cantidad)
@@ -15,7 +16,7 @@
  *
  * Resultados:
  *   1) cantidad de artículos que entran en el filtro
- *   2) stock por tienda y SKU (STOCK sin tránsito) + marca de tránsito (ENTRANSITO es 0/1 por SKU)
+ *   2) stock por tienda y SKU (CANT) + cantidad en tránsito (ENTRANSITO es la cantidad en camino)
  *   3) venta neta por tienda y SKU en [@desde, @hasta] (devoluciones restan)
  *   4) última venta (> 0) por tienda y SKU desde @desde_ult
  *   5) stock MITO REAL por SKU = físico − comprometido (COMB de DRAGONFISH_MITO, como la Repo diaria)
@@ -40,6 +41,8 @@ SELECT DISTINCT LTRIM(RTRIM(a.ID_ART))
    AND (@flia  = '' OR LTRIM(RTRIM(a.ID_FLIA))      IN (SELECT value FROM STRING_SPLIT(@flia, '|')))
    AND (@grupo = '' OR UPPER(LTRIM(RTRIM(a.ID_GRUPO))) IN (SELECT value FROM STRING_SPLIT(@grupo, '|')))
    AND (@art   = '' OR EXISTS (SELECT 1 FROM STRING_SPLIT(@art, '|') x WHERE LTRIM(RTRIM(a.ID_ART)) LIKE x.value + '%'))
+   -- código con X o sin X (@x = 'CON' | 'SIN' | '')
+   AND (@x = '' OR (@x = 'CON' AND a.ID_ART LIKE '%X%') OR (@x = 'SIN' AND a.ID_ART NOT LIKE '%X%'))
    AND (@gen   = '' OR EXISTS (SELECT 1 FROM DRAGONFISH_MITO.ZooLogic.ART z
                                 WHERE RTRIM(z.ARTCOD) = RTRIM(a.ID_ART)
                                   AND LTRIM(RTRIM(z.CATEARTI)) IN (SELECT value FROM STRING_SPLIT(@gen, '|'))));
@@ -65,12 +68,15 @@ SELECT LEFT(Fecha, 10)                AS dia,
 
 -- 2) stock actual y tránsito
 SELECT Tienda, ID_ART, ID_COLOR, ID_TALLE,
-       SUM(CASE WHEN ENTRANSITO = 0 THEN CANT ELSE 0 END) AS stock,
-       MAX(CASE WHEN ENTRANSITO >= 1 THEN 1 ELSE 0 END)   AS transito
+       -- CANT = stock del local; ENTRANSITO = CANTIDAD que le viene en camino (no es 0/1).
+       -- Hasta el 20/11 se sumaba solo CANT de los renglones sin tránsito: un talle con algo en
+       -- camino quedaba con stock 0 (ej. CF165211 02 L en Polo 52: 149 en el local, el reparto daba 0)
+       SUM(CANT)                                              AS stock,
+       SUM(CASE WHEN ENTRANSITO > 0 THEN ENTRANSITO ELSE 0 END) AS transito
   FROM #f
  WHERE Tipo = 'STOCK'
  GROUP BY Tienda, ID_ART, ID_COLOR, ID_TALLE
-HAVING SUM(CASE WHEN ENTRANSITO = 0 THEN CANT ELSE 0 END) <> 0 OR MAX(ENTRANSITO) >= 1;
+HAVING SUM(CANT) <> 0 OR SUM(CASE WHEN ENTRANSITO > 0 THEN ENTRANSITO ELSE 0 END) > 0;
 
 -- 3) venta neta del período
 SELECT Tienda, ID_ART, ID_COLOR, ID_TALLE, SUM(CANT) AS venta

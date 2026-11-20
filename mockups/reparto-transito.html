@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reparto: cantidad en tránsito</title>
+<style>
+  :root{--paper:#0b0d12;--surface:#11141b;--surface2:#171b24;--surface-solid:#11141b;--line:rgba(148,163,184,.16);--line2:rgba(148,163,184,.28);--ink:#e5e7eb;--sub:#94a3b8}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;padding:24px 16px 48px}
+  .wrap{max-width:1180px;margin:0 auto}
+  h1{font-size:22px;margin:0 0 4px}
+  h2{font-size:15px;margin:0 0 4px}
+  p{margin:0}
+  .sub{color:var(--sub);font-size:13px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;margin-top:16px}
+  .leyenda{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:11.5px;color:var(--sub);margin:10px 0}
+  .leyenda b{color:var(--ink)}
+  .tabla-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+  table{border-collapse:separate;border-spacing:0;font-size:12px;font-variant-numeric:tabular-nums;min-width:980px;width:100%}
+  th,td{height:28px;padding:0 3px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);white-space:nowrap;text-align:center}
+  thead th{background:var(--surface-solid);color:var(--sub);font-weight:600;font-size:11px}
+  td.c0{text-align:left;color:var(--ink)} td.c1{text-align:left;color:var(--sub);max-width:150px;overflow:hidden;text-overflow:ellipsis} td.c3{border-right:1px solid var(--line2)}
+  tr.ng td{border-top:2px solid rgba(148,163,184,.7)}
+  .cell{position:relative;min-width:42px}
+  .sold{background:rgba(248,113,113,.18)}
+  .tr{color:#38bdf8;font-weight:700}
+  /* NUEVO: camión con la cantidad */
+  .trq{display:inline-flex;align-items:center;gap:1px;font-size:12px;font-weight:800;color:#38bdf8;line-height:1;pointer-events:none}
+  .trq.esq{position:absolute;top:1px;right:1px;font-size:9.5px;background:rgba(14,165,233,.2);border-radius:4px;padding:1px 2px}
+  .hoy .trmk{font-size:.8em}
+  .hoy .trmk.esq{position:absolute;top:0;right:1px;font-size:8.5px;line-height:1}
+  .tip{position:absolute;z-index:5;left:50%;top:calc(100% + 6px);transform:translateX(-50%);background:#0f172a;border:1px solid var(--line2);color:var(--ink);font-size:11.5px;font-weight:500;padding:6px 8px;border-radius:8px;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+  .tip::before{content:"";position:absolute;top:-5px;left:50%;transform:translateX(-50%) rotate(45deg);width:8px;height:8px;background:#0f172a;border-left:1px solid var(--line2);border-top:1px solid var(--line2)}
+  .hover{box-shadow:inset 0 0 0 2px #f97316}
+  .pill{display:inline-block;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700}
+  .antes{background:rgba(148,163,184,.18);color:var(--sub)} .ahora{background:rgba(249,115,22,.18);color:#fdba74}
+  .grid2{display:grid;gap:16px;grid-template-columns:1fr} @media(min-width:900px){.grid2{grid-template-columns:1fr 1fr}}
+  .mini td,.mini th{min-width:56px}
+  .grid2>div{min-width:0;overflow-x:auto}
+  .nota{border-left:3px solid #fbbf24;background:rgba(251,191,36,.08);padding:10px 12px;border-radius:8px;font-size:13px;margin-top:12px}
+  .nota b{color:#fde68a}
+  ul{margin:6px 0 0 18px;padding:0} li{margin:3px 0}
+  .seg{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{height:36px;padding:0 16px;font:inherit;font-size:12px;color:var(--sub);background:none;border:0;border-left:1px solid var(--line);cursor:pointer}
+  .seg button:first-of-type{border-left:0}
+  .seg .seg-t{padding:0 10px;font-size:11px;color:var(--sub);border-right:1px solid var(--line);height:36px;display:inline-flex;align-items:center}
+  .seg button.on{background:rgba(249,115,22,.15);color:#fdba74;font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Reparto manual · cantidad en tránsito</h1>
+  <p class="sub">Mockup con datos reales del 20/11 (9 de Julio). El camión pasa a decir <b style="color:#38bdf8">cuántas unidades</b> le están llegando a ese local en ese talle.</p>
+
+  <div class="card" style="border-color:rgba(249,115,22,.45)">
+    <h2><span class="pill ahora">Nuevo</span> Filtro «Código con X»</h2>
+    <p class="sub">Separa los artículos cuyo código (ID) tiene una X de los que no. Va en el paso 1 (al lado de Todos / MITO / Marcas) y también arriba de la grilla, en pantalla completa.</p>
+
+    <p style="margin:14px 0 4px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:rgba(148,163,184,.8)">Artículos</p>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+      <div class="seg"><button class="on">Todos</button><button>MITO</button><button>Marcas</button></div>
+      <div class="seg" title="Código del artículo con X o sin X"><span class="seg-t">Código</span><button>Todos</button><button class="on">Con X</button><button>Sin X</button></div>
+    </div>
+
+    <div class="grid2" style="margin-top:14px">
+      <div>
+        <p class="sub" style="margin-bottom:6px">Con lo que hay hoy en la foto (11.159 artículos con stock o venta):</p>
+        <table class="mini" style="min-width:0">
+          <thead><tr><th style="text-align:left">Código</th><th>Artículos</th><th style="text-align:left">Ejemplos</th></tr></thead>
+          <tbody>
+            <tr><td style="text-align:left"><b>Con X</b></td><td><b>147</b></td><td style="text-align:left;color:var(--sub)">EX020005 piluso croco · QX031213 QIX Vulcanized · MAX04004 beanie · A1771X71V vinilo · KX027201 Krux</td></tr>
+            <tr><td style="text-align:left"><b>Sin X</b></td><td><b>11.012</b></td><td style="text-align:left;color:var(--sub)">CF166103 · CF162105 · …</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <p class="sub" style="margin-bottom:6px">Los 147 «con X» por proveedor:</p>
+        <table class="mini" style="min-width:0">
+          <thead><tr><th style="text-align:left">Proveedor</th><th>Artículos</th><th style="text-align:left">Dónde está la X</th></tr></thead>
+          <tbody>
+            <tr><td style="text-align:left">EXT</td><td>87</td><td style="text-align:left;color:var(--sub)">EX0… (2ª letra)</td></tr>
+            <tr><td style="text-align:left">MKT</td><td>35</td><td style="text-align:left;color:var(--sub)">medidas tipo 71X71</td></tr>
+            <tr><td style="text-align:left">IBAQX (QIX)</td><td>12</td><td style="text-align:left;color:var(--sub)">QX0…</td></tr>
+            <tr><td style="text-align:left">MAX</td><td>9</td><td style="text-align:left;color:var(--sub)">MAX…</td></tr>
+            <tr><td style="text-align:left">otros</td><td>4</td><td style="text-align:left;color:var(--sub)">ADFX6563, KX027201, RX060835…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="nota" style="border-left-color:#38bdf8;background:rgba(56,189,248,.08)">
+      <b style="color:#bae6fd">Para confirmar:</b> ¿es esta la separación que querés (cualquier X en cualquier parte del código)? Si en realidad es otra cosa — por ejemplo una X en una posición fija, o la X en el ID del proveedor — decime y lo ajusto antes de programarlo.
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card hoy">
+      <h2><span class="pill antes">Hoy</span></h2>
+      <p class="sub">Solo avisa que hay algo en camino.</p>
+      <div class="tabla-wrap" style="margin-top:10px">
+        <table class="mini">
+          <thead><tr><th>Talle</th><th>NVOCED</th><th>9DEJUL</th><th>CFR4</th></tr></thead>
+          <tbody>
+            <tr><td>S</td><td class="cell"></td><td class="cell tr"><span class="trmk">🚚</span></td><td class="cell"></td></tr>
+            <tr><td>M</td><td class="cell"></td><td class="cell tr"><span class="trmk">🚚</span></td><td class="cell"></td></tr>
+            <tr><td>L</td><td class="cell">1</td><td class="cell tr">2<span class="trmk esq">🚚</span></td><td class="cell"></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <h2><span class="pill ahora">Propuesta</span></h2>
+      <p class="sub">El camión lleva el número: vacío = solo lo que viene; con stock, va chiquito en la esquina.</p>
+      <div class="tabla-wrap" style="margin-top:10px">
+        <table class="mini">
+          <thead><tr><th>Talle</th><th>NVOCED</th><th>9DEJUL</th><th>CFR4</th></tr></thead>
+          <tbody>
+            <tr><td>S</td><td class="cell"></td><td class="cell tr"><span class="trq">🚚2</span></td><td class="cell"></td></tr>
+            <tr><td>M</td><td class="cell"></td><td class="cell tr"><span class="trq">🚚2</span></td><td class="cell"></td></tr>
+            <tr><td>L</td><td class="cell">1</td><td class="cell tr">2<span class="trq esq">🚚3</span></td><td class="cell"></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="sub" style="margin-top:8px">En L: tiene <b>2</b> en el local y le llegan <b>3</b> más.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Así se vería en la grilla</h2>
+    <div class="leyenda">
+      <span><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:rgba(248,113,113,.4);vertical-align:-1px;margin-right:4px"></i>vendió en el período</span>
+      <span><b style="color:#38bdf8">🚚3</b> = le llegan 3 en tránsito (en 0: no es hueco, ya le llega)</span>
+      <span>con stock: <b>2</b><sup style="color:#38bdf8;font-weight:800">🚚3</sup> = tiene 2 y le llegan 3</span>
+    </div>
+    <div class="tabla-wrap">
+      <table>
+        <thead>
+          <tr><th style="text-align:left">Artículo</th><th style="text-align:left">Descripción</th><th>Col.</th><th>Talle</th>
+            <th>VCPD</th><th>RIVERAD</th><th>CFRA</th><th>BUSTOD</th><th>MUNOZ</th><th>9DEJUL</th><th>LIBERD</th><th>NVOCED</th><th>CFR4</th><th>DEPO</th><th>MITO</th><th>POLO52</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="c0">CF166103</td><td class="c1">ARCTIC POLAR CREW</td><td>02</td><td class="c3">S</td>
+            <td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell tr"><span class="trq">🚚2</span></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell">54</td></tr>
+          <tr><td class="c0">CF166103</td><td class="c1">ARCTIC POLAR CREW</td><td>02</td><td class="c3">M</td>
+            <td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell tr"><span class="trq">🚚2</span></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell">41</td></tr>
+          <tr><td class="c0">CF166103</td><td class="c1">ARCTIC POLAR CREW</td><td>02</td><td class="c3">L</td>
+            <td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td>
+            <td class="cell tr hover"><span class="trq">🚚3</span><span class="tip">9DEJUL · En tránsito: <b style="color:#38bdf8">3</b> (no es hueco, ya le llega)</span></td>
+            <td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell">20</td></tr>
+          <tr><td class="c0">CF166103</td><td class="c1">ARCTIC POLAR CREW</td><td>02</td><td class="c3">XL</td>
+            <td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell tr"><span class="trq">🚚1</span></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell">29</td></tr>
+          <tr><td class="c0">CF166103</td><td class="c1">ARCTIC POLAR CREW</td><td>02</td><td class="c3">XXL</td>
+            <td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell tr"><span class="trq">🚚2</span></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell">21</td></tr>
+          <tr><td class="c0">CF166103</td><td class="c1">ARCTIC POLAR CREW</td><td>02</td><td class="c3">3XL</td>
+            <td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell tr"><span class="trq">🚚1</span></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell">8</td></tr>
+          <tr class="ng"><td class="c0">CF162105</td><td class="c1">MARLO BAGGY JEAN</td><td>02</td><td class="c3">30</td>
+            <td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell tr"><span class="trq">🚚1</span></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td></tr>
+          <tr><td class="c0">CF162105</td><td class="c1">MARLO BAGGY JEAN</td><td>02</td><td class="c3">32</td>
+            <td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell tr"><span class="trq">🚚6</span></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td></tr>
+          <tr><td class="c0">CF162105</td><td class="c1">MARLO BAGGY JEAN</td><td>02</td><td class="c3">34</td>
+            <td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell tr"><span class="trq">🚚2</span></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td></tr>
+          <tr><td class="c0">CF162105</td><td class="c1">MARLO BAGGY JEAN</td><td>02</td><td class="c3">36</td>
+            <td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell sold"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td></tr>
+          <tr><td class="c0">CF162105</td><td class="c1">MARLO BAGGY JEAN</td><td>02</td><td class="c3">38</td>
+            <td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell tr"><span class="trq">🚚5</span></td><td class="cell"></td><td class="cell">1</td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="sub" style="margin-top:10px">Al pasar el mouse por la celda, el cartelito dice el número: «En tránsito: 3 (no es hueco, ya le llega)».</p>
+
+    <div class="nota">
+      <b>Ojo, encontré un error al mirar el dato:</b> cuando un talle tiene algo en tránsito, el reparto hoy <b>pone el stock de ese local en 0</b>, aunque tenga mercadería. Ejemplo real: <b>CF165211 color 02 talle L en Polo 52</b> tiene <b>149</b> en el DWH (y 2 en camino), y el reparto muestra <b>0</b>. Pasa en unos 2.300 renglones.
+      <ul>
+        <li>Propongo corregirlo junto con esto: número de la celda = stock real del local · camión = lo que viene en camino.</li>
+        <li>Así las celdas «vacías con camión» van a ser solo las que de verdad no tienen nada y están esperando mercadería.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+</body>
+</html>
