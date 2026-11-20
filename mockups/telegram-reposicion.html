@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reposición por Telegram</title>
+<style>
+  :root { --bg:#0b0d12; --ink:#e9edf3; --sub:#93a0b4; --line:#252b36; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 24px 16px 48px; }
+  .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: #f5b041; margin: 0; }
+  h1 { margin: 4px 0 6px; font-size: 22px; }
+  .lead { margin: 0 0 22px; color: var(--sub); font-size: 14px; max-width: 640px; }
+  .pasos { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 28px; justify-items: center; }
+  .paso-t { font-size: 12px; font-weight: 700; color: var(--sub); text-transform: uppercase; letter-spacing: .08em; margin: 0 0 8px; align-self: start; }
+  .phone { width: 340px; max-width: 100%; height: 680px; border-radius: 34px; border: 8px solid #1c2129; background: #000; overflow: hidden; display: flex; flex-direction: column; }
+
+  /* Telegram */
+  .tg-top { background:#517DA2; display:flex; align-items:center; gap:10px; padding:10px 12px; color:#fff; }
+  .tg-ava { width:36px; height:36px; border-radius:50%; background:#E24B4A; display:grid; place-items:center; font-weight:700; }
+  .tg-chat { flex:1; background:#CFDCC5; padding:14px 10px; overflow:auto; }
+  .tg-fecha { text-align:center; margin-bottom:12px; } .tg-fecha span { background:rgba(0,0,0,.25); color:#fff; font-size:12px; padding:3px 10px; border-radius:10px; }
+  .tg-msg { max-width:270px; background:#fff; color:#1a1a1a; border-radius:12px 12px 12px 4px; padding:8px 11px 5px; font-size:14px; line-height:1.45; }
+  .tg-hora { text-align:right; font-size:11px; color:#8a9aa8; }
+  .tg-btn { display:block; width:270px; margin-top:4px; border:0; background:rgba(60,90,70,.5); color:#fff; border-radius:8px; padding:10px; font-size:14px; font-weight:600; cursor:pointer; }
+  .tg-btn:hover { background:rgba(60,90,70,.68); }
+  .tg-input { background:#fff; color:#9aa; padding:12px 14px; font-size:14px; border-top:1px solid #ddd; }
+
+  /* Página /p/:token */
+  .pg { flex:1; display:flex; flex-direction:column; background:#f4f4f5; color:#18181b; min-height:0; position:relative; }
+  .pg-head { background:#000; color:#fff; padding:14px 14px 12px; }
+  .pg-logo { color:#ef3b3b; font-weight:900; font-size:18px; }
+  .pg-head h2 { margin:2px 0 2px; font-size:17px; }
+  .pg-head p { margin:0; color:#a1a1aa; font-size:11.5px; }
+  .pg-body { flex:1; overflow:auto; padding:10px 10px 80px; }
+  .pg-body > p { font-size:12px; color:#52525b; margin:0 0 8px; }
+  .fila { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:8px; }
+  .b { border:1px solid #d4d4d8; background:#fff; border-radius:10px; padding:8px; font-size:12.5px; font-weight:600; cursor:pointer; color:#18181b; }
+  .buscar { width:100%; border:1px solid #d4d4d8; border-radius:10px; padding:8px 10px; font-size:13px; margin-bottom:8px; }
+  .art { background:#fff; border:1px solid #e4e4e7; border-radius:14px; padding:10px; margin-bottom:8px; }
+  .art.off { opacity:.55; }
+  .art-top { display:flex; gap:10px; }
+  .foto { width:58px; height:58px; border-radius:8px; background:#e4e4e7; display:grid; place-items:center; font-size:26px; flex-shrink:0; }
+  .cod { font-weight:800; font-size:13.5px; } .desc { color:#71717a; font-size:11.5px; } .det { font-size:11.5px; color:#3f3f46; }
+  .chips { display:flex; flex-wrap:wrap; gap:4px; margin-top:5px; }
+  .chip { font-size:11px; border-radius:6px; padding:2px 6px; font-weight:600; }
+  .c1{background:#e0f2fe;color:#075985}.c2{background:#fef3c7;color:#92400e}.c3{background:#d1fae5;color:#065f46}.c4{background:#ede9fe;color:#5b21b6}
+  .art-bot { display:flex; justify-content:space-between; align-items:center; margin-top:8px; }
+  .sino { display:flex; border:1px solid #d4d4d8; border-radius:999px; overflow:hidden; }
+  .sino button { border:0; background:#fff; padding:5px 12px; font-size:12px; font-weight:700; cursor:pointer; color:#3f3f46; }
+  .sino button.on-si { background:#16a34a; color:#fff; } .sino button.on-no { background:#e4e4e7; }
+  .cant { display:flex; align-items:center; border:1px solid #d4d4d8; border-radius:10px; overflow:hidden; background:#f4f4f5; }
+  .cant button { border:0; background:transparent; width:30px; height:30px; font-size:17px; cursor:pointer; color:#18181b; }
+  .cant span { width:28px; text-align:center; font-weight:800; font-size:14px; }
+  .pg-pie { position:absolute; left:0; right:0; bottom:0; background:#fff; border-top:1px solid #e4e4e7; padding:10px; display:flex; justify-content:space-between; align-items:center; }
+  .pg-pie b { font-size:16px; } .pg-pie small { color:#71717a; font-size:12px; }
+  .conf { border:0; border-radius:12px; background:#ef4444; color:#fff; font-weight:800; padding:10px 14px; font-size:13.5px; cursor:pointer; }
+  .conf:disabled { opacity:.45; cursor:default; }
+  .listo { position:absolute; inset:0; background:#f4f4f5; display:none; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:24px; gap:8px; }
+  .listo .ok { width:64px; height:64px; border-radius:50%; background:#16a34a; color:#fff; display:grid; place-items:center; font-size:34px; }
+  .listo h3 { margin:6px 0 0; } .listo p { margin:0; color:#52525b; font-size:13px; }
+  .nota { margin-top:26px; border:1px solid var(--line); border-radius:14px; padding:14px 16px; font-size:13.5px; color:var(--sub); line-height:1.6; }
+  .nota b { color:var(--ink); }
+  @keyframes pulso { 0%{box-shadow:0 0 0 0 rgba(239,68,68,.7)} 100%{box-shadow:0 0 0 18px rgba(239,68,68,0)} }
+  .pulsa { animation: pulso .9s ease-out 2; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="eyebrow">Mayorista · Franquicias</p>
+  <h1>Así le llega la reposición por Telegram</h1>
+  <p class="lead">Maqueta con los datos de la reposición P-007 (ARGENTINA S.R.L). Tocá el botón del mensaje y probá la página: Sí / No, − / +, Quiero todo y Confirmar. No manda nada.</p>
+
+  <div class="pasos">
+    <div style="display:flex;flex-direction:column;align-items:center">
+      <p class="paso-t">1 · Mensaje del bot</p>
+      <div class="phone">
+        <div class="tg-top">
+          <span style="font-size:20px">‹</span>
+          <div class="tg-ava">M</div>
+          <div><div style="font-weight:600">MITO avisos</div><div style="font-size:12px;color:#d6e4f0">bot</div></div>
+        </div>
+        <div class="tg-chat">
+          <div class="tg-fecha"><span>20 de noviembre</span></div>
+          <div class="tg-msg">
+            Hola ARGENTINA S.R.L, te armamos la reposición P-007 según la venta del 09/11 al 19/11: 31 artículos, 31 unidades.<br><br>
+            Mirala, ajustá lo que quieras y confirmala con el botón.
+            <div class="tg-hora">09:00</div>
+          </div>
+          <button class="tg-btn" id="abrir">🛒 Ver y confirmar el pedido ↗</button>
+        </div>
+        <div class="tg-input">Mensaje</div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;align-items:center">
+      <p class="paso-t">2 · Página que se abre (/p/…)</p>
+      <div class="phone" id="tel2">
+        <div class="pg">
+          <div class="pg-head">
+            <div class="pg-logo">MITO</div>
+            <h2>Propuesta de reposición</h2>
+            <p>ARGENTINA S.R.L · N° P-007 · válida hasta el 26/11</p>
+          </div>
+          <div class="pg-body">
+            <p>Según tu venta del <b>09/11 al 19/11</b>. Marcá lo que querés que te enviemos. Podés cambiar las cantidades (hasta lo que hay en stock).</p>
+            <div class="fila"><button class="b" id="todo">✓ Quiero todo</button><button class="b" id="nada">✕ Nada</button></div>
+            <input class="buscar" id="buscar" placeholder="🔍 Buscar artículo o nombre">
+            <div id="lista"></div>
+          </div>
+          <div class="pg-pie">
+            <div><b id="tu">0</b> <small>unidades · <span id="ta">0</span> artículos</small></div>
+            <button class="conf" id="conf" disabled>✓ Confirmar pedido</button>
+          </div>
+          <div class="listo" id="listo">
+            <div class="ok">✓</div>
+            <h3>¡Pedido confirmado!</h3>
+            <p id="listo-txt"></p>
+            <p style="font-size:12px">A los demás números el link les muestra «🔒 Este pedido ya fue aceptado».</p>
+            <button class="b" id="volver" style="margin-top:10px">Volver a la maqueta</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="nota">
+    <b>Qué pasa después:</b> al confirmar, el pedido se carga solo en Dragon (DRAGONFISH_MITO) en el próximo minuto, y en el hub la reposición pasa a «✓ Aceptado por +…». Si el cliente tiene varios números, el primero que confirma gana y a los demás se les bloquea.<br>
+    <b>Hoy</b> la página arranca con todo sin marcar (hay que tocar Sí o Quiero todo). Si preferís que llegue ya marcada, se cambia.
+  </div>
+</div>
+
+<script>
+  const arts = [
+    { cod:'ZH060215', desc:'ASHER LONG SOCK ZIMITH', color:'10', talle:'U', precio:8000, local:1, venta:2, prop:1, disp:301, foto:'🧦' },
+    { cod:'ZH060301', desc:'SKECH BOXER ZIMITH', color:'03', talle:'M', precio:7500, local:1, venta:2, prop:1, disp:154, foto:'🩲' },
+    { cod:'ZN265112', desc:'STATE T-SHIRT KID ZIMITH', color:'02', talle:'16', precio:12500, local:0, venta:1, prop:1, disp:23, foto:'👕' },
+    { cod:'CF165211', desc:'BOARDSHORT CAPTAIN FIN', color:'02', talle:'L', precio:29900, local:0, venta:2, prop:2, disp:149, foto:'🩳' },
+    { cod:'CF170044', desc:'GORRA TRUCKER CAPTAIN FIN', color:'01', talle:'U', precio:15900, local:1, venta:1, prop:1, disp:40, foto:'🧢' },
+  ]
+  const est = arts.map(a => ({ si: null, cant: a.prop }))
+  const pesos = n => new Intl.NumberFormat('es-AR', { style:'currency', currency:'ARS', maximumFractionDigits:0 }).format(n)
+  const lista = document.getElementById('lista')
+
+  function pintar() {
+    const q = document.getElementById('buscar').value.trim().toLowerCase()
+    lista.innerHTML = ''
+    arts.forEach((a, i) => {
+      if (q && !(a.cod + ' ' + a.desc).toLowerCase().includes(q)) return
+      const e = est[i]
+      const d = document.createElement('div')
+      d.className = 'art' + (e.si === false ? ' off' : '')
+      d.innerHTML = `
+        <div class="art-top">
+          <div class="foto">${a.foto}</div>
+          <div style="min-width:0">
+            <div class="cod">${a.cod}</div><div class="desc">${a.desc}</div>
+            <div class="det">Color ${a.color} · Talle ${a.talle} · ${pesos(a.precio)} c/u</div>
+            <div class="chips">
+              <span class="chip c1">Stock local = ${a.local}</span><span class="chip c2">Venta = ${a.venta}</span>
+              <span class="chip c3">Propuesta de reposición = ${a.prop}</span><span class="chip c4">Disponible MITO = ${a.disp}</span>
+            </div>
+          </div>
+        </div>
+        <div class="art-bot">
+          <div class="sino"><button data-si="${i}" class="${e.si === true ? 'on-si' : ''}">Sí</button><button data-no="${i}" class="${e.si === false ? 'on-no' : ''}">No</button></div>
+          <div class="cant"><button data-menos="${i}">−</button><span>${e.cant}</span><button data-mas="${i}">+</button></div>
+        </div>`
+      lista.appendChild(d)
+    })
+    let u = 0, n = 0, t = 0
+    arts.forEach((a, i) => { if (est[i].si && est[i].cant > 0) { u += est[i].cant; n++; t += est[i].cant * a.precio } })
+    document.getElementById('tu').textContent = u
+    document.getElementById('ta').textContent = n
+    document.getElementById('conf').disabled = u === 0
+    document.getElementById('conf').dataset.total = t
+  }
+
+  lista.addEventListener('click', ev => {
+    const b = ev.target.closest('button'); if (!b) return
+    const d = b.dataset
+    if (d.si) est[d.si].si = true
+    if (d.no) est[d.no].si = false
+    if (d.menos) { const e = est[d.menos]; e.cant = Math.max(0, e.cant - 1); e.si = e.cant > 0 }
+    if (d.mas) { const e = est[d.mas]; e.cant = Math.min(arts[d.mas].disp, e.cant + 1); e.si = true }
+    pintar()
+  })
+  document.getElementById('todo').onclick = () => { est.forEach(e => { e.si = true; if (!e.cant) e.cant = 1 }); pintar() }
+  document.getElementById('nada').onclick = () => { est.forEach(e => e.si = false); pintar() }
+  document.getElementById('buscar').oninput = pintar
+  document.getElementById('abrir').onclick = () => {
+    const t = document.getElementById('tel2')
+    t.scrollIntoView({ behavior:'smooth', block:'center' })
+    t.classList.remove('pulsa'); void t.offsetWidth; t.classList.add('pulsa')
+  }
+  document.getElementById('conf').onclick = () => {
+    const u = document.getElementById('tu').textContent, n = document.getElementById('ta').textContent
+    document.getElementById('listo-txt').textContent = `${u} unidades de ${n} artículos · ${pesos(+document.getElementById('conf').dataset.total)}. Lo estamos preparando.`
+    document.getElementById('listo').style.display = 'flex'
+  }
+  document.getElementById('volver').onclick = () => { document.getElementById('listo').style.display = 'none' }
+  pintar()
+</script>
+</body>
+</html>
