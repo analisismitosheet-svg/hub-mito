@@ -14,7 +14,7 @@ const OPCIONES: AppDef[] = [
     id: 'franquicias-auto',
     areaId: 'mayorista',
     title: 'Reposición diaria automática',
-    description: 'Cada cliente con su base y sus WhatsApps, días y hora de salida, y las reposiciones por cliente y fecha.',
+    description: 'Cada cliente con su base y sus teléfonos (Telegram), días y hora de salida, y las reposiciones por cliente y fecha.',
     icon: CalendarClock,
     kind: 'internal',
     target: '/mayorista/franquicias/auto',

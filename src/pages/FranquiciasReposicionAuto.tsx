@@ -5,7 +5,7 @@ import {
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
-import { normalizarTelefono, telefonoValido } from '@/lib/informes'
+import { claveTelefono, normalizarTelefono, telefonoValido } from '@/lib/informes'
 import { cargarClientes, cargarMapaFranquicias, type BaseFranquicia, type ClienteFranquicia } from '@/lib/franquicias'
 
 /* ------------------------------------------------------------------ */
@@ -84,7 +84,24 @@ async function apiInforme(payload: Record<string, unknown>): Promise<{ enviados?
   return body ?? {}
 }
 
-function chipEstado(p: Propuesta, envios: Envio[]) {
+interface EstadoTelegram { configurado: boolean; usuario?: string; conectado?: boolean; error?: string }
+
+/** Con TELEGRAM_BOT_TOKEN en Vercel el link sale por Telegram (src/lib/telegram.ts). */
+async function estadoTelegram(): Promise<EstadoTelegram | null> {
+  if (!supabase) return null
+  const { data } = await supabase.auth.getSession()
+  const res = await fetch('/api/informe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${data.session?.access_token ?? ''}` },
+    body: JSON.stringify({ telegram: 'estado' }),
+  }).catch(() => null)
+  return res?.ok ? ((await res.json().catch(() => null)) as EstadoTelegram | null) : null
+}
+
+const invitacionTelegram = (usuario: string) =>
+  `Hola! Las reposiciones de MITO te van a llegar por Telegram. Para activarlo abrí https://t.me/${usuario} , tocá «Iniciar» y después «Compartir mi número». Se hace una sola vez.`
+
+function chipEstado(p: Propuesta, envios: Envio[], canal: string) {
   if (p.estado === 'en_dragon') return { txt: `✓ Aceptado${p.confirmada_por ? ` por +${p.confirmada_por}` : ''} · En Dragon (PV ${p.dragon_pedido ?? ''})`, cls: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400' }
   if (p.estado === 'confirmada' && p.dragon_error) return { txt: `Aceptado · error al cargar en Dragon`, cls: 'border-red-500/40 bg-red-500/10 text-red-400' }
   if (p.estado === 'confirmada') return { txt: `✓ Aceptado${p.confirmada_por ? ` por +${p.confirmada_por}` : ''} · cargando en Dragon…`, cls: 'border-teal-500/40 bg-teal-500/10 text-teal-400' }
@@ -93,7 +110,7 @@ function chipEstado(p: Propuesta, envios: Envio[]) {
   const ok = envios.filter((e) => e.estado === 'enviado').length
   const err = envios.filter((e) => e.estado === 'error').length
   if (ok) return { txt: `🔗 Link enviado a ${ok} número${ok === 1 ? '' : 's'} · esperando aceptación`, cls: 'border-sky-500/40 bg-sky-500/10 text-sky-400' }
-  if (err) return { txt: 'WhatsApp con error · mandalo a mano o reintentá', cls: 'border-amber-500/40 bg-amber-500/10 text-amber-400' }
+  if (err) return { txt: `${canal} con error · mandalo a mano o reintentá`, cls: 'border-amber-500/40 bg-amber-500/10 text-amber-400' }
   return { txt: '⏳ Pendiente de enviar link', cls: 'border-violet-500/40 bg-violet-500/10 text-violet-400' }
 }
 
@@ -116,6 +133,21 @@ export default function FranquiciasReposicionAuto() {
   const [fechasAbiertas, setFechasAbiertas] = useState<Set<string>>(new Set())
   const [ocupado, setOcupado] = useState<string | null>(null)
 
+  // Telegram: si el bot está cargado, el link sale por ahí y solo le llega a quien se vinculó
+  const [tg, setTg] = useState<EstadoTelegram | null>(null)
+  const [vinculados, setVinculados] = useState<Set<string>>(new Set())
+  const porTelegram = Boolean(tg?.configurado)
+  const canal = porTelegram ? 'Telegram' : 'WhatsApp'
+  const vinculado = (t: string) => vinculados.has(claveTelefono(t))
+
+  const cargarVinculos = useCallback(async (tels: string[]) => {
+    if (!supabase || !tels.length) return
+    const { data } = await supabase.rpc('franquicias_telegram_vinculados', { p_claves: [...new Set(tels.map(claveTelefono))] })
+    setVinculados(new Set(((data ?? []) as { telefono: string }[]).map((v) => v.telefono)))
+  }, [])
+
+  useEffect(() => { void estadoTelegram().then(setTg) }, [])
+
   const cargar = useCallback(async () => {
     if (!supabase) return
     const [cfg, props] = await Promise.all([
@@ -125,7 +157,8 @@ export default function FranquiciasReposicionAuto() {
     ])
     if (cfg.error) setAviso({ ok: false, txt: cfg.error.message })
     const ps = (props.data as Propuesta[] | null) ?? []
-    setConfigs((cfg.data as ConfigCliente[] | null) ?? [])
+    const cs = (cfg.data as ConfigCliente[] | null) ?? []
+    setConfigs(cs)
     setPropuestas(ps)
     if (ps.length) {
       const { data } = await supabase.from('franquicias_propuesta_envios').select('id,propuesta_id,telefono,token,estado,detalle,enviado_at,abierto_at').in('propuesta_id', ps.map((p) => p.id)).order('id')
@@ -150,6 +183,18 @@ export default function FranquiciasReposicionAuto() {
     })()
     return () => { vivo = false }
   }, [cargar])
+
+  // Vínculos de todos los números a la vista (los guardados y los que se están cargando)
+  const todosLosTels = useMemo(
+    () => [...configs.flatMap((c) => (c.telefonos?.length ? c.telefonos : c.telefono ? [c.telefono] : [])), ...form.telefonos].sort().join(','),
+    [configs, form.telefonos],
+  )
+  useEffect(() => { if (porTelegram && todosLosTels) void cargarVinculos(todosLosTels.split(',')) }, [porTelegram, todosLosTels, cargarVinculos])
+
+  function invitar(t: string) {
+    if (!tg?.usuario) return
+    window.open(`https://wa.me/${normalizarTelefono(t)}?text=${encodeURIComponent(invitacionTelegram(tg.usuario))}`, '_blank')
+  }
 
   const nombreCliente = useCallback((cod: string) => clientes.find((c) => c.codigo === cod)?.razonSocial ?? '', [clientes])
   const baseDe = (b: string) => bases.find((x) => x.base === b)
@@ -179,7 +224,7 @@ export default function FranquiciasReposicionAuto() {
   }
 
   function agregarWa() {
-    if (!telefonoValido(nuevoWa)) { setAviso({ ok: false, txt: 'Ingresá un número de WhatsApp válido (ej. 5492901554321).' }); return }
+    if (!telefonoValido(nuevoWa)) { setAviso({ ok: false, txt: `Ingresá un número de ${canal} válido (ej. 5492901554321).` }); return }
     const t = normalizarTelefono(nuevoWa)
     setForm((f) => (f.telefonos.includes(t) ? f : { ...f, telefonos: [...f.telefonos, t] }))
     setNuevoWa('')
@@ -250,7 +295,7 @@ export default function FranquiciasReposicionAuto() {
     const { error } = await supabase.rpc('franquicias_pedir_armado', { p_cliente: c.cliente_id })
     setOcupado(null)
     if (error) { setAviso({ ok: false, txt: error.message }); return }
-    setAviso({ ok: true, txt: `Listo: el puente arma la de ${c.cliente_id} con la venta de ayer en el próximo minuto y sale el WhatsApp. Tocá «Actualizar» en un rato.` })
+    setAviso({ ok: true, txt: `Listo: el puente arma la de ${c.cliente_id} con la venta de ayer en el próximo minuto y sale el ${canal}. Tocá «Actualizar» en un rato.` })
     void cargar()
   }
 
@@ -259,7 +304,7 @@ export default function FranquiciasReposicionAuto() {
     setAviso(null)
     try {
       const r = await apiInforme({ franquicias: p.id, todos })
-      setAviso({ ok: !r.errores, txt: r.errores ? `No salió: ${(r.detalle ?? []).join(' · ')}` : `WhatsApp enviado a ${r.enviados ?? 0} número(s).` })
+      setAviso({ ok: !r.errores, txt: r.errores ? `No salió: ${(r.detalle ?? []).join(' · ')}` : `${canal} enviado a ${r.enviados ?? 0} número(s).` })
     } catch (e) {
       setAviso({ ok: false, txt: (e as Error).message })
     } finally {
@@ -288,7 +333,7 @@ export default function FranquiciasReposicionAuto() {
             <div className="min-w-0">
               <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-400">Mayorista · Franquicias</p>
               <h1 className="font-display text-xl font-semibold text-ink md:text-2xl">Reposición diaria automática</h1>
-              <p className="mt-1 max-w-2xl text-sm text-sub">Asociá el cliente con su base y sus números de WhatsApp, programá los días y la hora de salida, y consultá cada reposición por cliente y fecha.</p>
+              <p className="mt-1 max-w-2xl text-sm text-sub">Asociá el cliente con su base y sus números de {canal}, programá los días y la hora de salida, y consultá cada reposición por cliente y fecha.</p>
             </div>
           </div>
           <button type="button" onClick={() => void cargar()} className={btnSec}><RefreshCw size={13} aria-hidden /> Actualizar</button>
@@ -309,7 +354,19 @@ export default function FranquiciasReposicionAuto() {
                 <span className="rounded-full border border-red-500/40 bg-red-500/15 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-red-300">Paso 1</span>
                 Datos del cliente y horario automático
               </h2>
-              <p className="mt-1 text-xs text-sub">Podés cargar uno o varios WhatsApp con <b className="text-ink">+</b>. Todos reciben el link y, apenas uno confirma el pedido, a los demás les queda bloqueado avisando que ya fue aceptado.</p>
+              <p className="mt-1 text-xs text-sub">Podés cargar uno o varios números de {canal} con <b className="text-ink">+</b>. Todos reciben el link y, apenas uno confirma el pedido, a los demás les queda bloqueado avisando que ya fue aceptado.</p>
+              {porTelegram && (
+                <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-sky-300">
+                  <span>El link sale por <b>Telegram</b>: cada número tiene que abrir {tg?.usuario ? <a href={`https://t.me/${tg.usuario}`} target="_blank" rel="noreferrer" className="font-semibold underline underline-offset-2">t.me/{tg.usuario}</a> : 'el bot'} y tocar «Compartir mi número» una vez. Si se vincula después, le llega solo lo pendiente.</span>
+                  {tg?.usuario && (
+                    <button type="button" className="inline-flex items-center gap-1 rounded-full border border-sky-500/40 px-2 py-0.5 font-semibold hover:bg-sky-500/10"
+                      onClick={() => { void navigator.clipboard?.writeText(invitacionTelegram(tg.usuario ?? '')); setAviso({ ok: true, txt: 'Invitación copiada: pegala donde quieras.' }) }}>
+                      <Copy size={11} aria-hidden /> Copiar invitación
+                    </button>
+                  )}
+                  {tg?.configurado && !tg.conectado && <span className="text-amber-400">· El bot no está conectado (Sistemas → Informes → Contactos).</span>}
+                </p>
+              )}
             </div>
             {form.cliente && (
               <span className={`rounded-full border px-3 py-1 text-xs font-bold ${form.activo ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400' : 'border-line bg-surface2 text-sub'}`}>
@@ -338,15 +395,19 @@ export default function FranquiciasReposicionAuto() {
               <input id="ra-suc" value={form.sucursal} onChange={(e) => setForm((f) => ({ ...f, sucursal: e.target.value }))} placeholder="BD_ORIGEN" className={inp} title="Sucursal del stock del cliente (columna BD_ORIGEN); es la misma para todos los clientes de esa base" />
             </div>
             <div>
-              <label className={lbl} htmlFor="ra-wa">4. WhatsApps destino</label>
+              <label className={lbl} htmlFor="ra-wa">4. {porTelegram ? 'Teléfonos destino (Telegram)' : 'WhatsApps destino'}</label>
               <div className="flex gap-2">
                 <input id="ra-wa" type="tel" inputMode="tel" value={nuevoWa} onChange={(e) => setNuevoWa(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); agregarWa() } }} placeholder="Ej. 5492901554321 (dueño, encargado…)" className={inp} />
                 <button type="button" onClick={agregarWa} aria-label="Agregar número" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-600 text-white hover:bg-emerald-500"><Plus size={18} aria-hidden /></button>
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {form.telefonos.map((t, i) => (
-                  <span key={t} className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/35 bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-400">
+                  <span key={t} title={porTelegram ? (vinculado(t) ? 'Vinculado a Telegram: recibe el link' : 'Todavía no se vinculó al bot: no recibe nada') : undefined}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${porTelegram && !vinculado(t) ? 'border-red-500/35 bg-red-500/10 text-red-300' : 'border-emerald-500/35 bg-emerald-500/10 text-emerald-400'}`}>
                     +{t} <span className="font-normal opacity-70">(#{i + 1})</span>
+                    {porTelegram && (vinculado(t)
+                      ? <span className="font-normal">· ✓ Telegram</span>
+                      : <button type="button" onClick={() => invitar(t)} className="font-normal underline underline-offset-2" title="Abre tu WhatsApp con la invitación al bot para este número">· sin vincular, invitar</button>)}
                     <button type="button" onClick={() => setForm((f) => ({ ...f, telefonos: f.telefonos.filter((x) => x !== t) }))} aria-label={`Quitar +${t}`}><X size={12} aria-hidden /></button>
                   </span>
                 ))}
@@ -385,7 +446,7 @@ export default function FranquiciasReposicionAuto() {
               <span className={lbl}>Resumen</span>
               <p className="text-xs leading-snug text-ink">
                 {form.cliente
-                  ? <>Cliente <b>{form.cliente}</b> ↔ base <b className="text-amber-400">{form.base || '—'}</b> → sale a <b className="text-emerald-400">{form.telefonos.length} WhatsApp</b>{form.telefonos.length ? ` (${form.telefonos.map((t) => `+${t}`).join(', ')})` : ''} con la venta de ayer.</>
+                  ? <>Cliente <b>{form.cliente}</b> ↔ base <b className="text-amber-400">{form.base || '—'}</b> → sale a <b className="text-emerald-400">{form.telefonos.length} {canal}</b>{form.telefonos.length ? ` (${form.telefonos.map((t) => `+${t}`).join(', ')})` : ''} con la venta de ayer.</>
                   : <span className="text-sub">Elegí un cliente para cargar o editar sus datos.</span>}
               </p>
             </div>
@@ -429,7 +490,11 @@ export default function FranquiciasReposicionAuto() {
                       {abierto ? <ChevronDown size={16} className="shrink-0 text-amber-400" aria-hidden /> : <ChevronRight size={16} className="shrink-0 text-sub" aria-hidden />}
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-bold text-ink">{c.cliente_id} · {nombreCliente(c.cliente_id) || 'Cliente'}</span>
-                        <span className="block truncate text-[11px] text-sub">WhatsApps ({tels.length}): <b className="text-emerald-400">{tels.map((t) => `+${t}`).join(' · ') || '—'}</b></span>
+                        <span className="block truncate text-[11px] text-sub">{porTelegram ? 'Telegram' : 'WhatsApps'} ({tels.length}): {tels.length === 0 && <b className="text-emerald-400">—</b>}
+                          {tels.map((t, i) => (
+                            <b key={t} className={porTelegram && !vinculado(t) ? 'text-red-300' : 'text-emerald-400'}>{i > 0 && ' · '}+{t}{porTelegram ? (vinculado(t) ? ' ✓' : ' (sin vincular)') : ''}</b>
+                          ))}
+                        </span>
                       </span>
                     </button>
                     <span className="rounded-full border border-amber-500/35 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-300">{c.base} (stock: {baseDe(c.base)?.sucursal || '—'})</span>
@@ -438,7 +503,7 @@ export default function FranquiciasReposicionAuto() {
                     </span>
                     {ultima && <span className="rounded-full border border-line bg-surface px-2 py-0.5 text-[11px] text-sub">Última: <b className="text-ink">{fmt(ultima.unidades_propuestas)} u.</b> · {fmtPesos(Number(ultima.total_propuesto))}</span>}
                     <button type="button" className={btnSec} disabled={ocupado === `armar-${c.cliente_id}` || Boolean(c.auto_pedido_at)} onClick={() => void armarAhora(c)}
-                      title="Arma ya la reposición con la venta de ayer y manda el WhatsApp">
+                      title={`Arma ya la reposición con la venta de ayer y manda el ${canal}`}>
                       {c.auto_pedido_at ? <><Loader2 size={12} className="animate-spin" aria-hidden /> Armando…</> : <><Zap size={12} aria-hidden /> Armar ahora</>}
                     </button>
                     <button type="button" className={btnSec} onClick={() => { elegirCliente(c.cliente_id); window.scrollTo({ top: 0, behavior: 'smooth' }) }}><Pencil size={12} aria-hidden /> Editar</button>
@@ -454,7 +519,7 @@ export default function FranquiciasReposicionAuto() {
                       <div className="flex flex-col gap-2">
                         {props.map((p) => {
                           const env = enviosDe(p.id)
-                          const e = chipEstado(p, env)
+                          const e = chipEstado(p, env, canal)
                           const fAbierta = fechasAbiertas.has(p.id)
                           const lista = items[p.id]
                           const editable = p.estado === 'enviada' && new Date(p.vence_at) > new Date()
@@ -554,13 +619,18 @@ export default function FranquiciasReposicionAuto() {
                                         <li key={en.id} className="flex flex-wrap items-center gap-2 text-xs">
                                           <b className="text-ink">+{en.telefono}</b>
                                           <span className={en.estado === 'enviado' ? 'text-emerald-400' : en.estado === 'error' ? 'text-amber-400' : 'text-violet-300'}>
-                                            {en.estado === 'enviado' ? `WhatsApp enviado ${en.enviado_at ? fmtHora(en.enviado_at) : ''}` : en.estado === 'error' ? `No salió: ${en.detalle ?? ''}` : 'En cola'}
+                                            {en.estado === 'enviado'
+                                              ? `${en.detalle?.includes('Telegram') ? 'Telegram' : 'WhatsApp'} enviado ${en.enviado_at ? fmtHora(en.enviado_at) : ''}`
+                                              : en.estado === 'error'
+                                                ? (porTelegram && !vinculado(en.telefono) ? 'Sin Telegram vinculado: le sale solo apenas se vincule' : `No salió: ${en.detalle ?? ''}`)
+                                                : 'En cola'}
                                             {en.abierto_at ? ` · abrió el link ${fmtHora(en.abierto_at)}` : ''}
                                             {p.confirmada_por === en.telefono ? ' · ✓ aceptó' : ''}
                                           </span>
                                           <span className="ml-auto flex gap-1.5">
                                             <a href={linkDe(en.token)} target="_blank" rel="noreferrer" className={btnSec}><ExternalLink size={12} aria-hidden /> Ver link</a>
                                             <button type="button" className={btnSec} onClick={() => { void navigator.clipboard?.writeText(linkDe(en.token)); setAviso({ ok: true, txt: `Link de +${en.telefono} copiado.` }) }}><Copy size={12} aria-hidden /> Copiar</button>
+                                            {editable && porTelegram && !vinculado(en.telefono) && tg?.usuario && <button type="button" className={btnSec} onClick={() => invitar(en.telefono)} title="Abre tu WhatsApp con la invitación al bot de Telegram">Invitar a Telegram</button>}
                                             {editable && <button type="button" className={btnSec} onClick={() => whatsappManual(p, en)} title="Abre tu WhatsApp con el mensaje y el link de este número">WhatsApp a mano</button>}
                                           </span>
                                         </li>
@@ -576,9 +646,9 @@ export default function FranquiciasReposicionAuto() {
                                       <div className="mt-3 flex flex-wrap gap-2">
                                         <button type="button" disabled={ocupado === `enviar-${p.id}`} onClick={() => void enviarAhora(p, false)}
                                           className="inline-flex items-center gap-1.5 rounded-full bg-sky-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-sky-500 disabled:opacity-50">
-                                          {ocupado === `enviar-${p.id}` ? <Loader2 size={12} className="animate-spin" aria-hidden /> : <Send size={12} aria-hidden />} Enviar por WhatsApp los que faltan
+                                          {ocupado === `enviar-${p.id}` ? <Loader2 size={12} className="animate-spin" aria-hidden /> : <Send size={12} aria-hidden />} Enviar por {canal} los que faltan
                                         </button>
-                                        <button type="button" disabled={ocupado === `enviar-${p.id}`} onClick={() => { if (window.confirm('¿Volver a mandar el WhatsApp a todos los números?')) void enviarAhora(p, true) }} className={btnSec}>Reenviar a todos</button>
+                                        <button type="button" disabled={ocupado === `enviar-${p.id}`} onClick={() => { if (window.confirm(`¿Volver a mandar el ${canal} a todos los números?`)) void enviarAhora(p, true) }} className={btnSec}>Reenviar a todos</button>
                                       </div>
                                     )}
                                   </div>

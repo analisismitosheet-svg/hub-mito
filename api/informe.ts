@@ -29,7 +29,7 @@
 import { activarAvisosWhatsapp, armarCuerpo, descartarRespaldo, enviarInforme, estadoWhatsapp, generarImagenInforme, reenviarConPlantilla, registrarMensajeEntrante, repoCompleta, tienePermiso, usuarioDe } from '../src/lib/informesServidor.js'
 import { formatoDe, type Informe } from '../src/lib/informes.js'
 import { mismoSecreto } from '../src/lib/apiAuth.js'
-import { enviarPendientesFranquicias, reenviarPropuesta } from '../src/lib/franquiciasWhatsapp.js'
+import { enviarAlVincular, enviarPendientesFranquicias, reenviarPropuesta } from '../src/lib/franquiciasWhatsapp.js'
 import { ampliarAvisosOc, crearPlantillaOc, estadoPlantillaOc, pedirAutorizacionOc, procesarBotonOc, type BotonPulsado } from '../src/lib/ordenesCompraWhatsapp.js'
 import { conectarBotTelegram, estadoTelegram, procesarUpdateTelegram, secretoWebhookTelegram, telegramActivo } from '../src/lib/telegram.js'
 
@@ -263,7 +263,7 @@ async function manual(req: Req, res: Res) {
 
   // --- Telegram: estado del bot (pantalla de contactos) y conectar el webhook (solo admin) ---
   if (datos.telegram === 'estado') {
-    if (!(await tienePermiso(token, ['sistemas.informes.view', 'ordenes_compra.admin']))) return res.status(403).json({ error: 'No tenés permiso para esta acción' })
+    if (!(await tienePermiso(token, ['sistemas.informes.view', 'ordenes_compra.admin', 'mayorista.franquicias.view']))) return res.status(403).json({ error: 'No tenés permiso para esta acción' })
     return res.status(200).json(await estadoTelegram(HUB_URL()))
   }
   if (datos.telegram === 'conectar') {
@@ -426,9 +426,14 @@ async function webhookTelegram(req: Req, res: Res) {
     return res.status(401).json({ error: 'No autorizado' })
   }
   // Telegram reintenta si no recibe 200: una falla acá no tiene que repetirse sin fin
-  const update = cuerpo(req) as { callback_query?: BotonPulsado }
-  await (update.callback_query ? procesarBotonOc(update.callback_query) : procesarUpdateTelegram(update))
-    .catch((e: Error) => console.log(`[telegram] error: ${e.name}`))
+  const update = cuerpo(req) as { callback_query?: BotonPulsado } & Parameters<typeof procesarUpdateTelegram>[0]
+  if (update.callback_query) {
+    await procesarBotonOc(update.callback_query).catch((e: Error) => console.log(`[telegram] error: ${e.name}`))
+  } else {
+    const vinculado = await procesarUpdateTelegram(update).catch((e: Error) => { console.log(`[telegram] error: ${e.name}`); return null })
+    // Recién vinculado: le salen las reposiciones de franquicias que tenía esperando
+    if (vinculado) await enviarAlVincular(vinculado).catch((e: Error) => console.log(`[telegram] franquicias: ${e.name}`))
+  }
   return res.status(200).json({ ok: true })
 }
 

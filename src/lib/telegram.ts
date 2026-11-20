@@ -90,17 +90,20 @@ const pedirNumero = (chat: number, texto: string) =>
     reply_markup: { keyboard: [[{ text: 'Compartir mi número', request_contact: true }]], resize_keyboard: true, one_time_keyboard: true },
   })
 
-/** Lo que manda Telegram al webhook: el saludo, o el número que la persona compartió. */
-export async function procesarUpdateTelegram(update: { message?: MensajeTelegram }): Promise<void> {
+/**
+ * Lo que manda Telegram al webhook: el saludo, o el número que la persona compartió.
+ * Devuelve el teléfono si se acaba de vincular (para mandarle lo que tenía pendiente).
+ */
+export async function procesarUpdateTelegram(update: { message?: MensajeTelegram }): Promise<string | null> {
   const m = update.message
   const chat = m?.chat?.id
-  if (!m || !chat || m.chat?.type !== 'private') return
+  if (!m || !chat || m.chat?.type !== 'private') return null
   if (m.contact) {
     // Solo vale el número propio: se puede compartir el contacto de otra persona
     const tel = normalizarTelefono(m.contact.phone_number ?? '')
     if (!tel || !m.from?.id || m.contact.user_id !== m.from.id) {
       await pedirNumero(chat, 'Necesito tu propio número. Tocá el botón «Compartir mi número».')
-      return
+      return null
     }
     const r = await rest('telegram_vinculos?on_conflict=telefono', {
       method: 'POST',
@@ -112,9 +115,10 @@ export async function procesarUpdateTelegram(update: { message?: MensajeTelegram
       text: r.ok ? 'Listo, quedaste vinculado. Los avisos de MITO te van a llegar por acá.' : 'No se pudo guardar. Probá de nuevo en un rato.',
       reply_markup: { remove_keyboard: true },
     })
-    return
+    return r.ok ? tel : null
   }
   await pedirNumero(chat, 'Hola. Para recibir los avisos de MITO, tocá el botón «Compartir mi número». Solo se hace una vez.')
+  return null
 }
 
 export interface EstadoTelegram {

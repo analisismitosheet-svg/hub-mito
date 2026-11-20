@@ -13,6 +13,7 @@
  */
 import { enviarWhatsappPlantilla } from './informesServidor.js'
 import { enviarTelegram, telegramActivo } from './telegram.js'
+import { claveTelefono } from './informes.js'
 
 /** Reintentos de un envío que falla (plantilla en revisión, Meta caído…): cada 5 min → ~1 h. */
 const MAX_INTENTOS = 12
@@ -67,8 +68,8 @@ export interface ResultadoFranquicias {
  * Manda los envíos pendientes (o los de una propuesta). Cada envío se reclama sumando
  * un intento con PATCH condicional: si dos corridas se cruzan, solo una lo manda.
  */
-export async function enviarPendientesFranquicias(propuestaId?: string): Promise<ResultadoFranquicias> {
-  const filtro = propuestaId ? `propuesta_id=eq.${propuestaId}` : `intentos=lt.${MAX_INTENTOS}`
+export async function enviarPendientesFranquicias(propuestaId?: string, ids?: number[]): Promise<ResultadoFranquicias> {
+  const filtro = ids?.length ? `id=in.(${ids.join(',')})` : propuestaId ? `propuesta_id=eq.${propuestaId}` : `intentos=lt.${MAX_INTENTOS}`
   const r = await rest(
     `franquicias_propuesta_envios?estado=neq.enviado&${filtro}` +
       '&select=id,propuesta_id,telefono,token,intentos,franquicias_propuestas(numero,cliente_nombre,franquicia_nombre,desde,hasta,estado)' +
@@ -100,7 +101,12 @@ export async function enviarPendientesFranquicias(propuestaId?: string): Promise
     const link = `${hubUrl()}/p/${e.token}`
     const texto = `Hola ${cliente}, te armamos la reposición ${p.numero} según la venta del ${ventaDe(p)}: ${t.articulos} artículos, ${t.unidades} unidades.\n\nMirala y confirmala acá:\n${link}`
     const res = telegramActivo()
-      ? await enviarTelegram(e.telefono, texto)
+      ? await enviarTelegram(
+          e.telefono,
+          `Hola ${cliente}, te armamos la reposición ${p.numero} según la venta del ${ventaDe(p)}: ${t.articulos} artículos, ${t.unidades} unidades.\n\nMirala, ajustá lo que quieras y confirmala con el botón.`,
+          null,
+          [[{ text: '🛒 Ver y confirmar el pedido', url: link }]],
+        )
       : await enviarWhatsappPlantilla(
           e.telefono,
           {
@@ -117,7 +123,8 @@ export async function enviarPendientesFranquicias(propuestaId?: string): Promise
       headers: { Prefer: 'return=minimal' },
       body: JSON.stringify(res.ok
         ? { estado: 'enviado', enviado_at: ahora, detalle: res.detalle }
-        : { estado: 'error', detalle: res.detalle.slice(0, 500) }),
+        // Sin vínculo a Telegram no sirve reintentar: sale solo apenas la persona se vincula (enviarAlVincular)
+        : { estado: 'error', detalle: res.detalle.slice(0, 500), ...('sinVinculo' in res && res.sinVinculo ? { intentos: MAX_INTENTOS } : {}) }),
     }).catch(() => undefined)
     if (res.ok) {
       out.enviados++
@@ -132,6 +139,31 @@ export async function enviarPendientesFranquicias(propuestaId?: string): Promise
     out.detalle.push(`${p.numero} +${e.telefono}: ${res.ok ? 'OK' : res.detalle}`)
   }
   return out
+}
+
+/**
+ * Alguien se acaba de vincular al bot de Telegram: le manda las reposiciones que tenía
+ * pendientes (todavía sin aceptar ni vencer) a ese número.
+ */
+export async function enviarAlVincular(telefono: string): Promise<ResultadoFranquicias | null> {
+  const clave = claveTelefono(telefono)
+  const r = await rest(
+    'franquicias_propuesta_envios?estado=neq.enviado' +
+      '&select=id,telefono,franquicias_propuestas!inner(estado,vence_at)' +
+      `&franquicias_propuestas.estado=eq.enviada&franquicias_propuestas.vence_at=gt.${new Date().toISOString()}` +
+      '&order=id.desc&limit=200',
+  )
+  if (!r.ok) return null
+  const ids = ((await r.json()) as Array<{ id: number; telefono: string }>)
+    .filter((e) => claveTelefono(e.telefono) === clave)
+    .map((e) => e.id)
+  if (!ids.length) return null
+  await rest(`franquicias_propuesta_envios?id=in.(${ids.join(',')})`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({ estado: 'pendiente', intentos: 0, detalle: null }),
+  })
+  return enviarPendientesFranquicias(undefined, ids)
 }
 
 /** "Enviar ahora" desde el hub: vuelve a poner en cola los que no salieron y los manda. */
