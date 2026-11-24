@@ -111,6 +111,34 @@ function localDeCelda(v: unknown): string | null {
   return iso ? `${+iso.slice(8, 10)} DE ${MESES[+iso.slice(5, 7) - 1]}` : s
 }
 
+/**
+ * Comentarios de columnas que el hub no tiene: van como nota a la columna más
+ * cercana, con el nombre de la columna original adelante.
+ */
+const NOTA_REDIRIGIDA: Record<string, string> = {
+  'cambio carga horaria': 'horas',
+  'cambio de cat': 'categoria',
+  'cant. personas': 'prepaga',
+  'preocupacional': 'fecha_ingreso',
+  'entrega de epp': 'entrega_remeras',
+  'talle remeras': 'entrega_remeras',
+}
+/** Si la columna no está ni mapeada ni redirigida, la nota va al ingreso. */
+const NOTA_POR_DEFECTO = 'fecha_ingreso'
+
+/**
+ * Texto de un comentario de Excel/Google Sheets sin el ruido que agrega la
+ * exportación: separadores "======", "ID#...", y la línea de autor y fecha.
+ */
+export function limpiarComentario(t: string): string {
+  return t
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && !/^=+$/.test(l) && !/^ID#/i.test(l) && !/^.+\s\(\d{4}-\d{2}-\d{2} [\d:]+\)$/.test(l))
+    .join('\n')
+    .trim()
+}
+
 /** Normaliza un encabezado: sin acentos, sin símbolos raros, en minúscula. */
 function norm(s: unknown): string {
   return String(s ?? '')
@@ -206,8 +234,23 @@ export async function leerListado(file: File, estadoPorDefecto: string): Promise
     const mapa = MAPEO[estado]
     if (!mapa) continue
 
-    const filas = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[hoja], { header: 1, defval: '', blankrows: false })
+    const ws = wb.Sheets[hoja]
+    // Con blankrows el índice de cada fila coincide con su renglón en la hoja (para ubicar los comentarios)
+    const filas = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '', blankrows: true })
     if (filas.length < 2) { avisos.push(`Hoja "${hoja}": vacía.`); continue }
+    const rango = XLSX.utils.decode_range(ws['!ref'] ?? 'A1')
+    // Comentarios de las celdas: renglón -> [columna, texto]
+    const comentarios = new Map<number, { col: number; texto: string }[]>()
+    for (const dir of Object.keys(ws)) {
+      if (dir[0] === '!') continue
+      const cel = ws[dir] as { c?: { t?: string }[] }
+      if (!cel?.c?.length) continue
+      const texto = limpiarComentario(cel.c.map((x) => x.t ?? '').join('\n'))
+      if (!texto) continue
+      const { r, c } = XLSX.utils.decode_cell(dir)
+      const fila = r - rango.s.r
+      comentarios.set(fila, [...(comentarios.get(fila) ?? []), { col: c - rango.s.c, texto }])
+    }
     const iCab = filaEncabezado(filas)
     const cabecera = (filas[iCab] as unknown[]).map(norm)
     const indices: Record<string, number> = {}
@@ -216,7 +259,10 @@ export async function leerListado(file: File, estadoPorDefecto: string): Promise
 
     const salida: Record<string, unknown>[] = []
     let sinNombre = 0
-    for (const fila of filas.slice(iCab + 1)) {
+    const campoDeCol = new Map(Object.entries(indices).filter(([, i]) => i >= 0).map(([campo, i]) => [i, campo]))
+    for (let k = iCab + 1; k < filas.length; k++) {
+      const fila = filas[k]
+      if (!(fila as unknown[]).some((v) => String(v ?? '').trim() !== '')) continue
       const crudo = (i: number) => (i >= 0 ? String((fila as unknown[])[i] ?? '').trim() : '')
       const nombre = crudo(indices.nombre)
       if (!nombre) { sinNombre++; continue }
@@ -230,6 +276,20 @@ export async function leerListado(file: File, estadoPorDefecto: string): Promise
         else if (CAMPOS_LOCAL.has(campo)) reg[campo] = localDeCelda(v)
         else reg[campo] = String(v ?? '').trim() || null
       }
+      // Notas: los comentarios de las celdas de esta fila
+      const notas: Record<string, string> = {}
+      for (const { col, texto } of comentarios.get(k) ?? []) {
+        let campo = campoDeCol.get(col)
+        let txt = texto
+        if (!campo || campo === 'nombre' || campo === 'legajo') {
+          const cab = cabecera[col] ?? ''
+          campo = NOTA_REDIRIGIDA[cab] ?? NOTA_POR_DEFECTO
+          const original = String((filas[iCab] as unknown[])[col] ?? '').trim()
+          if (original) txt = `[${original.toUpperCase()}] ${texto}`
+        }
+        notas[campo] = notas[campo] ? `${notas[campo]}\n${txt}` : txt
+      }
+      if (Object.keys(notas).length) reg.notas = notas
       salida.push(reg)
     }
     if (sinNombre) avisos.push(`Hoja "${hoja}": ${sinNombre} fila${sinNombre === 1 ? '' : 's'} sin nombre que se saltearon.`)

@@ -160,6 +160,72 @@ export function SelectBuscar({
 }
 
 /**
+ * Como SelectBuscar, pero se pueden tildar varias opciones (ej. OCTUBRE y NOVIEMBRE).
+ * Vacío = todas. Devuelve las elegidas en el orden de `opciones`.
+ */
+export function SelectBuscarVarios({
+  label,
+  opciones,
+  valores,
+  onChange,
+  className,
+}: {
+  label: string
+  opciones: OpcionMulti[]
+  valores: string[]
+  onChange: (v: string[]) => void
+  className?: string
+}) {
+  const [abierto, setAbierto] = useState(false)
+  const elegidas = new Set(valores)
+  const texto =
+    valores.length === 0 ? label
+      : valores.length <= 2 ? opciones.filter((o) => elegidas.has(o.id)).map((o) => o.label).join(', ')
+        : `${label}: ${valores.length}`
+
+  function toggle(id: string) {
+    const nuevo = new Set(elegidas)
+    if (nuevo.has(id)) nuevo.delete(id)
+    else nuevo.add(id)
+    onChange(opciones.map((o) => o.id).filter((x) => nuevo.has(x)))
+  }
+
+  return (
+    <div className={'relative ' + (className ?? '')}>
+      <button
+        type="button"
+        onClick={() => setAbierto((o) => !o)}
+        title={valores.length ? opciones.filter((o) => elegidas.has(o.id)).map((o) => o.label).join(', ') : `${label} (todos)`}
+        className="btn-press inline-flex w-full items-center justify-between gap-1.5 rounded-lg border border-line bg-surface2 px-2 py-1.5 text-xs font-medium text-ink hover:bg-line"
+      >
+        <span className="truncate">{texto}</span>
+        <ChevronDown size={13} className="shrink-0 text-sub" aria-hidden />
+      </button>
+      {abierto && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setAbierto(false)} />
+          <div className="absolute left-0 top-full z-40 mt-1 w-56 rounded-xl border border-line bg-surface p-2 shadow-lg">
+            <label className="flex cursor-pointer items-center gap-1.5 rounded-lg px-1.5 py-1 text-xs font-medium text-ink hover:bg-line/40">
+              <input type="checkbox" checked={valores.length === 0} onChange={() => onChange([])} className="h-3.5 w-3.5 rounded border-line bg-surface2 accent-brand-600" />
+              {label} (todos)
+            </label>
+            <div className="my-1 border-t border-line" />
+            <div className="max-h-64 overflow-y-auto">
+              {opciones.map((o) => (
+                <label key={o.id} className="flex cursor-pointer items-center gap-1.5 rounded-lg px-1.5 py-1 text-xs text-ink hover:bg-line/40">
+                  <input type="checkbox" checked={elegidas.has(o.id)} onChange={() => toggle(o.id)} className="h-3.5 w-3.5 rounded border-line bg-surface2 accent-brand-600" />
+                  <span className="truncate">{o.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+/**
  * Filtro multiselect con buscador (como los filtros de Excel).
  * Muestra un botón con el contador y, al abrir, un dropdown con input de
  * búsqueda para no tener que desplazar la barra.

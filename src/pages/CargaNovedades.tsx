@@ -7,7 +7,8 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { FILTRO_EMPLEADOS_ACTIVOS } from '@/lib/empleadosActivos'
 import { usePermisosArea } from '@/hooks/usePermisosArea'
-import MultiselectFiltro, { SelectBuscar, AutocompleteCampo } from '@/components/MultiselectFiltro'
+import MultiselectFiltro, { SelectBuscar, SelectBuscarVarios, AutocompleteCampo } from '@/components/MultiselectFiltro'
+import { textoMes, periodoDeFecha, tipoDeEmpleado } from '@/lib/novedadesPeriodo'
 import { nombresMotivos, colorFilaMotivo } from '@/lib/motivos'
 import { nombresTipos, invalidarTipos, cargarTipos } from '@/lib/tipos'
 
@@ -41,16 +42,6 @@ const MESES = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', '
 function mesNombre(mes: string | null): string {
   const n = (mes ?? '').split(/[ (]/)[0].trim().toUpperCase()
   return MESES.includes(n) ? n : ''
-}
-
-/** Arma el texto de liquidación para un mes: "MES (26/mm AL 25/mm)". */
-function textoMes(mes: string): string {
-  const idx = MESES.indexOf(mes.toUpperCase())
-  if (idx < 0) return mes
-  // El período arranca el 26 del mes anterior
-  const dd = String(idx === 0 ? 12 : idx).padStart(2, '0')
-  const hh = String(idx + 1).padStart(2, '0')
-  return `${mes.toUpperCase()} (26/${dd} AL 25/${hh})`
 }
 
 function fmtFecha(iso: string | null): string {
@@ -119,21 +110,6 @@ const periodoEnCurso = () => {
   const pasa = hoy.getDate() >= 26
   const idx = (hoy.getMonth() + (pasa ? 1 : 0)) % 12
   const anio = hoy.getFullYear() + (pasa && hoy.getMonth() === 11 ? 1 : 0)
-  return { anio: String(anio), mes: MESES_LIQUIDACION[idx] }
-}
-
-/** BAJA e INGRESO van al mes calendario de la fecha (así los carga RRHH); el resto, del 26 al 25. */
-const MOTIVOS_MES_CALENDARIO = new Set(['BAJA', 'INGRESO'])
-
-/** Período de liquidación al que pertenece una fecha ISO (del 26 en adelante es el mes siguiente,
- *  salvo BAJA e INGRESO, que quedan en el mes de la fecha). */
-function periodoDeFecha(iso: string, motivo = ''): { anio: string; mes: string } | null {
-  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/)
-  if (!m) return null
-  const y = +m[1], mm = +m[2] - 1, d = +m[3]
-  const pasa = d >= 26 && !MOTIVOS_MES_CALENDARIO.has(motivo.trim().toUpperCase())
-  const idx = (mm + (pasa ? 1 : 0)) % 12
-  const anio = y + (pasa && mm === 11 ? 1 : 0)
   return { anio: String(anio), mes: MESES_LIQUIDACION[idx] }
 }
 
@@ -210,17 +186,18 @@ export default function CargaNovedades() {
   // Filtros
   const [q, setQ] = useState('')
   const [fAnio, setFAnio] = useState(() => periodoEnCurso().anio)
-  const [fMes, setFMes] = useState(() => periodoEnCurso().mes)
+  // Varios meses a la vez (ej. OCTUBRE y NOVIEMBRE); vacío = todos
+  const [fMeses, setFMeses] = useState<string[]>(() => [periodoEnCurso().mes])
   const [fMotivo, setFMotivo] = useState('')
   const [fLocal, setFLocal] = useState('')
   const [fTipo, setFTipo] = useState('')
   const [motivos, setMotivos] = useState<string[]>([])
   const [tipos, setTipos] = useState<string[]>([])
   const [abiertoTipos, setAbiertoTipos] = useState(false)
-  const [empleadosLegajo, setEmpleadosLegajo] = useState<{ legajo: string; nombre: string }[]>([])
+  const [empleadosLegajo, setEmpleadosLegajo] = useState<{ legajo: string; nombre: string; tipo: string }[]>([])
 
   // Orden y filtros por columna de la tabla (multifiltro + multisort)
-  const [sortKeys, setSortKeys] = useState<{ clave: string; dir: 1 | -1 }[]>([{ clave: 'nombre_completo', dir: 1 }])
+  const [sortKeys, setSortKeys] = useState<{ clave: string; dir: 1 | -1 }[]>([{ clave: 'nombre_completo', dir: 1 }, { clave: 'fecha', dir: 1 }])
   const [filtrosCol, setFiltrosCol] = useState<Record<string, string[]>>({})
   const toggleOrden = (clave: string) =>
     setSortKeys((prev) => {
@@ -242,7 +219,7 @@ export default function CargaNovedades() {
     // Filtros aplicados en el servidor (la tabla tiene ~11k filas; sin esto solo llegan las primeras 1000)
     let query = supabase.from('novedades').select('*')
     if (fAnio) query = query.eq('anio', fAnio)
-    if (fMes) query = query.like('mes_liquidacion', fMes + '%')
+    if (fMeses.length) query = query.or(fMeses.map((m) => `mes_liquidacion.like.${m}%`).join(','))
     if (fMotivo) query = query.eq('motivo', fMotivo)
     if (fLocal) query = query.eq('local', fLocal)
     if (fTipo) query = query.eq('tipo', fTipo)
@@ -263,17 +240,17 @@ export default function CargaNovedades() {
     setMotivos(mts)
     setTipos(tps)
     setCargando(false)
-  }, [fAnio, fMes, fMotivo, fLocal, fTipo, q])
+  }, [fAnio, fMeses, fMotivo, fLocal, fTipo, q])
 
   useEffect(() => { void cargar() }, [cargar])
 
   // Empleados (legajo + nombre) para armar una fila por legajo en el mes en curso
   useEffect(() => {
     if (!supabase) return
-    void supabase.from('empleados_basico').select('legajo,nombre').not('legajo', 'is', null).or(FILTRO_EMPLEADOS_ACTIVOS).then(({ data }) => {
-      const rows = ((data as { legajo: string | null; nombre: string | null }[] | null) ?? [])
+    void supabase.from('empleados_basico').select('legajo,nombre,estado_legajo,plan').not('legajo', 'is', null).or(FILTRO_EMPLEADOS_ACTIVOS).then(({ data }) => {
+      const rows = ((data as { legajo: string | null; nombre: string | null; estado_legajo: string | null; plan: string | null }[] | null) ?? [])
         .filter((e) => e.legajo && e.nombre)
-        .map((e) => ({ legajo: String(e.legajo), nombre: String(e.nombre) }))
+        .map((e) => ({ legajo: String(e.legajo), nombre: String(e.nombre), tipo: tipoDeEmpleado(e.estado_legajo, e.plan) }))
       setEmpleadosLegajo(rows)
     })
   }, [])
@@ -304,7 +281,7 @@ export default function CargaNovedades() {
       reset()
       // Nueva novedad: precarga el mes/año del filtro para que coincida con la fila vacía
       setAnio(fAnio)
-      setMes(fMes ? textoMes(fMes) : '')
+      setMes(fMeses.length === 1 ? textoMes(fMeses[0]) : '')
     }
     setModalAbierto(true)
   }
@@ -445,6 +422,7 @@ export default function CargaNovedades() {
   // Mes de liquidacion en curso (periodo del 26 al 25): las filas por legajo
   // se arman solo cuando el filtro coincide con ese mes.
   const mesEnCurso = useMemo(periodoEnCurso, [])
+  const fMes = fMeses.length === 1 ? fMeses[0] : ''
   const esMesEnCurso = fAnio === mesEnCurso.anio && fMes === mesEnCurso.mes
 
   const colVal = useCallback((n: Novedad, clave: string): unknown => {
@@ -456,7 +434,7 @@ export default function CargaNovedades() {
   const lista = useMemo(() => {
     let r = todos
     if (fAnio) r = r.filter((n) => (n.anio || '').trim() === fAnio)
-    if (fMes) r = r.filter((n) => mesCorto(n.mes_liquidacion) === fMes)
+    if (fMeses.length) r = r.filter((n) => fMeses.includes(mesCorto(n.mes_liquidacion)))
     if (fMotivo) r = r.filter((n) => (n.motivo || '') === fMotivo)
     if (fLocal) r = r.filter((n) => (n.local || '') === fLocal)
     if (fTipo) r = r.filter((n) => (n.tipo || '') === fTipo)
@@ -509,6 +487,10 @@ export default function CargaNovedades() {
           let c = 0
           if (k.clave === 'dias' || k.clave === 'numero' || k.clave === 'anio' || k.clave === 'minutos') {
             c = (Number(sa.replace(',', '.')) || 0) - (Number(sb.replace(',', '.')) || 0)
+          } else if (k.clave === 'fecha') {
+            // Sin fecha, ordena por el desde (bajas, licencias); las vacías al final
+            const fa = a.fecha || a.desde || '9999', fb = b.fecha || b.desde || '9999'
+            c = fa.localeCompare(fb)
           } else if (k.clave === 'mes_liquidacion') {
             c = (MESES.indexOf(mesCorto(av as string | null)) || 0) - (MESES.indexOf(mesCorto(bv as string | null)) || 0)
           } else {
@@ -520,7 +502,7 @@ export default function CargaNovedades() {
       })
     }
     return r
-  }, [todos, fAnio, fMes, fMotivo, fLocal, fTipo, q, sortKeys, filtrosCol, esMesEnCurso, empleadosLegajo])
+  }, [todos, fAnio, fMeses, fMes, fMotivo, fLocal, fTipo, q, sortKeys, filtrosCol, esMesEnCurso, empleadosLegajo])
 
   const columnasNov = ['anio', 'mes_liquidacion', 'numero', 'nombre_completo', 'tipo', 'fecha', 'desde', 'hasta', 'dias', 'local', 'motivo', 'novedad', 'minutos', 'control']
   const valoresCol = useMemo(() => {
@@ -539,7 +521,7 @@ export default function CargaNovedades() {
   )
   const elegirEmp = (v: string) => {
     const emp = empleadosLegajo.find((e) => `${e.legajo} - ${e.nombre}` === v)
-    if (emp) { setNumero(emp.legajo); setNombre(emp.nombre) }
+    if (emp) { setNumero(emp.legajo); setNombre(emp.nombre); if (emp.tipo) setTipo(emp.tipo) }
   }
 
   async function exportarExcel() {
@@ -563,7 +545,7 @@ export default function CargaNovedades() {
     const ws = XLSX.utils.json_to_sheet(filas)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Novedades')
-    XLSX.writeFile(wb, `novedades_${fMes || 'todas'}_${fAnio || ''}.xlsx`)
+    XLSX.writeFile(wb, `novedades_${fMeses.join('-') || 'todas'}_${fAnio || ''}.xlsx`)
   }
 
   return (
@@ -602,7 +584,7 @@ export default function CargaNovedades() {
       <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
         <AutocompleteCampo label="Legajo o nombre" opciones={opcionesEmp} valor={q} onChange={setQ} placeholder="Buscar por legajo o nombre..." className="block" />
         <SelectBuscar label="Año" opciones={aniosDisponibles.map((a) => ({ id: a, label: a }))} valor={fAnio} onChange={setFAnio} className="h-7 w-full" />
-        <SelectBuscar label="Mes" opciones={MESES_LIQUIDACION.map((m) => ({ id: m, label: m }))} valor={fMes} onChange={setFMes} className="h-7 w-full" />
+        <SelectBuscarVarios label="Mes" opciones={MESES_LIQUIDACION.map((m) => ({ id: m, label: m }))} valores={fMeses} onChange={setFMeses} className="h-7 w-full" />
         <SelectBuscar label="Motivo" opciones={motivos.map((m) => ({ id: m, label: m }))} valor={fMotivo} onChange={setFMotivo} className="h-7 w-full" />
         <SelectBuscar label="Local" opciones={LOCALES.map((l) => ({ id: l, label: l }))} valor={fLocal} onChange={setFLocal} className="h-7 w-full" />
         <SelectBuscar label="Tipo" opciones={tipos.map((t) => ({ id: t, label: t }))} valor={fTipo} onChange={setFTipo} className="h-7 w-full" />

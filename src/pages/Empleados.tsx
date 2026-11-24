@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   Loader2, Plus, Trash2, Pencil, Search, SearchX, X, Upload, MapPin,
-  Users, ClipboardList, UserMinus, UserX,
+  Users, ClipboardList, UserMinus, UserX, Copy, Check, Flag,
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import AppCard from '@/components/AppCard'
@@ -14,6 +14,8 @@ import { AutocompleteCampo } from '@/components/MultiselectFiltro'
 import MultiselectFiltro from '@/components/MultiselectFiltro'
 import { COLUMNAS, columnasDeEstado, camposDeEstado, UBICACIONES_LEGAJO } from '@/config/columnasEmpleados'
 import { leerListado, claveBaja, soloDigitos } from '@/lib/importarListado'
+import { textoMes, periodoDeFecha, tipoDeEmpleado } from '@/lib/novedadesPeriodo'
+import { useAuth } from '@/context/AuthContext'
 
 interface Empleado {
   id: string
@@ -56,6 +58,8 @@ interface Empleado {
   cuenta_informes: boolean | null
   /** Notas por celda, como los comentarios de Excel: { clave_columna: texto } (sql/empleados_notas.sql) */
   notas: Record<string, string> | null
+  /** Renunció y está pendiente de baja: el nombre se pinta (sql/empleados_renuncia.sql) */
+  renuncia: boolean | null
 }
 
 const ESTADO_LEGAJO_OPCIONES = ['NOMINA ACTIVA', 'PLANES ACTIVOS', 'BAJAS MITO', 'BAJAS PLANES']
@@ -79,7 +83,7 @@ function estiloEstadoLegajo(s: string | null): string {
 }
 
 const CAMPOS =
-  'id,legajo,nombre,activo,lugar,ubicacion,area_sector,horas,convenio,categoria,puesto,comision,reingreso,fecha_ingreso,antiguedad_2025,dias_vacaciones_2025,cuil,dni,fecha_nacimiento,sexo,telefono,domicilio,email,codigo_os,prepaga,tipo_contrato,contacto_emergencia,parentesco,telefono_emergencia,estado_legajo,fecha_egreso,motivo_baja,plan,obra_social,fin_plan,entrega_remeras,cuenta_informes,notas'
+  'id,legajo,nombre,activo,lugar,ubicacion,area_sector,horas,convenio,categoria,puesto,comision,reingreso,fecha_ingreso,antiguedad_2025,dias_vacaciones_2025,cuil,dni,fecha_nacimiento,sexo,telefono,domicilio,email,codigo_os,prepaga,tipo_contrato,contacto_emergencia,parentesco,telefono_emergencia,estado_legajo,fecha_egreso,motivo_baja,plan,obra_social,fin_plan,entrega_remeras,cuenta_informes,notas,renuncia'
 
 const inputCls = 'w-full rounded-xl border border-line bg-surface2 px-3 py-1.5 text-[13px] text-ink outline-none transition duration-250 placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40'
 const selectCls = inputCls + ' appearance-none'
@@ -96,6 +100,23 @@ const CATEGORIAS = [
 
 /** Nómina activa incluye a los legajos sin estado cargado. */
 const FILTRO_NOMINA = 'estado_legajo.eq."NOMINA ACTIVA",estado_legajo.is.null'
+
+/** Legajo y nombre quedan fijos a la izquierda al desplazar la tabla (pedido de RR. HH.). */
+const ANCHO_LEGAJO = 64
+function claseFija(clave: string): string {
+  if (clave === 'legajo') return ' sticky left-0'
+  if (clave === 'nombre') return ' sticky border-r border-line min-w-[200px] max-w-[280px]'
+  return ''
+}
+const estiloFijo = (clave: string): React.CSSProperties | undefined =>
+  clave === 'legajo' ? { width: ANCHO_LEGAJO, minWidth: ANCHO_LEGAJO, maxWidth: ANCHO_LEGAJO }
+    : clave === 'nombre' ? { left: ANCHO_LEGAJO } : undefined
+
+/** Fondo de la marca de renuncia, opaco para que funcione en la columna fija. */
+const FONDO_RENUNCIA = 'color-mix(in srgb, #f59e0b 28%, var(--surface))'
+
+/** Estado de baja que corresponde a cada estado activo. */
+const BAJA_DE: Record<string, string> = { 'NOMINA ACTIVA': 'BAJAS MITO', 'PLANES ACTIVOS': 'BAJAS PLANES' }
 
 /** Columnas principales: no llevan nota. */
 const SIN_NOTA = new Set(['legajo', 'nombre'])
@@ -173,6 +194,9 @@ export default function Empleados() {
   const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null)
   const [verNota, setVerNota] = useState<{ texto: string; rect: DOMRect } | null>(null)
   const [editNota, setEditNota] = useState<{ emp: Empleado; clave: string; rect: DOMRect } | null>(null)
+  const [copiada, setCopiada] = useState<string | null>(null)
+  const [darBaja, setDarBaja] = useState<Empleado | null>(null)
+  const { isAdmin } = useAuth()
   const [importando, setImportando] = useState(false)
   const [importMsg, setImportMsg] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -181,6 +205,7 @@ export default function Empleados() {
   const fabDrag = useRef<{ sx: number; sy: number; ox: number; oy: number; moved: boolean } | null>(null)
 
   const columnas = useMemo(() => columnasDeEstado(estado || ESTADO_POR_DEFECTO), [estado])
+  const esVistaBajas = estado.startsWith('BAJAS')
 
   function fabDown(e: ReactMouseEvent) {
     e.preventDefault()
@@ -366,6 +391,27 @@ export default function Empleados() {
     await cargar()
   }
 
+  /** Copia los valores de una columna (lo filtrado, en el orden de la tabla), uno por renglón. */
+  async function copiarColumna(clave: string) {
+    const vals = filtrados.map((e) => { const t = texto(e, clave); return t === '-' ? '' : t })
+    try {
+      await navigator.clipboard.writeText(vals.join('\n'))
+      setCopiada(clave)
+      window.setTimeout(() => setCopiada((c) => (c === clave ? null : c)), 1500)
+    } catch {
+      setError('No se pudo copiar al portapapeles.')
+    }
+  }
+
+  /** Marca / desmarca la renuncia (el nombre se pinta hasta que se le da la baja). */
+  async function toggleRenuncia(emp: Empleado) {
+    if (!supabase) return
+    const renuncia = !emp.renuncia
+    const { error } = await supabase.from('empleados').update({ renuncia }).eq('id', emp.id)
+    if (error) { setError(error.message); return }
+    setEmpleados((prev) => prev.map((x) => (x.id === emp.id ? { ...x, renuncia } : x)))
+  }
+
   /** Guarda de a lotes: las filas con id se actualizan, las demás se insertan. */
   async function guardarLotes(filas: Record<string, unknown>[]): Promise<string | null> {
     if (!supabase || filas.length === 0) return null
@@ -398,8 +444,8 @@ export default function Empleados() {
       }
 
       // Activos: para actualizar por legajo y para no importar la baja de alguien que hoy trabaja
-      const { filas: activos, error: errAct } = await traerTodo<{ id: string; legajo: string | null; cuil: string | null; estado_legajo: string | null }>(
-        (desde, hasta) => sb.from('empleados').select('id,legajo,cuil,estado_legajo').in('estado_legajo', ESTADOS_ACTIVOS).range(desde, hasta),
+      const { filas: activos, error: errAct } = await traerTodo<{ id: string; legajo: string | null; cuil: string | null; estado_legajo: string | null; notas: Record<string, string> | null }>(
+        (desde, hasta) => sb.from('empleados').select('id,legajo,cuil,estado_legajo,notas').in('estado_legajo', ESTADOS_ACTIVOS).range(desde, hasta),
       )
       if (errAct) { setError(errAct); return }
       const cuilActivos = new Set(activos.map((a) => soloDigitos(a.cuil)).filter(Boolean))
@@ -407,13 +453,23 @@ export default function Empleados() {
       const idPorLegajo = new Map(
         activos.filter((a) => a.legajo).map((a) => [`${a.estado_legajo}|${a.legajo}`, a.id]),
       )
+      const notasPorId = new Map(activos.map((a) => [a.id, a.notas ?? {}]))
 
       const resumen: string[] = []
       for (const [est, filas] of Object.entries(porEstado)) {
         if (ESTADOS_ACTIVOS.includes(est)) {
           const conId = filas.map((f) => {
             const id = f.legajo ? idPorLegajo.get(`${est}|${f.legajo}`) : undefined
-            return id ? { ...f, id } : f
+            if (!id) return f
+            // Notas: se suman las del Excel a las que ya tiene la ficha (no se pisan las del hub)
+            const previas = notasPorId.get(id) ?? {}
+            const delExcel = (f.notas as Record<string, string> | undefined) ?? {}
+            const notas: Record<string, string> = { ...previas }
+            for (const [k, t] of Object.entries(delExcel)) {
+              if (!notas[k]) notas[k] = t
+              else if (!notas[k].includes(t)) notas[k] = `${notas[k]}\n${t}`
+            }
+            return { ...f, id, notas }
           })
           const nuevos = conId.filter((f) => !f.id).length
           const err = await guardarLotes(conId)
@@ -558,10 +614,21 @@ export default function Empleados() {
             <thead className="sticky top-0 z-10 bg-surface2/95 text-left text-[11px] uppercase tracking-wide text-sub backdrop-blur">
               <tr>
                 {columnas.map((clave) => (
-                  <th key={clave} className={tdBase + ' py-2'}>
-                    <button type="button" onClick={() => toggleSort(clave)} className="font-semibold uppercase text-sub hover:text-ink">
-                      {COLUMNAS[clave].label}{sortArrow(clave)}
-                    </button>
+                  <th key={clave} className={tdBase + ' group/th py-2' + claseFija(clave) + (claseFija(clave) ? ' z-20 bg-surface2' : '')} style={estiloFijo(clave)}>
+                    <span className="inline-flex items-center gap-1">
+                      <button type="button" onClick={() => toggleSort(clave)} className="font-semibold uppercase text-sub hover:text-ink">
+                        {COLUMNAS[clave].label}{sortArrow(clave)}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void copiarColumna(clave)}
+                        title={`Copiar la columna ${COLUMNAS[clave].label} (${filtrados.length} renglones)`}
+                        aria-label={`Copiar la columna ${COLUMNAS[clave].label}`}
+                        className={'rounded p-0.5 transition hover:text-ink ' + (copiada === clave ? 'text-emerald-400 opacity-100' : 'text-sub opacity-0 group-hover/th:opacity-100 focus-visible:opacity-100')}
+                      >
+                        {copiada === clave ? <Check size={11} aria-hidden /> : <Copy size={11} aria-hidden />}
+                      </button>
+                    </span>
                   </th>
                 ))}
                 <th className={tdBase + ' py-2 text-right'}>Acciones</th>
@@ -570,7 +637,7 @@ export default function Empleados() {
                 {columnas.map((clave) => {
                   const d = filtroDe(clave)
                   return (
-                    <th key={clave} className={tdBase + ' py-1 align-top'}>
+                    <th key={clave} className={tdBase + ' py-1 align-top' + claseFija(clave) + (claseFija(clave) ? ' z-20 bg-surface2' : '')} style={estiloFijo(clave)}>
                       {d && (
                         <FiltroCol
                           d={d}
@@ -586,21 +653,28 @@ export default function Empleados() {
             </thead>
             <tbody className="divide-y divide-line/60">
               {filtrados.map((e) => (
-                <tr key={e.id} className="hover:bg-line/20">
+                <tr key={e.id} className={'group hover:bg-line/20' + (esVistaBajas ? ' text-red-400' : '')}>
                   {columnas.map((clave) => {
                     const cls = (COLUMNAS[clave].wrap ? tdBaseWrap : tdBase)
+                    const colorTexto = esVistaBajas ? ' text-red-400' : ''
                     if (clave === 'nombre') {
+                      const marca = !!e.renuncia && !esVistaBajas
                       return (
-                        <td key={clave} className={tdBaseWrap + ' font-medium text-ink'}>
+                        <td
+                          key={clave}
+                          className={tdBaseWrap + ' z-[5] bg-surface font-medium group-hover:bg-surface2' + claseFija(clave) + (esVistaBajas ? ' text-red-400' : marca ? ' text-amber-300' : ' text-ink')}
+                          style={{ ...estiloFijo(clave), ...(marca ? { backgroundColor: FONDO_RENUNCIA } : {}) }}
+                          title={marca ? 'Renunció: pendiente de baja' : undefined}
+                        >
                           {puedeEditar ? (
-                            <button type="button" onClick={() => { setSel(e); setModal('edit') }} className="cursor-pointer text-left text-ink transition hover:text-brand-500" title="Editar empleado">
+                            <button type="button" onClick={() => { setSel(e); setModal('edit') }} className="cursor-pointer text-left transition hover:text-brand-500" title={marca ? 'Renunció: pendiente de baja. Clic para editar' : 'Editar empleado'}>
                               {e.nombre}
                             </button>
                           ) : e.nombre}
                         </td>
                       )
                     }
-                    if (SIN_NOTA.has(clave)) return <td key={clave} className={cls + ' text-sub'}>{texto(e, clave)}</td>
+                    if (SIN_NOTA.has(clave)) return <td key={clave} className={cls + ' z-[5] bg-surface group-hover:bg-surface2' + claseFija(clave) + (esVistaBajas ? colorTexto : ' text-sub')} style={estiloFijo(clave)}>{texto(e, clave)}</td>
                     const nota = e.notas?.[clave] ?? ''
                     const abrir = (ev: ReactMouseEvent<HTMLTableCellElement>) => {
                       ev.preventDefault()
@@ -629,8 +703,19 @@ export default function Empleados() {
                   })}
                   <td className={tdBase + ' text-right'}>
                     <div className="flex items-center justify-end gap-1">
+                      {puedeEditar && !esVistaBajas && (
+                        <button
+                          onClick={() => void toggleRenuncia(e)}
+                          className={'rounded border p-1 transition ' + (e.renuncia ? 'border-amber-500/50 bg-amber-500/15 text-amber-400' : 'border-line text-sub hover:text-amber-400')}
+                          title={e.renuncia ? 'Quitar la marca de renuncia' : 'Marcar renuncia (pinta el nombre hasta darle la baja)'}
+                        ><Flag size={11} aria-hidden /></button>
+                      )}
                       {puedeEditar && <button onClick={() => { setSel(e); setModal('edit') }} className="rounded border border-line p-1 text-sub transition hover:text-ink" title="Editar"><Pencil size={11} aria-hidden /></button>}
-                      {puedeBorrar && <button onClick={() => setConfirm({ message: `¿Borrar al empleado "${e.nombre}"?`, onConfirm: () => void borrar(e.id) })} className="rounded border border-line p-1 text-sub transition hover:text-ink" title="Eliminar"><Trash2 size={11} aria-hidden /></button>}
+                      {puedeEditar && !esVistaBajas && (
+                        <button onClick={() => setDarBaja(e)} className="rounded border border-line p-1 text-sub transition hover:text-red-400" title="Dar de baja (pasa a Bajas con todos sus datos)"><UserMinus size={11} aria-hidden /></button>
+                      )}
+                      {/* Borrar de verdad: en las bajas con permiso; en los activos solo el admin (para errores de carga) */}
+                      {puedeBorrar && (esVistaBajas || isAdmin) && <button onClick={() => setConfirm({ message: `¿Borrar al empleado "${e.nombre}"? Se pierde la ficha. Para darle la baja usá el botón de baja.`, onConfirm: () => void borrar(e.id) })} className="rounded border border-line p-1 text-sub transition hover:text-ink" title="Eliminar la ficha"><Trash2 size={11} aria-hidden /></button>}
                     </div>
                   </td>
                 </tr>
@@ -663,6 +748,16 @@ export default function Empleados() {
       )}
 
       <ConfirmDialog open={!!confirm} message={confirm?.message ?? ''} onCancel={() => setConfirm(null)} onConfirm={() => { confirm?.onConfirm(); setConfirm(null) }} />
+
+      {darBaja && (
+        <DarBajaDialog
+          emp={darBaja}
+          estadoActual={estado}
+          motivos={Array.from(new Set(['RENUNCIA', 'FIN DEL PLAN', 'DESPIDO', 'RENUNCIO AL PLAN', 'FIN DE CONTRATO', 'ABANDONO DE TRABAJO']))}
+          onClose={() => setDarBaja(null)}
+          onHecho={async (msg) => { setDarBaja(null); setImportMsg(msg); await cargar() }}
+        />
+      )}
 
       {puedeCrear && !modal && (
         <button
@@ -708,7 +803,15 @@ function EmpleadoModal({ registro, estadoActual, opciones, onClose, onSaved }: {
   // Informe de Eficiencia mayorista: por defecto cuentan todos
   const [cuentaInformes, setCuentaInformes] = useState(registro?.cuenta_informes !== false)
 
-  const set = (k: string, v: string) => setF((prev) => ({ ...prev, [k]: v }))
+  const set = (k: string, v: string) => setF((prev) => {
+    const next = { ...prev, [k]: v }
+    // Con el CUIL completo (11 dígitos) el DNI sale solo: son los 8 del medio
+    if (k === 'cuil') {
+      const dig = v.replace(/\D/g, '')
+      if (dig.length === 11) next.dni = String(Number(dig.slice(2, 10)))
+    }
+    return next
+  })
 
   // Los campos siguen al estado elegido: si lo pasás a una baja, quedan los de la hoja de bajas
   const estadoElegido = ESTADO_LEGAJO_OPCIONES.includes(f.estado_legajo) ? f.estado_legajo : estadoActual
@@ -766,6 +869,8 @@ function EmpleadoModal({ registro, estadoActual, opciones, onClose, onSaved }: {
       )
     }
     if (clave === 'ubicacion') {
+      // Solo tiene sentido para la gente de Fábrica (Depósito Indo / Mayorista / Mantenimiento)
+      if (!/FABRICA|FÁBRICA/i.test(f.lugar ?? '') && !f.ubicacion) return null
       return (
         <Campo key={clave} label={def.label}>
           <select value={f.ubicacion} onChange={(e) => set('ubicacion', e.target.value)} className={selectCls}>
@@ -888,6 +993,95 @@ function EmpleadoModal({ registro, estadoActual, opciones, onClose, onSaved }: {
           </div>
         </form>
       </div>
+    </div>
+  )
+}
+
+/**
+ * Dar de baja: pasa el legajo a Bajas Mito / Bajas Planes con toda su ficha y
+ * pide solo la fecha de egreso y el motivo. Opcionalmente carga la novedad BAJA.
+ */
+function DarBajaDialog({ emp, estadoActual, motivos, onClose, onHecho }: {
+  emp: Empleado
+  estadoActual: string
+  motivos: string[]
+  onClose: () => void
+  onHecho: (msg: string) => void
+}) {
+  const hoy = new Date()
+  const hoyIso = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`
+  const estadoOrigen = estadoEfectivo(emp)
+  const destino = BAJA_DE[estadoOrigen] ?? BAJA_DE[estadoActual] ?? 'BAJAS MITO'
+  const [fecha, setFecha] = useState(hoyIso)
+  const [motivo, setMotivo] = useState(emp.renuncia ? 'RENUNCIA' : '')
+  const [conNovedad, setConNovedad] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  /** Local para la novedad: en la nómina de locales es el área (BUSTOS, HIPER...); si no, el lugar. */
+  const local = (estadoOrigen === 'NOMINA ACTIVA' && /LOCALES/i.test(emp.lugar ?? '') ? emp.area_sector : emp.lugar)?.trim() || null
+
+  async function confirmar(e: FormEvent) {
+    e.preventDefault()
+    if (!supabase) return
+    if (!fecha) { setError('Falta la fecha de egreso.'); return }
+    if (!motivo.trim()) { setError('Falta el motivo.'); return }
+    setBusy(true); setError(null)
+    const { error: errEmp } = await supabase.from('empleados')
+      .update({ estado_legajo: destino, fecha_egreso: fecha, motivo_baja: motivo.trim().toUpperCase(), renuncia: false })
+      .eq('id', emp.id)
+    if (errEmp) { setBusy(false); setError(errEmp.message); return }
+
+    let msg = `${emp.nombre} pasó a ${destino}.`
+    if (conNovedad) {
+      const per = periodoDeFecha(fecha, 'BAJA')
+      const { error: errNov } = await supabase.from('novedades').insert({
+        anio: per?.anio ?? null,
+        mes_liquidacion: per ? textoMes(per.mes) : null,
+        numero: emp.legajo,
+        nombre_completo: emp.nombre,
+        tipo: tipoDeEmpleado(estadoOrigen, emp.plan) || null,
+        fecha, desde: fecha, hasta: fecha,
+        local,
+        motivo: 'BAJA',
+        novedad: motivo.trim().toUpperCase(),
+      })
+      msg += errNov ? ` No se pudo cargar la novedad BAJA (${errNov.message}); cargala a mano en Novedades.` : ' También se cargó la novedad BAJA.'
+    }
+    setBusy(false)
+    onHecho(msg)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <form onSubmit={(ev) => void confirmar(ev)} onClick={(ev) => ev.stopPropagation()} className="w-full max-w-md rounded-2xl border border-line bg-surface p-5 shadow-xl">
+        <h2 className="flex items-center gap-2 text-lg font-semibold text-ink"><UserMinus size={18} className="text-red-400" aria-hidden /> Dar de baja</h2>
+        <p className="mt-1 text-sm text-sub">
+          <span className="font-medium text-ink">{emp.legajo ? `${emp.legajo} · ` : ''}{emp.nombre}</span> pasa a <span className="font-medium text-red-400">{destino}</span> con todos sus datos.
+        </p>
+        {error && <p role="alert" className="mt-3 rounded-xl border border-brand-600/30 bg-brand-600/10 p-2 text-sm text-brand-400">{error}</p>}
+        <div className="mt-4 grid grid-cols-1 gap-3">
+          <Campo label="Fecha de egreso">
+            <input type="date" value={fecha} onChange={(ev) => setFecha(ev.target.value)} className={inputCls} required />
+          </Campo>
+          <AutocompleteCampo label="Motivo" opciones={motivos.map((m) => ({ id: m, label: m }))} valor={motivo} onChange={setMotivo} placeholder="RENUNCIA, FIN DEL PLAN..." />
+          <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-line bg-surface2/60 px-3 py-2 text-[13px] text-ink">
+            <input type="checkbox" checked={conNovedad} onChange={(ev) => setConNovedad(ev.target.checked)} className="mt-0.5 h-4 w-4 accent-brand-600" />
+            <span>
+              Cargar también la novedad BAJA
+              <span className="block text-[11px] text-sub">
+                {tipoDeEmpleado(estadoOrigen, emp.plan) || 'sin tipo'} · {local || 'sin local'} · {(() => { const per = periodoDeFecha(fecha, 'BAJA'); return per ? `${per.mes} ${per.anio}` : '-' })()}
+              </span>
+            </span>
+          </label>
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="btn-press rounded-lg border border-line bg-surface2 px-4 py-2 text-sm font-medium text-ink hover:bg-line">Cancelar</button>
+          <button type="submit" disabled={busy} className="btn-press rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50">
+            {busy ? 'Guardando…' : 'Dar de baja'}
+          </button>
+        </div>
+      </form>
     </div>
   )
 }

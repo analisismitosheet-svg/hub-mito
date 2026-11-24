@@ -40,14 +40,15 @@ export const COLUMNAS: Record<string, ColDef> = {
   plan: { label: 'Plan', filtrable: true, campo: 'autocomplete' },
   fin_plan: { label: 'Fin del plan', tipo: 'fecha', campo: 'fecha' },
   obra_social: { label: 'Obra social', filtrable: true, campo: 'autocomplete' },
-  entrega_remeras: { label: 'Entrega remeras' },
+  // tipo fecha solo para mostrarla dd/mm/aaaa; en la ficha sigue siendo texto libre (hay valores viejos escritos a mano)
+  entrega_remeras: { label: 'Entrega remeras', tipo: 'fecha' },
   prepaga: { label: 'Prepaga', filtrable: true, campo: 'autocomplete' },
   tipo_contrato: { label: 'Contrato', filtrable: true, campo: 'autocomplete' },
   codigo_os: { label: 'Código OS', filtrable: true },
   telefono: { label: 'Teléfono' },
   domicilio: { label: 'Domicilio', wrap: true },
   email: { label: 'Email' },
-  contacto_emergencia: { label: 'Contacto emerg.', wrap: true },
+  contacto_emergencia: { label: 'Nombre contacto emerg.', wrap: true },
   parentesco: { label: 'Parentesco' },
   telefono_emergencia: { label: 'Tel. emerg.' },
 }
@@ -62,13 +63,13 @@ export const UBICACIONES_LEGAJO = ['DEPOSITO MAYORISTA', 'DEPOSITO INDO', 'MANTE
 /** Columnas visibles por categoría, en el mismo orden que la hoja del Excel. */
 export const COLUMNAS_POR_ESTADO: Record<string, string[]> = {
   'NOMINA ACTIVA': [
-    'legajo', 'nombre', 'lugar', 'ubicacion', 'area_sector', 'horas', 'convenio', 'categoria', 'puesto',
+    'legajo', 'nombre', 'lugar', 'area_sector', 'horas', 'convenio', 'categoria', 'puesto',
     'comision', 'reingreso', 'fecha_ingreso', 'antiguedad', 'vacaciones', 'cuil', 'dni',
     'fecha_nacimiento', 'sexo', 'telefono', 'domicilio', 'email', 'codigo_os', 'prepaga',
-    'tipo_contrato', 'contacto_emergencia', 'parentesco', 'telefono_emergencia',
+    'tipo_contrato', 'entrega_remeras', 'contacto_emergencia', 'parentesco', 'telefono_emergencia',
   ],
   'PLANES ACTIVOS': [
-    'legajo', 'nombre', 'plan', 'lugar', 'ubicacion', 'horas', 'comision', 'fecha_ingreso', 'cuil', 'dni',
+    'legajo', 'nombre', 'plan', 'lugar', 'horas', 'comision', 'fecha_ingreso', 'cuil', 'dni',
     'fecha_nacimiento', 'sexo', 'obra_social', 'fin_plan', 'domicilio', 'entrega_remeras',
     'telefono', 'email', 'contacto_emergencia', 'parentesco', 'telefono_emergencia',
   ],
@@ -84,10 +85,20 @@ export const COLUMNAS_POR_ESTADO: Record<string, string[]> = {
   ],
 }
 
-/** Campos editables del formulario: los mismos que se ven, sin las derivadas. */
+/**
+ * Campos editables del formulario: los mismos que se ven, sin las derivadas.
+ * La ubicación (Depósito Indo / Mayorista / Mantenimiento) ya no va en la tabla
+ * (lo pidió RR. HH. el 24/11/2026) pero sigue en la ficha de los activos,
+ * porque de ahí salen los avisos de transferencias al Depósito Indo.
+ */
 export function camposDeEstado(estado: string): string[] {
-  return (COLUMNAS_POR_ESTADO[estado] ?? COLUMNAS_POR_ESTADO['NOMINA ACTIVA'])
+  const cols = (COLUMNAS_POR_ESTADO[estado] ?? COLUMNAS_POR_ESTADO['NOMINA ACTIVA'])
     .filter((c) => COLUMNAS[c]?.tipo !== 'derivada')
+  if (!estado.startsWith('BAJAS')) {
+    const i = cols.indexOf('lugar')
+    cols.splice(i >= 0 ? i + 1 : cols.length, 0, 'ubicacion')
+  }
+  return cols
 }
 
 export function columnasDeEstado(estado: string): string[] {
