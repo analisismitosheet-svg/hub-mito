@@ -122,6 +122,17 @@ const periodoEnCurso = () => {
   return { anio: String(anio), mes: MESES_LIQUIDACION[idx] }
 }
 
+/** Período de liquidación al que pertenece una fecha ISO (del 26 en adelante es el mes siguiente). */
+function periodoDeFecha(iso: string): { anio: string; mes: string } | null {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!m) return null
+  const y = +m[1], mm = +m[2] - 1, d = +m[3]
+  const pasa = d >= 26
+  const idx = (mm + (pasa ? 1 : 0)) % 12
+  const anio = y + (pasa && mm === 11 ? 1 : 0)
+  return { anio: String(anio), mes: MESES_LIQUIDACION[idx] }
+}
+
 /** Ejecuta una query paginándola (Supabase limita a 1000 filas por request). */
 async function cargarTodas(query: any): Promise<{ data: Novedad[]; error: any }> {
   const CHUNK = 1000
@@ -292,6 +303,14 @@ export default function CargaNovedades() {
       setMes(fMes ? textoMes(fMes) : '')
     }
     setModalAbierto(true)
+  }
+
+  /** Al elegir la fecha (o el desde), el mes/año de liquidación siguen a esa fecha. */
+  function ajustarPeriodo(iso: string) {
+    const p = periodoDeFecha(iso)
+    if (!p) return
+    setAnio(p.anio)
+    setMes(textoMes(p.mes))
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -695,8 +714,8 @@ export default function CargaNovedades() {
                     <button type="button" onClick={() => setAbiertoTipos((o) => !o)} className="btn-press inline-flex shrink-0 items-center justify-center rounded-lg border border-brand-600/40 bg-brand-600/10 px-2 text-base font-semibold text-brand-400 hover:bg-brand-600/20" title="Gestionar tipos"><Plus size={15} aria-hidden /></button>
                   </div>
                 </label>
-                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Fecha</span><input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className={inputCls} /></label>
-                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Desde</span><input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className={inputCls} /></label>
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Fecha</span><input type="date" value={fecha} onChange={(e) => { setFecha(e.target.value); ajustarPeriodo(e.target.value) }} className={inputCls} /></label>
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Desde</span><input type="date" value={desde} onChange={(e) => { setDesde(e.target.value); if (!fecha) ajustarPeriodo(e.target.value) }} className={inputCls} /></label>
                 <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Hasta</span><input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className={inputCls} /></label>
                 <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Local</span><select value={local} onChange={(e) => setLocal(e.target.value)} className={selectCls}><option value="">--</option>{LOCALES.map((l) => <option key={l} value={l}>{l}</option>)}</select></label>
                 <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Motivo</span><select value={motivo} onChange={(e) => setMotivo(e.target.value)} className={selectCls}><option value="">--</option>{motivos.map((m) => <option key={m} value={m}>{m}</option>)}</select></label>
