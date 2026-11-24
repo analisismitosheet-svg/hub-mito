@@ -13,6 +13,9 @@ import { supabase } from '@/lib/supabase'
 /*  cancelado = pendiente (AFESALDO de Dragon). La actualiza           */
 /*  puente-sql/scripts/sync-estado-pedidos.js al final de la copia de  */
 /*  pedidos de venta (cada 15 minutos). Solo lectura.                  */
+/*  Stock MITO de cada línea: stock real del depósito (físico −        */
+/*  pedido − preparado), en vivo del puente al abrir el pedido          */
+/*  (/api/sql/stock-mito). Ya descuenta este mismo pedido.             */
 /* ------------------------------------------------------------------ */
 
 interface Comprobante {
@@ -79,6 +82,9 @@ const TIPOS: Record<number, { nombre: string; color: string }> = {
   12: { nombre: 'Cancelación', color: '#f87171' },
 }
 const SIN_MOTIVO = '_sin'
+const COLOR_STOCK = '#f472b6'
+const claveSku = (a: string | null, c: string | null, t: string | null) =>
+  [a, c, t].map((x) => (x ?? '').trim().toUpperCase()).join('|')
 const COLORES_MOTIVO = ['#38bdf8', '#a78bfa', '#2dd4bf', '#f472b6', '#facc15']
 
 const $ = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -118,6 +124,9 @@ export default function EstadoPedidosVenta() {
   const [soloSaldo, setSoloSaldo] = useState(true)
   const [forzando, setForzando] = useState(false)
   const [avisoSync, setAvisoSync] = useState<{ ok: boolean; texto: string } | null>(null)
+  // Stock MITO por SKU (artículo|color|talle) y estado del pedido de stock de cada pedido abierto
+  const [stock, setStock] = useState<Record<string, number>>({})
+  const [stockPedido, setStockPedido] = useState<Record<string, true | string>>({})
 
   const cargar = useCallback(async () => {
     if (!supabase) return
@@ -132,6 +141,8 @@ export default function EstadoPedidosVenta() {
       if (e) throw e
       setPedidos((data ?? []) as PedidoEstado[])
       setLineas({})
+      setStock({})
+      setStockPedido({})
       const { data: s } = await supabase.from('estado_pedidos_sync').select('ultima_at').maybeSingle()
       setActualizado((s as { ultima_at: string | null } | null)?.ultima_at ?? null)
     } catch (e) {
@@ -255,9 +266,42 @@ export default function EstadoPedidosVenta() {
         if (!data || data.length < 1000) break
       }
       setLineas((l) => ({ ...l, [codigo]: todas }))
+      void pedirStock(codigo, todas)
     },
     [lineas],
   )
+
+  // Stock real del depósito MITO de los artículos del pedido (el puente devuelve solo s > 0: lo que falta es 0)
+  async function pedirStock(codigo: string, ls: Linea[]) {
+    if (!supabase) return
+    const arts = [...new Set(ls.map((l) => (l.articulo ?? '').trim().toUpperCase()).filter(Boolean))]
+    if (!arts.length) return setStockPedido((m) => ({ ...m, [codigo]: true }))
+    setStockPedido((m) => {
+      const n = { ...m }
+      delete n[codigo]
+      return n
+    })
+    try {
+      const { data } = await supabase.auth.getSession()
+      const nuevo: Record<string, number> = {}
+      for (let i = 0; i < arts.length; i += 200) {
+        const r = await fetch(`/api/sql/stock-mito?articulos=${encodeURIComponent(arts.slice(i, i + 200).join(','))}`, {
+          headers: { Authorization: `Bearer ${data.session?.access_token ?? ''}` },
+        })
+        const cuerpo = (await r.json().catch(() => null)) as { filas?: { a: string; c: string; t: string; s: number }[]; error?: string } | null
+        if (!r.ok || !cuerpo?.filas) throw new Error(cuerpo?.error ?? `Error ${r.status}`)
+        for (const f of cuerpo.filas) nuevo[claveSku(f.a, f.c, f.t)] = f.s
+      }
+      setStock((st) => {
+        const n = { ...st }
+        for (const l of ls) n[claveSku(l.articulo, l.color, l.talle)] = nuevo[claveSku(l.articulo, l.color, l.talle)] ?? 0
+        return n
+      })
+      setStockPedido((m) => ({ ...m, [codigo]: true }))
+    } catch (e) {
+      setStockPedido((m) => ({ ...m, [codigo]: e instanceof Error ? e.message : 'No se pudo traer el stock' }))
+    }
+  }
   const abiertosAhora = useMemo(() => {
     const s = new Set(abiertos)
     if (conArticulo && cliente) for (const p of cliente.pedidos) if (conArticulo.has(p.codigo)) s.add(p.codigo)
@@ -421,6 +465,9 @@ export default function EstadoPedidosVenta() {
                   {PARTES.map((x) => (
                     <span key={x.k} className="inline-flex items-center gap-1"><i className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: x.color }} />{x.titulo}</span>
                   ))}
+                  <span className="inline-flex items-center gap-1" title="Stock real del depósito MITO (físico − pedido − preparado): ya descuenta este pedido">
+                    <i className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: COLOR_STOCK }} />Stock MITO (real)
+                  </span>
                 </div>
                 <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-sub">
                   <input type="checkbox" checked={soloSaldo} onChange={(e) => setSoloSaldo(e.target.checked)} className="h-4 w-4 accent-amber-500" />
@@ -432,6 +479,13 @@ export default function EstadoPedidosVenta() {
                 const abierto = abiertosAhora.has(p.codigo)
                 const colorMot = colorMotivo(claveMotivo(p))
                 const ls = (lineas[p.codigo] ?? []).filter((l) => !soloSaldo || l.saldo > 0)
+                const estStock = stockPedido[p.codigo]
+                const celdaStock = (l: Linea) => {
+                  if (estStock === undefined) return <Loader2 size={12} className="ml-auto animate-spin" aria-label="Cargando stock" />
+                  if (estStock !== true) return <span title={estStock}>—</span>
+                  const v = stock[claveSku(l.articulo, l.color, l.talle)] ?? 0
+                  return v ? n0.format(v) : <span className="font-semibold text-sub">0</span>
+                }
                 const valores: Record<string, number> = { remitido: p.u_remitido, facturado: p.u_facturado, cancelado: p.u_cancelado, saldo: p.u_saldo }
                 return (
                   <div key={p.codigo} className="overflow-hidden rounded-2xl border border-line bg-surface">
@@ -474,8 +528,11 @@ export default function EstadoPedidosVenta() {
                             Ver pedido <ExternalLink size={12} aria-hidden />
                           </Link>
                         </div>
+                        {typeof estStock === 'string' && (
+                          <p className="border-b border-line px-4 py-1.5 text-xs text-brand-400">No se pudo traer el stock de MITO: {estStock}</p>
+                        )}
                         <div className="overflow-x-auto">
-                          <table className="w-full min-w-[60rem] text-sm">
+                          <table className="w-full min-w-[66rem] text-sm">
                             <thead>
                               <tr className="border-b border-line bg-surface2 text-left text-[11px] font-semibold uppercase tracking-wide text-sub">
                                 <th className="px-3 py-2">Artículo</th>
@@ -484,14 +541,17 @@ export default function EstadoPedidosVenta() {
                                 <th className="px-3 py-2">Talle</th>
                                 <th className="px-3 py-2 text-right">Pedido</th>
                                 {PARTES.map((x) => <th key={x.k} className="px-3 py-2 text-right">{x.titulo}</th>)}
+                                <th className="px-3 py-2 text-right" style={{ color: COLOR_STOCK, backgroundColor: `${COLOR_STOCK}1a` }} title="Stock real del depósito MITO (físico − pedido − preparado): ya descuenta este pedido">
+                                  Stock MITO
+                                </th>
                                 <th className="px-3 py-2 text-right">$ Pendiente</th>
                               </tr>
                             </thead>
                             <tbody>
                               {!lineas[p.codigo] ? (
-                                <tr><td colSpan={11} className="px-3 py-6 text-center text-sub"><Loader2 size={16} className="mr-2 inline animate-spin" aria-hidden />Cargando líneas…</td></tr>
+                                <tr><td colSpan={12} className="px-3 py-6 text-center text-sub"><Loader2 size={16} className="mr-2 inline animate-spin" aria-hidden />Cargando líneas…</td></tr>
                               ) : ls.length === 0 ? (
-                                <tr><td colSpan={11} className="px-3 py-6 text-center text-sub">Sin líneas con saldo.</td></tr>
+                                <tr><td colSpan={12} className="px-3 py-6 text-center text-sub">Sin líneas con saldo.</td></tr>
                               ) : (
                                 ls.map((l) => (
                                   <tr key={l.linea} className={`border-b border-line/50 ${l.saldo ? '' : 'text-sub'}`}>
@@ -505,6 +565,7 @@ export default function EstadoPedidosVenta() {
                                         {l[x.k] ? n0.format(l[x.k]) : x.k === 'saldo' ? '—' : ''}
                                       </td>
                                     ))}
+                                    <td className="px-3 py-1.5 text-right font-extrabold tabular-nums" style={{ color: COLOR_STOCK, backgroundColor: `${COLOR_STOCK}0f` }}>{celdaStock(l)}</td>
                                     <td className="px-3 py-1.5 text-right tabular-nums">{l.saldo ? plata(l.saldo * l.precio) : ''}</td>
                                   </tr>
                                 ))
@@ -518,6 +579,9 @@ export default function EstadoPedidosVenta() {
                                   {PARTES.map((x) => (
                                     <td key={x.k} className="px-3 py-2 text-right tabular-nums" style={{ color: x.color }}>{n0.format(ls.reduce((s, l) => s + l[x.k], 0))}</td>
                                   ))}
+                                  <td className="px-3 py-2 text-right tabular-nums" style={{ color: COLOR_STOCK, backgroundColor: `${COLOR_STOCK}0f` }}>
+                                    {estStock === true ? n0.format([...new Set(ls.map((l) => claveSku(l.articulo, l.color, l.talle)))].reduce((s, k) => s + (stock[k] ?? 0), 0)) : ''}
+                                  </td>
                                   <td className="px-3 py-2 text-right tabular-nums">{plata(ls.reduce((s, l) => s + l.saldo * l.precio, 0))}</td>
                                 </tr>
                               </tfoot>

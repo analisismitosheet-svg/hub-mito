@@ -15,7 +15,7 @@
  * Vive colgada del router api/sql/[ruta].ts.
  */
 import { postAlPuente, urlsDelPuente } from './puenteRetry.js'
-import { mismoSecreto } from './apiAuth.js'
+import { autorizado, mismoSecreto, tokenDe } from './apiAuth.js'
 
 type Req = {
   method?: string
@@ -111,4 +111,36 @@ export async function tiendaDragon(req: Req & { body?: unknown }, res: Res) {
   const datos = await r0.res.json().catch(() => null)
   if (datos === null) return res.status(502).json({ error: `Puente SQL: respuesta ${r0.res.status}` })
   return res.status(r0.res.status).json(datos)
+}
+
+/**
+ * GET /api/sql/stock-mito?articulos=CF264132,ZH118870 (hasta 200), con la sesión del hub (pedidos_venta.view).
+ * Mayorista > Estado de pedidos: columna Stock MITO de las líneas de un pedido. Misma acción del puente
+ * (`stock_tienda`, stock REAL = físico − pedido − preparado del depósito MITO, solo s > 0). SOLO LECTURA.
+ *   -> { filas: [{ a, c, t, s }], en }
+ */
+export async function stockMitoHub(req: Req, res: Res) {
+  res.setHeader('Cache-Control', 'no-store')
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Método no permitido' })
+  const token = tokenDe(req.headers.authorization as string | undefined)
+  if (!token || !(await autorizado(token, ['pedidos_venta.view']))) return res.status(401).json({ error: 'No autorizado' })
+
+  const articulos = [...new Set(lista(req.query.articulos))]
+  if (!articulos.length || articulos.length > 200 || articulos.some((a) => !/^[A-Z0-9._/-]{1,40}$/.test(a))) {
+    return res.status(400).json({ error: 'Pasá de 1 a 200 artículos válidos' })
+  }
+  const destino = await urlDestino()
+  const tokenPuente = process.env.SQL_BRIDGE_TOKEN ?? ''
+  if (!destino || !tokenPuente) return res.status(500).json({ error: 'Falta configurar el Puente SQL' })
+  const r0 = await postAlPuente(
+    destino,
+    { headers: { 'Content-Type': 'application/json', 'X-Puente-Token': tokenPuente }, body: JSON.stringify({ accion: 'stock_tienda', articulos }) },
+    { timeoutMs: 30_000, intentos: 2 },
+  )
+  if (!r0.ok) return res.status(502).json({ error: 'No se pudo contactar la PC del SQL' })
+  const cuerpo = (await r0.res.json().catch(() => null)) as { filas?: unknown; error?: string } | null
+  if (!r0.res.ok || !cuerpo || !Array.isArray(cuerpo.filas)) {
+    return res.status(502).json({ error: `Puente SQL: ${cuerpo?.error ?? `respuesta ${r0.res.status}`}` })
+  }
+  return res.status(200).json(cuerpo)
 }
