@@ -122,12 +122,16 @@ const periodoEnCurso = () => {
   return { anio: String(anio), mes: MESES_LIQUIDACION[idx] }
 }
 
-/** Período de liquidación al que pertenece una fecha ISO (del 26 en adelante es el mes siguiente). */
-function periodoDeFecha(iso: string): { anio: string; mes: string } | null {
+/** BAJA e INGRESO van al mes calendario de la fecha (así los carga RRHH); el resto, del 26 al 25. */
+const MOTIVOS_MES_CALENDARIO = new Set(['BAJA', 'INGRESO'])
+
+/** Período de liquidación al que pertenece una fecha ISO (del 26 en adelante es el mes siguiente,
+ *  salvo BAJA e INGRESO, que quedan en el mes de la fecha). */
+function periodoDeFecha(iso: string, motivo = ''): { anio: string; mes: string } | null {
   const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/)
   if (!m) return null
   const y = +m[1], mm = +m[2] - 1, d = +m[3]
-  const pasa = d >= 26
+  const pasa = d >= 26 && !MOTIVOS_MES_CALENDARIO.has(motivo.trim().toUpperCase())
   const idx = (mm + (pasa ? 1 : 0)) % 12
   const anio = y + (pasa && mm === 11 ? 1 : 0)
   return { anio: String(anio), mes: MESES_LIQUIDACION[idx] }
@@ -306,8 +310,8 @@ export default function CargaNovedades() {
   }
 
   /** Al elegir la fecha (o el desde), el mes/año de liquidación siguen a esa fecha. */
-  function ajustarPeriodo(iso: string) {
-    const p = periodoDeFecha(iso)
+  function ajustarPeriodo(iso: string, mot: string = motivo) {
+    const p = periodoDeFecha(iso, mot)
     if (!p) return
     setAnio(p.anio)
     setMes(textoMes(p.mes))
@@ -718,7 +722,7 @@ export default function CargaNovedades() {
                 <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Desde</span><input type="date" value={desde} onChange={(e) => { setDesde(e.target.value); if (!fecha) ajustarPeriodo(e.target.value) }} className={inputCls} /></label>
                 <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Hasta</span><input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className={inputCls} /></label>
                 <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Local</span><select value={local} onChange={(e) => setLocal(e.target.value)} className={selectCls}><option value="">--</option>{LOCALES.map((l) => <option key={l} value={l}>{l}</option>)}</select></label>
-                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Motivo</span><select value={motivo} onChange={(e) => setMotivo(e.target.value)} className={selectCls}><option value="">--</option>{motivos.map((m) => <option key={m} value={m}>{m}</option>)}</select></label>
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Motivo</span><select value={motivo} onChange={(e) => { setMotivo(e.target.value); if (fecha || desde) ajustarPeriodo(fecha || desde, e.target.value) }} className={selectCls}><option value="">--</option>{motivos.map((m) => <option key={m} value={m}>{m}</option>)}</select></label>
                 <label className="block sm:col-span-3"><span className="mb-0.5 block text-[11px] font-medium text-sub">Novedad</span><input value={novedadTxt} onChange={(e) => setNovedadTxt(e.target.value)} placeholder="Detalle..." className={inputCls} /></label>
                 <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-sub">Minutos (solo TARDANZA)</span><input value={minutos} onChange={(e) => setMinutos(e.target.value)} disabled={motivo !== 'TARDANZA'} placeholder="30" className={inputCls + (motivo !== 'TARDANZA' ? ' cursor-not-allowed opacity-50' : '')} /></label>
                 <label className="block sm:col-span-4"><span className="mb-0.5 block text-[11px] font-medium text-sub">Control certificado / notificación</span><input value={control} onChange={(e) => setControl(e.target.value)} placeholder="OK / NO ENVIA CERTIFICADO" className={inputCls} /></label>
