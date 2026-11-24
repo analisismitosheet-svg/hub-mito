@@ -196,7 +196,7 @@ export default function RepartoTransferencias() {
   const motivoNoArmar = hayNinguno
     ? 'Hay un filtro en «Ninguno»: elegí algo o volvé a «Seleccionar todo».'
     : !hayFiltroArt
-      ? 'Elegí al menos un filtro de artículo (MITO o marcas, proveedor, material, temporada, año, línea, familia, género, grupo o código con X).'
+      ? 'Elegí al menos un filtro de artículo (MITO o marcas, proveedor, material, temporada, año, línea, familia, género, grupo o línea con X).'
       : localesElegidos.length < 2
         ? 'Elegí al menos 2 locales.'
         : desde > hasta
@@ -295,7 +295,7 @@ export default function RepartoTransferencias() {
       (x) =>
         (!fColor || x.color === fColor) && (!fTalle || x.talle === fTalle) && (!fGrupo || x.grupo === fGrupo) &&
         pasa(gLinea, x.linea) && pasa(gFlia, x.flia) && pasa(gProv, x.prov) &&
-        (!gArts.length || gArts.some((a) => x.articulo.startsWith(a))) && pasaX(gX, x.articulo) &&
+        (!gArts.length || gArts.some((a) => x.articulo.startsWith(a))) && pasaX(gX, x.linea) &&
         (!q || x.articulo.toLowerCase().includes(q) || x.desc.toLowerCase().includes(q)),
     )
     return ordenar(f, orden)
@@ -419,7 +419,7 @@ export default function RepartoTransferencias() {
   const resumenFiltro = (origen ? [origen === 'MITO' ? 'Artículos MITO' : 'Marcas'] : [])
     .concat(FILTROS.filter((f) => sel[f.k].size)
       .map((f) => `${f.titulo.replace('ID proveedor descripción', 'Proveedor')}: ${[...sel[f.k]].join(', ')}`))
-    .concat(conX ? [conX === 'CON' ? 'Código con X' : 'Código sin X'] : [])
+    .concat(conX ? [conX === 'CON' ? 'Línea con X' : 'Línea sin X'] : [])
     .join(' · ')
 
   return (
@@ -824,18 +824,18 @@ export default function RepartoTransferencias() {
   )
 }
 
-/** Código del artículo con X o sin X (uno a la vez); «Todos» = sin filtro. */
+/** Línea del artículo con X o sin X (uno a la vez); «Todos» = sin filtro. */
 function SelectorX({ valor, onChange, sinTitulo }: { valor: FiltroX; onChange: (v: FiltroX) => void; sinTitulo?: boolean }) {
   return (
     <div>
       {!sinTitulo && (
         <div className="mb-1 flex h-4 items-center justify-between gap-2">
-          <p className="text-[11px] font-medium uppercase tracking-wider text-sub/80">Código</p>
-          {valor && <Goma titulo="Código con X" onClick={() => onChange('')} />}
+          <p className="text-[11px] font-medium uppercase tracking-wider text-sub/80">Línea</p>
+          {valor && <Goma titulo="Línea con X" onClick={() => onChange('')} />}
         </div>
       )}
-      <div className="inline-flex overflow-hidden rounded-lg border border-line" role="radiogroup" aria-label="Código del artículo con X o sin X">
-        {sinTitulo && <span className="inline-flex h-9 items-center border-r border-line px-2.5 text-[11px] text-sub">Código</span>}
+      <div className="inline-flex overflow-hidden rounded-lg border border-line" role="radiogroup" aria-label="Línea del artículo con X o sin X">
+        {sinTitulo && <span className="inline-flex h-9 items-center border-r border-line px-2.5 text-[11px] text-sub">Línea</span>}
         {([['', 'Todos'], ['CON', 'Con X'], ['SIN', 'Sin X']] as [FiltroX, string][]).map(([v, t], i) => (
           <button
             key={t}
@@ -843,7 +843,7 @@ function SelectorX({ valor, onChange, sinTitulo }: { valor: FiltroX; onChange: (
             role="radio"
             aria-checked={valor === v}
             onClick={() => onChange(v)}
-            title={v === 'CON' ? 'Solo los artículos cuyo código tiene una X' : v === 'SIN' ? 'Solo los artículos cuyo código no tiene X' : undefined}
+            title={v === 'CON' ? 'Solo los artículos cuya línea tiene una X (X, XG, XU60, W50OFF-XG…)' : v === 'SIN' ? 'Solo los artículos cuya línea no tiene X' : undefined}
             className={`h-9 px-3.5 text-xs ${valor === v ? 'bg-orange-500/15 font-semibold text-orange-300' : 'text-sub hover:text-ink'} ${i ? 'border-l border-line' : ''}`}
           >
             {t}

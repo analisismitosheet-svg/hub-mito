@@ -6,7 +6,7 @@
  *   @prov @mat @temp @anio @linea @flia @grupo @gen   atributos del artículo (como el tablero de PBI)
  *   marca ORIGEN  reparto.js la cambia por la condición de MITO (proveedor MO…) o MARCAS (el resto)
  *   @art     códigos o principios de código separados por '|' (opcional)
- *   @x       'CON' = solo códigos con X · 'SIN' = sin X · '' = todos
+ *   @x       'CON' = solo líneas que contienen X (X, XG, W50OFF-XG…) · 'SIN' = línea sin X · '' = todos
  *   @desde @hasta  período de venta 'YYYY-MM-DD'
  *   @desde_ult     desde cuándo se busca la última venta (días sin venta, ~180 días)
  *   @max           tope de artículos (si se pasa, devuelve solo el recordset 1 con la cantidad)
@@ -41,8 +41,8 @@ SELECT DISTINCT LTRIM(RTRIM(a.ID_ART))
    AND (@flia  = '' OR LTRIM(RTRIM(a.ID_FLIA))      IN (SELECT value FROM STRING_SPLIT(@flia, '|')))
    AND (@grupo = '' OR UPPER(LTRIM(RTRIM(a.ID_GRUPO))) IN (SELECT value FROM STRING_SPLIT(@grupo, '|')))
    AND (@art   = '' OR EXISTS (SELECT 1 FROM STRING_SPLIT(@art, '|') x WHERE LTRIM(RTRIM(a.ID_ART)) LIKE x.value + '%'))
-   -- código con X o sin X (@x = 'CON' | 'SIN' | '')
-   AND (@x = '' OR (@x = 'CON' AND a.ID_ART LIKE '%X%') OR (@x = 'SIN' AND a.ID_ART NOT LIKE '%X%'))
+   -- línea con X o sin X (@x = 'CON' | 'SIN' | '')
+   AND (@x = '' OR (@x = 'CON' AND UPPER(ISNULL(a.ID_LINEA, '')) LIKE '%X%') OR (@x = 'SIN' AND UPPER(ISNULL(a.ID_LINEA, '')) NOT LIKE '%X%'))
    AND (@gen   = '' OR EXISTS (SELECT 1 FROM DRAGONFISH_MITO.ZooLogic.ART z
                                 WHERE RTRIM(z.ARTCOD) = RTRIM(a.ID_ART)
                                   AND LTRIM(RTRIM(z.CATEARTI)) IN (SELECT value FROM STRING_SPLIT(@gen, '|'))));

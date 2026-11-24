@@ -16,9 +16,9 @@ export type ClaveFiltro = 'prov' | 'mat' | 'temp' | 'anio' | 'linea' | 'flia' | 
 export type Opciones = Record<ClaveFiltro, OpcionFiltro[]> & { art?: [string, string, string][] }
 /** MITO = proveedores que empiezan con MO; MARCAS = el resto; '' = todos */
 export type Origen = '' | 'MITO' | 'MARCAS'
-/** Código del artículo con X o sin X ('' = todos) */
+/** Línea del artículo que contiene una X (X, XG, XU60, W50OFF-XG…) o no ('' = todos) */
 export type FiltroX = '' | 'CON' | 'SIN'
-export const pasaX = (x: FiltroX, articulo: string) => !x || (x === 'CON') === /x/i.test(articulo)
+export const pasaX = (x: FiltroX, linea: string | null | undefined) => !x || (x === 'CON') === /x/i.test(linea ?? '')
 export const esProvMito = (cod: string) => cod.trim().toUpperCase().startsWith('MO')
 /** art = códigos o principios de código separados por «|» (el Puente busca cada uno con LIKE 'X%') */
 export type Filtros = Record<ClaveFiltro, string[]> & { art: string; origen?: Origen; x?: FiltroX }

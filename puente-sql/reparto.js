@@ -12,7 +12,7 @@
  *       no cubre las fechas pedidas (venta de hace más de ~60 días) o no se pudo leer, se lee solo
  *       lo filtrado con sql/reparto-stock.sql (~1-2 min, cada foto por filtro dura 5 minutos).
  *       filtros.art = uno o varios códigos (o principios de código) separados por «|».
- *       filtros.x = 'CON' (solo códigos con X) | 'SIN' (sin X) | ''.
+ *       filtros.x = 'CON' (solo líneas que contienen X: X, XG, XU60, W50OFF-XG…) | 'SIN' (línea sin X) | ''.
  *       tránsito = CANTIDAD en camino por local (ENTRANSITO), no una marca.
  *
  * Columnas = los 20 locales del reparto (mismos que la PWA vieja y que el Excel de remitos).
@@ -320,7 +320,7 @@ function crear(deps) {
         cumple(f.prov, x.prov) && cumple(f.mat, x.mat) && cumple(f.temp, x.temp) && cumple(f.anio, x.anio) &&
         cumple(f.linea, x.linea) && cumple(f.flia, x.flia) && cumple(f.grupo, x.grupo) && cumple(f.gen, x.gen) &&
         (!f.art.length || f.art.some((p) => a.startsWith(p))) &&
-        (f.x === 'CON' ? /X/i.test(a) : f.x === 'SIN' ? !/X/i.test(a) : true) &&
+        (f.x === 'CON' ? /X/i.test(x.linea || '') : f.x === 'SIN' ? !/X/i.test(x.linea || '') : true) &&
         (f.origen === 'MITO' ? x.prov.startsWith('MO') : f.origen === 'MARCAS' ? !x.prov.startsWith('MO') : true)
       ) elegidos.push(a)
     }
