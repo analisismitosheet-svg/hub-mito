@@ -647,6 +647,17 @@ export const APPS: AppDef[] = [
     permiso: 'polo52.transferencias.view',
   },
   {
+    id: 'polo52-mi-repo',
+    areaId: 'polo52',
+    title: 'Mi repo',
+    description: 'Escaneo en piso: lo que sale de Polo 52, local por local.',
+    icon: ScanLine,
+    kind: 'internal',
+    target: '/polo52/mi-repo',
+    color: '#ea580c',
+    permiso: 'polo52.transferencias.view',
+  },
+  {
     id: 'deposito-repo',
     areaId: 'deposito',
     title: 'Repos Depósito',

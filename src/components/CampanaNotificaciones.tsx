@@ -541,7 +541,7 @@ export default function CampanaNotificaciones() {
           // Polo 52 se anota aparte: un lote puede salir de Indo y de Polo a la vez
           const clave = (l: { lote_id: string; ubicacion: string }) => (esPolo(l) ? `${l.lote_id}|POLO52` : l.lote_id)
           const ruta = (l: { lote_id: string; ubicacion: string }) =>
-            esPolo(l) ? '/polo52/transferencias'
+            esPolo(l) ? '/polo52/mi-repo'
               : can('deposito.view') ? '/deposito' : can('transferencias.view') ? `/transferencias?abrir=${l.lote_id}` : '/mayorista/mi-repo'
           for (const l of lotesIndo) {
             const partes = [l.salen ? `salen ${l.salen} u.` : '', l.entran ? `entran ${l.entran} u.` : ''].filter(Boolean).join(' · ')

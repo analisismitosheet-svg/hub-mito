@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { suscribirCambios } from '@/lib/realtime'
 import { compararTalles } from '@/lib/ordenPiso'
 import { useCajasMapeo } from '@/lib/useCajasMapeo'
+import { NOMBRE_DEPOSITO, type DepositoTransfer } from '@/components/TransferenciaDepositoLote'
 
 /** Renglón de transferencia que sale de Depósito Indo (RPC transferencias_deposito_items). */
 interface Renglon {
@@ -53,10 +54,15 @@ interface TarjetaLocal {
 export default function TransferenciasDeposito({
   mostrarVacio = false,
   alAbrir,
+  deposito = 'INDO',
 }: {
   mostrarVacio?: boolean
   alAbrir?: (abierto: boolean) => void
+  /** INDO (Mi repo del Depósito, con Mapeo de cajas) o POLO52 (Mi repo de Polo 52, por artículo) */
+  deposito?: DepositoTransfer
 }) {
+  const sinCajas = deposito !== 'INDO'
+  const nombreDep = deposito === 'INDO' ? 'Depósito Indo' : NOMBRE_DEPOSITO[deposito]
   const [renglones, setRenglones] = useState<Renglon[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -65,11 +71,11 @@ export default function TransferenciasDeposito({
 
   const cargar = useCallback(async () => {
     if (!supabase) return
-    const { data, error: e } = await supabase.rpc('transferencias_deposito_items')
+    const { data, error: e } = await supabase.rpc('transferencias_deposito_items', { p_deposito: deposito })
     if (e) setError(e.message)
     else { setError(null); setRenglones((data ?? []) as Renglon[]) }
     setCargando(false)
-  }, [])
+  }, [deposito])
 
   useEffect(() => {
     void cargar()
@@ -80,9 +86,12 @@ export default function TransferenciasDeposito({
 
   // Cajas del Mapeo de cajas (como las ubicaciones en el armado de pedidos):
   // chip al lado del artículo y recorrido por número de caja. Se actualizan solas.
-  const codigos = useMemo(() => renglones.map((r) => String(r.articulo ?? '')), [renglones])
+  const codigos = useMemo(() => (sinCajas ? [] : renglones.map((r) => String(r.articulo ?? ''))), [renglones, sinCajas])
   const cajas = useCajasMapeo(codigos)
-  const cajasDe = useCallback((r: Renglon) => cajas.get(String(r.articulo ?? '').trim().toUpperCase()) ?? [], [cajas])
+  const cajasDe = useCallback(
+    (r: { articulo: string | null }) => (sinCajas ? [] : cajas.get(String(r.articulo ?? '').trim().toUpperCase()) ?? []),
+    [cajas, sinCajas],
+  )
 
   /** Recorrido: caja → artículo → color → talle; los que no están en ninguna caja, al final */
   const compararRecorrido = useCallback(
@@ -119,7 +128,7 @@ export default function TransferenciasDeposito({
     setRenglones((arr) =>
       arr.map((r) => (ids.includes(r.id) ? { ...r, estado, hecho_at: at, escaneadas: estado === 'pendiente' ? 0 : r.escaneadas } : r)),
     )
-    const { error: e } = await supabase.rpc('transferencia_marcar_deposito', { p_ids: ids, p_estado: estado })
+    const { error: e } = await supabase.rpc('transferencia_marcar_deposito', { p_ids: ids, p_estado: estado, p_deposito: deposito })
     if (e) { setError(e.message); await cargar() }
   }
 
@@ -155,7 +164,7 @@ export default function TransferenciasDeposito({
   if (cargando) {
     return (
       <div className="mb-4 flex items-center gap-2 text-sm text-sub">
-        <Loader2 size={15} className="animate-spin" aria-hidden /> Cargando transferencias de Depósito Indo…
+        <Loader2 size={15} className="animate-spin" aria-hidden /> Cargando transferencias de {nombreDep}…
       </div>
     )
   }
@@ -164,7 +173,7 @@ export default function TransferenciasDeposito({
     return (
       <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-line2 bg-surface/50 px-4 py-14 text-center text-sub">
         <ArrowRightLeft size={28} aria-hidden />
-        <p>No hay transferencias pendientes que salgan de Depósito Indo.</p>
+        <p>No hay transferencias pendientes que salgan de {nombreDep}.</p>
         <p className="text-xs">Cuando se cargue una, aparece acá.</p>
       </div>
     )
@@ -180,7 +189,8 @@ export default function TransferenciasDeposito({
           loteNombre={abierta.loteNombre}
           destino={abierta.destino}
           renglones={abierta.renglones}
-          cajasDe={(r) => cajas.get(String(r.articulo ?? '').trim().toUpperCase()) ?? []}
+          cajasDe={cajasDe}
+          deposito={deposito}
           textoVolver="Mis locales"
           onVolver={() => setSel(null)}
           onMarcar={(ids, estado) => marcar(ids, estado)}
@@ -194,7 +204,7 @@ export default function TransferenciasDeposito({
   return (
     <section className="mb-5 space-y-2.5">
       <h2 className="flex items-center gap-2 font-display text-lg font-bold text-ink">
-        <ArrowRightLeft size={18} className="text-violet-500" aria-hidden /> Transferencias Depósito Indo
+        <ArrowRightLeft size={18} className="text-violet-500" aria-hidden /> Transferencias {nombreDep}
       </h2>
       {error && <p role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-2 text-sm text-red-500">{error}</p>}
       {tarjetas.map((t) => {

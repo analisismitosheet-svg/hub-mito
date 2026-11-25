@@ -30,6 +30,7 @@ import Mayorista from '@/pages/Mayorista'
 import MiRepo from '@/pages/MiRepo'
 import Deposito from '@/pages/Deposito'
 import TransferenciasPolo52 from '@/pages/TransferenciasPolo52'
+import MiRepoPolo52 from '@/pages/MiRepoPolo52'
 import Rma from '@/pages/Rma'
 import Picking from '@/pages/Picking'
 import RecepcionIndo from '@/pages/RecepcionIndo'
@@ -546,6 +547,14 @@ export default function App() {
             element={
               <PermissionRoute permiso="deposito.view">
                 <Deposito />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/polo52/mi-repo"
+            element={
+              <PermissionRoute permiso="polo52.transferencias.view">
+                <MiRepoPolo52 />
               </PermissionRoute>
             }
           />

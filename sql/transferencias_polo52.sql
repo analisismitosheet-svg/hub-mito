@@ -213,3 +213,34 @@ GRANT EXECUTE ON FUNCTION public.transferencia_escanear_deposito(uuid, text, tex
 GRANT EXECUTE ON FUNCTION public.transferencia_desescanear_deposito(uuid, text) TO authenticated;
 
 COMMIT;
+
+-- ---- Mi repo de Polo 52 (25/11/2026): renglones de 7 días, pendientes + marcados hoy ----
+-- Igual que transferencias_deposito_items() de Indo (sql/transferencias_deposito_escaneo.sql),
+-- con p_deposito ('INDO' por defecto). Lo usa TransferenciasDeposito en /polo52/mi-repo.
+DROP FUNCTION IF EXISTS public.transferencias_deposito_items();
+DROP FUNCTION IF EXISTS public.transferencias_deposito_items(text);
+CREATE FUNCTION public.transferencias_deposito_items(p_deposito text DEFAULT 'INDO')
+RETURNS TABLE(id uuid, lote_id uuid, lote_nombre text, lote_creado timestamptz, origen text, destino text,
+              articulo text, descripcion text, color text, talle text, cantidad integer, estado text, hecho_at timestamptz,
+              escaneadas integer)
+LANGUAGE plpgsql STABLE SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_locs text[] := private.locales_deposito(p_deposito);
+BEGIN
+  IF cardinality(v_locs) = 0 THEN RETURN; END IF;
+  RETURN QUERY
+  SELECT i.id, l.id, l.nombre, l.created_at, i.origen, i.destino, i.articulo, i.descripcion, i.color, i.talle,
+         i.cantidad, coalesce(i.estado, 'pendiente'), i.hecho_at, coalesce(e.escaneadas, 0)
+    FROM public.transfer_lotes l
+    JOIN public.transfer_items i ON i.lote_id = l.id
+    LEFT JOIN public.transfer_escaneos_deposito e ON e.item_id = i.id
+   WHERE l.created_at >= now() - interval '7 days'
+     AND upper(trim(coalesce(i.origen, ''))) = ANY(v_locs)
+     AND (coalesce(i.estado, 'pendiente') = 'pendiente' OR i.hecho_at >= date_trunc('day', now() AT TIME ZONE 'America/Argentina/Cordoba') AT TIME ZONE 'America/Argentina/Cordoba')
+   ORDER BY l.created_at, i.destino, i.articulo, i.color, i.talle;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.transferencias_deposito_items(text) FROM anon, public;
+GRANT EXECUTE ON FUNCTION public.transferencias_deposito_items(text) TO authenticated;
