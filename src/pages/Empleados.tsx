@@ -114,6 +114,8 @@ const estiloFijo = (clave: string): React.CSSProperties | undefined =>
 
 /** Fondo de la marca de renuncia, opaco para que funcione en la columna fija. */
 const FONDO_RENUNCIA = 'color-mix(in srgb, #f59e0b 28%, var(--surface))'
+/** Fila marcada al tocar el legajo (solo en pantalla, para seguir un renglón al desplazarse). */
+const FONDO_MARCADA = 'color-mix(in srgb, #0ea5e9 30%, var(--surface))'
 
 /** Estado de baja que corresponde a cada estado activo. */
 const BAJA_DE: Record<string, string> = { 'NOMINA ACTIVA': 'BAJAS MITO', 'PLANES ACTIVOS': 'BAJAS PLANES' }
@@ -196,6 +198,13 @@ export default function Empleados() {
   const [editNota, setEditNota] = useState<{ emp: Empleado; clave: string; rect: DOMRect } | null>(null)
   const [copiada, setCopiada] = useState<string | null>(null)
   const [darBaja, setDarBaja] = useState<Empleado | null>(null)
+  const [marcadas, setMarcadas] = useState<Set<string>>(() => new Set())
+  const toggleMarcada = (id: string) => setMarcadas((prev) => {
+    const n = new Set(prev)
+    if (n.has(id)) n.delete(id)
+    else n.add(id)
+    return n
+  })
   const { isAdmin } = useAuth()
   const [importando, setImportando] = useState(false)
   const [importMsg, setImportMsg] = useState<string | null>(null)
@@ -652,8 +661,11 @@ export default function Empleados() {
               </tr>
             </thead>
             <tbody className="divide-y divide-line/60">
-              {filtrados.map((e) => (
-                <tr key={e.id} className={'group hover:bg-line/20' + (esVistaBajas ? ' text-red-400' : '')}>
+              {filtrados.map((e) => {
+                const marcada = marcadas.has(e.id)
+                const fondoFila = marcada ? { backgroundColor: FONDO_MARCADA } : {}
+                return (
+                <tr key={e.id} className={'group hover:bg-line/20' + (esVistaBajas ? ' text-red-400' : '')} style={fondoFila}>
                   {columnas.map((clave) => {
                     const cls = (COLUMNAS[clave].wrap ? tdBaseWrap : tdBase)
                     const colorTexto = esVistaBajas ? ' text-red-400' : ''
@@ -663,7 +675,7 @@ export default function Empleados() {
                         <td
                           key={clave}
                           className={tdBaseWrap + ' z-[5] bg-surface font-medium group-hover:bg-surface2' + claseFija(clave) + (esVistaBajas ? ' text-red-400' : marca ? ' text-amber-300' : ' text-ink')}
-                          style={{ ...estiloFijo(clave), ...(marca ? { backgroundColor: FONDO_RENUNCIA } : {}) }}
+                          style={{ ...estiloFijo(clave), ...fondoFila, ...(marca ? { backgroundColor: FONDO_RENUNCIA } : {}) }}
                           title={marca ? 'Renunció: pendiente de baja' : undefined}
                         >
                           {puedeEditar ? (
@@ -674,7 +686,22 @@ export default function Empleados() {
                         </td>
                       )
                     }
-                    if (SIN_NOTA.has(clave)) return <td key={clave} className={cls + ' z-[5] bg-surface group-hover:bg-surface2' + claseFija(clave) + (esVistaBajas ? colorTexto : ' text-sub')} style={estiloFijo(clave)}>{texto(e, clave)}</td>
+                    if (clave === 'legajo') {
+                      return (
+                        <td key={clave} className={cls + ' z-[5] bg-surface group-hover:bg-surface2' + claseFija(clave)} style={{ ...estiloFijo(clave), ...fondoFila }}>
+                          <button
+                            type="button"
+                            onClick={() => toggleMarcada(e.id)}
+                            aria-pressed={marcada}
+                            title={marcada ? 'Desmarcar la fila' : 'Marcar la fila'}
+                            className={'w-full cursor-pointer text-left tabular-nums transition hover:text-sky-400 ' + (marcada ? 'font-semibold text-sky-300' : esVistaBajas ? 'text-red-400' : 'text-sub')}
+                          >
+                            {texto(e, clave)}
+                          </button>
+                        </td>
+                      )
+                    }
+                    if (SIN_NOTA.has(clave)) return <td key={clave} className={cls + ' z-[5] bg-surface group-hover:bg-surface2' + claseFija(clave) + (esVistaBajas ? colorTexto : ' text-sub')} style={{ ...estiloFijo(clave), ...fondoFila }}>{texto(e, clave)}</td>
                     const nota = e.notas?.[clave] ?? ''
                     const abrir = (ev: ReactMouseEvent<HTMLTableCellElement>) => {
                       ev.preventDefault()
@@ -719,7 +746,8 @@ export default function Empleados() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         </div>
