@@ -148,7 +148,16 @@ async function cron(req: Req, res: Res) {
     return res.status(500).json({ error: 'Falta la configuración de Supabase' })
   }
 
-  // ?evento=diarios: pg_cron cada 5 min (sql/informes_diarios_cron.sql), para que salgan a su hora
+  /** Feriado de RR. HH. → Feriados (objetivos_feriados): de todos los locales o de fábrica/depósito,
+ *  la misma regla que la repo automática (sql/repo_auto_feriados.sql). Si no se puede leer, no frena. */
+async function esFeriado(fecha: string): Promise<boolean> {
+  const r = await rest(`objetivos_feriados?select=local&fecha=eq.${fecha}`).catch(() => null)
+  if (!r?.ok) return false
+  const filas = (await r.json().catch(() => [])) as Array<{ local: string | null }>
+  return filas.some((f) => !f.local || ['INDOD', 'POLO52'].includes(f.local.toUpperCase()))
+}
+
+// ?evento=diarios: pg_cron cada 5 min (sql/informes_diarios_cron.sql), para que salgan a su hora
   // (el cron de Vercel Hobby es uno por día). Sin autenticación, igual que ?evento=repo: no recibe
   // nada ni devuelve datos, y solo manda los diarios ya vencidos, una vez por día (reclamo atómico).
   if (req.query?.evento !== 'diarios') {
@@ -173,12 +182,17 @@ async function cron(req: Req, res: Res) {
   const { fecha, hora, dia } = ahoraAr()
   const corte = inicioHoyUtc()
   const enviados: Array<{ nombre: string; ok: boolean; detalle: string }> = []
+  let feriado: boolean | null = null
 
   for (const i of informes) {
     const suHora = (i.hora ?? '').trim()
     if (!/^\d{2}:\d{2}$/.test(suHora)) continue
     if (hora < suHora) continue // todavía no es la hora
     if (i.dias?.length && !i.dias.includes(dia)) continue // no toca hoy
+    if ((i.config as Record<string, unknown> | null)?.saltarFeriados) {
+      if (feriado === null) feriado = await esFeriado(fecha)
+      if (feriado) continue // feriado: no sale y queda para el próximo día hábil
+    }
 
     // Reclamo atómico: sólo pasa si no se mandó hoy todavía.
     const claim = await rest(

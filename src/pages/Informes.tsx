@@ -422,6 +422,8 @@ function InformeForm({
   const [tipoApp, setTipoApp] = useState((inicial?.config as unknown as ConfigApp)?.tipo ?? 'recepcion_indo')
   // Plantilla aprobada en Meta (para que llegue sin ventana de 24 h)
   const [plantillaMeta, setPlantillaMeta] = useState(String((inicial?.config as Record<string, unknown> | undefined)?.plantillaMeta ?? ''))
+  // No mandar los feriados (los de RR. HH. → Feriados: de todos los locales o de fábrica)
+  const [saltarFeriados, setSaltarFeriados] = useState(Boolean((inicial?.config as Record<string, unknown> | undefined)?.saltarFeriados))
 
   // Fuente vista
   const cfgV = (inicial?.config as unknown as ConfigVista) ?? {}
@@ -446,7 +448,7 @@ function InformeForm({
   }, [])
 
   const config = useMemo<Record<string, unknown>>(() => {
-    const meta = plantillaMeta.trim() ? { plantillaMeta: plantillaMeta.trim() } : {}
+    const meta = { ...(plantillaMeta.trim() ? { plantillaMeta: plantillaMeta.trim() } : {}), ...(saltarFeriados ? { saltarFeriados: true } : {}) }
     if (fuente === 'texto') return { formato, plantilla, ...meta }
     if (fuente === 'app') return { formato, tipo: tipoApp, ...meta }
     return {
@@ -457,7 +459,7 @@ function InformeForm({
       ...(columnas.trim() ? { columnas: columnas.split(',').map((c) => c.trim()).filter(Boolean) } : {}),
       tope: Number(tope) || 50,
     }
-  }, [fuente, formato, plantilla, plantillaMeta, tipoApp, vistaSel, filtroCol, filtroValor, coincide, tope, columnas])
+  }, [fuente, formato, plantilla, plantillaMeta, saltarFeriados, tipoApp, vistaSel, filtroCol, filtroValor, coincide, tope, columnas])
 
   const informeActual = (): Informe => ({
     id: inicial?.id ?? '',
@@ -775,6 +777,10 @@ function InformeForm({
                 })}
               </div>
               {modo === 'diario' && <p className="mt-1 text-[11px] text-sub">Se dispara a la hora elegida (hora de Argentina). Como respaldo, también se procesan los que quedaron pendientes al abrir esta pantalla.</p>}
+              <label className="mt-2 flex items-center gap-2 text-sm text-sub">
+                <input type="checkbox" checked={saltarFeriados} onChange={(e) => setSaltarFeriados(e.target.checked)} className="accent-cyan-600" />
+                No mandar los feriados (los que carga RR. HH. para todos los locales o fábrica)
+              </label>
             </div>
           )}
         </section>
