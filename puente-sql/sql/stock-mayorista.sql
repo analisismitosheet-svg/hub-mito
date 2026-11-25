@@ -7,7 +7,7 @@
                  y lo que está en tránsito (ENTRANSITO > 0).
    Resultado 2 — TAPERA: mercadería remitida a clientes que todavía no se facturó.
                  Remitos de venta (FACTTIPO 11) no anulados a clientes mayoristas (código
-                 numérico: los locales propios y las cuentas internas tienen código con letras
+                 numérico o número + CF, como 782CF: los locales propios y las cuentas internas tienen código con letras
                  y sus remitos nunca se facturan). Por línea: lo remitido menos lo que le
                  descontaron las facturas y cancelaciones que afectan esa línea
                  (COMPROBANTEVDET.AFE_COD / AFENROITEM con AFETIPOCOM = 11). OJO: el AFESALDO
@@ -50,7 +50,12 @@ SELECT c.FNUMCOMP AS remito, CONVERT(char(10), c.FFCH, 23) AS fecha, d.NROITEM A
   LEFT JOIN #afe af ON af.AFE_COD = c.CODIGO AND af.AFENROITEM = d.NROITEM
   LEFT JOIN DRAGONFISH_MITO.ZooLogic.CLI cl ON cl.CLCOD = c.FPERSON
  WHERE c.FACTTIPO = 11 AND c.ANULADO = 0
-   AND LTRIM(RTRIM(c.FPERSON)) <> '' AND c.FPERSON NOT LIKE '%[^0-9 ]%'
+   AND LTRIM(RTRIM(c.FPERSON)) <> ''
+   /* Código numérico (00782) o número + CF (782CF: la cuenta consumidor final del mismo
+      cliente, 25/11/2026). Los locales con CF adelante (CFD, CFPO, CFR4) quedan afuera. */
+   AND (c.FPERSON NOT LIKE '%[^0-9 ]%'
+        OR (LTRIM(RTRIM(c.FPERSON)) LIKE '[0-9]%CF'
+            AND LEFT(LTRIM(RTRIM(c.FPERSON)), LEN(LTRIM(RTRIM(c.FPERSON))) - 2) NOT LIKE '%[^0-9]%'))
    AND d.FCANT - ISNULL(af.u, 0) > 0;
 
 /* Lo que pasó a REPOLOC (20/11/2026, regla del usuario): cuando la mercadería de un cliente
@@ -79,7 +84,7 @@ SELECT CODIGO, rp_remito, rp_fecha,
 /* Por cada línea pendiente: cuánto de lo mandado a REPOLOC para ese cliente/SKU (posterior o del
    mismo día) le toca, repartido de la más vieja a la más nueva. */
 SELECT t.*, ROW_NUMBER() OVER (ORDER BY t.fecha, t.remito, t.item) AS orden,
-       TRY_CAST(t.cli AS int) AS cli_num
+       TRY_CAST(REPLACE(t.cli, 'CF', '') AS int) AS cli_num   /* 782CF cuenta como 782 para REPOLOC */
   INTO #tap1 FROM #tap0 t;
 
 SELECT t.remito, t.item, t.cli,
@@ -124,7 +129,7 @@ SELECT LTRIM(RTRIM(COLCOD)) AS c, LTRIM(RTRIM(ISNULL(COLDES, ''))) AS des
 SELECT t.remito, t.fecha, t.cli, t.cli_nom, t.a, t.c, t.t, t.rep AS u, t.precio,
        STUFF((SELECT DISTINCT ',' + CAST(r.rp_remito AS varchar(12)) FROM #rp r
                 JOIN DRAGONFISH_MITO.ZooLogic.COMPROBANTEVDET d ON d.CODIGO = r.CODIGO
-               WHERE r.cli_num = TRY_CAST(t.cli AS int) AND r.rp_fecha >= t.fecha
+               WHERE r.cli_num = TRY_CAST(REPLACE(t.cli, 'CF', '') AS int) AND r.rp_fecha >= t.fecha
                  AND LTRIM(RTRIM(d.FART)) = t.a AND LTRIM(RTRIM(d.CCOLOR)) = t.c AND LTRIM(RTRIM(d.TALLE)) = t.t
                FOR XML PATH('')), 1, 1, '') AS rp_remitos
   FROM #tap t WHERE t.rep > 0 ORDER BY t.fecha, t.remito;
