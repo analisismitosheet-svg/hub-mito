@@ -244,3 +244,9 @@ END;
 $$;
 REVOKE ALL ON FUNCTION public.transferencias_deposito_items(text) FROM anon, public;
 GRANT EXECUTE ON FUNCTION public.transferencias_deposito_items(text) TO authenticated;
+
+-- ---- Rol polo52 (25/11/2026, lo pidió el usuario): ve y marca Transferencias y Mi repo de Polo 52 ----
+INSERT INTO public.rol_permisos (rol, permiso_clave)
+SELECT 'polo52', p.clave
+  FROM (VALUES ('polo52.transferencias.view'), ('polo52.transferencias.mark')) AS p(clave)
+ WHERE NOT EXISTS (SELECT 1 FROM public.rol_permisos WHERE rol = 'polo52' AND permiso_clave = p.clave);
