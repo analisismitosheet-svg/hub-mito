@@ -31,7 +31,7 @@ import { formatoDe, type Informe } from '../src/lib/informes.js'
 import { mismoSecreto } from '../src/lib/apiAuth.js'
 import { enviarAlVincular, enviarPendientesFranquicias, reenviarPropuesta } from '../src/lib/franquiciasWhatsapp.js'
 import { ampliarAvisosOc, crearPlantillaOc, estadoPlantillaOc, pedirAutorizacionOc, procesarBotonOc, type BotonPulsado } from '../src/lib/ordenesCompraWhatsapp.js'
-import { conectarBotTelegram, estadoTelegram, procesarUpdateTelegram, secretoWebhookTelegram, telegramActivo } from '../src/lib/telegram.js'
+import { completarNombresTelegram, conectarBotTelegram, estadoTelegram, procesarUpdateTelegram, secretoWebhookTelegram, telegramActivo } from '../src/lib/telegram.js'
 
 const HUB_URL = () => process.env.HUB_URL || 'https://hub-mito.vercel.app'
 
@@ -278,7 +278,9 @@ async function manual(req: Req, res: Res) {
   // --- Telegram: estado del bot (pantalla de contactos) y conectar el webhook (solo admin) ---
   if (datos.telegram === 'estado') {
     if (!(await tienePermiso(token, ['sistemas.informes.view', 'ordenes_compra.admin', 'mayorista.franquicias.view']))) return res.status(403).json({ error: 'No tenés permiso para esta acción' })
-    return res.status(200).json(await estadoTelegram(HUB_URL()))
+    // De paso, el nombre de los vinculados que todavía no lo tienen (la pantalla muestra «Nombre (+tel)»)
+    const [estado, nombres] = await Promise.all([estadoTelegram(HUB_URL()), completarNombresTelegram().catch(() => 0)])
+    return res.status(200).json({ ...estado, nombresNuevos: nombres })
   }
   if (datos.telegram === 'conectar') {
     if (!(await tienePermiso(token, ['__solo_admin__']))) return res.status(403).json({ error: 'Solo el administrador' })

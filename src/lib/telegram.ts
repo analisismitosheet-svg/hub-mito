@@ -79,9 +79,15 @@ export const secretoWebhookTelegram = (): string =>
 
 type MensajeTelegram = {
   chat?: { id?: number; type?: string }
-  from?: { id?: number }
+  from?: { id?: number; first_name?: string; last_name?: string; username?: string }
   text?: string
-  contact?: { phone_number?: string; user_id?: number }
+  contact?: { phone_number?: string; user_id?: number; first_name?: string; last_name?: string }
+}
+
+/** «Nombre Apellido» de Telegram (o @usuario), para mostrar quién es cada número */
+const nombreDe = (p?: { first_name?: string; last_name?: string; username?: string }): string | null => {
+  const n = [p?.first_name, p?.last_name].map((x) => (x ?? '').trim()).filter(Boolean).join(' ')
+  return (n || (p?.username ? `@${p.username}` : '')).slice(0, 80) || null
 }
 
 const pedirNumero = (chat: number, texto: string) =>
@@ -109,7 +115,10 @@ export async function procesarUpdateTelegram(update: { message?: MensajeTelegram
     const r = await rest('telegram_vinculos?on_conflict=telefono', {
       method: 'POST',
       headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-      body: JSON.stringify({ telefono: claveTelefono(tel), chat_id: chat, vinculado_at: new Date().toISOString() }),
+      body: JSON.stringify({
+        telefono: claveTelefono(tel), chat_id: chat, vinculado_at: new Date().toISOString(),
+        nombre: nombreDe(m.contact) ?? nombreDe(m.from),
+      }),
     })
     await llamar('sendMessage', {
       chat_id: chat,
@@ -120,6 +129,28 @@ export async function procesarUpdateTelegram(update: { message?: MensajeTelegram
   }
   await pedirNumero(chat, 'Hola. Para recibir los avisos de MITO, tocá el botón «Compartir mi número». Solo se hace una vez.')
   return null
+}
+
+/**
+ * Completa el nombre de los que se vincularon antes de que se guardara (getChat de cada
+ * chat privado). Solo los que no lo tienen, de a pocos: lo llama el estado del bot.
+ */
+export async function completarNombresTelegram(max = 25): Promise<number> {
+  if (!telegramActivo()) return 0
+  const r = await rest(`telegram_vinculos?select=telefono,chat_id&nombre=is.null&limit=${max}`)
+  if (!r.ok) return 0
+  const filas = (await r.json()) as Array<{ telefono: string; chat_id: number }>
+  let n = 0
+  for (const f of filas) {
+    const c = await llamar<{ first_name?: string; last_name?: string; username?: string }>('getChat', { chat_id: f.chat_id }).catch(() => null)
+    // Sin nombre (chat cerrado, bot bloqueado): se marca vacío para no volver a preguntar
+    const nombre = (c?.ok ? nombreDe(c.result) : null) ?? ''
+    const u = await rest(`telegram_vinculos?telefono=eq.${encodeURIComponent(f.telefono)}`, {
+      method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ nombre }),
+    })
+    if (u.ok && nombre) n++
+  }
+  return n
 }
 
 export interface EstadoTelegram {

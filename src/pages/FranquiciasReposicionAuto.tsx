@@ -91,7 +91,7 @@ async function apiInforme(payload: Record<string, unknown>): Promise<{ enviados?
   return body ?? {}
 }
 
-interface EstadoTelegram { configurado: boolean; usuario?: string; conectado?: boolean; error?: string }
+interface EstadoTelegram { configurado: boolean; usuario?: string; conectado?: boolean; error?: string; nombresNuevos?: number }
 
 /** Con TELEGRAM_BOT_TOKEN en Vercel el link sale por Telegram (src/lib/telegram.ts). */
 async function estadoTelegram(): Promise<EstadoTelegram | null> {
@@ -115,12 +115,12 @@ function pedidosDragon(p: Propuesta) {
   return [mito, polo].filter(Boolean).join(' · ') || `PV ${p.dragon_pedido ?? ''}`
 }
 
-function chipEstado(p: Propuesta, envios: Envio[], canal: string, numeroDe?: (id: string) => string | undefined) {
+function chipEstado(p: Propuesta, envios: Envio[], canal: string, numeroDe?: (id: string) => string | undefined, quienDe: (t: string) => string = (t) => `+${t}`) {
   if (p.dragon_anulado_at) return { txt: `✕ Anulado en Dragon (${pedidosDragon(p)}) · ${fmtHora(p.dragon_anulado_at)}${p.dragon_anulado_por ? ` por ${p.dragon_anulado_por}` : ''}`, cls: 'border-red-500/40 bg-red-500/10 text-red-400' }
   if (p.estado === 'en_dragon' && p.dragon_polo_falta) return { txt: `✓ Aceptado · En Dragon (${pedidosDragon(p)})`, cls: 'border-amber-500/40 bg-amber-500/10 text-amber-400' }
-  if (p.estado === 'en_dragon') return { txt: `✓ Aceptado${p.confirmada_por ? ` por +${p.confirmada_por}` : ''} · En Dragon (${pedidosDragon(p)})`, cls: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400' }
+  if (p.estado === 'en_dragon') return { txt: `✓ Aceptado${p.confirmada_por ? ` por ${quienDe(p.confirmada_por)}` : ''} · En Dragon (${pedidosDragon(p)})`, cls: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400' }
   if (p.estado === 'confirmada' && p.dragon_error) return { txt: `Aceptado · error al cargar en Dragon`, cls: 'border-red-500/40 bg-red-500/10 text-red-400' }
-  if (p.estado === 'confirmada') return { txt: `✓ Aceptado${p.confirmada_por ? ` por +${p.confirmada_por}` : ''} · cargando en Dragon…`, cls: 'border-teal-500/40 bg-teal-500/10 text-teal-400' }
+  if (p.estado === 'confirmada') return { txt: `✓ Aceptado${p.confirmada_por ? ` por ${quienDe(p.confirmada_por)}` : ''} · cargando en Dragon…`, cls: 'border-teal-500/40 bg-teal-500/10 text-teal-400' }
   if (p.estado === 'anulada' && p.reemplazada_por) return { txt: `🔒 Reemplazada por ${numeroDe?.(p.reemplazada_por) ?? 'otra'} · su link ya no acepta`, cls: 'border-line bg-surface2 text-sub' }
   if (p.estado === 'anulada') return { txt: 'Anulada', cls: 'border-line bg-surface2 text-sub' }
   if (new Date(p.vence_at) < new Date()) return { txt: 'Vencida sin aceptar', cls: 'border-line bg-surface2 text-sub' }
@@ -152,16 +152,22 @@ export default function FranquiciasReposicionAuto() {
 
   // Telegram: si el bot está cargado, el link sale por ahí y solo le llega a quien se vinculó
   const [tg, setTg] = useState<EstadoTelegram | null>(null)
-  const [vinculados, setVinculados] = useState<Set<string>>(new Set())
+  // teléfono (clave) → nombre de Telegram ('' si no se sabe)
+  const [vinculados, setVinculados] = useState<Map<string, string>>(new Map())
   // Siempre Telegram: si el estado del bot no se pudo leer, igual se muestra como Telegram
   const porTelegram = tg ? tg.configurado : true
   const canal = 'Telegram'
   const vinculado = (t: string) => vinculados.has(claveTelefono(t))
+  /** «Nombre (+tel)» si se vinculó a Telegram y se sabe el nombre; si no, «+tel» */
+  const quien = (t: string) => {
+    const n = vinculados.get(claveTelefono(t))
+    return n ? `${n} (+${t})` : `+${t}`
+  }
 
   const cargarVinculos = useCallback(async (tels: string[]) => {
     if (!supabase || !tels.length) return
     const { data } = await supabase.rpc('franquicias_telegram_vinculados', { p_claves: [...new Set(tels.map(claveTelefono))] })
-    setVinculados(new Set(((data ?? []) as { telefono: string }[]).map((v) => v.telefono)))
+    setVinculados(new Map(((data ?? []) as { telefono: string; nombre: string | null }[]).map((v) => [v.telefono, (v.nombre ?? '').trim()])))
   }, [])
 
   useEffect(() => { void estadoTelegram().then(setTg) }, [])
@@ -208,6 +214,8 @@ export default function FranquiciasReposicionAuto() {
     [configs, form.telefonos],
   )
   useEffect(() => { if (porTelegram && todosLosTels) void cargarVinculos(todosLosTels.split(',')) }, [porTelegram, todosLosTels, cargarVinculos])
+  // El estado del bot completó nombres de vinculados viejos: se releen
+  useEffect(() => { if (tg?.nombresNuevos && todosLosTels) void cargarVinculos(todosLosTels.split(',')) }, [tg, todosLosTels, cargarVinculos])
 
   function invitar(t: string) {
     if (!tg?.usuario) return
@@ -471,7 +479,7 @@ export default function FranquiciasReposicionAuto() {
                 {form.telefonos.map((t, i) => (
                   <span key={t} title={porTelegram ? (vinculado(t) ? 'Vinculado a Telegram: recibe el link' : 'Todavía no se vinculó al bot: no recibe nada') : undefined}
                     className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${porTelegram && !vinculado(t) ? 'border-red-500/35 bg-red-500/10 text-red-300' : 'border-emerald-500/35 bg-emerald-500/10 text-emerald-400'}`}>
-                    +{t} <span className="font-normal opacity-70">(#{i + 1})</span>
+                    {quien(t)} <span className="font-normal opacity-70">(#{i + 1})</span>
                     {porTelegram && (vinculado(t)
                       ? <span className="font-normal">· ✓ Telegram</span>
                       : <button type="button" onClick={() => invitar(t)} className="font-normal underline underline-offset-2" title="Abre tu WhatsApp con la invitación al bot para este número">· sin vincular, invitar</button>)}
@@ -559,7 +567,7 @@ export default function FranquiciasReposicionAuto() {
                         <span className="block truncate text-sm font-bold text-ink">{c.cliente_id} · {nombreCliente(c.cliente_id) || 'Cliente'}</span>
                         <span className="block truncate text-[11px] text-sub">Telegram ({tels.length}): {tels.length === 0 && <b className="text-emerald-400">—</b>}
                           {tels.map((t, i) => (
-                            <b key={t} className={porTelegram && !vinculado(t) ? 'text-red-300' : 'text-emerald-400'}>{i > 0 && ' · '}+{t}{porTelegram ? (vinculado(t) ? ' ✓' : ' (sin vincular)') : ''}</b>
+                            <b key={t} className={porTelegram && !vinculado(t) ? 'text-red-300' : 'text-emerald-400'}>{i > 0 && ' · '}{quien(t)}{porTelegram ? (vinculado(t) ? ' ✓' : ' (sin vincular)') : ''}</b>
                           ))}
                         </span>
                       </span>
@@ -586,7 +594,7 @@ export default function FranquiciasReposicionAuto() {
                       <div className="flex flex-col gap-2">
                         {props.map((p) => {
                           const env = enviosDe(p.id)
-                          const e = chipEstado(p, env, canal, (id) => propuestas.find((x) => x.id === id)?.numero)
+                          const e = chipEstado(p, env, canal, (id) => propuestas.find((x) => x.id === id)?.numero, quien)
                           const fAbierta = fechasAbiertas.has(p.id)
                           const lista = items[p.id]
                           const editable = p.estado === 'enviada' && new Date(p.vence_at) > new Date()
@@ -684,7 +692,7 @@ export default function FranquiciasReposicionAuto() {
                                     <ul className="mt-2 flex flex-col gap-1.5">
                                       {env.map((en) => (
                                         <li key={en.id} className="flex flex-wrap items-center gap-2 text-xs">
-                                          <b className="text-ink">+{en.telefono}</b>
+                                          <b className="text-ink">{quien(en.telefono)}</b>
                                           <span className={en.estado === 'enviado' ? 'text-emerald-400' : en.estado === 'error' ? 'text-amber-400' : 'text-violet-300'}>
                                             {en.estado === 'enviado'
                                               ? `Telegram enviado ${en.enviado_at ? fmtHora(en.enviado_at) : ''}`
