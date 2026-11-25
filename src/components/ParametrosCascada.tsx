@@ -207,7 +207,7 @@ export default function ParametrosCascada({ params, guardados, onChange, onGuard
         </Regla>
         <Regla
           titulo="Donante principal"
-          ayuda="Dona antes que los locales y trabaja como MITO: cubre lo que falta con todo su stock, por prioridad de local, sin quedarse con nada ni topes. Lo que no alcanza lo donan los locales."
+          ayuda="Dona antes que los locales y trabaja como MITO: cubre lo que falta con todo su stock, por prioridad de local, sin quedarse con nada ni topes. No le manda a un local que ya tiene el SKU (regla «No recibe si ya tiene») ni lo que le está llegando en tránsito. Lo que no alcanza lo donan los locales."
           activo={P.donante_principal.activo}
           onActivo={(v) => set((p) => { p.donante_principal.activo = v })}
           cambio={!igual(P.donante_principal, D.donante_principal)}

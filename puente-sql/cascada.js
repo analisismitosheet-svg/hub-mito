@@ -22,8 +22,10 @@
  *   - pase_extra: locales que, si no recibieron nada, aceptan donantes con 1 sola unidad (NVOCED)
  *   - donante_principal (14/11/2026): bases que donan ANTES que los locales y trabajan como
  *     MITO: cubren el faltante con todo su stock, por prioridad de local, sin quedarse con
- *     nada, sin tope por SKU, sin mínimo por envío ni tránsito / «ya tiene» / restricción
- *     de proveedor. Lo que no cubren pasa a los locales. Por defecto: INDOD.
+ *     nada, sin tope por SKU, sin mínimo por envío ni restricción de proveedor. Desde el
+ *     25/11/2026 SÍ respetan tránsito y «ya tiene» (receptor_max), como los locales: antes Indo
+ *     reponía artículos que el local ya tenía en stock. Lo que no cubren pasa a los locales.
+ *     Por defecto: INDOD.
  *   - cerrados_dia (14/11/2026): locales que no abren ciertos días de la semana (1 = lunes …
  *     7 = domingo). El día que corre la cascada NO donan NI reciben: lo que se les iba a pedir
  *     lo dona el siguiente local que sí abre. Al día siguiente esos locales suman la venta que
@@ -437,6 +439,10 @@
       const porPrioridad = [...pares].sort((a, b) => PRIO.get(a.base) - PRIO.get(b.base) || cmp(a.sku, b.sku))
       for (const p of porPrioridad) {
         if (p.faltante <= 0 || !p.elegible) continue
+        // (25/11/2026) Igual que los locales: no le pide a Indo lo que el local ya tiene
+        // (≥ receptor_max) ni lo que le está llegando en tránsito.
+        if (P.respetar_transito && transito.has(`${p.base}|${p.sku}`)) continue
+        if (P.receptor_max.activo && get(p.base, p.sku) >= P.receptor_max.valor) continue
         for (const d of PRINCIPALES) {
           const n = Math.min(get(d, p.sku), p.faltante)
           if (n <= 0) continue
