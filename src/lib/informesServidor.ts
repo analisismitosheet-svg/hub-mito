@@ -17,6 +17,7 @@ import { enviarTelegram, telegramActivo, type ResultadoTelegram } from './telegr
 import { renderReporteImagen, type BloqueImagen, type ReporteImagen } from './informesImagen.js'
 import { bloquesEficiencia, corta, porcentajes, type AvanceVtd, type FilaPiso, type FilaVtd } from './informeEficiencia.js'
 import { bloquesConversion, type DatosConversion } from './informeConversion.js'
+import { bloquesPedidosClientes, DIAS_ABIERTOS, type DatosPedidosClientes, type EstadoPedidoCliente, type PedidoCliente } from './informePedidosClientes.js'
 import { bloquesKm,type FilaKmInforme, type FilaLocalesInforme, type FilaParadaInforme, type VehiculoInforme } from './informeKmTransporte.js'
 import {
   claveTelefono,
@@ -298,6 +299,8 @@ async function cuerpoApp(cfg: ConfigApp): Promise<string> {
       return bloquesKm(await datosKm(ahoraAr().fecha)).texto
     case 'tasa_conversion':
       return bloquesConversion(await datosConversion(ahoraAr().fecha)).texto
+    case 'pedidos_clientes':
+      return bloquesPedidosClientes(await datosPedidosClientes(ahoraAr().fecha)).texto
     default:
       throw new Error('Tipo de informe desconocido')
   }
@@ -558,6 +561,59 @@ async function datosKm(fecha: string): Promise<{
 }
 
 // ---------------------------------------------------------------------------
+// Estado de pedidos de clientes (src/lib/informePedidosClientes.ts)
+// ---------------------------------------------------------------------------
+
+async function datosPedidosClientes(fecha: string): Promise<DatosPedidosClientes> {
+  const [y, m, dd] = fecha.split('-').map(Number)
+  const desde = new Date(Date.UTC(y, m - 1, dd - DIAS_ABIERTOS)).toISOString().slice(0, 10)
+  // Clientes mayoristas: motivo vacío (VTD y REP son de locales)
+  const cab = await jsonDe<{ codigo: string; numero: number | null; cliente: string | null; cliente_nombre: string | null; fecha: string; unidades: number | null; total: number | string | null }>(
+    `pedidos_venta?select=codigo,numero,cliente,cliente_nombre,fecha,unidades,total&motivo=is.null&anulado=not.is.true&fecha=gte.${desde}&fecha=lte.${fecha}&order=fecha.asc&limit=1000`,
+  )
+  const est = new Map<string, { estado: string; prioridad: string | null; nombre: string | null; unidades_ok: number | null; faltantes: number | null; liberado_nombre: string | null; armado_id: string | null }>()
+  for (let i = 0; i < cab.length; i += 80) {
+    const codigos = cab.slice(i, i + 80).map((c) => `"${c.codigo}"`).join(',')
+    const filas = await jsonDe<{ codigo: string; estado: string; prioridad: string | null; nombre: string | null; unidades_ok: number | null; faltantes: number | null; liberado_nombre: string | null; armado_id: string | null }>(
+      `pedidos_venta_estado?select=codigo,estado,prioridad,nombre,unidades_ok,faltantes,liberado_nombre,armado_id&codigo=in.(${encodeURIComponent(codigos)})`,
+    )
+    for (const f of filas) est.set(f.codigo, f)
+  }
+  // Cuándo se terminó cada armado (para «terminados hoy»)
+  const idsHechos = [...est.values()].filter((e) => e.estado === 'hecho' && e.armado_id).map((e) => e.armado_id!)
+  const hechoAt = new Map<string, string | null>()
+  for (let i = 0; i < idsHechos.length; i += 80) {
+    const filas = await jsonDe<{ id: string; hecho_at: string | null }>(`mayorista_armados?select=id,hecho_at&id=in.(${idsHechos.slice(i, i + 80).join(',')})`)
+    for (const f of filas) hechoAt.set(f.id, f.hecho_at)
+  }
+  const diaAr = (iso: string | null | undefined) => (iso ? ahoraAr(new Date(iso)).fecha : null)
+
+  const pedidos: PedidoCliente[] = []
+  for (const c of cab) {
+    const e = est.get(c.codigo)
+    const estado: EstadoPedidoCliente = !e ? 'sin_armado' : e.estado === 'hecho' ? 'hecho' : e.estado === 'aceptado' ? 'aceptado' : 'pendiente'
+    const deHoy = c.fecha === fecha
+    const terminadoHoy = estado === 'hecho' && diaAr(e?.armado_id ? hechoAt.get(e.armado_id) : null) === fecha
+    if (!deHoy && estado === 'hecho' && !terminadoHoy) continue
+    pedidos.push({
+      numero: c.numero,
+      cliente: (c.cliente ?? '').trim() || '—',
+      cliente_nombre: c.cliente_nombre,
+      fecha: c.fecha,
+      unidades: Number(c.unidades) || 0,
+      total: Number(c.total) || 0,
+      estado,
+      prioridad: e?.prioridad ?? null,
+      nombre: e?.nombre ?? null,
+      unidades_ok: Number(e?.unidades_ok) || 0,
+      faltantes: Number(e?.faltantes) || 0,
+      liberado_nombre: e?.liberado_nombre ?? null,
+    })
+  }
+  return { fecha, hora: ahoraAr().hora, pedidos }
+}
+
+// ---------------------------------------------------------------------------
 // Cuerpo completo
 // ---------------------------------------------------------------------------
 
@@ -641,6 +697,13 @@ async function construirReporteImagen(informe: Informe, fecha?: string): Promise
         return {
           reporte: { titulo: limpiarParaImagen(enc || 'Tasa de conversión'), subtitulo: r.subtitulo, pie, bloques: r.bloques, ancho: r.ancho },
           caption: limpiarParaImagen(enc || informe.nombre || 'Tasa de conversión').slice(0, 900),
+        }
+      }
+      if (cfg.tipo === 'pedidos_clientes') {
+        const r = bloquesPedidosClientes(await datosPedidosClientes(d.fecha))
+        return {
+          reporte: { titulo: limpiarParaImagen(enc || 'Estado de pedidos de clientes'), subtitulo: r.subtitulo, pie, bloques: r.bloques, ancho: r.ancho },
+          caption: limpiarParaImagen(enc || informe.nombre || 'Estado de pedidos de clientes').slice(0, 900),
         }
       }
       if (cfg.tipo === 'eficiencia_mayorista') {
