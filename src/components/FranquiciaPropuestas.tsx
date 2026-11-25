@@ -52,6 +52,7 @@ interface Propuesta {
   confirmada_at: string | null
   revisada_at: string | null
   dragon_pedido: string | null
+  dragon_pedido_polo?: string | null
   dragon_error: string | null
   dragon_enviando_at: string | null
   dragon_intentos: number
@@ -65,7 +66,7 @@ const fmtFecha = (iso: string | null) => (iso ? new Intl.DateTimeFormat('es-AR',
 const linkDe = (token: string) => `${window.location.origin}/p/${token}`
 
 function chipEstado(p: Propuesta) {
-  if (p.estado === 'en_dragon') return { txt: `En Dragon · pedido ${p.dragon_pedido ?? ''}`.trim(), cls: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400' }
+  if (p.estado === 'en_dragon') return { txt: `En Dragon · pedido ${p.dragon_pedido ?? ''}${p.dragon_pedido_polo && p.dragon_pedido_polo !== p.dragon_pedido ? ` · Polo ${p.dragon_pedido_polo}` : ''}`.trim(), cls: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400' }
   if (p.estado === 'confirmada' && p.dragon_error) return { txt: 'Confirmada · error al cargar en Dragon', cls: 'border-red-500/40 bg-red-500/10 text-red-400' }
   if (p.estado === 'confirmada' && p.dragon_enviando_at) return { txt: 'Confirmada · cargando en Dragon…', cls: 'border-violet-500/40 bg-violet-500/10 text-violet-400' }
   if (p.estado === 'confirmada') return { txt: 'Confirmada · por cargar en Dragon', cls: 'border-teal-500/40 bg-teal-500/10 text-teal-400' }

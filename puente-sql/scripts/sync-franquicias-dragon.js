@@ -7,6 +7,8 @@
  *
  * - Cliente y lista por franquicia: FRANQUICIAS (abajo). Lista MAYOR = LISTA2 en Dragon.
  * - Observaciones: "01140 (CF Ushuaia - Argentina S.R.L.) - Propuesta P-001" + comentario del cliente.
+ * - Lo que sale de Polo 52 va en un pedido aparte con Obs "LLEGA DESDE POLO52 - ..." (25/11/2026,
+ *   sql/franquicias_pedido_polo.sql). Si falla solo ese, queda el de MITO y se reintenta el de Polo.
  * - Precio: no se manda; Dragon pone el del artículo en la lista.
  * - Si Dragon rechaza, queda el error en el hub y se reintenta (hasta 5 veces). Si el proceso se corta
  *   a mitad de camino queda "enviando" y no se reintenta solo (ver sql/franquicias_dragon.sql).
@@ -74,7 +76,11 @@ async function main() {
     // propuesta es vieja y no lo trae, se usa el de la franquicia.
     const cliente = String(p.cliente_id ?? '').trim() || f?.cliente
     const descripcion = String(p.cliente_nombre ?? '').trim() || f?.descripcion || ''
-    let pedido = null
+    // Lo de MITO y lo de Polo van en pedidos separados (la RPC ya trae el reparto por ítem).
+    // Si el de MITO ya estaba cargado (reintento porque falló el de Polo), solo se manda el de Polo.
+    let pedido = String(p.dragon_pedido ?? '').trim() || null
+    let pedidoPolo = null
+    let poloFalta = false
     let error = null
     try {
       if (!cliente) throw new Error(`La franquicia ${p.franquicia} no tiene cliente de Dragon configurado`)
@@ -82,14 +88,37 @@ async function main() {
       const que = p.tipo === 'calzado' || p.tipo === 'materiales' ? 'Reposición de materiales' : 'Propuesta'
       const obs = `${cliente} (${descripcion}) - ${que} ${p.numero}${p.comentario ? ` - ${p.comentario}` : ''}`
       const fecha = new Date(new Date(p.confirmada_at).getTime() - 3 * 3600_000).toISOString().slice(0, 10)
-      const r = await crearPedido({ cliente, lista: 'LISTA2', obs, items: p.items, fecha })
-      if (r.ok) pedido = String(r.numero ?? r.codigo)
-      else error = r.detalle
+      const deMito = p.items.map((i) => ({ ...i, cantidad: Number(i.mito ?? i.cantidad) || 0 })).filter((i) => i.cantidad > 0)
+      const dePolo = p.items.map((i) => ({ ...i, cantidad: Number(i.polo) || 0 })).filter((i) => i.cantidad > 0)
+      if (!pedido && deMito.length) {
+        const r = await crearPedido({ cliente, lista: 'LISTA2', obs, items: deMito, fecha })
+        if (!r.ok) throw new Error(r.detalle)
+        pedido = String(r.numero ?? r.codigo)
+      }
+      if (dePolo.length) {
+        try {
+          const r = await crearPedido({ cliente, lista: 'LISTA2', obs: `LLEGA DESDE POLO52 - ${obs}`, items: dePolo, fecha })
+          if (r.ok) pedidoPolo = String(r.numero ?? r.codigo)
+          else throw new Error(r.detalle)
+        } catch (e) {
+          // Si todo salía de Polo no hay pedido de MITO: cuenta como error común y se reintenta entero.
+          if (!pedido) throw e
+          poloFalta = true
+          error = e.message
+        }
+      }
+      if (!pedido) pedido = pedidoPolo
     } catch (e) {
       error = e.message
     }
-    await rpc('franquicias_resultado_dragon', { p_token: token, p_id: p.id, p_pedido: pedido, p_error: error })
-    anotar(pedido ? `${p.numero}: cargada en Dragon como pedido N° ${pedido}` : `${p.numero}: ERROR ${error}`)
+    await rpc('franquicias_resultado_dragon', {
+      p_token: token, p_id: p.id, p_pedido: pedido, p_error: error, p_pedido_polo: pedidoPolo, p_polo_falta: poloFalta,
+    })
+    anotar(
+      pedido
+        ? `${p.numero}: cargada en Dragon · MITO N° ${pedido === pedidoPolo ? '—' : pedido}${pedidoPolo ? ` · Polo N° ${pedidoPolo}` : ''}${poloFalta ? ` · FALTA el de Polo: ${error}` : ''}`
+        : `${p.numero}: ERROR ${error}`,
+    )
   }
 }
 
