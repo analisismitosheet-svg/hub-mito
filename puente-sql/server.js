@@ -50,6 +50,9 @@
  *   POST /          body: { accion: 'stock_mayorista', forzar? } -> { deposito, tapera, articulos, colores, calculado }
  *                   (Mayorista > Stock: sql/stock-mayorista.sql, DRAGONFISH_MITO, cache 1 min)
  *   POST /          body: { accion: 'stock_tienda', prefijos|articulos, locales? } -> { filas } (tienda cf-zimith-mayorista)
+ *   POST /          body: { accion: 'polo_bulto', origen, numeros: [{pv, num}] } (Polo 52 > Mapeo de bultos, ver poloBulto.js)
+ *   POST /          body: { accion: 'flexxus', consulta: 'ventas'|'saldos'|'asientos'|'balance', desde?, hasta?, forzar? }
+ *                   (Administración > Flexxus: Firebird por el servidor vinculado FLEXXUS del SQL local, ver flexxus.js; cache 2 min)
  *   POST /          body: { accion: 'stock_valorizado', forzar? } -> { bases, articulos, costo, calculado }
  *                   (Administradores > Stock valorizado: sql/stock-valorizado.sql contra el
  *                    servidor principal, recorre todas las bases DRAGONFISH_*; cache 10 min)
@@ -1197,6 +1200,8 @@ async function stockValorizadoDeBase(base) {
  * para cambiar de día sin volver al SQL; "Actualizar" (forzar) saca una nueva.
  */
 const repoDiaria = require('./repo-diaria')
+const { accionFlexxus } = require('./flexxus')
+const { accionPoloBulto } = require('./poloBulto')
 // Reparto manual del hub (se arma más abajo, cuando ya existen sql y conexionLarga)
 let repartoManual = null
 const cascadaLocales = require('./cascada')
@@ -1973,6 +1978,25 @@ const server = http.createServer(async (req, res) => {
 
     if (body?.accion === 'stock_mayorista') {
       return enviar(res, 200, await stockMayorista(body?.forzar === true))
+    }
+
+    // Administración > Flexxus: ventas, saldos de clientes y asientos (Firebird, solo lectura)
+    if (body?.accion === 'flexxus') {
+      try {
+        const local = [...SERVIDORES.values()].find((s) => !s.principal)
+        return enviar(res, 200, await accionFlexxus(local, asegurarConexion, body))
+      } catch (e) {
+        return enviar(res, 400, { error: e.message })
+      }
+    }
+
+    // Polo 52 > Mapeo de bultos: artículos del remito de un bulto que llegó (DRAGONFISH_POLO52, solo lectura)
+    if (body?.accion === 'polo_bulto') {
+      try {
+        return enviar(res, 200, await accionPoloBulto(SERVIDORES.get(ALIAS_PRINCIPAL.toUpperCase()), asegurarConexion, body))
+      } catch (e) {
+        return enviar(res, 400, { error: e.message })
+      }
     }
 
     if (body?.accion === 'stock_valorizado') {

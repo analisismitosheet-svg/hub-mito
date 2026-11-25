@@ -104,6 +104,9 @@ const TrackingKm = lazy(() => import('@/pages/TrackingKm'))
 const OrdenesCompra = lazy(() => import('@/pages/OrdenesCompra'))
 const ReposicionEscaneo = lazy(() => import('@/pages/ReposicionEscaneo'))
 const StockValorizado = lazy(() => import('@/pages/StockValorizado'))
+const Flexxus = lazy(() => import('@/pages/Flexxus'))
+const PoloMapeo = lazy(() => import('@/pages/PoloMapeo'))
+const PoloPosiciones = lazy(() => import('@/pages/PoloPosiciones'))
 const MayoristaStock = lazy(() => import('@/pages/MayoristaStock'))
 const RepoDiariaMito = lazy(() => import('@/pages/RepoDiariaMito'))
 const RepartoTransferencias = lazy(() => import('@/pages/RepartoTransferencias'))
@@ -559,6 +562,26 @@ export default function App() {
             }
           />
           <Route
+            path="/polo52/mapeo"
+            element={
+              <PermissionRoute permiso="polo52.mapeo.view">
+                <Suspense fallback={null}>
+                  <PoloMapeo />
+                </Suspense>
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/polo52/mapeo/posiciones"
+            element={
+              <PermissionRoute permiso="polo52.mapeo.gestionar">
+                <Suspense fallback={null}>
+                  <PoloPosiciones />
+                </Suspense>
+              </PermissionRoute>
+            }
+          />
+          <Route
             path="/polo52/transferencias"
             element={
               <PermissionRoute permiso="polo52.transferencias.view">
@@ -680,6 +703,16 @@ export default function App() {
               <PermissionRoute permiso="tracking.view">
                 <Suspense fallback={null}>
                   <TrackingKm />
+                </Suspense>
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/administracion/flexxus"
+            element={
+              <PermissionRoute permiso="flexxus.view">
+                <Suspense fallback={null}>
+                  <Flexxus />
                 </Suspense>
               </PermissionRoute>
             }

@@ -20,6 +20,7 @@ El detalle largo y la historia de cada módulo siguen en `CONTEXTO.md` (raíz de
 - [[Reposición por escaneo]]: cargás el Excel, escaneás y te dice en voz alta en qué caja (local) va cada prenda
 - [[Franquicias]]: reposición diaria, propuesta, materiales; configuración en Sistemas
 - [[Mapeo depósito]]
+- [[Mapeo Polo 52]]: bultos que llegan a Polo 52 por posición (palet), con los artículos del remito
 - [[Transferencias]]: reposiciones y estadísticas
 - [[Facturación, guías y notas de crédito]]
 - [[Informes por WhatsApp]]: Envío informes y reportes (Sistemas)
@@ -56,6 +57,7 @@ El detalle largo y la historia de cada módulo siguen en `CONTEXTO.md` (raíz de
 | `/administradores/stock-valorizado` | StockValorizado.tsx | [[Stock valorizado]] |
 | `/web/ventas` | VentasWeb.tsx | [[Ventas web (Tiendanube)]] |
 | `/mayorista/mapeo` (+escanear, orden, ubicaciones) | MapeoEscanear/Orden/Ubicaciones.tsx | [[Mapeo depósito]] |
+| `/polo52/mapeo` (+posiciones) | PoloMapeo.tsx, PoloPosiciones.tsx | [[Mapeo Polo 52]] |
 | `/mayorista/consulta-articulos` | ConsultaArticulos.tsx | [[Artículos y F12]] |
 | `/mayorista/facturacion-fabrica`, `/guias`, `/notas-credito`, `/clientes`, `/transportes` | FacturacionFabrica, Guias, NotasCredito, Clientes, Transportes | [[Facturación, guías y notas de crédito]] |
 | `/rrhh/*` | Empleados, CargaNovedades, ResumenNovedades, MotivosNovedades, Cumpleanios | [[Otros módulos]] |

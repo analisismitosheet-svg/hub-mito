@@ -72,6 +72,10 @@ export default defineConfig({
       '/api/sql/repo-diaria': 'http://localhost:4176',
       // Mayorista > Stock: `node scripts/mock-stock-mayorista.mjs` (+ Puente en :3128 o una copia en :3199)
       '/api/sql/stock-mayorista': 'http://localhost:4178',
+      // Administración > Flexxus: `node scripts/mock-flexxus.mjs` (+ Puente en :3128 o una copia en :3199)
+      '/api/sql/flexxus': 'http://localhost:4179',
+      // Polo 52 > Mapeo de bultos: `npx tsx scripts/mock-polo-bulto.mts` (+ Puente en :3128 o una copia en :3199)
+      '/api/sql/polo-bulto': 'http://localhost:4180',
       // Reposiciones / Transferencias > Reparto manual: `node scripts/mock-reparto.mjs` (+ una copia del Puente en :3199)
       '/api/sql/reparto': 'http://localhost:4177',
     },

@@ -64,6 +64,7 @@ import {
   ReceiptText,
   Bot,
   KanbanSquare,
+  MapPin,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
@@ -288,6 +289,17 @@ export const APPS: AppDef[] = [
     target: '/administradores/stock-valorizado',
     color: '#10b981',
     permiso: 'stock_valorizado.view',
+  },
+  {
+    id: 'flexxus',
+    areaId: 'administracion',
+    title: 'Flexxus',
+    description: 'Ventas, saldos de clientes y asientos contables, en vivo desde Flexxus.',
+    icon: Database,
+    kind: 'internal',
+    target: '/administracion/flexxus',
+    color: '#6366f1',
+    permiso: 'flexxus.view',
   },
   {
     id: 'ventas-web',
@@ -656,6 +668,17 @@ export const APPS: AppDef[] = [
     target: '/polo52/mi-repo',
     color: '#ea580c',
     permiso: 'polo52.transferencias.view',
+  },
+  {
+    id: 'polo52-mapeo',
+    areaId: 'polo52',
+    title: 'Mapeo de bultos',
+    description: 'Escaneá el palet y los bultos que llegan: ves qué artículos hay en cada posición.',
+    icon: MapPin,
+    kind: 'internal',
+    target: '/polo52/mapeo',
+    color: '#7c3aed',
+    permiso: 'polo52.mapeo.view',
   },
   {
     id: 'deposito-repo',

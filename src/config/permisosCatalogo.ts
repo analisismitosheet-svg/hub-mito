@@ -41,6 +41,7 @@ import {
   Tags,
   ReceiptText,
   KanbanSquare,
+  MapPin,
 } from 'lucide-react'
 
 /**
@@ -199,6 +200,16 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
     ],
   },
 
+  {
+    id: 'polo52-mapeo', areaId: 'polo52', titulo: 'Mapeo de bultos', descripcion: 'Posiciones (palets) de Polo 52 y los bultos que hay en cada una, con sus artículos de Dragon',
+    icon: MapPin, color: '#7c3aed',
+    acciones: { ver: 'polo52.mapeo.view' },
+    especiales: [
+      { clave: 'polo52.mapeo.escanear', label: 'Escanear bultos en posiciones' },
+      { clave: 'polo52.mapeo.gestionar', label: 'Crear/borrar posiciones y sacar bultos' },
+    ],
+  },
+
   // ===== Compras =====
   {
     id: 'transferencias', areaId: 'compras', titulo: 'Reposiciones / Transferencias', descripcion: 'Transferencias entre locales y sus estadísticas',
@@ -328,6 +339,12 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
     id: 'informes', areaId: 'sistemas', titulo: 'Envío informes y reportes', descripcion: 'Informes por WhatsApp',
     icon: FileText, color: '#22c55e',
     acciones: { ver: 'sistemas.informes.view', crear: 'sistemas.informes.create', editar: 'sistemas.informes.edit', borrar: 'sistemas.informes.delete' },
+  },
+
+  // ===== Administración =====
+  {
+    id: 'flexxus', areaId: 'administracion', titulo: 'Flexxus', descripcion: 'Ventas, saldos de clientes y asientos (solo lectura)',
+    icon: Database, color: '#6366f1', acciones: { ver: 'flexxus.view' },
   },
 
   // ===== Administradores =====

@@ -18,6 +18,8 @@
  *   GET /api/sql/pedido-venta-items?codigo=    -> renglones de un pedido de venta viejo, en vivo de Dragonfish
  *   GET /api/sql/dragon-variantes?base=&articulo= -> colores y talles de un artículo en Dragon (Órdenes de compras)
  *   GET /api/sql/dragon-articulos?base=&q=|codigos= -> artículos en vivo de Dragon (buscador e importar txt de Órdenes de compras)
+ *   GET /api/sql/flexxus?consulta=ventas|saldos|asientos|balance&desde=&hasta= -> Administración > Flexxus (Firebird, solo lectura)
+ *   GET /api/sql/polo-bulto?codigo=          -> Polo 52 > Mapeo de bultos: artículos del remito de un bulto (Dragon POLO52)
  *   GET /api/sql/stock-publico?articulo=      -> PÚBLICO (sin sesión): stock de un artículo por local (/precios)
  *   GET /api/sql/<vista>[?where=&value=&limit=] -> filas de una vista habilitada
  *
@@ -46,6 +48,8 @@ import stockMayorista from '../../src/lib/stockMayoristaApi.js'
 import stockTienda, { stockMitoHub, tiendaDragon } from '../../src/lib/stockTiendaApi.js'
 import tiendaTelegram from '../../src/lib/tiendaTelegramApi.js'
 import tiendaClientes from '../../src/lib/tiendaClientesApi.js'
+import flexxus from '../../src/lib/flexxusApi.js'
+import poloBulto from '../../src/lib/poloBultoApi.js'
 
 type Req = {
   method?: string
@@ -128,6 +132,8 @@ export default async function handler(req: Req, res: Res) {
   if (ruta === 'stock-mito') return stockMitoHub(req, res)
   if (ruta === 'dragon-variantes') return dragonVariantes(req, res)
   if (ruta === 'dragon-articulos') return dragonArticulos(req, res)
+  if (ruta === 'flexxus') return flexxus(req, res)
+  if (ruta === 'polo-bulto') return poloBulto(req, res)
 
   // Cualquier otro nombre es una vista: se la pasa como ?view= a la lógica de siempre,
   // pero con el MISMO req (jamás un spread: se perdería req.headers y crashearía).
