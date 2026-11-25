@@ -66,6 +66,23 @@ async function rpc(nombre, params) {
   return cuerpo
 }
 
+const HUB_URL = (cfg('HUB_URL') || 'https://hub-mito.vercel.app').replace(/\/$/, '')
+
+/** Push de transferencia nueva (api/push.ts?tipo=transferencia, con la clave del puente). */
+async function avisarTransferencia(token, loteId) {
+  try {
+    const r = await fetch(`${HUB_URL}/api/push?tipo=transferencia`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Puente-Token': token },
+      body: JSON.stringify({ lote_id: loteId }),
+      signal: AbortSignal.timeout(60_000),
+    })
+    if (!r.ok) anotar(`aviso Polo (lote ${loteId}): HTTP ${r.status}`)
+  } catch (e) {
+    anotar(`aviso Polo (lote ${loteId}): ${e.message}`)
+  }
+}
+
 async function main() {
   const token = cfg('PUENTE_TOKEN')
   if (!token) throw new Error('Falta PUENTE_TOKEN en puente-sql/.env')
@@ -111,9 +128,11 @@ async function main() {
     } catch (e) {
       error = e.message
     }
-    await rpc('franquicias_resultado_dragon', {
+    const res = await rpc('franquicias_resultado_dragon', {
       p_token: token, p_id: p.id, p_pedido: pedido, p_error: error, p_pedido_polo: pedidoPolo, p_polo_falta: poloFalta,
     })
+    // Lote POLO52 → MITO recién creado: aviso al celular de Polo 52 (si falla, queda la campana).
+    if (res?.lote_polo) await avisarTransferencia(token, res.lote_polo)
     anotar(
       pedido
         ? `${p.numero}: cargada en Dragon · MITO N° ${pedido === pedidoPolo ? '—' : pedido}${pedidoPolo ? ` · Polo N° ${pedidoPolo}` : ''}${poloFalta ? ` · FALTA el de Polo: ${error}` : ''}`

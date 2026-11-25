@@ -140,3 +140,48 @@ begin
   end if;
   return null;
 end $$;
+
+-- Aviso al celular de Polo 52 (25/11/2026): franquicias_resultado_dragon devuelve el id del lote
+-- POLO52 → MITO ({lote_polo}) y el puente pide /api/push?tipo=transferencia con su clave
+-- (push_ubicacion_at evita avisar dos veces). Cambia el tipo de retorno: void → jsonb.
+drop function if exists public.franquicias_resultado_dragon(text, uuid, text, text, text, boolean);
+create or replace function public.franquicias_resultado_dragon(
+  p_token text, p_id uuid, p_pedido text, p_error text,
+  p_pedido_polo text default null, p_polo_falta boolean default false)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_estado text;
+  v_lote jsonb;
+begin
+  if not private.clave_sync_ok('puente', p_token) then
+    raise exception 'No autorizado' using errcode = '42501';
+  end if;
+  select estado into v_estado from public.franquicias_propuestas where id = p_id;
+  if nullif(btrim(coalesce(p_pedido, '')), '') is not null then
+    update public.franquicias_propuestas
+       set estado = 'en_dragon', dragon_pedido = p_pedido,
+           dragon_pedido_polo = coalesce(nullif(btrim(coalesce(p_pedido_polo, '')), ''), dragon_pedido_polo),
+           dragon_polo_falta = coalesce(p_polo_falta, false),
+           dragon_error = case when coalesce(p_polo_falta, false)
+                               then left('Pedido de MITO cargado, falta el de Polo: ' || coalesce(p_error, 'sin detalle'), 500) end,
+           dragon_at = coalesce(dragon_at, now()), dragon_enviando_at = null
+     where id = p_id;
+    if v_estado = 'confirmada' then
+      begin
+        v_lote := private.franquicias_lote_polo(p_id);
+      exception when others then
+        update public.franquicias_propuestas
+           set dragon_error = left(coalesce(dragon_error || ' · ', '') || 'No se pudo crear la transferencia de Polo: ' || sqlerrm, 500)
+         where id = p_id;
+      end;
+    end if;
+  else
+    update public.franquicias_propuestas
+       set dragon_error = left(coalesce(p_error, 'Error sin detalle'), 500), dragon_enviando_at = null
+     where id = p_id;
+  end if;
+  return jsonb_build_object('lote_polo', v_lote->>'id');
+end $$;
+
+revoke all on function public.franquicias_resultado_dragon(text, uuid, text, text, text, boolean) from public;
+grant execute on function public.franquicias_resultado_dragon(text, uuid, text, text, text, boolean) to anon, authenticated;
