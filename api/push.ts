@@ -373,7 +373,9 @@ interface AvisoUbicacion {
   entran: number
 }
 
-const NOMBRE_UBICACION: Record<string, string> = { 'DEPOSITO INDO': 'Depósito Indo', 'DEPOSITO MAYORISTA': 'Depósito Mayorista' }
+const NOMBRE_UBICACION: Record<string, string> = { 'DEPOSITO INDO': 'Depósito Indo', 'DEPOSITO MAYORISTA': 'Depósito Mayorista', 'POLO 52': 'Polo 52' }
+/** Pantalla que abre el aviso (Polo 52: sql/avisos_polo52.sql) */
+const URL_UBICACION: Record<string, string> = { 'POLO 52': '/polo52/transferencias' }
 
 /** Reposición/transferencia nueva: a los legajos de la ubicación que tiene renglones (sql/legajos_ubicacion.sql). */
 async function avisarTransferencia(req: Req, res: Res, token: string | null) {
@@ -426,7 +428,7 @@ async function avisarTransferencia(req: Req, res: Res, token: string | null) {
     const payload = JSON.stringify({
       title: `📦 Reposición para ${NOMBRE_UBICACION[ubicacion] ?? ubicacion}`,
       body: `${lote.nombre} · ${a0.articulos} artículo${a0.articulos === 1 ? '' : 's'}${partes ? ` · ${partes}` : ''}`,
-      url: '/mayorista/mi-repo',
+      url: URL_UBICACION[ubicacion] ?? '/mayorista/mi-repo',
       urgente: true,
     })
     const ids = new Set(lista.map((x) => x.usuario_id))

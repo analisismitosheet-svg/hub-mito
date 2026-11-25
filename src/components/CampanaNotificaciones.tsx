@@ -140,7 +140,9 @@ function esperaRepique(n: number): number {
  * - Rol mayorista: cada guía sin finalizar y cada registro de facturación sin fecha de envío.
  */
 export default function CampanaNotificaciones() {
-  const { isAdmin, perfil, soloPiso, esLegajo, can, avisosIndo } = useAuth()
+  const { isAdmin, perfil, soloPiso, esLegajo, can, avisosIndo: avisosDeIndo, avisosPolo52 } = useAuth()
+  // Reposiciones de depósito: Indo y/o Polo 52 (sql/avisos_polo52.sql), misma RPC y mismo sonido
+  const avisosIndo = avisosDeIndo || avisosPolo52
   const navigate = useNavigate()
   const [abierto, setAbierto] = useState(false)
   const [items, setItems] = useState<Notificacion[]>([])
@@ -534,20 +536,25 @@ export default function CampanaNotificaciones() {
       if (avisosIndo) {
         const { data } = await sb.rpc('transferencias_de_mi_ubicacion')
         if (activo && data) {
-          const lotesIndo = data as { lote_id: string; nombre: string; creado_at: string; articulos: number; salen: number; entran: number }[]
-          const ruta = (l: { lote_id: string }) =>
-            can('deposito.view') ? '/deposito' : can('transferencias.view') ? `/transferencias?abrir=${l.lote_id}` : '/mayorista/mi-repo'
+          const lotesIndo = data as { lote_id: string; nombre: string; creado_at: string; ubicacion: string; articulos: number; salen: number; entran: number }[]
+          const esPolo = (l: { ubicacion: string }) => l.ubicacion === 'POLO 52'
+          // Polo 52 se anota aparte: un lote puede salir de Indo y de Polo a la vez
+          const clave = (l: { lote_id: string; ubicacion: string }) => (esPolo(l) ? `${l.lote_id}|POLO52` : l.lote_id)
+          const ruta = (l: { lote_id: string; ubicacion: string }) =>
+            esPolo(l) ? '/polo52/transferencias'
+              : can('deposito.view') ? '/deposito' : can('transferencias.view') ? `/transferencias?abrir=${l.lote_id}` : '/mayorista/mi-repo'
           for (const l of lotesIndo) {
             const partes = [l.salen ? `salen ${l.salen} u.` : '', l.entran ? `entran ${l.entran} u.` : ''].filter(Boolean).join(' · ')
-            notis.push({ id: `tu-${l.lote_id}`, tipo: 'transferencias', titulo: l.nombre, detalle: `${l.articulos} artículo${l.articulos === 1 ? '' : 's'} pendiente${l.articulos === 1 ? '' : 's'}${partes ? ` · ${partes}` : ''}`, ruta: ruta(l), fecha: l.creado_at, destinoId: l.lote_id })
+            notis.push({ id: `tu-${clave(l)}`, tipo: 'transferencias', titulo: esPolo(l) ? `Polo 52 · ${l.nombre}` : l.nombre, detalle: `${l.articulos} artículo${l.articulos === 1 ? '' : 's'} pendiente${l.articulos === 1 ? '' : 's'}${partes ? ` · ${partes}` : ''}`, ruta: ruta(l), fecha: l.creado_at, destinoId: l.lote_id })
           }
-          const nuevas = new Set(reposicionesNuevas(lotesIndo))
-          const primera = lotesIndo.find((l) => nuevas.has(l.lote_id))
+          const nuevas = new Set(reposicionesNuevas(lotesIndo.map((l) => ({ lote_id: clave(l), creado_at: l.creado_at }))))
+          const primera = lotesIndo.find((l) => nuevas.has(clave(l)))
           if (primera) {
+            const donde = [...new Set(lotesIndo.filter((l) => nuevas.has(clave(l))).map((l) => (esPolo(l) ? 'Polo 52' : 'Depósito Indo')))].join(' y ')
             sonarArmado('urgente')
             vibrarArmado('urgente')
             notificarArmado(
-              nuevas.size === 1 ? '📦 Reposición nueva para Depósito Indo' : `📦 ${nuevas.size} reposiciones nuevas para Depósito Indo`,
+              nuevas.size === 1 ? `📦 Reposición nueva para ${donde}` : `📦 ${nuevas.size} reposiciones nuevas para ${donde}`,
               `${primera.nombre} · ${primera.articulos} artículo${primera.articulos === 1 ? '' : 's'}`,
               ruta(primera),
             )

@@ -51,6 +51,8 @@ interface AuthState {
   veMiRepoDeposito: boolean
   /** Le suenan las reposiciones/transferencias de Indo: rol deposito o legajo de Depósito Indo */
   avisosIndo: boolean
+  /** Permiso asignado de Transferencias Polo 52 (no el admin): campana y push (sql/avisos_polo52.sql) */
+  avisosPolo52: boolean
   /** ¿El usuario tiene el permiso indicado? (admin siempre true) */
   can: (clave: string) => boolean
   refresh: () => Promise<void>
@@ -165,6 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       [...permisos].every((p) => PERMISOS_PISO.has(p))
     const esLegajo = !!session?.user?.email?.toLowerCase().endsWith(`@${DOMINIO_LOGIN_EMPLEADO}`)
     const avisosIndo = roles.includes('deposito') || (esLegajo && perfil?.ubicacion === 'DEPOSITO INDO')
+    const avisosPolo52 = configured && !isAdmin && permisos.has('polo52.transferencias.view')
     const veMiRepoDeposito =
       isAdmin || roles.includes('deposito') || (esLegajo && perfil?.ubicacion === 'DEPOSITO INDO')
     return {
@@ -180,6 +183,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       esLegajo,
       veMiRepoDeposito,
       avisosIndo,
+      avisosPolo52,
       can(clave) {
         if (!configured) return true
         if (isAdmin) return true

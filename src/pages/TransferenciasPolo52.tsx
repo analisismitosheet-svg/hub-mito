@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { suscribirCambios } from '@/lib/realtime'
 import TransferenciaDepositoLote, { type RenglonTransfer } from '@/components/TransferenciaDepositoLote'
+import AvisosCelular from '@/components/AvisosCelular'
 
 /**
  * Polo 52 → Transferencias (25/11/2026): el mismo proceso que Repos Depósito con
@@ -14,7 +15,7 @@ import TransferenciaDepositoLote, { type RenglonTransfer } from '@/components/Tr
  * va por artículo. SQL: sql/transferencias_polo52.sql (p_deposito = 'POLO52').
  */
 export default function TransferenciasPolo52() {
-  const { can, perfil, isAdmin } = useAuth()
+  const { can, perfil, isAdmin, avisosPolo52 } = useAuth()
   const puedeMarcar = isAdmin || can('polo52.transferencias.mark')
   const [transfer, setTransfer] = useState<RenglonTransfer[]>([])
   const [cargando, setCargando] = useState(true)
@@ -64,6 +65,9 @@ export default function TransferenciasPolo52() {
           <p className="text-sm text-sub">Lo que sale de Polo 52: preparar por local y marcar hecho o faltante.</p>
         </div>
       </div>
+
+      {/* Quien tiene el permiso asignado: que suene cuando carguen una transferencia que sale de Polo 52 */}
+      {avisosPolo52 && <AvisosCelular texto="Activá los avisos para que suene cuando carguen una transferencia que sale de Polo 52, aunque la pantalla esté bloqueada o la app cerrada." />}
 
       {error && (
         <p role="alert" aria-live="polite" className="mb-4 rounded-xl border border-brand-600/30 bg-brand-600/10 p-3 text-sm text-brand-400">
