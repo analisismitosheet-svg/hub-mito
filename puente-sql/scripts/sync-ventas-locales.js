@@ -9,7 +9,7 @@
  * de crédito vienen en positivo con SIGNOMOV -1, así restan) y TICKETS = cantidad de TICKETFACTURA +
  * FACTURAELECTRONICA. Es la misma venta que usaba el Excel de objetivos. La WEB (punto 39 de 9 de
  * Julio) es un local aparte, así que 9 de Julio no cuenta ese punto. Lee el COMPROBANTEV de cada base en el servidor principal
- * (SQL_SERVER del .env), solo lectura.
+ * (SQL_SERVER del .env), solo lectura; los locales con servidor: 'local' se leen del SQL de esta PC (SQL2_*, usuario de Windows).
  *
  * Lo lanza la tarea "MITO - Pedidos franquicias" (sync-franquicias-dragon.ps1, cada 1 min), pero
  * corre de verdad una vez por hora (marca en data/sync-ventas-locales.ultimo).
@@ -60,7 +60,8 @@ const LOCALES = {
   CFR9: ['DRAGONFISH_CFR9'],
   CFRA: ['DRAGONFISH_CFRA'],
   DINOD: ['DRAGONFISH_DINOD'],
-  ESPINOD: ['DRAGONFISH_ESPINOD'],
+  // Desde 25/11/2026 Espinosa se lee del SQL de esta PC (SQL2_*): en el principal dejó de llegar después del 23/11
+  ESPINOD: { bases: ['DRAGONFISH_ESPINOD'], servidor: 'local' },
   GPAZD: ['DRAGONFISH_GRALPAZ'],
   LIBERD: ['DRAGONFISH_LIBERD'],
   MUNOZ: ['DRAGONFISH_MUNOZ'],
@@ -117,22 +118,44 @@ async function main() {
   })
 
   const filas = []
+  const definiciones = Object.entries(LOCALES).map(([local, def]) => {
+    const { bases, filtro = VENTA, servidor = 'principal' } = Array.isArray(def) ? { bases: def } : def
+    return { local, bases, filtro, servidor }
+  })
+  const leer = async (p, tipoFecha, { local, bases, filtro }) => {
+    // Las notas de crédito vienen con FTOTAL positivo y SIGNOMOV = -1: el total es FTOTAL × SIGNOMOV
+    const union = bases
+      .map((b) => `SELECT CAST(C.FFCH AS date) AS F, C.DESCFW, C.FTOTAL * C.SIGNOMOV AS NETO FROM [${b}].ZooLogic.COMPROBANTEV AS C
+                     WHERE C.ANULADO = 0 AND ${filtro} AND C.FFCH >= @desde`)
+      .join(' UNION ALL ')
+    const r = await p.request().input('desde', tipoFecha, desde).query(`
+      SELECT CONVERT(varchar(10), T.F, 23) AS fecha, SUM(T.NETO) AS total,
+             COUNT(CASE WHEN T.DESCFW LIKE 'TICKETFACTURA%' OR T.DESCFW LIKE 'FACTURAELECTRONICA%' THEN 1 END) AS tickets
+        FROM (${union}) AS T GROUP BY T.F`)
+    for (const f of r.recordset) filas.push({ local, fecha: f.fecha, total: Number(f.total) || 0, tickets: Number(f.tickets) || 0 })
+  }
   try {
-    for (const [local, def] of Object.entries(LOCALES)) {
-      const { bases, filtro } = Array.isArray(def) ? { bases: def, filtro: VENTA } : def
-      // Las notas de crédito vienen con FTOTAL positivo y SIGNOMOV = -1: el total es FTOTAL × SIGNOMOV
-      const union = bases
-        .map((b) => `SELECT CAST(C.FFCH AS date) AS F, C.DESCFW, C.FTOTAL * C.SIGNOMOV AS NETO FROM [${b}].ZooLogic.COMPROBANTEV AS C
-                       WHERE C.ANULADO = 0 AND ${filtro} AND C.FFCH >= @desde`)
-        .join(' UNION ALL ')
-      const r = await pool.request().input('desde', sql.Date, desde).query(`
-        SELECT CONVERT(varchar(10), T.F, 23) AS fecha, SUM(T.NETO) AS total,
-               COUNT(CASE WHEN T.DESCFW LIKE 'TICKETFACTURA%' OR T.DESCFW LIKE 'FACTURAELECTRONICA%' THEN 1 END) AS tickets
-          FROM (${union}) AS T GROUP BY T.F`)
-      for (const f of r.recordset) filas.push({ local, fecha: f.fecha, total: Number(f.total) || 0, tickets: Number(f.tickets) || 0 })
-    }
+    for (const d of definiciones.filter((x) => x.servidor === 'principal')) await leer(pool, sql.Date, d)
   } finally {
     await pool.close().catch(() => undefined)
+  }
+
+  // SQL de esta PC con usuario de Windows: el driver msnodesqlv8 se carga recién ahora, con el pool principal ya cerrado
+  const locales = definiciones.filter((x) => x.servidor === 'local')
+  if (locales.length) {
+    const sqlLocal = require('mssql/msnodesqlv8')
+    const [h2, p2] = String(cfg('SQL2_SERVER') || 'localhost').split(':')
+    const poolLocal = await new sqlLocal.ConnectionPool({
+      connectionString:
+        `Driver={${cfg('SQL2_ODBC_DRIVER') || 'ODBC Driver 18 for SQL Server'}};Server=${p2 ? `${h2},${p2}` : h2};` +
+        `Database=master;Trusted_Connection=yes;TrustServerCertificate=yes;`,
+      requestTimeout: 120_000,
+    }).connect()
+    try {
+      for (const d of locales) await leer(poolLocal, sqlLocal.Date, d)
+    } finally {
+      await poolLocal.close().catch(() => undefined)
+    }
   }
 
   let cambiadas = 0
