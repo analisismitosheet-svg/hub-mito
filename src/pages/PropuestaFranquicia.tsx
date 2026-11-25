@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Check, Loader2, Minus, Plus, Search, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -47,6 +47,13 @@ interface PropuestaPub {
   /** el pedido se anuló en Dragon (sql/franquicias_dragon_anulado.sql) */
   dragon_anulado_at?: string | null
   comentario: string | null
+  /** Otra reposición de las mismas ventas la reemplazó (sql/franquicias_una_aceptacion.sql) */
+  reemplazada?: boolean
+  reemplazada_por_numero?: string | null
+  /** la que la reemplazó ya fue aceptada (y cuándo / por quién) */
+  reemplazo_aceptado?: boolean
+  reemplazo_aceptado_at?: string | null
+  reemplazo_aceptado_por?: string | null
   items: ItemPub[]
 }
 
@@ -73,6 +80,8 @@ export default function PropuestaFranquicia() {
   const [comentario, setComentario] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [hecho, setHecho] = useState<{ unidades: number; total: number } | null>(null)
+  /** Candado contra el doble toque: el estado de React tarda un render en cerrar el botón */
+  const enviandoRef = useRef(false)
 
   useEffect(() => {
     if (!supabase) return
@@ -97,7 +106,7 @@ export default function PropuestaFranquicia() {
     return items.filter((i) => `${i.art} ${i.descrip ?? ''} ${i.color ?? ''}`.toUpperCase().includes(q))
   }, [prop, busca])
 
-  const cerrado = Boolean(prop?.confirmada || prop?.vencida || hecho)
+  const cerrado = Boolean(prop?.confirmada || prop?.vencida || prop?.reemplazada || hecho)
   const elegidos = useMemo(() => (prop?.items ?? []).filter((i) => si[i.id] === true && (cant[i.id] ?? 0) > 0), [prop, si, cant])
   const unidades = elegidos.reduce((s, i) => s + (cant[i.id] ?? 0), 0)
   const total = elegidos.reduce((s, i) => s + (cant[i.id] ?? 0) * (i.precio ?? 0), 0)
@@ -114,24 +123,31 @@ export default function PropuestaFranquicia() {
   }
 
   async function confirmar() {
-    if (!supabase || !prop || cerrado) return
+    if (!supabase || !prop || cerrado || enviandoRef.current) return
     if (sinResponder > 0 && !window.confirm(`Quedan ${sinResponder} artículo(s) sin marcar: se toman como "No". ¿Confirmás el pedido?`)) return
+    if (enviandoRef.current) return
+    enviandoRef.current = true
     setEnviando(true)
     setError(null)
-    const { data, error: e } = await supabase.rpc('confirmar_propuesta_franquicia', {
-      p_token: token,
-      p_items: elegidos.map((i) => ({ id: i.id, cantidad: cant[i.id] ?? 0 })),
-      p_comentario: comentario,
-    })
-    setEnviando(false)
-    if (e) {
-      setError(e.message || 'No se pudo confirmar el pedido.')
-      // Otro número la aceptó mientras tanto: se recarga para mostrar el cartel de bloqueo
-      if (/ya fue aceptado/i.test(e.message ?? '')) setRecarga((n) => n + 1)
-      return
+    try {
+      const { data, error: e } = await supabase.rpc('confirmar_propuesta_franquicia', {
+        p_token: token,
+        p_items: elegidos.map((i) => ({ id: i.id, cantidad: cant[i.id] ?? 0 })),
+        p_comentario: comentario,
+      })
+      const r = (data ?? null) as { ok?: boolean; error?: string; unidades: number; total: number } | null
+      const msj = e?.message ?? (r?.ok === false ? r.error ?? 'No se pudo confirmar el pedido.' : null)
+      if (msj) {
+        setError(msj)
+        // Otro número u otra propuesta de las mismas ventas ya se aceptó: se recarga para mostrar el bloqueo
+        if (/ya fue aceptado|reemplazada/i.test(msj)) setRecarga((n) => n + 1)
+        return
+      }
+      if (r) setHecho({ unidades: r.unidades, total: Number(r.total) || 0 })
+    } finally {
+      enviandoRef.current = false
+      setEnviando(false)
     }
-    const r = data as { unidades: number; total: number }
-    setHecho({ unidades: r.unidades, total: Number(r.total) || 0 })
   }
 
   return (
@@ -143,7 +159,7 @@ export default function PropuestaFranquicia() {
           {prop && (
             <p className="text-xs text-white/70">
               {prop.cliente || prop.franquicia} · N° {prop.numero}
-              {!prop.confirmada && !prop.vencida && ` · válida hasta el ${fmtFecha(prop.vence_at)}`}
+              {!prop.confirmada && !prop.vencida && !prop.reemplazada && ` · válida hasta el ${fmtFecha(prop.vence_at)}`}
             </p>
           )}
           {/* Reposición diaria: que se vea de qué día es la venta (casi siempre, ayer) */}
@@ -187,7 +203,23 @@ export default function PropuestaFranquicia() {
 
         {prop && !hecho && (
           <>
-            {prop.dragon_anulado_at ? (
+            {prop.reemplazada ? (
+              <div role="status" className="mb-3 rounded-xl border-2 border-amber-400 bg-amber-50 p-3 text-amber-900">
+                <p className="text-base font-extrabold">🔒 {prop.reemplazo_aceptado ? 'Esta reposición ya fue aceptada' : 'Este link ya no sirve'}</p>
+                <p className="mt-1 text-sm leading-relaxed">
+                  {prop.reemplazo_aceptado ? (
+                    <>
+                      Esta venta ya se pidió con la reposición N° <b>{prop.reemplazada_por_numero}</b>
+                      {prop.reemplazo_aceptado_por ? <> (la aceptó <b>+{prop.reemplazo_aceptado_por}</b>)</> : ''}
+                      {prop.reemplazo_aceptado_at ? <> el <b>{fmtFecha(prop.reemplazo_aceptado_at)} a las {fmtHora(prop.reemplazo_aceptado_at)} hs</b></> : ''}.
+                    </>
+                  ) : (
+                    <>MITO te mandó una propuesta nueva para esta venta: la N° <b>{prop.reemplazada_por_numero}</b>. Abrí el último link que te llegó.</>
+                  )}
+                  <br /><b>El formulario quedó bloqueado</b> para no duplicar el pedido.
+                </p>
+              </div>
+            ) : prop.dragon_anulado_at ? (
               <div role="status" className="mb-3 rounded-xl border-2 border-red-300 bg-red-50 p-3 text-red-800">
                 <p className="text-base font-extrabold">✕ Este pedido fue anulado</p>
                 <p className="mt-1 text-sm leading-relaxed">

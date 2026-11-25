@@ -234,6 +234,9 @@ async function main() {
       if (r?.numero) {
         creadas++
         anotar(`${c.cliente_id} ${c.cliente_nombre}: ${r.numero} (${c.desde} a ${c.hasta}) · ${r.unidades} u. · ${r.envios} WhatsApp`)
+      } else if (r?.ya_aceptada) {
+        // Esas ventas ya tienen una reposición aceptada: no se arma otra (sql/franquicias_una_aceptacion.sql)
+        anotar(`${c.cliente_id} ${c.cliente_nombre}: no se arma, ${c.desde} a ${c.hasta} ya se aceptó con ${r.ya_aceptada}`)
       } else if (!r?.repetida) {
         anotar(`${c.cliente_id} ${c.cliente_nombre}: sin nada para reponer (${c.desde} a ${c.hasta}, ${items.length} SKU vendidos)`)
       }

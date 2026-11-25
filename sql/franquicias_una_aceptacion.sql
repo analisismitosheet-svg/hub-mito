@@ -102,6 +102,10 @@ begin
   -- Esas ventas ya tienen una reposición aceptada: no se arma otra (sería pedido duplicado)
   v_ya := private.franquicias_aceptada_solapada(p_cliente, p_desde, p_hasta, null);
   if v_ya.id is not null then
+    -- Que en la pantalla se vea por qué «Armar ahora» no armó nada
+    update public.franquicias_clientes
+       set auto_error = 'esas ventas ya se aceptaron con la N° ' || v_ya.numero || ' (no se arma otra)'
+     where cliente_id = p_cliente;
     return jsonb_build_object('ok', true, 'numero', null, 'unidades', 0, 'repetida', true, 'ya_aceptada', v_ya.numero);
   end if;
 

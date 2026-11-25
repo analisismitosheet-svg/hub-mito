@@ -58,6 +58,8 @@ interface Propuesta {
   total_confirmado: number | null
   confirmada_at: string | null
   confirmada_por: string | null
+  /** Otra reposición de las mismas ventas la reemplazó (sql/franquicias_una_aceptacion.sql) */
+  reemplazada_por?: string | null
   dragon_pedido: string | null
   dragon_pedido_polo: string | null
   dragon_polo_falta: boolean
@@ -113,12 +115,13 @@ function pedidosDragon(p: Propuesta) {
   return [mito, polo].filter(Boolean).join(' · ') || `PV ${p.dragon_pedido ?? ''}`
 }
 
-function chipEstado(p: Propuesta, envios: Envio[], canal: string) {
+function chipEstado(p: Propuesta, envios: Envio[], canal: string, numeroDe?: (id: string) => string | undefined) {
   if (p.dragon_anulado_at) return { txt: `✕ Anulado en Dragon (${pedidosDragon(p)}) · ${fmtHora(p.dragon_anulado_at)}${p.dragon_anulado_por ? ` por ${p.dragon_anulado_por}` : ''}`, cls: 'border-red-500/40 bg-red-500/10 text-red-400' }
   if (p.estado === 'en_dragon' && p.dragon_polo_falta) return { txt: `✓ Aceptado · En Dragon (${pedidosDragon(p)})`, cls: 'border-amber-500/40 bg-amber-500/10 text-amber-400' }
   if (p.estado === 'en_dragon') return { txt: `✓ Aceptado${p.confirmada_por ? ` por +${p.confirmada_por}` : ''} · En Dragon (${pedidosDragon(p)})`, cls: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400' }
   if (p.estado === 'confirmada' && p.dragon_error) return { txt: `Aceptado · error al cargar en Dragon`, cls: 'border-red-500/40 bg-red-500/10 text-red-400' }
   if (p.estado === 'confirmada') return { txt: `✓ Aceptado${p.confirmada_por ? ` por +${p.confirmada_por}` : ''} · cargando en Dragon…`, cls: 'border-teal-500/40 bg-teal-500/10 text-teal-400' }
+  if (p.estado === 'anulada' && p.reemplazada_por) return { txt: `🔒 Reemplazada por ${numeroDe?.(p.reemplazada_por) ?? 'otra'} · su link ya no acepta`, cls: 'border-line bg-surface2 text-sub' }
   if (p.estado === 'anulada') return { txt: 'Anulada', cls: 'border-line bg-surface2 text-sub' }
   if (new Date(p.vence_at) < new Date()) return { txt: 'Vencida sin aceptar', cls: 'border-line bg-surface2 text-sub' }
   const ok = envios.filter((e) => e.estado === 'enviado').length
@@ -167,7 +170,7 @@ export default function FranquiciasReposicionAuto() {
     if (!supabase) return
     const [cfg, props] = await Promise.all([
       supabase.from('franquicias_clientes').select('cliente_id,base,telefono,telefonos,auto_activo,auto_dias,auto_hora,auto_ultimo_hasta,auto_pedido_at,auto_error').order('cliente_id'),
-      supabase.from('franquicias_propuestas').select('id,numero,franquicia,cliente_id,cliente_nombre,origen,desde,hasta,estado,token,vence_at,unidades_propuestas,total_propuesto,unidades_confirmadas,total_confirmado,confirmada_at,confirmada_por,dragon_pedido,dragon_pedido_polo,dragon_polo_falta,dragon_error,dragon_anulado_at,dragon_anulado_por,comentario,creado_at')
+      supabase.from('franquicias_propuestas').select('id,numero,franquicia,cliente_id,cliente_nombre,origen,desde,hasta,estado,token,vence_at,unidades_propuestas,total_propuesto,unidades_confirmadas,total_confirmado,confirmada_at,confirmada_por,dragon_pedido,dragon_pedido_polo,dragon_polo_falta,dragon_error,dragon_anulado_at,dragon_anulado_por,comentario,creado_at,reemplazada_por')
         .eq('tipo', 'reposicion').order('hasta', { ascending: false, nullsFirst: false }).order('creado_at', { ascending: false }).limit(120),
     ])
     if (cfg.error) setAviso({ ok: false, txt: cfg.error.message })
@@ -319,7 +322,7 @@ export default function FranquiciasReposicionAuto() {
       // Más vieja que las que se listan: se trae sola
       if (buscandoAbrir.current === id) { setSearchParams({}, { replace: true }); return }
       buscandoAbrir.current = id
-      void supabase.from('franquicias_propuestas').select('id,numero,franquicia,cliente_id,cliente_nombre,origen,desde,hasta,estado,token,vence_at,unidades_propuestas,total_propuesto,unidades_confirmadas,total_confirmado,confirmada_at,confirmada_por,dragon_pedido,dragon_pedido_polo,dragon_polo_falta,dragon_error,dragon_anulado_at,dragon_anulado_por,comentario,creado_at')
+      void supabase.from('franquicias_propuestas').select('id,numero,franquicia,cliente_id,cliente_nombre,origen,desde,hasta,estado,token,vence_at,unidades_propuestas,total_propuesto,unidades_confirmadas,total_confirmado,confirmada_at,confirmada_por,dragon_pedido,dragon_pedido_polo,dragon_polo_falta,dragon_error,dragon_anulado_at,dragon_anulado_por,comentario,creado_at,reemplazada_por')
         .eq('id', id).maybeSingle().then(({ data }) => {
           if (data) setPropuestas((ps) => (ps.some((x) => x.id === id) ? ps : [...ps, data as Propuesta]))
           else setSearchParams({}, { replace: true })
@@ -583,7 +586,7 @@ export default function FranquiciasReposicionAuto() {
                       <div className="flex flex-col gap-2">
                         {props.map((p) => {
                           const env = enviosDe(p.id)
-                          const e = chipEstado(p, env, canal)
+                          const e = chipEstado(p, env, canal, (id) => propuestas.find((x) => x.id === id)?.numero)
                           const fAbierta = fechasAbiertas.has(p.id)
                           const lista = items[p.id]
                           const editable = p.estado === 'enviada' && new Date(p.vence_at) > new Date()
