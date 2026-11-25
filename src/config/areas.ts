@@ -636,6 +636,17 @@ export const APPS: AppDef[] = [
     permiso: 'mayorista.facturacion.view',
   },
   {
+    id: 'polo52-transferencias',
+    areaId: 'polo52',
+    title: 'Transferencias Polo 52',
+    description: 'Lo que sale de Polo 52 por local: escanear o marcar hecho / faltante.',
+    icon: ArrowRightLeft,
+    kind: 'internal',
+    target: '/polo52/transferencias',
+    color: '#0891b2',
+    permiso: 'polo52.transferencias.view',
+  },
+  {
     id: 'deposito-repo',
     areaId: 'deposito',
     title: 'Repos Depósito',

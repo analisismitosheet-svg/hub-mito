@@ -189,6 +189,16 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
     etiquetas: { ver: 'Ver y escanear', crear: 'Cargar el Excel y cerrar' },
   },
 
+  // ===== Polo 52 =====
+  {
+    id: 'polo52-transferencias', areaId: 'polo52', titulo: 'Transferencias Polo 52', descripcion: 'Preparar las transferencias que salen de Polo 52 (como Repos Depósito con Indo)',
+    icon: ArrowRightLeft, color: '#4f46e5',
+    acciones: { ver: 'polo52.transferencias.view' },
+    especiales: [
+      { clave: 'polo52.transferencias.mark', label: 'Marcar hecho / faltante y escanear' },
+    ],
+  },
+
   // ===== Compras =====
   {
     id: 'transferencias', areaId: 'compras', titulo: 'Reposiciones / Transferencias', descripcion: 'Transferencias entre locales y sus estadísticas',

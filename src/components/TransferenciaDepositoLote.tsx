@@ -7,6 +7,10 @@ import LocalTransferDeposito, { listasDeRenglon, type CambioRenglonDeposito } fr
 
 export type EstadoTransfer = 'pendiente' | 'hecho' | 'faltante' | 'senado'
 
+/** Depósito del que salen las transferencias: Indo (Repos Depósito) o Polo 52 (sql/transferencias_polo52.sql) */
+export type DepositoTransfer = 'INDO' | 'POLO52'
+export const NOMBRE_DEPOSITO: Record<DepositoTransfer, string> = { INDO: 'INDO', POLO52: 'POLO 52' }
+
 /** Renglón de transferencia que sale de Indo (RPC deposito_transferencias, sql/deposito_transferencias.sql). */
 export interface RenglonTransfer {
   id: string
@@ -43,7 +47,8 @@ function Celda({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /**
- * Un lote de transferencias que sale de Depósito Indo, dentro de Repos Depósito.
+ * Un lote de transferencias que sale de Depósito Indo (Repos Depósito) o de Polo 52
+ * (Polo 52 → Transferencias, sin Mapeo de cajas).
  * Estadísticas como la Eficiencia mayorista: horas del primer al último tilde
  * (L-V 9 a 17, como los repos del depósito), personas que marcaron, prendas/hora
  * y una fila por persona. «Por local» (20/11/2026) es como Mi repo del mayorista:
@@ -56,13 +61,17 @@ export default function TransferenciaDepositoLote({
   puedeMarcar,
   onMarcar,
   onCambio,
+  deposito = 'INDO',
 }: {
   renglones: RenglonTransfer[]
   puedeMarcar: boolean
   onMarcar: (ids: string[], estado: 'pendiente' | 'hecho' | 'faltante') => void | Promise<void>
   /** escaneo / deshacer desde el local abierto */
   onCambio: (c: CambioRenglonDeposito) => void
+  /** Polo 52 no tiene Mapeo de cajas: el recorrido va por artículo */
+  deposito?: DepositoTransfer
 }) {
+  const sinCajas = deposito !== 'INDO'
   const [abierto, setAbierto] = useState(false)
   const [sub, setSub] = useState<'stats' | 'repo' | null>('repo')
   /** Local abierto (destino) */
@@ -70,11 +79,11 @@ export default function TransferenciaDepositoLote({
   const r0 = renglones[0]
 
   // Cajas del Mapeo de cajas: recorrido por número de caja
-  const codigos = useMemo(() => renglones.map((r) => String(r.articulo ?? '')), [renglones])
+  const codigos = useMemo(() => (sinCajas ? [] : renglones.map((r) => String(r.articulo ?? ''))), [renglones, sinCajas])
   const cajas = useCajasMapeo(codigos)
   const cajasDe = useCallback(
-    (r: { articulo: string | null }) => cajas.get(String(r.articulo ?? '').trim().toUpperCase()) ?? [],
-    [cajas],
+    (r: { articulo: string | null }) => (sinCajas ? [] : cajas.get(String(r.articulo ?? '').trim().toUpperCase()) ?? []),
+    [cajas, sinCajas],
   )
 
   const st = useMemo(() => {
@@ -169,7 +178,7 @@ export default function TransferenciaDepositoLote({
           <p className="flex min-w-0 items-center gap-2 font-medium text-ink">
             <span className="truncate">{r0.lote_nombre}</span>
             <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-violet-500/35 bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-bold text-violet-400">
-              <ArrowRightLeft size={10} aria-hidden /> Transferencia · sale de INDO
+              <ArrowRightLeft size={10} aria-hidden /> Transferencia · sale de {NOMBRE_DEPOSITO[deposito]}
             </span>
           </p>
           <p className="truncate text-xs text-sub">
@@ -253,7 +262,7 @@ export default function TransferenciaDepositoLote({
             <ChevronRight size={15} aria-hidden className={`shrink-0 text-sub transition-transform ${sub === 'repo' ? 'rotate-90' : ''}`} />
             <Store size={15} aria-hidden className="text-sub" />
             <span className="font-display font-semibold text-ink">Por local</span>
-            <span className="text-xs text-sub">· en orden de caja</span>
+            <span className="text-xs text-sub">· {sinCajas ? 'por artículo' : 'en orden de caja'}</span>
           </button>
           {sub === 'repo' && (
             <div className="px-3 py-3 sm:px-4">
@@ -267,6 +276,7 @@ export default function TransferenciaDepositoLote({
                       destino={abiertaL.destino}
                       renglones={abiertaL.renglones}
                       cajasDe={cajasDe}
+                      deposito={deposito}
                       puedeMarcar={puedeMarcar}
                       textoVolver="Todos los locales"
                       onVolver={() => setLocal(null)}

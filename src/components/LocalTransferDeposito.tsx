@@ -59,6 +59,7 @@ export default function LocalTransferDeposito({
   destino,
   renglones,
   cajasDe,
+  deposito = 'INDO',
   puedeMarcar = true,
   textoVolver,
   onVolver,
@@ -70,6 +71,8 @@ export default function LocalTransferDeposito({
   destino: string
   renglones: RenglonLocalDeposito[]
   cajasDe: (r: RenglonLocalDeposito) => number[]
+  /** INDO (con Mapeo de cajas) o POLO52 (sin cajas) */
+  deposito?: 'INDO' | 'POLO52'
   puedeMarcar?: boolean
   textoVolver: string
   onVolver: () => void
@@ -117,6 +120,7 @@ export default function LocalTransferDeposito({
         p_lote: loteId,
         p_destino: destino,
         p_codigo: bruto,
+        p_deposito: deposito,
       })
       if (e) throw new Error(e.message)
       const f = ((Array.isArray(data) ? data[0] : data) ?? null) as FilaEscaneo | null
@@ -139,7 +143,7 @@ export default function LocalTransferDeposito({
   async function deshacerUltimo() {
     if (!ultimo || !supabase) return
     setDeshaciendo(true)
-    const { data, error: e } = await supabase.rpc('transferencia_desescanear_deposito', { p_item: ultimo.id })
+    const { data, error: e } = await supabase.rpc('transferencia_desescanear_deposito', { p_item: ultimo.id, p_deposito: deposito })
     setDeshaciendo(false)
     if (e) {
       setMensaje({ ok: false, texto: e.message })
@@ -242,7 +246,7 @@ export default function LocalTransferDeposito({
               <span aria-hidden>·</span>
               <span className="tabular-nums">{hechas} de {total} unidades</span>
               <span aria-hidden>·</span>
-              <span>recorrido por caja</span>
+              <span>{deposito === 'INDO' ? 'recorrido por caja' : 'por artículo'}</span>
             </p>
           </div>
           {puedeMarcar && pendientes.length > 0 && (
@@ -348,10 +352,10 @@ export default function LocalTransferDeposito({
             <div key={g.caja ?? 'sin'} className="overflow-hidden rounded-xl border border-line bg-surface">
               <div className={`flex items-center justify-between border-b border-line px-3 py-2 ${g.caja === null ? 'bg-surface2' : 'bg-orange-500/10'}`}>
                 <span className="flex items-center gap-1.5 font-display text-base font-bold text-ink">
-                  {g.caja === null ? 'Sin caja' : (<><Package size={16} className="text-orange-500" aria-hidden /> Caja {g.caja}</>)}
+                  {g.caja === null ? (deposito === 'INDO' ? 'Sin caja' : 'Artículos') : (<><Package size={16} className="text-orange-500" aria-hidden /> Caja {g.caja}</>)}
                 </span>
                 <span className="text-xs tabular-nums text-sub">
-                  {g.renglones.reduce((s, r) => s + r.cantidad, 0)} u.{g.caja === null ? ' · no están en el Mapeo de cajas' : ''}
+                  {g.renglones.reduce((s, r) => s + r.cantidad, 0)} u.{g.caja === null && deposito === 'INDO' ? ' · no están en el Mapeo de cajas' : ''}
                 </span>
               </div>
               <ul className="divide-y divide-line/40">{g.renglones.map((r) => fila(r, false))}</ul>
