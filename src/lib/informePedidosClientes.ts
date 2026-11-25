@@ -1,7 +1,8 @@
 /**
  * Informe «Estado de pedidos de clientes» (Envío informes y reportes → Datos de la app).
  * Pedido por Facundo (25/11/2026), variante A del mockup
- * mockups/informe-estado-pedidos-clientes.html: una fila por cliente, lo atrasado arriba.
+ * mockups/informe-estado-pedidos-clientes.html, pero con un renglón por pedido (pedido el
+ * mismo día): agrupados por cliente, el cliente más atrasado arriba.
  *
  * Entran los pedidos de venta de clientes mayoristas (motivo vacío: sin VTD ni REP,
  * que son de locales), no anulados, que:
@@ -97,42 +98,33 @@ function porCliente(pedidos: PedidoCliente[]): FilaCliente[] {
   return [...m.values()].sort((a, b) => RANGO[a.peor] - RANGO[b.peor] || b.unidades - a.unidades || a.cliente.localeCompare(b.cliente))
 }
 
-/** Texto de la columna Estado de un cliente */
-function estadoCliente(f: FilaCliente): { texto: string; color: string } {
-  const n = f.pedidos.length
-  const cuenta = (e: EstadoPedidoCliente) => f.pedidos.filter((p) => p.estado === e).length
-  const hechos = cuenta('hecho')
-  const parcial = n > 1 && hechos > 0 && hechos < n ? ` (${hechos} de ${n} terminados)` : ''
-  switch (f.peor) {
+/** Estado de un pedido (columna Estado) */
+function estadoPedido(p: PedidoCliente): { texto: string; color: string } {
+  switch (p.estado) {
     case 'sin_armado':
-      return { texto: `Sin pedir armado${parcial}`, color: COLOR.sin_armado }
-    case 'pendiente': {
-      const prios = new Set(f.pedidos.filter((p) => p.estado === 'pendiente').map((p) => p.prioridad || 'normal'))
-      const prio = prios.has('urgente') ? 'urgente' : prios.has('normal') ? 'normal' : 'baja'
-      return { texto: `Sin tomar · ${prio}${parcial}`, color: COLOR.pendiente }
-    }
-    case 'aceptado': {
-      const enCurso = f.pedidos.filter((p) => p.estado === 'aceptado')
-      const ok = enCurso.reduce((s, p) => s + p.unidades_ok, 0)
-      const tot = enCurso.reduce((s, p) => s + p.unidades, 0)
-      return { texto: `Armándose ${nf(ok)}/${nf(tot)} u.${parcial}`, color: COLOR.aceptado }
-    }
+      return { texto: 'Sin pedir armado', color: COLOR.sin_armado }
+    case 'pendiente':
+      return { texto: `Sin tomar · ${p.prioridad || 'normal'}`, color: COLOR.pendiente }
+    case 'aceptado':
+      return { texto: `Armándose ${nf(p.unidades_ok)}/${nf(p.unidades)} u.`, color: COLOR.aceptado }
     default:
       return { texto: 'Terminado', color: COLOR.hecho }
   }
 }
 
-/** Debajo del estado: quién, si lo soltaron, faltantes */
-function detalleCliente(f: FilaCliente): string {
+/** Quién lo tomó o armó, si lo soltaron, faltantes */
+function notaPedido(p: PedidoCliente): string {
   const partes: string[] = []
-  const quienes = [...new Set(f.pedidos.filter((p) => p.nombre && p.estado !== 'pendiente').map((p) => apellido(p.nombre!)))]
-  if (quienes.length) partes.push(quienes.join(', '))
-  const soltados = f.pedidos.filter((p) => p.estado === 'pendiente' && p.liberado_nombre)
-  if (soltados.length) partes.push(`${soltados.length === 1 ? 'soltó' : `${soltados.length} soltados:`} ${[...new Set(soltados.map((p) => /^\d+$/.test(p.liberado_nombre!) ? `leg. ${p.liberado_nombre}` : apellido(p.liberado_nombre!)))].join(', ')}`)
-  const falt = f.pedidos.reduce((s, p) => s + (p.estado === 'hecho' ? p.faltantes : 0), 0)
-  if (falt) partes.push(`${falt === 1 ? 'falta' : 'faltan'} ${nf(falt)} u.`)
+  if (p.nombre && p.estado !== 'pendiente') partes.push(apellido(p.nombre))
+  if (p.estado === 'pendiente' && p.liberado_nombre)
+    partes.push(`soltó ${/^\d+$/.test(p.liberado_nombre) ? `leg. ${p.liberado_nombre}` : apellido(p.liberado_nombre)}`)
+  if (p.estado === 'hecho' && p.faltantes) partes.push(`${p.faltantes === 1 ? 'falta' : 'faltan'} ${nf(p.faltantes)} u.`)
   return partes.join(' · ')
 }
+
+/** Dentro de cada cliente, primero lo atrasado y después por número */
+const ordenPedidos = (xs: PedidoCliente[]) => [...xs].sort((a, b) => RANGO[a.estado] - RANGO[b.estado] || (a.numero ?? 0) - (b.numero ?? 0))
+const cargado = (p: PedidoCliente, hoy: string) => (p.fecha === hoy ? 'hoy' : corta(p.fecha))
 
 export function bloquesPedidosClientes(d: DatosPedidosClientes): { subtitulo: string; bloques: BloqueImagen[]; texto: string; ancho: number } {
   const subtitulo = `Pedidos mayoristas del ${diaLargo(d.fecha)} y abiertos de los últimos ${DIAS_ABIERTOS} días · corte ${d.hora}`
@@ -157,43 +149,50 @@ export function bloquesPedidosClientes(d: DatosPedidosClientes): { subtitulo: st
   kpis.push({ titulo: 'Sin tomar', valor: nf(de('pendiente').length), pie: `${nf(u(de('pendiente')))} u.`, color: COLOR.pendiente })
   kpis.push({ titulo: 'Sin pedir armado', valor: nf(de('sin_armado').length), pie: `${nf(u(de('sin_armado')))} u.`, color: COLOR.sin_armado })
 
+  // Un renglón por pedido, agrupados por cliente (el nombre va solo en el primero)
   const filas: string[][] = []
   const coloresCelda: Array<Array<string | null> | null> = []
   for (const f of clientes) {
-    const est = estadoCliente(f)
-    const det = detalleCliente(f)
-    filas.push([`${f.cliente} ${f.nombre}`, nf(f.pedidos.length), nf(f.unidades), nf(f.total), est.texto, det])
-    coloresCelda.push([null, null, null, null, est.color, det.includes('falta') || det.includes('solt') ? COLOR.rojo : COLOR.gris])
+    ordenPedidos(f.pedidos).forEach((p, i) => {
+      const est = estadoPedido(p)
+      const nota = notaPedido(p)
+      filas.push([i === 0 ? `${f.cliente} ${f.nombre}` : '', String(p.numero ?? '—'), cargado(p, d.fecha), nf(p.unidades), nf(p.total), est.texto, nota])
+      coloresCelda.push([null, null, COLOR.gris, null, null, est.color, /falta|solt/.test(nota) ? COLOR.rojo : COLOR.gris])
+    })
   }
-  filas.push(['Total', nf(ps.length), nf(u(ps)), nf(ps.reduce((s, p) => s + p.total, 0)), '', ''])
+  filas.push(['Total', `${nf(ps.length)} ped.`, '', nf(u(ps)), nf(ps.reduce((s, p) => s + p.total, 0)), '', ''])
   coloresCelda.push(null)
 
   const bloques: BloqueImagen[] = [
     { tipo: 'kpis', items: kpis },
     {
       tipo: 'tabla',
-      columnas: ['Cliente', 'Ped.', 'Unid.', '$', 'Estado', 'Quién / nota'],
+      columnas: ['Cliente', 'N°', 'Cargado', 'Unid.', '$', 'Estado', 'Quién / nota'],
       filas,
-      alinear: ['izq', 'der', 'der', 'der', 'izq', 'izq'],
-      anchos: [3.4, 0.6, 0.8, 1.4, 2.4, 2.6],
+      alinear: ['izq', 'izq', 'izq', 'der', 'der', 'izq', 'izq'],
+      anchos: [3.2, 0.8, 0.9, 0.7, 1.3, 2.3, 2.0],
       coloresCelda,
       total: true,
     },
   ]
 
-  // Texto (formato texto o caption): lo que falta arriba, después los terminados
-  const linea = (f: FilaCliente) => {
-    const det = detalleCliente(f)
-    return `• ${f.nombre} — ${f.pedidos.length} ped. · ${nf(f.unidades)} u. · ${estadoCliente(f).texto}${det ? ` (${det})` : ''}`
-  }
+  // Texto (formato texto o caption): cada cliente con sus pedidos; lo que falta arriba
+  const bloqueCliente = (f: FilaCliente) =>
+    [
+      `• ${f.nombre}`,
+      ...ordenPedidos(f.pedidos).map((p) => {
+        const nota = notaPedido(p)
+        return `   N° ${p.numero ?? '—'} (${cargado(p, d.fecha)}) · ${nf(p.unidades)} u. · ${estadoPedido(p).texto}${nota ? ` (${nota})` : ''}`
+      }),
+    ].join('\n')
   const abiertos = clientes.filter((f) => f.peor !== 'hecho')
   const listos = clientes.filter((f) => f.peor === 'hecho')
   const texto = [
     `*Pedidos de clientes · ${diaLargo(d.fecha)}*`,
     `📦 ${ps.length} pedidos · ${clientes.length} clientes · ${nf(u(ps))} u.`,
     `✅ Terminados: ${hechos.length} · 🔵 Armándose: ${enCurso.length} · ⏳ Sin tomar: ${de('pendiente').length} · 📝 Sin pedir armado: ${de('sin_armado').length}`,
-    abiertos.length ? `\n*Falta terminar*\n${abiertos.map(linea).join('\n')}` : '',
-    listos.length ? `\n*Terminados*\n${listos.map(linea).join('\n')}` : '',
+    abiertos.length ? `\n*Falta terminar*\n${abiertos.map(bloqueCliente).join('\n')}` : '',
+    listos.length ? `\n*Terminados*\n${listos.map(bloqueCliente).join('\n')}` : '',
   ]
     .filter(Boolean)
     .join('\n')
