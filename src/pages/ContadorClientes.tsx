@@ -522,12 +522,20 @@ export function Camaras({ dispositivos, locales, onCambio, tarjeta, btnChico }: 
       { dispositivo_id: quitarCam.d.id, camara: quitarCam.nombre, config: { eliminar: true }, actualizado: new Date().toISOString() },
       { onConflict: 'dispositivo_id,camara' })
     setMsg(error ? error.message : `La cámara "${quitarCam.nombre}" se quita en menos de 1 minuto (sus conteos ya guardados se conservan).`)
+    if (!error) setQuitando((s) => new Set(s).add(`${quitarCam.d.id}|${quitarCam.nombre}`))
     setQuitarCam(null)
     await onCambio()
     // la PC la saca en su próximo envío (cada 15 s): volver a leer para que desaparezca de la lista
     if (!error) for (const s of [20, 40, 70]) setTimeout(() => void onCambio(), s * 1000)
   }
   const [vista, setVista] = useState('')
+  // Cámaras con el pedido de quitar pendiente (la PC lo toma en su próximo envío, hasta 1 min):
+  // se marcan en la lista para que no parezca que el botón no hizo nada
+  const [quitando, setQuitando] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    void sb().from('contador_config').select('dispositivo_id,camara').eq('config->>eliminar', 'true')
+      .then(({ data }) => setQuitando(new Set((data ?? []).map((f) => `${f.dispositivo_id}|${f.camara}`))))
+  }, [dispositivos])
 
   useEffect(() => {
     void sb().from('config_app').select('valor').eq('clave', CLAVE_VISTA).maybeSingle()
@@ -594,7 +602,12 @@ export function Camaras({ dispositivos, locales, onCambio, tarjeta, btnChico }: 
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
-                    {(d.estado?.camaras ?? []).map((c) => (
+                    {(d.estado?.camaras ?? []).map((c) => quitando.has(`${d.id}|${c.nombre}`) ? (
+                      <span key={c.nombre} title="La PC contadora la saca en su próximo envío (menos de 1 minuto)"
+                        className="rounded-full border border-dashed border-line px-2 py-0.5 text-[11px] text-sub line-through decoration-sub/50">
+                        {c.nombre}: quitándose…
+                      </span>
+                    ) : (
                       <span key={c.nombre} className="inline-flex items-center gap-1">
                         <span title={c.error ?? ''}
                           className={'rounded-full border px-2 py-0.5 text-[11px] ' + (c.ok ? 'border-emerald-600/40 text-emerald-400' : 'border-red-600/40 text-red-400')}>
