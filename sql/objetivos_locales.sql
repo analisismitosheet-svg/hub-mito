@@ -169,7 +169,12 @@ returns table (local text, fecha date, fecha_base date, venta_base numeric, ipc 
                opera boolean, feriado boolean, venta numeric, manual boolean)
 language plpgsql stable security definer set search_path = public as $$
 declare v_local text;
+        v_misma_fecha text[];
 begin
+  select coalesce(array_agg(x), array['12-22','12-23','12-24','12-25','12-30','12-31','01-01'])
+    into v_misma_fecha
+    from public.config_app c, jsonb_array_elements_text(c.valor) x
+   where c.clave = 'objetivos_fechas_misma_fecha' and jsonb_typeof(c.valor) = 'array';
   if auth.role() = 'service_role' or private.es_admin() or private.tengo_permiso('contador.ver_todo')
      or private.tengo_permiso('objetivos.ver_todo') then
     v_local := nullif(upper(btrim(p_local)), '');
@@ -190,11 +195,12 @@ begin
   with dias as (
     -- Interanual del mes de objetivos si está cargado; si no, el acumulado de los 12 IPC
     -- mensuales que terminan en él (null si falta alguno).
-    -- Fiestas de fin de año (22 al 25/12 y 30/12 al 1/1): la base es la misma fecha del año
-    -- anterior y no la de − 364 (así el 24 toma el 24 y el 25, que no abre nadie, queda sin
-    -- objetivo; ídem 31/12 y 1/1). Desde 26/11/2026.
+    -- Fiestas (parámetro config_app.objetivos_fechas_misma_fecha, lista 'MM-DD'; por defecto
+    -- 22 al 25/12 y 30/12 al 1/1): la base es la misma fecha del año anterior y no la de − 364
+    -- (así el 24 toma el 24 y el 25, que no abre nadie, queda sin objetivo; ídem 31/12 y 1/1).
+    -- Vale para todos los años. Desde 26/11/2026.
     select d::date as fecha,
-           case when to_char(d, 'MM-DD') in ('12-22', '12-23', '12-24', '12-25', '12-30', '12-31', '01-01')
+           case when to_char(d, 'MM-DD') = any (v_misma_fecha)
                 then (d - interval '1 year')::date
                 else d::date - 364 end as base,
            m.mes_obj,
@@ -262,4 +268,8 @@ begin
    order by a.local, a.fecha;
 end $$;
 revoke all on function public.objetivos_locales_dia(date, date, text) from public, anon;
+-- Fechas (MM-DD) que se comparan con la misma fecha del año anterior en vez de − 364.
+insert into public.config_app (clave, valor) values
+  ('objetivos_fechas_misma_fecha', '["12-22","12-23","12-24","12-25","12-30","12-31","01-01"]'::jsonb)
+on conflict (clave) do nothing;
 grant execute on function public.objetivos_locales_dia(date, date, text) to authenticated, service_role;
