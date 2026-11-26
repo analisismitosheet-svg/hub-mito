@@ -15,6 +15,7 @@
  *   POST /api/sql/tienda-telegram              -> tienda: link de ingreso por el bot de Telegram (misma clave)
  *   POST /api/sql/tienda-clientes              -> tienda: registro, aprobación y permisos de clientes (misma clave)
  *   GET /api/sql/stock-mito?articulos=         -> Mayorista > Estado de pedidos: stock real del depósito MITO por SKU (sesión, pedidos_venta.view)
+ *   POST /api/sql/tienda-productos             -> tienda: lo de la web de cada artículo (visible, pre-venta, locales, detalle)
  *   GET /api/sql/pedido-venta-items?codigo=    -> renglones de un pedido de venta viejo, en vivo de Dragonfish
  *   GET /api/sql/dragon-variantes?base=&articulo= -> colores y talles de un artículo en Dragon (Órdenes de compras)
  *   GET /api/sql/dragon-articulos?base=&q=|codigos= -> artículos en vivo de Dragon (buscador e importar txt de Órdenes de compras)
@@ -49,6 +50,7 @@ import stockMayorista from '../../src/lib/stockMayoristaApi.js'
 import stockTienda, { stockMitoHub, tiendaDragon } from '../../src/lib/stockTiendaApi.js'
 import tiendaTelegram from '../../src/lib/tiendaTelegramApi.js'
 import tiendaClientes from '../../src/lib/tiendaClientesApi.js'
+import tiendaProductos from '../../src/lib/tiendaProductosApi.js'
 import flexxus from '../../src/lib/flexxusApi.js'
 import poloBulto from '../../src/lib/poloBultoApi.js'
 import analisisVentas from '../../src/lib/analisisVentasApi.js'
@@ -123,6 +125,7 @@ export default async function handler(req: Req, res: Res) {
   if (ruta === 'tienda-dragon') return tiendaDragon(req, res)
   if (ruta === 'tienda-telegram') return tiendaTelegram(req, res)
   if (ruta === 'tienda-clientes') return tiendaClientes(req, res)
+  if (ruta === 'tienda-productos') return tiendaProductos(req, res)
 
   if (ruta === 'status') return status(req, res)
   if (ruta === 'catalogo') return catalogo(req, res)
