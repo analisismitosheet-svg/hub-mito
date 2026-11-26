@@ -294,6 +294,18 @@ export default function ContadorClientes() {
     }))
   }, [datos, ventas, fLocal, mideElDia, clientes])
 
+  // Tabla Por local: todos los locales del contador, aunque no hayan medido en el rango
+  // (quedan al final con 0 y '—', así se ve qué PC contadora no mandó datos).
+  const filasLocal = useMemo(() => {
+    if (!datos) return []
+    const filas = [...datos.porLocal]
+    if (!fLocal) {
+      const ya = new Set(filas.map((l) => l.local))
+      for (const l of locales) if (!ya.has(l)) filas.push({ local: l, entradas: 0, salidas: 0, transeuntes: 0, empleados: 0, nuevos: 0, reingresos: 0, grupos: 0 })
+    }
+    return filas
+  }, [datos, locales, fLocal])
+
   const offline = dispositivos.filter((d) => d.activo && (!d.ultimo_latido || Date.now() - new Date(d.ultimo_latido).getTime() > OFFLINE_MIN * 60000))
 
   const tarjeta = 'rounded-2xl border border-line bg-surface p-4'
@@ -406,7 +418,7 @@ export default function ContadorClientes() {
 
               <div className={tarjeta}>
                 <h3 className="mb-3 text-sm font-semibold text-ink">Por local</h3>
-                {datos.porLocal.length === 0 ? (
+                {filasLocal.length === 0 ? (
                   <p className="text-sm text-sub">Todavía no hay conteos en este rango.</p>
                 ) : (
                   <>
@@ -425,17 +437,17 @@ export default function ContadorClientes() {
                           </tr>
                         </thead>
                         <tbody>
-                          {datos.porLocal.map((l) => {
+                          {filasLocal.map((l) => {
                             const tk = tickets?.get(l.local)
                             const conv = conVentas.has(l.local) ? conversion(clientes.porLocal.get(l.local) ?? l.entradas, tk ?? 0) : null
                             const convG = conVentas.has(l.local) && l.grupos ? conversion(l.grupos, ticketsGrupo?.get(l.local) ?? 0) : null
                             return (
-                              <tr key={l.local} className="border-t border-line">
-                                <td className="py-1.5 pr-3 font-medium text-ink">
+                              <tr key={l.local} className={'border-t border-line' + (l.entradas ? '' : ' text-sub/60')}>
+                                <td className={"py-1.5 pr-3 font-medium " + (l.entradas ? "text-ink" : "text-sub")}>
                                   <button onClick={() => setParam('local', fLocal === l.local ? '' : l.local)} className="hover:underline">{l.local}</button>
                                 </td>
                                 <td className="py-1.5 pr-3 text-right tabular-nums text-sub">{diasMedidos.get(l.local)?.size ?? 0}/{diasRango}</td>
-                                <td className="py-1.5 pr-3 text-right tabular-nums">{nf(l.entradas)}</td>
+                                <td className="py-1.5 pr-3 text-right tabular-nums">{l.entradas ? nf(l.entradas) : 'sin conteo'}</td>
                                 {hayGrupos && <td className="py-1.5 pr-3 text-right tabular-nums">{l.grupos ? nf(l.grupos) : '—'}</td>}
                                 {ventas && <td className="py-1.5 pr-3 text-right tabular-nums">{nf(tk ?? 0)}</td>}
                                 {ventas && hayTotal && <td className="py-1.5 pr-3 text-right tabular-nums">{nfMoneda(totales.porLocal.get(l.local) ?? 0)}</td>}
