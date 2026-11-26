@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Maqueta · Mi repo Depósito por artículo y caja</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{--paper:#050508;--surface:#0e0e13;--surface2:#16161d;--line:rgba(255,255,255,.09);--ink:#f8fafc;--sub:#94a3b8;--or:#f97316;--am:#f59e0b;--em:#10b981;--rojo:#f87171;--sky:#38bdf8;--vi:#a78bfa}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:14px;line-height:1.45;padding:20px clamp(12px,3vw,36px) 64px}
+  h1{font-size:24px;margin:0;font-weight:700;letter-spacing:-.02em}
+  h2{font-size:14px;margin:0 0 10px;font-weight:800;color:#fdba74;letter-spacing:.02em;text-transform:uppercase}
+  p{margin:0}.sub{color:var(--sub)}.num{font-variant-numeric:tabular-nums}
+  .nota{border:1px dashed rgba(249,115,22,.5);background:rgba(249,115,22,.07);color:#fdba74;border-radius:12px;padding:9px 12px;font-size:12.5px;margin:10px 0;max-width:1100px}
+  .nota b{color:#fed7aa}
+  .pregunta{border:1px solid rgba(56,189,248,.45);background:rgba(56,189,248,.08);color:#bae6fd;border-radius:12px;padding:9px 12px;font-size:12.5px;margin:8px 0;max-width:1100px}
+  .pantallas{display:flex;gap:28px;flex-wrap:wrap;margin-top:22px;align-items:flex-start}
+  .tel{width:390px;max-width:100%;border:1px solid var(--line);border-radius:28px;background:#08080c;padding:16px 14px 20px}
+  .back{font-size:12.5px;color:var(--sub);margin-bottom:8px}
+  .tit{display:flex;align-items:center;gap:8px;font-weight:800;font-size:17px;margin-bottom:10px}
+  .bus{height:44px;border-radius:12px;border:1px solid #3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.2);background:var(--surface);display:flex;align-items:center;padding:0 12px;gap:8px;color:var(--ink)}
+  .bus .ph{color:var(--sub)}
+  .seg{display:flex;gap:6px;margin:10px 0}
+  .seg span{flex:1;text-align:center;font-size:12.5px;font-weight:700;border-radius:10px;padding:7px 0;border:1px solid var(--line);background:var(--surface2);color:var(--sub)}
+  .seg span.on{background:#ea580c;border-color:#ea580c;color:#fff}
+  .resumen{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--sub);margin:4px 0 10px}
+  .resumen b{color:var(--ink)}
+  .prog{height:6px;border-radius:99px;background:var(--surface2);overflow:hidden;margin-bottom:12px}
+  .prog i{display:block;height:100%;background:var(--or)}
+  .grupo{border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-top:10px;background:var(--surface)}
+  .grupo-h{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:rgba(249,115,22,.1);border-bottom:1px solid var(--line)}
+  .grupo-h b{font-size:15px;display:flex;align-items:center;gap:6px}
+  .grupo.sin .grupo-h{background:var(--surface2)}
+  .art{padding:10px 12px;border-top:1px solid rgba(255,255,255,.05)}
+  .art:first-of-type{border-top:0}
+  .art.sel{background:rgba(249,115,22,.07);box-shadow:inset 3px 0 0 var(--or)}
+  .fila{display:flex;align-items:center;gap:8px}
+  .cod{font-weight:700;font-size:15px}
+  .c{font-size:11.5px;font-weight:700;border-radius:6px;padding:1px 6px}
+  .c.col{background:rgba(56,189,248,.15);color:var(--sky)}
+  .c.tal{background:rgba(167,139,250,.15);color:var(--vi)}
+  .c.mat{background:var(--line);color:#cbd5e1;text-transform:uppercase;font-size:10.5px}
+  .desc{font-size:12px;color:var(--sub);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tot{margin-left:auto;font-weight:800;font-size:15px;border-radius:9px;padding:3px 9px;background:var(--line)}
+  .tot.par{background:rgba(245,158,11,.15);color:var(--am)}
+  .locs{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+  .loc{font-size:11.5px;font-weight:600;border-radius:7px;padding:2px 7px;background:var(--surface2);border:1px solid var(--line);color:#e2e8f0}
+  .loc b{color:var(--or);margin-left:3px}
+  .loc.ok{border-color:rgba(16,185,129,.4);background:rgba(16,185,129,.1);color:#6ee7b7}
+  .loc.ok b{color:#34d399}
+  .loc.prox{border-color:rgba(56,189,248,.6);background:rgba(56,189,248,.1)}
+  .input{display:flex;gap:8px;margin:10px 0}
+  .input .campo{flex:1;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--surface2);display:flex;align-items:center;padding:0 12px;color:var(--sub);font-size:13.5px}
+  .input .cam{width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--surface2);display:grid;place-items:center}
+  .ok{border:1px solid rgba(16,185,129,.35);background:rgba(16,185,129,.1);color:#6ee7b7;border-radius:12px;padding:8px 12px;font-size:13px;font-weight:600}
+  .ok big{display:block;font-size:20px;font-weight:800;color:#fff;margin-top:2px}
+  .reparto{border:1px solid var(--line);border-radius:14px;background:var(--surface);margin-top:10px;overflow:hidden}
+  .reparto-h{padding:9px 12px;border-bottom:1px solid var(--line);font-weight:700;display:flex;justify-content:space-between}
+  .rl{display:flex;align-items:center;gap:10px;padding:9px 12px;border-top:1px solid rgba(255,255,255,.05)}
+  .rl:first-of-type{border-top:0}
+  .rl .n{flex:1;font-weight:600}
+  .rl .q{font-weight:800}
+  .rl.listo{opacity:.6}
+  .rl.act{background:rgba(56,189,248,.08)}
+  .btn{height:34px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;padding:0 10px;font-weight:700;font-size:12.5px;border:1px solid var(--line);background:var(--surface2)}
+  .btn.em{background:#059669;border-color:#059669;color:#fff}
+  .btn.rj{background:#dc2626;border-color:#dc2626;color:#fff}
+  .lab{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--sub);margin:16px 2px 6px}
+  .chk{width:30px;height:30px;border-radius:9px;border:2px solid #475569;display:grid;place-items:center;flex-shrink:0;font-weight:900;font-size:15px}
+  .chk.on{background:#059669;border-color:#059669;color:#fff}
+  .art.tildado{opacity:.55}
+  .art.tildado .cod{text-decoration:line-through}
+  .cards{display:grid;gap:8px}
+  .lc{border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:10px 12px}
+  .lc.on{border-color:rgba(249,115,22,.7);box-shadow:0 0 0 3px rgba(249,115,22,.15)}
+  .lc .p{height:5px;border-radius:99px;background:var(--surface2);margin-top:7px;overflow:hidden}
+  .lc .p i{display:block;height:100%;background:var(--em)}
+  .pend{font-size:11px;color:var(--sub)}
+  .flecha{color:var(--sub);font-size:16px;width:22px;text-align:center;transition:transform .15s}
+  .flecha.abierta{transform:rotate(90deg);color:var(--or)}
+  .despl{margin:8px 0 2px 38px;border:1px solid var(--line);border-radius:10px;background:var(--surface2);overflow:hidden}
+  .despl .dl{display:flex;justify-content:space-between;padding:6px 10px;font-size:13px;border-top:1px solid rgba(255,255,255,.05)}
+  .despl .dl:first-child{border-top:0}
+  .despl .dl b{font-variant-numeric:tabular-nums;color:var(--or)}
+  .despl .dt{display:flex;justify-content:space-between;padding:6px 10px;font-size:12px;font-weight:700;color:var(--sub);background:rgba(255,255,255,.03);border-top:1px solid var(--line)}
+</style>
+</head>
+<body>
+  <h1>Mi repo · Depósito Indo — por artículo y caja</h1>
+  <p class="sub" style="margin-top:4px">Hoy: una tarjeta por local y adentro por caja. Propuesta: una sola lista con todo lo que sale de Indo, agrupada por <b>caja → artículo</b>, sumando los locales.</p>
+
+  <div class="nota"><b>Dos pasos:</b> 1) <b>Juntar</b>: recorrés las cajas y tildás cada SKU cuando sacaste todas las unidades (el total de todos los locales). 2) <b>Separar</b>: entrás a cada local y vas tildando lo que le ponés, a mano.</div>
+
+  <div class="pantallas">
+
+    <!-- ===== 1. Juntar: tildar por SKU ===== -->
+    <div>
+      <h2>1 · Juntar (por caja y SKU)</h2>
+      <div class="tel">
+        <p class="back">‹ Menú</p>
+        <p class="tit">⇄ Transferencias Depósito Indo</p>
+        <div class="bus">🔍 <span class="ph">Buscar artículo, color o caja…</span></div>
+        <div class="seg"><span class="on">1 · Juntar</span><span>2 · Separar por local</span></div>
+        <div class="resumen">
+          <span><b class="num">2 de 5</b> SKU juntados</span>
+          <span><b class="num">17 de 33</b> unidades</span>
+        </div>
+        <div class="prog"><i style="width:52%"></i></div>
+
+        <div class="grupo">
+          <div class="grupo-h"><b><span style="color:var(--or)">▣</span> Caja 3</b><span class="sub num" style="font-size:12px">2 SKU · 17 u.</span></div>
+          <div class="art tildado">
+            <div class="fila">
+              <span class="chk on">✓</span>
+              <span class="cod">R2405</span><span class="c col">NEGRO</span><span class="c tal">M</span>
+              <span class="tot num">×9</span>
+              <span class="flecha">›</span>
+            </div>
+            <p class="desc" style="margin-left:38px">REMERA OVERSIZE · <span style="color:var(--or)">toca para ver locales</span></p>
+          </div>
+          <div class="art tildado">
+            <div class="fila">
+              <span class="chk on">✓</span>
+              <span class="cod">R2405</span><span class="c col">BLANCO</span><span class="c tal">L</span>
+              <span class="tot num">×8</span>
+              <span class="flecha">›</span>
+            </div>
+            <p class="desc" style="margin-left:38px">REMERA OVERSIZE · <span style="color:var(--or)">toca para ver locales</span></p>
+          </div>
+        </div>
+
+        <div class="grupo">
+          <div class="grupo-h"><b><span style="color:var(--or)">▣</span> Caja 7</b><span class="sub num" style="font-size:12px">2 SKU · 10 u.</span></div>
+          <div class="art sel">
+            <div class="fila">
+              <span class="chk"></span>
+              <span class="cod">J1180</span><span class="c col">CELESTE</span><span class="c tal">42</span>
+              <span class="tot num">×6</span>
+              <span class="btn rj" style="height:30px;padding:0 8px">✕</span>
+              <span class="flecha abierta">›</span>
+            </div>
+            <p class="desc" style="margin-left:38px">JEAN MOM ROTURAS · <span style="color:var(--or)">toca para ver locales</span></p>
+            <div class="despl">
+              <div class="dl"><span>VCPD</span><b>2</b></div>
+              <div class="dl"><span>9 de Julio</span><b>2</b></div>
+              <div class="dl"><span>Patio Olmos</span><b>2</b></div>
+              <div class="dt"><span>3 locales</span><span>Total 6</span></div>
+            </div>
+          </div>
+          <div class="art">
+            <div class="fila">
+              <span class="chk"></span>
+              <span class="cod">J1180</span><span class="c col">CELESTE</span><span class="c tal">44</span>
+              <span class="tot num">×4</span>
+              <span class="btn rj" style="height:30px;padding:0 8px">✕</span>
+              <span class="flecha">›</span>
+            </div>
+            <p class="desc" style="margin-left:38px">JEAN MOM ROTURAS · <span style="color:var(--or)">toca para ver locales</span></p>
+          </div>
+        </div>
+
+        <div class="grupo sin">
+          <div class="grupo-h"><b>Sin caja</b><span class="sub num" style="font-size:12px">1 SKU · 4 u.</span></div>
+          <div class="art">
+            <div class="fila">
+              <span class="chk"></span>
+              <span class="cod">B3301</span><span class="c col">GRIS</span><span class="c tal">XL</span>
+              <span class="tot num">×4</span>
+              <span class="btn rj" style="height:30px;padding:0 8px">✕</span>
+              <span class="flecha">›</span>
+            </div>
+            <p class="desc" style="margin-left:38px">BUZO CANGURO FRISA · <span style="color:var(--or)">toca para ver locales</span></p>
+          </div>
+        </div>
+      </div>
+      <div class="nota" style="width:390px">Tocás la flecha (o la fila) y se despliega cada local con su cantidad. Tocás el cuadradito y el SKU queda juntado (todas sus unidades). ✕ = no está / faltante. Los tildados quedan tachados en su caja para poder destildar.</div>
+    </div>
+
+    <!-- ===== 2. Separar por local ===== -->
+    <div>
+      <h2>2 · Separar por local</h2>
+      <div class="tel">
+        <p class="back">‹ Menú</p>
+        <p class="tit">⇄ Transferencias Depósito Indo</p>
+        <div class="seg"><span>1 · Juntar</span><span class="on">2 · Separar por local</span></div>
+
+        <div class="cards">
+          <div class="lc"><div class="fila"><b>Rivera</b><span class="pend" style="margin-left:auto">2 de 12 u. separadas</span></div><div class="p"><i style="width:17%"></i></div></div>
+          <div class="lc on"><div class="fila"><b>Nvo Centro</b><span class="pend" style="margin-left:auto">3 de 7 u.</span></div><div class="p"><i style="width:43%"></i></div></div>
+          <div class="lc"><div class="fila"><b>VCPD</b><span class="pend" style="margin-left:auto">0 de 5 u.</span></div><div class="p"><i style="width:0"></i></div></div>
+        </div>
+
+        <div class="lab">Nvo Centro · lo que ya juntaste</div>
+        <div class="reparto">
+          <div class="rl listo"><span class="chk on">✓</span><span class="n">R2405 <span class="c col">NEGRO</span> <span class="c tal">M</span></span><span class="q num">3</span></div>
+          <div class="rl"><span class="chk"></span><span class="n">R2405 <span class="c col">BLANCO</span> <span class="c tal">L</span></span><span class="q num">4</span></div>
+        </div>
+        <div class="lab">Todavía sin juntar</div>
+        <div class="reparto" style="opacity:.5">
+          <div class="rl"><span class="chk" style="border-style:dashed"></span><span class="n">J1180 <span class="c col">CELESTE</span> <span class="c tal">42</span> <span class="pend">caja 7</span></span><span class="q num">—</span></div>
+        </div>
+
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <span class="btn em" style="flex:1;height:44px">✓ Todo lo de Nvo Centro</span>
+        </div>
+      </div>
+      <div class="nota" style="width:390px">Cada local muestra solo lo que ya está juntado (lo demás aparece gris y no se puede tildar). Al tildar acá el renglón queda <b>Hecho</b> para ese local, como hoy.</div>
+    </div>
+  </div>
+
+  <div class="pregunta"><b>Para definir:</b> 1) En «Separar», ¿se puede tildar algo que todavía no se juntó o lo bloqueamos como en la maqueta? · 2) ¿Se mezclan todos los lotes de los últimos 7 días o se elige el lote primero? · 3) ¿El escáner sigue sirviendo para tildar el SKU en «Juntar»?</div>
+</body>
+</html>

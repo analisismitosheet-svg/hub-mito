@@ -9,7 +9,7 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import ScannerCamara from '@/components/ScannerCamara'
 import ArmadoPedido from '@/components/ArmadoPedido'
 import AvisosCelular from '@/components/AvisosCelular'
-import TransferenciasDeposito from '@/components/TransferenciasDeposito'
+import TransferenciasIndo from '@/components/TransferenciasIndo'
 import MotivoPausaDialog, { nombreMotivoPausa, type MotivoPausa } from '@/components/MotivoPausa'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
@@ -1082,7 +1082,7 @@ export default function MiRepo() {
       )}
 
       {/* Rol deposito y legajos de Depósito Indo: los renglones que salen de Indo */}
-      {!asignacionSel && veMiRepoDeposito && <TransferenciasDeposito mostrarVacio={soloDeposito} alAbrir={setDepAbierto} />}
+      {!asignacionSel && veMiRepoDeposito && <TransferenciasIndo mostrarVacio={soloDeposito} alAbrir={setDepAbierto} />}
 
       {avisoArmado && (
         <p
