@@ -344,7 +344,7 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
   // ===== Administración =====
   {
     id: 'flexxus', areaId: 'administracion', titulo: 'Flexxus', descripcion: 'Ventas, saldos de clientes y asientos (solo lectura)',
-    icon: Database, color: '#6366f1', acciones: { ver: 'flexxus.view' },
+    icon: Database, color: '#6366f1', acciones: { ver: 'flexxus.view', editar: 'flexxus.clasificar' }, etiquetas: { editar: 'Clasificar cuentas' },
   },
 
   // ===== Administradores =====

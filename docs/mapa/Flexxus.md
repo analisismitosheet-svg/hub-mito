@@ -14,6 +14,9 @@ Flujo: `src/lib/flexxus.ts` → `GET /api/sql/flexxus?consulta=…` (`src/lib/fl
   - **Resultados no asignados** (`3300000001`) suma en su saldo inicial el resultado del inicio del ejercicio al día anterior al rango;
   - los asientos automáticos de apertura/cierre (`CODIGOAGRUPACION = 13`) no son movimiento; la apertura va al saldo inicial. En 2026 hay dos pares de apertura (la segunda ajusta la primera): se suman todos.
   - El rango tiene que quedar dentro de un ejercicio (`EJERCICIOS`).
+  - **Columnas a elección** (Saldo inicial, Debe, Haber, Saldo final, Mov.), recordadas en el navegador (`localStorage flexxus.sys.columnas`).
+  - **Agrupar por** «Plan Flexxus» (rubro de primer nivel) o «Clasificación» propia: Clasificación → Rubro → Nota con subtotales, como la planilla del contador; «Ver cuentas» abre el detalle. Lo no clasificado va a «Sin clasificar».
+- **Clasificación de cuentas**: tabla `flexxus_clasificacion` en Supabase (`sql/flexxus_clasificacion.sql`; cuenta → clasificación, rubro, nota). No toca Flexxus. Ver con `flexxus.view`, editar con `flexxus.clasificar`. Se guarda al salir de la casilla; con tildes se asigna a varias cuentas a la vez. Las sugerencias salen de lo ya cargado.
 - **Centros de costo** (`centros`): `APROPIACIONCENTROSCOSTO` (por línea de asiento, `MONTO <> 0`) + `CENTROSCOSTO` / `RUBROSCENTROSCOSTO`. Ingresos = cuentas 51…, costos = 4…, gastos = resto de 5…. Lo no apropiado va a «Sin centro de costo asignado».
 
 ## Desarrollo

@@ -177,6 +177,37 @@ export const cargarMayor = (desde: string, hasta: string, cuenta: string) =>
 export const cargarCentros = (desde: string, hasta: string, forzar = false) =>
   pedir<Centros>({ consulta: 'centros', desde, hasta, ...f(forzar) })
 
+/* ------------------- clasificación propia de cuentas ------------------- */
+
+/**
+ * Clasificación del contador para cada cuenta (tabla flexxus_clasificacion en
+ * Supabase, NO en Flexxus): Clasificación → Rubro → Nota, como su planilla.
+ */
+export interface Clasificacion {
+  cuenta: string
+  clasificacion: string
+  rubro: string
+  nota: string
+}
+
+export async function cargarClasificacion(): Promise<Map<string, Clasificacion>> {
+  if (!supabase) throw new Error('Supabase no está configurado.')
+  const { data, error } = await supabase.from('flexxus_clasificacion').select('cuenta, clasificacion, rubro, nota')
+  if (error) throw new Error(error.message)
+  return new Map((data ?? []).map((c) => [c.cuenta as string, c as Clasificacion]))
+}
+
+/** Guarda la clasificación de una cuenta; si quedan los tres vacíos, la borra. */
+export async function guardarClasificacion(c: Clasificacion): Promise<void> {
+  if (!supabase) throw new Error('Supabase no está configurado.')
+  const fila = { cuenta: c.cuenta, clasificacion: c.clasificacion.trim(), rubro: c.rubro.trim(), nota: c.nota.trim() }
+  const { error } =
+    !fila.clasificacion && !fila.rubro && !fila.nota
+      ? await supabase.from('flexxus_clasificacion').delete().eq('cuenta', c.cuenta)
+      : await supabase.from('flexxus_clasificacion').upsert(fila, { onConflict: 'cuenta' })
+  if (error) throw new Error(error.message)
+}
+
 /* ------------------------------ formatos ------------------------------ */
 
 const PESOS = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })

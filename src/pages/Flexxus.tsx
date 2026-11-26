@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Scale,
   Search,
+  Tags,
   TrendingUp,
   TriangleAlert,
   Users,
@@ -23,6 +24,7 @@ import {
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import MultiselectFiltro from '@/components/MultiselectFiltro'
+import { useAuth } from '@/context/AuthContext'
 import { coloresUnicos } from '@/lib/coloresUnicos'
 import {
   CUENTA_RNA,
@@ -33,11 +35,13 @@ import {
   cargarAsientos,
   cargarBalance,
   cargarCentros,
+  cargarClasificacion,
   cargarMayor,
   cargarSaldos,
   cargarVentas,
   diasEntre,
   fechaCorta,
+  guardarClasificacion,
   isoLocal,
   nroComprobante,
   numero,
@@ -48,6 +52,7 @@ import {
   type Asientos,
   type Balance,
   type Centros,
+  type Clasificacion,
   type Mayor,
   type Saldos,
   type Tramo,
@@ -62,9 +67,9 @@ import {
  * solo lectura). Ver src/lib/flexxus.ts y puente-sql/flexxus.js.
  */
 
-type Solapa = 'ventas' | 'saldos' | 'asientos' | 'balance' | 'centros'
+type Solapa = 'ventas' | 'saldos' | 'asientos' | 'balance' | 'centros' | 'clasificacion'
 
-const [cSky, cEmerald, cRose, cViolet, cAmber, cTeal, cOrange, cIndigo, cPink] = coloresUnicos([
+const [cSky, cEmerald, cRose, cViolet, cAmber, cTeal, cOrange, cIndigo, cPink, cLima] = coloresUnicos([
   '#0284c7',
   '#10b981',
   '#f43f5e',
@@ -74,6 +79,7 @@ const [cSky, cEmerald, cRose, cViolet, cAmber, cTeal, cOrange, cIndigo, cPink] =
   '#f97316',
   '#6366f1',
   '#ec4899',
+  '#84cc16',
 ])
 
 const btnChico =
@@ -117,6 +123,7 @@ export default function Flexxus() {
     { id: 'asientos', texto: 'Asientos', icono: BookOpen, color: cAmber },
     { id: 'balance', texto: 'Sumas y saldos', icono: Scale, color: cTeal },
     { id: 'centros', texto: 'Centros de costo', icono: Building2, color: cPink },
+    { id: 'clasificacion', texto: 'Clasificación de cuentas', icono: Tags, color: cLima },
   ] as const
 
   const presets = [
@@ -157,7 +164,7 @@ export default function Flexxus() {
           ))}
         </div>
 
-        {solapa !== 'saldos' && (
+        {solapa !== 'saldos' && solapa !== 'clasificacion' && (
           <div className="flex flex-wrap items-center gap-2">
             <CalendarRange size={16} className="text-sub" aria-hidden />
             <input type="date" value={desde} max={hasta} onChange={(e) => e.target.value && setDesde(e.target.value)} className={inputFecha} aria-label="Desde" />
@@ -185,6 +192,7 @@ export default function Flexxus() {
       {solapa === 'asientos' && <SolapaAsientos desde={desde} hasta={hasta} />}
       {solapa === 'balance' && <SolapaBalance desde={desde} hasta={hasta} />}
       {solapa === 'centros' && <SolapaCentros desde={desde} hasta={hasta} />}
+      {solapa === 'clasificacion' && <SolapaClasificacion />}
     </Layout>
   )
 }
@@ -1092,14 +1100,51 @@ function fechaHora(s: string): string {
 
 /* =========================== SUMAS Y SALDOS =========================== */
 
+/** Columnas que se pueden mostrar u ocultar en Sumas y saldos (se recuerda en este navegador). */
+const COLUMNAS_SYS = [
+  { id: 'inicial', label: 'Saldo inicial' },
+  { id: 'debe', label: 'Debe' },
+  { id: 'haber', label: 'Haber' },
+  { id: 'final', label: 'Saldo final' },
+  { id: 'mov', label: 'Movimientos' },
+] as const
+type ColSys = (typeof COLUMNAS_SYS)[number]['id']
+const CLAVE_COLUMNAS = 'flexxus.sys.columnas'
+const SIN_CLASIF = 'Sin clasificar'
+
+function leerColumnas(): Set<string> {
+  try {
+    const v = JSON.parse(localStorage.getItem(CLAVE_COLUMNAS) ?? '[]')
+    return new Set(Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [])
+  } catch {
+    return new Set()
+  }
+}
+
 function SolapaBalance({ desde, hasta }: { desde: string; hasta: string }) {
   const { datos, cargando, error, cargar } = useCarga<Balance>((forzar) => cargarBalance(desde, hasta, forzar), [desde, hasta])
+  const clasif = useCarga<Map<string, Clasificacion>>(() => cargarClasificacion(), [])
   const [busqueda, setBusqueda] = useState('')
   const [rubrosSel, setRubrosSel] = useState<Set<string>>(new Set())
   const [cuentasSel, setCuentasSel] = useState<Set<string>>(new Set())
   const [ocultarCero, setOcultarCero] = useState(true)
   const [abierta, setAbierta] = useState<string | null>(null)
   const [mayores, setMayores] = useState<Record<string, Mayor | { error: string } | 'cargando'>>({})
+  /** Columnas tildadas (vacío = todas), recordadas en el navegador. */
+  const [columnasSel, setColumnasSel] = useState<Set<string>>(leerColumnas)
+  /** Agrupar por el plan de Flexxus o por la clasificación propia del contador. */
+  const [agrupar, setAgrupar] = useState<'plan' | 'clasif'>(() => (localStorage.getItem('flexxus.sys.agrupar') === 'clasif' ? 'clasif' : 'plan'))
+  const [verCuentas, setVerCuentas] = useState(true)
+
+  useEffect(() => {
+    localStorage.setItem(CLAVE_COLUMNAS, JSON.stringify([...columnasSel]))
+  }, [columnasSel])
+  useEffect(() => {
+    localStorage.setItem('flexxus.sys.agrupar', agrupar)
+  }, [agrupar])
+
+  const ver = (c: ColSys) => columnasSel.size === 0 || columnasSel.has(c)
+  const cols = COLUMNAS_SYS.filter((c) => ver(c.id))
 
   // Si cambia el rango, los detalles abiertos ya no sirven
   useEffect(() => {
@@ -1111,18 +1156,28 @@ function SolapaBalance({ desde, hasta }: { desde: string; hasta: string }) {
     if (!datos) return []
     const plan = new Map(datos.cuentas.map((c) => [c.cuenta, c]))
     const rubro = rubros(datos.cuentas)
-    return armarBalance(datos.movimientos).map((m) => ({
-      ...m,
-      descripcion: plan.get(m.cuenta)?.descripcion ?? '',
-      rubro: rubro.get(m.cuenta)?.descripcion ?? 'Sin rubro',
-      rubroCod: rubro.get(m.cuenta)?.cuenta ?? 'zzz',
-    }))
-  }, [datos])
+    const cl = clasif.datos ?? new Map<string, Clasificacion>()
+    return armarBalance(datos.movimientos).map((m) => {
+      const c = cl.get(m.cuenta)
+      return {
+        ...m,
+        descripcion: plan.get(m.cuenta)?.descripcion ?? '',
+        rubro: rubro.get(m.cuenta)?.descripcion ?? 'Sin rubro',
+        rubroCod: rubro.get(m.cuenta)?.cuenta ?? 'zzz',
+        cClasif: c?.clasificacion || SIN_CLASIF,
+        cRubro: c?.rubro || '—',
+        cNota: c?.nota || '—',
+      }
+    })
+  }, [datos, clasif.datos])
 
   const opcionesRubros = useMemo(() => {
+    if (agrupar === 'clasif') {
+      return [...new Set(base.map((f) => f.cClasif))].sort().map((x) => ({ id: x, label: x }))
+    }
     const m = new Map(base.map((f) => [f.rubroCod, f.rubro]))
     return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([id, label]) => ({ id, label }))
-  }, [base])
+  }, [base, agrupar])
   const opcionesCuentas = useMemo(
     () => [...base].sort((a, b) => a.cuenta.localeCompare(b.cuenta)).map((f) => ({ id: f.cuenta, label: `${f.cuenta} · ${f.descripcion}` })),
     [base],
@@ -1132,26 +1187,53 @@ function SolapaBalance({ desde, hasta }: { desde: string; hasta: string }) {
   const filas = useMemo(
     () =>
       base
-        .filter((f) => rubrosSel.size === 0 || rubrosSel.has(f.rubroCod))
+        .filter((f) => rubrosSel.size === 0 || rubrosSel.has(agrupar === 'clasif' ? f.cClasif : f.rubroCod))
         .filter((f) => cuentasSel.size === 0 || cuentasSel.has(f.cuenta))
         .filter((f) => !ocultarCero || Math.abs(f.final) >= 0.5 || f.debe || f.haber)
-        .filter((f) => !q || norm(`${f.cuenta} ${f.descripcion} ${f.rubro}`).includes(q))
+        .filter((f) => !q || norm(`${f.cuenta} ${f.descripcion} ${f.rubro} ${f.cClasif} ${f.cRubro} ${f.cNota}`).includes(q))
         .sort((a, b) => a.cuenta.localeCompare(b.cuenta)),
-    [base, rubrosSel, cuentasSel, ocultarCero, q],
+    [base, rubrosSel, cuentasSel, ocultarCero, q, agrupar],
   )
+  type Fila = (typeof filas)[number]
+  type Suma = { inicial: number; debe: number; haber: number; final: number; lineas: number }
+  const sumar = (fs: Fila[]): Suma =>
+    fs.reduce((t, f) => ({ inicial: t.inicial + f.inicial, debe: t.debe + f.debe, haber: t.haber + f.haber, final: t.final + f.final, lineas: t.lineas + f.lineas }), {
+      inicial: 0,
+      debe: 0,
+      haber: 0,
+      final: 0,
+      lineas: 0,
+    })
 
+  /* Agrupado por el plan de Flexxus: un nivel (rubro de primer nivel). */
   const grupos = useMemo(() => {
-    const m = new Map<string, { rubro: string; cod: string; filas: typeof filas; inicial: number; debe: number; haber: number; final: number }>()
+    const m = new Map<string, { titulo: string; cod: string; filas: Fila[] }>()
     for (const f of filas) {
-      const g = m.get(f.rubroCod) ?? { rubro: f.rubro, cod: f.rubroCod, filas: [], inicial: 0, debe: 0, haber: 0, final: 0 }
+      const g = m.get(f.rubroCod) ?? { titulo: f.rubro, cod: f.rubroCod, filas: [] }
       g.filas.push(f)
-      g.inicial += f.inicial
-      g.debe += f.debe
-      g.haber += f.haber
-      g.final += f.final
       m.set(f.rubroCod, g)
     }
     return [...m.values()].sort((a, b) => a.cod.localeCompare(b.cod))
+  }, [filas])
+
+  /* Agrupado por la clasificación propia: Clasificación → Rubro → Nota (como la planilla). */
+  const arbol = useMemo(() => {
+    const orden = (a: string, b: string) => (a === SIN_CLASIF ? 1 : b === SIN_CLASIF ? -1 : a.localeCompare(b, 'es', { numeric: true }))
+    const m = new Map<string, Map<string, Map<string, Fila[]>>>()
+    for (const f of filas) {
+      const r = m.get(f.cClasif) ?? new Map<string, Map<string, Fila[]>>()
+      const n = r.get(f.cRubro) ?? new Map<string, Fila[]>()
+      n.set(f.cNota, [...(n.get(f.cNota) ?? []), f])
+      r.set(f.cRubro, n)
+      m.set(f.cClasif, r)
+    }
+    return [...m.entries()].sort((a, b) => orden(a[0], b[0])).map(([clasificacion, r]) => ({
+      clasificacion,
+      rubros: [...r.entries()].sort((a, b) => orden(a[0], b[0])).map(([rubro, n]) => ({
+        rubro,
+        notas: [...n.entries()].sort((a, b) => orden(a[0], b[0])).map(([nota, fs]) => ({ nota, filas: fs })),
+      })),
+    }))
   }, [filas])
 
   /* Tarjetas sobre TODO el balance (no sobre lo filtrado): activo, pasivo + PN, resultado del período y control. */
@@ -1161,6 +1243,7 @@ function SolapaBalance({ desde, hasta }: { desde: string; hasta: string }) {
   const resultado = -base.filter((f) => !arrastraSaldo(f.cuenta)).reduce((t, f) => t + f.final, 0)
   const control = base.reduce((t, f) => t + f.final, 0)
   const cuadra = Math.abs(control) < 1
+  const sinClasificar = base.filter((f) => f.cClasif === SIN_CLASIF).length
 
   async function abrir(cuenta: string) {
     if (abierta === cuenta) return setAbierta(null)
@@ -1178,19 +1261,63 @@ function SolapaBalance({ desde, hasta }: { desde: string; hasta: string }) {
   const exportar = () =>
     void bajarExcel(`flexxus_sumas_y_saldos_${desde}_${hasta}`, {
       'Sumas y saldos': filas.map((f) => ({
-        Rubro: f.rubro,
+        ...(agrupar === 'clasif' ? { Clasificación: f.cClasif, 'Rubro (propio)': f.cRubro, Nota: f.cNota } : { Rubro: f.rubro }),
         Cuenta: f.cuenta,
         Descripción: f.descripcion,
-        'Saldo inicial': f.inicial,
-        Debe: f.debe,
-        Haber: f.haber,
-        'Saldo final': f.final,
-        Movimientos: f.lineas,
+        ...(ver('inicial') ? { 'Saldo inicial': f.inicial } : {}),
+        ...(ver('debe') ? { Debe: f.debe } : {}),
+        ...(ver('haber') ? { Haber: f.haber } : {}),
+        ...(ver('final') ? { 'Saldo final': f.final } : {}),
+        ...(ver('mov') ? { Movimientos: f.lineas } : {}),
       })),
     })
 
   const ej = datos?.ejercicio
   const diaAnterior = isoLocal(new Date(new Date(`${desde}T12:00:00`).getTime() - 86_400_000))
+  const nCols = 1 + cols.length
+
+  /** Celdas de números según las columnas elegidas. */
+  const celdas = (s: Suma, clase: string, esCuenta = false) => (
+    <>
+      {ver('inicial') && (
+        <td className={`${tdR} ${clase} ${esCuenta && Math.abs(s.inicial) < 0.5 ? 'text-sub/40' : ''}`}>
+          {esCuenta && Math.abs(s.inicial) < 0.5 ? '—' : pesos(s.inicial)}
+        </td>
+      )}
+      {ver('debe') && <td className={`${tdR} ${clase}`}>{esCuenta && !s.debe ? '—' : pesos(s.debe)}</td>}
+      {ver('haber') && <td className={`${tdR} ${clase}`}>{esCuenta && !s.haber ? '—' : pesos(s.haber)}</td>}
+      {ver('final') && <td className={`${tdR} ${clase} font-semibold text-ink`}>{pesos(s.final)}</td>}
+      {ver('mov') && <td className={`${tdR} ${clase} text-sub`}>{esCuenta ? numero(s.lineas) : ''}</td>}
+    </>
+  )
+
+  const filaCuenta = (f: Fila, sangria = '') => {
+    const ab = abierta === f.cuenta
+    return (
+      <Fragment key={f.cuenta}>
+        <tr className="cursor-pointer border-b border-line/60 transition hover:bg-surface2/60" onClick={() => void abrir(f.cuenta)}>
+          <td className={`${td} ${sangria}`}>
+            <span className="inline-flex items-center gap-1.5">
+              <ChevronDown size={14} className={`text-sub transition ${ab ? '' : '-rotate-90'}`} aria-hidden />
+              <span className="tabular-nums text-xs text-sub">{f.cuenta}</span>
+              <span className="text-ink">{f.descripcion || '—'}</span>
+              {f.cuenta === CUENTA_RNA && (
+                <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-500">+ resultado previo</span>
+              )}
+            </span>
+          </td>
+          {celdas(f, '', true)}
+        </tr>
+        {ab && (
+          <tr className="border-b border-line/60 bg-surface2/40">
+            <td colSpan={nCols} className="px-3 py-2">
+              <DetalleCuenta det={mayores[f.cuenta]} inicial={f.inicial} />
+            </td>
+          </tr>
+        )}
+      </Fragment>
+    )
+  }
 
   return (
     <div className="space-y-4 pb-6">
@@ -1228,93 +1355,411 @@ function SolapaBalance({ desde, hasta }: { desde: string; hasta: string }) {
           <Barra
             busqueda={busqueda}
             setBusqueda={setBusqueda}
-            placeholder="Buscar cuenta o rubro…"
+            placeholder="Buscar cuenta, rubro o clasificación…"
             calculado={datos.calculado}
             cacheado={datos.cacheado}
             cargando={cargando}
-            onActualizar={() => void cargar(true)}
+            onActualizar={() => {
+              void cargar(true)
+              void clasif.cargar()
+            }}
             onExcel={exportar}
             extra={
               <>
-                <MultiselectFiltro label="Rubro" opciones={opcionesRubros} seleccionadas={rubrosSel} onChange={setRubrosSel} />
+                <div className="flex items-center gap-1 rounded-xl border border-line bg-surface p-1">
+                  {([
+                    ['plan', 'Plan Flexxus'],
+                    ['clasif', 'Clasificación'],
+                  ] as const).map(([id, t]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => {
+                        setAgrupar(id)
+                        setRubrosSel(new Set())
+                      }}
+                      className={`btn-press h-8 rounded-lg px-2.5 text-xs font-medium ${agrupar === id ? 'bg-surface2 text-ink' : 'text-sub hover:text-ink'}`}
+                      title={id === 'clasif' ? 'Agrupa por Clasificación → Rubro → Nota (solapa Clasificación de cuentas)' : 'Agrupa por el plan de cuentas de Flexxus'}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+                <MultiselectFiltro label={agrupar === 'clasif' ? 'Clasificación' : 'Rubro'} opciones={opcionesRubros} seleccionadas={rubrosSel} onChange={setRubrosSel} />
                 <MultiselectFiltro label="Cuentas" opciones={opcionesCuentas} seleccionadas={cuentasSel} onChange={setCuentasSel} />
+                <MultiselectFiltro label="Columnas" opciones={COLUMNAS_SYS.map((c) => ({ id: c.id, label: c.label }))} seleccionadas={columnasSel} onChange={setColumnasSel} arrancaTodo />
                 <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-sub">
                   <input type="checkbox" checked={ocultarCero} onChange={(e) => setOcultarCero(e.target.checked)} /> Ocultar en cero
                 </label>
+                {agrupar === 'clasif' && (
+                  <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-sub">
+                    <input type="checkbox" checked={verCuentas} onChange={(e) => setVerCuentas(e.target.checked)} /> Ver cuentas
+                  </label>
+                )}
               </>
             }
           />
+          {agrupar === 'clasif' && sinClasificar > 0 && (
+            <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-500">
+              {numero(sinClasificar)} cuenta{sinClasificar > 1 ? 's' : ''} con movimiento todavía sin clasificar: van al final, en «{SIN_CLASIF}». Se
+              asignan en la solapa <b>Clasificación de cuentas</b>.
+            </p>
+          )}
           <div className={caja}>
-            <table className="w-full min-w-[900px] text-sm">
+            <table className="w-full min-w-[640px] text-sm">
               <thead>
                 <tr className={filaHead}>
-                  <th className={th}>Cuenta</th>
-                  <th className={thR}>Saldo inicial</th>
-                  <th className={thR}>Debe</th>
-                  <th className={thR}>Haber</th>
-                  <th className={thR}>Saldo final</th>
-                  <th className={thR}>Mov.</th>
+                  <th className={th}>{agrupar === 'clasif' ? 'Clasificación / Rubro / Nota' : 'Cuenta'}</th>
+                  {cols.map((c) => (
+                    <th key={c.id} className={thR}>
+                      {c.id === 'mov' ? 'Mov.' : c.label}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {grupos.map((g) => (
-                  <Fragment key={g.cod}>
-                    <tr className="border-b border-line bg-surface2/60">
-                      <td className={`${td} text-xs font-semibold uppercase tracking-wide text-ink`}>{g.rubro}</td>
-                      <td className={`${tdR} text-xs font-semibold text-ink`}>{pesos(g.inicial)}</td>
-                      <td className={`${tdR} text-xs font-semibold text-ink`}>{pesos(g.debe)}</td>
-                      <td className={`${tdR} text-xs font-semibold text-ink`}>{pesos(g.haber)}</td>
-                      <td className={`${tdR} text-xs font-semibold text-ink`}>{pesos(g.final)}</td>
-                      <td />
-                    </tr>
-                    {g.filas.map((f) => {
-                      const ab = abierta === f.cuenta
-                      const det = mayores[f.cuenta]
-                      return (
-                        <Fragment key={f.cuenta}>
-                          <tr className="cursor-pointer border-b border-line/60 transition hover:bg-surface2/60" onClick={() => void abrir(f.cuenta)}>
-                            <td className={td}>
-                              <span className="inline-flex items-center gap-1.5">
-                                <ChevronDown size={14} className={`text-sub transition ${ab ? '' : '-rotate-90'}`} aria-hidden />
-                                <span className="tabular-nums text-xs text-sub">{f.cuenta}</span>
-                                <span className="text-ink">{f.descripcion || '—'}</span>
-                                {f.cuenta === CUENTA_RNA && (
-                                  <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-500">+ resultado previo</span>
-                                )}
-                              </span>
-                            </td>
-                            <td className={`${tdR} ${Math.abs(f.inicial) < 0.5 ? 'text-sub/40' : 'text-sub'}`}>{Math.abs(f.inicial) < 0.5 ? '—' : pesos(f.inicial)}</td>
-                            <td className={tdR}>{f.debe ? pesos(f.debe) : '—'}</td>
-                            <td className={tdR}>{f.haber ? pesos(f.haber) : '—'}</td>
-                            <td className={`${tdR} font-semibold text-ink`}>{pesos(f.final)}</td>
-                            <td className={`${tdR} text-sub`}>{numero(f.lineas)}</td>
-                          </tr>
-                          {ab && (
-                            <tr className="border-b border-line/60 bg-surface2/40">
-                              <td colSpan={6} className="px-3 py-2">
-                                <DetalleCuenta det={det} inicial={f.inicial} />
-                              </td>
-                            </tr>
-                          )}
-                        </Fragment>
-                      )
-                    })}
-                  </Fragment>
-                ))}
-                {filas.length === 0 && <SinFilas cols={6} />}
+                {agrupar === 'plan' &&
+                  grupos.map((g) => (
+                    <Fragment key={g.cod}>
+                      <tr className="border-b border-line bg-surface2/60">
+                        <td className={`${td} text-xs font-semibold uppercase tracking-wide text-ink`}>{g.titulo}</td>
+                        {celdas(sumar(g.filas), 'text-xs font-semibold text-ink')}
+                      </tr>
+                      {g.filas.map((f) => filaCuenta(f))}
+                    </Fragment>
+                  ))}
+
+                {agrupar === 'clasif' &&
+                  arbol.map((c) => {
+                    const fc = c.rubros.flatMap((r) => r.notas.flatMap((n) => n.filas))
+                    return (
+                      <Fragment key={c.clasificacion}>
+                        <tr className="border-b border-line bg-sky-500/10">
+                          <td className={`${td} text-xs font-bold uppercase tracking-wide ${c.clasificacion === SIN_CLASIF ? 'text-amber-500' : 'text-ink'}`}>
+                            {c.clasificacion}
+                          </td>
+                          {celdas(sumar(fc), 'text-xs font-bold text-ink')}
+                        </tr>
+                        {c.rubros.map((r) => {
+                          const fr = r.notas.flatMap((n) => n.filas)
+                          return (
+                            <Fragment key={`${c.clasificacion}|${r.rubro}`}>
+                              <tr className="border-b border-line/80 bg-surface2/60">
+                                <td className={`${td} pl-6 text-xs font-semibold text-ink`}>{r.rubro}</td>
+                                {celdas(sumar(fr), 'text-xs font-semibold text-ink')}
+                              </tr>
+                              {r.notas.map((n) => (
+                                <Fragment key={`${c.clasificacion}|${r.rubro}|${n.nota}`}>
+                                  <tr className="border-b border-line/60">
+                                    <td className={`${td} pl-10 font-medium text-ink`}>{n.nota}</td>
+                                    {celdas(sumar(n.filas), 'font-medium')}
+                                  </tr>
+                                  {verCuentas && n.filas.map((f) => filaCuenta(f, 'pl-14'))}
+                                </Fragment>
+                              ))}
+                            </Fragment>
+                          )
+                        })}
+                      </Fragment>
+                    )
+                  })}
+                {filas.length === 0 && <SinFilas cols={nCols} />}
               </tbody>
               {filas.length > 0 && (
                 <tfoot>
                   <tr className="border-t border-line font-semibold text-ink">
                     <td className={td}>Total{rubrosSel.size || cuentasSel.size || q ? ' (filtrado)' : ''}</td>
-                    <td className={tdR}>{pesos(filas.reduce((t, f) => t + f.inicial, 0))}</td>
-                    <td className={tdR}>{pesos(filas.reduce((t, f) => t + f.debe, 0))}</td>
-                    <td className={tdR}>{pesos(filas.reduce((t, f) => t + f.haber, 0))}</td>
-                    <td className={tdR}>{pesos(filas.reduce((t, f) => t + f.final, 0))}</td>
-                    <td />
+                    {celdas(sumar(filas), '')}
                   </tr>
                 </tfoot>
               )}
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+/* ====================== CLASIFICACIÓN DE CUENTAS ====================== */
+
+/**
+ * El contador asigna a cada cuenta una Clasificación, un Rubro y una Nota (los
+ * tres niveles de su planilla). Se guarda en flexxus_clasificacion (Supabase);
+ * Sumas y saldos agrupa por acá con «Clasificación».
+ */
+function SolapaClasificacion() {
+  const { isAdmin, can } = useAuth()
+  const puedeEditar = isAdmin || can('flexxus.clasificar')
+  // El plan de cuentas viene con cualquier consulta contable: se usa la del mes (queda en cache del puente)
+  const plan = useCarga<Balance>((forzar) => cargarBalance(inicioMes(), hoyIso(), forzar), [])
+  const clasif = useCarga<Map<string, Clasificacion>>(() => cargarClasificacion(), [])
+  const [busqueda, setBusqueda] = useState('')
+  const [rubrosSel, setRubrosSel] = useState<Set<string>>(new Set())
+  const [soloSin, setSoloSin] = useState(false)
+  const [soloImputables, setSoloImputables] = useState(true)
+  const [elegidas, setElegidas] = useState<Set<string>>(new Set())
+  const [masivo, setMasivo] = useState({ clasificacion: '', rubro: '', nota: '' })
+  const [guardando, setGuardando] = useState<string | null>(null)
+  const [aviso, setAviso] = useState<string | null>(null)
+  const [locales, setLocales] = useState<Map<string, Clasificacion>>(new Map())
+
+  // Copia editable: arranca con lo guardado y se actualiza al guardar
+  useEffect(() => {
+    if (clasif.datos) setLocales(new Map(clasif.datos))
+  }, [clasif.datos])
+
+  const cuentas = useMemo(() => {
+    if (!plan.datos) return []
+    const rubro = rubros(plan.datos.cuentas)
+    const porCodigo = new Map(plan.datos.cuentas.map((c) => [c.cuenta, c]))
+    return plan.datos.cuentas
+      .map((c) => {
+        // Rubro de primer nivel + la cuenta madre directa (ej. «ACTIVO › CAJA»), para ubicarla rápido
+        const top = rubro.get(c.cuenta)?.descripcion ?? ''
+        const madre = porCodigo.get(c.madre)
+        const rubroFx = madre && madre.descripcion !== top ? `${top} › ${madre.descripcion}` : top
+        return { ...c, rubroFx, rubroCod: rubro.get(c.cuenta)?.cuenta ?? '' }
+      })
+      .sort((a, b) => a.cuenta.localeCompare(b.cuenta))
+  }, [plan.datos])
+
+  const sugerencias = useMemo(() => {
+    const s = { clasificacion: new Set<string>(), rubro: new Set<string>(), nota: new Set<string>() }
+    for (const c of locales.values()) {
+      if (c.clasificacion) s.clasificacion.add(c.clasificacion)
+      if (c.rubro) s.rubro.add(c.rubro)
+      if (c.nota) s.nota.add(c.nota)
+    }
+    const orden = (x: Set<string>) => [...x].sort((a, b) => a.localeCompare(b, 'es', { numeric: true }))
+    return { clasificacion: orden(s.clasificacion), rubro: orden(s.rubro), nota: orden(s.nota) }
+  }, [locales])
+
+  const opcionesRubros = useMemo(() => {
+    const m = new Map(cuentas.map((c) => [c.rubroCod, c.rubroFx.split(' › ')[0]]))
+    return [...m.entries()].filter(([id]) => id).sort((a, b) => a[0].localeCompare(b[0])).map(([id, label]) => ({ id, label }))
+  }, [cuentas])
+
+  const q = norm(busqueda.trim())
+  const lista = cuentas
+    .filter((c) => !soloImputables || c.imputable)
+    .filter((c) => rubrosSel.size === 0 || rubrosSel.has(c.rubroCod))
+    .filter((c) => !soloSin || !locales.get(c.cuenta)?.clasificacion)
+    .filter((c) => {
+      if (!q) return true
+      const l = locales.get(c.cuenta)
+      return norm(`${c.cuenta} ${c.descripcion} ${l?.clasificacion ?? ''} ${l?.rubro ?? ''} ${l?.nota ?? ''}`).includes(q)
+    })
+  const clasificadas = cuentas.filter((c) => c.imputable && locales.get(c.cuenta)?.clasificacion).length
+  const imputables = cuentas.filter((c) => c.imputable).length
+
+  async function guardar(c: Clasificacion) {
+    const antes = clasif.datos?.get(c.cuenta)
+    if (antes && antes.clasificacion === c.clasificacion.trim() && antes.rubro === c.rubro.trim() && antes.nota === c.nota.trim()) return
+    if (!antes && !c.clasificacion.trim() && !c.rubro.trim() && !c.nota.trim()) return
+    setGuardando(c.cuenta)
+    try {
+      await guardarClasificacion(c)
+      setAviso(null)
+      await clasif.cargar()
+    } catch (e) {
+      setAviso(e instanceof Error ? e.message : String(e))
+    } finally {
+      setGuardando(null)
+    }
+  }
+
+  async function aplicarMasivo() {
+    if (elegidas.size === 0) return
+    setGuardando('masivo')
+    try {
+      for (const cuenta of elegidas) {
+        const l = locales.get(cuenta) ?? { cuenta, clasificacion: '', rubro: '', nota: '' }
+        await guardarClasificacion({
+          cuenta,
+          clasificacion: masivo.clasificacion || l.clasificacion,
+          rubro: masivo.rubro || l.rubro,
+          nota: masivo.nota || l.nota,
+        })
+      }
+      setElegidas(new Set())
+      setAviso(null)
+      await clasif.cargar()
+    } catch (e) {
+      setAviso(e instanceof Error ? e.message : String(e))
+    } finally {
+      setGuardando(null)
+    }
+  }
+
+  const editar = (cuenta: string, campo: 'clasificacion' | 'rubro' | 'nota', valor: string) =>
+    setLocales((m) => {
+      const n = new Map(m)
+      n.set(cuenta, { ...(n.get(cuenta) ?? { cuenta, clasificacion: '', rubro: '', nota: '' }), [campo]: valor })
+      return n
+    })
+
+  const exportar = () =>
+    void bajarExcel('flexxus_clasificacion_cuentas', {
+      Clasificación: lista.map((c) => {
+        const l = locales.get(c.cuenta)
+        return {
+          Cuenta: c.cuenta,
+          Descripción: c.descripcion,
+          'Rubro Flexxus': c.rubroFx,
+          Imputable: c.imputable ? 'Sí' : 'No',
+          Clasificación: l?.clasificacion ?? '',
+          Rubro: l?.rubro ?? '',
+          Nota: l?.nota ?? '',
+        }
+      }),
+    })
+
+  const inputCelda = 'h-8 w-full min-w-[9rem] rounded-lg border border-line bg-surface px-2 text-xs text-ink placeholder:text-sub/50 disabled:opacity-60'
+
+  return (
+    <div className="space-y-4 pb-6">
+      <Estado cargando={plan.cargando || clasif.cargando} error={plan.error ?? clasif.error} hay={!!plan.datos} texto="Trayendo el plan de cuentas…" />
+      {aviso && <p className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-500">{aviso}</p>}
+      {plan.datos && (
+        <>
+          <Tarjetas
+            items={[
+              { titulo: 'Cuentas imputables', valor: numero(imputables), pie: `${numero(cuentas.length)} en el plan de Flexxus`, icono: BookOpen, color: cAmber },
+              { titulo: 'Clasificadas', valor: numero(clasificadas), pie: imputables ? `${((clasificadas / imputables) * 100).toFixed(0)} % del plan` : '—', icono: Tags, color: cEmerald },
+              { titulo: 'Sin clasificar', valor: numero(imputables - clasificadas), pie: 'van a «Sin clasificar» en Sumas y saldos', icono: TriangleAlert, color: cOrange },
+              {
+                titulo: 'Clasificaciones',
+                valor: numero(sugerencias.clasificacion.length),
+                pie: `${numero(sugerencias.rubro.length)} rubros · ${numero(sugerencias.nota.length)} notas`,
+                icono: Scale,
+                color: cTeal,
+              },
+            ]}
+          />
+          <p className="rounded-xl border border-line bg-surface px-3 py-2 text-xs text-sub">
+            Asigná a cada cuenta su <b className="text-ink">Clasificación</b> (ej. «01. Activo Corriente»), <b className="text-ink">Rubro</b> (ej. «01. Caja y
+            Bancos») y <b className="text-ink">Nota</b> (ej. «Bancos»). Numerarlos define el orden. Se guarda solo al salir de la casilla y no toca Flexxus.
+            {!puedeEditar && ' Para editar hace falta el permiso «Flexxus · Clasificar cuentas».'}
+          </p>
+          <Barra
+            busqueda={busqueda}
+            setBusqueda={setBusqueda}
+            placeholder="Buscar cuenta o clasificación…"
+            cargando={plan.cargando || clasif.cargando}
+            onActualizar={() => void clasif.cargar()}
+            onExcel={exportar}
+            extra={
+              <>
+                <MultiselectFiltro label="Rubro Flexxus" opciones={opcionesRubros} seleccionadas={rubrosSel} onChange={setRubrosSel} />
+                <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-sub">
+                  <input type="checkbox" checked={soloSin} onChange={(e) => setSoloSin(e.target.checked)} /> Solo sin clasificar
+                </label>
+                <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-sub">
+                  <input type="checkbox" checked={soloImputables} onChange={(e) => setSoloImputables(e.target.checked)} /> Solo imputables
+                </label>
+              </>
+            }
+          />
+
+          {puedeEditar && elegidas.size > 0 && (
+            <div className="flex flex-wrap items-end gap-2 rounded-xl border border-sky-500/30 bg-sky-500/10 p-3">
+              <span className="w-full text-xs font-medium text-sky-500">
+                Asignar a las {numero(elegidas.size)} cuentas tildadas (lo que dejes vacío no se cambia):
+              </span>
+              {(['clasificacion', 'rubro', 'nota'] as const).map((campo) => (
+                <input
+                  key={campo}
+                  list={`fx-sug-${campo}`}
+                  value={masivo[campo]}
+                  onChange={(e) => setMasivo((m) => ({ ...m, [campo]: e.target.value }))}
+                  placeholder={campo === 'clasificacion' ? 'Clasificación' : campo === 'rubro' ? 'Rubro' : 'Nota'}
+                  className={`${inputCelda} max-w-xs`}
+                />
+              ))}
+              <button type="button" onClick={() => void aplicarMasivo()} disabled={guardando === 'masivo'} className={btnChico}>
+                {guardando === 'masivo' ? <Loader2 size={13} className="animate-spin" aria-hidden /> : <Tags size={13} aria-hidden />} Asignar
+              </button>
+              <button type="button" onClick={() => setElegidas(new Set())} className={btnChico}>
+                Destildar
+              </button>
+            </div>
+          )}
+
+          {(['clasificacion', 'rubro', 'nota'] as const).map((campo) => (
+            <datalist key={campo} id={`fx-sug-${campo}`}>
+              {sugerencias[campo].map((s) => (
+                <option key={s} value={s} />
+              ))}
+            </datalist>
+          ))}
+
+          <div className={caja}>
+            <table className="w-full min-w-[980px] text-sm">
+              <thead>
+                <tr className={filaHead}>
+                  {puedeEditar && (
+                    <th className={`${th} w-8`}>
+                      <input
+                        type="checkbox"
+                        aria-label="Tildar todas las visibles"
+                        checked={lista.length > 0 && lista.every((c) => elegidas.has(c.cuenta))}
+                        onChange={(e) => setElegidas(e.target.checked ? new Set(lista.map((c) => c.cuenta)) : new Set())}
+                      />
+                    </th>
+                  )}
+                  <th className={th}>Cuenta</th>
+                  <th className={th}>Rubro Flexxus</th>
+                  <th className={th}>Clasificación</th>
+                  <th className={th}>Rubro</th>
+                  <th className={th}>Nota</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lista.map((c) => {
+                  const l = locales.get(c.cuenta) ?? { cuenta: c.cuenta, clasificacion: '', rubro: '', nota: '' }
+                  return (
+                    <tr key={c.cuenta} className={`border-b border-line/60 ${c.imputable ? '' : 'opacity-60'}`}>
+                      {puedeEditar && (
+                        <td className={td}>
+                          <input
+                            type="checkbox"
+                            aria-label={`Tildar ${c.cuenta}`}
+                            checked={elegidas.has(c.cuenta)}
+                            onChange={(e) =>
+                              setElegidas((s) => {
+                                const n = new Set(s)
+                                if (e.target.checked) n.add(c.cuenta)
+                                else n.delete(c.cuenta)
+                                return n
+                              })
+                            }
+                          />
+                        </td>
+                      )}
+                      <td className={td}>
+                        <span className="tabular-nums text-xs text-sub">{c.cuenta}</span> <span className="text-ink">{c.descripcion}</span>
+                        {guardando === c.cuenta && <Loader2 size={12} className="ml-1 inline animate-spin text-sub" aria-hidden />}
+                      </td>
+                      <td className={`${td} text-xs text-sub`}>{c.rubroFx}</td>
+                      {(['clasificacion', 'rubro', 'nota'] as const).map((campo) => (
+                        <td key={campo} className="px-2 py-1">
+                          <input
+                            list={`fx-sug-${campo}`}
+                            value={l[campo]}
+                            disabled={!puedeEditar}
+                            onChange={(e) => editar(c.cuenta, campo, e.target.value)}
+                            onBlur={() => void guardar(locales.get(c.cuenta) ?? l)}
+                            placeholder="—"
+                            className={inputCelda}
+                          />
+                        </td>
+                      ))}
+                    </tr>
+                  )
+                })}
+                {lista.length === 0 && <SinFilas cols={puedeEditar ? 6 : 5} />}
+              </tbody>
             </table>
           </div>
         </>
