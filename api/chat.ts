@@ -19,6 +19,7 @@
  *   URL_AGENTES (opcional)         - respaldo si la base no tiene la URL publicada del mito-server
  */
 import { tokenDe } from '../src/lib/apiAuth.js'
+import { postAlPuente, urlsDelPuente } from '../src/lib/puenteRetry.js'
 
 type Req = {
   method?: string
@@ -33,7 +34,7 @@ type Res = {
 }
 
 const OPENCODE_URL = 'https://opencode.ai/inference/go/anthropic/v1/messages'
-const MAX_VUELTAS = 6
+const MAX_VUELTAS = 8
 const MAX_RESULTADO = 10_000
 const VISTA_ARTICULOS = 'DESKTOP-OA4GU6I:VISTAS_CONSOLIDADAS.dbo.vw_ARTICULOS_MITO'
 const COLUMNAS_BUSQUEDA = 'ARTCOD,ID_ARTICULO,ARTICULO,NOMBRE_COMPLETO,DESCRIPCION,ARTDES,ARTDESADIC'
@@ -69,6 +70,47 @@ async function tabla(token: string, consulta: string): Promise<unknown> {
   if (!r.ok) throw new Error((cuerpo as { message?: string } | null)?.message ?? `Error ${r.status}`)
   return cuerpo
 }
+
+/** GET/POST a un endpoint del propio hub con el JWT del usuario (los permisos los valida ese endpoint). */
+async function hub(
+  origen: string,
+  token: string,
+  ruta: string,
+  { qs, body, timeout = 40_000 }: { qs?: URLSearchParams; body?: unknown; timeout?: number } = {},
+): Promise<Record<string, unknown>> {
+  const r = await fetch(`${origen}/api/${ruta}${qs ? `?${qs}` : ''}`, {
+    method: body === undefined ? 'GET' : 'POST',
+    headers: { Authorization: `Bearer ${token}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    signal: AbortSignal.timeout(timeout),
+  })
+  const cuerpo = (await r.json().catch(() => null)) as Record<string, unknown> | null
+  if (!r.ok || !cuerpo) throw new Error(String(cuerpo?.error ?? `El hub respondió ${r.status} en ${ruta}`))
+  return cuerpo
+}
+
+/** Acción de solo lectura directa al Puente SQL (stock de locales: el endpoint de la tienda pide otra clave). */
+async function alPuente(cuerpo: Record<string, unknown>, timeoutMs = 30_000): Promise<Record<string, unknown>> {
+  const destino = (await urlsDelPuente())[0] ?? process.env.SQL_LOGICAPP_URL ?? ''
+  const tokenPuente = process.env.SQL_BRIDGE_TOKEN ?? ''
+  if (!destino || !tokenPuente) throw new Error('Falta configurar el Puente SQL')
+  const r0 = await postAlPuente(
+    destino,
+    { headers: { 'Content-Type': 'application/json', 'X-Puente-Token': tokenPuente }, body: JSON.stringify(cuerpo) },
+    { timeoutMs, intentos: 2 },
+  )
+  if (!r0.ok) throw new Error('No se pudo contactar la PC del SQL (puente)')
+  const datos = (await r0.res.json().catch(() => null)) as Record<string, unknown> | null
+  if (!r0.res.ok || !datos) throw new Error(`Puente SQL: ${String(datos?.error ?? `respuesta ${r0.res.status}`)}`)
+  return datos
+}
+
+const codigosArticulo = (v: unknown, max: number): string[] =>
+  [...new Set((Array.isArray(v) ? v : String(v ?? '').split(',')).map((x) => String(x).trim().toUpperCase()))]
+    .filter((x) => /^[A-Z0-9._/-]{1,40}$/.test(x))
+    .slice(0, max)
+
+const num = (v: unknown) => Number(v) || 0
 
 // ---------------------------------------------------------------- herramientas (solo lectura)
 
@@ -341,6 +383,305 @@ const HERRAMIENTAS: Herramienta[] = [
     },
   },
   {
+    nombre: 'stock_articulo',
+    descripcion:
+      'Stock REAL (físico − pedido − preparado) de uno o varios artículos en el depósito MITO y en los 17 locales a la calle, en vivo de Dragon. ' +
+      'Devuelve el total por artículo y local; con detalle=true (o un solo artículo) también por color y talle. ' +
+      'Pide CÓDIGOS de artículo: si el usuario da una descripción, primero buscá el código con buscar_articulos.',
+    parametros: {
+      type: 'object',
+      properties: {
+        articulos: { type: 'array', items: { type: 'string' }, description: 'Códigos de artículo (1 a 60), ej. CF264132' },
+        locales: { type: 'array', items: { type: 'string' }, description: 'Solo estos locales (códigos, opcional). MITO = depósito mayorista' },
+        detalle: { type: 'boolean', description: 'true: abrir por color y talle' },
+      },
+      required: ['articulos'],
+    },
+    correr: async (a) => {
+      const arts = codigosArticulo(a.articulos, 60)
+      if (!arts.length) return { error: 'Pasá al menos un código de artículo válido (usá buscar_articulos si tenés la descripción).' }
+      const soloLocales = new Set(
+        (Array.isArray(a.locales) ? a.locales : []).map((l) => texto(l, 20).toUpperCase()).filter(Boolean),
+      )
+      const [mito, locales] = await Promise.allSettled([
+        alPuente({ accion: 'stock_tienda', articulos: arts }),
+        alPuente({ accion: 'stock_tienda', articulos: arts, locales: true }, 45_000),
+      ])
+      type Fila = { l?: string; a: string; c: string; t: string; s: number }
+      const filas: Fila[] = []
+      const sinDatos: string[] = []
+      if (mito.status === 'fulfilled') for (const f of (mito.value.filas as Fila[]) ?? []) filas.push({ ...f, l: 'MITO' })
+      else sinDatos.push(`MITO (${(mito.reason as Error).message})`)
+      if (locales.status === 'fulfilled') {
+        for (const f of (locales.value.filas as Fila[]) ?? []) filas.push(f)
+        sinDatos.push(...(((locales.value.sin_datos as string[]) ?? []).map(String)))
+      } else sinDatos.push(`locales (${(locales.reason as Error).message})`)
+
+      const sel = filas.filter((f) => num(f.s) !== 0 && (!soloLocales.size || soloLocales.has(String(f.l))))
+      const porArtLocal = new Map<string, number>()
+      const totalArt = new Map<string, number>()
+      for (const f of sel) {
+        const k = `${f.a}|${f.l}`
+        porArtLocal.set(k, (porArtLocal.get(k) ?? 0) + num(f.s))
+        totalArt.set(f.a, (totalArt.get(f.a) ?? 0) + num(f.s))
+      }
+      const detalle = a.detalle === true || arts.length === 1
+      return {
+        articulos_pedidos: arts.join(','),
+        sin_stock: arts.filter((x) => !totalArt.has(x)).join(',') || undefined,
+        ...(sinDatos.length ? { sin_datos: sinDatos.join(', ') } : {}),
+        totales: [...totalArt.entries()].map(([articulo, unidades]) => ({ articulo, unidades })),
+        por_local: [...porArtLocal.entries()]
+          .map(([k, unidades]) => ({ articulo: k.split('|')[0], local: k.split('|')[1], unidades }))
+          .sort((x, y) => x.articulo.localeCompare(y.articulo) || y.unidades - x.unidades),
+        ...(detalle
+          ? {
+              por_color_talle: sel
+                .map((f) => ({ articulo: f.a, local: f.l, color: f.c, talle: f.t, unidades: num(f.s) }))
+                .sort((x, y) => x.articulo.localeCompare(y.articulo) || String(x.local).localeCompare(String(y.local)))
+                .slice(0, 400),
+            }
+          : {}),
+        nota: 'Unidades negativas = el local vendió/comprometió más de lo que figura cargado.',
+      }
+    },
+  },
+  {
+    nombre: 'stock_valorizado',
+    descripcion:
+      'Stock valorizado a costo (lista Compra) de todas las sucursales y depósitos: unidades, plata, unidades sin costo y en tránsito por sucursal. ' +
+      'Con "base" (ej. DRAGONFISH_NVOCED) devuelve los artículos de esa sucursal, los de más plata primero. Con "articulo" filtra el total por código o descripción.',
+    parametros: {
+      type: 'object',
+      properties: {
+        base: { type: 'string', description: 'Base Dragon de la sucursal, ej. DRAGONFISH_GPAZD (opcional)' },
+        articulo: { type: 'string', description: 'Código o parte de la descripción (opcional)' },
+      },
+    },
+    correr: async (a, { token, origen }) => {
+      const base = texto(a.base, 60).toUpperCase()
+      const q = texto(a.articulo, 40).toLowerCase()
+      type Art = { articulo: string; descripcion: string; unidades: number; valorizado: number; costo: number | null; transito?: number; proveedor?: string }
+      const filtrar = (lista: Art[]) =>
+        lista
+          .filter((x) => !q || `${x.articulo} ${x.descripcion}`.toLowerCase().includes(q))
+          .sort((x, y) => num(y.valorizado) - num(x.valorizado))
+      if (base) {
+        const r = await hub(origen, token, 'sql/stock-valorizado', { qs: new URLSearchParams({ base: base.startsWith('DRAGONFISH_') ? base : `DRAGONFISH_${base}` }), timeout: 60_000 })
+        const arts = filtrar((r.articulos as Art[]) ?? [])
+        return {
+          base: r.base,
+          articulos_con_stock: arts.length,
+          unidades: arts.reduce((s, x) => s + num(x.unidades), 0),
+          valorizado: Math.round(arts.reduce((s, x) => s + num(x.valorizado), 0)),
+          articulos: arts.slice(0, 80).map((x) => ({ articulo: x.articulo, descripcion: String(x.descripcion ?? '').slice(0, 40), unidades: x.unidades, costo: x.costo, valorizado: Math.round(num(x.valorizado)) })),
+        }
+      }
+      const r = await hub(origen, token, 'sql/stock-valorizado', { timeout: 60_000 })
+      const bases = ((r.bases as Array<Record<string, unknown>>) ?? []).sort((x, y) => num(y.valorizado) - num(x.valorizado))
+      const total = (k: string) => Math.round(bases.reduce((s, b) => s + num(b[k]), 0))
+      return {
+        calculado: r.calculado,
+        totales: { unidades: total('unidades'), valorizado: total('valorizado'), unidades_sin_costo: total('unidades_sin_costo'), transito: total('transito'), transito_val: total('transito_val') },
+        por_sucursal: bases.map((b) => ({ base: b.base, unidades: b.unidades, valorizado: Math.round(num(b.valorizado)), sin_costo: b.unidades_sin_costo, transito: b.transito ?? 0 })),
+        ...(q ? { articulos: filtrar((r.articulos as Art[]) ?? []).slice(0, 60).map((x) => ({ articulo: x.articulo, descripcion: String(x.descripcion ?? '').slice(0, 40), unidades: x.unidades, costo: x.costo, valorizado: Math.round(num(x.valorizado)) })) } : { top_articulos: ((r.articulos as Art[]) ?? []).sort((x, y) => num(y.valorizado) - num(x.valorizado)).slice(0, 25).map((x) => ({ articulo: x.articulo, descripcion: String(x.descripcion ?? '').slice(0, 40), unidades: x.unidades, valorizado: Math.round(num(x.valorizado)) })) }),
+        cantidad_sin_costo: ((r.sin_costo as unknown[]) ?? []).length,
+      }
+    },
+  },
+  {
+    nombre: 'stock_mayorista',
+    descripcion:
+      'Mayorista: stock del depósito MITO (unidades y en tránsito) y la "tapera" (mercadería remitida a clientes mayoristas sin facturar). ' +
+      'Sin filtro: totales y los artículos con más unidades. Con "articulo" (código o descripción) y/o "cliente": el detalle.',
+    parametros: {
+      type: 'object',
+      properties: {
+        articulo: { type: 'string', description: 'Código o parte de la descripción (opcional)' },
+        cliente: { type: 'string', description: 'Parte del nombre del cliente, para la tapera (opcional)' },
+      },
+    },
+    correr: async (a, { token, origen }) => {
+      const r = await hub(origen, token, 'sql/stock-mayorista', { timeout: 60_000 })
+      type Dep = { a: string; c: string; t: string; u: number; tr: number }
+      type Tap = { remito: number; fecha: string; cli: string; cli_nom: string; a: string; c: string; t: string; u: number; precio: number }
+      const info = new Map(((r.articulos as Array<{ a: string; des: string; prov_nom?: string }>) ?? []).map((x) => [x.a, x]))
+      const q = texto(a.articulo, 40).toLowerCase()
+      const cli = texto(a.cliente, 40).toLowerCase()
+      const okArt = (cod: string) => !q || `${cod} ${info.get(cod)?.des ?? ''}`.toLowerCase().includes(q)
+      const dep = ((r.deposito as Dep[]) ?? []).filter((x) => okArt(x.a))
+      const tap = ((r.tapera as Tap[]) ?? []).filter((x) => okArt(x.a) && (!cli || `${x.cli} ${x.cli_nom}`.toLowerCase().includes(cli)))
+      const porArt = new Map<string, { articulo: string; descripcion: string; deposito: number; transito: number; tapera: number }>()
+      const fila = (cod: string) => {
+        const f = porArt.get(cod) ?? { articulo: cod, descripcion: String(info.get(cod)?.des ?? '').slice(0, 40), deposito: 0, transito: 0, tapera: 0 }
+        porArt.set(cod, f)
+        return f
+      }
+      for (const x of dep) {
+        fila(x.a).deposito += num(x.u)
+        fila(x.a).transito += num(x.tr)
+      }
+      for (const x of tap) fila(x.a).tapera += num(x.u)
+      const arts = [...porArt.values()].sort((x, y) => y.deposito + y.tapera - (x.deposito + x.tapera))
+      const porCliente = new Map<string, { cliente: string; remitos: Set<number>; unidades: number; importe: number }>()
+      for (const x of tap) {
+        const g = porCliente.get(x.cli_nom) ?? { cliente: x.cli_nom, remitos: new Set(), unidades: 0, importe: 0 }
+        g.remitos.add(x.remito)
+        g.unidades += num(x.u)
+        g.importe += num(x.u) * num(x.precio)
+        porCliente.set(x.cli_nom, g)
+      }
+      return {
+        calculado: r.calculado,
+        totales: { deposito: dep.reduce((s, x) => s + num(x.u), 0), transito: dep.reduce((s, x) => s + num(x.tr), 0), tapera: tap.reduce((s, x) => s + num(x.u), 0) },
+        articulos: arts.slice(0, q ? 80 : 30),
+        tapera_por_cliente: [...porCliente.values()]
+          .sort((x, y) => y.unidades - x.unidades)
+          .slice(0, 40)
+          .map((g) => ({ cliente: g.cliente, remitos: g.remitos.size, unidades: g.unidades, importe: Math.round(g.importe) })),
+        ...(q || cli
+          ? { detalle_deposito: dep.slice(0, 150).map((x) => ({ articulo: x.a, color: x.c, talle: x.t, unidades: x.u, transito: x.tr })), detalle_tapera: tap.slice(0, 150).map((x) => ({ remito: x.remito, fecha: x.fecha, cliente: x.cli_nom, articulo: x.a, color: x.c, talle: x.t, unidades: x.u })) }
+          : {}),
+      }
+    },
+  },
+  {
+    nombre: 'analisis_ventas',
+    descripcion:
+      'Análisis de ventas de los locales con HISTORIAL LARGO (años, días cerrados hasta ayer; para hoy usá ventas_por_articulo): ' +
+      'plata, unidades y tickets del período, comparado contra el año anterior o el período anterior, serie por día/semana/mes/año, ' +
+      'venta por día de la semana y una tabla abierta por proveedor, línea, grupo, material, familia, temporada, año, género, local o artículo (con stock). ' +
+      'Sin locales elegidos cuenta solo los locales a la calle (sin depósitos ni mayorista).',
+    parametros: {
+      type: 'object',
+      properties: {
+        desde: FECHA,
+        hasta: FECHA,
+        comparar: { type: 'string', enum: ['anio', 'anterior', 'nada'], description: 'anio = mismo período del año anterior (por defecto); anterior = período anterior de igual largo' },
+        gran: { type: 'string', enum: ['dia', 'sem', 'mes', 'anio'], description: 'Agrupación de la serie (por defecto según el largo)' },
+        abrir_por: { type: 'string', enum: ['prov', 'linea', 'grupo', 'mat', 'flia', 'temp', 'anio', 'gen', 'local', 'art'], description: 'Tabla abierta por (por defecto local)' },
+        locales: { type: 'array', items: { type: 'string' }, description: 'Códigos de base de los locales (opcional)' },
+        articulo: { type: 'string', description: 'Filtrar por código de artículo (opcional)' },
+        origen: { type: 'string', enum: ['', 'MITO', 'MARCAS'], description: 'MITO = marcas propias, MARCAS = de terceros, vacío = todo' },
+        top: { type: 'number', description: 'Filas de la tabla (1-100, por defecto 30)' },
+      },
+      required: ['desde', 'hasta'],
+    },
+    correr: async (a, { token, origen }) => {
+      const desde = fecha(a.desde)
+      const hasta = fecha(a.hasta)
+      if (!desde || !hasta) return { error: 'Faltan desde y hasta (AAAA-MM-DD).' }
+      const dias = (Date.parse(hasta) - Date.parse(desde)) / 86_400_000
+      const gran = ['dia', 'sem', 'mes', 'anio'].includes(String(a.gran)) ? a.gran : dias > 400 ? 'anio' : dias > 62 ? 'mes' : dias > 21 ? 'sem' : 'dia'
+      const locales = Array.isArray(a.locales) ? a.locales.map((l) => texto(l, 20).toUpperCase()).filter(Boolean) : []
+      const art = texto(a.articulo, 40).toUpperCase()
+      const r = await hub(origen, token, 'sql/analisis-ventas', {
+        body: {
+          desde,
+          hasta,
+          comparar: ['anio', 'anterior', 'nada'].includes(String(a.comparar)) ? a.comparar : 'anio',
+          gran,
+          dim: texto(a.abrir_por, 10) || 'local',
+          camino: [],
+          corte: 'dia',
+          filtros: {
+            ...(locales.length ? { locales } : { excluir: ['MITO', 'POLO52', 'INDO', 'INDOD', 'TX-POLO', 'FABRICA', 'CENTRALD', 'NOMED', 'OUTLETD'] }),
+            ...(art ? { art } : {}),
+            ...(a.origen === 'MITO' || a.origen === 'MARCAS' ? { origen: a.origen } : {}),
+          },
+        },
+        timeout: 45_000,
+      })
+      if (r.estado && r.estado !== 'listo') return { estado: r.estado, nota: 'El puente todavía está cargando ventas; probá de nuevo en un rato.' }
+      const top = Math.min(Math.max(Number(a.top) || 30, 1), 100)
+      const tabla = (r.tabla as { dim?: string; filas?: unknown[] } | undefined) ?? {}
+      const DOW = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb']
+      return {
+        periodo: `${r.desde} a ${r.hasta}`,
+        comparado: r.comparado,
+        kpis: r.kpis,
+        faltan_dias: r.faltan,
+        serie: ((r.serie as Array<Record<string, unknown>>) ?? []).slice(-60).map((p) => {
+          const comp = p.comp as Record<string, unknown> | null
+          return { periodo: p.lab, monto: p.monto, unid: p.unid, tickets: p.tickets, monto_comp: comp?.monto ?? null, unid_comp: comp?.unid ?? null }
+        }),
+        por_dia_semana: ((r.dow as Array<Record<string, unknown>>) ?? []).map((d, i) => ({ dia: DOW[i], ...d })),
+        tabla_dim: tabla.dim,
+        tabla: (tabla.filas ?? []).slice(0, top),
+        filas_tabla: (tabla.filas ?? []).length,
+        anio_a_la_fecha: r.anio,
+      }
+    },
+  },
+  {
+    nombre: 'items_pedido_venta',
+    descripcion:
+      'Renglones (artículo, color, talle, cantidades y precios) de un pedido de venta mayorista, en vivo de Dragon. ' +
+      'Usá el "codigo" que da pedidos_venta.',
+    parametros: {
+      type: 'object',
+      properties: { codigo: { type: 'string', description: 'Código del pedido (columna codigo de pedidos_venta)' } },
+      required: ['codigo'],
+    },
+    correr: async (a, { token, origen }) => {
+      const codigo = texto(a.codigo, 60)
+      if (!codigo) return { error: 'Falta el código del pedido.' }
+      const r = await hub(origen, token, 'sql/pedido-venta-items', { qs: new URLSearchParams({ codigo }) })
+      return r
+    },
+  },
+  {
+    nombre: 'flexxus',
+    descripcion:
+      'Contabilidad y ventas en Flexxus (Firebird, solo lectura). consulta: ventas (facturación entre fechas), saldos (de clientes), ' +
+      'asientos (hasta 93 días), balance (sumas y saldos por cuenta), mayor (líneas de una cuenta; requiere cuenta), centros (resultado por centro de costo).',
+    parametros: {
+      type: 'object',
+      properties: {
+        consulta: { type: 'string', enum: ['ventas', 'saldos', 'asientos', 'balance', 'mayor', 'centros'] },
+        desde: FECHA,
+        hasta: FECHA,
+        cuenta: { type: 'string', description: 'Código de cuenta contable (solo para mayor)' },
+      },
+      required: ['consulta'],
+    },
+    correr: async (a, { token, origen }) => {
+      const consulta = texto(a.consulta, 20)
+      const qs = new URLSearchParams({ consulta })
+      if (consulta !== 'saldos') {
+        const { desde, hasta } = rango(a, 30)
+        qs.set('desde', desde)
+        qs.set('hasta', hasta)
+      }
+      if (texto(a.cuenta, 30)) qs.set('cuenta', texto(a.cuenta, 30))
+      return hub(origen, token, 'sql/flexxus', { qs, timeout: 60_000 })
+    },
+  },
+  {
+    nombre: 'arqueos',
+    descripcion:
+      'Arqueos de caja de los locales de un día: local, caja, hora, vendedor y total contado. Horarios fijos 10, 14, 19 y 22 hs: ' +
+      'un arqueo vale desde 1 h 30 antes (el de las 19 desde las 17:00) hasta 1 h después. Sirve para "quién no arqueó" o "quién arqueó tarde".',
+    parametros: {
+      type: 'object',
+      properties: { fecha: { ...FECHA, description: 'Día (AAAA-MM-DD, por defecto hoy)' }, local: { type: 'string', description: 'Código de local (opcional)' } },
+    },
+    correr: async (a, { token }) => {
+      const dia = fecha(a.fecha) ?? hoyAr()
+      const local = texto(a.local, 20)
+      const [filas, excluidos] = await Promise.all([
+        tabla(token, `arqueos_locales?select=local,caja,arqueo,hora,vendedor,total&fecha=eq.${dia}${local ? `&local=eq.${filtro(local)}` : ''}&order=local,hora`),
+        tabla(token, 'arqueos_excluidos?select=local').catch(() => []),
+      ])
+      return {
+        fecha: dia,
+        horarios: '10, 14, 19 y 22',
+        no_controlados: ((excluidos as Array<{ local: string }>) ?? []).map((x) => x.local).join(',') || undefined,
+        arqueos: filas,
+      }
+    },
+  },
+  {
     nombre: 'listar_tablas',
     descripcion:
       'Catálogo de TODAS las tablas del hub (Supabase) que se pueden leer, con sus columnas. Sin "buscar" devuelve solo los nombres; ' +
@@ -537,6 +878,10 @@ function sistema(): string {
     'Las herramientas son de solo lectura: no podés modificar nada. Nunca mostrás claves, contraseñas, tokens ni secretos.',
     'Para "más vendido", rankings o unidades vendidas por artículo/producto/SKU usá SIEMPRE ventas_por_articulo (sirve también para hoy). ' +
       'Si una herramienta falla (timeout, puente caído), decí que la fuente no respondió y que se puede reintentar: nunca digas que el dato no existe.',
+    'Stock: stock_articulo (por local y depósito MITO, color y talle; pide códigos, buscalos con buscar_articulos), ' +
+      'stock_valorizado (plata en stock por sucursal), stock_mayorista (depósito MITO y tapera de clientes). ' +
+      'Ventas con historial largo, comparaciones contra el año pasado y aperturas por proveedor/línea/local/artículo: analisis_ventas (días cerrados hasta ayer). ' +
+      'Contabilidad: flexxus. Arqueos de caja: arqueos. Renglones de un pedido mayorista: items_pedido_venta.',
     'Preferí las herramientas específicas (ventas, contador, ventas_por_articulo, etc.). Si ninguna sirve, usá listar_tablas + leer_tabla ' +
       '(cualquier tabla del hub) o listar_vistas_sql + leer_vista_sql (SQL Server). Pedí solo las columnas y filas necesarias.',
     'Los resultados de las herramientas vienen como tabla: primera línea = columnas, después una fila por línea separada por |.',
@@ -647,8 +992,14 @@ async function vueltaOpencode(mensajes: Mensaje[], sesion: string, uso: Uso): Pr
       body: JSON.stringify({
         model: process.env.OPENCODE_GO_MODELO?.trim() || 'claude-haiku-5-5',
         max_tokens: 8192,
-        system: sistema(),
-        tools: HERRAMIENTAS.map((h) => ({ name: h.nombre, description: h.descripcion, input_schema: h.parametros })),
+        // Caché de prompt: herramientas + instrucciones son iguales en cada vuelta (la fecha cambia una vez por día)
+        system: [{ type: 'text', text: sistema(), cache_control: { type: 'ephemeral' } }],
+        tools: HERRAMIENTAS.map((h, i) => ({
+          name: h.nombre,
+          description: h.descripcion,
+          input_schema: h.parametros,
+          ...(i === HERRAMIENTAS.length - 1 ? { cache_control: { type: 'ephemeral' } } : {}),
+        })),
         messages: mensajes,
       }),
       signal: AbortSignal.timeout(40_000),
