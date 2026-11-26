@@ -485,23 +485,44 @@ export default function Empleados() {
           if (err) { setError(err); return }
           resumen.push(`${est}: ${filas.length} (${nuevos} nuevos)`)
         } else {
-          const { filas: previas, error: errPrev } = await traerTodo<{ cuil: string | null; nombre: string; fecha_ingreso: string | null; fecha_egreso: string | null }>(
-            (desde, hasta) => sb.from('empleados').select('cuil,nombre,fecha_ingreso,fecha_egreso').eq('estado_legajo', est).range(desde, hasta),
+          type Previa = { id: string; cuil: string | null; nombre: string; fecha_ingreso: string | null; fecha_egreso: string | null; motivo_baja: string | null }
+          const { filas: previas, error: errPrev } = await traerTodo<Previa>(
+            (desde, hasta) => sb.from('empleados').select('id,cuil,nombre,fecha_ingreso,fecha_egreso,motivo_baja').eq('estado_legajo', est).range(desde, hasta),
           )
           if (errPrev) { setError(errPrev); return }
-          const yaEstan = new Set(previas.map(claveBaja))
+          const yaEstan = new Map(previas.map((p) => [claveBaja(p), p]))
+          // Bajas ya cargadas sin egreso: se reconocen por CUIL (o nombre) + ingreso, para completarlas
+          const sinEgreso = new Map<string, Previa>()
+          for (const p of previas) if (!p.fecha_egreso) sinEgreso.set(claveBaja({ ...p, fecha_egreso: null }), p)
           let salteadas = 0
+          const completar: Record<string, unknown>[] = []
           const nuevas = filas.filter((f) => {
             const c = soloDigitos(f.cuil)
             if (c && cuilActivos.has(c)) { salteadas++; return false }
             const k = claveBaja(f)
-            if (yaEstan.has(k)) { salteadas++; return false }
-            yaEstan.add(k)
+            // Ya está esa misma baja, o una sin egreso con el mismo ingreso: se completa lo que falte
+            const previa = yaEstan.get(k) ?? (f.fecha_egreso ? sinEgreso.get(claveBaja({ ...f, fecha_egreso: null })) : undefined)
+            if (previa) {
+              const set: Record<string, unknown> = {}
+              if (!previa.fecha_egreso && f.fecha_egreso) set.fecha_egreso = f.fecha_egreso
+              if (!previa.motivo_baja && f.motivo_baja) set.motivo_baja = String(f.motivo_baja).trim().replace(/\s+/g, ' ').toUpperCase()
+              if (Object.keys(set).length) {
+                completar.push({ id: previa.id, ...set })
+                Object.assign(previa, set)
+              } else salteadas++
+              return false
+            }
+            yaEstan.set(k, { id: '', cuil: f.cuil as string | null, nombre: String(f.nombre), fecha_ingreso: f.fecha_ingreso as string | null, fecha_egreso: f.fecha_egreso as string | null, motivo_baja: f.motivo_baja as string | null })
             return true
           })
+          for (const u of completar) {
+            const { id, ...set } = u
+            const { error: errUp } = await sb.from('empleados').update(set).eq('id', id as string)
+            if (errUp) { setError(errUp.message); return }
+          }
           const err = await guardarLotes(nuevas)
           if (err) { setError(err); return }
-          resumen.push(`${est}: ${nuevas.length} nuevas, ${salteadas} salteadas`)
+          resumen.push(`${est}: ${nuevas.length} nuevas, ${completar.length} completadas (egreso/motivo), ${salteadas} sin cambios`)
         }
       }
       setImportMsg([`Listo. ${resumen.join(' · ')}`, ...avisos].join(' — '))

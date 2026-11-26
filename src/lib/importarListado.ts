@@ -165,7 +165,10 @@ export function fechaExcelAISO(v: unknown): string | null {
   if (m) {
     let y = +m[3]
     if (y < 100) y += y < 40 ? 2000 : 1900
-    return `${y}-${String(+m[2]).padStart(2, '0')}-${String(+m[1]).padStart(2, '0')}`
+    const iso = `${y}-${String(+m[2]).padStart(2, '0')}-${String(+m[1]).padStart(2, '0')}`
+    // Fechas que no existen (ej. 31/09) quedan vacías: la base las rechaza y frena toda la importación
+    const d = new Date(iso + 'T00:00:00Z')
+    return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === iso ? iso : null
   }
   return null
 }
