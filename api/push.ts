@@ -375,7 +375,7 @@ interface AvisoUbicacion {
 
 const NOMBRE_UBICACION: Record<string, string> = { 'DEPOSITO INDO': 'Depósito Indo', 'DEPOSITO MAYORISTA': 'Depósito Mayorista', 'POLO 52': 'Polo 52' }
 /** Pantalla que abre el aviso (Polo 52: sql/avisos_polo52.sql) */
-const URL_UBICACION: Record<string, string> = { 'POLO 52': '/polo52/mi-repo' }
+const URL_UBICACION: Record<string, string> = { 'POLO 52': '/polo52/mi-repo', 'DEPOSITO INDO': '/deposito/mi-repo' }
 
 /** Reposición/transferencia nueva: a los legajos de la ubicación que tiene renglones (sql/legajos_ubicacion.sql). */
 async function avisarTransferencia(req: Req, res: Res, token: string | null) {

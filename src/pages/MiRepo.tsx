@@ -9,7 +9,7 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import ScannerCamara from '@/components/ScannerCamara'
 import ArmadoPedido from '@/components/ArmadoPedido'
 import AvisosCelular from '@/components/AvisosCelular'
-import TransferenciasIndo from '@/components/TransferenciasIndo'
+import { Link, Navigate } from 'react-router-dom'
 import MotivoPausaDialog, { nombreMotivoPausa, type MotivoPausa } from '@/components/MotivoPausa'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
@@ -158,8 +158,6 @@ export default function MiRepo() {
   }, [items])
 
   const [sel, setSel] = useState<string | null>(null)
-  // Un local de Transferencias Depósito Indo abierto: se esconde lo demás, como con una repo abierta
-  const [depAbierto, setDepAbierto] = useState(false)
   const [mensaje, setMensaje] = useState<{ ok: boolean; texto: string } | null>(null)
   const [deshacer, setDeshacer] = useState<UltimoEscaneo | null>(null)
   // Escaneos en viaje: se cuentan (no se bloquea), así un lector rápido no pierde lecturas
@@ -1040,6 +1038,9 @@ export default function MiRepo() {
     )
   }
 
+  // Rol deposito sin legajo: lo suyo es solo Depósito Indo, que tiene su propia pantalla
+  if (soloDeposito) return <Navigate to="/deposito/mi-repo" replace />
+
   if (cargando) {
     return (
       <Layout>
@@ -1055,7 +1056,7 @@ export default function MiRepo() {
       {/* Las cuentas de piso no tienen menú: Mi repo es su única pantalla */}
       {!soloPiso && <BackButton label="Menú" />}
 
-      {!asignacionSel && !depAbierto && (
+      {!asignacionSel && (
         <div className="mb-4 flex items-center gap-3 sm:mb-5">
           <div
             className="rounded-xl border p-2.5 sm:p-3"
@@ -1066,23 +1067,26 @@ export default function MiRepo() {
           <div className="min-w-0">
             <h1 className="font-display text-xl font-bold text-ink sm:text-2xl">Mi repo</h1>
             <p className="truncate text-sm text-sub">
-              {soloDeposito ? 'Transferencias Depósito Indo' : empleadoNombre ?? 'Tus locales asignados'}
+              {empleadoNombre ?? 'Tus locales asignados'}
             </p>
           </div>
         </div>
       )}
 
       {/* Avisos push: que el celular suene aunque esté bloqueado */}
-      {!asignacionSel && !depAbierto && (
-        <AvisosCelular
-          texto={soloDeposito
-            ? 'Activá los avisos para que suene cuando carguen una reposición de Depósito Indo, aunque el celular esté bloqueado.'
-            : undefined}
-        />
-      )}
+      {!asignacionSel && <AvisosCelular />}
 
-      {/* Rol deposito y legajos de Depósito Indo: los renglones que salen de Indo */}
-      {!asignacionSel && veMiRepoDeposito && <TransferenciasIndo mostrarVacio={soloDeposito} alAbrir={setDepAbierto} />}
+      {/* Lo de Depósito Indo va en su propia pantalla (Depósito → Mi repo), no mezclado acá.
+          Las cuentas de piso no tienen menú: se les deja el acceso directo. */}
+      {!asignacionSel && soloPiso && veMiRepoDeposito && (
+        <Link
+          to="/deposito/mi-repo"
+          className="mb-4 flex items-center justify-between gap-2 rounded-2xl border border-orange-500/30 bg-orange-500/10 p-4 text-sm font-semibold text-orange-400"
+        >
+          <span className="flex items-center gap-2"><ScanLine size={16} aria-hidden /> Mi repo Depósito Indo</span>
+          <ChevronRight size={16} aria-hidden />
+        </Link>
+      )}
 
       {avisoArmado && (
         <p
@@ -1108,7 +1112,7 @@ export default function MiRepo() {
       )}
 
       {/* ---------- Armados de pedidos (lo que pidió el mayorista) ---------- */}
-      {!asignacionSel && !depAbierto && armadosPendientes.length > 0 && (
+      {!asignacionSel && armadosPendientes.length > 0 && (
         <div className="space-y-3">
           <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-400">
             <BellRing size={13} aria-hidden /> Armados pedidos
@@ -1124,7 +1128,7 @@ export default function MiRepo() {
         </div>
       )}
 
-      {!asignacionSel && !depAbierto && armadosMios.length > 0 && (
+      {!asignacionSel && armadosMios.length > 0 && (
         <div className="space-y-3">
           <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-emerald-500">
             <Flag size={13} aria-hidden /> Armados en curso
@@ -1137,13 +1141,13 @@ export default function MiRepo() {
       )}
 
       {/* Resumen del último repo finalizado */}
-      {!asignacionSel && !depAbierto && resumen && (
+      {!asignacionSel && resumen && (
         <div className="mb-4 flex items-start gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm font-medium text-emerald-400">
           <Flag size={16} className="mt-0.5 shrink-0" aria-hidden /> {resumen}
         </div>
       )}
 
-      {!aviso && !error && !soloDeposito && !depAbierto && asignaciones.length === 0 && (
+      {!aviso && !error && !soloDeposito && asignaciones.length === 0 && (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-line2 bg-surface/50 px-4 py-14 text-center text-sub">
           <Store size={28} aria-hidden />
           <p>{modoAdmin ? 'No hay repos con responsables asignados.' : 'Todavía no te asignaron ningún local en un repo.'}</p>
@@ -1153,7 +1157,7 @@ export default function MiRepo() {
         </div>
       )}
 
-      {!aviso && !error && !asignacionSel && !depAbierto && asignaciones.length > 0 && conPendientes.length === 0 &&
+      {!aviso && !error && !asignacionSel && asignaciones.length > 0 && conPendientes.length === 0 &&
         armadosPendientes.length === 0 && armadosMios.length === 0 && (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-14 text-center text-emerald-400">
           <Check size={28} aria-hidden />
@@ -1165,12 +1169,12 @@ export default function MiRepo() {
       )}
 
       {/* ---------- Lista de repos (solo los que tienen algo pendiente o están abiertos) ---------- */}
-      {!asignacionSel && !depAbierto && conPendientes.length > 0 && !modoAdmin && (
+      {!asignacionSel && conPendientes.length > 0 && !modoAdmin && (
         <div className="space-y-3">{conPendientes.map((a) => tarjeta(a))}</div>
       )}
 
       {/* ---------- Administrador: por legajo → pendientes / terminados ---------- */}
-      {!asignacionSel && !depAbierto && modoAdmin && porLegajo.length > 0 && (
+      {!asignacionSel && modoAdmin && porLegajo.length > 0 && (
         <div className="space-y-3">
           {porLegajo.map((g) => {
             const abierto = empAbiertos.has(g.clave)

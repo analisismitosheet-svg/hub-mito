@@ -349,14 +349,14 @@ export const APPS: AppDef[] = [
     soloLegajo: true,
   },
   {
-    // La misma pantalla, en Depósito: solo rol deposito o legajos de Depósito Indo
+    // Su propia pantalla (/deposito/mi-repo): solo Depósito Indo, sin los repos del mayorista
     id: 'deposito-mi-repo',
     areaId: 'deposito',
     title: 'Mi repo',
-    description: 'Escaneo en piso: tus locales asignados, artículo por artículo.',
+    description: 'Transferencias de Depósito Indo: juntar por caja y separar por local.',
     icon: ScanLine,
     kind: 'internal',
-    target: '/mayorista/mi-repo',
+    target: '/deposito/mi-repo',
     color: '#ea580c',
     soloDeposito: true,
   },

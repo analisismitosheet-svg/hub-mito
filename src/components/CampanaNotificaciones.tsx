@@ -542,7 +542,7 @@ export default function CampanaNotificaciones() {
           const clave = (l: { lote_id: string; ubicacion: string }) => (esPolo(l) ? `${l.lote_id}|POLO52` : l.lote_id)
           const ruta = (l: { lote_id: string; ubicacion: string }) =>
             esPolo(l) ? '/polo52/mi-repo'
-              : can('deposito.view') ? '/deposito' : can('transferencias.view') ? `/transferencias?abrir=${l.lote_id}` : '/mayorista/mi-repo'
+              : can('deposito.view') ? '/deposito' : can('transferencias.view') ? `/transferencias?abrir=${l.lote_id}` : '/deposito/mi-repo'
           for (const l of lotesIndo) {
             const partes = [l.salen ? `salen ${l.salen} u.` : '', l.entran ? `entran ${l.entran} u.` : ''].filter(Boolean).join(' · ')
             notis.push({ id: `tu-${clave(l)}`, tipo: 'transferencias', titulo: esPolo(l) ? `Polo 52 · ${l.nombre}` : l.nombre, detalle: `${l.articulos} artículo${l.articulos === 1 ? '' : 's'} pendiente${l.articulos === 1 ? '' : 's'}${partes ? ` · ${partes}` : ''}`, ruta: ruta(l), fecha: l.creado_at, destinoId: l.lote_id })

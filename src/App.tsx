@@ -31,6 +31,7 @@ import MiRepo from '@/pages/MiRepo'
 import Deposito from '@/pages/Deposito'
 import TransferenciasPolo52 from '@/pages/TransferenciasPolo52'
 import MiRepoPolo52 from '@/pages/MiRepoPolo52'
+import MiRepoDeposito from '@/pages/MiRepoDeposito'
 import Rma from '@/pages/Rma'
 import Picking from '@/pages/Picking'
 import RecepcionIndo from '@/pages/RecepcionIndo'
@@ -347,6 +348,15 @@ export default function App() {
             element={
               <PermissionRoute permiso="mayorista.repos_piso" soloLegajo oDeposito>
                 <MiRepo />
+              </PermissionRoute>
+            }
+          />
+          {/* Mi repo de Depósito: solo Depósito Indo (rol deposito, legajos de Indo y admin) */}
+          <Route
+            path="/deposito/mi-repo"
+            element={
+              <PermissionRoute permiso="deposito.mi_repo" oDeposito>
+                <MiRepoDeposito />
               </PermissionRoute>
             }
           />
