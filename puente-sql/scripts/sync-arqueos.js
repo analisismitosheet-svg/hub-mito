@@ -5,7 +5,10 @@
  *   node scripts/sync-arqueos.js          (hoy y ayer)
  *   node scripts/sync-arqueos.js --todo   (últimos 30 días)
  *
- * Lee DWH.dbo.vw_FACT_ARQUEO del servidor principal (SQL_SERVER del .env), SOLO LECTURA.
+ * Lee DWH.dbo.vw_FACT_ARQUEO del servidor principal (SQL_SERVER del .env) y además ARQCAJA + ARQEFECTDET de cada
+ * DRAGONFISH_* del SQL de esta PC (DESKTOP-OA4GU6I, usuario de Windows), SOLO LECTURA: a veces el arqueo llega antes
+ * a uno que al otro (Rivera 14:17 del 26/11 no estaba en el DWH), así que se juntan y, si está en los dos, gana el local.
+ * `--ver` muestra los de hoy sin subir nada.
  * Una fila por arqueo, con el efectivo en pesos por billete/moneda.
  * Después de copiar le pide al hub que mande los avisos que tocan (/api/push?tipo=arqueo).
  *
@@ -68,6 +71,45 @@ async function rpc(nombre, params) {
 
 const isoLocal = (d) => d.toLocaleDateString('sv-SE')
 
+/** Bases del SQL local que no son locales que arquean */
+const BASES_LOCALES_FUERA = new Set(['FABRICA', 'CFU'])
+
+/** Arqueos (encabezado + efectivo) de cada DRAGONFISH_* del SQL de esta PC, con las mismas columnas que vw_FACT_ARQUEO */
+async function leerLocales(desde) {
+  const sqlLocal = require('mssql/msnodesqlv8')
+  const [h2, p2] = String(cfg('SQL2_SERVER') || 'localhost').split(':')
+  const pool = await new sqlLocal.ConnectionPool({
+    connectionString:
+      `Driver={${cfg('SQL2_ODBC_DRIVER') || 'ODBC Driver 18 for SQL Server'}};Server=${p2 ? `${h2},${p2}` : h2};` +
+      `Database=master;Trusted_Connection=yes;TrustServerCertificate=yes;`,
+    requestTimeout: 120_000,
+  }).connect()
+  const out = []
+  try {
+    const bases = (await pool.request().query(`SELECT name FROM sys.databases WHERE name LIKE 'DRAGONFISH[_]%' AND state = 0`)).recordset
+      .map((r) => r.name)
+      .filter((b) => /^DRAGONFISH_[A-Z0-9]+$/i.test(b) && !BASES_LOCALES_FUERA.has(b.replace(/^DRAGONFISH_/i, '').toUpperCase()))
+    for (const b of bases) {
+      try {
+        const r = await pool.request().input('desde', sqlLocal.Date, desde).query(`
+          SELECT '${b}' AS TIENDA, 'DETALLE' AS SECCION, A.CAJA, A.NUMERO AS ARQUEO, CONVERT(char(10), A.FALTAFW, 23) AS FECHA,
+                 LEFT(RTRIM(A.HALTAFW), 8) AS HORA, COALESCE(RTRIM(V.CLNOM), RTRIM(A.VENDEDOR)) AS VENDEDOR,
+                 D.MONEDADEN AS DIVISA, D.TIPO, D.VALORDEN AS MONTO, D.CANT AS CANTIDAD, D.TOT AS TOTAL, 'local' AS ORIGEN
+            FROM [${b}].ZooLogic.ARQCAJA A
+            LEFT JOIN [${b}].ZooLogic.VEN V ON RTRIM(V.CLCOD) = RTRIM(A.VENDEDOR)
+            LEFT JOIN [${b}].ZooLogic.ARQEFECTDET D ON D.CODIGO = A.CODIGO
+           WHERE A.FALTAFW >= @desde`)
+        out.push(...r.recordset)
+      } catch (e) {
+        anotar(`SQL local ${b}: ${e.message}`)
+      }
+    }
+  } finally {
+    await pool.close().catch(() => undefined)
+  }
+  return out
+}
+
 async function main() {
   const token = cfg('PUENTE_TOKEN')
   if (!token) throw new Error('Falta PUENTE_TOKEN en puente-sql/.env')
@@ -101,15 +143,26 @@ async function main() {
     await pool.close().catch(() => undefined)
   }
 
+  // Arqueos de las bases del Replicador en el SQL de esta PC (DESKTOP-OA4GU6I, usuario de Windows): llegan
+  // antes que al DWH (p. ej. el de Rivera de las 14:17 no estaba en vw_FACT_ARQUEO). Se lee después de cerrar
+  // el pool principal porque msnodesqlv8 y tedious no conviven en la misma copia de mssql.
+  const locales = await leerLocales(desde).catch((e) => {
+    anotar(`SQL local: ${e.message}`)
+    return []
+  })
+
   const arqueos = new Map()
-  for (const f of filas) {
+  for (const f of [...filas, ...locales]) {
     const base = String(f.TIENDA || '').replace(/^DRAGONFISH_/i, '').toUpperCase()
     if (!base) continue
     const local = LOCAL_DE_BASE[base] ?? base
     const clave = `${local}|${f.CAJA}|${f.ARQUEO}`
     let a = arqueos.get(clave)
+    // El mismo arqueo en las dos fuentes: queda el del SQL local (llega primero y completo)
+    if (a && f.ORIGEN === 'local' && a.origen !== 'local') a = null
+    if (a && a.origen === 'local' && f.ORIGEN !== 'local') continue
     if (!a) {
-      a = { local, caja: Number(f.CAJA), arqueo: Number(f.ARQUEO), fecha: f.FECHA, hora: String(f.HORA || '00:00:00').trim(), vendedor: f.VENDEDOR ?? null, total: 0, billetes: [] }
+      a = { local, caja: Number(f.CAJA), arqueo: Number(f.ARQUEO), fecha: f.FECHA, hora: String(f.HORA || '00:00:00').trim(), vendedor: f.VENDEDOR ?? null, total: 0, billetes: [], origen: f.ORIGEN ?? 'dwh' }
       arqueos.set(clave, a)
     }
     if (f.SECCION === 'DETALLE' && String(f.DIVISA || '').toUpperCase() === 'PESOS') {
@@ -119,7 +172,15 @@ async function main() {
     }
   }
   const lista = [...arqueos.values()].filter((a) => Number.isFinite(a.caja) && Number.isFinite(a.arqueo))
-  for (const a of lista) a.billetes.sort((x, y) => y.valor - x.valor)
+  for (const a of lista) {
+    a.billetes.sort((x, y) => y.valor - x.valor || String(x.tipo).localeCompare(String(y.tipo)))
+    delete a.origen
+  }
+  if (process.argv.includes('--ver')) {
+    for (const a of lista.filter((x) => x.fecha >= isoLocal(new Date())).sort((x, y) => (x.local + x.hora).localeCompare(y.local + y.hora)))
+      console.log(a.local, a.caja, a.arqueo, a.fecha, a.hora, a.total, a.vendedor, a.billetes.length)
+    return
+  }
 
   const cambiadas = Number(await rpc('arqueos_sync_filas', { p_token: token, p_desde: desde, p_filas: lista })) || 0
   fs.mkdirSync(path.dirname(MARCA), { recursive: true })
