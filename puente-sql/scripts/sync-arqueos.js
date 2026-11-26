@@ -5,9 +5,9 @@
  *   node scripts/sync-arqueos.js          (hoy y ayer)
  *   node scripts/sync-arqueos.js --todo   (últimos 30 días)
  *
- * Lee DWH.dbo.vw_FACT_ARQUEO del servidor principal (SQL_SERVER del .env) y además ARQCAJA + ARQEFECTDET de cada
- * DRAGONFISH_* del SQL de esta PC (DESKTOP-OA4GU6I, usuario de Windows), SOLO LECTURA: a veces el arqueo llega antes
- * a uno que al otro (Rivera 14:17 del 26/11 no estaba en el DWH), así que se juntan y, si está en los dos, gana el local.
+ * Las bases DRAGONFISH_* que están en el SQL de esta PC (DESKTOP-OA4GU6I, usuario de Windows) se leen SOLO de ahí
+ * (ARQCAJA + ARQEFECTDET + VEN); el resto, de DWH.dbo.vw_FACT_ARQUEO del principal M1T0O1\ZOOLOGIC (SQL_SERVER del
+ * .env). SOLO LECTURA. Si una base local no se puede leer, esa sale del DWH (el sync borra lo que no viene).
  * `--ver` muestra los de hoy sin subir nada.
  * Una fila por arqueo, con el efectivo en pesos por billete/moneda.
  * Después de copiar le pide al hub que mande los avisos que tocan (/api/push?tipo=arqueo).
@@ -74,7 +74,10 @@ const isoLocal = (d) => d.toLocaleDateString('sv-SE')
 /** Bases del SQL local que no son locales que arquean */
 const BASES_LOCALES_FUERA = new Set(['FABRICA', 'CFU'])
 
-/** Arqueos (encabezado + efectivo) de cada DRAGONFISH_* del SQL de esta PC, con las mismas columnas que vw_FACT_ARQUEO */
+/**
+ * Arqueos (encabezado + efectivo) de cada DRAGONFISH_* del SQL de esta PC, con las mismas columnas que vw_FACT_ARQUEO.
+ * Devuelve también las bases que se leyeron bien: esas salen SOLO de acá; las demás, del DWH.
+ */
 async function leerLocales(desde) {
   const sqlLocal = require('mssql/msnodesqlv8')
   const [h2, p2] = String(cfg('SQL2_SERVER') || 'localhost').split(':')
@@ -84,12 +87,18 @@ async function leerLocales(desde) {
       `Database=master;Trusted_Connection=yes;TrustServerCertificate=yes;`,
     requestTimeout: 120_000,
   }).connect()
-  const out = []
+  const filas = []
+  const basesOk = new Set()
   try {
     const bases = (await pool.request().query(`SELECT name FROM sys.databases WHERE name LIKE 'DRAGONFISH[_]%' AND state = 0`)).recordset
       .map((r) => r.name)
-      .filter((b) => /^DRAGONFISH_[A-Z0-9]+$/i.test(b) && !BASES_LOCALES_FUERA.has(b.replace(/^DRAGONFISH_/i, '').toUpperCase()))
+      .filter((b) => /^DRAGONFISH_[A-Z0-9]+$/i.test(b))
     for (const b of bases) {
+      const base = b.replace(/^DRAGONFISH_/i, '').toUpperCase()
+      if (BASES_LOCALES_FUERA.has(base)) {
+        basesOk.add(base) // está en esta PC: no se toma del DWH, y tampoco se sube
+        continue
+      }
       try {
         const r = await pool.request().input('desde', sqlLocal.Date, desde).query(`
           SELECT '${b}' AS TIENDA, 'DETALLE' AS SECCION, A.CAJA, A.NUMERO AS ARQUEO, CONVERT(char(10), A.FALTAFW, 23) AS FECHA,
@@ -99,15 +108,17 @@ async function leerLocales(desde) {
             LEFT JOIN [${b}].ZooLogic.VEN V ON RTRIM(V.CLCOD) = RTRIM(A.VENDEDOR)
             LEFT JOIN [${b}].ZooLogic.ARQEFECTDET D ON D.CODIGO = A.CODIGO
            WHERE A.FALTAFW >= @desde`)
-        out.push(...r.recordset)
+        filas.push(...r.recordset)
+        basesOk.add(base)
       } catch (e) {
-        anotar(`SQL local ${b}: ${e.message}`)
+        // Si una base no se puede leer, esa sigue saliendo del DWH (así no se borran sus arqueos en Supabase)
+        anotar(`SQL local ${b}: ${e.message} (se toma del DWH)`)
       }
     }
   } finally {
     await pool.close().catch(() => undefined)
   }
-  return out
+  return { filas, basesOk }
 }
 
 async function main() {
@@ -143,24 +154,22 @@ async function main() {
     await pool.close().catch(() => undefined)
   }
 
-  // Arqueos de las bases del Replicador en el SQL de esta PC (DESKTOP-OA4GU6I, usuario de Windows): llegan
-  // antes que al DWH (p. ej. el de Rivera de las 14:17 no estaba en vw_FACT_ARQUEO). Se lee después de cerrar
-  // el pool principal porque msnodesqlv8 y tedious no conviven en la misma copia de mssql.
+  // Las bases que están en el SQL de esta PC (DESKTOP-OA4GU6I, usuario de Windows) salen solo de ahí; las demás,
+  // del DWH de M1T0O1\ZOOLOGIC. Se lee después de cerrar el pool principal porque msnodesqlv8 y tedious no
+  // conviven en la misma copia de mssql. Si no se puede entrar al SQL local, todo sale del DWH.
   const locales = await leerLocales(desde).catch((e) => {
-    anotar(`SQL local: ${e.message}`)
-    return []
+    anotar(`SQL local: ${e.message} (todo se toma del DWH)`)
+    return { filas: [], basesOk: new Set() }
   })
+  const baseDe = (f) => String(f.TIENDA || '').replace(/^DRAGONFISH_/i, '').toUpperCase()
 
   const arqueos = new Map()
-  for (const f of [...filas, ...locales]) {
-    const base = String(f.TIENDA || '').replace(/^DRAGONFISH_/i, '').toUpperCase()
+  for (const f of [...filas.filter((f) => !locales.basesOk.has(baseDe(f))), ...locales.filas]) {
+    const base = baseDe(f)
     if (!base) continue
     const local = LOCAL_DE_BASE[base] ?? base
     const clave = `${local}|${f.CAJA}|${f.ARQUEO}`
     let a = arqueos.get(clave)
-    // El mismo arqueo en las dos fuentes: queda el del SQL local (llega primero y completo)
-    if (a && f.ORIGEN === 'local' && a.origen !== 'local') a = null
-    if (a && a.origen === 'local' && f.ORIGEN !== 'local') continue
     if (!a) {
       a = { local, caja: Number(f.CAJA), arqueo: Number(f.ARQUEO), fecha: f.FECHA, hora: String(f.HORA || '00:00:00').trim(), vendedor: f.VENDEDOR ?? null, total: 0, billetes: [], origen: f.ORIGEN ?? 'dwh' }
       arqueos.set(clave, a)
@@ -174,14 +183,15 @@ async function main() {
   const lista = [...arqueos.values()].filter((a) => Number.isFinite(a.caja) && Number.isFinite(a.arqueo))
   for (const a of lista) {
     a.billetes.sort((x, y) => y.valor - x.valor || String(x.tipo).localeCompare(String(y.tipo)))
-    delete a.origen
   }
   if (process.argv.includes('--ver')) {
     for (const a of lista.filter((x) => x.fecha >= isoLocal(new Date())).sort((x, y) => (x.local + x.hora).localeCompare(y.local + y.hora)))
-      console.log(a.local, a.caja, a.arqueo, a.fecha, a.hora, a.total, a.vendedor, a.billetes.length)
+      console.log(a.local, a.caja, a.arqueo, a.fecha, a.hora, a.total, a.vendedor, a.billetes.length, a.origen)
+    console.log('Del SQL local:', [...locales.basesOk].sort().join(' '))
     return
   }
 
+  for (const a of lista) delete a.origen
   const cambiadas = Number(await rpc('arqueos_sync_filas', { p_token: token, p_desde: desde, p_filas: lista })) || 0
   fs.mkdirSync(path.dirname(MARCA), { recursive: true })
   fs.writeFileSync(MARCA, String(Date.now()))
