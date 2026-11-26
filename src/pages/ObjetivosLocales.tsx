@@ -488,7 +488,7 @@ function Comparativo({ filas, locales, nom }: { filas: FilaObj[]; locales: strin
   if (!filas.length) return <div className="rounded-2xl border border-line bg-surface p-4 text-sm text-sub">Sin IPC cargado para este período.</div>
   return (
     <div className="overflow-x-auto rounded-2xl border border-line bg-surface p-4">
-      <p className="mb-2 text-xs text-sub">Venta 2025 corrida 364 días (mismo día de la semana), sin feriados ni días que no abre. En los meses con objetivos cargados (Excel), el % aumento es el que resulta de esos objetivos.</p>
+      <p className="mb-2 text-xs text-sub">Venta 2025 corrida 364 días (mismo día de la semana; del 22 al 25/12 y del 30/12 al 1/1, la misma fecha del año pasado), sin feriados ni días que no abre. En los meses con objetivos cargados (Excel), el % aumento es el que resulta de esos objetivos.</p>
       <table className="w-full text-sm tabular-nums">
         <thead className="text-left text-[11px] uppercase tracking-wider text-sub/70">
           <tr>

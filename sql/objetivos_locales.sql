@@ -152,7 +152,8 @@ create policy objetivos_cargados_editar on public.objetivos_cargados for all to 
 -- Objetivos y venta por local y día del rango. Salen los días con objetivo cargado o cuyo
 -- mes de objetivos (26 al 25) tiene IPC: el interanual de ese mes o los 12 mensuales.
 --   ipc        = IPC que se aplica a la venta base (%)
---   venta_base = venta del día base (fecha − 364); para CFR4, la generada desde CFR9
+--   venta_base = venta del día base (fecha − 364; en fin de año, la misma fecha del año
+--                anterior, ver «dias»); para CFR4, la generada desde CFR9
 --   opera      = el local vendió ese día base; en un mes con objetivos cargados, que tenga uno ese día
 --                (si no: «no abre», sin objetivo)
 --   feriado    = cargado en objetivos_feriados: sin objetivo
@@ -189,7 +190,14 @@ begin
   with dias as (
     -- Interanual del mes de objetivos si está cargado; si no, el acumulado de los 12 IPC
     -- mensuales que terminan en él (null si falta alguno).
-    select d::date as fecha, (d::date - 364) as base, m.mes_obj,
+    -- Fiestas de fin de año (22 al 25/12 y 30/12 al 1/1): la base es la misma fecha del año
+    -- anterior y no la de − 364 (así el 24 toma el 24 y el 25, que no abre nadie, queda sin
+    -- objetivo; ídem 31/12 y 1/1). Desde 26/11/2026.
+    select d::date as fecha,
+           case when to_char(d, 'MM-DD') in ('12-22', '12-23', '12-24', '12-25', '12-30', '12-31', '01-01')
+                then (d - interval '1 year')::date
+                else d::date - 364 end as base,
+           m.mes_obj,
            coalesce(ia.interanual, case when a.n = 12 then a.pct end) as pct
       from generate_series(p_desde, p_hasta, interval '1 day') d
       cross join lateral (select (date_trunc('month', d) + case when extract(day from d) >= 26 then interval '1 month' else interval '0' end)::date as mes_obj) m
