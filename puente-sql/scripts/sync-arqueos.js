@@ -6,7 +6,8 @@
  *   node scripts/sync-arqueos.js --todo   (últimos 30 días)
  *
  * Las bases DRAGONFISH_* que están en el SQL de esta PC (DESKTOP-OA4GU6I, usuario de Windows) se leen SOLO de ahí
- * (ARQCAJA + ARQEFECTDET + VEN); el resto, de DWH.dbo.vw_FACT_ARQUEO del principal M1T0O1\ZOOLOGIC (SQL_SERVER del
+ * (ARQCAJA + ARQEFECTDET + VEN); el DWH solo completa los arqueos que el Replicador todavía no trajo (a veces viene
+ * atrasado horas). El resto de las bases, de DWH.dbo.vw_FACT_ARQUEO del principal M1T0O1\ZOOLOGIC (SQL_SERVER del
  * .env). SOLO LECTURA. Si una base local no se puede leer, esa sale del DWH (el sync borra lo que no viene).
  * `--ver` muestra los de hoy sin subir nada.
  * Una fila por arqueo, con el efectivo en pesos por billete/moneda.
@@ -163,8 +164,13 @@ async function main() {
   })
   const baseDe = (f) => String(f.TIENDA || '').replace(/^DRAGONFISH_/i, '').toUpperCase()
 
+  // Lo que el Replicador todavía no trajo a esta PC (a veces viene atrasado horas) lo completa el DWH,
+  // solo con los arqueos que no están en el SQL local
+  const enLocal = new Set(locales.filas.map((f) => `${baseDe(f)}|${f.CAJA}|${f.ARQUEO}`))
+  const delDwh = filas.filter((f) => !locales.basesOk.has(baseDe(f)) || !enLocal.has(`${baseDe(f)}|${f.CAJA}|${f.ARQUEO}`))
+
   const arqueos = new Map()
-  for (const f of [...filas.filter((f) => !locales.basesOk.has(baseDe(f))), ...locales.filas]) {
+  for (const f of [...delDwh, ...locales.filas]) {
     const base = baseDe(f)
     if (!base) continue
     const local = LOCAL_DE_BASE[base] ?? base
