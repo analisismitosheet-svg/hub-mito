@@ -188,6 +188,13 @@ export default function AnalisisVentas() {
     if (soloMinoristas) filtros.excluir = NO_MINORISTAS
     if (origen) filtros.origen = origen
     if (artDebounced.trim()) filtros.art = artDebounced.trim().toUpperCase()
+    // La fila tocada en "Abrir por" (ej. un proveedor) filtra TODA la pantalla, no solo la tabla:
+    // KPIs, evolución, día de la semana, ticket del año y marcas por año quedan de ese proveedor.
+    for (const c of camino) {
+      if (!/^[A-Z0-9 ._/-]{1,40}$/i.test(c.cod)) continue // "(sin dato)" u otro raro: queda solo en la apertura
+      if (c.dim === 'local') filtros.locales = [c.cod]
+      else if (c.dim !== 'art') filtros[c.dim] = [c.cod]
+    }
     return { desde, hasta, comparar, gran, dim, camino: camino.map(({ dim: d, cod }) => ({ dim: d, cod })), corte, filtros }
   }, [desde, hasta, comparar, gran, dim, camino, corte, sel, locSel, soloMinoristas, origen, artDebounced])
 
@@ -423,6 +430,16 @@ export default function AnalisisVentas() {
         </div>
       </section>
 
+      {camino.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-xs text-sky-100">
+          Todo filtrado por
+          {camino.map((c, i) => (
+            <b key={i} className="rounded-lg border border-sky-500/40 px-2 py-0.5">{TITULO_DIM[c.dim]}: {c.label}</b>
+          ))}
+          <button type="button" className="ml-auto text-sky-300 underline" onClick={() => { setDim(camino[0].dim); setCamino([]) }}>Ver todo</button>
+        </div>
+      )}
+
       {error && (
         <div className="mb-4 flex items-start gap-2 rounded-2xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">
           <TriangleAlert size={16} className="mt-0.5 shrink-0" /> {error}
@@ -602,7 +619,7 @@ export default function AnalisisVentas() {
                   <span className="text-sub">› abierto por <b className="text-ink">{TITULO_DIM[dim]}</b></span>
                 </>
               ) : (
-                <span className="text-sub">Sin apertura: total de los filtros. Tocá una fila para abrirla por la siguiente tipificación.</span>
+                <span className="text-sub">Sin apertura: total de los filtros. Tocá una fila para abrirla por la siguiente tipificación; toda la pantalla queda filtrada por esa fila.</span>
               )}
             </div>
             <div className="overflow-x-auto">
