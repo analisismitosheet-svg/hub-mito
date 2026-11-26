@@ -46,21 +46,34 @@ const todosFaltante = (rs: Renglon[]) => rs.length > 0 && rs.every((r) => r.esta
 const todosJuntados = (rs: Renglon[]) => rs.some((r) => r.estado !== 'faltante') && rs.every((r) => r.estado === 'faltante' || juntadoR(r))
 const unidades = (rs: Renglon[]) => rs.reduce((s, r) => s + r.cantidad, 0)
 
-/* ---------- Repo diaria (lotes CASCADA): Indo la ve lunes y jueves ---------- */
+/* ---------- Repo diaria (lotes CASCADA): Indo la ve lunes y jueves ----------
+ * El lunes ve la repo de viernes, sábado y domingo; el jueves la de lunes, martes
+ * y miércoles. Cuenta el día de la repo (el «CASCADA 25-11» del nombre), no el de
+ * carga. La de hoy queda guardada para el próximo corte; lo que no se terminó sigue. */
 const esRepoDiaria = (r: Renglon) => /CASCADA/i.test(r.lote_nombre ?? '')
 const DIAS_CORTE = [1, 4] // lunes, jueves
-/** Fin del último lunes/jueves (hoy incluido): lo de la repo diaria cargado después se va acumulando */
-function finUltimoCorte(hoy = new Date()): Date {
-  const d = new Date(hoy)
-  d.setHours(0, 0, 0, 0)
+const inicioDia = (d: Date) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x }
+/** Día de la repo: el dd-mm del nombre (año del lote); si no tiene, el día de carga */
+function diaRepo(r: Renglon): Date {
+  const creado = new Date(r.lote_creado)
+  const m = /CASCADA\s+(\d{1,2})-(\d{1,2})/i.exec(r.lote_nombre ?? '')
+  if (!m) return inicioDia(creado)
+  const d = new Date(creado.getFullYear(), Number(m[2]) - 1, Number(m[1]))
+  // repo de diciembre cargada en enero
+  if (d.getTime() - creado.getTime() > 7 * 86_400_000) d.setFullYear(d.getFullYear() - 1)
+  return d
+}
+/** Último lunes/jueves (hoy incluido): se ve la repo de los días ANTERIORES a ese */
+function ultimoCorte(hoy = new Date()): Date {
+  const d = inicioDia(hoy)
   while (!DIAS_CORTE.includes(d.getDay())) d.setDate(d.getDate() - 1)
-  d.setDate(d.getDate() + 1)
   return d
 }
 /** Próximo lunes/jueves después del corte vigente */
-function proximoCorte(fin: Date): Date {
-  const d = new Date(fin)
-  while (!DIAS_CORTE.includes(d.getDay())) d.setDate(d.getDate() + 1)
+function proximoCorte(corte: Date): Date {
+  const d = new Date(corte)
+  do d.setDate(d.getDate() + 1)
+  while (!DIAS_CORTE.includes(d.getDay()))
   return d
 }
 const DIA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
@@ -137,16 +150,16 @@ export default function TransferenciasIndo({
   }, [cargar])
 
   // Repo diaria: lo cargado después del último lunes/jueves se guarda para el próximo
-  const fin = useMemo(() => finUltimoCorte(), [])
+  const corte = useMemo(() => ultimoCorte(), [])
   const { renglones, acumulando } = useMemo(() => {
     const vis: Renglon[] = []
     let acu = 0
     for (const r of todos) {
-      if (esRepoDiaria(r) && new Date(r.lote_creado) >= fin) acu += r.estado === 'pendiente' ? r.cantidad : 0
+      if (esRepoDiaria(r) && diaRepo(r) >= corte) acu += r.estado === 'pendiente' ? r.cantidad : 0
       else vis.push(r)
     }
     return { renglones: vis, acumulando: acu }
-  }, [todos, fin])
+  }, [todos, corte])
 
   const codigos = useMemo(() => renglones.map((r) => String(r.articulo ?? '')), [renglones])
   const cajas = useCajasMapeo(codigos)
@@ -287,7 +300,7 @@ export default function TransferenciasIndo({
       <CalendarClock size={15} className="mt-px shrink-0" aria-hidden />
       <span>
         Repo diaria: se van juntando <b className="tabular-nums">{acumulando}</b> unidades para el{' '}
-        <b>{fmtDia(proximoCorte(fin))}</b>. Depósito Indo la ve lunes y jueves.
+        <b>{fmtDia(proximoCorte(corte))}</b>. Depósito Indo la ve los lunes (viernes a domingo) y los jueves (lunes a miércoles).
       </span>
     </p>
   )
