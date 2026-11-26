@@ -9,7 +9,7 @@ DECLARE
   tz constant text := 'America/Argentina/Buenos_Aires';
   r  jsonb;
 BEGIN
-  WITH v AS (
+  WITH v AS MATERIALIZED (
     SELECT local, camara, (desde AT TIME ZONE tz) AS ts, entradas, salidas,
            transeuntes, empleados, nuevos, reingresos, grupos
     FROM public.contador_visitas
