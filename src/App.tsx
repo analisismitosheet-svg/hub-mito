@@ -99,6 +99,7 @@ import AutorizarOc from '@/pages/AutorizarOc'
 // Pantallas nuevas: se cargan bajo demanda para no agrandar el bundle principal
 // (el service worker no precachea archivos de más de 2 MB y la build falla).
 const ComparativaPrecios = lazy(() => import('@/pages/ComparativaPrecios'))
+const AnalisisVentas = lazy(() => import('@/pages/AnalisisVentas'))
 const TrackingTransporte = lazy(() => import('@/pages/TrackingTransporte'))
 const TrackingKm = lazy(() => import('@/pages/TrackingKm'))
 const OrdenesCompra = lazy(() => import('@/pages/OrdenesCompra'))
@@ -245,6 +246,16 @@ export default function App() {
             element={
               <PermissionRoute permiso="pedidos_compra.view">
                 <PedidosHub />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/compras/analisis-ventas"
+            element={
+              <PermissionRoute permiso="analisis_ventas.view">
+                <Suspense fallback={null}>
+                  <AnalisisVentas />
+                </Suspense>
               </PermissionRoute>
             }
           />

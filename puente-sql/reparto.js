@@ -489,7 +489,14 @@ function crear(deps) {
     return { estado: 'calculando', desde: new Date().toISOString() }
   }
 
-  return { accionOpciones, accionStock, LOCALES }
+  /** Solo las opciones de los filtros, sin pedir la foto general (Análisis ventas). */
+  async function opcionesFiltros() {
+    if (!opciones.datos) await refrescarOpciones()
+    else if (Date.now() - opciones.en > OPCIONES_MS) refrescarOpciones().catch((e) => console.error('[puente] reparto opciones:', e.message))
+    return opciones.datos
+  }
+
+  return { accionOpciones, accionStock, opcionesFiltros, LOCALES }
 }
 
 module.exports = { crear, LOCALES, columna, limpiarFiltros }

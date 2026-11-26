@@ -42,6 +42,9 @@
  *                   (lo que da MITO en el Reparto manual -> pedido de venta por local en Dragon: reparto-dragon.js)
  *   POST /          body: { accion: 'ventas_articulos', fechas, local?, agrupar?, top? } -> { estado: 'calculando' } | { estado: 'listo', ranking, ... }
  *                     (lee las bases Dragon directo con sql/ventas-articulos.sql; si falla, la foto de la repo diaria)
+ *   POST /          body: { accion: 'analisis_ventas', desde, hasta, comparar, gran, dim, camino, filtros, corte, opciones? }
+ *                   -> { estado: 'listo', kpis, serie, dow, tabla, anio, marcas, faltan, carga }
+ *                   (Compras > Análisis ventas: venta por ticket guardada por día en D:\memoria ia\analisis; analisis-ventas.js)
  *   POST /          body: { accion: 'repo_diaria_dragon', modo: 'revisar'|'cargar'|'estado', fechas, foto, locales?, confirmo? }
  *                   -> { carga: { obs, locales: [{ cliente, unidades, estado, numero }] } }
  *                   (carga la repo como pedidos de venta VTD en DRAGONFISH_MITO por la API, uno por local)
@@ -1516,6 +1519,34 @@ async function completarMemoriaVentas() {
     completandoVentas = false
   }
 }
+/* ---- Análisis ventas (hub: Compras > Análisis ventas, solo admin). Ver analisis-ventas.js ---- */
+let stockAnalisis = { en: -1, mapa: null }
+const analisisVentas = require('./analisis-ventas').crear({
+  diaLocal: (n) => diaLocal(n),
+  diaCerrado: (d) => diaCerrado(d),
+  asegurarConexion: (srv) => asegurarConexion(srv),
+  conexionLarga: () => conexionLarga(),
+  servidores: () => {
+    const principal = SERVIDORES.get(ALIAS_PRINCIPAL.toUpperCase())
+    const local = [...SERVIDORES.values()].find((s) => !s.principal)
+    return [{ srv: principal, bases: VENTAS_BASES_PRINCIPAL }, ...(local ? [{ srv: local, bases: VENTAS_BASES_LOCAL }] : [])]
+  },
+  // filtros: las mismas opciones que el Reparto manual (sin pedir la foto general del reparto)
+  opciones: () => repartoManual.opcionesFiltros(),
+  // stock de hoy por artículo (todas las bases), del último stock valorizado; se renueva por detrás
+  stock: () => {
+    const c = cacheStockValorizado
+    if (Date.now() - (c.en || 0) > 3_600_000 && !stockValorizadoEnCurso) stockValorizado(false).catch(() => {})
+    if (!c.datos) return null
+    if (stockAnalisis.en !== c.en) {
+      const mapa = new Map()
+      for (const a of c.datos.articulos ?? []) mapa.set(String(a.articulo ?? '').trim(), (mapa.get(String(a.articulo ?? '').trim()) ?? 0) + (Number(a.unidades) || 0))
+      stockAnalisis = { en: c.en, mapa }
+    }
+    return stockAnalisis.mapa
+  },
+})
+
 function iniciarMemoriaVentas() {
   if (!VENTAS_MEMORIA_DIAS) return
   setTimeout(completarMemoriaVentas, 60_000).unref?.()
@@ -2041,6 +2072,14 @@ const server = http.createServer(async (req, res) => {
     }
 
     // Ranking de ventas por artículo: bases directo, con la foto de la repo diaria de respaldo (Chat IA)
+    // Compras > Análisis ventas (solo admin en el hub). Solo lectura.
+    if (body?.accion === 'analisis_ventas') {
+      try {
+        return enviar(res, 200, await analisisVentas.accion(body))
+      } catch (e) {
+        return enviar(res, 500, { error: e.message })
+      }
+    }
     if (body?.accion === 'ventas_articulos') {
       try {
         return enviar(res, 200, await accionVentasArticulos(body))
@@ -2170,6 +2209,7 @@ server.listen(Number(PUENTE_PORT), PUENTE_HOST, () => {
   iniciarFotoManana()
   // Venta de los días cerrados guardada en D:\memoria ia (se completa por detrás)
   iniciarMemoriaVentas()
+  analisisVentas.iniciar()
   programador.iniciar({
     fotoNueva: fotoRepoNueva,
     foto: () => fotoRepo.foto,

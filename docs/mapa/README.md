@@ -21,6 +21,7 @@ El detalle largo y la historia de cada módulo siguen en `CONTEXTO.md` (raíz de
 - [[Franquicias]]: reposición diaria, propuesta, materiales; configuración en Sistemas
 - [[Mapeo depósito]]
 - [[Mapeo Polo 52]]: bultos que llegan a Polo 52 por posición (palet), con los artículos del remito
+- [[Análisis ventas]]: Compras (solo admin), venta por día/semana/mes/año, tickets y tipificaciones desde el puente
 - [[Transferencias]]: reposiciones y estadísticas
 - [[Facturación, guías y notas de crédito]]
 - [[Informes por WhatsApp]]: Envío informes y reportes (Sistemas)
@@ -42,6 +43,7 @@ El detalle largo y la historia de cada módulo siguen en `CONTEXTO.md` (raíz de
 | `/deposito/rma` (+proveedores, guia) | Rma.tsx, ProveedoresPacho.tsx, GuiaPacho.tsx | [[Otros módulos]] |
 | `/deposito/reposicion-escaneo` | ReposicionEscaneo.tsx | [[Reposición por escaneo]] |
 | `/compras/ordenes?n=` | OrdenesCompra.tsx | [[Órdenes de compras]] |
+| `/compras/analisis-ventas` | AnalisisVentas.tsx | [[Análisis ventas]] |
 | `/compras/pedidos` | PedidosHub.tsx | [[Pedidos compra, venta y cancelaciones]] |
 | `/compras/pedidos-compra?numero=` | PedidosCompra.tsx | idem |
 | `/compras/cancelaciones` | Cancelaciones.tsx | idem |

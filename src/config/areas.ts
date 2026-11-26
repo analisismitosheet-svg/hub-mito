@@ -65,6 +65,7 @@ import {
   Bot,
   KanbanSquare,
   MapPin,
+  BarChart3,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
@@ -852,6 +853,17 @@ export const APPS: AppDef[] = [
     target: '/compras/comparativa-precios',
     color: '#0891b2',
     permiso: 'compras_precios.view',
+  },
+  {
+    id: 'analisis-ventas',
+    areaId: 'compras',
+    title: 'Análisis ventas',
+    description: 'Venta por día, semana, mes y año: $, tickets, unidades, por proveedor, línea, grupo y más.',
+    icon: BarChart3,
+    kind: 'internal',
+    target: '/compras/analisis-ventas',
+    color: '#84cc16',
+    permiso: 'analisis_ventas.view',
   },
   {
     id: 'transferencias-estadisticas',

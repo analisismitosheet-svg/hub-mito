@@ -78,6 +78,8 @@ export default defineConfig({
       '/api/sql/polo-bulto': 'http://localhost:4180',
       // Reposiciones / Transferencias > Reparto manual: `node scripts/mock-reparto.mjs` (+ una copia del Puente en :3199)
       '/api/sql/reparto': 'http://localhost:4177',
+      // Compras > Análisis ventas: `node scripts/mock-analisis-ventas.mjs` (+ Puente en :3128 o una copia en :3199)
+      '/api/sql/analisis-ventas': 'http://localhost:4181',
     },
   },
 })

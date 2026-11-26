@@ -31,8 +31,8 @@
   .dd.act{border-color:rgba(56,189,248,.55);background:rgba(56,189,248,.10)}
   .dd .cnt{background:var(--sky);color:#04121c;border-radius:6px;padding:0 5px;font-size:10px;font-weight:800}
   input[type=date],input[type=text],select{height:32px;border:1px solid var(--line2);background:rgba(255,255,255,.04);color:var(--ink);border-radius:10px;padding:0 9px;font:inherit;font-size:12px;color-scheme:dark}
-  .kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin-bottom:14px}
-  @media(max-width:1100px){.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+  .kpis{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px;margin-bottom:14px}
+  @media(max-width:1200px){.kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}
   @media(max-width:600px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
   .k{border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:12px 14px;position:relative;overflow:hidden}
   .k .l{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;font-weight:800}
@@ -79,7 +79,7 @@
   <div class="row between" style="margin-bottom:12px">
     <div>
       <h1>Análisis ventas</h1>
-      <div class="sub small">Venta de todos los locales (Dragon) · montos con IVA · devoluciones restadas · días cerrados hasta ayer</div>
+      <div class="sub small"><span class="pill" style="background:rgba(167,139,250,.15);color:#c4b5fd">Solo admin</span> Venta de todos los locales (Dragon) · montos con IVA · devoluciones restadas · días cerrados hasta ayer</div>
     </div>
     <div class="row">
       <button class="btn">⟳ Actualizar</button>
@@ -120,6 +120,16 @@
   <!-- ===== KPIs ===== -->
   <div class="kpis" id="kpis"></div>
 
+  <!-- ===== Marcas vs MITO por año ===== -->
+  <div class="card">
+    <div class="row between" style="margin-bottom:10px">
+      <h3>Marcas vs Zimith / Captain Fin · por año</h3>
+      <div class="row small"><div class="seg" id="corte"><button data-c="dia" class="on">Hasta el mismo día (25/11)</button><button data-c="anio">Año entero</button></div><span class="sub">Años</span><div class="seg"><button>2024</button><button class="on">2025</button><button class="on">2026</button></div></div>
+    </div>
+    <div class="scroll"><table id="marcas"></table></div>
+    <div class="sub small" style="margin-top:8px">Zimith / Captain Fin = proveedores que empiezan con MO; Marcas = el resto. Respeta los filtros de arriba (locales, tipificaciones) pero no el período: compara cada año del 1/1 hasta el mismo día que ayer (25/11), así la variación es justa; con «Año entero» los años anteriores van completos.</div>
+  </div>
+
   <!-- ===== Evolución ===== -->
   <div class="grid2">
     <div class="card">
@@ -157,15 +167,6 @@
     <div class="bc" id="bc" style="margin-bottom:8px"></div>
     <div class="scroll"><table id="tabla"></table></div>
     <div class="sub small" style="margin-top:8px">Tocá una fila para abrirla por la siguiente tipificación (ej. Proveedor → Línea → Grupo → Artículo). ABC: A = 80 % de la venta, B = 15 %, C = 5 %.</div>
-  </div>
-
-  <!-- ===== Matriz ===== -->
-  <div class="card">
-    <div class="row between" style="margin-bottom:10px">
-      <h3>Matriz por mes · <span id="mtit" style="color:var(--ink)">Línea</span> × mes ($ venta)</h3>
-      <div class="row"><div class="seg"><button class="on">$ Venta</button><button>Unidades</button><button>Tickets</button></div><div class="seg"><button class="on">Meses</button><button>Semanas</button></div></div>
-    </div>
-    <div class="scroll"><table class="heat" id="matriz"></table></div>
   </div>
 
   <div class="note">
@@ -211,10 +212,11 @@ const kp = [
   { l: 'Tickets', c: 'var(--sky)', v: fmtN(T.tickets), a: T.tickets, b: A.tickets, s: serie.map(x => x.tickets) },
   { l: 'Unidades', c: 'var(--violet)', v: fmtN(T.unid), a: T.unid, b: A.unid, s: serie.map(x => x.unid) },
   { l: 'Ticket promedio', c: 'var(--amber)', v: fmt$(T.monto / T.tickets), a: T.monto / T.tickets, b: A.monto / A.tickets, s: serie.map(x => x.monto / x.tickets) },
+  { l: 'Ticket prom. del año', c: '#fb923c', v: fmt$(T.monto / T.tickets * 0.84), a: T.monto / T.tickets * 0.84, b: A.monto / A.tickets * 0.8, s: [.62,.66,.69,.72,.75,.78,.8,.83,.87,.9,.94,1].map(f => f * T.monto / T.tickets), sub: 'ene–nov 2026, fijo (no cambia con el período)', cmp: 'vs año 2025' },
   { l: 'Unid. por ticket', c: 'var(--pink)', v: (T.unid / T.tickets).toFixed(2).replace('.', ','), a: T.unid / T.tickets, b: A.unid / A.tickets, s: serie.map(x => x.unid / x.tickets) },
   { l: 'Precio prom. unidad', c: 'var(--teal)', v: fmt$(T.monto / T.unid), a: T.monto / T.unid, b: A.monto / A.unid, s: serie.map(x => x.monto / x.unid) },
 ]
-$('#kpis').innerHTML = kp.map(k => `<div class="k"><div class="l" style="color:${k.c}">${k.l}</div><div class="v">${k.v}</div><div class="d">${flecha(pct(k.a, k.b))} <span class="c">vs nov 2025</span></div>${k.sub ? `<div class="c">${k.sub}</div>` : ''}${spark(k.s, k.c)}</div>`).join('')
+$('#kpis').innerHTML = kp.map(k => `<div class="k"><div class="l" style="color:${k.c}">${k.l}</div><div class="v">${k.v}</div><div class="d">${flecha(pct(k.a, k.b))} <span class="c">${k.cmp || 'vs nov 2025'}</span></div>${k.sub ? `<div class="c">${k.sub}</div>` : ''}${spark(k.s, k.c)}</div>`).join('')
 
 /* ---------- evolución ---------- */
 let met = 'monto', gran = 'dia'
@@ -314,17 +316,28 @@ function dibujarTabla() {
 $('#ordenSel').onchange = (e) => { orden = e.target.value; dibujarTabla() }
 dibujarTabla()
 
-/* ---------- matriz ---------- */
-const meses = ['Dic 25', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov']
-const lin = DIMS.linea.v.slice(0, 10)
-const est = { Remeras: [1.6, 1.3, 1.1, .8, .5, .4, .3, .3, .5, .8, 1.1, 1.3], Bermudas: [1.7, 1.5, 1.2, .6, .3, .2, .1, .1, .3, .7, 1.1, 1.4], Buzos: [.2, .1, .2, .6, 1.2, 1.5, 1.7, 1.6, 1.1, .6, .3, .2], Camperas: [.1, .1, .2, .5, 1.1, 1.6, 1.9, 1.7, 1, .4, .2, .1], 'Shorts de baño': [2, 1.6, 1, .3, .1, .1, .05, .05, .1, .4, .9, 1.5] }
-let mh = `<thead><tr><th class="l" style="text-align:left">Línea</th>${meses.map(m => `<th>${m}</th>`).join('')}<th>Total</th></tr></thead><tbody>`
-lin.forEach((l, i) => {
-  const base = T.monto * Math.pow(.78, i) * .35, f = est[l] || meses.map(() => .8 + rnd() * .4)
-  const vs = f.map((x, j) => base * x * (0.7 + j * .04)), mx = Math.max(...vs)
-  mh += `<tr><td class="l" style="text-align:left"><b>${l}</b></td>${vs.map(v => { const a = v / mx; return `<td style="background:rgba(132,204,22,${(a * .75).toFixed(2)});color:${a > .55 ? '#0b1a02' : 'var(--ink)'};font-weight:${a > .55 ? 800 : 500}">${(v / 1e6).toFixed(1).replace('.', ',')}</td>` }).join('')}<td><b>${(vs.reduce((a, b) => a + b, 0) / 1e6).toFixed(0)} M</b></td></tr>`
-})
-$('#matriz').innerHTML = mh + '</tbody>'
+/* ---------- marcas vs MITO por año ---------- */
+{
+  const COMPLETO = { 2025: { MARCAS: [186769, 13627846150.13], ZC: [192869, 5466217092.79] }, 2026: { MARCAS: [148265, 11798891129.85], ZC: [202151, 6846493521.27] } }
+  // ejemplo: 2025 cortado al 25/11 (dic pesa ~17 % en unidades y ~19 % en $)
+  const MISMO_DIA = { 2025: { MARCAS: [154800, 11030000000], ZC: [160100, 4425000000] }, 2026: COMPLETO[2026] }
+  let D = MISMO_DIA
+  function dibujarMarcas() {
+  const anios = [2025, 2026], filasM = [['MARCAS', 'MARCAS'], ['ZC', 'ZIMITH / CAPTAIN FIN']]
+  const totA = (y) => [D[y].MARCAS[0] + D[y].ZC[0], D[y].MARCAS[1] + D[y].ZC[1]]
+  const n2 = (v) => v.toLocaleString('es-AR', { maximumFractionDigits: 0 })
+  let h = `<thead><tr><th class="l" rowspan="2" style="vertical-align:bottom">Marca</th>${anios.map(y => `<th colspan="2" style="text-align:center;color:var(--ink);font-size:12px">${y}</th>`).join('')}<th colspan="2" style="text-align:center;color:var(--amber)">Var. 2026 vs 2025</th></tr>
+    <tr>${anios.map(() => '<th>Unidades</th><th>$ Total</th>').join('')}<th>Unidades</th><th>$ Total</th></tr></thead><tbody>`
+  for (const [k, nom] of filasM) h += `<tr><td class="l"><b>${nom}</b></td>${anios.map(y => `<td>${n2(D[y][k][0])}</td><td>${fmt$(D[y][k][1])}</td>`).join('')}<td>${flecha(pct(D[2026][k][0], D[2025][k][0]))}</td><td>${flecha(pct(D[2026][k][1], D[2025][k][1]))}</td></tr>`
+  h += `<tr style="background:rgba(56,189,248,.08)"><td class="l"><b>Total general</b></td>${anios.map(y => `<td><b>${n2(totA(y)[0])}</b></td><td><b>${fmt$(totA(y)[1])}</b></td>`).join('')}<td><b>${flecha(pct(totA(2026)[0], totA(2025)[0]))}</b></td><td><b>${flecha(pct(totA(2026)[1], totA(2025)[1]))}</b></td></tr>`
+  for (const [k, nom] of filasM) h += `<tr class="sub"><td class="l">% ${nom}</td>${anios.map(y => `<td>${Math.round(D[y][k][0] / totA(y)[0] * 100)} %</td><td>${Math.round(D[y][k][1] / totA(y)[1] * 100)} %</td>`).join('')}<td>${(Math.round(D[2026][k][0] / totA(2026)[0] * 100) - Math.round(D[2025][k][0] / totA(2025)[0] * 100)).toLocaleString('es-AR', { signDisplay: 'always' })} pp</td><td>${(Math.round(D[2026][k][1] / totA(2026)[1] * 100) - Math.round(D[2025][k][1] / totA(2025)[1] * 100)).toLocaleString('es-AR', { signDisplay: 'always' })} pp</td></tr>`
+  $('#marcas').innerHTML = h + '</tbody>'
+    document.querySelectorAll('#marcas tbody tr').forEach(tr => tr.style.cursor = 'default')
+  }
+  dibujarMarcas()
+  document.querySelectorAll('#corte button').forEach(b => b.onclick = () => { D = b.dataset.c === 'dia' ? MISMO_DIA : COMPLETO; document.querySelectorAll('#corte button').forEach(x => x.classList.toggle('on', x === b)); dibujarMarcas() })
+  document.querySelectorAll('#marcas tbody tr').forEach(tr => tr.style.cursor = 'default')
+}
 </script>
 </body>
 </html>
