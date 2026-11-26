@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Compras · Análisis ventas (maqueta)</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{--paper:#050508;--surface:rgba(255,255,255,.04);--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.14);--ink:#f8fafc;--sub:#94a3b8;
+    --sky:#38bdf8;--emerald:#22c55e;--violet:#a78bfa;--amber:#f59e0b;--red:#f87171;--pink:#f472b6;--lime:#84cc16;--teal:#2dd4bf}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(900px 500px at 10% -10%,rgba(132,204,22,.10),transparent 60%),radial-gradient(800px 500px at 100% 0,rgba(56,189,248,.08),transparent 60%),var(--paper);
+    color:var(--ink);font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:14px;padding:18px 16px 60px;min-height:100vh}
+  .wrap{max-width:1400px;margin:0 auto}
+  .badge{display:inline-block;padding:3px 10px;border-radius:999px;background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.35);font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+  .crumb{color:var(--sub);font-size:12px;margin-top:10px}
+  h1{font-size:22px;margin:2px 0 2px;letter-spacing:-.02em}
+  .sub{color:var(--sub)} .small{font-size:12px}
+  .card{border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:14px;margin-bottom:14px;backdrop-filter:blur(8px)}
+  .card h3{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--sub)}
+  .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .between{justify-content:space-between}
+  .seg{display:inline-flex;border:1px solid var(--line2);border-radius:10px;overflow:hidden}
+  .seg button{background:transparent;border:0;color:var(--sub);padding:6px 12px;font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+  .seg button.on{background:rgba(132,204,22,.16);color:var(--lime)}
+  .btn{display:inline-flex;align-items:center;gap:6px;height:32px;border:1px solid var(--line2);background:rgba(255,255,255,.05);color:var(--ink);border-radius:10px;padding:0 11px;font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+  .btn:hover{background:var(--line)}
+  .btn.pri{background:rgba(132,204,22,.18);border-color:rgba(132,204,22,.5);color:#d9f99d}
+  .dd{position:relative;display:inline-flex;align-items:center;gap:6px;height:32px;border:1px solid var(--line2);background:rgba(255,255,255,.03);border-radius:10px;padding:0 10px;font-size:12px;font-weight:700;cursor:pointer;color:var(--ink)}
+  .dd .n{color:var(--sub);font-weight:600}
+  .dd.act{border-color:rgba(56,189,248,.55);background:rgba(56,189,248,.10)}
+  .dd .cnt{background:var(--sky);color:#04121c;border-radius:6px;padding:0 5px;font-size:10px;font-weight:800}
+  input[type=date],input[type=text],select{height:32px;border:1px solid var(--line2);background:rgba(255,255,255,.04);color:var(--ink);border-radius:10px;padding:0 9px;font:inherit;font-size:12px;color-scheme:dark}
+  .kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin-bottom:14px}
+  @media(max-width:1100px){.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+  @media(max-width:600px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .k{border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:12px 14px;position:relative;overflow:hidden}
+  .k .l{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;font-weight:800}
+  .k .v{font-size:24px;font-weight:800;margin-top:3px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .k .d{font-size:12px;margin-top:2px;font-weight:700}
+  .k .c{font-size:11px;color:var(--sub)}
+  .k svg{position:absolute;right:8px;bottom:8px;opacity:.85}
+  .up{color:var(--emerald)} .down{color:var(--red)} .flat{color:var(--sub)}
+  .grid2{display:grid;grid-template-columns:2fr 1fr;gap:14px}
+  @media(max-width:1000px){.grid2{grid-template-columns:1fr}}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--sub);text-align:right;padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap;cursor:pointer;user-select:none}
+  th:first-child,td:first-child,th.l,td.l{text-align:left}
+  th.on{color:var(--lime)}
+  td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  tbody tr{cursor:pointer} tbody tr:hover td{background:rgba(255,255,255,.035)}
+  tfoot td{font-weight:800;border-top:1px solid var(--line2);border-bottom:0}
+  .bar{height:6px;border-radius:4px;background:rgba(255,255,255,.06);min-width:90px;position:relative}
+  .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:linear-gradient(90deg,#65a30d,#a3e635)}
+  .pill{font-size:10px;font-weight:800;border-radius:6px;padding:2px 6px}
+  .p-a{background:rgba(34,197,94,.15);color:#86efac}.p-b{background:rgba(245,158,11,.15);color:#fcd34d}.p-c{background:rgba(148,163,184,.15);color:#cbd5e1}
+  .tabs{display:flex;gap:4px;flex-wrap:wrap}
+  .tabs button{border:1px solid var(--line);background:transparent;color:var(--sub);padding:6px 11px;border-radius:999px;font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+  .tabs button.on{border-color:rgba(132,204,22,.55);color:#d9f99d;background:rgba(132,204,22,.12)}
+  .bc{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12px}
+  .bc span{background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.35);color:#bae6fd;border-radius:8px;padding:2px 8px;font-weight:700}
+  .bc a{color:var(--sky);cursor:pointer;text-decoration:underline}
+  .heat td{text-align:center;font-size:11.5px;padding:6px 4px;border:1px solid rgba(0,0,0,.25)}
+  .heat th{text-align:center;cursor:default}
+  .note{border:1px dashed rgba(245,158,11,.45);background:rgba(245,158,11,.06);color:#fde68a;border-radius:12px;padding:10px 12px;font-size:12px;line-height:1.5}
+  .ins{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--line);font-size:12.5px;line-height:1.45}
+  .ins:last-child{border-bottom:0}
+  .ins b.i{flex:none;width:22px;height:22px;border-radius:7px;display:grid;place-items:center;font-size:12px}
+  .tt{position:fixed;pointer-events:none;background:#0b0f17;border:1px solid var(--line2);border-radius:10px;padding:8px 10px;font-size:12px;display:none;z-index:9;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+  .legend{display:flex;gap:14px;font-size:11.5px;color:var(--sub)}
+  .legend i{display:inline-block;width:12px;height:3px;border-radius:2px;margin-right:5px;vertical-align:middle}
+  .scroll{overflow-x:auto}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span class="badge">Maqueta · datos de ejemplo</span>
+  <div class="crumb">Compras › <b style="color:var(--ink)">Análisis ventas</b></div>
+  <div class="row between" style="margin-bottom:12px">
+    <div>
+      <h1>Análisis ventas</h1>
+      <div class="sub small">Venta de todos los locales (Dragon) · montos con IVA · devoluciones restadas · días cerrados hasta ayer</div>
+    </div>
+    <div class="row">
+      <button class="btn">⟳ Actualizar</button>
+      <button class="btn">⬇ Excel</button>
+    </div>
+  </div>
+
+  <!-- ===== Filtros ===== -->
+  <div class="card">
+    <div class="row between" style="margin-bottom:10px">
+      <div class="row">
+        <div class="seg" id="rapidos">
+          <button>Ayer</button><button>Esta semana</button><button class="on">Este mes</button><button>Mes pasado</button><button>Este año</button><button>Últ. 12 meses</button>
+        </div>
+        <input type="date" value="2026-11-01"/> <span class="sub small">a</span> <input type="date" value="2026-11-25"/>
+      </div>
+      <div class="row small">
+        <span class="sub">Comparar con</span>
+        <div class="seg" id="comp"><button class="on">Mismo período año pasado</button><button>Período anterior</button><button>Nada</button></div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="seg"><button class="on">Todos</button><button>MITO</button><button>Marcas</button></div>
+      <div class="dd">Locales <span class="n">Todos</span> ▾</div>
+      <div class="dd act">Proveedor <span class="cnt">2</span> ▾</div>
+      <div class="dd">Material ▾</div>
+      <div class="dd">Temporada ▾</div>
+      <div class="dd">Año ▾</div>
+      <div class="dd">Línea ▾</div>
+      <div class="dd">Familia ▾</div>
+      <div class="dd">Género ▾</div>
+      <div class="dd">Grupo ▾</div>
+      <input type="text" placeholder="Artículo (código o comienzo)" style="width:190px"/>
+      <a class="small" style="color:var(--sky);cursor:pointer">Limpiar filtros</a>
+    </div>
+  </div>
+
+  <!-- ===== KPIs ===== -->
+  <div class="kpis" id="kpis"></div>
+
+  <!-- ===== Evolución ===== -->
+  <div class="grid2">
+    <div class="card">
+      <div class="row between" style="margin-bottom:8px">
+        <h3>Evolución</h3>
+        <div class="row">
+          <div class="seg" id="metrica"><button data-m="monto" class="on">$ Venta</button><button data-m="tickets">Tickets</button><button data-m="unid">Unidades</button><button data-m="tprom">Ticket prom.</button></div>
+          <div class="seg" id="gran"><button data-g="dia" class="on">Días</button><button data-g="sem">Semanas</button><button data-g="mes">Meses</button><button data-g="anio">Años</button></div>
+        </div>
+      </div>
+      <div class="legend" style="margin-bottom:4px"><span><i style="background:var(--lime)"></i>Nov 2026</span><span><i style="background:#64748b"></i>Nov 2025 (comparado)</span><span><i style="background:var(--amber);height:8px;width:8px;border-radius:50%"></i>Feriado / evento</span></div>
+      <svg id="evo" width="100%" height="260" viewBox="0 0 900 260" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="card">
+      <div class="row between" style="margin-bottom:8px"><h3>Día de la semana</h3><div class="seg" id="dowm"><button class="on">$ prom.</button><button>Tickets prom.</button></div></div>
+      <div id="dow"></div>
+      <div style="margin-top:12px"><h3 style="margin-bottom:8px">Lectura rápida</h3><div id="insights"></div></div>
+    </div>
+  </div>
+
+  <!-- ===== Apertura ===== -->
+  <div class="card">
+    <div class="row between" style="margin-bottom:10px">
+      <div class="row">
+        <h3>Abrir por</h3>
+        <div class="tabs" id="dims"></div>
+      </div>
+      <div class="row small">
+        <span class="sub">Orden</span>
+        <select id="ordenSel"><option value="monto">$ Venta</option><option value="unid">Unidades</option><option value="tickets">Tickets</option><option value="var">Variación %</option></select>
+        <span class="sub">Mostrar</span>
+        <select><option>Top 20</option><option>Top 50</option><option>Todos</option></select>
+      </div>
+    </div>
+    <div class="bc" id="bc" style="margin-bottom:8px"></div>
+    <div class="scroll"><table id="tabla"></table></div>
+    <div class="sub small" style="margin-top:8px">Tocá una fila para abrirla por la siguiente tipificación (ej. Proveedor → Línea → Grupo → Artículo). ABC: A = 80 % de la venta, B = 15 %, C = 5 %.</div>
+  </div>
+
+  <!-- ===== Matriz ===== -->
+  <div class="card">
+    <div class="row between" style="margin-bottom:10px">
+      <h3>Matriz por mes · <span id="mtit" style="color:var(--ink)">Línea</span> × mes ($ venta)</h3>
+      <div class="row"><div class="seg"><button class="on">$ Venta</button><button>Unidades</button><button>Tickets</button></div><div class="seg"><button class="on">Meses</button><button>Semanas</button></div></div>
+    </div>
+    <div class="scroll"><table class="heat" id="matriz"></table></div>
+  </div>
+
+  <div class="note">
+    <b>Cómo se cuenta (para validar antes de programar):</b><br/>
+    • <b>Venta $</b>: total de renglón con IVA de TFC/FEN/FCV menos TNC/CEN/NCV, de todas las bases DRAGONFISH de locales (mismos criterios que la Repo diaria; Polo 52, Producción y Fábrica fuera).<br/>
+    • <b>Tickets</b>: comprobantes de venta distintos (una devolución no suma ticket). Al abrir por proveedor/línea/etc., un ticket con prendas de dos líneas cuenta en las dos: por eso la suma de tickets de la tabla da más que el total.<br/>
+    • <b>Unidades</b>: prendas vendidas menos devueltas. <b>Ticket promedio</b> = $ / tickets · <b>UPT</b> = unidades / tickets · <b>Precio prom.</b> = $ / unidades.<br/>
+    • Los días cerrados quedan guardados en el puente (D:\memoria ia) para no ir al SQL cada vez; hoy se suma en vivo.
+  </div>
+</div>
+<div class="tt" id="tt"></div>
+
+<script>
+/* ---------- datos de ejemplo ---------- */
+const $ = (s) => document.querySelector(s)
+const fmt$ = (n) => '$ ' + Math.round(n).toLocaleString('es-AR')
+const fmtM = (n) => n >= 1e6 ? '$ ' + (n / 1e6).toLocaleString('es-AR', { maximumFractionDigits: 1 }) + ' M' : fmt$(n)
+const fmtN = (n) => Math.round(n).toLocaleString('es-AR')
+const pct = (a, b) => (b ? (a / b - 1) * 100 : 0)
+const flecha = (v) => `<span class="${v > 1 ? 'up' : v < -1 ? 'down' : 'flat'}">${v > 0 ? '▲' : v < 0 ? '▼' : '='} ${Math.abs(v).toLocaleString('es-AR', { maximumFractionDigits: 1 })} %</span>`
+let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647
+
+const DIAS = 25
+const dowF = [1.45, 0.78, 0.82, 0.88, 0.95, 1.18, 1.62] // dom..sab
+const serie = [], serieAnt = []
+for (let d = 1; d <= DIAS; d++) {
+  const dow = new Date(2026, 10, d).getDay()
+  let f = dowF[dow] * (0.88 + rnd() * 0.24); if (d === 21 || d === 24) f *= 1.35
+  const tk = Math.round(820 * f), upt = 2.05 + rnd() * 0.3, pu = 21500 + rnd() * 2600
+  serie.push({ d, dow, tickets: tk, unid: Math.round(tk * upt), monto: tk * upt * pu })
+  const f2 = dowF[new Date(2025, 10, d).getDay()] * (0.85 + rnd() * 0.25)
+  const tk2 = Math.round(860 * f2), upt2 = 2.15 + rnd() * 0.3
+  serieAnt.push({ tickets: tk2, unid: Math.round(tk2 * upt2), monto: tk2 * upt2 * 14800 * (0.95 + rnd() * .1) })
+}
+const tot = (s, k) => s.reduce((a, x) => a + x[k], 0)
+const T = { monto: tot(serie, 'monto'), tickets: tot(serie, 'tickets'), unid: tot(serie, 'unid') }
+const A = { monto: tot(serieAnt, 'monto'), tickets: tot(serieAnt, 'tickets'), unid: tot(serieAnt, 'unid') }
+
+/* ---------- KPIs ---------- */
+const spark = (vals, color) => { const mx = Math.max(...vals), mn = Math.min(...vals); const p = vals.map((v, i) => `${(i / (vals.length - 1)) * 70},${22 - ((v - mn) / (mx - mn || 1)) * 20}`).join(' '); return `<svg width="70" height="24"><polyline points="${p}" fill="none" stroke="${color}" stroke-width="1.6"/></svg>` }
+const kp = [
+  { l: 'Venta $', c: 'var(--lime)', v: fmtM(T.monto), a: T.monto, b: A.monto, s: serie.map(x => x.monto), sub: 'inflación nov: ~31 % i.a.' },
+  { l: 'Tickets', c: 'var(--sky)', v: fmtN(T.tickets), a: T.tickets, b: A.tickets, s: serie.map(x => x.tickets) },
+  { l: 'Unidades', c: 'var(--violet)', v: fmtN(T.unid), a: T.unid, b: A.unid, s: serie.map(x => x.unid) },
+  { l: 'Ticket promedio', c: 'var(--amber)', v: fmt$(T.monto / T.tickets), a: T.monto / T.tickets, b: A.monto / A.tickets, s: serie.map(x => x.monto / x.tickets) },
+  { l: 'Unid. por ticket', c: 'var(--pink)', v: (T.unid / T.tickets).toFixed(2).replace('.', ','), a: T.unid / T.tickets, b: A.unid / A.tickets, s: serie.map(x => x.unid / x.tickets) },
+  { l: 'Precio prom. unidad', c: 'var(--teal)', v: fmt$(T.monto / T.unid), a: T.monto / T.unid, b: A.monto / A.unid, s: serie.map(x => x.monto / x.unid) },
+]
+$('#kpis').innerHTML = kp.map(k => `<div class="k"><div class="l" style="color:${k.c}">${k.l}</div><div class="v">${k.v}</div><div class="d">${flecha(pct(k.a, k.b))} <span class="c">vs nov 2025</span></div>${k.sub ? `<div class="c">${k.sub}</div>` : ''}${spark(k.s, k.c)}</div>`).join('')
+
+/* ---------- evolución ---------- */
+let met = 'monto', gran = 'dia'
+function agrupar(s) {
+  if (gran === 'dia') return s.map((x, i) => ({ lab: String(i + 1), ...x }))
+  if (gran === 'sem') { const out = []; s.forEach((x, i) => { const w = Math.floor(i / 7); out[w] ??= { lab: 'Sem ' + (w + 45), monto: 0, tickets: 0, unid: 0 }; out[w].monto += x.monto; out[w].tickets += x.tickets; out[w].unid += x.unid }); return out }
+  if (gran === 'mes') { const m = ['Dic', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov']; const f = [1.9, .8, .75, .85, .95, 1.0, 1.25, 1.2, .9, .95, 1.05, 1]; return m.map((lab, i) => ({ lab, monto: T.monto * f[i] * (0.8 + i * 0.03), tickets: T.tickets * f[i], unid: T.unid * f[i] })) }
+  return [{ lab: '2023', monto: T.monto * 4.1, tickets: T.tickets * 13.2, unid: T.unid * 13.6 }, { lab: '2024', monto: T.monto * 7.4, tickets: T.tickets * 12.1, unid: T.unid * 12.4 }, { lab: '2025', monto: T.monto * 9.9, tickets: T.tickets * 12.6, unid: T.unid * 12.9 }, { lab: '2026', monto: T.monto * 11.6, tickets: T.tickets * 11.9, unid: T.unid * 12.0 }]
+}
+const val = (x) => met === 'tprom' ? x.monto / x.tickets : x[met]
+const fmtMet = (v) => met === 'monto' ? fmtM(v) : met === 'tprom' ? fmt$(v) : fmtN(v)
+function dibujarEvo() {
+  const a = agrupar(serie), b = gran === 'dia' || gran === 'sem' ? agrupar(serieAnt) : a.map(x => ({ ...x, monto: x.monto * .72, tickets: x.tickets * 1.04, unid: x.unid * 1.03 }))
+  const W = 900, H = 260, P = { l: 56, r: 10, t: 12, b: 26 }
+  const vals = [...a.map(val), ...(gran === 'anio' ? [] : b.map(val))], mx = Math.max(...vals) * 1.08
+  const x = (i) => P.l + (i + .5) * (W - P.l - P.r) / a.length, y = (v) => H - P.b - (v / mx) * (H - P.t - P.b)
+  const bw = Math.min(40, (W - P.l - P.r) / a.length * .62)
+  let g = ''
+  for (let i = 0; i <= 4; i++) { const v = mx * i / 4; g += `<line x1="${P.l}" x2="${W - P.r}" y1="${y(v)}" y2="${y(v)}" stroke="rgba(255,255,255,.06)"/><text x="${P.l - 6}" y="${y(v) + 4}" fill="#64748b" font-size="10" text-anchor="end">${met === 'monto' ? (v / 1e6).toFixed(0) + 'M' : fmtN(v)}</text>` }
+  a.forEach((p, i) => {
+    const finde = gran === 'dia' && (p.dow === 0 || p.dow === 6)
+    g += `<rect class="hb" data-i="${i}" x="${x(i) - bw / 2}" y="${y(val(p))}" width="${bw}" height="${H - P.b - y(val(p))}" rx="3" fill="${finde ? 'rgba(163,230,53,.95)' : 'rgba(132,204,22,.55)'}"/>`
+    g += `<text x="${x(i)}" y="${H - 8}" fill="#64748b" font-size="10" text-anchor="middle">${p.lab}</text>`
+    if (gran === 'dia' && (p.d === 21 || p.d === 24)) g += `<circle cx="${x(i)}" cy="${y(val(p)) - 8}" r="4" fill="var(--amber)"/>`
+  })
+  if (gran !== 'anio') g += `<polyline points="${b.map((p, i) => `${x(i)},${y(val(p))}`).join(' ')}" fill="none" stroke="#64748b" stroke-width="2" stroke-dasharray="4 3"/>`
+  $('#evo').innerHTML = g
+  const tt = $('#tt')
+  document.querySelectorAll('#evo .hb').forEach(r => {
+    r.onmousemove = (e) => { const i = +r.dataset.i, p = a[i], q = b[i]; tt.style.display = 'block'; tt.style.left = e.clientX + 14 + 'px'; tt.style.top = e.clientY + 10 + 'px'
+      tt.innerHTML = `<b>${gran === 'dia' ? ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'][p.dow] + ' ' + p.lab + '/11' : p.lab}</b><br>$ ${fmtM(p.monto)} · ${fmtN(p.tickets)} tickets · ${fmtN(p.unid)} u.<br>Ticket prom. ${fmt$(p.monto / p.tickets)}${gran !== 'anio' ? `<br><span style="color:#94a3b8">Comparado: ${fmtMet(val(q))} ${flecha(pct(val(p), val(q)))}</span>` : ''}` }
+    r.onmouseleave = () => tt.style.display = 'none'
+  })
+}
+document.querySelectorAll('#metrica button').forEach(b => b.onclick = () => { met = b.dataset.m; document.querySelectorAll('#metrica button').forEach(x => x.classList.toggle('on', x === b)); dibujarEvo() })
+document.querySelectorAll('#gran button').forEach(b => b.onclick = () => { gran = b.dataset.g; document.querySelectorAll('#gran button').forEach(x => x.classList.toggle('on', x === b)); dibujarEvo() })
+dibujarEvo()
+
+/* ---------- día de la semana ---------- */
+const nd = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'], ord = [1, 2, 3, 4, 5, 6, 0]
+const porDow = ord.map(d => { const xs = serie.filter(x => x.dow === d); return { m: tot(xs, 'monto') / xs.length, t: tot(xs, 'tickets') / xs.length } })
+const mxd = Math.max(...porDow.map(x => x.m))
+$('#dow').innerHTML = porDow.map((x, i) => `<div style="display:grid;grid-template-columns:78px 1fr 80px 60px;gap:8px;align-items:center;font-size:12px;margin:5px 0"><span>${nd[i]}</span><div class="bar"><i style="width:${x.m / mxd * 100}%;${i >= 5 ? 'background:linear-gradient(90deg,#0ea5e9,#7dd3fc)' : ''}"></i></div><b style="text-align:right">${fmtM(x.m)}</b><span class="sub" style="text-align:right">${fmtN(x.t)} tk</span></div>`).join('')
+
+const ins = [
+  ['▲', 'var(--emerald)', 'rgba(34,197,94,.15)', `<b>Venta $ +${pct(T.monto, A.monto).toFixed(0)} %</b> contra nov 2025; ${pct(T.monto, A.monto) > 31 ? 'por encima de la inflación (~31 %): crece en términos reales.' : 'por debajo de la inflación (~31 %): en términos reales cae.'}`],
+  ['▼', 'var(--red)', 'rgba(248,113,113,.15)', `<b>Tickets ${pct(T.tickets, A.tickets).toFixed(0)} %</b>: entra menos gente que compra; el ticket promedio sostiene la plata.`],
+  ['★', 'var(--amber)', 'rgba(245,158,11,.15)', `<b>Sábado y domingo</b> hacen el 38 % de la venta de la semana.`],
+  ['◆', 'var(--violet)', 'rgba(167,139,250,.15)', `<b>4 proveedores</b> explican el 80 % de la venta del mes (clase A).`],
+]
+$('#insights').innerHTML = ins.map(([ic, c, bg, t]) => `<div class="ins"><b class="i" style="color:${c};background:${bg}">${ic}</b><div>${t}</div></div>`).join('')
+
+/* ---------- apertura ---------- */
+const DIMS = {
+  prov: { t: 'Proveedor', v: ['MOCF · MITO Capitán', 'MOZH · MITO Zimith', 'MOFR · MITO Fresh', 'ADID · Adidas', 'TOPP · Topper', 'MOAC · MITO Accesorios', 'NIKE · Nike', 'PUMA · Puma', 'JAGU · Jaguar', 'MOKD · MITO Kids', 'REEB · Reebok', 'FILA · Fila'] },
+  linea: { t: 'Línea', v: ['Remeras', 'Bermudas', 'Jeans', 'Zapatillas', 'Buzos', 'Camperas', 'Shorts de baño', 'Medias', 'Gorras', 'Ojotas', 'Musculosas', 'Camisas'] },
+  grupo: { t: 'Grupo', v: ['Básicos', 'Moda', 'Deportivo', 'Calzado urbano', 'Calzado running', 'Accesorios', 'Kids', 'Outlet'] },
+  mat: { t: 'Material', v: ['Algodón', 'Denim', 'Gabardina', 'Poliéster', 'Lona', 'Cuero sint.', 'Frisa', 'Lycra', 'Mesh'] },
+  flia: { t: 'Familia', v: ['Indumentaria', 'Calzado', 'Accesorios', 'Ropa interior'] },
+  temp: { t: 'Temporada', v: ['Verano 26', 'Invierno 26', 'Atemporal', 'Verano 25', 'Invierno 25'] },
+  anio: { t: 'Año', v: ['2026', '2025', '2024', '2023'] },
+  gen: { t: 'Género', v: ['Hombre', 'Mujer', 'Unisex', 'Niño', 'Niña'] },
+  local: { t: 'Local', v: ['CFD', 'CFPO', 'NVOCED', 'CFRA', 'RIVERAD', 'GRALPAZ', 'VCPD', 'WALMARTD', 'DINOD', 'RUTA9D', 'ESPINOD', 'LIBERD', 'BUSTOD', 'MUNOZ', '9DEJULIO', 'CFR4', 'CFR9'] },
+  art: { t: 'Artículo', v: ['CF050302 · Remera básica', 'RU265106 · Bermuda cargo', 'BG264102 · Jean recto', 'CF175121 · Remera print', 'VS051101 · Ojota', 'RU264105 · Jean slim', 'CJ265107 · Campera rompev.', 'QJ265605 · Buzo canguro', 'LE255125 · Musculosa', 'SZ051000 · Gorra'] },
+}
+const SIG = { prov: 'linea', linea: 'grupo', grupo: 'art', mat: 'linea', flia: 'linea', temp: 'linea', anio: 'linea', gen: 'linea', local: 'prov', art: null }
+let dim = 'prov', camino = [], orden = 'monto'
+function filas() {
+  const vs = DIMS[dim].v, n = vs.length
+  const pesos = vs.map((_, i) => Math.pow(0.72, i) * (0.8 + rnd() * .4)), sp = pesos.reduce((a, b) => a + b, 0)
+  const factor = camino.reduce((f) => f * 0.32, 1)
+  return vs.map((nom, i) => {
+    const sh = pesos[i] / sp, monto = T.monto * sh * factor, unid = T.unid * sh * factor * (0.85 + rnd() * .3)
+    const tickets = Math.min(T.tickets * factor, unid / (1.15 + rnd() * .4)), varp = -22 + rnd() * 70
+    return { nom, monto, unid, tickets, varp, stock: Math.round(unid * (1.4 + rnd() * 4)) }
+  })
+}
+function dibujarTabla() {
+  $('#dims').innerHTML = Object.entries(DIMS).map(([k, d]) => `<button data-k="${k}" class="${k === dim ? 'on' : ''}">${d.t}</button>`).join('')
+  document.querySelectorAll('#dims button').forEach(b => b.onclick = () => { dim = b.dataset.k; camino = []; seed = 11; dibujarTabla() })
+  $('#bc').innerHTML = camino.length ? `<a onclick="camino=[];dim='${camino[0].dim}';dibujarTabla()">Todo</a>` + camino.map(c => ` › <span>${DIMS[c.dim].t}: ${c.nom}</span>`).join('') + ` › <b>abierto por ${DIMS[dim].t}</b>` : `<span class="sub">Sin apertura: total de los filtros</span>`
+  const fs = filas().sort((a, b) => orden === 'var' ? b.varp - a.varp : b[orden] - a[orden])
+  const tm = fs.reduce((a, x) => a + x.monto, 0); let acu = 0
+  const mx = Math.max(...fs.map(x => x.monto))
+  const cols = [['l', DIMS[dim].t], ['', '$ Venta'], ['', '% part.'], ['l', ''], ['', 'Var. vs comp.'], ['', 'Unidades'], ['', 'Tickets'], ['', 'Ticket prom.'], ['', 'Precio prom.'], ['', 'Stock hoy'], ['', 'Semanas stock'], ['', 'ABC']]
+  let h = `<thead><tr>${cols.map(([c, t]) => `<th class="${c} ${(t === '$ Venta' && orden === 'monto') || (t === 'Unidades' && orden === 'unid') || (t === 'Tickets' && orden === 'tickets') ? 'on' : ''}">${t}</th>`).join('')}</tr></thead><tbody>`
+  fs.forEach(x => {
+    acu += x.monto; const cl = acu / tm <= .8 ? 'a' : acu / tm <= .95 ? 'b' : 'c'
+    const sem = x.stock / (x.unid / (DIAS / 7))
+    h += `<tr data-n="${x.nom}"><td class="l"><b>${x.nom}</b></td><td>${fmtM(x.monto)}</td><td>${(x.monto / tm * 100).toFixed(1).replace('.', ',')} %</td><td class="l"><div class="bar"><i style="width:${x.monto / mx * 100}%"></i></div></td><td>${flecha(x.varp)}</td><td>${fmtN(x.unid)}</td><td>${fmtN(x.tickets)}</td><td>${fmt$(x.monto / x.tickets)}</td><td>${fmt$(x.monto / x.unid)}</td><td>${fmtN(x.stock)}</td><td class="${sem < 2 ? 'down' : sem > 12 ? 'up' : ''}" style="${sem > 12 ? 'color:var(--amber)' : ''}">${sem.toFixed(1).replace('.', ',')}</td><td><span class="pill p-${cl}">${cl.toUpperCase()}</span></td></tr>`
+  })
+  const tu = fs.reduce((a, x) => a + x.unid, 0)
+  h += `</tbody><tfoot><tr><td class="l">Total</td><td>${fmtM(tm)}</td><td>100 %</td><td></td><td>${flecha(pct(T.monto, A.monto))}</td><td>${fmtN(tu)}</td><td title="Tickets distintos, no la suma">${fmtN(camino.length ? fs[0].tickets * 2.1 : T.tickets)}*</td><td>${fmt$(tm / T.tickets)}</td><td>${fmt$(tm / tu)}</td><td></td><td></td><td></td></tr></tfoot>`
+  $('#tabla').innerHTML = h
+  document.querySelectorAll('#tabla tbody tr').forEach(tr => tr.onclick = () => { const s = SIG[dim]; if (!s) return; camino.push({ dim, nom: tr.dataset.n }); dim = s; dibujarTabla() })
+}
+$('#ordenSel').onchange = (e) => { orden = e.target.value; dibujarTabla() }
+dibujarTabla()
+
+/* ---------- matriz ---------- */
+const meses = ['Dic 25', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov']
+const lin = DIMS.linea.v.slice(0, 10)
+const est = { Remeras: [1.6, 1.3, 1.1, .8, .5, .4, .3, .3, .5, .8, 1.1, 1.3], Bermudas: [1.7, 1.5, 1.2, .6, .3, .2, .1, .1, .3, .7, 1.1, 1.4], Buzos: [.2, .1, .2, .6, 1.2, 1.5, 1.7, 1.6, 1.1, .6, .3, .2], Camperas: [.1, .1, .2, .5, 1.1, 1.6, 1.9, 1.7, 1, .4, .2, .1], 'Shorts de baño': [2, 1.6, 1, .3, .1, .1, .05, .05, .1, .4, .9, 1.5] }
+let mh = `<thead><tr><th class="l" style="text-align:left">Línea</th>${meses.map(m => `<th>${m}</th>`).join('')}<th>Total</th></tr></thead><tbody>`
+lin.forEach((l, i) => {
+  const base = T.monto * Math.pow(.78, i) * .35, f = est[l] || meses.map(() => .8 + rnd() * .4)
+  const vs = f.map((x, j) => base * x * (0.7 + j * .04)), mx = Math.max(...vs)
+  mh += `<tr><td class="l" style="text-align:left"><b>${l}</b></td>${vs.map(v => { const a = v / mx; return `<td style="background:rgba(132,204,22,${(a * .75).toFixed(2)});color:${a > .55 ? '#0b1a02' : 'var(--ink)'};font-weight:${a > .55 ? 800 : 500}">${(v / 1e6).toFixed(1).replace('.', ',')}</td>` }).join('')}<td><b>${(vs.reduce((a, b) => a + b, 0) / 1e6).toFixed(0)} M</b></td></tr>`
+})
+$('#matriz').innerHTML = mh + '</tbody>'
+</script>
+</body>
+</html>

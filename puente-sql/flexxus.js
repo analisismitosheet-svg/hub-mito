@@ -12,7 +12,9 @@
  *   { accion: 'flexxus', consulta: 'ventas',  desde, hasta } -> { comprobantes }
  *   { accion: 'flexxus', consulta: 'saldos' }                 -> { deuda, hoy }
  *   { accion: 'flexxus', consulta: 'asientos', desde, hasta } -> { lineas, cuentas }  (hasta 93 días)
- *   { accion: 'flexxus', consulta: 'balance',  desde, hasta } -> { cuentas, totales }  (sumas y saldos)
+ *   { accion: 'flexxus', consulta: 'balance',  desde, hasta } -> { ejercicio, movimientos (previo/debe/haber), cuentas }
+ *   { accion: 'flexxus', consulta: 'mayor',    desde, hasta, cuenta } -> { lineas }  (detalle de una cuenta)
+ *   { accion: 'flexxus', consulta: 'centros',  desde, hasta } -> { centros, apropiado, totales, cuentas }
  */
 
 const FECHA = /^\d{4}-\d{2}-\d{2}$/
@@ -157,30 +159,202 @@ async function asientos(srv, desde, hasta) {
     if (!cab.has(a)) cab.set(a, { asiento: a, numero: num(f.NUM), fecha: txt(f.F), obs: txt(f.OBS) })
     lineas.push([a, txt(f.CTA), num(f.MONTO), num(f.DEBE) === 1 ? 1 : 0])
   }
-  return { asientos: [...cab.values()], lineas, cuentas }
+  const usuarios = await usuariosAsientos(srv, d, h)
+  return { asientos: [...cab.values()], lineas, cuentas, usuarios }
 }
 
+/**
+ * Ejercicio contable que contiene `desde` (tabla EJERCICIOS). El rango tiene
+ * que quedar dentro de un mismo ejercicio: el saldo inicial se arrastra desde
+ * su apertura.
+ */
+async function ejercicioDe(srv, d, h) {
+  const filas = await correr(
+    srv,
+    `SELECT COD, DES, CONVERT(char(10), INI, 23) AS INI, CONVERT(char(10), FIN, 23) AS FIN
+       FROM ${oq(`SELECT e.CODIGOEJERCICIO AS COD, e.DESCRIPCION AS DES, e.FECHAINICIO AS INI, e.FECHAFIN AS FIN
+                    FROM EJERCICIOS e
+                   WHERE e.FECHAINICIO <= '${d} 23:59:59' AND e.FECHAFIN >= '${d}'`)} q`,
+  )
+  const e = filas[0]
+  if (!e) throw new Error(`No hay ejercicio contable que contenga el ${d}`)
+  const ej = { codigo: num(e.COD), descripcion: txt(e.DES), inicio: txt(e.INI), fin: txt(e.FIN) }
+  if (h > ej.fin) throw new Error(`El rango tiene que quedar dentro del ejercicio ${ej.descripcion} (hasta el ${ej.fin})`)
+  return ej
+}
+
+/*
+ * Asientos automáticos de apertura y cierre del ejercicio (agrupación 13 de
+ * Flexxus, «CIERRE Y APERTURA»). La apertura va al saldo inicial; el cierre de
+ * resultados no se cuenta, así diciembre no queda en cero.
+ */
+const ES_APERTURA = `(c.CODIGOAGRUPACION = 13 AND c.OBSERVACIONES CONTAINING 'Apertura')`
+const ES_CIERRE = `(c.CODIGOAGRUPACION = 13 AND c.OBSERVACIONES CONTAINING 'Cierre')`
+
 async function balance(srv, desde, hasta) {
-  const { d, h } = validarRango(desde, hasta, 800)
-  const [filas, cuentas] = await Promise.all([
+  const { d, h } = validarRango(desde, hasta, 400)
+  const ej = await ejercicioDe(srv, d, h)
+  const sumas = `SUM(CASE WHEN d.ESDEBE = 1 THEN d.MONTO ELSE 0 END) AS DEBE,
+                 SUM(CASE WHEN d.ESDEBE = 1 THEN 0 ELSE d.MONTO END) AS HABER, COUNT(*) AS N`
+  const [periodo, previo, cuentas] = await Promise.all([
+    // Movimientos del rango, sin la apertura ni el cierre
     correr(
       srv,
-      `SELECT CTA, DEBE, HABER, N
-         FROM ${oq(`SELECT d.CUENTA AS CTA,
-                           SUM(CASE WHEN d.ESDEBE = 1 THEN d.MONTO ELSE 0 END) AS DEBE,
-                           SUM(CASE WHEN d.ESDEBE = 1 THEN 0 ELSE d.MONTO END) AS HABER,
-                           COUNT(*) AS N
-                      FROM CABEZAASIENTOS c
-                      JOIN CUERPOASIENTOS d ON d.CODIGOASIENTO = c.CODIGOASIENTO
-                     WHERE c.FECHA BETWEEN '${d}' AND '${h} 23:59:59'
-                     GROUP BY d.CUENTA`)} q`,
+      `SELECT CTA, DEBE, HABER, N FROM ${oq(`SELECT d.CUENTA AS CTA, ${sumas}
+                    FROM CABEZAASIENTOS c JOIN CUERPOASIENTOS d ON d.CODIGOASIENTO = c.CODIGOASIENTO
+                   WHERE c.FECHA BETWEEN '${d}' AND '${h} 23:59:59' AND NOT ${ES_APERTURA} AND NOT ${ES_CIERRE}
+                   GROUP BY d.CUENTA`)} q`,
+    ),
+    // Lo anterior al rango dentro del ejercicio: apertura + movimientos hasta el día anterior a `desde`
+    correr(
+      srv,
+      `SELECT CTA, DEBE, HABER, N FROM ${oq(`SELECT d.CUENTA AS CTA, ${sumas}
+                    FROM CABEZAASIENTOS c JOIN CUERPOASIENTOS d ON d.CODIGOASIENTO = c.CODIGOASIENTO
+                   WHERE c.FECHA >= '${ej.inicio}' AND NOT ${ES_CIERRE}
+                     AND ((c.FECHA < '${d}' AND NOT ${ES_APERTURA}) OR (${ES_APERTURA} AND c.FECHA <= '${h} 23:59:59'))
+                   GROUP BY d.CUENTA`)} q`,
+    ),
+    planDeCuentas(srv),
+  ])
+  const prev = new Map(previo.map((f) => [txt(f.CTA), num(f.DEBE) - num(f.HABER)]))
+  const todas = new Set([...prev.keys(), ...periodo.map((f) => txt(f.CTA))])
+  const mov = new Map(periodo.map((f) => [txt(f.CTA), f]))
+  return {
+    ejercicio: ej,
+    movimientos: [...todas].map((cta) => {
+      const f = mov.get(cta)
+      // previo = debe − haber acumulado antes del rango (la pantalla decide qué cuentas lo arrastran)
+      return { cuenta: cta, previo: prev.get(cta) ?? 0, debe: num(f?.DEBE), haber: num(f?.HABER), lineas: num(f?.N) }
+    }),
+    cuentas,
+  }
+}
+
+/** Mayor de una cuenta: sus líneas en el rango, con el asiento (sin apertura ni cierre). */
+async function mayor(srv, desde, hasta, cuenta) {
+  const { d, h } = validarRango(desde, hasta, 400)
+  const cta = String(cuenta ?? '')
+  if (!/^\d{1,12}$/.test(cta)) throw new Error('Cuenta inválida')
+  const filas = await correr(
+    srv,
+    `SELECT TOP 5001 A, NUM, CONVERT(char(10), F, 23) AS F, OBS, MONTO, DEBE
+       FROM ${oq(`SELECT c.CODIGOASIENTO AS A, c.NUMEROASIENTO AS NUM, c.FECHA AS F, c.OBSERVACIONES AS OBS,
+                         d.MONTO AS MONTO, d.ESDEBE AS DEBE
+                    FROM CABEZAASIENTOS c JOIN CUERPOASIENTOS d ON d.CODIGOASIENTO = c.CODIGOASIENTO
+                   WHERE d.CUENTA = ${cta} AND c.FECHA BETWEEN '${d}' AND '${h} 23:59:59'
+                     AND NOT ${ES_APERTURA} AND NOT ${ES_CIERRE}`)} q
+      ORDER BY F, NUM, A`,
+  )
+  return {
+    cuenta: cta,
+    recortado: filas.length > 5000,
+    lineas: filas.slice(0, 5000).map((f) => ({
+      asiento: num(f.A),
+      numero: num(f.NUM),
+      fecha: txt(f.F),
+      obs: txt(f.OBS),
+      debe: num(f.DEBE) === 1 ? num(f.MONTO) : 0,
+      haber: num(f.DEBE) === 1 ? 0 : num(f.MONTO),
+    })),
+  }
+}
+
+/**
+ * Centros de costo: lo apropiado a cada centro (APROPIACIONCENTROSCOSTO, por
+ * línea de asiento) en el rango, por cuenta; más el total de cada cuenta de
+ * resultado para ver lo que quedó sin asignar.
+ */
+async function centros(srv, desde, hasta) {
+  const { d, h } = validarRango(desde, hasta, 400)
+  const rango = `c.FECHA BETWEEN '${d}' AND '${h} 23:59:59' AND NOT ${ES_APERTURA} AND NOT ${ES_CIERRE}`
+  const [apropiado, totales, lista, cuentas] = await Promise.all([
+    correr(
+      srv,
+      `SELECT CC, CTA, NETO, N FROM ${oq(`SELECT a.CODIGOCENTROSCOSTO AS CC, d.CUENTA AS CTA,
+                         SUM(CASE WHEN d.ESDEBE = 1 THEN a.MONTO ELSE -a.MONTO END) AS NETO, COUNT(*) AS N
+                    FROM CABEZAASIENTOS c
+                    JOIN CUERPOASIENTOS d ON d.CODIGOASIENTO = c.CODIGOASIENTO
+                    JOIN APROPIACIONCENTROSCOSTO a ON a.CODIGOASIENTO = d.CODIGOASIENTO AND a.LINEA = d.LINEA
+                   WHERE ${rango} AND a.MONTO <> 0
+                   GROUP BY a.CODIGOCENTROSCOSTO, d.CUENTA`)} q`,
+    ),
+    correr(
+      srv,
+      `SELECT CTA, NETO FROM ${oq(`SELECT d.CUENTA AS CTA, SUM(CASE WHEN d.ESDEBE = 1 THEN d.MONTO ELSE -d.MONTO END) AS NETO
+                    FROM CABEZAASIENTOS c JOIN CUERPOASIENTOS d ON d.CODIGOASIENTO = c.CODIGOASIENTO
+                   WHERE ${rango} AND d.CUENTA >= 4000000000
+                   GROUP BY d.CUENTA`)} q`,
+    ),
+    correr(
+      srv,
+      `SELECT CC, DES, RUBRO, ACTIVO FROM ${oq(`SELECT cc.CODIGOCENTROSCOSTO AS CC, cc.DESCRIPCION AS DES, r.DESCRIPCION AS RUBRO, cc.ACTIVO AS ACTIVO
+                    FROM CENTROSCOSTO cc
+                    LEFT JOIN RUBROSCENTROSCOSTO r ON r.CODIGORUBROCENTROCOSTO = cc.CODIGORUBROCENTROCOSTO
+                     AND r.CODIGOSUPERRUBROCENTROCOSTO = cc.CODIGOSUPERRUBROCENTROCOSTO`)} q`,
     ),
     planDeCuentas(srv),
   ])
   return {
-    movimientos: filas.map((f) => ({ cuenta: txt(f.CTA), debe: num(f.DEBE), haber: num(f.HABER), lineas: num(f.N) })),
+    centros: lista.map((f) => ({ centro: txt(f.CC), descripcion: txt(f.DES), rubro: txt(f.RUBRO) || 'Sin rubro', activo: num(f.ACTIVO) === 1 })),
+    apropiado: apropiado.map((f) => ({ centro: txt(f.CC), cuenta: txt(f.CTA), neto: num(f.NETO), lineas: num(f.N) })),
+    totales: totales.map((f) => ({ cuenta: txt(f.CTA), neto: num(f.NETO) })),
     cuentas,
   }
+}
+
+/**
+ * Quién hizo cada asiento del rango. Los manuales tienen su historia en
+ * ASIENTOSMANUALES (orden 1 = alta, el resto = modificaciones); los automáticos
+ * se atan al comprobante que los generó (COMPROBANTESASIENTOS): ventas y
+ * movimientos de fondos en CABEZACOMPROBANTES, compras en CABEZACOMPRAS, cobros
+ * y pagos en CABEZAPAGOS / CABEZAPAGOSCOMPRAS.
+ */
+async function usuariosAsientos(srv, d, h) {
+  const [manuales, auto] = await Promise.all([
+    correr(
+      srv,
+      `SELECT A, ORDEN, USU, CONVERT(char(16), FH, 120) AS FH FROM ${oq(`SELECT m.CODIGOASIENTO AS A, m.ORDENMODIFICACION AS ORDEN,
+                         m.CODIGOUSUARIO AS USU, m.FECHAHORA AS FH
+                    FROM CABEZAASIENTOS c JOIN ASIENTOSMANUALES m ON m.CODIGOASIENTO = c.CODIGOASIENTO
+                   WHERE c.FECHA BETWEEN '${d}' AND '${h} 23:59:59'`)} q`,
+    ),
+    correr(
+      srv,
+      `SELECT A, T, USU FROM ${oq(`SELECT ca.CODIGOASIENTO AS A, ca.TIPOCOMPROBANTE AS T,
+                         COALESCE(v.CODIGOUSUARIO, k.CODIGOUSUARIO, p.CODIGOUSUARIO, pc.CODIGOUSUARIO) AS USU
+                    FROM CABEZAASIENTOS c
+                    JOIN COMPROBANTESASIENTOS ca ON ca.CODIGOASIENTO = c.CODIGOASIENTO
+                    LEFT JOIN CABEZACOMPROBANTES v ON ca.ORIGEN = 'I' AND v.TIPOCOMPROBANTE = ca.TIPOCOMPROBANTE AND v.NUMEROCOMPROBANTE = ca.NUMEROCOMPROBANTE
+                    LEFT JOIN CABEZAPAGOS p ON ca.ORIGEN = 'I' AND ca.TIPOCOMPROBANTE = 'PA' AND p.NUMEROPAGO = ca.NUMEROCOMPROBANTE
+                    LEFT JOIN CABEZACOMPRAS k ON ca.ORIGEN = 'E' AND k.TIPOCOMPROBANTE = ca.TIPOCOMPROBANTE AND k.NUMEROCOMPROBANTE = ca.NUMEROCOMPROBANTE
+                                             AND k.CODIGOPROVEEDOR = ca.CODIGOPROVEEDOR
+                    LEFT JOIN CABEZAPAGOSCOMPRAS pc ON ca.ORIGEN = 'E' AND ca.TIPOCOMPROBANTE = 'PA' AND pc.NUMEROPAGO = ca.NUMEROCOMPROBANTE
+                   WHERE c.FECHA BETWEEN '${d}' AND '${h} 23:59:59'`)} q`,
+    ),
+  ])
+  const res = new Map()
+  const de = (a) => {
+    if (!res.has(a)) res.set(a, { asiento: a, manual: false, creo: '', creo_en: '', edito: '', edito_en: '', ediciones: 0, origen: '' })
+    return res.get(a)
+  }
+  for (const f of [...manuales].sort((x, y) => num(x.ORDEN) - num(y.ORDEN))) {
+    const u = de(num(f.A))
+    u.manual = true
+    if (num(f.ORDEN) <= 1 && !u.creo) {
+      u.creo = txt(f.USU)
+      u.creo_en = txt(f.FH)
+    } else if (num(f.ORDEN) > 1) {
+      u.edito = txt(f.USU)
+      u.edito_en = txt(f.FH)
+      u.ediciones++
+    }
+  }
+  for (const f of auto) {
+    const u = de(num(f.A))
+    if (!u.origen) u.origen = txt(f.T)
+    if (!u.manual && !u.creo && txt(f.USU)) u.creo = txt(f.USU)
+  }
+  return [...res.values()]
 }
 
 /**
@@ -190,8 +364,8 @@ async function balance(srv, desde, hasta) {
 async function accionFlexxus(srv, asegurarConexion, body) {
   if (!srv) throw new Error('Falta el servidor local (SQL2_*) con el servidor vinculado FLEXXUS')
   const consulta = String(body?.consulta ?? '')
-  if (!['ventas', 'saldos', 'asientos', 'balance'].includes(consulta)) throw new Error('Consulta de Flexxus inválida')
-  const clave = `${consulta}|${body?.desde ?? ''}|${body?.hasta ?? ''}`
+  if (!['ventas', 'saldos', 'asientos', 'balance', 'mayor', 'centros'].includes(consulta)) throw new Error('Consulta de Flexxus inválida')
+  const clave = `${consulta}|${body?.desde ?? ''}|${body?.hasta ?? ''}|${body?.cuenta ?? ''}`
   const hay = cache.get(clave)
   if (!body?.forzar && hay && Date.now() - hay.en < CACHE_MS) return { ...hay.datos, calculado: new Date(hay.en).toISOString(), cacheado: true }
 
@@ -201,6 +375,8 @@ async function accionFlexxus(srv, asegurarConexion, body) {
   if (consulta === 'ventas') datos = await ventas(srv, body?.desde, body?.hasta)
   else if (consulta === 'saldos') datos = await saldos(srv)
   else if (consulta === 'asientos') datos = await asientos(srv, body?.desde, body?.hasta)
+  else if (consulta === 'mayor') datos = await mayor(srv, body?.desde, body?.hasta, body?.cuenta)
+  else if (consulta === 'centros') datos = await centros(srv, body?.desde, body?.hasta)
   else datos = await balance(srv, body?.desde, body?.hasta)
 
   const en = Date.now()

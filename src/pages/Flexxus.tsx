@@ -1,12 +1,16 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import {
   BookOpen,
+  Building2,
   CalendarRange,
   ChevronDown,
   Database,
   Download,
   FileText,
+  History,
+  Landmark,
   Loader2,
+  PencilLine,
   ReceiptText,
   RefreshCw,
   Scale,
@@ -18,12 +22,18 @@ import {
 } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
+import MultiselectFiltro from '@/components/MultiselectFiltro'
 import { coloresUnicos } from '@/lib/coloresUnicos'
 import {
+  CUENTA_RNA,
   DIAS_MAX_ASIENTOS,
   TRAMOS,
+  armarBalance,
+  arrastraSaldo,
   cargarAsientos,
   cargarBalance,
+  cargarCentros,
+  cargarMayor,
   cargarSaldos,
   cargarVentas,
   diasEntre,
@@ -37,6 +47,8 @@ import {
   tramoDe,
   type Asientos,
   type Balance,
+  type Centros,
+  type Mayor,
   type Saldos,
   type Tramo,
   type Ventas,
@@ -50,9 +62,9 @@ import {
  * solo lectura). Ver src/lib/flexxus.ts y puente-sql/flexxus.js.
  */
 
-type Solapa = 'ventas' | 'saldos' | 'asientos' | 'balance'
+type Solapa = 'ventas' | 'saldos' | 'asientos' | 'balance' | 'centros'
 
-const [cSky, cEmerald, cRose, cViolet, cAmber, cTeal, cOrange, cIndigo] = coloresUnicos([
+const [cSky, cEmerald, cRose, cViolet, cAmber, cTeal, cOrange, cIndigo, cPink] = coloresUnicos([
   '#0284c7',
   '#10b981',
   '#f43f5e',
@@ -61,6 +73,7 @@ const [cSky, cEmerald, cRose, cViolet, cAmber, cTeal, cOrange, cIndigo] = colore
   '#14b8a6',
   '#f97316',
   '#6366f1',
+  '#ec4899',
 ])
 
 const btnChico =
@@ -103,6 +116,7 @@ export default function Flexxus() {
     { id: 'saldos', texto: 'Saldos de clientes', icono: Users, color: cViolet },
     { id: 'asientos', texto: 'Asientos', icono: BookOpen, color: cAmber },
     { id: 'balance', texto: 'Sumas y saldos', icono: Scale, color: cTeal },
+    { id: 'centros', texto: 'Centros de costo', icono: Building2, color: cPink },
   ] as const
 
   const presets = [
@@ -170,6 +184,7 @@ export default function Flexxus() {
       {solapa === 'saldos' && <SolapaSaldos />}
       {solapa === 'asientos' && <SolapaAsientos desde={desde} hasta={hasta} />}
       {solapa === 'balance' && <SolapaBalance desde={desde} hasta={hasta} />}
+      {solapa === 'centros' && <SolapaCentros desde={desde} hasta={hasta} />}
     </Layout>
   )
 }
@@ -799,11 +814,14 @@ function SolapaAsientos({ desde, hasta }: { desde: string; hasta: string }) {
     [desde, hasta, largo],
   )
   const [busqueda, setBusqueda] = useState('')
-  const [cuenta, setCuenta] = useState('')
+  const [cuentasSel, setCuentasSel] = useState<Set<string>>(new Set())
+  const [usuariosSel, setUsuariosSel] = useState<Set<string>>(new Set())
+  const [tiposSel, setTiposSel] = useState<Set<string>>(new Set())
   const [abiertos, setAbiertos] = useState<Set<number>>(new Set())
   const [mostrar, setMostrar] = useState(TOPE)
 
   const nombreCuenta = useMemo(() => new Map((datos?.cuentas ?? []).map((c) => [c.cuenta, c.descripcion])), [datos])
+  const usuarioDe = useMemo(() => new Map((datos?.usuarios ?? []).map((u) => [u.asiento, u])), [datos])
   const lineasPor = useMemo(() => {
     const m = new Map<number, Asientos['lineas']>()
     for (const l of datos?.lineas ?? []) {
@@ -813,43 +831,86 @@ function SolapaAsientos({ desde, hasta }: { desde: string; hasta: string }) {
     }
     return m
   }, [datos])
-  const cuentasUsadas = useMemo(() => {
+
+  const opcionesCuentas = useMemo(() => {
     const s = new Set((datos?.lineas ?? []).map((l) => l[1]))
-    return [...s].sort().map((c) => ({ cuenta: c, descripcion: nombreCuenta.get(c) ?? '' }))
+    return [...s].sort().map((c) => ({ id: c, label: `${c} · ${nombreCuenta.get(c) ?? ''}` }))
   }, [datos, nombreCuenta])
+  const SIN_USUARIO = '(sin usuario)'
+  const opcionesUsuarios = useMemo(() => {
+    const s = new Set<string>()
+    for (const a of datos?.asientos ?? []) {
+      const u = usuarioDe.get(a.asiento)
+      s.add(u?.creo || SIN_USUARIO)
+      if (u?.edito) s.add(u.edito)
+    }
+    return [...s].sort().map((u) => ({ id: u, label: u }))
+  }, [datos, usuarioDe])
+  const opcionesTipos = [
+    { id: 'manual', label: 'Manuales' },
+    { id: 'auto', label: 'Automáticos (de un comprobante)' },
+    { id: 'editado', label: 'Editados después de cargarlos' },
+  ]
 
   const q = norm(busqueda.trim())
   const lista = useMemo(
     () =>
       (datos?.asientos ?? [])
-        .filter((a) => !cuenta || (lineasPor.get(a.asiento) ?? []).some((l) => l[1] === cuenta))
-        .filter((a) => !q || norm(`${a.numero} ${a.obs}`).includes(q))
+        .filter((a) => cuentasSel.size === 0 || (lineasPor.get(a.asiento) ?? []).some((l) => cuentasSel.has(l[1])))
+        .filter((a) => {
+          if (usuariosSel.size === 0) return true
+          const u = usuarioDe.get(a.asiento)
+          return usuariosSel.has(u?.creo || SIN_USUARIO) || (!!u?.edito && usuariosSel.has(u.edito))
+        })
+        .filter((a) => {
+          if (tiposSel.size === 0) return true
+          const u = usuarioDe.get(a.asiento)
+          return (
+            (tiposSel.has('manual') && !!u?.manual) ||
+            (tiposSel.has('auto') && !u?.manual) ||
+            (tiposSel.has('editado') && (u?.ediciones ?? 0) > 0)
+          )
+        })
+        .filter((a) => {
+          if (!q) return true
+          const u = usuarioDe.get(a.asiento)
+          return norm(`${a.numero} ${a.obs} ${u?.creo ?? ''} ${u?.edito ?? ''}`).includes(q)
+        })
         .reverse(),
-    [datos, cuenta, q, lineasPor],
+    [datos, cuentasSel, usuariosSel, tiposSel, q, lineasPor, usuarioDe],
   )
 
-  /* Con una cuenta elegida, el «mayor»: debe, haber y saldo de esa cuenta en el rango. */
+  /* Con cuentas elegidas: debe, haber y saldo de ESAS cuentas en el rango. */
   const mayor = useMemo(() => {
-    if (!cuenta) return null
+    if (cuentasSel.size === 0) return null
     let debe = 0
     let haber = 0
-    for (const a of lista) for (const l of lineasPor.get(a.asiento) ?? []) if (l[1] === cuenta) (l[3] ? (debe += l[2]) : (haber += l[2]))
+    for (const a of lista) for (const l of lineasPor.get(a.asiento) ?? []) if (cuentasSel.has(l[1])) (l[3] ? (debe += l[2]) : (haber += l[2]))
     return { debe, haber }
-  }, [cuenta, lista, lineasPor])
+  }, [cuentasSel, lista, lineasPor])
+
+  const manuales = lista.filter((a) => usuarioDe.get(a.asiento)?.manual).length
+  const editados = lista.filter((a) => (usuarioDe.get(a.asiento)?.ediciones ?? 0) > 0).length
 
   const exportar = () =>
     void bajarExcel(`flexxus_asientos_${desde}_${hasta}`, {
-      Asientos: lista.flatMap((a) =>
-        (lineasPor.get(a.asiento) ?? []).map((l) => ({
+      Asientos: lista.flatMap((a) => {
+        const u = usuarioDe.get(a.asiento)
+        return (lineasPor.get(a.asiento) ?? []).map((l) => ({
           Fecha: a.fecha,
           Asiento: a.numero,
           Observaciones: a.obs,
+          Tipo: u?.manual ? 'Manual' : 'Automático',
+          'Creó': u?.creo ?? '',
+          'Creado el': u?.creo_en ?? '',
+          'Editó': u?.edito ?? '',
+          'Editado el': u?.edito_en ?? '',
           Cuenta: l[1],
           Descripción: nombreCuenta.get(l[1]) ?? '',
           Debe: l[3] ? l[2] : 0,
           Haber: l[3] ? 0 : l[2],
-        })),
-      ),
+        }))
+      }),
     })
 
   if (largo) {
@@ -861,64 +922,68 @@ function SolapaAsientos({ desde, hasta }: { desde: string; hasta: string }) {
     )
   }
 
+  const nombresSel = [...cuentasSel].map((c) => nombreCuenta.get(c) ?? c)
+
   return (
     <div className="space-y-4 pb-6">
       <Estado cargando={cargando} error={error} hay={!!datos} texto="Leyendo los asientos de Flexxus…" />
       {datos && (
         <>
           <Tarjetas
-            items={[
-              { titulo: 'Asientos', valor: numero(lista.length), pie: `${numero(datos.lineas.length)} líneas en el rango`, icono: BookOpen, color: cAmber },
-              ...(mayor
+            items={
+              mayor
                 ? [
+                    { titulo: 'Asientos', valor: numero(lista.length), pie: `${numero(manuales)} manuales · ${numero(editados)} editados`, icono: BookOpen, color: cAmber },
                     { titulo: 'Debe', valor: pesosCorto(mayor.debe), pie: pesos(mayor.debe), icono: TrendingUp, color: cEmerald },
                     { titulo: 'Haber', valor: pesosCorto(mayor.haber), pie: pesos(mayor.haber), icono: FileText, color: cRose },
                     {
                       titulo: 'Saldo del período',
                       valor: pesosCorto(mayor.debe - mayor.haber),
-                      pie: `${cuenta} · ${nombreCuenta.get(cuenta) ?? ''}`,
+                      pie: nombresSel.length === 1 ? nombresSel[0] : `${nombresSel.length} cuentas`,
                       icono: Scale,
                       color: cTeal,
                     },
                   ]
-                : []),
-            ]}
+                : [
+                    { titulo: 'Asientos', valor: numero(lista.length), pie: `${numero(datos.lineas.length)} líneas en el rango`, icono: BookOpen, color: cAmber },
+                    { titulo: 'Manuales', valor: numero(manuales), pie: 'cargados a mano en Flexxus', icono: PencilLine, color: cViolet },
+                    { titulo: 'Editados', valor: numero(editados), pie: 'modificados después de cargarlos', icono: History, color: cOrange },
+                    {
+                      titulo: 'Automáticos',
+                      valor: numero(lista.length - manuales),
+                      pie: 'salen de un comprobante',
+                      icono: ReceiptText,
+                      color: cSky,
+                    },
+                  ]
+            }
           />
           <Barra
             busqueda={busqueda}
             setBusqueda={setBusqueda}
-            placeholder="Buscar número u observación…"
+            placeholder="Buscar número, observación o usuario…"
             calculado={datos.calculado}
             cacheado={datos.cacheado}
             cargando={cargando}
             onActualizar={() => void cargar(true)}
             onExcel={exportar}
             extra={
-              <select
-                value={cuenta}
-                onChange={(e) => {
-                  setCuenta(e.target.value)
-                  setMostrar(TOPE)
-                }}
-                className="h-10 max-w-xs rounded-xl border border-line bg-surface px-2 text-sm text-ink"
-                aria-label="Filtrar por cuenta"
-              >
-                <option value="">Todas las cuentas</option>
-                {cuentasUsadas.map((c) => (
-                  <option key={c.cuenta} value={c.cuenta}>
-                    {c.cuenta} · {c.descripcion}
-                  </option>
-                ))}
-              </select>
+              <>
+                <MultiselectFiltro label="Cuentas" opciones={opcionesCuentas} seleccionadas={cuentasSel} onChange={(s) => { setCuentasSel(s); setMostrar(TOPE) }} />
+                <MultiselectFiltro label="Usuario" opciones={opcionesUsuarios} seleccionadas={usuariosSel} onChange={(s) => { setUsuariosSel(s); setMostrar(TOPE) }} />
+                <MultiselectFiltro label="Tipo" opciones={opcionesTipos} seleccionadas={tiposSel} onChange={(s) => { setTiposSel(s); setMostrar(TOPE) }} />
+              </>
             }
           />
           <div className={caja}>
-            <table className="w-full min-w-[720px] text-sm">
+            <table className="w-full min-w-[900px] text-sm">
               <thead>
                 <tr className={filaHead}>
                   <th className={th}>Fecha</th>
                   <th className={th}>Asiento</th>
                   <th className={th}>Observaciones</th>
+                  <th className={th}>Creó</th>
+                  <th className={th}>Editó</th>
                   <th className={thR}>Importe</th>
                 </tr>
               </thead>
@@ -927,6 +992,7 @@ function SolapaAsientos({ desde, hasta }: { desde: string; hasta: string }) {
                   const lin = lineasPor.get(a.asiento) ?? []
                   const importe = lin.reduce((t, l) => t + (l[3] ? l[2] : 0), 0)
                   const ab = abiertos.has(a.asiento)
+                  const u = usuarioDe.get(a.asiento)
                   return (
                     <Fragment key={a.asiento}>
                       <tr
@@ -948,11 +1014,30 @@ function SolapaAsientos({ desde, hasta }: { desde: string; hasta: string }) {
                           </span>
                         </td>
                         <td className={td}>{a.obs || '—'}</td>
+                        <td className={`${td} whitespace-nowrap`}>
+                          <span className="text-ink">{u?.creo || <span className="text-sub/50">—</span>}</span>
+                          <span className="block text-[11px] text-sub/70">
+                            {u?.manual ? `manual · ${fechaHora(u.creo_en)}` : `automático${u?.origen ? ` · ${u.origen}` : ''}`}
+                          </span>
+                        </td>
+                        <td className={`${td} whitespace-nowrap`}>
+                          {u?.edito ? (
+                            <>
+                              <span className="text-orange-500">{u.edito}</span>
+                              <span className="block text-[11px] text-sub/70">
+                                {fechaHora(u.edito_en)}
+                                {u.ediciones > 1 ? ` · ${u.ediciones} veces` : ''}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-sub/40">—</span>
+                          )}
+                        </td>
                         <td className={`${tdR} text-ink`}>{pesos(importe)}</td>
                       </tr>
                       {ab && (
                         <tr className="border-b border-line/60 bg-surface2/40">
-                          <td colSpan={4} className="px-3 py-2">
+                          <td colSpan={6} className="px-3 py-2">
                             <table className="w-full text-xs">
                               <thead>
                                 <tr className="text-left text-sub">
@@ -963,7 +1048,7 @@ function SolapaAsientos({ desde, hasta }: { desde: string; hasta: string }) {
                               </thead>
                               <tbody>
                                 {lin.map((l, i) => (
-                                  <tr key={i} className={`border-t border-line/40 ${l[1] === cuenta ? 'bg-teal-500/10' : ''}`}>
+                                  <tr key={i} className={`border-t border-line/40 ${cuentasSel.has(l[1]) ? 'bg-teal-500/10' : ''}`}>
                                     <td className={`py-1 ${l[3] ? '' : 'pl-6'}`}>
                                       <span className="tabular-nums text-sub">{l[1]}</span>{' '}
                                       <span className="text-ink">{nombreCuenta.get(l[1]) ?? ''}</span>
@@ -980,7 +1065,7 @@ function SolapaAsientos({ desde, hasta }: { desde: string; hasta: string }) {
                     </Fragment>
                   )
                 })}
-                {lista.length === 0 && <SinFilas cols={4} />}
+                {lista.length === 0 && <SinFilas cols={6} />}
               </tbody>
             </table>
             {lista.length > mostrar && (
@@ -997,44 +1082,98 @@ function SolapaAsientos({ desde, hasta }: { desde: string; hasta: string }) {
   )
 }
 
+/** "2026-11-11 13:03" → "11/11 13:03" */
+function fechaHora(s: string): string {
+  if (!s) return ''
+  const [f, h = ''] = s.split(' ')
+  const [, m, d] = f.split('-')
+  return `${d}/${m} ${h}`.trim()
+}
+
 /* =========================== SUMAS Y SALDOS =========================== */
 
 function SolapaBalance({ desde, hasta }: { desde: string; hasta: string }) {
   const { datos, cargando, error, cargar } = useCarga<Balance>((forzar) => cargarBalance(desde, hasta, forzar), [desde, hasta])
   const [busqueda, setBusqueda] = useState('')
+  const [rubrosSel, setRubrosSel] = useState<Set<string>>(new Set())
+  const [cuentasSel, setCuentasSel] = useState<Set<string>>(new Set())
+  const [ocultarCero, setOcultarCero] = useState(true)
+  const [abierta, setAbierta] = useState<string | null>(null)
+  const [mayores, setMayores] = useState<Record<string, Mayor | { error: string } | 'cargando'>>({})
 
-  const filas = useMemo(() => {
+  // Si cambia el rango, los detalles abiertos ya no sirven
+  useEffect(() => {
+    setMayores({})
+    setAbierta(null)
+  }, [desde, hasta])
+
+  const base = useMemo(() => {
     if (!datos) return []
     const plan = new Map(datos.cuentas.map((c) => [c.cuenta, c]))
     const rubro = rubros(datos.cuentas)
-    const q = norm(busqueda.trim())
-    return datos.movimientos
-      .map((m) => ({
-        ...m,
-        descripcion: plan.get(m.cuenta)?.descripcion ?? '',
-        rubro: rubro.get(m.cuenta)?.descripcion ?? 'Sin rubro',
-        rubroCod: rubro.get(m.cuenta)?.cuenta ?? 'zzz',
-        saldo: m.debe - m.haber,
-      }))
-      .filter((f) => !q || norm(`${f.cuenta} ${f.descripcion} ${f.rubro}`).includes(q))
-      .sort((a, b) => a.cuenta.localeCompare(b.cuenta))
-  }, [datos, busqueda])
+    return armarBalance(datos.movimientos).map((m) => ({
+      ...m,
+      descripcion: plan.get(m.cuenta)?.descripcion ?? '',
+      rubro: rubro.get(m.cuenta)?.descripcion ?? 'Sin rubro',
+      rubroCod: rubro.get(m.cuenta)?.cuenta ?? 'zzz',
+    }))
+  }, [datos])
+
+  const opcionesRubros = useMemo(() => {
+    const m = new Map(base.map((f) => [f.rubroCod, f.rubro]))
+    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([id, label]) => ({ id, label }))
+  }, [base])
+  const opcionesCuentas = useMemo(
+    () => [...base].sort((a, b) => a.cuenta.localeCompare(b.cuenta)).map((f) => ({ id: f.cuenta, label: `${f.cuenta} · ${f.descripcion}` })),
+    [base],
+  )
+
+  const q = norm(busqueda.trim())
+  const filas = useMemo(
+    () =>
+      base
+        .filter((f) => rubrosSel.size === 0 || rubrosSel.has(f.rubroCod))
+        .filter((f) => cuentasSel.size === 0 || cuentasSel.has(f.cuenta))
+        .filter((f) => !ocultarCero || Math.abs(f.final) >= 0.5 || f.debe || f.haber)
+        .filter((f) => !q || norm(`${f.cuenta} ${f.descripcion} ${f.rubro}`).includes(q))
+        .sort((a, b) => a.cuenta.localeCompare(b.cuenta)),
+    [base, rubrosSel, cuentasSel, ocultarCero, q],
+  )
 
   const grupos = useMemo(() => {
-    const m = new Map<string, { rubro: string; cod: string; filas: typeof filas; debe: number; haber: number }>()
+    const m = new Map<string, { rubro: string; cod: string; filas: typeof filas; inicial: number; debe: number; haber: number; final: number }>()
     for (const f of filas) {
-      const g = m.get(f.rubroCod) ?? { rubro: f.rubro, cod: f.rubroCod, filas: [], debe: 0, haber: 0 }
+      const g = m.get(f.rubroCod) ?? { rubro: f.rubro, cod: f.rubroCod, filas: [], inicial: 0, debe: 0, haber: 0, final: 0 }
       g.filas.push(f)
+      g.inicial += f.inicial
       g.debe += f.debe
       g.haber += f.haber
+      g.final += f.final
       m.set(f.rubroCod, g)
     }
     return [...m.values()].sort((a, b) => a.cod.localeCompare(b.cod))
   }, [filas])
 
-  const debe = filas.reduce((t, f) => t + f.debe, 0)
-  const haber = filas.reduce((t, f) => t + f.haber, 0)
-  const cuadra = Math.abs(debe - haber) < 1
+  /* Tarjetas sobre TODO el balance (no sobre lo filtrado): activo, pasivo + PN, resultado del período y control. */
+  const porRubro = (r: string) => base.filter((f) => f.cuenta.startsWith(r)).reduce((t, f) => t + f.final, 0)
+  const activo = porRubro('1')
+  const pasivoPn = -(porRubro('2') + porRubro('3'))
+  const resultado = -base.filter((f) => !arrastraSaldo(f.cuenta)).reduce((t, f) => t + f.final, 0)
+  const control = base.reduce((t, f) => t + f.final, 0)
+  const cuadra = Math.abs(control) < 1
+
+  async function abrir(cuenta: string) {
+    if (abierta === cuenta) return setAbierta(null)
+    setAbierta(cuenta)
+    if (mayores[cuenta] && mayores[cuenta] !== 'cargando' && !('error' in (mayores[cuenta] as object))) return
+    setMayores((m) => ({ ...m, [cuenta]: 'cargando' }))
+    try {
+      const r = await cargarMayor(desde, hasta, cuenta)
+      setMayores((m) => ({ ...m, [cuenta]: r }))
+    } catch (e) {
+      setMayores((m) => ({ ...m, [cuenta]: { error: e instanceof Error ? e.message : String(e) } }))
+    }
+  }
 
   const exportar = () =>
     void bajarExcel(`flexxus_sumas_y_saldos_${desde}_${hasta}`, {
@@ -1042,12 +1181,16 @@ function SolapaBalance({ desde, hasta }: { desde: string; hasta: string }) {
         Rubro: f.rubro,
         Cuenta: f.cuenta,
         Descripción: f.descripcion,
+        'Saldo inicial': f.inicial,
         Debe: f.debe,
         Haber: f.haber,
-        Saldo: f.saldo,
+        'Saldo final': f.final,
         Movimientos: f.lineas,
       })),
     })
+
+  const ej = datos?.ejercicio
+  const diaAnterior = isoLocal(new Date(new Date(`${desde}T12:00:00`).getTime() - 86_400_000))
 
   return (
     <div className="space-y-4 pb-6">
@@ -1056,18 +1199,32 @@ function SolapaBalance({ desde, hasta }: { desde: string; hasta: string }) {
         <>
           <Tarjetas
             items={[
-              { titulo: 'Total debe', valor: pesosCorto(debe), pie: pesos(debe), icono: TrendingUp, color: cEmerald },
-              { titulo: 'Total haber', valor: pesosCorto(haber), pie: pesos(haber), icono: FileText, color: cRose },
+              { titulo: 'Activo', valor: pesosCorto(activo), pie: `${pesos(activo)} al ${fechaCorta(hasta)}`, icono: Wallet, color: cEmerald },
+              { titulo: 'Pasivo + Patrimonio neto', valor: pesosCorto(pasivoPn), pie: pesos(pasivoPn), icono: Landmark, color: cIndigo },
               {
-                titulo: cuadra ? 'Cuadra' : 'Diferencia',
-                valor: cuadra ? 'OK' : pesosCorto(debe - haber),
-                pie: busqueda ? 'con el filtro aplicado' : 'debe − haber del período',
-                icono: Scale,
-                color: cTeal,
+                titulo: 'Resultado del período',
+                valor: pesosCorto(resultado),
+                pie: resultado >= 0 ? 'ganancia (ingresos − costos − gastos)' : 'pérdida (ingresos − costos − gastos)',
+                icono: TrendingUp,
+                color: cAmber,
               },
-              { titulo: 'Cuentas con movimiento', valor: numero(filas.length), pie: `del ${fechaCorta(desde)} al ${fechaCorta(hasta)}`, icono: BookOpen, color: cAmber },
+              {
+                titulo: cuadra ? 'Balance cuadra' : 'No cuadra',
+                valor: cuadra ? 'OK' : pesosCorto(control),
+                pie: cuadra ? 'saldos deudores = acreedores' : 'diferencia entre deudores y acreedores',
+                icono: Scale,
+                color: cuadra ? cTeal : cRose,
+              },
             ]}
           />
+          {ej && (
+            <p className="rounded-xl border border-line bg-surface px-3 py-2 text-xs text-sub">
+              Ejercicio <b className="text-ink">{ej.descripcion}</b>. Las cuentas 1, 2 y 3 arrastran saldo (apertura + movimientos del{' '}
+              {fechaCorta(ej.inicio)} {desde > ej.inicio ? `al ${fechaCorta(diaAnterior)}` : ''}). Las de resultado arrancan en cero y lo que
+              acumularon {desde > ej.inicio ? `del ${fechaCorta(ej.inicio)} al ${fechaCorta(diaAnterior)}` : 'antes del rango'} se suma al
+              saldo inicial de <b className="text-ink">Resultados no asignados</b>. Apertura y cierre automáticos no cuentan como movimiento.
+            </p>
+          )}
           <Barra
             busqueda={busqueda}
             setBusqueda={setBusqueda}
@@ -1077,15 +1234,25 @@ function SolapaBalance({ desde, hasta }: { desde: string; hasta: string }) {
             cargando={cargando}
             onActualizar={() => void cargar(true)}
             onExcel={exportar}
+            extra={
+              <>
+                <MultiselectFiltro label="Rubro" opciones={opcionesRubros} seleccionadas={rubrosSel} onChange={setRubrosSel} />
+                <MultiselectFiltro label="Cuentas" opciones={opcionesCuentas} seleccionadas={cuentasSel} onChange={setCuentasSel} />
+                <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-sub">
+                  <input type="checkbox" checked={ocultarCero} onChange={(e) => setOcultarCero(e.target.checked)} /> Ocultar en cero
+                </label>
+              </>
+            }
           />
           <div className={caja}>
-            <table className="w-full min-w-[720px] text-sm">
+            <table className="w-full min-w-[900px] text-sm">
               <thead>
                 <tr className={filaHead}>
                   <th className={th}>Cuenta</th>
+                  <th className={thR}>Saldo inicial</th>
                   <th className={thR}>Debe</th>
                   <th className={thR}>Haber</th>
-                  <th className={thR}>Saldo</th>
+                  <th className={thR}>Saldo final</th>
                   <th className={thR}>Mov.</th>
                 </tr>
               </thead>
@@ -1094,27 +1261,335 @@ function SolapaBalance({ desde, hasta }: { desde: string; hasta: string }) {
                   <Fragment key={g.cod}>
                     <tr className="border-b border-line bg-surface2/60">
                       <td className={`${td} text-xs font-semibold uppercase tracking-wide text-ink`}>{g.rubro}</td>
+                      <td className={`${tdR} text-xs font-semibold text-ink`}>{pesos(g.inicial)}</td>
                       <td className={`${tdR} text-xs font-semibold text-ink`}>{pesos(g.debe)}</td>
                       <td className={`${tdR} text-xs font-semibold text-ink`}>{pesos(g.haber)}</td>
-                      <td className={`${tdR} text-xs font-semibold text-ink`}>{pesos(g.debe - g.haber)}</td>
+                      <td className={`${tdR} text-xs font-semibold text-ink`}>{pesos(g.final)}</td>
                       <td />
                     </tr>
-                    {g.filas.map((f) => (
-                      <tr key={f.cuenta} className="border-b border-line/60 last:border-0">
-                        <td className={td}>
-                          <span className="tabular-nums text-xs text-sub">{f.cuenta}</span>{' '}
-                          <span className="text-ink">{f.descripcion || '—'}</span>
-                        </td>
-                        <td className={tdR}>{f.debe ? pesos(f.debe) : '—'}</td>
-                        <td className={tdR}>{f.haber ? pesos(f.haber) : '—'}</td>
-                        <td className={`${tdR} font-medium ${f.saldo < 0 ? 'text-rose-500' : 'text-ink'}`}>{pesos(f.saldo)}</td>
-                        <td className={`${tdR} text-sub`}>{numero(f.lineas)}</td>
-                      </tr>
-                    ))}
+                    {g.filas.map((f) => {
+                      const ab = abierta === f.cuenta
+                      const det = mayores[f.cuenta]
+                      return (
+                        <Fragment key={f.cuenta}>
+                          <tr className="cursor-pointer border-b border-line/60 transition hover:bg-surface2/60" onClick={() => void abrir(f.cuenta)}>
+                            <td className={td}>
+                              <span className="inline-flex items-center gap-1.5">
+                                <ChevronDown size={14} className={`text-sub transition ${ab ? '' : '-rotate-90'}`} aria-hidden />
+                                <span className="tabular-nums text-xs text-sub">{f.cuenta}</span>
+                                <span className="text-ink">{f.descripcion || '—'}</span>
+                                {f.cuenta === CUENTA_RNA && (
+                                  <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-500">+ resultado previo</span>
+                                )}
+                              </span>
+                            </td>
+                            <td className={`${tdR} ${Math.abs(f.inicial) < 0.5 ? 'text-sub/40' : 'text-sub'}`}>{Math.abs(f.inicial) < 0.5 ? '—' : pesos(f.inicial)}</td>
+                            <td className={tdR}>{f.debe ? pesos(f.debe) : '—'}</td>
+                            <td className={tdR}>{f.haber ? pesos(f.haber) : '—'}</td>
+                            <td className={`${tdR} font-semibold text-ink`}>{pesos(f.final)}</td>
+                            <td className={`${tdR} text-sub`}>{numero(f.lineas)}</td>
+                          </tr>
+                          {ab && (
+                            <tr className="border-b border-line/60 bg-surface2/40">
+                              <td colSpan={6} className="px-3 py-2">
+                                <DetalleCuenta det={det} inicial={f.inicial} />
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      )
+                    })}
                   </Fragment>
                 ))}
-                {filas.length === 0 && <SinFilas cols={5} />}
+                {filas.length === 0 && <SinFilas cols={6} />}
               </tbody>
+              {filas.length > 0 && (
+                <tfoot>
+                  <tr className="border-t border-line font-semibold text-ink">
+                    <td className={td}>Total{rubrosSel.size || cuentasSel.size || q ? ' (filtrado)' : ''}</td>
+                    <td className={tdR}>{pesos(filas.reduce((t, f) => t + f.inicial, 0))}</td>
+                    <td className={tdR}>{pesos(filas.reduce((t, f) => t + f.debe, 0))}</td>
+                    <td className={tdR}>{pesos(filas.reduce((t, f) => t + f.haber, 0))}</td>
+                    <td className={tdR}>{pesos(filas.reduce((t, f) => t + f.final, 0))}</td>
+                    <td />
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+/** Los asientos de una cuenta en el rango, con el saldo corrido desde el saldo inicial. */
+function DetalleCuenta({ det, inicial }: { det: Mayor | { error: string } | 'cargando' | undefined; inicial: number }) {
+  if (!det || det === 'cargando') {
+    return (
+      <p className="flex items-center gap-2 py-2 text-xs text-sub">
+        <Loader2 size={13} className="animate-spin" aria-hidden /> Trayendo los asientos de la cuenta…
+      </p>
+    )
+  }
+  if ('error' in det) return <p className="py-2 text-xs text-rose-500">{det.error}</p>
+  let saldo = inicial
+  return (
+    <div className="max-h-96 overflow-auto">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="text-left text-sub">
+            <th className="sticky top-0 bg-surface2 py-1 font-medium">Fecha</th>
+            <th className="sticky top-0 bg-surface2 py-1 font-medium">Asiento</th>
+            <th className="sticky top-0 bg-surface2 py-1 font-medium">Observaciones</th>
+            <th className="sticky top-0 bg-surface2 py-1 text-right font-medium">Debe</th>
+            <th className="sticky top-0 bg-surface2 py-1 text-right font-medium">Haber</th>
+            <th className="sticky top-0 bg-surface2 py-1 text-right font-medium">Saldo</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr className="border-t border-line/40 text-sub">
+            <td className="py-1" colSpan={5}>
+              Saldo inicial
+            </td>
+            <td className="py-1 text-right tabular-nums">{pesos(inicial)}</td>
+          </tr>
+          {det.lineas.map((l, i) => {
+            saldo += l.debe - l.haber
+            return (
+              <tr key={i} className="border-t border-line/40">
+                <td className="whitespace-nowrap py-1 text-sub">{fechaCorta(l.fecha)}</td>
+                <td className="py-1 tabular-nums text-ink">{numero(l.numero)}</td>
+                <td className="py-1 text-ink">{l.obs || '—'}</td>
+                <td className="py-1 text-right tabular-nums text-ink">{l.debe ? pesos(l.debe) : ''}</td>
+                <td className="py-1 text-right tabular-nums text-ink">{l.haber ? pesos(l.haber) : ''}</td>
+                <td className="py-1 text-right tabular-nums font-medium text-ink">{pesos(saldo)}</td>
+              </tr>
+            )
+          })}
+          {det.lineas.length === 0 && (
+            <tr>
+              <td colSpan={6} className="py-2 text-center text-sub">
+                Sin movimientos en el rango.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+      {det.recortado && <p className="py-1 text-center text-[11px] text-amber-500">Se muestran los primeros 5.000 movimientos: achicá el rango para ver todo.</p>}
+    </div>
+  )
+}
+
+/* =========================== CENTROS DE COSTO =========================== */
+
+/** Clasificación de las cuentas de resultado del plan de Flexxus. */
+function claseResultado(cuenta: string): 'ingresos' | 'costos' | 'gastos' | null {
+  if (cuenta.startsWith('51')) return 'ingresos'
+  if (cuenta.startsWith('4')) return 'costos'
+  if (cuenta.startsWith('5')) return 'gastos'
+  return null
+}
+
+function SolapaCentros({ desde, hasta }: { desde: string; hasta: string }) {
+  const { datos, cargando, error, cargar } = useCarga<Centros>((forzar) => cargarCentros(desde, hasta, forzar), [desde, hasta])
+  const [busqueda, setBusqueda] = useState('')
+  const [centrosSel, setCentrosSel] = useState<Set<string>>(new Set())
+  const [rubrosSel, setRubrosSel] = useState<Set<string>>(new Set())
+  const [abierto, setAbierto] = useState<string | null>(null)
+
+  const SIN = '__sin__'
+  const filasTodas = useMemo(() => {
+    if (!datos) return []
+    const info = new Map(datos.centros.map((c) => [c.centro, c]))
+    type Fila = { centro: string; descripcion: string; rubro: string; ingresos: number; costos: number; gastos: number; cuentas: Map<string, number> }
+    const m = new Map<string, Fila>()
+    const fila = (id: string): Fila => {
+      if (!m.has(id)) {
+        const c = info.get(id)
+        m.set(id, {
+          centro: id,
+          descripcion: id === SIN ? 'Sin centro de costo asignado' : c?.descripcion ?? `Centro ${id}`,
+          rubro: id === SIN ? '—' : c?.rubro ?? 'Sin rubro',
+          ingresos: 0,
+          costos: 0,
+          gastos: 0,
+          cuentas: new Map(),
+        })
+      }
+      return m.get(id)!
+    }
+    const asignado = new Map<string, number>()
+    for (const a of datos.apropiado) {
+      const clase = claseResultado(a.cuenta)
+      if (!clase) continue
+      const f = fila(a.centro)
+      // neto = debe − haber: los ingresos son haber (negativos) → se muestran en positivo
+      if (clase === 'ingresos') f.ingresos += -a.neto
+      else f[clase] += a.neto
+      f.cuentas.set(a.cuenta, (f.cuentas.get(a.cuenta) ?? 0) + a.neto)
+      asignado.set(a.cuenta, (asignado.get(a.cuenta) ?? 0) + a.neto)
+    }
+    // Lo que quedó sin apropiar a ningún centro
+    for (const t of datos.totales) {
+      const clase = claseResultado(t.cuenta)
+      const resto = t.neto - (asignado.get(t.cuenta) ?? 0)
+      if (!clase || Math.abs(resto) < 1) continue
+      const f = fila(SIN)
+      if (clase === 'ingresos') f.ingresos += -resto
+      else f[clase] += resto
+      f.cuentas.set(t.cuenta, (f.cuentas.get(t.cuenta) ?? 0) + resto)
+    }
+    return [...m.values()].map((f) => ({ ...f, resultado: f.ingresos - f.costos - f.gastos }))
+  }, [datos])
+
+  const nombreCuenta = useMemo(() => new Map((datos?.cuentas ?? []).map((c) => [c.cuenta, c.descripcion])), [datos])
+  const opcionesCentros = useMemo(
+    () => [...filasTodas].sort((a, b) => a.descripcion.localeCompare(b.descripcion)).map((f) => ({ id: f.centro, label: f.descripcion })),
+    [filasTodas],
+  )
+  const opcionesRubros = useMemo(() => [...new Set(filasTodas.map((f) => f.rubro))].sort().map((r) => ({ id: r, label: r })), [filasTodas])
+
+  const q = norm(busqueda.trim())
+  const filas = filasTodas
+    .filter((f) => centrosSel.size === 0 || centrosSel.has(f.centro))
+    .filter((f) => rubrosSel.size === 0 || rubrosSel.has(f.rubro))
+    .filter((f) => !q || norm(`${f.descripcion} ${f.rubro}`).includes(q))
+    .sort((a, b) => b.ingresos - a.ingresos || b.resultado - a.resultado)
+
+  const tot = filas.reduce(
+    (t, f) => ({ ingresos: t.ingresos + f.ingresos, costos: t.costos + f.costos, gastos: t.gastos + f.gastos, resultado: t.resultado + f.resultado }),
+    { ingresos: 0, costos: 0, gastos: 0, resultado: 0 },
+  )
+  const margen = (f: { ingresos: number; resultado: number }) => (f.ingresos > 0 ? `${((f.resultado / f.ingresos) * 100).toFixed(1)} %` : '—')
+
+  const exportar = () =>
+    void bajarExcel(`flexxus_centros_costo_${desde}_${hasta}`, {
+      'Por centro': filas.map((f) => ({
+        Centro: f.descripcion,
+        Rubro: f.rubro,
+        Ingresos: Math.round(f.ingresos),
+        Costos: Math.round(f.costos),
+        Gastos: Math.round(f.gastos),
+        Resultado: Math.round(f.resultado),
+        'Margen %': f.ingresos > 0 ? Math.round((f.resultado / f.ingresos) * 1000) / 10 : '',
+      })),
+      'Centro x cuenta': filas.flatMap((f) =>
+        [...f.cuentas.entries()].map(([cta, neto]) => ({
+          Centro: f.descripcion,
+          Cuenta: cta,
+          Descripción: nombreCuenta.get(cta) ?? '',
+          'Debe − Haber': Math.round(neto),
+        })),
+      ),
+    })
+
+  return (
+    <div className="space-y-4 pb-6">
+      <Estado cargando={cargando} error={error} hay={!!datos} texto="Repartiendo el resultado por centro de costo…" />
+      {datos && (
+        <>
+          <Tarjetas
+            items={[
+              { titulo: 'Ingresos', valor: pesosCorto(tot.ingresos), pie: pesos(tot.ingresos), icono: TrendingUp, color: cEmerald },
+              { titulo: 'Costos + gastos', valor: pesosCorto(tot.costos + tot.gastos), pie: `costos ${pesosCorto(tot.costos)} · gastos ${pesosCorto(tot.gastos)}`, icono: FileText, color: cRose },
+              { titulo: 'Resultado', valor: pesosCorto(tot.resultado), pie: `margen ${margen(tot)}`, icono: Scale, color: cTeal },
+              { titulo: 'Centros con movimiento', valor: numero(filas.length), pie: `del ${fechaCorta(desde)} al ${fechaCorta(hasta)}`, icono: Building2, color: cPink },
+            ]}
+          />
+          <Barra
+            busqueda={busqueda}
+            setBusqueda={setBusqueda}
+            placeholder="Buscar centro o rubro…"
+            calculado={datos.calculado}
+            cacheado={datos.cacheado}
+            cargando={cargando}
+            onActualizar={() => void cargar(true)}
+            onExcel={exportar}
+            extra={
+              <>
+                <MultiselectFiltro label="Centros" opciones={opcionesCentros} seleccionadas={centrosSel} onChange={setCentrosSel} />
+                <MultiselectFiltro label="Rubro" opciones={opcionesRubros} seleccionadas={rubrosSel} onChange={setRubrosSel} />
+              </>
+            }
+          />
+          <div className={caja}>
+            <table className="w-full min-w-[860px] text-sm">
+              <thead>
+                <tr className={filaHead}>
+                  <th className={th}>Centro de costo</th>
+                  <th className={thR}>Ingresos</th>
+                  <th className={thR}>Costos</th>
+                  <th className={thR}>Gastos</th>
+                  <th className={thR}>Resultado</th>
+                  <th className={thR}>Margen</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filas.map((f) => {
+                  const ab = abierto === f.centro
+                  return (
+                    <Fragment key={f.centro}>
+                      <tr className="cursor-pointer border-b border-line/60 transition hover:bg-surface2/60" onClick={() => setAbierto(ab ? null : f.centro)}>
+                        <td className={td}>
+                          <span className="inline-flex items-center gap-1.5">
+                            <ChevronDown size={14} className={`text-sub transition ${ab ? '' : '-rotate-90'}`} aria-hidden />
+                            <span className={`font-medium ${f.centro === SIN ? 'text-amber-500' : 'text-ink'}`}>{f.descripcion}</span>
+                            <span className="text-xs text-sub">{f.rubro}</span>
+                          </span>
+                        </td>
+                        <td className={tdR}>{f.ingresos ? pesos(f.ingresos) : '—'}</td>
+                        <td className={tdR}>{f.costos ? pesos(f.costos) : '—'}</td>
+                        <td className={tdR}>{f.gastos ? pesos(f.gastos) : '—'}</td>
+                        <td className={`${tdR} font-semibold ${f.resultado < 0 ? 'text-rose-500' : 'text-ink'}`}>{pesos(f.resultado)}</td>
+                        <td className={`${tdR} text-sub`}>{margen(f)}</td>
+                      </tr>
+                      {ab && (
+                        <tr className="border-b border-line/60 bg-surface2/40">
+                          <td colSpan={6} className="px-3 py-2">
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="text-left text-sub">
+                                  <th className="py-1 font-medium">Cuenta</th>
+                                  <th className="py-1 text-right font-medium">Importe</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {[...f.cuentas.entries()]
+                                  .sort((a, b) => a[0].localeCompare(b[0]))
+                                  .map(([cta, neto]) => (
+                                    <tr key={cta} className="border-t border-line/40">
+                                      <td className="py-1">
+                                        <span className="tabular-nums text-sub">{cta}</span>{' '}
+                                        <span className="text-ink">{nombreCuenta.get(cta) ?? ''}</span>
+                                      </td>
+                                      <td className="py-1 text-right tabular-nums text-ink">
+                                        {pesos(claseResultado(cta) === 'ingresos' ? -neto : neto)}
+                                      </td>
+                                    </tr>
+                                  ))}
+                              </tbody>
+                            </table>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  )
+                })}
+                {filas.length === 0 && <SinFilas cols={6} />}
+              </tbody>
+              {filas.length > 0 && (
+                <tfoot>
+                  <tr className="border-t border-line font-semibold text-ink">
+                    <td className={td}>Total</td>
+                    <td className={tdR}>{pesos(tot.ingresos)}</td>
+                    <td className={tdR}>{pesos(tot.costos)}</td>
+                    <td className={tdR}>{pesos(tot.gastos)}</td>
+                    <td className={tdR}>{pesos(tot.resultado)}</td>
+                    <td className={tdR}>{margen(tot)}</td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         </>

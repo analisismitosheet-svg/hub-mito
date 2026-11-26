@@ -55,9 +55,47 @@ export type LineaAsiento = [number, string, number, 0 | 1]
 
 export interface MovimientoCuenta {
   cuenta: string
+  /** debe − haber acumulado en el ejercicio antes del rango (incluye la apertura) */
+  previo: number
   debe: number
   haber: number
   lineas: number
+}
+
+export interface Ejercicio {
+  codigo: number
+  descripcion: string
+  inicio: string
+  fin: string
+}
+
+/** Quién hizo cada asiento: manual (con historia de cambios) o automático (usuario del comprobante). */
+export interface UsuarioAsiento {
+  asiento: number
+  manual: boolean
+  creo: string
+  creo_en: string
+  edito: string
+  edito_en: string
+  ediciones: number
+  /** tipo del comprobante que generó el asiento (FA, PA, IN…) */
+  origen: string
+}
+
+export interface LineaMayor {
+  asiento: number
+  numero: number
+  fecha: string
+  obs: string
+  debe: number
+  haber: number
+}
+
+export interface CentroCosto {
+  centro: string
+  descripcion: string
+  rubro: string
+  activo: boolean
 }
 
 interface Meta {
@@ -68,8 +106,46 @@ interface Meta {
 
 export type Ventas = Meta & { comprobantes: ComprobanteVenta[] }
 export type Saldos = Meta & { deuda: DeudaCliente[]; hoy: string }
-export type Asientos = Meta & { asientos: CabezaAsiento[]; lineas: LineaAsiento[]; cuentas: Cuenta[] }
-export type Balance = Meta & { movimientos: MovimientoCuenta[]; cuentas: Cuenta[] }
+export type Asientos = Meta & { asientos: CabezaAsiento[]; lineas: LineaAsiento[]; cuentas: Cuenta[]; usuarios?: UsuarioAsiento[] }
+export type Balance = Meta & { movimientos: MovimientoCuenta[]; cuentas: Cuenta[]; ejercicio?: Ejercicio }
+export type Mayor = Meta & { cuenta: string; lineas: LineaMayor[]; recortado: boolean }
+export type Centros = Meta & {
+  centros: CentroCosto[]
+  apropiado: { centro: string; cuenta: string; neto: number; lineas: number }[]
+  totales: { cuenta: string; neto: number }[]
+  cuentas: Cuenta[]
+}
+
+/** Cuenta de Resultados no asignados: recibe el resultado del ejercicio anterior al rango. */
+export const CUENTA_RNA = '3300000001'
+
+/** Patrimoniales (Activo, Pasivo, Patrimonio neto): las que empiezan con 1, 2 o 3 arrastran saldo. */
+export const arrastraSaldo = (cuenta: string) => /^[123]/.test(cuenta)
+
+export interface FilaBalance extends MovimientoCuenta {
+  inicial: number
+  final: number
+}
+
+/**
+ * Saldo inicial de cada cuenta según las reglas del contador:
+ *  - 1, 2 y 3 arrastran el saldo (apertura + movimientos del ejercicio antes del rango);
+ *  - las de resultado arrancan en 0 en el rango;
+ *  - Resultados no asignados suma, además, el resultado de las cuentas de resultado
+ *    desde el inicio del ejercicio hasta el día anterior al rango (el «mes anterior»).
+ */
+export function armarBalance(movs: MovimientoCuenta[]): FilaBalance[] {
+  const resultadoPrevio = movs.filter((m) => !arrastraSaldo(m.cuenta)).reduce((t, m) => t + m.previo, 0)
+  const filas = movs.map((m) => {
+    let inicial = arrastraSaldo(m.cuenta) ? m.previo : 0
+    if (m.cuenta === CUENTA_RNA) inicial += resultadoPrevio
+    return { ...m, inicial, final: inicial + m.debe - m.haber }
+  })
+  if (Math.abs(resultadoPrevio) >= 0.5 && !filas.some((f) => f.cuenta === CUENTA_RNA)) {
+    filas.push({ cuenta: CUENTA_RNA, previo: 0, debe: 0, haber: 0, lineas: 0, inicial: resultadoPrevio, final: resultadoPrevio })
+  }
+  return filas.filter((f) => Math.abs(f.inicial) >= 0.5 || f.debe || f.haber)
+}
 
 /** Días máximos del libro diario (lo mismo que acepta el puente). */
 export const DIAS_MAX_ASIENTOS = 93
@@ -96,6 +172,10 @@ export const cargarAsientos = (desde: string, hasta: string, forzar = false) =>
   pedir<Asientos>({ consulta: 'asientos', desde, hasta, ...f(forzar) })
 export const cargarBalance = (desde: string, hasta: string, forzar = false) =>
   pedir<Balance>({ consulta: 'balance', desde, hasta, ...f(forzar) })
+export const cargarMayor = (desde: string, hasta: string, cuenta: string) =>
+  pedir<Mayor>({ consulta: 'mayor', desde, hasta, cuenta })
+export const cargarCentros = (desde: string, hasta: string, forzar = false) =>
+  pedir<Centros>({ consulta: 'centros', desde, hasta, ...f(forzar) })
 
 /* ------------------------------ formatos ------------------------------ */
 

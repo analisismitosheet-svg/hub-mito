@@ -41,6 +41,7 @@ http
           desde: q.get('desde') ?? '',
           hasta: q.get('hasta') ?? '',
           forzar: q.get('forzar') === '1',
+          cuenta: q.get('cuenta') ?? undefined,
         }),
       })
       const cuerpo = await r.json().catch(() => null)

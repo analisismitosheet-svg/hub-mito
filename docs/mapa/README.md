@@ -27,6 +27,7 @@ El detalle largo y la historia de cada módulo siguen en `CONTEXTO.md` (raíz de
 - [[Tracking de transporte]]: área Administradores, GPS de los choferes (Traccar), puntos de control
 - [[Stock valorizado]]: área Administradores, unidades y plata a costo por sucursal
 - [[Stock mayorista]]: Mayorista → Stock, solapas Depósito y Tapera (remitido a clientes sin facturar)
+- [[Flexxus]]: área Administración, ventas, saldos de clientes, asientos, sumas y saldos y centros de costo en vivo desde Flexxus (Firebird)
 - [[Ventas web (Tiendanube)]]: área WEB (rol `web`), pedidos de la tienda online (sync cada 20 min)
 - [[Requerimientos]]: arreglos que piden los locales; Arquitectura programa, mantenimiento hace, el local confirma
 - [[Otros módulos]]: RRHH, RMA, contador de clientes, encuestas, QR, réplicas
@@ -56,6 +57,7 @@ El detalle largo y la historia de cada módulo siguen en `CONTEXTO.md` (raíz de
 | `/administradores/tracking` (+ `/km`) | TrackingTransporte.tsx, TrackingKm.tsx | [[Tracking de transporte]] |
 | `/administradores/stock-valorizado` | StockValorizado.tsx | [[Stock valorizado]] |
 | `/web/ventas` | VentasWeb.tsx | [[Ventas web (Tiendanube)]] |
+| `/administracion/flexxus` | Flexxus.tsx | [[Flexxus]] |
 | `/mayorista/mapeo` (+escanear, orden, ubicaciones) | MapeoEscanear/Orden/Ubicaciones.tsx | [[Mapeo depósito]] |
 | `/polo52/mapeo` (+posiciones) | PoloMapeo.tsx, PoloPosiciones.tsx | [[Mapeo Polo 52]] |
 | `/mayorista/consulta-articulos` | ConsultaArticulos.tsx | [[Artículos y F12]] |

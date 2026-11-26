@@ -4,7 +4,9 @@
  *   GET /api/sql/flexxus?consulta=ventas&desde=AAAA-MM-DD&hasta=AAAA-MM-DD[&forzar=1]
  *   GET /api/sql/flexxus?consulta=saldos[&forzar=1]
  *   GET /api/sql/flexxus?consulta=asientos&desde=&hasta=   (hasta 93 días)
- *   GET /api/sql/flexxus?consulta=balance&desde=&hasta=    (sumas y saldos por cuenta)
+ *   GET /api/sql/flexxus?consulta=balance&desde=&hasta=    (sumas y saldos por cuenta, con saldo previo)
+ *   GET /api/sql/flexxus?consulta=mayor&desde=&hasta=&cuenta=   (líneas de una cuenta)
+ *   GET /api/sql/flexxus?consulta=centros&desde=&hasta=    (resultado por centro de costo)
  *
  * Acción propia del Puente SQL (`{ accion: 'flexxus' }` → puente-sql/flexxus.js), que
  * lee la base Firebird de Flexxus por el servidor vinculado FLEXXUS del SQL local.
@@ -28,7 +30,7 @@ type Res = {
 }
 
 const PERMISO = 'flexxus.view'
-const CONSULTAS = ['ventas', 'saldos', 'asientos', 'balance'] as const
+const CONSULTAS = ['ventas', 'saldos', 'asientos', 'balance', 'mayor', 'centros'] as const
 const FECHA = /^\d{4}-\d{2}-\d{2}$/
 
 /** URL efectiva del Puente: la guardada en sql_conexion, si no el env. */
@@ -71,6 +73,8 @@ export default async function handler(req: Req, res: Res) {
   if (consulta !== 'saldos' && (!FECHA.test(desde) || !FECHA.test(hasta))) {
     return res.status(400).json({ error: 'Faltan las fechas desde/hasta (AAAA-MM-DD)' })
   }
+  const cuenta = primero(req.query.cuenta).trim()
+  if (consulta === 'mayor' && !/^\d{1,12}$/.test(cuenta)) return res.status(400).json({ error: 'Cuenta inválida' })
   const forzar = /^(1|true|si|sí)$/i.test(primero(req.query.forzar))
 
   const destino = await urlDestino()
@@ -85,7 +89,7 @@ export default async function handler(req: Req, res: Res) {
     destino,
     {
       headers: { 'Content-Type': 'application/json', 'X-Puente-Token': tokenPuente },
-      body: JSON.stringify({ accion: 'flexxus', consulta, desde, hasta, forzar }),
+      body: JSON.stringify({ accion: 'flexxus', consulta, desde, hasta, forzar, ...(consulta === 'mayor' ? { cuenta } : {}) }),
     },
     { timeoutMs: 55_000, intentos: 2 },
   )
