@@ -61,6 +61,11 @@ const numerico = (f: FilaObj): FilaObj => ({
 const tono = (p: number) => (p >= 100 ? 'ok' : p >= 80 ? 'medio' : 'mal')
 const BORDE = { ok: 'border-l-emerald-500', medio: 'border-l-amber-500', mal: 'border-l-red-500' } as const
 const TEXTO = { ok: 'text-emerald-400', medio: 'text-amber-400', mal: 'text-red-400' } as const
+/** grupo de locales: los Captain Fin (código CF* o nombre «CAPTAIN FIN…»); el resto, Indonesia */
+type Grupo = '' | 'captain' | 'indonesia'
+const GRUPOS: [Grupo, string][] = [['', 'Todos'], ['captain', 'Captain Fin'], ['indonesia', 'Indonesia']]
+const grupoDe = (codigo: string, nombre: string): Exclude<Grupo, ''> =>
+  codigo.toUpperCase().startsWith('CF') || /^CAPTAIN FIN/i.test(nombre.trim()) ? 'captain' : 'indonesia'
 
 export default function ObjetivosLocales({ soloLocal }: { soloLocal?: string } = {}) {
   const auth = useAuth()
@@ -74,6 +79,7 @@ export default function ObjetivosLocales({ soloLocal }: { soloLocal?: string } =
   const [filas, setFilas] = useState<FilaObj[]>([])
   const [nombres, setNombres] = useState<Record<string, string>>({})
   const [localSel, setLocalSel] = useState<string>('')
+  const [grupoSel, setGrupoSel] = useState<Grupo>('')
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [vista, setVista] = useState<'dias' | 'comparativo' | 'ipc'>('dias')
@@ -125,6 +131,14 @@ export default function ObjetivosLocales({ soloLocal }: { soloLocal?: string } =
     return [...tot.entries()].sort((a, b) => b[1] - a[1]).map(([l]) => l)
   }, [filas])
   const nom = useCallback((l: string) => nombres[l] || l, [nombres])
+  /** el local entra en el grupo elegido (Todos = sí) */
+  const enGrupo = useCallback((l: string) => !grupoSel || grupoDe(l, nom(l)) === grupoSel, [grupoSel, nom])
+  const localesGrupo = useMemo(() => locales.filter(enGrupo), [locales, enGrupo])
+  const elegirGrupo = (g: Grupo) => {
+    setGrupoSel(g)
+    // si el local elegido no es del grupo nuevo, vuelve a «todos los del grupo»
+    if (localSel && g && grupoDe(localSel, nom(localSel)) !== g) setLocalSel('')
+  }
 
   // El que no es admin recibe solo su local; el admin elige (vacío = todos)
   const verLocal = verTodo ? localSel : (locales[0] ?? miLocal ?? '')
@@ -132,7 +146,7 @@ export default function ObjetivosLocales({ soloLocal }: { soloLocal?: string } =
     const hoy = hoyIso()
     const m = new Map<string, Dia>()
     for (const f of filas) {
-      if (verLocal && f.local !== verLocal) continue
+      if (verLocal ? f.local !== verLocal : verTodo && !enGrupo(f.local)) continue
       const d = m.get(f.fecha) ?? { fecha: f.fecha, objetivo: 0, venta: null, feriado: true, opera: false, sinVenta: true, cerrados: [] }
       const sinVenta = sinVentaPasada(f, hoy)
       d.objetivo += sinVenta ? 0 : f.objetivo ?? 0
@@ -147,7 +161,7 @@ export default function ObjetivosLocales({ soloLocal }: { soloLocal?: string } =
       m.set(f.fecha, d)
     }
     return [...m.values()].sort((a, b) => a.fecha.localeCompare(b.fecha))
-  }, [filas, verLocal, feriados, nom])
+  }, [filas, verLocal, verTodo, enGrupo, feriados, nom])
 
   const nombreMes = `${MESES[periodo.mes - 1][0].toUpperCase()}${MESES[periodo.mes - 1].slice(1)} ${periodo.anio}`
   const mover = (n: number) => setPeriodo((p) => {
@@ -189,11 +203,19 @@ export default function ObjetivosLocales({ soloLocal }: { soloLocal?: string } =
           <button onClick={() => mover(-1)} aria-label="Mes anterior" className="btn-press grid h-8 w-8 place-items-center rounded-lg border border-line bg-surface2 text-ink hover:bg-line"><ChevronLeft size={16} aria-hidden /></button>
           <span className="text-base font-semibold text-ink">{nombreMes} <span className="text-xs font-normal text-sub">{ddmm(rango.desde)} al {ddmm(rango.hasta)}</span></span>
           <button onClick={() => mover(1)} aria-label="Mes siguiente" className="btn-press grid h-8 w-8 place-items-center rounded-lg border border-line bg-surface2 text-ink hover:bg-line"><ChevronRight size={16} aria-hidden /></button>
+          {verTodo && (
+            <div className="inline-flex h-8 overflow-hidden rounded-lg border border-line bg-surface2" role="group" aria-label="Grupo de locales">
+              {GRUPOS.map(([g, t]) => (
+                <button key={g || 'todos'} onClick={() => elegirGrupo(g)} aria-pressed={grupoSel === g}
+                  className={`px-2.5 text-xs font-medium transition ${grupoSel === g ? 'bg-brand-600 text-white' : 'text-ink hover:bg-line'}`}>{t}</button>
+              ))}
+            </div>
+          )}
           {vista === 'dias' && (verTodo ? (
             <select value={localSel} onChange={(e) => setLocalSel(e.target.value)} aria-label="Local"
               className="h-8 rounded-lg border border-line bg-surface2 px-2 text-xs text-ink">
-              <option value="">Todos los locales</option>
-              {[...locales].sort((a, b) => nom(a).localeCompare(nom(b))).map((l) => <option key={l} value={l}>{nom(l)}</option>)}
+              <option value="">{grupoSel ? `Todos los ${GRUPOS.find(([g]) => g === grupoSel)![1]}` : 'Todos los locales'}</option>
+              {[...localesGrupo].sort((a, b) => nom(a).localeCompare(nom(b))).map((l) => <option key={l} value={l}>{nom(l)}</option>)}
             </select>
           ) : verLocal ? (
             <span className="inline-flex h-8 items-center gap-1 rounded-lg border border-line bg-surface2 px-2.5 text-xs text-ink"><MapPin size={13} aria-hidden /> {nom(verLocal)}</span>
@@ -221,9 +243,9 @@ export default function ObjetivosLocales({ soloLocal }: { soloLocal?: string } =
         )
       )}
 
-      {vista === 'dias' && verTodo && <DetalleObjetivos filas={detalle} desde={desde} hasta={hasta} nom={nom} />}
+      {vista === 'dias' && verTodo && <DetalleObjetivos filas={detalle.filter((f) => enGrupo(f.local))} desde={desde} hasta={hasta} nom={nom} />}
 
-      {vista === 'comparativo' && verTodo && <Comparativo filas={filas} locales={locales} nom={nom} />}
+      {vista === 'comparativo' && verTodo && <Comparativo filas={filas.filter((f) => enGrupo(f.local))} locales={localesGrupo} nom={nom} />}
       {vista === 'ipc' && isAdmin && <IpcMensual onCambio={() => void cargar()} />}
     </Layout>
   )
