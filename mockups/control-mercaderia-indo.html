@@ -130,10 +130,11 @@
           <tr><td class="num">26/11</td><td><b>Elordi S.A.</b></td><td class="num">0010-00079672</td><td class="num" style="color:var(--sky)">15116</td><td><span class="chip am">LISTO PARA CONTROLAR</span></td><td><span class="chip sky">Picking #1</span></td><td><span class="chip">Pendiente</span></td><td class="sub">pendiente</td></tr>
           <tr><td class="num">26/11</td><td><b>Cristobal Colon S R L</b></td><td class="num">0161-00313302</td><td class="num" style="color:var(--sky)">15119</td><td><span class="chip am">LISTO PARA CONTROLAR</span></td><td><span class="chip sky">Picking #1</span></td><td><span class="chip am">En curso · Sofía 40%</span></td><td class="sub">pendiente</td></tr>
           <tr><td class="num">26/11</td><td><b>Id Argentina SA</b></td><td class="num">0011-00140101</td><td class="num" style="color:var(--sky)">15352</td><td><span class="chip am">LISTO PARA CONTROLAR</span></td><td><span class="chip sky">Picking #1</span></td><td><span class="chip rojo">Hecho · −3</span></td><td style="color:#6ee7b7">27/11<br><span class="sub" style="font-size:10px">Sofía</span><br><span class="chip rojo" style="font-size:10px">con diferencias</span></td></tr>
+          <tr><td class="num">27/11</td><td><b>INNTEX S.A.</b></td><td class="num">0003-00051877</td><td class="num" style="color:var(--sky)">15361</td><td><span class="chip">En deposito</span></td><td><span class="chip" style="color:#4ade80;border-color:rgba(74,222,128,.45)">Picking</span></td><td><span class="chip" style="opacity:.7">🔒 Falta el picking</span></td><td class="sub">pendiente</td></tr>
           <tr><td class="num">13/11</td><td><b>Elordi S.A.</b></td><td class="num">0010-00079439</td><td class="num" style="color:var(--sky)">15116</td><td><span class="chip">En deposito</span></td><td><span class="chip sky">Picking #1</span></td><td><span class="chip em">Hecho · OK</span></td><td style="color:#6ee7b7">18/11<br><span class="sub" style="font-size:10px">Sofía</span></td></tr>
         </tbody>
       </table>
-      <div class="aviso vi" style="max-width:760px">Columna nueva <b>Control físico</b>: Pendiente / En curso (quién y %) / Hecho (OK o con diferencia). Al tocarla abre el control. Cuando el operario lo cierra, se llena <b>Controlada</b> (fecha + quién) como hoy se hace a mano.</div>
+      <div class="aviso vi" style="max-width:760px">Columna nueva <b>Control físico</b>: Pendiente / En curso (quién y %) / Hecho (OK o con diferencia). Solo se habilita <b>cuando la factura tiene picking registrado</b> (estado «LISTO PARA CONTROLAR»); antes dice «🔒 Falta el picking» y en el celular esa factura ni aparece. Si se anula el picking, el control vuelve a bloquearse. Cuando el operario lo cierra, se llena <b>Controlada</b> (fecha + quién) como hoy se hace a mano.</div>
     </div>
   </div>
   <div class="nota"><b>Decidido (27/11):</b> al cerrar el control, «Controlada» se marca <b>siempre</b> (fecha + quién). Si hubo faltantes o sobrantes queda con la etiqueta roja <b>«con diferencias»</b>, que se puede filtrar y lleva al detalle.</div>
@@ -273,10 +274,10 @@
         <span class="chip em" style="margin-left:auto">Control físico hecho · Sofía 27/11</span>
       </div>
       <table>
-        <thead><tr><th></th><th>Artículo</th><th>Color</th><th>Talle</th><th class="r">Pedido</th><th class="r">Recibido</th><th class="r">Saldo</th><th class="r">Control físico</th></tr></thead>
+        <thead><tr><th></th><th>Artículo</th><th>Color</th><th>Talle</th><th class="r">Pedido</th><th class="r">Recibido</th><th class="r">Saldo</th><th class="r">P. compra</th><th class="r">Importe</th><th class="r">Control físico</th></tr></thead>
         <tbody>
-          <tr class="sinvar"><td>▾</td><td><b>SZ267102</b></td><td><span class="c falta">00</span></td><td><span class="c falta">U</span></td><td class="r num">32</td><td class="r num">32</td><td class="r num sub">0</td><td class="r"><span class="chip vi">desglosado · 28 · −4</span></td></tr>
-          <tr class="sinvar"><td></td><td colspan="7" style="padding:4px 8px 12px 28px">
+          <tr class="sinvar"><td>▾</td><td><b>SZ267102</b></td><td><span class="c falta">00</span></td><td><span class="c falta">U</span></td><td class="r num">32</td><td class="r num">32</td><td class="r num sub">0</td><td class="r num">$ 22.495</td><td class="r num">$ 719.840</td><td class="r"><span class="chip vi">desglosado · 28 · −4</span></td></tr>
+          <tr class="sinvar"><td></td><td colspan="9" style="padding:4px 8px 12px 28px">
             <div class="sub" style="font-size:11.5px;margin-bottom:5px">Lo que contó el operario (no cambia el picking):</div>
             <div class="fila" style="flex-wrap:wrap;gap:6px">
               <span class="chip"><span class="c col">01 NEGRO</span> S 2 · M 4 · L 4 · XL 2 = <b>12</b></span>
@@ -285,11 +286,11 @@
               <span class="chip rojo">−4 · No llegó</span>
             </div>
           </td></tr>
-          <tr><td>▸</td><td><b>CA16405C</b></td><td><span class="c col">02</span></td><td><span class="c tal">M</span></td><td class="r num">18</td><td class="r num">18</td><td class="r num sub">0</td><td class="r"><span class="chip rojo">15 · −3 No llegó</span></td></tr>
-          <tr><td>▸</td><td><b>CA16405C</b></td><td><span class="c col">02</span></td><td><span class="c tal">S</span></td><td class="r num">12</td><td class="r num">12</td><td class="r num sub">0</td><td class="r"><span class="chip em">12 ✓</span></td></tr>
+          <tr><td>▸</td><td><b>CA16405C</b></td><td><span class="c col">02</span></td><td><span class="c tal">M</span></td><td class="r num">18</td><td class="r num">18</td><td class="r num sub">0</td><td class="r num">$ 18.995</td><td class="r num">$ 341.910</td><td class="r"><span class="chip rojo">15 · −3 No llegó</span></td></tr>
+          <tr><td>▸</td><td><b>CA16405C</b></td><td><span class="c col">02</span></td><td><span class="c tal">S</span></td><td class="r num">12</td><td class="r num">12</td><td class="r num sub">0</td><td class="r num">$ 18.995</td><td class="r num">$ 227.940</td><td class="r"><span class="chip em">12 ✓</span></td></tr>
         </tbody>
       </table>
-      <div class="desc" style="margin-top:8px">Columna nueva <b>Control físico</b> en el Picking. Los renglones desglosados tienen ▾ para ver la grilla que cargó el operario.</div>
+      <div class="desc" style="margin-top:8px">Columnas nuevas en el Picking que hace Compras: <b>P. compra</b> (precio unitario sin IVA de la línea de la OC en Dragon) e <b>Importe</b> (recibido × precio), y <b>Control físico</b>. Los renglones desglosados tienen ▾ para ver la grilla que cargó el operario.</div>
     </div>
   </div>
 
@@ -379,34 +380,35 @@
               <div class="kpi"><span>Contado</span><b class="num">205</b></div>
               <div class="kpi"><span>Faltan</span><b class="num" style="color:var(--rojo)">7</b></div>
               <div class="kpi"><span>Desglosados</span><b class="num" style="color:var(--vi)">3</b></div>
+              <div class="kpi"><span>Faltante a precio compra</span><b class="num" style="color:var(--rojo)">$ 146.965</b></div>
             </div>
           </div>
-          <div class="aviso rojo" style="margin-top:10px">Diferencias: <b>7 u.</b> — SZ267102 (−4 No llegó) · CA16405C 02 M (−3 No llegó)</div>
+          <div class="aviso rojo" style="margin-top:10px">Diferencias: <b>7 u. · $ 146.965</b> a precio de compra — SZ267102 (−4 No llegó) · CA16405C 02 M (−3 No llegó)</div>
 
           <table style="margin-top:10px">
-            <thead><tr><th>Artículo</th><th>Color</th><th>Talle</th><th class="r">Picking</th><th class="r">Contado</th><th>Estado</th></tr></thead>
+            <thead><tr><th>Artículo</th><th>Color</th><th>Talle</th><th class="r">Picking</th><th class="r">Contado</th><th class="r">P. compra</th><th class="r">Importe contado</th><th class="r">$ Dif.</th><th>Estado</th></tr></thead>
             <tbody>
-              <tr style="background:rgba(167,139,250,.06)"><td><b>SZ267102</b> <span class="sub" style="font-size:11.5px">▾ desglose</span></td><td><span class="c falta">00</span></td><td><span class="c falta">U</span></td><td class="r num">32</td><td class="r num">28</td><td><span class="chip rojo">✕ Faltan 4</span></td></tr>
-              <tr><td colspan="6" style="padding:4px 8px 10px 26px">
+              <tr style="background:rgba(167,139,250,.06)"><td><b>SZ267102</b> <span class="sub" style="font-size:11.5px">▾ desglose</span></td><td><span class="c falta">00</span></td><td><span class="c falta">U</span></td><td class="r num">32</td><td class="r num">28</td><td class="r num">$ 22.495</td><td class="r num">$ 629.860</td><td class="r num" style="color:var(--rojo)">−$ 89.980</td><td><span class="chip rojo">✕ Faltan 4</span></td></tr>
+              <tr><td colspan="9" style="padding:4px 8px 10px 26px">
                 <div class="fila" style="flex-wrap:wrap;gap:6px">
                   <span class="chip"><span class="c col">01 NEGRO</span> S 2 · M 4 · L 4 · XL 2 = <b>12</b></span>
                   <span class="chip"><span class="c col">02 BLANCO</span> S 2 · M 4 · L 4 = <b>10</b></span>
                   <span class="chip"><span class="c col">06 VERDE</span> M 3 · L 3 = <b>6</b></span>
                 </div></td></tr>
-              <tr style="background:rgba(16,185,129,.06)"><td><b>RU261400</b> <span class="sub" style="font-size:11.5px">▸ desglose</span></td><td><span class="c falta">00</span></td><td><span class="c tal">412</span></td><td class="r num">25</td><td class="r num">25</td><td><span class="chip em">✓</span></td></tr>
-              <tr style="background:rgba(248,113,113,.06)"><td><b>CA16405C</b></td><td><span class="c col">02</span></td><td><span class="c tal">M</span></td><td class="r num">18</td><td class="r num">15</td><td><span class="chip rojo">✕ Faltan 3 · No llegó</span></td></tr>
-              <tr style="background:rgba(16,185,129,.06)"><td><b>CA16405C</b></td><td><span class="c col">02</span></td><td><span class="c tal">S</span></td><td class="r num">12</td><td class="r num">12</td><td><span class="chip em">✓</span></td></tr>
-              <tr><td colspan="6" class="sub" style="font-size:12px">… 10 renglones más ✓</td></tr>
+              <tr style="background:rgba(16,185,129,.06)"><td><b>RU261400</b> <span class="sub" style="font-size:11.5px">▸ desglose</span></td><td><span class="c falta">00</span></td><td><span class="c tal">412</span></td><td class="r num">25</td><td class="r num">25</td><td class="r num">$ 34.995</td><td class="r num">$ 874.875</td><td class="r num sub">—</td><td><span class="chip em">✓</span></td></tr>
+              <tr style="background:rgba(248,113,113,.06)"><td><b>CA16405C</b></td><td><span class="c col">02</span></td><td><span class="c tal">M</span></td><td class="r num">18</td><td class="r num">15</td><td class="r num">$ 18.995</td><td class="r num">$ 284.925</td><td class="r num" style="color:var(--rojo)">−$ 56.985</td><td><span class="chip rojo">✕ Faltan 3 · No llegó</span></td></tr>
+              <tr style="background:rgba(16,185,129,.06)"><td><b>CA16405C</b></td><td><span class="c col">02</span></td><td><span class="c tal">S</span></td><td class="r num">12</td><td class="r num">12</td><td class="r num">$ 18.995</td><td class="r num">$ 227.940</td><td class="r num sub">—</td><td><span class="chip em">✓</span></td></tr>
+              <tr><td colspan="9" class="sub" style="font-size:12px">… 10 renglones más ✓</td></tr>
             </tbody>
           </table>
-          <div class="desc" style="margin-top:6px">Pintado como el detalle del pedido de venta: <b style="color:#6ee7b7">verde ✓</b> igual al picking · <b style="color:#fca5a5">rojo ✕ Faltan N</b> · <b style="color:#d9f99d">verde flúor + N</b> si sobra · ▾ abre el desglose.</div>
+          <div class="desc" style="margin-top:6px">Pintado como el detalle del pedido de venta: <b style="color:#6ee7b7">verde ✓</b> igual al picking · <b style="color:#fca5a5">rojo ✕ Faltan N</b> · <b style="color:#d9f99d">verde flúor + N</b> si sobra · ▾ abre el desglose. <b>P. compra</b> = precio unitario sin IVA de la OC; en un renglón desglosado vale el mismo precio para todos sus colores y talles.</div>
         </section>
       </div>
     </div>
   </div>
   <div class="nota">Ruta propuesta <b>/deposito/controles-fisicos</b> (en el menú de Depósito). <b>?abrir=&lt;factura&gt;</b> la abre con el control elegido, que es lo que usa el aviso. En el celular se ve en una columna: lista y al tocar, el detalle.</div>
 
-  <div class="nota"><b>Decidido (27/11):</b> desglose con <b>grilla color × talle</b> · lo toma <b>cualquiera con rol Depósito</b> (después por legajo) · colores y talles <b>se eligen o buscan en los maestros de Dragon</b> (lo que no está en Dragon no se carga) · el desglose <b>no reemplaza</b> el renglón del picking, se ve desplegándolo.</div>
+  <div class="nota"><b>Decidido (27/11):</b> desglose con <b>grilla color × talle</b> · lo toma <b>cualquiera con rol Depósito</b> (después por legajo) · colores y talles <b>se eligen o buscan en los maestros de Dragon</b> (lo que no está en Dragon no se carga) · el desglose <b>no reemplaza</b> el renglón del picking, se ve desplegándolo. · el control físico <b>se habilita solo con el picking hecho</b> · columna <b>precio de compra</b> en Picking y en Controles físicos.</div>
   <div class="nota"><b>Decidido (27/11):</b> un renglón con color 00 o talle U <b>siempre se desglosa</b>, aunque sea un artículo de talle único (no hay botón «Es único»).</div>
 
 <script>
