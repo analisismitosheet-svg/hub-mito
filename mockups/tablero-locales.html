@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tablero locales</title>
+<style>
+  :root { --bg:#0f172a; --card:#1e293b; --borde:#334155; --txt:#e2e8f0; --sub:#94a3b8; --acento:#0284c7; --acento2:#38bdf8; --ok:#22c55e; --mal:#ef4444; --medio:#f59e0b; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt); font:14px system-ui, sans-serif; padding:16px; }
+  h1 { font-size:20px; margin:0 0 4px; display:flex; align-items:center; gap:8px; }
+  h3 { font-size:13px; margin:0 0 8px; color:var(--sub); font-weight:600; display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .nota { color:var(--sub); font-size:13px; margin:0 0 14px; }
+  .maqueta { font-size:11px; color:#fbbf24; border:1px dashed #fbbf2466; border-radius:8px; padding:6px 10px; margin-bottom:12px; }
+  .miga { font-size:12px; color:var(--sub); margin-bottom:4px; }
+  .cab { display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:10px; margin-bottom:12px; }
+  .filtros { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:12px; }
+  .tabs { display:inline-flex; gap:4px; background:var(--card); border:1px solid var(--borde); border-radius:12px; padding:4px; }
+  .tab { padding:6px 12px; border-radius:8px; color:var(--sub); border:none; background:none; font-size:13px; cursor:pointer; }
+  .tab.on { background:var(--acento); color:#fff; font-weight:600; }
+  select, input[type=date], input[type=search] { background:#0f172a; color:var(--txt); border:1px solid var(--borde); border-radius:8px; padding:6px 8px; font-size:12px; }
+  .btn { background:var(--card); color:var(--txt); border:1px solid var(--borde); border-radius:8px; padding:6px 10px; font-size:12px; cursor:pointer; }
+  .btn.on { border-color:#0284c799; background:#0284c722; color:var(--acento2); font-weight:600; }
+
+  /* selector de locales */
+  .sel-loc { position:relative; }
+  .sel-loc > .btn { min-width:230px; text-align:left; display:flex; justify-content:space-between; gap:8px; }
+  .panel { position:absolute; z-index:10; top:calc(100% + 4px); left:0; width:290px; background:var(--card); border:1px solid var(--borde); border-radius:12px; padding:8px; box-shadow:0 10px 30px #0008; display:none; }
+  .panel.abierto { display:block; }
+  .panel input[type=search] { width:100%; margin-bottom:6px; }
+  .panel .rapidos { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:6px; }
+  .panel .rapidos .btn { padding:3px 8px; font-size:11px; }
+  .panel .grupo { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--sub); margin:6px 4px 2px; }
+  .panel label { display:flex; align-items:center; gap:8px; padding:4px 6px; border-radius:6px; cursor:pointer; font-size:13px; }
+  .panel label:hover { background:#0f172a; }
+  .panel label small { margin-left:auto; color:var(--sub); font-size:10px; }
+  .panel .lista { max-height:300px; overflow:auto; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+  .chip { padding:3px 8px; border-radius:8px; border:1px solid #0284c799; background:#0284c722; color:var(--acento2); font-size:12px; }
+  .chip b { cursor:pointer; margin-left:4px; opacity:.7; }
+
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:8px; margin-bottom:12px; }
+  .kpi { background:var(--card); border:1px solid var(--borde); border-radius:12px; padding:10px 12px; }
+  .kpi span { display:block; font-size:11px; color:var(--sub); }
+  .kpi b { font-size:20px; font-variant-numeric:tabular-nums; }
+  .kpi small { display:block; font-size:11px; color:var(--sub); }
+  .tarjeta { background:var(--card); border:1px solid var(--borde); border-radius:14px; padding:12px; min-width:0; }
+  .grilla { display:grid; grid-template-columns:repeat(12, 1fr); gap:10px; }
+  .c12 { grid-column:span 12; } .c8 { grid-column:span 8; } .c6 { grid-column:span 6; } .c4 { grid-column:span 4; }
+  @media (max-width:1000px) { .c8, .c6, .c4 { grid-column:span 12; } }
+  .scroll { overflow:auto; max-height:420px; }
+  table { border-collapse:collapse; width:100%; font-size:12px; }
+  th { color:var(--sub); font-weight:500; text-align:left; padding:5px 8px; position:sticky; top:0; background:var(--card); border-bottom:1px solid var(--borde); white-space:nowrap; }
+  td { padding:5px 8px; border-bottom:1px solid #33415566; white-space:nowrap; }
+  td.n, th.n { text-align:right; font-variant-numeric:tabular-nums; }
+  tr.clic { cursor:pointer; } tr.clic:hover td { background:#0f172a88; }
+  tr.sel td { background:#0284c722 !important; }
+  tfoot td { font-weight:700; border-top:2px solid var(--borde); border-bottom:none; }
+  .ok { color:var(--ok); } .mal { color:var(--mal); } .medio { color:var(--medio); } .gris { color:var(--sub); }
+  .pill { font-size:10px; padding:1px 6px; border-radius:6px; font-weight:700; }
+  .pill.ok { background:#22c55e22; } .pill.mal { background:#ef444422; } .pill.medio { background:#f59e0b22; }
+  .loc-tag { font-size:11px; padding:1px 6px; border-radius:6px; background:#0f172a; border:1px solid var(--borde); color:var(--sub); }
+  .arq-res { display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--sub); margin-bottom:8px; }
+  .arq-res b { color:var(--txt); }
+  .vacio { color:var(--sub); font-size:12px; padding:14px; text-align:center; }
+  .ayuda { font-size:11px; color:var(--sub); margin-top:6px; }
+</style>
+</head>
+<body>
+<div class="maqueta">MAQUETA · datos de ejemplo. Probá el selector de locales, las fechas, las pestañas y tocar filas.</div>
+
+<div class="miga">Administración › Tablero locales</div>
+<div class="cab">
+  <div>
+    <h1><span style="color:var(--acento2)">📊</span> Tablero locales</h1>
+    <p class="nota">Las hojas <b>Caja</b> y <b>Errores de caja</b> del Tablero del local, para uno o varios locales a la vez.</p>
+  </div>
+  <div class="tabs">
+    <button class="tab on" data-h="caja">💵 Caja</button>
+    <button class="tab" data-h="errores">⚠️ Errores de caja</button>
+  </div>
+</div>
+
+<div class="filtros">
+  <div class="sel-loc">
+    <button class="btn" id="btnLoc"><span id="txtLoc"></span><span>▾</span></button>
+    <div class="panel" id="panelLoc">
+      <input type="search" id="buscaLoc" placeholder="Buscar local…">
+      <div class="rapidos">
+        <button class="btn" data-r="todos">Todos</button>
+        <button class="btn" data-r="mito">Solo Mito</button>
+        <button class="btn" data-r="cf">Solo Captain Fin</button>
+        <button class="btn" data-r="ninguno">Ninguno</button>
+      </div>
+      <div class="lista" id="listaLoc"></div>
+    </div>
+  </div>
+  <button class="btn on" data-p="hoy">Hoy</button>
+  <button class="btn" data-p="ayer">Ayer</button>
+  <button class="btn" data-p="7">7 días</button>
+  <button class="btn" data-p="mes">Este mes</button>
+  <input type="date" value="2026-11-27"> <span class="gris">a</span> <input type="date" value="2026-11-27">
+  <span id="filtrosHoja"></span>
+</div>
+<div class="chips" id="chips"></div>
+
+<div id="vista"></div>
+
+<script>
+const LOCALES = [
+  ['9DEJULIO','9 de Julio','mito'], ['BUSTOD','Bustos','mito'], ['VCPD','Carlos Paz','mito'], ['DINOD','Dino R20','mito'],
+  ['ESPINOD','Espinosa','mito'], ['GPAZD','General Paz Outlet','mito'], ['LIBERD','Libertad','mito'], ['MUNOZ','Muñoz','mito'],
+  ['NVOCED','Nuevo Centro','mito'], ['RIVERAD','Rivera','mito'], ['RUTA9D2','Ruta 9','mito'], ['WALMARTD','Walmart','mito'],
+  ['CFD','Captain Fin Bustos','cf'], ['CFPO','Captain Fin Patio Olmos','cf'], ['CFRA','Captain Fin Rivera Indarte','cf'],
+  ['CFR4','Captain Fin Río Cuarto','cf'], ['CFR9','Captain Fin Ruta 9','cf'],
+].map(([codigo, nombre, marca]) => ({ codigo, nombre, marca }))
+
+let elegidos = new Set(['NVOCED', 'RIVERAD', 'CFRA'])
+let hoja = 'caja', localDetalle = null, compElegido = null, filtroValor = ''
+const $ = (s) => document.querySelector(s)
+const pesos = (v) => (v < 0 ? '-' : '') + '$ ' + Math.abs(Math.round(v)).toLocaleString('es-AR')
+const nom = (c) => LOCALES.find((l) => l.codigo === c)?.nombre || c
+
+/* ---------- datos de ejemplo (fijos por local) ---------- */
+function rnd(seed) { let s = 0; for (const ch of seed) s = (s * 31 + ch.charCodeAt(0)) >>> 0; return () => ((s = (s * 1103515245 + 12345) >>> 0) / 2 ** 32) }
+const VEND = ['Sofía Gómez', 'Lucas Pérez', 'Mica Torres', 'Juan Díaz', 'Agus Ríos', 'Caro Luna']
+const VALORES = [['EF','Efectivo','EFECTIVO'], ['TD','Tarjeta débito','TARJETAS'], ['TC1','Visa 1 pago','TARJETAS'], ['TC3','Visa 3 cuotas','TARJETAS'], ['MC1','Master 1 pago','TARJETAS'], ['QR','QR / transferencia','DIGITAL'], ['NC','Nota de crédito','OTROS']]
+const BILLETES = [20000, 10000, 2000, 1000, 500, 200, 100]
+function datosLocal(cod) {
+  const r = rnd(cod)
+  const venta = 900000 + r() * 2600000, objetivo = venta * (0.85 + r() * 0.3)
+  const valores = VALORES.map(([id, n, g]) => ({ id, nombre: n, grupo: g, recargo: id.startsWith('TC3') ? venta * 0.02 : 0, monto: 0 }))
+  let resto = venta; [0.32, 0.22, 0.14, 0.09, 0.08, 0.13].forEach((p, i) => { valores[i].monto = venta * p; resto -= venta * p }); valores[6].monto = -Math.abs(resto) - r() * 20000
+  const vends = VEND.slice(0, 3 + Math.floor(r() * 3)).map((n, i) => ({ id: String(10 + i), nombre: n, tickets: 5 + Math.floor(r() * 25), unidades: 10 + Math.floor(r() * 60), monto: venta / (i + 2) }))
+  const arqueado = venta * 0.32, difArq = r() < 0.45 ? 0 : Math.round((r() - 0.6) * 18000 / 100) * 100
+  const comps = [
+    { hora: '09:58', numero: 1201, origdest: 'CAJA', vendedor: vends[0].nombre, concepto: 'CAP', conceptoDesc: 'Apertura de caja', tipo: 'ENTRADA', obs: '', total: 50000 },
+    { hora: '13:12', numero: 1202, origdest: 'CAJA', vendedor: vends[1].nombre, concepto: 'GAS', conceptoDesc: 'Gastos varios', tipo: 'SALIDA', obs: 'Artículos de limpieza', total: -8400 - Math.round(r() * 9000) },
+    { hora: '17:40', numero: 1203, origdest: 'TESORERÍA', vendedor: vends[0].nombre, concepto: 'RET', conceptoDesc: 'Retiro a tesorería', tipo: 'SALIDA', obs: 'Sobre 1', total: -Math.round(arqueado * 0.6) },
+    { hora: '21:05', numero: 1204, origdest: 'CAJA', vendedor: vends[2].nombre, concepto: 'CCC', conceptoDesc: 'Cierre de caja', tipo: 'SALIDA', obs: '', total: -50000 },
+  ]
+  let quedan = arqueado + difArq
+  const billetes = BILLETES.map((b) => { const c = Math.floor(quedan / b * (b >= 10000 ? 0.8 : 1)); quedan -= c * b; return { b, c, t: c * b } }).filter((x) => x.c)
+  const errores = []
+  for (let i = 0; i < 14; i++) {
+    const v = VALORES[Math.floor(r() * 6)], tot = Math.round((15000 + r() * 120000) / 100) * 100
+    const raro = r() < 0.25
+    errores.push({ local: cod, codigo: cod + i, hora: `${String(10 + Math.floor(i * 0.8)).padStart(2, '0')}:${String(Math.floor(r() * 60)).padStart(2, '0')}`,
+      factura: `FACTURA B 0004-000${String(31200 + i + Math.floor(r() * 900))}`, valor: v[0], valorDesc: v[1],
+      recibi: raro ? tot + Math.round((r() - 0.5) * 30000 / 100) * 100 : tot, recargo: v[0] === 'TC3' ? tot * 0.02 : 0, totalFactura: tot, vendedor: vends[Math.floor(r() * vends.length)].id })
+  }
+  return { cod, venta, objetivo, valores, vends, comps, billetes, errores, tickets: vends.reduce((s, v) => s + v.tickets, 0),
+    arqueo: { numero: 88 + Math.floor(r() * 10), hora: '20:58', vendedor: vends[2].nombre, arqueado, sistema: arqueado - difArq, dif: difArq },
+    cierre: '21:05' }
+}
+const CACHE = {}; const D = (c) => (CACHE[c] ??= datosLocal(c))
+
+/* ---------- selector de locales ---------- */
+function pintarSelector() {
+  const q = $('#buscaLoc').value.toLowerCase()
+  const grupo = (marca, titulo) => {
+    const ls = LOCALES.filter((l) => l.marca === marca && (l.nombre + l.codigo).toLowerCase().includes(q))
+    return ls.length ? `<div class="grupo">${titulo}</div>` + ls.map((l) => `<label><input type="checkbox" value="${l.codigo}" ${elegidos.has(l.codigo) ? 'checked' : ''}> ${l.nombre}<small>${l.codigo}</small></label>`).join('') : ''
+  }
+  $('#listaLoc').innerHTML = grupo('mito', 'Mito') + grupo('cf', 'Captain Fin') || '<div class="vacio">Sin coincidencias</div>'
+  const n = elegidos.size
+  $('#txtLoc').textContent = n === 0 ? 'Elegí locales' : n === LOCALES.length ? 'Todos los locales' : n === 1 ? nom([...elegidos][0]) : `${n} locales`
+  $('#chips').innerHTML = n === LOCALES.length ? '' : [...elegidos].map((c) => `<span class="chip">${nom(c)}<b data-x="${c}">✕</b></span>`).join('')
+}
+$('#btnLoc').onclick = (e) => { e.stopPropagation(); $('#panelLoc').classList.toggle('abierto') }
+$('#panelLoc').onclick = (e) => e.stopPropagation()
+document.onclick = () => $('#panelLoc').classList.remove('abierto')
+$('#buscaLoc').oninput = pintarSelector
+$('#listaLoc').onchange = (e) => { e.target.checked ? elegidos.add(e.target.value) : elegidos.delete(e.target.value); cambio() }
+document.querySelectorAll('[data-r]').forEach((b) => b.onclick = () => {
+  const r = b.dataset.r
+  elegidos = new Set(LOCALES.filter((l) => r === 'todos' || l.marca === r).map((l) => l.codigo)); cambio()
+})
+$('#chips').onclick = (e) => { if (e.target.dataset.x) { elegidos.delete(e.target.dataset.x); cambio() } }
+document.querySelectorAll('[data-p]').forEach((b) => b.onclick = () => { document.querySelectorAll('[data-p]').forEach((x) => x.classList.toggle('on', x === b)) })
+document.querySelectorAll('.tab').forEach((t) => t.onclick = () => { hoja = t.dataset.h; document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('on', x === t)); compElegido = null; pintar() })
+function cambio() { if (localDetalle && !elegidos.has(localDetalle)) localDetalle = null; compElegido = null; pintarSelector(); pintar() }
+
+/* ---------- tablas ---------- */
+function tabla(cols, filas, { total = false, clic, sel } = {}) {
+  if (!filas.length) return '<div class="vacio">Sin datos</div>'
+  const th = cols.map((c) => `<th class="${c.n ? 'n' : ''}">${c.t}</th>`).join('')
+  const tr = filas.map((f, i) => `<tr class="${clic ? 'clic' : ''} ${sel && sel(f) ? 'sel' : ''}" ${clic ? `data-i="${i}"` : ''}>` + cols.map((c) => `<td class="${c.n ? 'n' : ''} ${c.cls ? c.cls(f) : ''}">${c.f ? c.f(f) : f[c.k] ?? ''}</td>`).join('') + '</tr>').join('')
+  const pie = total ? '<tfoot><tr>' + cols.map((c, i) => `<td class="${c.n ? 'n' : ''}">${i === 0 ? 'Total' : c.suma ? c.suma(filas) : ''}</td>`).join('') + '</tr></tfoot>' : ''
+  return `<div class="scroll"><table><thead><tr>${th}</tr></thead><tbody>${tr}</tbody>${pie}</table></div>`
+}
+const sum = (k) => (fs) => pesos(fs.reduce((s, f) => s + (f[k] || 0), 0))
+const sumN = (k) => (fs) => fs.reduce((s, f) => s + (f[k] || 0), 0).toLocaleString('es-AR')
+
+/* ---------- hoja CAJA ---------- */
+function hojaCaja() {
+  const ls = [...elegidos].map(D)
+  const venta = ls.reduce((s, d) => s + d.venta, 0), obj = ls.reduce((s, d) => s + d.objetivo, 0)
+  const tickets = ls.reduce((s, d) => s + d.tickets, 0), difArq = ls.reduce((s, d) => s + d.arqueo.dif, 0)
+  const conDif = ls.filter((d) => d.arqueo.dif).length
+  const det = localDetalle ? D(localDetalle) : ls.length === 1 ? ls[0] : null
+
+  const kpis = `<div class="kpis">
+    <div class="kpi"><span>Venta</span><b>${pesos(venta)}</b><small>${ls.length} local${ls.length > 1 ? 'es' : ''}</small></div>
+    <div class="kpi"><span>Objetivo</span><b>${pesos(obj)}</b><small class="${venta >= obj ? 'ok' : 'mal'}">${venta >= obj ? 'SOBRÓ' : 'FALTÓ'} ${pesos(venta - obj)}</small></div>
+    <div class="kpi"><span>Ticket promedio</span><b>${pesos(venta / tickets)}</b><small>${tickets} tickets</small></div>
+    <div class="kpi"><span>Diferencia de arqueos</span><b class="${difArq ? (difArq > 0 ? 'ok' : 'mal') : ''}">${pesos(difArq)}</b><small>${conDif} de ${ls.length} con diferencia</small></div>
+  </div>`
+
+  const porLocal = ls.length > 1 ? `<div class="tarjeta c12"><h3>Por local <span class="gris" style="font-weight:400">tocá un local para ver su caja completa</span></h3>${tabla([
+    { t: 'Local', f: (d) => `${nom(d.cod)} <span class="loc-tag">${d.cod}</span>` },
+    { t: 'Venta', n: 1, f: (d) => pesos(d.venta), suma: sum('venta') },
+    { t: 'Objetivo', n: 1, f: (d) => pesos(d.objetivo), suma: sum('objetivo') },
+    { t: 'Diferencia', n: 1, f: (d) => pesos(d.venta - d.objetivo), cls: (d) => (d.venta >= d.objetivo ? 'ok' : 'mal') },
+    { t: '%', n: 1, f: (d) => ((d.venta / d.objetivo - 1) * 100).toFixed(1) + '%' },
+    { t: '', f: (d) => `<span class="pill ${d.venta >= d.objetivo ? 'ok' : 'mal'}">${d.venta >= d.objetivo ? 'SOBRÓ' : 'FALTÓ'}</span>` },
+    { t: 'Tickets', n: 1, f: (d) => d.tickets, suma: sumN('tickets') },
+    { t: 'Efectivo', n: 1, f: (d) => pesos(d.valores[0].monto) },
+    { t: 'Arqueo Nº', n: 1, f: (d) => d.arqueo.numero },
+    { t: 'Dif. arqueo', n: 1, f: (d) => pesos(d.arqueo.dif), cls: (d) => (d.arqueo.dif ? (d.arqueo.dif > 0 ? 'ok' : 'mal') : 'gris') },
+    { t: 'Cierre', f: (d) => d.cierre },
+  ], ls, { total: true, clic: true, sel: (d) => d.cod === localDetalle })}</div>` : ''
+
+  // valores sumados entre los locales elegidos
+  const val = {}; ls.forEach((d) => d.valores.forEach((v) => { val[v.id] ??= { ...v, recargo: 0, monto: 0 }; val[v.id].recargo += v.recargo; val[v.id].monto += v.monto }))
+  const valores = Object.values(val).sort((a, b) => b.monto - a.monto)
+  const grupos = {}; valores.forEach((v) => { grupos[v.grupo] ??= { grupo: v.grupo, recargo: 0, monto: 0 }; grupos[v.grupo].recargo += v.recargo; grupos[v.grupo].monto += v.monto })
+  const consolidado = `
+    <div class="tarjeta c6"><h3>Venta por valores ${ls.length > 1 ? '<span class="gris" style="font-weight:400">suma de los locales elegidos</span>' : ''}</h3>${tabla([
+      { t: 'Valor', f: (v) => `${v.id} - ${v.nombre}` }, { t: 'Recargo', n: 1, f: (v) => pesos(v.recargo), suma: sum('recargo') }, { t: 'Monto', n: 1, f: (v) => pesos(v.monto), suma: sum('monto') },
+    ], valores, { total: true })}</div>
+    <div class="tarjeta c6"><h3>Venta por grupo de valor</h3>${tabla([
+      { t: 'Grupo', k: 'grupo' }, { t: 'Recargo', n: 1, f: (v) => pesos(v.recargo), suma: sum('recargo') }, { t: 'Total', n: 1, f: (v) => pesos(v.monto), suma: sum('monto') },
+    ], Object.values(grupos), { total: true })}</div>`
+
+  const detalle = det ? `
+    <div class="tarjeta c12" style="border-color:#0284c799"><h3><span>Caja de <b style="color:var(--txt)">${nom(det.cod)}</b></span>${ls.length > 1 ? '<button class="btn" id="cerrarDet">✕ cerrar</button>' : ''}</h3>
+      <div class="grilla">
+        <div class="tarjeta c4"><h3>Arqueo de caja <select><option>Nº ${det.arqueo.numero} · ${det.arqueo.hora}</option><option>Nº ${det.arqueo.numero - 1} · 14:02</option></select></h3>
+          <div class="arq-res"><span>Contado <b>${pesos(det.arqueo.arqueado)}</b></span><span>Sistema <b>${pesos(det.arqueo.sistema)}</b></span><span>Dif. <b class="${det.arqueo.dif ? (det.arqueo.dif > 0 ? 'ok' : 'mal') : ''}">${pesos(det.arqueo.dif)}</b></span><span>${det.arqueo.vendedor}</span></div>
+          ${tabla([{ t: 'Valor', f: (b) => '$ ' + b.b.toLocaleString('es-AR') }, { t: 'Cant.', n: 1, k: 'c', suma: sumN('c') }, { t: 'Total', n: 1, f: (b) => pesos(b.t), suma: sum('t') }], det.billetes, { total: true })}</div>
+        <div class="tarjeta c8"><h3>Comprobantes de caja</h3>${tabla([
+          { t: 'Hora', k: 'hora' }, { t: 'Nro', n: 1, k: 'numero' }, { t: 'Orig/Dest', k: 'origdest' }, { t: 'Vendedor', k: 'vendedor' },
+          { t: 'Concepto', k: 'concepto' }, { t: 'Descripción', k: 'conceptoDesc' }, { t: 'Tipo', f: (c) => `<span class="${c.tipo === 'SALIDA' ? 'mal' : 'ok'}">${c.tipo}</span>` },
+          { t: 'Observaciones', k: 'obs' }, { t: 'Total', n: 1, f: (c) => pesos(c.total), suma: sum('total') },
+        ], det.comps, { total: true })}</div>
+        <div class="tarjeta c8"><h3>Ventas por vendedor</h3>${tabla([
+          { t: 'Vendedor', f: (v) => `${v.id} - ${v.nombre}` }, { t: 'Tickets', n: 1, k: 'tickets', suma: sumN('tickets') }, { t: 'Artículos', n: 1, k: 'unidades', suma: sumN('unidades') }, { t: 'Monto', n: 1, f: (v) => pesos(v.monto), suma: sum('monto') },
+        ], det.vends, { total: true })}</div>
+        <div class="c4" style="display:grid;gap:10px">
+          <div class="kpi"><span>Primer vendedor</span><b style="font-size:15px">${det.vends[0].id} - ${det.vends[0].nombre}</b><small>${pesos(det.vends[0].monto)} · desde 10:02</small></div>
+          <div class="kpi"><span>Último vendedor</span><b style="font-size:15px">${det.vends.at(-1).id} - ${det.vends.at(-1).nombre}</b><small>${pesos(det.vends.at(-1).monto)} · hasta 20:51</small></div>
+          <div class="kpi"><span>Cierre de caja</span><b>${det.cierre}</b><small>Arqueos en el día: 2</small></div>
+        </div>
+      </div>
+    </div>` : ls.length > 1 ? '' : ''
+
+  return kpis + `<div class="grilla">${porLocal}${detalle}${consolidado}</div>`
+}
+
+/* ---------- hoja ERRORES DE CAJA ---------- */
+function hojaErrores() {
+  let filas = [...elegidos].flatMap((c) => D(c).errores)
+  if (filtroValor) filas = filas.filter((f) => f.valor === filtroValor)
+  const soloDif = $('#soloDif')?.checked
+  if (soloDif) filas = filas.filter((f) => f.recibi !== f.totalFactura)
+  filas.sort((a, b) => b.hora.localeCompare(a.hora))
+  const varios = elegidos.size > 1
+  const cols = [
+    ...(varios ? [{ t: 'Local', f: (f) => `<span class="loc-tag">${nom(f.local)}</span>` }] : []),
+    { t: 'Fecha', f: () => '27/11/2026' }, { t: 'Hora', k: 'hora' }, { t: 'Comprobante', k: 'factura' },
+    { t: 'Valor', f: (f) => `${f.valor} - ${f.valorDesc}` },
+    { t: 'Recibido', n: 1, f: (f) => pesos(f.recibi), suma: sum('recibi'), cls: (f) => (f.recibi !== f.totalFactura ? 'medio' : '') },
+    { t: 'Recargo', n: 1, f: (f) => pesos(f.recargo), suma: sum('recargo') },
+    { t: 'Total factura', n: 1, f: (f) => pesos(f.totalFactura) },
+    { t: 'Vend.', k: 'vendedor' },
+  ]
+  const art = compElegido ? (() => {
+    const r = rnd(compElegido.codigo)
+    const filas = Array.from({ length: 1 + Math.floor(r() * 3) }, (_, i) => { const p = Math.round((12000 + r() * 40000) / 100) * 100; return { art: 'R' + (4100 + Math.floor(r() * 800)), desc: ['REMERA OVERSIZE', 'JEAN MOM', 'BUZO CANGURO', 'SHORT BAÑO'][i % 4], color: ['NEGRO', 'BLANCO', 'AZUL'][i % 3], talle: ['S', 'M', 'L', 'XL'][i % 4], u: 1, p, dto: i === 0 ? p * 0.1 : 0 } })
+    return `<div class="tarjeta c12"><h3>Artículos del comprobante <span class="gris" style="font-weight:400">${compElegido.factura} · ${nom(compElegido.local)}</span></h3>${tabla([
+      { t: 'Artículo', k: 'art' }, { t: 'Descripción', k: 'desc' }, { t: 'Color', k: 'color' }, { t: 'Talle', k: 'talle' }, { t: 'Unid.', n: 1, k: 'u', suma: sumN('u') },
+      { t: 'Precio lista', n: 1, f: (a) => pesos(a.p) }, { t: 'Dto. promo', n: 1, f: (a) => pesos(a.dto), suma: sum('dto') }, { t: 'Cobrado', n: 1, f: (a) => pesos(a.p - a.dto), suma: (fs) => pesos(fs.reduce((s, a) => s + a.p - a.dto, 0)) },
+    ], filas, { total: true })}</div>`
+  })() : ''
+  window._filasErr = filas
+  return `<div class="grilla"><div class="tarjeta c12"><h3>Cobros por comprobante <span class="gris" style="font-weight:400">tocá uno para ver sus artículos · ${filas.length} cobros</span></h3>
+    ${tabla(cols, filas, { total: true, clic: true, sel: (f) => f === compElegido })}
+    <div class="ayuda">En naranja: lo recibido no coincide con el total de la factura.</div></div>${art}</div>`
+}
+
+/* ---------- pintar ---------- */
+function pintar() {
+  $('#filtrosHoja').innerHTML = hoja === 'errores'
+    ? `<select id="fValor"><option value="">Todos los valores</option>${VALORES.map(([id, n]) => `<option value="${id}" ${filtroValor === id ? 'selected' : ''}>${id} - ${n}</option>`).join('')}</select>
+       <input type="search" placeholder="Comprobante…" style="width:140px">
+       <label class="gris" style="font-size:12px"><input type="checkbox" id="soloDif" ${window._soloDif ? 'checked' : ''}> Solo con diferencia</label>`
+    : `<select><option>Todos los conceptos de caja</option><option>CAP - Apertura</option><option>GAS - Gastos varios</option><option>RET - Retiro a tesorería</option><option>CCC - Cierre de caja</option></select>`
+  if ($('#fValor')) $('#fValor').onchange = (e) => { filtroValor = e.target.value; compElegido = null; pintar() }
+  if ($('#soloDif')) $('#soloDif').onchange = (e) => { window._soloDif = e.target.checked; compElegido = null; pintar() }
+  if ($('#soloDif')) $('#soloDif').checked = !!window._soloDif
+
+  if (!elegidos.size) { $('#vista').innerHTML = '<div class="tarjeta vacio">Elegí uno o más locales arriba.</div>'; return }
+  $('#vista').innerHTML = hoja === 'caja' ? hojaCaja() : hojaErrores()
+
+  if (hoja === 'caja') {
+    const ls = [...elegidos]
+    $('#vista').querySelectorAll('tr.clic').forEach((tr) => tr.onclick = () => { const c = ls[+tr.dataset.i]; localDetalle = localDetalle === c ? null : c; pintar() })
+    if ($('#cerrarDet')) $('#cerrarDet').onclick = () => { localDetalle = null; pintar() }
+  } else {
+    $('#vista').querySelectorAll('tr.clic').forEach((tr) => tr.onclick = () => { const f = window._filasErr[+tr.dataset.i]; compElegido = compElegido === f ? null : f; pintar() })
+  }
+}
+pintarSelector(); pintar()
+</script>
+</body>
+</html>
