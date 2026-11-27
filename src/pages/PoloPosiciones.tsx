@@ -47,7 +47,6 @@ function MembretePosicion({ codigo, ancho, alto }: { codigo: string; ancho: numb
   // ancho libre para el texto: menos QR, separación (2), relleno (4), borde y un margen de seguridad
   const textoMm = Math.max(5, ancho - qrMm - 8)
   const letraMm = Math.min(alto * 0.4, textoMm / anchoPorUnidad(nombre, 900))
-  const tituloMm = Math.min(alto * 0.08, textoMm / anchoPorUnidad('POLO 52', 700))
   return (
     <div
       className="etiqueta-bulto"
@@ -55,7 +54,6 @@ function MembretePosicion({ codigo, ancho, alto }: { codigo: string; ancho: numb
     >
       <QRCodeSVG value={qrPosicion(codigo)} size={256} level="M" style={{ width: `${qrMm}mm`, height: `${qrMm}mm`, flexShrink: 0 }} />
       <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '1mm', minWidth: 0, flex: 1, textAlign: 'center' }}>
-        <div style={{ fontSize: `${tituloMm}mm`, fontWeight: 700, textTransform: 'uppercase' }}>POLO 52</div>
         <div style={{ fontSize: `${letraMm}mm`, fontWeight: 900, lineHeight: 1, whiteSpace: 'nowrap' }}>
           {nombre}
         </div>
