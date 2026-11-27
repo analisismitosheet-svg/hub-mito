@@ -1,5 +1,6 @@
 import {
   Ban,
+  CalendarClock,
   PackageOpen,
   Scale,
   Briefcase,
@@ -614,6 +615,17 @@ export const APPS: AppDef[] = [
     target: '/rrhh/empleados',
     color: '#7c3aed',
     permiso: 'rrhh.empleados.view',
+  },
+  {
+    id: 'rrhh-carga-horaria',
+    areaId: 'rrhh',
+    title: 'Carga horaria',
+    description: 'Planilla calendario del horario por local y por legajo, contra las horas del contrato.',
+    icon: CalendarClock,
+    kind: 'internal',
+    target: '/rrhh/carga-horaria',
+    color: '#0ea5e9',
+    permiso: 'rrhh.horarios.view',
   },
   {
     id: 'rrhh-cumpleanos',
