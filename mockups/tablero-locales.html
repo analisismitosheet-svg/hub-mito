@@ -53,6 +53,12 @@
   th { color:var(--sub); font-weight:500; text-align:left; padding:5px 8px; position:sticky; top:0; background:var(--card); border-bottom:1px solid var(--borde); white-space:nowrap; }
   td { padding:5px 8px; border-bottom:1px solid #33415566; white-space:nowrap; }
   td.n, th.n { text-align:right; font-variant-numeric:tabular-nums; }
+  th.ord { cursor:pointer; user-select:none; }
+  th.ord:hover { color:var(--txt); }
+  th.ord i { font-style:normal; font-size:9px; margin-left:4px; opacity:.35; }
+  th.ord:hover i { opacity:.8; }
+  th.ord.on { color:var(--acento2); }
+  th.ord.on i { opacity:1; }
   tr.clic { cursor:pointer; } tr.clic:hover td { background:#0f172a88; }
   tr.sel td { background:#0284c722 !important; }
   tfoot td { font-weight:700; border-top:2px solid var(--borde); border-bottom:none; }
@@ -182,10 +188,26 @@ document.querySelectorAll('.tab').forEach((t) => t.onclick = () => { hoja = t.da
 function cambio() { if (localDetalle && !elegidos.has(localDetalle)) localDetalle = null; compElegido = null; pintarSelector(); pintar() }
 
 /* ---------- tablas ---------- */
+/* Orden por columna: 1er toque ascendente, 2do descendente, 3ro vuelve al orden original */
+const ORDEN = {} // nombre de tabla -> { col, dir }
+const celda = (c, f) => (c.f ? c.f(f) : f[c.k] ?? '')
+function valorOrden(c, f) {
+  if (c.k && typeof f[c.k] === 'number') return f[c.k]
+  const txt = String(celda(c, f)).replace(/<[^>]*>/g, '').trim()
+  const num = txt.replace(/[$%\s]/g, '').replace(/\./g, '').replace(',', '.')
+  return /^-?\d+(\.\d+)?$/.test(num) && txt !== '' ? parseFloat(num) : txt.toLowerCase()
+}
 function tabla(cols, filas, { total = false, clic, sel } = {}) {
   if (!filas.length) return '<div class="vacio">Sin datos</div>'
-  const th = cols.map((c) => `<th class="${c.n ? 'n' : ''}">${c.t}</th>`).join('')
-  const tr = filas.map((f, i) => `<tr class="${clic ? 'clic' : ''} ${sel && sel(f) ? 'sel' : ''}" ${clic ? `data-i="${i}"` : ''}>` + cols.map((c) => `<td class="${c.n ? 'n' : ''} ${c.cls ? c.cls(f) : ''}">${c.f ? c.f(f) : f[c.k] ?? ''}</td>`).join('') + '</tr>').join('')
+  const nombre = cols.map((c) => c.t).join('|')
+  const o = ORDEN[nombre]
+  let orden = filas.map((f, i) => [f, i]) // se guarda el índice original para los clics
+  if (o && cols[o.col]) {
+    const c = cols[o.col]
+    orden.sort(([a], [b]) => { const x = valorOrden(c, a), y = valorOrden(c, b); return (x < y ? -1 : x > y ? 1 : 0) * o.dir })
+  }
+  const th = cols.map((c, j) => `<th class="ord ${c.n ? 'n' : ''} ${o?.col === j ? 'on' : ''}" data-tabla="${nombre}" data-col="${j}" title="Ordenar">${c.t || ''}<i>${o?.col === j ? (o.dir > 0 ? '▲' : '▼') : '↕'}</i></th>`).join('')
+  const tr = orden.map(([f, i]) => `<tr class="${clic ? 'clic' : ''} ${sel && sel(f) ? 'sel' : ''}" ${clic ? `data-i="${i}"` : ''}>` + cols.map((c) => `<td class="${c.n ? 'n' : ''} ${c.cls ? c.cls(f) : ''}">${celda(c, f)}</td>`).join('') + '</tr>').join('')
   const pie = total ? '<tfoot><tr>' + cols.map((c, i) => `<td class="${c.n ? 'n' : ''}">${i === 0 ? 'Total' : c.suma ? c.suma(filas) : ''}</td>`).join('') + '</tr></tfoot>' : ''
   return `<div class="scroll"><table><thead><tr>${th}</tr></thead><tbody>${tr}</tbody>${pie}</table></div>`
 }
@@ -311,6 +333,13 @@ function pintar() {
     $('#vista').querySelectorAll('tr.clic').forEach((tr) => tr.onclick = () => { const f = window._filasErr[+tr.dataset.i]; compElegido = compElegido === f ? null : f; pintar() })
   }
 }
+// tocar un encabezado ordena esa tabla (asc → desc → original)
+$('#vista').addEventListener('click', (e) => {
+  const th = e.target.closest('th.ord'); if (!th) return
+  const t = th.dataset.tabla, col = +th.dataset.col, o = ORDEN[t]
+  ORDEN[t] = !o || o.col !== col ? { col, dir: 1 } : o.dir === 1 ? { col, dir: -1 } : undefined
+  pintar()
+})
 pintarSelector(); pintar()
 </script>
 </body>
