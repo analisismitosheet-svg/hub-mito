@@ -25,7 +25,7 @@ export default function CargaHoraria() {
           <CalendarClock size={22} className="text-sky-500" aria-hidden /> Carga horaria
         </h1>
         <p className="mt-1 text-sm text-sub">
-          Planilla mensual por local. En cada día, <b className="text-ink">entrada</b> y <b className="text-ink">salida</b> (10, 10:30, 17…); vacío = franco.
+          Un horario semanal por mes: lo que cargás en un día se repite todas las semanas del mes. En cada día, <b className="text-ink">entrada</b> y <b className="text-ink">salida</b> (10, 10:30, 17…); vacío = franco.
           En la entrada también va <b className="text-ink">V</b> vacaciones o <b className="text-ink">L</b> licencia; con <b className="text-ink">+</b> se agrega un turno cortado.
         </p>
       </header>

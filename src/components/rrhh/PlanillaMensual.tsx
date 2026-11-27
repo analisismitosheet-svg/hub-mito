@@ -7,17 +7,20 @@ import {
 } from '@/lib/horarios'
 
 /* ------------------------------------------------------------------ */
-/*  Planilla mensual de RR. HH. (27/11/2026), con el estilo de la       */
+/*  Planilla horaria de RR. HH. (27/11/2026), con el estilo de la       */
 /*  planilla de Excel de los locales: tipo (LOCAL 1, 2… o PPP) · legajo */
-/*  · cada día del mes con entrada / salida (dos tramos si es turno     */
-/*  cortado) y las horas abajo · total del mes.                          */
-/*  - modo «carga»: Carga horaria, editable por admin y rol rr_hh.      */
-/*  - modo «marcaciones»: lo que fichó el reloj (rrhh_marcaciones),     */
-/*    solo lectura, comparado contra la carga horaria.                  */
+/*  · lunes a domingo con entrada / salida (dos tramos si es turno      */
+/*  cortado) y las horas abajo.                                          */
+/*  - modo «carga»: UN horario semanal por mes (el empleado hace lo     */
+/*    mismo las 4 semanas). Cada día de la semana se guarda en todas    */
+/*    sus fechas del mes (rrhh_carga_horaria sigue siendo por fecha);   */
+/*    si alguna semana difiere (vacaciones, cambio) se marca con «•».   */
+/*    Editable solo por admin y rol rr_hh.                              */
+/*  - modo «marcaciones»: por semana, lo que fichó el reloj             */
+/*    (rrhh_marcaciones) contra lo planificado ese día. Solo lectura.   */
 /* ------------------------------------------------------------------ */
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
-const DIA_CORTO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 const APERTURA_DEF = { dias: 'lunes a domingos', abre: '10:00', cierra: '21:00' }
 const TOLERANCIA = 5 // minutos para marcar tarde / temprano
 const LS_LOCAL = 'carga-horaria.local'
@@ -26,9 +29,9 @@ type Guardar = (emp: Emp, fecha: string, c: Omit<Carga, 'legajo' | 'fecha' | 'lo
 
 /* ---------------- celda de Carga horaria (editable) ---------------- */
 
-interface DiaCargaProps { emp: Emp; fecha: string; carga: Carga | undefined; apertura: Apertura; editable: boolean; r: number; d: number; onGuardar: Guardar }
+interface DiaCargaProps { emp: Emp; fecha: string; carga: Carga | undefined; varia?: string; apertura: Apertura; editable: boolean; r: number; d: number; onGuardar: Guardar }
 
-function DiaCarga({ emp, fecha, carga, apertura, editable, r, d, onGuardar }: DiaCargaProps) {
+function DiaCarga({ emp, fecha, carga, varia, apertura, editable, r, d, onGuardar }: DiaCargaProps) {
   const tr = carga?.tipo === 'trabajo' ? tramosDe(carga.horario) : []
   const [e0, s0] = tr[0] ?? ['', '']
   const [e1, s1] = tr[1] ?? ['', '']
@@ -136,6 +139,7 @@ function DiaCarga({ emp, fecha, carga, apertura, editable, r, d, onGuardar }: Di
       )}
       <div className={`flex items-center justify-center gap-1 border-t border-line py-0.5 text-center text-[10px] tabular-nums ${franco || especial ? 'text-sub' : emp.plan ? 'bg-emerald-500/10 text-ink' : 'bg-sky-500/10 text-ink'} ${estado === 'falta' ? 'text-amber-500' : ''}`}>
         {pie}
+        {varia && <span className="font-bold text-amber-500" title={varia}>•</span>}
         {editable && !especial && !cortado && (
           <button
             type="button" onClick={() => setCortado(true)} tabIndex={-1}
@@ -167,7 +171,7 @@ function DiaMarcas({ emp, marca, carga, pasado }: { emp: Emp; marca: Marcacion |
     : !marca ? (emp.plan ? 'bg-emerald-500/10' : 'bg-sky-500/15') : sinPlan ? 'bg-violet-500/10' : ''
   const celda = 'h-7 text-center text-[12px] leading-7 tabular-nums'
   const pie = marca ? hhmm(marca.horas * 60)
-    : ausente ? 'Ausente' : carga?.tipo === 'vacaciones' ? 'Vacac.' : carga?.tipo === 'licencia' ? 'Licencia' : plan.length ? '' : 'Franco'
+    : ausente ? 'Ausente' : carga?.tipo === 'vacaciones' ? 'Vacac.' : carga?.tipo === 'licencia' ? 'Licencia' : plan.length ? plan.map(([a, b]) => `${a}-${b}`.replace(/:00/g, '')).join(' ') : 'Franco'
   const detalle = [planTxt, marca?.marcas ? `Fichadas: ${marca.marcas}` : null, marca?.incompleta ? 'Falta una fichada' : null, tarde ? 'Entró tarde' : null, temprano ? 'Salió temprano' : null]
     .filter(Boolean).join(' · ')
 
@@ -205,11 +209,18 @@ interface Props {
   onEmpleados?: (emps: Emp[]) => void
 }
 
+/** Una columna de la planilla: en Carga horaria un día de la semana (todas sus fechas del mes); en Marcaciones una fecha. */
+interface Columna { key: string; titulo: string; sub: string; fechas: string[]; fecha?: string }
+
+const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+const firma = (c: Carga | undefined) => (c ? `${c.tipo}|${c.horario ?? ''}|${c.horas}` : '')
+
 export default function PlanillaMensual({ modo, puedeEditar, acciones, recargar = 0, onEmpleados }: Props) {
   const hoy = new Date()
   const hoyIso = iso(hoy.getFullYear(), hoy.getMonth(), hoy.getDate())
   const [anio, setAnio] = useState(hoy.getFullYear())
   const [mes, setMes] = useState(hoy.getMonth())
+  const [lunes, setLunes] = useState(() => lunesDe(hoyIso))
   const [vista, setVista] = useState<'local' | 'legajo'>('local')
   const [emps, setEmps] = useState<Emp[]>([])
   const [cargas, setCargas] = useState<Map<string, Carga>>(new Map())
@@ -221,14 +232,28 @@ export default function PlanillaMensual({ modo, puedeEditar, acciones, recargar 
   const [busca, setBusca] = useState('')
   const [editAp, setEditAp] = useState<Apertura | null>(null)
   const [cargando, setCargando] = useState(true)
+  const [copiando, setCopiando] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
 
-  const desde = iso(anio, mes, 1)
+  const esCarga = modo === 'carga'
+  const editable = esCarga && puedeEditar
+  // Carga horaria: el mes entero. Marcaciones: la semana.
   const diasMes = new Date(Date.UTC(anio, mes + 1, 0)).getUTCDate()
-  const hasta = iso(anio, mes, diasMes)
-  const dias = useMemo(() => Array.from({ length: diasMes }, (_, i) => iso(anio, mes, i + 1)), [anio, mes, diasMes])
-  const editable = modo === 'carga' && puedeEditar
+  const desde = esCarga ? iso(anio, mes, 1) : lunes
+  const hasta = esCarga ? iso(anio, mes, diasMes) : sumarDias(lunes, 6)
+
+  const columnas: Columna[] = useMemo(() => {
+    if (esCarga) {
+      const fechasDe = (i: number) => {
+        const out: string[] = []
+        for (let d = 1; d <= diasMes; d++) { const f = iso(anio, mes, d); if ((dow(f) + 6) % 7 === i) out.push(f) }
+        return out
+      }
+      return DIAS_SEMANA.map((t, i) => { const fs = fechasDe(i); return { key: t, titulo: t, sub: `×${fs.length}`, fechas: fs } })
+    }
+    return DIAS_SEMANA.map((t, i) => { const f = sumarDias(lunes, i); return { key: f, titulo: t, sub: ddmm(f), fechas: [f], fecha: f } })
+  }, [esCarga, anio, mes, diasMes, lunes])
 
   // Empleados activos con legajo; puesto = LOCAL 1, 2… (por horas y nombre) o PPP si es plan
   useEffect(() => {
@@ -267,33 +292,35 @@ export default function PlanillaMensual({ modo, puedeEditar, acciones, recargar 
     })
   }, [onEmpleados])
 
-  // Mes (+ la semana anterior, para «Repetir semana anterior»), marcaciones y feriados
+  async function leerTabla<T>(tabla: string, campos: string, ini: string, fin: string): Promise<T[]> {
+    const out: T[] = []
+    if (!supabase) return out
+    for (let p = 0; ; p += 1000) {
+      const { data, error: e } = await supabase.from(tabla).select(campos).gte('fecha', ini).lte('fecha', fin).order('id').range(p, p + 999)
+      if (e) { setError(e.message); break }
+      const filas = (data as T[] | null) ?? []
+      out.push(...filas)
+      if (filas.length < 1000) break
+    }
+    return out
+  }
+
   const cargar = useCallback(async () => {
     const sb = supabase
     if (!sb) { setCargando(false); return }
     setCargando(true)
     setError(null)
-    async function todo<T>(tabla: string, campos: string, ini: string): Promise<T[]> {
-      const out: T[] = []
-      for (let p = 0; ; p += 1000) {
-        const { data, error: e } = await sb!.from(tabla).select(campos).gte('fecha', ini).lte('fecha', hasta).order('id').range(p, p + 999)
-        if (e) { setError(e.message); break }
-        const filas = (data as T[] | null) ?? []
-        out.push(...filas)
-        if (filas.length < 1000) break
-      }
-      return out
-    }
     const [cs, ms] = await Promise.all([
-      todo<Carga>('rrhh_carga_horaria', 'legajo,fecha,local,horario,horas,tipo', sumarDias(desde, -7)),
-      modo === 'marcaciones' ? todo<Marcacion>('rrhh_marcaciones', 'legajo,fecha,local,marcas,horario,horas,incompleta', desde) : Promise.resolve([] as Marcacion[]),
+      leerTabla<Carga>('rrhh_carga_horaria', 'legajo,fecha,local,horario,horas,tipo', desde, hasta),
+      esCarga ? Promise.resolve([] as Marcacion[]) : leerTabla<Marcacion>('rrhh_marcaciones', 'legajo,fecha,local,marcas,horario,horas,incompleta', desde, hasta),
     ])
     setCargas(new Map(cs.map((c) => [`${c.legajo}|${c.fecha}`, { ...c, horas: Number(c.horas) }])))
     setMarcas(new Map(ms.map((m) => [`${m.legajo}|${m.fecha}`, { ...m, horas: Number(m.horas) }])))
     const { data: fer } = await sb.from('objetivos_feriados').select('fecha,motivo').is('local', null).gte('fecha', desde).lte('fecha', hasta)
     setFeriados(new Map(((fer as { fecha: string; motivo: string | null }[] | null) ?? []).map((f) => [f.fecha, f.motivo || 'Feriado'])))
     setCargando(false)
-  }, [desde, hasta, modo])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [desde, hasta, esCarga])
   useEffect(() => { void cargar() }, [cargar, recargar])
 
   const locales = useMemo(() => {
@@ -314,48 +341,82 @@ export default function PlanillaMensual({ modo, puedeEditar, acciones, recargar 
   const localVista = vista === 'local' ? local : empLegajo?.local ?? ''
   const apertura: Apertura = aperturas.get(localVista) ?? { local: localVista, ...APERTURA_DEF }
 
-  const guardar: Guardar = useCallback(async (emp, fecha, c) => {
-    if (!supabase) return false
+  /** Horario del mes para un día de la semana: el que más se repite entre sus fechas (y las que difieren) */
+  const plantilla = useCallback((leg: string, col: Columna): { carga: Carga | undefined; varia: string | undefined } => {
+    const cuenta = new Map<string, { n: number; c: Carga | undefined }>()
+    for (const f of col.fechas) {
+      const c = cargas.get(`${leg}|${f}`)
+      const k = firma(c)
+      const x = cuenta.get(k) ?? { n: 0, c }
+      x.n++
+      cuenta.set(k, x)
+    }
+    const top = [...cuenta.entries()].sort((a, b) => b[1].n - a[1].n || (a[0] ? -1 : 1))[0]
+    if (!top) return { carga: undefined, varia: undefined }
+    const otras = col.fechas.filter((f) => firma(cargas.get(`${leg}|${f}`)) !== top[0])
+    const varia = otras.length
+      ? `Distinto en ${otras.map((f) => { const c = cargas.get(`${leg}|${f}`); return `${ddmm(f)} (${c ? (c.tipo === 'trabajo' ? c.horario : c.tipo) : 'franco'})` }).join(', ')}. Si lo cambiás, se pisa en todas las semanas.`
+      : undefined
+    return { carga: top[1].c, varia }
+  }, [cargas])
+
+  /** Guarda el horario de un día de la semana en todas sus fechas del mes */
+  const guardarColumna = useCallback(async (emp: Emp, fechas: string[], c: Omit<Carga, 'legajo' | 'fecha' | 'local'> | null): Promise<boolean> => {
+    if (!supabase || !fechas.length) return false
     const { error: e } = c
       ? await supabase.from('rrhh_carga_horaria').upsert(
-        { legajo: emp.legajo, fecha, local: emp.local, ...c, actualizado_at: new Date().toISOString() },
+        fechas.map((fecha) => ({ legajo: emp.legajo, fecha, local: emp.local, ...c, actualizado_at: new Date().toISOString() })),
         { onConflict: 'legajo,fecha' },
       )
-      : await supabase.from('rrhh_carga_horaria').delete().eq('legajo', emp.legajo).eq('fecha', fecha)
+      : await supabase.from('rrhh_carga_horaria').delete().eq('legajo', emp.legajo).in('fecha', fechas)
     if (e) { setError(e.message); return false }
     setCargas((prev) => {
       const n = new Map(prev)
-      const k = `${emp.legajo}|${fecha}`
-      if (c) n.set(k, { legajo: emp.legajo, fecha, local: emp.local, ...c })
-      else n.delete(k)
+      for (const fecha of fechas) {
+        const k = `${emp.legajo}|${fecha}`
+        if (c) n.set(k, { legajo: emp.legajo, fecha, local: emp.local, ...c })
+        else n.delete(k)
+      }
       return n
     })
     return true
   }, [])
 
-  const semanas = useMemo(() => {
-    const out: string[] = []
-    for (let l = lunesDe(desde); l <= hasta; l = sumarDias(l, 7)) out.push(l)
-    return out
-  }, [desde, hasta])
-
-  /** Copia la semana anterior a la semana que empieza en `lunes`, solo en los días vacíos del mes. */
-  async function repetirSemana(lunes: string) {
-    if (!supabase || !lunes) return
-    setAviso(null)
+  /** Copia el horario semanal del mes anterior a las personas que este mes no tienen nada cargado */
+  async function copiarMesAnterior() {
+    if (!supabase) return
+    setAviso(null); setCopiando(true)
+    const d0 = new Date(anio, mes - 1, 1)
+    const pa = d0.getFullYear(), pm = d0.getMonth()
+    const pdias = new Date(Date.UTC(pa, pm + 1, 0)).getUTCDate()
+    const previas = await leerTabla<Carga>('rrhh_carga_horaria', 'legajo,fecha,local,horario,horas,tipo', iso(pa, pm, 1), iso(pa, pm, pdias))
+    // horario más repetido por legajo y día de la semana (sin vacaciones ni licencias puntuales)
+    const cuenta = new Map<string, Map<string, { n: number; c: Carga }>>()
+    for (const c of previas) {
+      if (c.tipo !== 'trabajo') continue
+      const k = `${c.legajo}|${(dow(c.fecha) + 6) % 7}`
+      const m = cuenta.get(k) ?? new Map()
+      const f = firma(c)
+      m.set(f, { n: (m.get(f)?.n ?? 0) + 1, c })
+      cuenta.set(k, m)
+    }
     const filas = []
     for (const emp of personas) {
+      if (columnas.some((col) => col.fechas.some((f) => cargas.has(`${emp.legajo}|${f}`)))) continue
       for (let i = 0; i < 7; i++) {
-        const f = sumarDias(lunes, i)
-        if (f < desde || f > hasta || cargas.has(`${emp.legajo}|${f}`)) continue
-        const src = cargas.get(`${emp.legajo}|${sumarDias(f, -7)}`)
-        if (src) filas.push({ legajo: emp.legajo, fecha: f, local: emp.local, horario: src.horario, horas: src.horas, tipo: src.tipo, actualizado_at: new Date().toISOString() })
+        const m = cuenta.get(`${emp.legajo}|${i}`)
+        if (!m) continue
+        const top = [...m.values()].sort((a, b) => b.n - a.n)[0].c
+        for (const fecha of columnas[i].fechas) {
+          filas.push({ legajo: emp.legajo, fecha, local: emp.local, horario: top.horario, horas: Number(top.horas), tipo: top.tipo, actualizado_at: new Date().toISOString() })
+        }
       }
     }
-    if (!filas.length) { setAviso('No había nada para copiar (la semana anterior está vacía o esta ya está cargada).'); return }
+    if (!filas.length) { setCopiando(false); setAviso('No había nada para copiar (el mes anterior está vacío o este mes ya tiene horarios).'); return }
     const { error: e } = await supabase.from('rrhh_carga_horaria').upsert(filas, { onConflict: 'legajo,fecha' })
+    setCopiando(false)
     if (e) { setError(e.message); return }
-    setAviso(`Se copiaron ${filas.length} días de la semana anterior a la del ${ddmm(lunes)}.`)
+    setAviso(`Se copió el horario de ${MESES[pm].toLowerCase()} a ${new Set(filas.map((f) => f.legajo)).size} personas.`)
     await cargar()
   }
 
@@ -370,19 +431,24 @@ export default function PlanillaMensual({ modo, puedeEditar, acciones, recargar 
     setEditAp(null)
   }
 
-  function cambiarMes(delta: number) {
+  function mover(delta: number) {
     setAviso(null)
-    const d = new Date(anio, mes + delta, 1)
-    setAnio(d.getFullYear())
-    setMes(d.getMonth())
+    if (esCarga) {
+      const d = new Date(anio, mes + delta, 1)
+      setAnio(d.getFullYear()); setMes(d.getMonth())
+    } else setLunes(sumarDias(lunes, 7 * delta))
   }
+  const enActual = esCarga ? anio === hoy.getFullYear() && mes === hoy.getMonth() : lunes === lunesDe(hoyIso)
+  const irActual = () => { setAnio(hoy.getFullYear()); setMes(hoy.getMonth()); setLunes(lunesDe(hoyIso)) }
 
-  const horasCarga = (leg: string) => dias.reduce((s, f) => s + (cargas.get(`${leg}|${f}`)?.horas ?? 0), 0)
-  const horasMarcas = (leg: string) => dias.reduce((s, f) => s + (marcas.get(`${leg}|${f}`)?.horas ?? 0), 0)
-  const contratoMes = (e: Emp) => (e.horasSem == null ? null : (e.horasSem * diasMes) / 7)
-  const contratoTotal = personas.reduce((s, e) => s + (contratoMes(e) ?? 0), 0)
-  const enHora = (f: string, h: string) => personas.filter((e) => {
-    const tr = modo === 'carga' ? tramosDe(cargas.get(`${e.legajo}|${f}`)?.horario) : tramosDe(marcas.get(`${e.legajo}|${f}`)?.horario)
+  // Horas: Carga = semana tipo del mes contra el contrato semanal. Marcaciones = la semana planificada contra lo marcado.
+  const horasSemanaTipo = (leg: string) => columnas.reduce((s, col) => s + (plantilla(leg, col).carga?.horas ?? 0), 0)
+  const horasCarga = (leg: string) => columnas.reduce((s, col) => s + col.fechas.reduce((t, f) => t + (cargas.get(`${leg}|${f}`)?.horas ?? 0), 0), 0)
+  const horasMarcas = (leg: string) => columnas.reduce((s, col) => s + (marcas.get(`${leg}|${col.fecha}`)?.horas ?? 0), 0)
+  // «Ausente» solo hasta el último día que trajo el reloj (antes de subir el Excel no hay nada que comparar)
+  const hastaMarcado = useMemo(() => [...marcas.values()].reduce((m, x) => (x.fecha > m ? x.fecha : m), ''), [marcas])
+  const enHora = (col: Columna, h: string) => personas.filter((e) => {
+    const tr = esCarga ? tramosDe(plantilla(e.legajo, col).carga?.horario) : tramosDe(marcas.get(`${e.legajo}|${col.fecha}`)?.horario)
     return tr.some(([a, b]) => a <= h && (b >= h || b < a))
   }).length
 
@@ -393,10 +459,11 @@ export default function PlanillaMensual({ modo, puedeEditar, acciones, recargar 
   }, [busca, emps])
 
   const hora = (h: string) => (h.endsWith(':00') ? String(Number(h.slice(0, 2))) : h)
-  // «Ausente» solo hasta el último día que trajo el reloj (antes de subir el Excel no hay nada que comparar)
-  const hastaMarcado = useMemo(() => [...marcas.values()].reduce((m, x) => (x.fecha > m ? x.fecha : m), ''), [marcas])
+  const contratoTotal = personas.reduce((s, e) => s + (e.horasSem ?? 0), 0)
+  const totalSemanaTipo = personas.reduce((s, e) => s + horasSemanaTipo(e.legajo), 0)
+  const totalPlan = personas.reduce((s, e) => s + horasCarga(e.legajo), 0)
   const totalMarcado = personas.reduce((s, e) => s + horasMarcas(e.legajo), 0)
-  const totalCargado = personas.reduce((s, e) => s + horasCarga(e.legajo), 0)
+  const periodo = esCarga ? `${MESES[mes]} ${anio}` : `Semana del ${ddmm(lunes)} al ${ddmm(sumarDias(lunes, 6))}`
 
   return (
     <>
@@ -413,21 +480,19 @@ export default function PlanillaMensual({ modo, puedeEditar, acciones, recargar 
           ))}
         </div>
         <div className="flex items-center gap-1 rounded-xl border border-line bg-surface p-1">
-          <button onClick={() => cambiarMes(-1)} className="btn-press rounded-lg p-1.5 text-sub hover:text-ink" aria-label="Mes anterior"><ChevronLeft size={18} /></button>
-          <span className="min-w-[9.5rem] text-center text-sm font-semibold text-ink">{MESES[mes]} {anio}</span>
-          <button onClick={() => cambiarMes(1)} className="btn-press rounded-lg p-1.5 text-sub hover:text-ink" aria-label="Mes siguiente"><ChevronRight size={18} /></button>
+          <button onClick={() => mover(-1)} className="btn-press rounded-lg p-1.5 text-sub hover:text-ink" aria-label={esCarga ? 'Mes anterior' : 'Semana anterior'}><ChevronLeft size={18} /></button>
+          <span className="min-w-[11.5rem] text-center text-sm font-semibold text-ink">{periodo}</span>
+          <button onClick={() => mover(1)} className="btn-press rounded-lg p-1.5 text-sub hover:text-ink" aria-label={esCarga ? 'Mes siguiente' : 'Semana siguiente'}><ChevronRight size={18} /></button>
         </div>
-        {(anio !== hoy.getFullYear() || mes !== hoy.getMonth()) && (
-          <button onClick={() => { setAnio(hoy.getFullYear()); setMes(hoy.getMonth()) }} className="text-xs text-sky-500 hover:underline">Ir a este mes</button>
-        )}
+        {!enActual && <button onClick={irActual} className="text-xs text-sky-500 hover:underline">{esCarga ? 'Ir a este mes' : 'Ir a esta semana'}</button>}
         {editable && personas.length > 0 && (
-          <label className="flex items-center gap-1.5 rounded-xl border border-line bg-surface px-2 py-1 text-xs text-ink">
-            <Copy size={14} className="text-violet-500" aria-hidden />
-            <select value="" onChange={(e) => void repetirSemana(e.target.value)} aria-label="Repetir la semana anterior" className="h-7 bg-transparent text-xs text-ink">
-              <option value="">Repetir semana anterior en…</option>
-              {semanas.map((l) => <option key={l} value={l}>Semana del {ddmm(l)} al {ddmm(sumarDias(l, 6))}</option>)}
-            </select>
-          </label>
+          <button
+            onClick={() => void copiarMesAnterior()} disabled={copiando}
+            className="btn-press flex items-center gap-1.5 rounded-xl border border-line bg-surface px-3 py-2 text-xs text-ink hover:border-violet-500/50 disabled:opacity-50"
+            title="A las personas que este mes no tienen horario les copia el del mes anterior"
+          >
+            {copiando ? <Loader2 size={14} className="animate-spin" /> : <Copy size={14} className="text-violet-500" aria-hidden />} Copiar mes anterior
+          </button>
         )}
         {acciones}
       </div>
@@ -469,9 +534,9 @@ export default function PlanillaMensual({ modo, puedeEditar, acciones, recargar 
 
       {error && <p role="alert" className="mb-3 text-sm text-red-400">{error}</p>}
       {aviso && <p className="mb-3 text-sm text-emerald-500">{aviso}</p>}
-      {modo === 'marcaciones' && !cargando && !marcas.size && (
+      {!esCarga && !cargando && !marcas.size && (
         <p className="mb-3 rounded-xl border border-fuchsia-500/30 bg-fuchsia-500/10 px-3 py-2 text-sm text-ink">
-          Todavía no se subieron marcaciones de {MESES[mes].toLowerCase()} {anio}.
+          Todavía no hay marcaciones de esta semana.
         </p>
       )}
 
@@ -479,7 +544,7 @@ export default function PlanillaMensual({ modo, puedeEditar, acciones, recargar 
         <p className="rounded-2xl border border-line bg-surface p-4 text-sm text-sub">Buscá una persona, o tocá un nombre en la vista «Por local».</p>
       ) : (
         <div className="rounded-2xl border border-line bg-surface p-3">
-          {/* Cabecera: apertura · local y mes · totales */}
+          {/* Cabecera: apertura · local y período · totales */}
           <div className="mb-3 flex flex-wrap items-stretch gap-2">
             <div className="rounded-xl border border-line bg-surface2 px-3 py-2">
               <p className="text-[11px] uppercase tracking-wider text-sub/70">Apertura</p>
@@ -503,44 +568,45 @@ export default function PlanillaMensual({ modo, puedeEditar, acciones, recargar 
             </div>
             <div className="flex min-w-[12rem] flex-1 flex-col items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-500/15 px-3 py-2 text-center">
               <p className="font-display text-lg font-semibold text-ink">{vista === 'local' ? localVista : `${empLegajo!.nombre} · ${localVista}`}</p>
-              <p className="text-xs text-sub">{MESES[mes]} {anio}</p>
+              <p className="text-xs text-sub">{esCarga ? `${periodo} · el mismo horario todas las semanas` : periodo}</p>
             </div>
-            {modo === 'carga' ? (
-              <div className="rounded-xl border border-line bg-surface2 px-3 py-2 text-right">
-                <p className="text-[11px] uppercase tracking-wider text-sub/70">Carga total horaria del mes</p>
-                <p className="text-lg font-semibold tabular-nums text-ink">{hhmm(totalCargado * 60)} <span className="text-xs font-normal text-sub">de {hhmm(contratoTotal * 60)} de contrato</span></p>
-              </div>
-            ) : (
-              <div className="rounded-xl border border-line bg-surface2 px-3 py-2 text-right">
-                <p className="text-[11px] uppercase tracking-wider text-sub/70">Horas marcadas del mes</p>
-                <p className="text-lg font-semibold tabular-nums text-ink">{hhmm(totalMarcado * 60)} <span className="text-xs font-normal text-sub">de {hhmm(totalCargado * 60)} planificadas</span></p>
-              </div>
-            )}
+            <div className="rounded-xl border border-line bg-surface2 px-3 py-2 text-right">
+              {esCarga ? (
+                <>
+                  <p className="text-[11px] uppercase tracking-wider text-sub/70">Carga total horaria semanal</p>
+                  <p className="text-lg font-semibold tabular-nums text-ink">{hhmm(totalSemanaTipo * 60)} <span className="text-xs font-normal text-sub">de {hhmm(contratoTotal * 60)} de contrato</span></p>
+                </>
+              ) : (
+                <>
+                  <p className="text-[11px] uppercase tracking-wider text-sub/70">Horas marcadas en la semana</p>
+                  <p className="text-lg font-semibold tabular-nums text-ink">{hhmm(totalMarcado * 60)} <span className="text-xs font-normal text-sub">de {hhmm(totalPlan * 60)} planificadas</span></p>
+                </>
+              )}
+            </div>
           </div>
 
           {cargando && !cargas.size && !marcas.size ? (
             <p className="flex items-center gap-2 py-6 text-sm text-sub"><Loader2 size={16} className="animate-spin" /> Cargando…</p>
           ) : (
             <div className="overflow-x-auto pb-1">
-              <table className="border-separate border-spacing-1 text-xs">
+              <table className="w-full min-w-[60rem] border-separate border-spacing-1 text-xs">
                 <thead>
                   <tr className="text-[11px]">
-                    <th className="sticky left-0 z-20 min-w-[15.5rem] bg-surface-solid px-2 py-1.5 text-left font-medium text-sub">
+                    <th className="sticky left-0 z-20 w-[15.5rem] bg-surface-solid px-2 py-1.5 text-left font-medium text-sub">
                       <div className="flex items-end justify-between gap-2">
                         <span className="uppercase tracking-wider">Legajo</span>
-                        <span className="w-[4.5rem] text-center text-[9px] font-normal normal-case leading-tight">horas del mes<br />{modo === 'carga' ? 'contrato / cargadas' : 'planif. / marcadas'}</span>
+                        <span className="w-[4.5rem] text-center text-[9px] font-normal normal-case leading-tight">horas semana<br />{esCarga ? 'contrato / cargadas' : 'planif. / marcadas'}</span>
                       </div>
                     </th>
-                    {dias.map((f) => {
-                      const d = dow(f)
-                      const fer = feriados.get(f)
-                      const finde = d === 0 || d === 6
+                    {columnas.map((col) => {
+                      const fer = col.fecha ? feriados.get(col.fecha) : undefined
+                      const esHoy = col.fecha === hoyIso
                       return (
                         <th
-                          key={f} title={fer}
-                          className={`min-w-[5.25rem] rounded-lg px-1 py-1 font-semibold ${f === hoyIso ? 'bg-sky-500/20 text-sky-500' : fer ? 'bg-orange-500/20 text-orange-500' : finde ? 'bg-rose-500/10 text-rose-400/80' : 'bg-rose-500/15 text-rose-400'}`}
+                          key={col.key} title={fer}
+                          className={`min-w-[6rem] rounded-lg px-1 py-1 font-semibold ${esHoy ? 'bg-sky-500/20 text-sky-500' : fer ? 'bg-orange-500/20 text-orange-500' : 'bg-rose-500/15 text-rose-400'}`}
                         >
-                          {DIA_CORTO[d]} {Number(f.slice(8))}
+                          {col.titulo} <span className="font-normal opacity-70">{col.sub}</span>
                           <div className="grid grid-cols-2 text-[9px] font-normal opacity-70"><span>entrada</span><span>salida</span></div>
                         </th>
                       )
@@ -549,43 +615,53 @@ export default function PlanillaMensual({ modo, puedeEditar, acciones, recargar 
                 </thead>
                 <tbody>
                   {personas.map((e, r) => {
-                    const cargadas = horasCarga(e.legajo)
-                    const arriba = modo === 'carga' ? contratoMes(e) : cargadas
-                    const abajo = modo === 'carga' ? cargadas : horasMarcas(e.legajo)
-                    const ok = arriba != null && Math.abs(abajo - arriba) <= Math.max(1, arriba * 0.03) // el mes no tiene semanas justas: 3 % de tolerancia
+                    const arriba = esCarga ? e.horasSem : horasCarga(e.legajo)
+                    const abajo = esCarga ? horasSemanaTipo(e.legajo) : horasMarcas(e.legajo)
+                    const ok = arriba != null && Math.abs(abajo - arriba) < 0.5
                     return (
                       <tr key={e.legajo}>
                         <td className="sticky left-0 z-10 bg-surface-solid px-1 align-top">
                           <div className="flex gap-1">
-                          <button
-                            onClick={() => { setLegajo(e.legajo); setVista('legajo'); setAviso(null) }}
-                            className={`min-w-0 flex-1 rounded-lg px-2 py-1.5 text-left leading-tight hover:underline ${e.plan ? 'bg-emerald-500/10' : 'bg-orange-500/10'}`}
-                            title="Ver solo a esta persona"
-                          >
-                            <span className={`block text-[10px] font-bold ${e.plan ? 'text-emerald-500' : 'text-sky-500'}`}>{e.puesto}</span>
-                            <span className="block text-[12px] font-semibold text-ink">{e.nombre}</span>
-                            <span className="block text-[10px] tabular-nums text-sub">{e.legajo}{e.horasSem != null ? ` · ${String(e.horasSem).replace('.', ',')} h/sem` : ''}</span>
-                          </button>
-                          <div className="w-[4.5rem] shrink-0 self-start overflow-hidden rounded-lg border border-line text-center tabular-nums">
-                            <div className="py-1 text-[12px] text-ink" title={modo === 'carga' ? 'Contrato del mes (horas semanales × días ÷ 7)' : 'Horas planificadas en la carga horaria'}>{arriba == null ? '—' : hhmm(arriba * 60)}</div>
-                            <div
-                              className={`border-t border-line py-0.5 text-[11px] font-bold ${arriba == null ? 'text-sub' : ok ? 'bg-emerald-500/20 text-emerald-500' : 'bg-red-500/20 text-red-400'}`}
-                              title={modo === 'carga' ? 'Horas cargadas en el mes' : 'Horas marcadas en el mes'}
+                            <button
+                              onClick={() => { setLegajo(e.legajo); setVista('legajo'); setAviso(null) }}
+                              className={`min-w-0 flex-1 rounded-lg px-2 py-1.5 text-left leading-tight hover:underline ${e.plan ? 'bg-emerald-500/10' : 'bg-orange-500/10'}`}
+                              title="Ver solo a esta persona"
                             >
-                              {hhmm(abajo * 60)}
+                              <span className={`block text-[10px] font-bold ${e.plan ? 'text-emerald-500' : 'text-sky-500'}`}>{e.puesto}</span>
+                              <span className="block text-[12px] font-semibold text-ink">{e.nombre}</span>
+                              <span className="block text-[10px] tabular-nums text-sub">{e.legajo}</span>
+                            </button>
+                            <div className="w-[4.5rem] shrink-0 self-start overflow-hidden rounded-lg border border-line text-center tabular-nums">
+                              <div className="py-1 text-[12px] text-ink" title={esCarga ? 'Horas semanales del contrato' : 'Horas planificadas en la semana'}>
+                                {arriba == null ? '—' : esCarga ? String(arriba).replace('.', ',') : hhmm(arriba * 60)}
+                              </div>
+                              <div
+                                className={`border-t border-line py-0.5 text-[11px] font-bold ${arriba == null ? 'text-sub' : ok ? 'bg-emerald-500/20 text-emerald-500' : 'bg-red-500/20 text-red-400'}`}
+                                title={esCarga ? 'Horas cargadas en la semana' : 'Horas marcadas en la semana'}
+                              >
+                                {hhmm(abajo * 60)}
+                              </div>
                             </div>
                           </div>
-                          </div>
                         </td>
-                        {dias.map((f, d) => (
-                          <td key={f} className="align-top">
-                            {modo === 'carga' ? (
-                              <DiaCarga emp={e} fecha={f} carga={cargas.get(`${e.legajo}|${f}`)} apertura={apertura} editable={editable} r={r} d={d} onGuardar={guardar} />
-                            ) : (
-                              <DiaMarcas emp={e} marca={marcas.get(`${e.legajo}|${f}`)} carga={cargas.get(`${e.legajo}|${f}`)} pasado={f <= hastaMarcado} />
-                            )}
-                          </td>
-                        ))}
+                        {columnas.map((col, d) => {
+                          if (esCarga) {
+                            const { carga, varia } = plantilla(e.legajo, col)
+                            return (
+                              <td key={col.key} className="align-top">
+                                <DiaCarga
+                                  emp={e} fecha={col.titulo} carga={carga} varia={varia} apertura={apertura} editable={editable} r={r} d={d}
+                                  onGuardar={(emp, _f, c) => guardarColumna(emp, col.fechas, c)}
+                                />
+                              </td>
+                            )
+                          }
+                          return (
+                            <td key={col.key} className="align-top">
+                              <DiaMarcas emp={e} marca={marcas.get(`${e.legajo}|${col.fecha}`)} carga={cargas.get(`${e.legajo}|${col.fecha}`)} pasado={!!col.fecha && col.fecha <= hastaMarcado} />
+                            </td>
+                          )
+                        })}
                       </tr>
                     )
                   })}
@@ -594,9 +670,9 @@ export default function PlanillaMensual({ modo, puedeEditar, acciones, recargar 
                   <tfoot>
                     <tr className="text-[11px] text-sub">
                       <td className="sticky left-0 z-10 bg-surface-solid px-2 py-1">Personas al abrir / al cerrar</td>
-                      {dias.map((f) => {
-                        const a = enHora(f, apertura.abre), c = enHora(f, apertura.cierra)
-                        return <td key={f} className={`rounded-lg bg-surface2 py-1 text-center tabular-nums ${!a || !c ? 'font-bold text-red-400' : ''}`}>{a} / {c}</td>
+                      {columnas.map((col) => {
+                        const a = enHora(col, apertura.abre), c = enHora(col, apertura.cierra)
+                        return <td key={col.key} className={`rounded-lg bg-surface2 py-1 text-center tabular-nums ${!a || !c ? 'font-bold text-red-400' : ''}`}>{a} / {c}</td>
                       })}
                     </tr>
                   </tfoot>
@@ -612,10 +688,11 @@ export default function PlanillaMensual({ modo, puedeEditar, acciones, recargar 
         <span><i className="mr-1 inline-block size-2.5 rounded-sm bg-teal-500/40 align-[-1px]" />vacaciones</span>
         <span><i className="mr-1 inline-block size-2.5 rounded-sm bg-amber-500/40 align-[-1px]" />licencia</span>
         <span><i className="mr-1 inline-block size-2.5 rounded-sm bg-emerald-500/40 align-[-1px]" />PPP / plan</span>
-        {modo === 'carga' ? (
+        {esCarga ? (
           <>
-            <span><b className="text-emerald-500">verde</b>: cargadas = contrato del mes (±3 %) · <b className="text-red-400">rojo</b>: no coincide</span>
+            <span><b className="text-emerald-500">verde</b>: cargadas = contrato semanal · <b className="text-red-400">rojo</b>: no coincide</span>
             <span><b className="text-red-400">hora en rojo</b>: entra después de abrir o sale antes de cerrar</span>
+            <span><b className="text-amber-500">•</b>: alguna semana del mes es distinta (pasá el mouse)</span>
             {!puedeEditar && <span>Solo el admin y RR. HH. pueden modificarla.</span>}
           </>
         ) : (
@@ -630,4 +707,3 @@ export default function PlanillaMensual({ modo, puedeEditar, acciones, recargar 
     </>
   )
 }
-
