@@ -293,6 +293,119 @@
     </div>
   </div>
 
+  <!-- ================= AVISO + PANTALLA TIPO PEDIDOS DE VENTA ================= -->
+  <h2>4 · Aviso «Control físico terminado» al depósito</h2>
+  <div class="pantallas">
+    <div class="tel">
+      <div class="tel-lbl">E · Operario termina</div>
+      <div class="tit">Elordi S.A.</div>
+      <div class="desc">Fact. 0010-00079672 · Picking #1</div>
+      <div class="prog ok"><i style="width:100%"></i></div>
+      <div class="desc"><b style="color:var(--ink)">14 de 14</b> controlados · 3 desglosados</div>
+      <div class="aviso em">✓ Guardaste el último desglose. Ya está todo contado.</div>
+      <div class="aviso rojo">Hay diferencias: <b>−4</b> SZ267102 · <b>−3</b> CA16405C 02 M</div>
+      <button class="btn em full" style="margin-top:12px">Terminar control físico</button>
+      <div class="desc" style="margin-top:8px">Al terminar: se marca «Controlada» (con diferencias) y sale el aviso a Depósito.</div>
+    </div>
+
+    <div class="tel">
+      <div class="tel-lbl">F · Llega el aviso</div>
+      <div class="desc" style="margin-bottom:6px">Push en el celular (pantalla bloqueada):</div>
+      <div class="card" style="background:#1c1c24;border-radius:18px">
+        <div class="fila"><span style="font-size:12px;color:var(--sub)">🟠 Hub MITO · ahora</span></div>
+        <div style="font-weight:800;margin-top:4px">📦 Control físico terminado</div>
+        <div style="font-size:13px;color:#e2e8f0">Elordi S.A. · Fact. 0010-00079672 · Sofía · <span style="color:#fca5a5">con diferencias (−7)</span></div>
+      </div>
+      <div class="desc" style="margin:14px 0 6px">Y en la campana del hub:</div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="padding:9px 12px;border-bottom:1px solid var(--line);font-weight:800">🔔 Avisos <span class="chip rojo" style="margin-left:6px">2</span></div>
+        <div style="padding:10px 12px;background:rgba(249,115,22,.07);box-shadow:inset 3px 0 0 var(--or)">
+          <div style="font-weight:700">📦 Control físico terminado</div>
+          <div class="desc">Elordi S.A. · 0010-00079672 · Sofía 11:42 · <span style="color:#fca5a5">−7</span></div>
+        </div>
+        <div style="padding:10px 12px;border-top:1px solid var(--line)">
+          <div style="font-weight:700">📦 Control físico terminado</div>
+          <div class="desc">Id Argentina SA · 0011-00140101 · Lucas 10:05 · <span style="color:#6ee7b7">OK</span></div>
+        </div>
+      </div>
+      <div class="desc" style="margin-top:8px">Le llega a <b style="color:var(--ink)">todos los de rol Depósito</b> (y al admin). Tocarlo abre la pantalla de abajo con ese control elegido.</div>
+    </div>
+  </div>
+
+  <h2>5 · Controles físicos — igual que Pedidos de venta del mayorista (PC)</h2>
+  <div class="pantallas">
+    <div class="pc" style="max-width:1250px">
+      <div class="pc-h"><span class="t">Controles físicos</span><span class="sub">· 23 controles · actualizado en vivo</span><span style="margin-left:auto" class="btn gh">⬇ Excel</span></div>
+      <div class="pc-h" style="gap:6px">
+        <span class="chip am">Hoy</span><span class="chip">Esta semana</span><span class="chip">Semana anterior</span><span class="chip">Últimas 4 semanas</span><span class="chip">Todos</span>
+        <span class="sub" style="margin-left:10px">Estado:</span><span class="chip sky">Todos 23</span><span class="chip rojo">Con diferencias 6</span><span class="chip em">OK 15</span><span class="chip am">En curso 2</span>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(240px,330px) 1fr;gap:14px">
+        <aside>
+          <div class="bus" style="margin-top:0">🔎 Proveedor, factura, OC, artículo…</div>
+          <div class="card on" style="margin-top:6px">
+            <div class="fila"><span style="font-weight:800;font-size:15px">Elordi S.A.</span><span class="der num" style="font-weight:800">205 u.</span></div>
+            <div class="desc">Fact. 0010-00079672 · OC 15116</div>
+            <div class="fila" style="margin-top:5px;flex-wrap:wrap;gap:5px"><span class="desc" style="margin:0">27/11 11:42</span><span class="chip rojo" style="font-size:10.5px">CON DIFERENCIAS −7</span></div>
+            <div class="desc" style="color:#6ee7b7">Controló Sofía (#1043)</div>
+          </div>
+          <div class="card">
+            <div class="fila"><span style="font-weight:800;font-size:15px">Id Argentina SA</span><span class="der num" style="font-weight:800">140 u.</span></div>
+            <div class="desc">Fact. 0011-00140101 · OC 15352</div>
+            <div class="fila" style="margin-top:5px;gap:5px"><span class="desc" style="margin:0">27/11 10:05</span><span class="chip em" style="font-size:10.5px">OK ✓</span></div>
+            <div class="desc" style="color:#6ee7b7">Controló Lucas (#1021)</div>
+          </div>
+          <div class="card">
+            <div class="fila"><span style="font-weight:800;font-size:15px">Cristobal Colon S R L</span><span class="der num" style="font-weight:800">96 u.</span></div>
+            <div class="desc">Fact. 0161-00313302 · OC 15119</div>
+            <div class="fila" style="margin-top:5px;gap:5px"><span class="desc" style="margin:0">26/11</span><span class="chip am" style="font-size:10.5px">EN CURSO 40%</span></div>
+            <div class="desc" style="color:#fcd34d">Lo está haciendo Sofía</div>
+          </div>
+        </aside>
+
+        <section>
+          <div class="pc-h" style="justify-content:flex-end;gap:6px"><span class="btn gh" style="padding:6px 10px">‹</span><span class="btn gh" style="padding:6px 10px">›</span><span class="btn gh" style="padding:6px 12px">🖨 Imprimir</span></div>
+          <div class="card" style="margin-top:0">
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px 16px">
+              <div style="grid-column:span 2"><small class="sub">Proveedor</small><div style="font-weight:700"><span style="color:var(--am)">0412</span> Elordi S.A.</div></div>
+              <div><small class="sub">Factura</small><div style="font-weight:700">0010-00079672</div></div>
+              <div><small class="sub">Estado</small><div><span class="chip rojo">Controlada · con diferencias</span></div></div>
+              <div style="grid-column:span 2"><small class="sub">Pedido de compra</small><div style="color:var(--am);font-weight:700">OC 15116 ↗ · Picking #1 ↗</div></div>
+              <div><small class="sub">Controló</small><div style="font-weight:700">Sofía (#1043)</div></div>
+              <div><small class="sub">Fecha / hora</small><div style="font-weight:700">27/11/2026 · 11:42</div></div>
+            </div>
+            <div class="kpis" style="margin:12px 0 0">
+              <div class="kpi"><span>Picking</span><b class="num">212</b></div>
+              <div class="kpi"><span>Contado</span><b class="num">205</b></div>
+              <div class="kpi"><span>Faltan</span><b class="num" style="color:var(--rojo)">7</b></div>
+              <div class="kpi"><span>Desglosados</span><b class="num" style="color:var(--vi)">3</b></div>
+            </div>
+          </div>
+          <div class="aviso rojo" style="margin-top:10px">Diferencias: <b>7 u.</b> — SZ267102 (−4 No llegó) · CA16405C 02 M (−3 No llegó)</div>
+
+          <table style="margin-top:10px">
+            <thead><tr><th>Artículo</th><th>Color</th><th>Talle</th><th class="r">Picking</th><th class="r">Contado</th><th>Estado</th></tr></thead>
+            <tbody>
+              <tr style="background:rgba(167,139,250,.06)"><td><b>SZ267102</b> <span class="sub" style="font-size:11.5px">▾ desglose</span></td><td><span class="c falta">00</span></td><td><span class="c falta">U</span></td><td class="r num">32</td><td class="r num">28</td><td><span class="chip rojo">✕ Faltan 4</span></td></tr>
+              <tr><td colspan="6" style="padding:4px 8px 10px 26px">
+                <div class="fila" style="flex-wrap:wrap;gap:6px">
+                  <span class="chip"><span class="c col">01 NEGRO</span> S 2 · M 4 · L 4 · XL 2 = <b>12</b></span>
+                  <span class="chip"><span class="c col">02 BLANCO</span> S 2 · M 4 · L 4 = <b>10</b></span>
+                  <span class="chip"><span class="c col">06 VERDE</span> M 3 · L 3 = <b>6</b></span>
+                </div></td></tr>
+              <tr style="background:rgba(16,185,129,.06)"><td><b>RU261400</b> <span class="sub" style="font-size:11.5px">▸ desglose</span></td><td><span class="c falta">00</span></td><td><span class="c tal">412</span></td><td class="r num">25</td><td class="r num">25</td><td><span class="chip em">✓</span></td></tr>
+              <tr style="background:rgba(248,113,113,.06)"><td><b>CA16405C</b></td><td><span class="c col">02</span></td><td><span class="c tal">M</span></td><td class="r num">18</td><td class="r num">15</td><td><span class="chip rojo">✕ Faltan 3 · No llegó</span></td></tr>
+              <tr style="background:rgba(16,185,129,.06)"><td><b>CA16405C</b></td><td><span class="c col">02</span></td><td><span class="c tal">S</span></td><td class="r num">12</td><td class="r num">12</td><td><span class="chip em">✓</span></td></tr>
+              <tr><td colspan="6" class="sub" style="font-size:12px">… 10 renglones más ✓</td></tr>
+            </tbody>
+          </table>
+          <div class="desc" style="margin-top:6px">Pintado como el detalle del pedido de venta: <b style="color:#6ee7b7">verde ✓</b> igual al picking · <b style="color:#fca5a5">rojo ✕ Faltan N</b> · <b style="color:#d9f99d">verde flúor + N</b> si sobra · ▾ abre el desglose.</div>
+        </section>
+      </div>
+    </div>
+  </div>
+  <div class="nota">Ruta propuesta <b>/deposito/controles-fisicos</b> (en el menú de Depósito). <b>?abrir=&lt;factura&gt;</b> la abre con el control elegido, que es lo que usa el aviso. En el celular se ve en una columna: lista y al tocar, el detalle.</div>
+
   <div class="nota"><b>Decidido (27/11):</b> desglose con <b>grilla color × talle</b> · lo toma <b>cualquiera con rol Depósito</b> (después por legajo) · colores y talles <b>se eligen o buscan en los maestros de Dragon</b> (lo que no está en Dragon no se carga) · el desglose <b>no reemplaza</b> el renglón del picking, se ve desplegándolo.</div>
   <div class="nota"><b>Decidido (27/11):</b> un renglón con color 00 o talle U <b>siempre se desglosa</b>, aunque sea un artículo de talle único (no hay botón «Es único»).</div>
 
