@@ -1,6 +1,12 @@
 /* Lectura del Excel del reloj para RR. HH. → Marcaciones.
  *
- * No conocemos de antemano el formato del reloj, así que se detectan las columnas por el encabezado:
+ * Formato principal (27/11/2026): «Reporte de Fichadas (Por Legajo)» del ClockCard 2000 de LARCON-SIA
+ * (.xls): un bloque por empleado («Empleado: | 155 | - | COMBA GERMAN ARIEL»), y por cada día
+ * «Día | dd/mm/aaaa | Entró | Salió | Entró | Salió…» (hasta 5 pares). Una hora con «-M» es una fichada
+ * cargada a mano en el reloj: se guarda con una M al final («22:00M») y se muestra como manual.
+ * Los días sin fichadas no vienen.
+ *
+ * Si no es ese formato, se detectan las columnas por el encabezado:
  *  - Una fila por fichada: legajo/ID y/o nombre + «fecha y hora» (o «fecha» y «hora» por separado).
  *  - Una fila por día: legajo/nombre + fecha + columnas entrada/salida (entrada 1, salida 1, entrada 2…).
  * Las fichadas de cada legajo y día se ordenan, se descartan las repetidas (≤ 2 min) y se arman de a pares.
@@ -12,12 +18,16 @@ export interface DiaMarcado {
   nombre: string
   fecha: string
   marcas: string[]
+  /** Fichadas cargadas a mano en el reloj («-M») */
+  manuales?: string[]
 }
 export interface Lectura {
   dias: DiaMarcado[]
   formato: string
   columnas: string[]
   hojas: number
+  /** Período que dice el reporte (PERIODO: dd/mm/aaaa AL dd/mm/aaaa) */
+  periodo?: string
 }
 export interface Resultado {
   legajo: string
@@ -88,6 +98,42 @@ export async function leerExcelReloj(file: File): Promise<Lectura> {
     if (!mapa.has(k)) mapa.set(k, { clave, nombre, fecha, marcas: [] })
     mapa.get(k)!.marcas.push(hora)
   }
+
+  // ClockCard 2000: «Reporte de Fichadas (Por Legajo)»
+  let periodo: string | undefined
+  for (const nombreHoja of wb.SheetNames) {
+    const txt = XLSX.utils.sheet_to_json<string[]>(wb.Sheets[nombreHoja], { header: 1, raw: false, defval: '' })
+    if (!txt.some((r) => norm(r[0]) === 'empleado:')) continue
+    hojas++
+    formato = 'Reporte de Fichadas por legajo (ClockCard)'
+    columnas = ['Empleado', 'Día', 'Fecha', 'Entró / Salió × 5']
+    let clave = '', nombre = ''
+    for (const r of txt) {
+      if (norm(r[0]) === 'periodo:') periodo = [r[1], r[3]].filter(Boolean).join(' al ')
+      if (norm(r[0]) === 'empleado:') {
+        clave = String(r[1] ?? '').replace(/[^\d]/g, '')
+        nombre = String(r.slice(2).find((v) => v && v !== '-') ?? '').trim()
+        continue
+      }
+      const fecha = /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(String(r[1]).trim()) ? aFecha(r[1]) : null
+      if (!clave || !fecha) continue
+      // Las fichadas van seguidas desde la columna C o D; lo que viene después de un hueco
+      // (horas normales, extras, ausencias del otro reporte) no son fichadas.
+      let empezo = false
+      for (let j = 2; j < Math.min(r.length, 14); j++) {
+        const t = String(r[j] ?? '').trim()
+        const hora = aHora(t)
+        if (!hora) { if (empezo) break; if (j >= 4) break; continue }
+        empezo = true
+        agregar(clave, nombre, fecha, hora)
+        if (/-\s*m$/i.test(t)) {
+          const d = mapa.get(`${clave}|${fecha}`)!
+          d.manuales = [...(d.manuales ?? []), hora]
+        }
+      }
+    }
+  }
+  if (mapa.size) return { dias: [...mapa.values()], formato, columnas, hojas, periodo }
 
   for (const nombreHoja of wb.SheetNames) {
     const filas = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[nombreHoja], { header: 1, raw: true, defval: null })
@@ -175,7 +221,7 @@ export function cruzar(dias: DiaMarcado[], emps: Emp[]): { resultados: Resultado
       min += duracion(limpias[i], limpias[i + 1])
     }
     resultados.push({
-      legajo: e.legajo, fecha: d.fecha, local: e.local, marcas: limpias.join(' '),
+      legajo: e.legajo, fecha: d.fecha, local: e.local, marcas: limpias.map((m) => (d.manuales?.includes(m) ? `${m}M` : m)).join(' '),
       horario: pares.join(' ') || null, horas: Math.round((min / 60) * 100) / 100, incompleta: limpias.length % 2 === 1,
     })
   }

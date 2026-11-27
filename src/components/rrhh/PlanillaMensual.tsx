@@ -159,7 +159,13 @@ function DiaCarga({ emp, fecha, carga, varia, enOtro, apertura, editable, r, d, 
 function DiaMarcas({ emp, marca, carga, pasado }: { emp: Emp; marca: Marcacion | undefined; carga: Carga | undefined; pasado: boolean }) {
   const plan = carga?.tipo === 'trabajo' ? tramosDe(carga.horario) : []
   const tr = tramosDe(marca?.horario)
-  const sueltas = marca?.incompleta ? (marca.marcas ?? '').split(' ').filter(Boolean).slice(tr.length * 2) : []
+  const fichadas = (marca?.marcas ?? '').split(' ').filter(Boolean)
+  // «22:00M» = fichada cargada a mano en el reloj
+  const manuales = new Set(fichadas.filter((m) => m.endsWith('M')).map((m) => m.slice(0, -1)))
+  const sueltas = marca?.incompleta ? fichadas.map((m) => m.replace(/M$/, '')).slice(tr.length * 2) : []
+  const conM = (h: string) => (manuales.has(h)
+    ? <>{h}<sup className="ml-px text-[8px] font-bold text-violet-400" title="Fichada cargada a mano en el reloj">M</sup></>
+    : h)
   const planTxt = carga
     ? carga.tipo === 'trabajo' ? `Planificado: ${carga.horario ?? `${carga.horas} h`}` : `Planificado: ${carga.tipo}`
     : 'Sin horario planificado'
@@ -172,7 +178,7 @@ function DiaMarcas({ emp, marca, carga, pasado }: { emp: Emp; marca: Marcacion |
   const celda = 'h-7 text-center text-[12px] leading-7 tabular-nums'
   const pie = marca ? hhmm(marca.horas * 60)
     : ausente ? 'Ausente' : carga?.tipo === 'vacaciones' ? 'Vacac.' : carga?.tipo === 'licencia' ? 'Licencia' : plan.length ? plan.map(([a, b]) => `${a}-${b}`.replace(/:00/g, '')).join(' ') : 'Franco'
-  const detalle = [planTxt, marca?.marcas ? `Fichadas: ${marca.marcas}` : null, marca?.incompleta ? 'Falta una fichada' : null, tarde ? 'Entró tarde' : null, temprano ? 'Salió temprano' : null]
+  const detalle = [planTxt, marca?.marcas ? `Fichadas: ${fichadas.map((m) => (m.endsWith('M') ? `${m.slice(0, -1)} (manual)` : m)).join(' ')}` : null, marca?.incompleta ? 'Falta una fichada' : null, tarde ? 'Entró tarde' : null, temprano ? 'Salió temprano' : null]
     .filter(Boolean).join(' · ')
 
   return (
@@ -180,8 +186,8 @@ function DiaMarcas({ emp, marca, carga, pasado }: { emp: Emp; marca: Marcacion |
       {tr.length || sueltas.length ? (
         [...tr, ...sueltas.map((s) => [s, '?'] as [string, string])].map(([a, b], i) => (
           <div key={i} className={`grid grid-cols-2 divide-x divide-line ${i ? 'border-t border-dashed border-line' : ''}`}>
-            <span className={`${celda} ${i === 0 && tarde ? 'font-semibold text-red-400' : 'text-ink'}`}>{a}</span>
-            <span className={`${celda} ${b === '?' ? 'font-bold text-amber-500' : i === tr.length - 1 && temprano ? 'font-semibold text-red-400' : 'text-ink'}`}>{b}</span>
+            <span className={`${celda} ${i === 0 && tarde ? 'font-semibold text-red-400' : 'text-ink'}`}>{conM(a)}</span>
+            <span className={`${celda} ${b === '?' ? 'font-bold text-amber-500' : i === tr.length - 1 && temprano ? 'font-semibold text-red-400' : 'text-ink'}`}>{b === '?' ? b : conM(b)}</span>
           </div>
         ))
       ) : (
@@ -899,6 +905,7 @@ export default function PlanillaMensual({ modo, puedeEditar, acciones, recargar 
             <span><i className="mr-1 inline-block size-2.5 rounded-sm bg-violet-500/40 align-[-1px]" />fichó sin horario planificado</span>
             <span><b className="text-red-400">hora en rojo</b>: entró tarde o salió temprano (más de {TOLERANCIA} min)</span>
             <span><b className="text-amber-500">?</b>: falta una fichada</span>
+            <span><b className="text-violet-400">M</b>: fichada cargada a mano en el reloj</span>
           </>
         )}
       </div>

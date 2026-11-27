@@ -18,7 +18,7 @@ import { ddmm, type Emp } from '@/lib/horarios'
 /*  admin y rol rr_hh. Ver: rrhh.marcaciones.view.                       */
 /* ------------------------------------------------------------------ */
 
-interface Previa { archivo: string; formato: string; columnas: string[]; resultados: Resultado[]; sinLegajo: string[]; desde: string; hasta: string }
+interface Previa { archivo: string; formato: string; periodo?: string; columnas: string[]; resultados: Resultado[]; sinLegajo: string[]; desde: string; hasta: string }
 
 export default function Marcaciones() {
   const { isAdmin, perfil } = useAuth()
@@ -45,7 +45,7 @@ export default function Marcaciones() {
       }
       const { resultados, sinLegajo } = cruzar(l.dias, emps)
       const fechas = resultados.map((r) => r.fecha).sort()
-      setPrevia({ archivo: file.name, formato: l.formato, columnas: l.columnas, resultados, sinLegajo, desde: fechas[0] ?? '', hasta: fechas[fechas.length - 1] ?? '' })
+      setPrevia({ archivo: file.name, formato: l.formato, periodo: l.periodo, columnas: l.columnas, resultados, sinLegajo, desde: fechas[0] ?? '', hasta: fechas[fechas.length - 1] ?? '' })
     } catch (e) {
       setError(`No se pudo leer el Excel: ${(e as Error).message}`)
     } finally {
@@ -69,6 +69,7 @@ export default function Marcaciones() {
 
   const personas = previa ? new Set(previa.resultados.map((r) => r.legajo)).size : 0
   const incompletas = previa ? previa.resultados.filter((r) => r.incompleta).length : 0
+  const manuales = previa ? previa.resultados.reduce((n, r) => n + r.marcas.split(' ').filter((m) => m.endsWith('M')).length, 0) : 0
 
   return (
     <Layout>
@@ -99,8 +100,8 @@ export default function Marcaciones() {
             {[
               ['Días con fichadas', String(previa.resultados.length)],
               ['Personas', String(personas)],
-              ['Período', previa.desde ? `${ddmm(previa.desde)} al ${ddmm(previa.hasta)}` : '—'],
-              ['Con una fichada sin pareja', String(incompletas)],
+              ['Período', previa.periodo ?? (previa.desde ? `${ddmm(previa.desde)} al ${ddmm(previa.hasta)}` : '—')],
+              ['Sin pareja / manuales', `${incompletas} / ${manuales}`],
             ].map(([t, v]) => (
               <div key={t} className="rounded-xl border border-line bg-surface px-3 py-2">
                 <p className="text-[11px] uppercase tracking-wider text-sub/70">{t}</p>
