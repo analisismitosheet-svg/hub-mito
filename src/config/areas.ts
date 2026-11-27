@@ -67,6 +67,8 @@ import {
   KanbanSquare,
   MapPin,
   BarChart3,
+  ClipboardCheck,
+  ListChecks,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
@@ -735,6 +737,29 @@ export const APPS: AppDef[] = [
     kind: 'internal',
     target: '/deposito/picking',
     color: '#0d9488',
+    permiso: 'picking.view',
+  },
+  {
+    // Control físico (27/11/2026): el depósito cuenta lo del picking y desglosa color × talle
+    id: 'deposito-control-fisico',
+    areaId: 'deposito',
+    title: 'Control físico',
+    description: 'Contá en el celular lo que llegó según el picking y desglosá en color y talle los códigos sin variante.',
+    icon: ClipboardCheck,
+    kind: 'internal',
+    target: '/deposito/control-fisico',
+    color: '#0891b2',
+    soloDeposito: true,
+  },
+  {
+    id: 'deposito-controles-fisicos',
+    areaId: 'deposito',
+    title: 'Controles físicos',
+    description: 'Cada control terminado con sus diferencias, el desglose y el precio de compra.',
+    icon: ListChecks,
+    kind: 'internal',
+    target: '/deposito/controles-fisicos',
+    color: '#e11d48',
     permiso: 'picking.view',
   },
   {

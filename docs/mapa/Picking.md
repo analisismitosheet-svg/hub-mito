@@ -19,3 +19,5 @@ Pantalla `src/pages/Picking.tsx`. Permiso `picking.view`. Se abre directo con `?
 - Lo marcado antes del cambio quedó como Picking #1 `inicial` (396 pedidos).
 
 Ver también [[Pedidos compra, venta y cancelaciones]].
+
+- **Control físico** (27/11/2026): columnas P. compra, Importe y Control físico; ver [[Control físico]].

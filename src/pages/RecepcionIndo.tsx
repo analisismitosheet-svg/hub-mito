@@ -626,6 +626,8 @@ export default function RecepcionIndo() {
   const [numerosPedido, setNumerosPedido] = useState<Set<string>>(new Set())
   // Pickings vivos de la factura de cada fila (sql/picking_factura.sql): clave -> OC -> N° de picking
   const [pickingsFila, setPickingsFila] = useState<Map<string, Map<string, number>>>(new Map())
+  // Control físico por fila (sql/control_fisico.sql): solo facturas con picking
+  const [controlFila, setControlFila] = useState<Map<string, ControlDeFila>>(new Map())
 
   // Filtros
   const [deposito, setDeposito] = useState('')
@@ -680,6 +682,13 @@ export default function RecepcionIndo() {
             m.set(r.clave, porOc)
           }
           setPickingsFila(m)
+        })
+      }
+      if (datos.length) {
+        void supabase.rpc('control_fisico_estados', { p_claves: datos.map((f) => f.clave) }).then(({ data }) => {
+          const m = new Map<string, ControlDeFila>()
+          for (const r of (data as ControlDeFila[] | null) ?? []) m.set(r.clave, r)
+          setControlFila(m)
         })
       }
       setTotal(Number(datos[0]?.total ?? 0))
@@ -1338,6 +1347,7 @@ export default function RecepcionIndo() {
                     {controlada && f.controlado_por && (
                       <div className="mt-0.5 text-[10px] text-sub/70">{f.controlado_por}</div>
                     )}
+                    <ChipControlFisico c={controlFila.get(f.clave)} sinPicking={!controlada && !!f.n_factura?.trim() && !pickingsFila.get(f.clave)?.size && puedePicking} />
                     {controlada && f.dias_atraso != null && f.dias_atraso > 0 && (
                       <div className="text-[10px] text-amber-500/90">{f.dias_atraso} días de atraso</div>
                     )}
@@ -1424,5 +1434,48 @@ export default function RecepcionIndo() {
         />
       )}
     </Layout>
+  )
+}
+
+/** Control físico de la factura de esta fila (control_fisico_estados) */
+interface ControlDeFila {
+  clave: string
+  factura_clave: string
+  estado: 'pendiente' | 'en_curso' | 'terminado'
+  renglones: number
+  controlados: number
+  quien: string | null
+  con_diferencias: boolean | null
+  faltan: number | null
+  sobran: number | null
+}
+
+/**
+ * Debajo de la fecha de control: cómo va el control físico. Solo se habilita con
+ * el picking hecho; sin picking dice «Falta el picking».
+ */
+function ChipControlFisico({ c, sinPicking }: { c: ControlDeFila | undefined; sinPicking: boolean }) {
+  const base = 'mt-1 inline-flex items-center gap-1 whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[10px] font-semibold'
+  if (!c) {
+    return sinPicking ? (
+      <div className={`${base} border-line text-sub/70`} title="El control físico se habilita cuando Compras registra el picking">🔒 Falta el picking</div>
+    ) : null
+  }
+  if (c.estado === 'terminado') {
+    const dif = c.con_diferencias
+    return (
+      <Link to={`/deposito/controles-fisicos?abrir=${encodeURIComponent(c.factura_clave)}`}
+        className={`${base} ${dif ? 'border-red-500/40 bg-red-500/10 text-red-400' : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'}`}
+        title={`Control físico de ${c.quien ?? '—'}`}>
+        {dif ? `con diferencias${Number(c.faltan) ? ` −${Number(c.faltan)}` : ''}${Number(c.sobran) ? ` +${Number(c.sobran)}` : ''}` : 'control físico OK'}
+      </Link>
+    )
+  }
+  const pct = c.renglones ? Math.round((Number(c.controlados) / Number(c.renglones)) * 100) : 0
+  return (
+    <Link to={`/deposito/control-fisico?f=${encodeURIComponent(c.factura_clave)}`}
+      className={`${base} ${c.estado === 'en_curso' ? 'border-amber-500/40 bg-amber-500/10 text-amber-400' : 'border-sky-500/40 bg-sky-500/10 text-sky-400'}`}>
+      {c.estado === 'en_curso' ? `Control físico ${pct}%${c.quien ? ` · ${c.quien}` : ''}` : 'Control físico pendiente'}
+    </Link>
   )
 }

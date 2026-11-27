@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Bell, UserCheck, ClipboardList, Truck, CalendarX, FileText, ArrowRightLeft, PackageCheck, X, Pause,
-  ChevronRight, Building2, Wrench, Banknote,
+  ChevronRight, Building2, Wrench, Banknote, ClipboardCheck,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
@@ -27,6 +27,7 @@ interface Notificacion {
     | 'franquicias'
     | 'requerimientos'
     | 'arqueo'
+    | 'control_fisico'
   titulo: string
   detalle: string
   ruta: string
@@ -65,6 +66,7 @@ const GRUPOS: Record<string, { area: string; seccion: string; color: string; ico
   transferencias: { area: 'Locales', seccion: 'Reposiciones / Transferencias', color: 'bg-violet-500/15 text-violet-400', icono: ArrowRightLeft },
   requerimientos: { area: 'Locales', seccion: 'Arreglos (requerimientos)', color: 'bg-lime-500/15 text-lime-400', icono: Wrench },
   arqueo: { area: 'Locales', seccion: 'Arqueo de caja', color: 'bg-indigo-500/15 text-indigo-400', icono: Banknote },
+  control_fisico: { area: 'Depósito', seccion: 'Control físico terminado', color: 'bg-cyan-500/15 text-cyan-400', icono: ClipboardCheck },
 }
 const GRUPO_DE_TIPO: Record<Notificacion['tipo'], keyof typeof GRUPOS> = {
   usuarios: 'usuarios',
@@ -78,6 +80,7 @@ const GRUPO_DE_TIPO: Record<Notificacion['tipo'], keyof typeof GRUPOS> = {
   franquicias: 'franquicias',
   requerimientos: 'requerimientos',
   arqueo: 'arqueo',
+  control_fisico: 'control_fisico',
 }
 
 /** Ícono de cada aviso dentro del grupo (ej. en Facturación: sin fecha vs sin enviar). */
@@ -93,6 +96,7 @@ const ICONO_TIPO: Record<Notificacion['tipo'], typeof Bell> = {
   franquicias: Building2,
   requerimientos: Wrench,
   arqueo: Banknote,
+  control_fisico: ClipboardCheck,
 }
 
 /**
@@ -558,6 +562,19 @@ export default function CampanaNotificaciones() {
               `${primera.nombre} · ${primera.articulos} artículo${primera.articulos === 1 ? '' : 's'}`,
               ruta(primera),
             )
+          }
+        }
+      }
+      // 8) Control físico terminado (sql/control_fisico.sql): rol deposito, legajos de Indo y admin.
+      // Sale hasta que se abre el control (control_fisico_visto) o pasan 3 días.
+      if (avisosIndo || isAdmin) {
+        const { data } = await sb.rpc('control_fisico_avisos')
+        if (activo && data) {
+          for (const c of data as { control_id: string; factura_clave: string; proveedor: string | null; n_factura: string | null; terminado_nombre: string | null; terminado_at: string; con_diferencias: boolean | null; faltan: number | null; sobran: number | null }[]) {
+            const dif = c.con_diferencias
+              ? `con diferencias${Number(c.faltan) ? ` −${Number(c.faltan)}` : ''}${Number(c.sobran) ? ` +${Number(c.sobran)}` : ''}`
+              : 'OK'
+            notis.push({ id: `cf-${c.control_id}`, tipo: 'control_fisico', titulo: `Control físico terminado · ${c.proveedor ?? ''}`, detalle: `Fact. ${c.n_factura ?? ''} · ${c.terminado_nombre ?? ''} · ${dif}`, ruta: `/deposito/controles-fisicos?abrir=${encodeURIComponent(c.factura_clave)}`, fecha: c.terminado_at, destinoId: c.control_id })
           }
         }
       }

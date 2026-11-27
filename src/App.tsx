@@ -34,6 +34,8 @@ import MiRepoPolo52 from '@/pages/MiRepoPolo52'
 import MiRepoDeposito from '@/pages/MiRepoDeposito'
 import Rma from '@/pages/Rma'
 import Picking from '@/pages/Picking'
+import ControlFisico from '@/pages/ControlFisico'
+import ControlesFisicos from '@/pages/ControlesFisicos'
 import RecepcionIndo from '@/pages/RecepcionIndo'
 import Opiniones from '@/pages/Opiniones'
 import ContadorClientes from '@/pages/ContadorClientes'
@@ -624,6 +626,23 @@ export default function App() {
             element={
               <PermissionRoute permiso="picking.view">
                 <Picking />
+              </PermissionRoute>
+            }
+          />
+          {/* Control físico (sql/control_fisico.sql): cuenta el depósito; Compras lo ve */}
+          <Route
+            path="/deposito/control-fisico"
+            element={
+              <PermissionRoute permiso={['picking.view', 'deposito.view']} oDeposito>
+                <ControlFisico />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/deposito/controles-fisicos"
+            element={
+              <PermissionRoute permiso={['picking.view', 'deposito.view']} oDeposito>
+                <ControlesFisicos />
               </PermissionRoute>
             }
           />

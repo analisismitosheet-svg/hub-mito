@@ -2,12 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Loader2, Search, ChevronRight, CheckCheck, Check, Minus, Plus, ArrowLeft, PackageCheck, RotateCcw, Boxes, ClipboardList, FileSpreadsheet, Pencil, Save, X, Receipt,
 } from 'lucide-react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { useAuth } from '@/context/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { cruzar, leerIngresos, type RenglonPedido } from '@/lib/ingresosPicking'
+import { lineasControl, pesos, type LineaControl } from '@/lib/controlFisico'
+import DesgloseChips from '@/components/control/DesgloseChips'
 
 /* ------------------------------------------------------------------ */
 /*  Picking (Depósito): ingreso físico de los pedidos de compra.       */
@@ -525,6 +527,46 @@ ${avisoNo}` : ''}
     void cargarFacturasPedido(numeroSel, sel)
   }, [sel, numeroSel, cargarFacturasPedido])
   const factura = facturasPedido.find((f) => f.clave === facturaSel) ?? null
+
+  // Precio de compra de cada renglón de la OC (sin IVA, de Dragon): picking_precios
+  const [precios, setPrecios] = useState<Map<string, number>>(new Map())
+  useEffect(() => {
+    setPrecios(new Map())
+    if (!sel || !supabase) return
+    let vivo = true
+    void supabase.rpc('picking_precios', { p_codigo: sel }).then(({ data }) => {
+      if (!vivo) return
+      const m = new Map<string, number>()
+      for (const r of (data as { articulo: string; color: string; talle: string; precio: number | null }[] | null) ?? []) {
+        if (r.precio != null) m.set(claveItem(r), Number(r.precio))
+      }
+      setPrecios(m)
+    })
+    return () => { vivo = false }
+  }, [sel])
+
+  // Control físico de la factura elegida en esta OC (sql/control_fisico.sql): no cambia el picking,
+  // se muestra al lado y los renglones desglosados se despliegan
+  const [ctrl, setCtrl] = useState<{ factura: string; estado: string; quien: string | null; lineas: Map<string, LineaControl> } | null>(null)
+  const [desgloseAbierto, setDesgloseAbierto] = useState<string | null>(null)
+  useEffect(() => {
+    setCtrl(null)
+    setDesgloseAbierto(null)
+    const clave = factura?.clave
+    if (!sel || !clave || !supabase) return
+    let vivo = true
+    void (async () => {
+      const { data } = await supabase!.rpc('control_fisico_estados', { p_claves: [clave] })
+      const e = ((data as { factura_clave: string; estado: string; quien: string | null }[] | null) ?? [])[0]
+      if (!e || !vivo) return
+      const ls = await lineasControl(e.factura_clave).catch(() => [] as LineaControl[])
+      if (!vivo) return
+      const m = new Map<string, LineaControl>()
+      for (const l of ls) if (l.codigo === sel) m.set(claveItem(l), l)
+      setCtrl({ factura: e.factura_clave, estado: e.estado, quien: e.quien, lineas: m })
+    })()
+    return () => { vivo = false }
+  }, [sel, factura?.clave])
   const pickingDeFactura = factura ? pickingEnOc(factura, sel, numeroSel) : null
   const facturaOk = !!factura && !pickingDeFactura && !factura.controlada
   // Sin factura válida no se cuenta nada: si la factura ya tiene picking la pantalla queda solo para ver
@@ -898,6 +940,55 @@ Se recalcula lo recibido de esta OC.`)) return
     void cargarPedidos()
   }
   const provActual = proveedores.find((p) => p.codigo === proveedor)
+
+  /* ---- Precio de compra y control físico por renglón ---- */
+  const precioDe = (i: { articulo: string; color: string; talle: string }) => precios.get(claveItem(i))
+  /** Mismo precio para todas las variantes = ese precio; distintos = «varios» */
+  function textoPrecio(vs: ItemPicking[]): string {
+    const ps = [...new Set(vs.map(precioDe).filter((p): p is number => p != null))]
+    if (!ps.length) return '—'
+    return ps.length === 1 ? pesos.format(ps[0]) : 'varios'
+  }
+  function importeDe(vs: ItemPicking[]): string {
+    if (!precios.size) return '—'
+    return pesos.format(vs.reduce((s, i) => s + i.recibido * (precioDe(i) ?? 0), 0))
+  }
+  function celdaControl(vs: ItemPicking[]) {
+    if (!ctrl) return <span className="text-sub/50">—</span>
+    const ls = vs.map((v) => ctrl.lineas.get(claveItem(v))).filter((l): l is LineaControl => !!l)
+    if (!ls.length) return <span className="text-sub/50">—</span>
+    const contadas = ls.filter((l) => l.contado != null)
+    if (!contadas.length) return <span className="text-[11px] text-sub">sin contar</span>
+    const pk = ls.reduce((s, l) => s + l.picking, 0)
+    const ct = contadas.reduce((s, l) => s + (l.contado ?? 0), 0)
+    const completo = contadas.length === ls.length
+    const dif = ct - pk
+    const conDesglose = vs.length === 1 && !!ls[0].desglose
+    const cls = !completo ? 'bg-amber-500/15 text-amber-400' : dif === 0 ? 'bg-emerald-500/15 text-emerald-400' : dif < 0 ? 'bg-red-500/15 text-red-400' : 'bg-lime-400/15 text-lime-300'
+    const texto = `${conDesglose ? 'desglosado · ' : ''}${n0.format(ct)}${completo && dif !== 0 ? ` · ${dif > 0 ? '+' : ''}${dif}` : completo ? ' ✓' : '…'}`
+    if (conDesglose) {
+      const k = claveItem(vs[0])
+      return (
+        <button type="button" onClick={() => setDesgloseAbierto((a) => (a === k ? null : k))} className={`whitespace-nowrap rounded-md px-1.5 py-0.5 text-[11px] font-bold ${cls}`} title="Ver el desglose de color y talle">
+          {desgloseAbierto === k ? '▾ ' : '▸ '}{texto}
+        </button>
+      )
+    }
+    return <span className={`whitespace-nowrap rounded-md px-1.5 py-0.5 text-[11px] font-bold ${cls}`} title={ls.map((l) => l.motivo).filter(Boolean).join(' · ') || undefined}>{texto}</span>
+  }
+  function filaDesglose(i: ItemPicking) {
+    const k = claveItem(i)
+    const l = ctrl?.lineas.get(k)
+    if (desgloseAbierto !== k || !l?.desglose) return null
+    return (
+      <tr key={`${k}-desglose`} className="bg-violet-500/[0.05]">
+        <td colSpan={12} className="px-3 pb-2.5 pl-10 pt-1">
+          <p className="mb-1 text-[11px] text-sub">Lo que contó {l.actualizado_nombre ?? 'el depósito'} en el control físico (el picking no cambia){l.motivo ? ` · ${l.motivo}` : ''}:</p>
+          <DesgloseChips desglose={l.desglose} />
+        </td>
+      </tr>
+    )
+  }
 
   return (
     <Layout>
@@ -1528,19 +1619,22 @@ Se recalcula lo recibido de esta OC.`)) return
                           <th className="px-3 py-2 text-right">Pedido</th>
                           <th className="px-3 py-2 text-right" title="Suma de los pickings registrados">Recibido</th>
                           <th className="px-3 py-2 text-right">Saldo</th>
+                          <th className="px-3 py-2 text-right" title="Precio unitario de compra sin IVA (línea de la OC en Dragon)">P. compra</th>
+                          <th className="px-3 py-2 text-right" title="Recibido × precio de compra">Importe</th>
                           <th className="px-3 py-2 text-center">Picking (#{nroSiguiente})</th>
                           <th className="px-3 py-2 text-center">✓</th>
+                          <th className="px-3 py-2 text-center" title="Lo que contó el depósito en el control físico de la factura elegida">Control físico</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-line/50">
                         {cargandoItems ? (
                           <tr>
-                            <td colSpan={9} className="px-3 py-8 text-center text-sub">
+                            <td colSpan={12} className="px-3 py-8 text-center text-sub">
                               <Loader2 size={16} className="mr-1.5 inline animate-spin" aria-hidden /> Cargando artículos…
                             </td>
                           </tr>
                         ) : gruposPedido.length === 0 ? (
-                          <tr><td colSpan={9} className="px-3 py-8 text-center text-sub">No hay artículos {filtro === 'pendientes' ? 'con saldo' : filtro === 'completos' ? 'completos' : ''}.</td></tr>
+                          <tr><td colSpan={12} className="px-3 py-8 text-center text-sub">No hay artículos {filtro === 'pendientes' ? 'con saldo' : filtro === 'completos' ? 'completos' : ''}.</td></tr>
                         ) : (
                           gruposPedido.flatMap((g) => {
                             const varios = g.variantes.length > 1
@@ -1575,6 +1669,8 @@ Se recalcula lo recibido de esta OC.`)) return
                                 <td className={`px-3 py-1.5 text-right font-bold tabular-nums ${g.saldo - g.este > 0 ? 'text-amber-500' : 'text-emerald-500'}`}>
                                   {n0.format(Math.max(0, g.saldo - g.este))}
                                 </td>
+                                <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums text-sub">{textoPrecio(g.variantes)}</td>
+                                <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums text-ink">{importeDe(g.variantes)}</td>
                                 <td className="px-3 py-1">
                                   {g.saldo === 0 && g.este === 0 ? (
                                     <span className="mx-auto block w-fit rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-500">COMPLETO</span>
@@ -1599,15 +1695,16 @@ Se recalcula lo recibido de esta OC.`)) return
                                     <Tilde completo={g.este >= g.saldo} etiqueta={g.articulo} onClick={() => tildarEste(g.variantes)} />
                                   ) : null}
                                 </td>
+                                <td className="px-3 py-1 text-center">{celdaControl(g.variantes)}</td>
                               </tr>
                             )
-                            if (!abierto) return [filaArticulo]
+                            if (!abierto) return varios ? [filaArticulo] : [filaArticulo, filaDesglose(unaSola)]
                             return [
                               filaArticulo,
-                              ...g.variantes.map((i) => {
+                              ...g.variantes.flatMap((i) => {
                                 const saldo = saldoDe(i)
                                 const este = esteDe(i)
-                                return (
+                                return [
                                   <tr
                                     key={claveItem(i)}
                                     className={`${colorFila(i.recibido + este, i.cantidad, i.cancelado)} bg-surface2/40 text-[13px]`}
@@ -1621,6 +1718,8 @@ Se recalcula lo recibido de esta OC.`)) return
                                     <td className={`px-3 py-1 text-right font-bold tabular-nums ${saldo - este > 0 ? 'text-amber-500' : 'text-emerald-500'}`}>
                                       {n0.format(Math.max(0, saldo - este))}
                                     </td>
+                                    <td className="whitespace-nowrap px-3 py-1 text-right tabular-nums text-sub">{textoPrecio([i])}</td>
+                                    <td className="whitespace-nowrap px-3 py-1 text-right tabular-nums text-ink">{importeDe([i])}</td>
                                     <td className="px-3 py-1">
                                       {saldo === 0 && este === 0 ? (
                                         <span className="mx-auto block w-fit rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-500">COMPLETO</span>
@@ -1645,8 +1744,10 @@ Se recalcula lo recibido de esta OC.`)) return
                                         <Tilde completo={este >= saldo} etiqueta={`${i.articulo} ${i.color} ${i.talle}`} onClick={() => tildarEste([i])} />
                                       ) : null}
                                     </td>
-                                  </tr>
-                                )
+                                    <td className="px-3 py-1 text-center">{celdaControl([i])}</td>
+                                  </tr>,
+                                  filaDesglose(i),
+                                ].filter(Boolean)
                               }),
                             ]
                           })
@@ -1658,8 +1759,18 @@ Se recalcula lo recibido de esta OC.`)) return
                           <td className="px-3 py-2 text-right tabular-nums text-ink">{n0.format(tot.pedidas)}</td>
                           <td className="px-3 py-2 text-right tabular-nums text-ink">{n0.format(tot.recibidas + tot.demas)}</td>
                           <td className="px-3 py-2 text-right tabular-nums text-amber-500">{n0.format(Math.max(0, tot.pedidas - tot.recibidas - tot.este))}</td>
+                          <td />
+                          <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-ink">{importeDe(items)}</td>
                           <td className="px-3 py-2 text-center tabular-nums text-emerald-500">{n0.format(tot.este)}</td>
                           <td />
+                          <td className="px-3 py-2 text-center text-xs">
+                            {ctrl ? (
+                              <Link to={ctrl.estado === 'terminado' ? `/deposito/controles-fisicos?abrir=${encodeURIComponent(ctrl.factura)}` : `/deposito/control-fisico?f=${encodeURIComponent(ctrl.factura)}`}
+                                className="font-semibold text-orange-400 hover:underline">
+                                {ctrl.estado === 'terminado' ? `Hecho · ${ctrl.quien ?? ''}` : ctrl.estado === 'en_curso' ? 'En curso' : 'Pendiente'}
+                              </Link>
+                            ) : <span className="text-sub/60">—</span>}
+                          </td>
                         </tr>
                       </tfoot>
                     </table>

@@ -13,6 +13,7 @@ El detalle largo y la historia de cada módulo siguen en `CONTEXTO.md` (raíz de
 - [[Artículos y F12]]: maestro de artículos, descripción adicional, F12, stock
 - [[Picking]]: pickings por registro, cancelaciones, Excel
 - [[Recepción INDO]]
+- [[Control físico]]: el depósito cuenta el picking de cada factura y desglosa en color × talle los 00/U; Controles físicos con precio de compra
 - [[Pedidos compra, venta y cancelaciones]]
 - [[Órdenes de compras]]: alta de OC, autorización por WhatsApp, Flexxus y alta en Dragon (reemplaza la planilla)
 - [[Armado de pedidos]]: Mayorista pide, el piso arma en Mi repo
@@ -39,6 +40,8 @@ El detalle largo y la historia de cada módulo siguen en `CONTEXTO.md` (raíz de
 | Ruta | Pantalla (`src/pages`) | Nota |
 |---|---|---|
 | `/deposito/picking?oc=&prov=` | Picking.tsx | [[Picking]] |
+| `/deposito/control-fisico?f=` | ControlFisico.tsx | [[Control físico]] (celular) |
+| `/deposito/controles-fisicos?abrir=` | ControlesFisicos.tsx | [[Control físico]] (lista + detalle) |
 | `/deposito/recepcion-indo` | RecepcionIndo.tsx | [[Recepción INDO]] |
 | `/deposito/rma` (+proveedores, guia) | Rma.tsx, ProveedoresPacho.tsx, GuiaPacho.tsx | [[Otros módulos]] |
 | `/deposito/reposicion-escaneo` | ReposicionEscaneo.tsx | [[Reposición por escaneo]] |

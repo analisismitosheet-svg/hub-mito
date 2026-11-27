@@ -9,6 +9,9 @@
  *                                                    que el lote tiene renglones para ellos
  *   POST /api/push?tipo=requerimiento { id }       -> avisa al local qué arreglo le programaron, el día,
  *                                                    el horario y quién va (sql/requerimientos.sql)
+ *   POST /api/push?tipo=control_fisico { control_id } -> «Control físico terminado» al rol deposito,
+ *                                                    legajos de Depósito Indo y admins (sql/control_fisico.sql).
+ *                                                    Solo lo dispara quien lo terminó, y una vez.
  *   POST /api/push?tipo=arqueo                     -> avisa a los locales que no arquearon a las 10, 14, 19
  *                                                    o 22 (sql/arqueos_locales.sql). Sin autenticación: lo
  *                                                    llama el puente después de cada sync, no recibe nada y
@@ -449,6 +452,56 @@ interface Requerimiento {
   programado_nota: string | null
 }
 
+interface AvisoControl {
+  usuario_id: string
+  proveedor: string | null
+  n_factura: string | null
+  factura_clave: string
+  terminado_nombre: string | null
+  con_diferencias: boolean | null
+  faltan: number | null
+  sobran: number | null
+}
+
+/** Control físico terminado (sql/control_fisico.sql): a todo el depósito, una sola vez por control. */
+async function avisarControlFisico(req: Req, res: Res, uid: string) {
+  let id = ''
+  try {
+    id = String(cuerpoDe(req).control_id ?? '')
+  } catch {
+    id = ''
+  }
+  if (!esUuid(id)) return res.status(400).json({ error: 'control_id inválido' })
+
+  // La base reclama el aviso (push_at) solo si lo terminó este usuario y todavía no se avisó
+  const rA = await rest('rpc/control_fisico_reclamar_push', { method: 'POST', body: JSON.stringify({ p_control: id, p_usuario: uid }) })
+  if (!rA.ok) return res.status(502).json({ error: `No se pudo calcular a quién avisar (${rA.status})` })
+  const avisos = (await rA.json()) as AvisoControl[]
+  if (!avisos.length) return res.status(200).json({ enviados: 0, yaAvisado: true })
+
+  const uids = [...new Set(avisos.map((a) => a.usuario_id))].filter(esUuid)
+  if (!uids.length) return res.status(200).json({ enviados: 0, receptores: 0 })
+  const rS = await rest(`push_suscripciones?select=endpoint,usuario_id,p256dh,auth&usuario_id=in.(${uids.join(',')})`)
+  if (!rS.ok) return res.status(502).json({ error: `No se pudieron leer las suscripciones (${rS.status})` })
+  const subs = (await rS.json()) as Suscripcion[]
+  if (!subs.length) return res.status(200).json({ enviados: 0, receptores: uids.length, suscripciones: 0 })
+
+  const a = avisos[0]
+  const faltan = Number(a.faltan) || 0
+  const sobran = Number(a.sobran) || 0
+  const dif = a.con_diferencias
+    ? `con diferencias (${[faltan ? `faltan ${faltan}` : '', sobran ? `sobran ${sobran}` : ''].filter(Boolean).join(' · ')})`
+    : 'OK'
+  const payload = JSON.stringify({
+    title: '📦 Control físico terminado',
+    body: `${a.proveedor ?? ''} · Fact. ${a.n_factura ?? ''} · ${a.terminado_nombre ?? ''} · ${dif}`,
+    url: `/deposito/controles-fisicos?abrir=${encodeURIComponent(a.factura_clave)}`,
+    urgente: false,
+  })
+  const r = await entregar(payload, subs)
+  return res.status(200).json({ ...r, receptores: uids.length, suscripciones: subs.length })
+}
+
 /** Requerimiento programado: al local que lo pidió, con la tarea, el día y el horario. */
 async function avisarRequerimiento(req: Req, res: Res, token: string) {
   let id = ''
@@ -596,5 +649,6 @@ export default async function handler(req: Req, res: Res) {
   if (tipo === 'faltantes') return avisarFaltantes(req, res, token)
   if (tipo === 'transferencia') return avisarTransferencia(req, res, token)
   if (tipo === 'requerimiento') return avisarRequerimiento(req, res, token)
+  if (tipo === 'control_fisico') return avisarControlFisico(req, res, uid)
   return avisarArmado(req, res, uid)
 }
