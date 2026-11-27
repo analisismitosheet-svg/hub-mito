@@ -31,10 +31,23 @@ function codigosDe(prefijo: string, desde: string, hasta: string): string[] | st
   return mala ? `«${mala}» no sirve: letras, números y guiones, hasta 20.` : out
 }
 
+let lienzo: CanvasRenderingContext2D | null | undefined
+
+/** Ancho real del texto en Arial negrita, por cada 1 de tamaño de letra (sin canvas, una estimación holgada) */
+function anchoPorUnidad(texto: string, peso: number) {
+  if (lienzo === undefined) lienzo = document.createElement('canvas').getContext('2d')
+  if (!lienzo) return texto.length * 0.72
+  lienzo.font = `${peso} 100px Arial, Helvetica, sans-serif`
+  return lienzo.measureText(texto).width / 100
+}
+
 function MembretePosicion({ codigo, ancho, alto }: { codigo: string; ancho: number; alto: number }) {
   const nombre = nombrePosicion(codigo)
   const qrMm = Math.max(10, Math.min(alto - 8, ancho * 0.35))
-  const textoMm = ancho - qrMm - 6
+  // ancho libre para el texto: menos QR, separación (2), relleno (4), borde y un margen de seguridad
+  const textoMm = Math.max(5, ancho - qrMm - 8)
+  const letraMm = Math.min(alto * 0.4, textoMm / anchoPorUnidad(nombre, 900))
+  const tituloMm = Math.min(alto * 0.08, textoMm / anchoPorUnidad('POLO 52', 700))
   return (
     <div
       className="etiqueta-bulto"
@@ -42,8 +55,8 @@ function MembretePosicion({ codigo, ancho, alto }: { codigo: string; ancho: numb
     >
       <QRCodeSVG value={qrPosicion(codigo)} size={256} level="M" style={{ width: `${qrMm}mm`, height: `${qrMm}mm`, flexShrink: 0 }} />
       <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '1mm', minWidth: 0, flex: 1, textAlign: 'center' }}>
-        <div style={{ fontSize: `${alto * 0.08}mm`, fontWeight: 700, textTransform: 'uppercase' }}>POLO 52</div>
-        <div style={{ fontSize: `${Math.min(alto * 0.4, (textoMm * 1.6) / Math.max(nombre.length, 3))}mm`, fontWeight: 900, lineHeight: 1, whiteSpace: 'nowrap' }}>
+        <div style={{ fontSize: `${tituloMm}mm`, fontWeight: 700, textTransform: 'uppercase' }}>POLO 52</div>
+        <div style={{ fontSize: `${letraMm}mm`, fontWeight: 900, lineHeight: 1, whiteSpace: 'nowrap' }}>
           {nombre}
         </div>
       </div>
