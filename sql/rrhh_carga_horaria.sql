@@ -40,3 +40,22 @@ drop policy if exists rrhh_carga_horaria_editar on public.rrhh_carga_horaria;
 create policy rrhh_carga_horaria_editar on public.rrhh_carga_horaria for all to authenticated
   using (private.es_admin() or private.tengo_permiso('rrhh.horarios.edit'))
   with check (private.es_admin() or private.tengo_permiso('rrhh.horarios.edit'));
+
+-- Apertura de cada local para la planilla (27/11/2026): días y horario.
+-- Con eso se marca en rojo quien entra después de abrir o sale antes de cerrar,
+-- y se cuenta cuántas personas hay al abrir y al cerrar.
+create table if not exists public.rrhh_locales_apertura (
+  local text primary key,
+  dias text not null default 'lunes a domingos',
+  abre text not null default '10:00',
+  cierra text not null default '21:00',
+  actualizado_at timestamptz not null default now()
+);
+alter table public.rrhh_locales_apertura enable row level security;
+drop policy if exists rrhh_locales_apertura_ver on public.rrhh_locales_apertura;
+create policy rrhh_locales_apertura_ver on public.rrhh_locales_apertura for select to authenticated
+  using (private.es_admin() or private.tengo_permiso('rrhh.horarios.view'));
+drop policy if exists rrhh_locales_apertura_editar on public.rrhh_locales_apertura;
+create policy rrhh_locales_apertura_editar on public.rrhh_locales_apertura for all to authenticated
+  using (private.es_admin() or private.tengo_permiso('rrhh.horarios.edit'))
+  with check (private.es_admin() or private.tengo_permiso('rrhh.horarios.edit'));

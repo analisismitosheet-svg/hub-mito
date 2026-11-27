@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from 'react'
-import { CalendarClock, ChevronLeft, ChevronRight, Copy, Loader2, Search, Store, User } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState, type FocusEvent, type KeyboardEvent } from 'react'
+import { CalendarClock, Check, ChevronLeft, ChevronRight, Copy, Loader2, Pencil, Search, Store, User, X } from 'lucide-react'
 import Layout from '@/components/Layout'
 import BackButton from '@/components/BackButton'
 import { supabase } from '@/lib/supabase'
@@ -7,84 +7,53 @@ import { useAuth } from '@/context/AuthContext'
 
 /* ------------------------------------------------------------------ */
 /*  RR. HH. → Carga horaria (27/11/2026).                               */
-/*  Planilla tipo calendario del horario de cada legajo, día por día:   */
-/*  - Por local: filas = empleados del local, columnas = días del mes.  */
-/*  - Por legajo: calendario lunes a domingo de una persona.            */
-/*  En cada celda se tipea «10-14 17-21», «8», «F» (franco),            */
-/*  «V» (vacaciones) o «L» (licencia); vacío = se borra.                */
-/*  Se compara con las horas semanales del contrato (empleados.horas).  */
-/*  Tabla rrhh_carga_horaria (sql/rrhh_carga_horaria.sql),              */
-/*  permisos rrhh.horarios.view / .edit (rol rr_hh).                    */
+/*  Planilla semanal por local, como la de Excel que usaban los locales:*/
+/*  tipo (puesto: LOCAL 1, 2… o PPP para planes) · legajo · por día     */
+/*  entrada y salida con las horas abajo (vacío = franco; V/L en la     */
+/*  entrada = vacaciones/licencia) · horas del contrato y cargadas.     */
+/*  Apertura del local (días y horario) en rrhh_locales_apertura: en    */
+/*  rojo quien entra después de abrir o sale antes de cerrar, y abajo   */
+/*  cuántas personas hay al abrir y al cerrar.                          */
+/*  Tablas: sql/rrhh_carga_horaria.sql. Permisos rrhh.horarios.view /  */
+/*  .edit (rol rr_hh). Maqueta: mockups/carga-horaria.html.             */
 /* ------------------------------------------------------------------ */
 
 type Tipo = 'trabajo' | 'franco' | 'vacaciones' | 'licencia'
 interface Carga { legajo: string; fecha: string; local: string | null; horario: string | null; horas: number; tipo: Tipo }
-interface Emp { legajo: string; nombre: string; local: string; horasSem: number | null }
-interface Parseo { tipo: Tipo; horario: string | null; horas: number }
+interface Emp { legajo: string; nombre: string; local: string; horasSem: number | null; plan: boolean; puesto: string }
+interface Apertura { local: string; dias: string; abre: string; cierra: string }
 
-const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
-const DIAS_CORTO = ['D', 'L', 'M', 'M', 'J', 'V', 'S']
-const DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
-const LETRA: Record<Exclude<Tipo, 'trabajo'>, string> = { franco: 'F', vacaciones: 'V', licencia: 'L' }
-const ESTILO_TIPO: Record<Tipo, string> = {
-  trabajo: 'text-ink',
-  franco: 'bg-slate-500/15 text-sub',
-  vacaciones: 'bg-teal-500/15 text-teal-500',
-  licencia: 'bg-amber-500/15 text-amber-500',
-}
+const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+const APERTURA_DEF = { dias: 'lunes a domingos', abre: '10:00', cierra: '21:00' }
 const LS_LOCAL = 'carga-horaria.local'
 
-/* ---------- fechas (todo en ISO yyyy-mm-dd, sin zonas) ---------- */
+/* ---------- fechas (ISO yyyy-mm-dd, sin zonas) ---------- */
 const pad = (n: number) => String(n).padStart(2, '0')
-const iso = (a: number, m: number, d: number) => `${a}-${pad(m + 1)}-${pad(d)}`
 const sumarDias = (f: string, n: number) => {
   const d = new Date(`${f}T12:00:00Z`)
   d.setUTCDate(d.getUTCDate() + n)
   return d.toISOString().slice(0, 10)
 }
 const dow = (f: string) => new Date(`${f}T12:00:00Z`).getUTCDay()
-/** Lunes de la semana de `f` */
 const lunesDe = (f: string) => sumarDias(f, -((dow(f) + 6) % 7))
 const ddmm = (f: string) => `${f.slice(8, 10)}/${f.slice(5, 7)}`
+const hhmm = (min: number) => `${pad(Math.floor(min / 60))}:${pad(Math.round(min % 60))}`
+const aMin = (h: string) => Number(h.slice(0, 2)) * 60 + Number(h.slice(3, 5))
 
-/* ---------- celdas: texto ↔ dato ---------- */
-const fmtH = (h: number) => (Math.round(h * 100) / 100).toString().replace('.', ',')
-
-/** Interpreta lo tipeado. null = vacío (borrar); 'error' = no se entiende. */
-export function parsearCelda(txt: string): Parseo | null | 'error' {
-  let t = txt.trim().toLowerCase()
+/** «10» → 10:00, «9:30» / «9.30» / «930» → 09:30. null = vacío, 'error' = no se entiende */
+export function parsearHora(txt: string): string | null | 'error' {
+  const t = txt.trim().toLowerCase().replace(/\s*hs?$/, '')
   if (!t) return null
-  if (['f', 'franco'].includes(t)) return { tipo: 'franco', horario: null, horas: 0 }
-  if (['v', 'vac', 'vacaciones'].includes(t)) return { tipo: 'vacaciones', horario: null, horas: 0 }
-  if (['l', 'lic', 'licencia'].includes(t)) return { tipo: 'licencia', horario: null, horas: 0 }
-  const solo = t.match(/^(\d{1,2}(?:[.,]\d{1,2})?)\s*(?:h|hs|horas)?$/)
-  if (solo) {
-    const h = Number(solo[1].replace(',', '.'))
-    return h > 0 && h <= 24 ? { tipo: 'trabajo', horario: null, horas: h } : 'error'
-  }
-  t = t.replace(/hs?\b/g, '').replace(/\s+a\s+/g, '-').replace(/\s*-\s*/g, '-').replace(/\s+y\s+|[;,/]/g, ' ')
-  const tramos: string[] = []
-  let horas = 0
-  for (const tok of t.split(/\s+/).filter(Boolean)) {
-    const m = tok.match(/^(\d{1,2})(?:[:.](\d{2}))?-(\d{1,2})(?:[:.](\d{2}))?$/)
-    if (!m) return 'error'
-    const [h1, m1, h2, m2] = [Number(m[1]), Number(m[2] ?? 0), Number(m[3]), Number(m[4] ?? 0)]
-    if (h1 > 24 || h2 > 24 || m1 > 59 || m2 > 59) return 'error'
-    let dur = h2 * 60 + m2 - (h1 * 60 + m1)
-    if (dur <= 0) dur += 24 * 60 // pasa la medianoche
-    horas += dur / 60
-    tramos.push(`${pad(h1)}:${pad(m1)}-${pad(h2)}:${pad(m2)}`)
-  }
-  if (!tramos.length || horas > 24) return 'error'
-  return { tipo: 'trabajo', horario: tramos.join(' '), horas: Math.round(horas * 100) / 100 }
+  const m = t.match(/^(\d{1,2})(?:[:.](\d{2}))?$/) ?? t.match(/^(\d{1,2})(\d{2})$/)
+  if (!m) return 'error'
+  const h = Number(m[1]), mi = Number(m[2] ?? 0)
+  return h <= 24 && mi <= 59 ? `${pad(h)}:${pad(mi)}` : 'error'
 }
-
-/** Texto corto para mostrar en la celda */
-function textoCelda(c: Carga | undefined): string {
-  if (!c) return ''
-  if (c.tipo !== 'trabajo') return LETRA[c.tipo]
-  if (c.horario) return c.horario.replace(/:00/g, '').replace(/^0(\d)/, '$1').replace(/ 0(\d)/g, ' $1').replace(/-0(\d)/g, '-$1')
-  return fmtH(c.horas)
+const duracion = (ent: string, sal: string) => { let d = aMin(sal) - aMin(ent); if (d <= 0) d += 1440; return d }
+/** Entrada y salida guardadas en `horario` («10:00-21:00») */
+function entSal(c: Carga | undefined): [string, string] {
+  const m = c?.tipo === 'trabajo' ? c.horario?.match(/(\d{2}:\d{2})-(\d{2}:\d{2})/) : null
+  return m ? [m[1], m[2]] : ['', '']
 }
 
 /** Local del legajo: el lugar, o el sector cuando el lugar dice LOCALES */
@@ -96,68 +65,109 @@ function localDe(lugar: string | null, sector: string | null): string {
 
 /* ------------------------------------------------------------------ */
 
-interface CeldaProps {
+interface DiaProps {
+  emp: Emp
+  fecha: string
   carga: Carga | undefined
+  apertura: Apertura
   editable: boolean
   r: number
-  c: number
-  grupo: string
-  feriado?: boolean
-  finde?: boolean
-  onGuardar: (p: Parseo | null) => Promise<boolean>
-  ancho?: string
+  d: number
+  onGuardar: (emp: Emp, fecha: string, c: Omit<Carga, 'legajo' | 'fecha' | 'local'> | null) => Promise<boolean>
 }
 
-/** Celda editable: se tipea y al salir (Enter, Tab o clic afuera) se guarda. */
-function Celda({ carga, editable, r, c, grupo, feriado, finde, onGuardar, ancho = 'w-[4.25rem]' }: CeldaProps) {
-  const original = textoCelda(carga)
-  const [txt, setTxt] = useState(original)
-  const [estado, setEstado] = useState<'ok' | 'error' | 'guardando'>('ok')
-  useEffect(() => { setTxt(original); setEstado('ok') }, [original])
+/** Un día de una persona: entrada | salida y las horas abajo. */
+function Dia({ emp, fecha, carga, apertura, editable, r, d, onGuardar }: DiaProps) {
+  const [e0, s0] = entSal(carga)
+  const marca = carga?.tipo === 'vacaciones' ? 'V' : carga?.tipo === 'licencia' ? 'L' : ''
+  const [ent, setEnt] = useState(marca || e0)
+  const [sal, setSal] = useState(s0)
+  const [estado, setEstado] = useState<'ok' | 'error' | 'falta' | 'guardando'>('ok')
+  useEffect(() => { setEnt(marca || e0); setSal(s0); setEstado('ok') }, [marca, e0, s0])
 
   async function confirmar() {
-    if (txt.trim() === original) { setEstado('ok'); return }
-    const p = parsearCelda(txt)
-    if (p === 'error') { setEstado('error'); return }
+    const e = ent.trim().toLowerCase()
+    if (e === 'v' || e === 'l' || e === 'f') {
+      setEstado('guardando')
+      const ok = await onGuardar(emp, fecha, e === 'f' ? null : { tipo: e === 'v' ? 'vacaciones' : 'licencia', horario: null, horas: 0 })
+      setEstado(ok ? 'ok' : 'error')
+      return
+    }
+    const he = parsearHora(ent), hs = parsearHora(sal)
+    if (he === 'error' || hs === 'error') { setEstado('error'); return }
+    if (!he && !hs) {
+      if (carga) { setEstado('guardando'); setEstado((await onGuardar(emp, fecha, null)) ? 'ok' : 'error') }
+      else setEstado('ok')
+      return
+    }
+    if (!he || !hs) { setEstado('falta'); return }
+    if (he === e0 && hs === s0) { setEstado('ok'); return }
     setEstado('guardando')
-    const ok = await onGuardar(p)
+    const ok = await onGuardar(emp, fecha, { tipo: 'trabajo', horario: `${he}-${hs}`, horas: Math.round((duracion(he, hs) / 60) * 100) / 100 })
     setEstado(ok ? 'ok' : 'error')
   }
 
-  function mover(e: KeyboardEvent<HTMLInputElement>) {
-    const destino = (dr: number, dc: number) => {
-      const el = document.querySelector<HTMLInputElement>(`input[data-g="${grupo}"][data-r="${r + dr}"][data-c="${c + dc}"]`)
-      if (el) { e.preventDefault(); el.focus(); el.select() }
+  function teclas(ev: KeyboardEvent<HTMLInputElement>, c: number) {
+    const ir = (dr: number, dc: number) => {
+      const el = document.querySelector<HTMLInputElement>(`input[data-hr="${r + dr}"][data-hc="${c + dc}"]`)
+      if (el) { ev.preventDefault(); el.focus(); el.select() }
     }
-    if (e.key === 'Enter') { e.currentTarget.blur(); destino(0, 1) }
-    else if (e.key === 'Escape') { setTxt(original); setEstado('ok'); e.currentTarget.blur() }
-    else if (e.key === 'ArrowDown') destino(1, 0)
-    else if (e.key === 'ArrowUp') destino(-1, 0)
-    else if (e.key === 'ArrowRight' && e.currentTarget.selectionStart === txt.length) destino(0, 1)
-    else if (e.key === 'ArrowLeft' && e.currentTarget.selectionStart === 0) destino(0, -1)
+    const v = ev.currentTarget.value
+    if (ev.key === 'Enter') ir(0, 1)
+    else if (ev.key === 'Escape') { setEnt(marca || e0); setSal(s0); setEstado('ok') }
+    else if (ev.key === 'ArrowDown') ir(1, 0)
+    else if (ev.key === 'ArrowUp') ir(-1, 0)
+    else if (ev.key === 'ArrowRight' && ev.currentTarget.selectionStart === v.length) ir(0, 1)
+    else if (ev.key === 'ArrowLeft' && ev.currentTarget.selectionStart === 0) ir(0, -1)
+  }
+  // Se guarda cuando el foco sale del día (no al pasar de entrada a salida)
+  const salir = (ev: FocusEvent<HTMLDivElement>) => {
+    if (!ev.currentTarget.contains(ev.relatedTarget as Node | null)) void confirmar()
   }
 
-  const fondo = carga ? ESTILO_TIPO[carga.tipo] : feriado ? 'bg-orange-500/10' : finde ? 'bg-surface2/60' : ''
-  const borde = estado === 'error' ? 'ring-1 ring-red-500' : estado === 'guardando' ? 'opacity-60' : ''
-  const titulo = carga
-    ? carga.tipo === 'trabajo' ? `${carga.horario ?? 'Sin horario'} · ${fmtH(carga.horas)} h` : carga.tipo
-    : estado === 'error' ? 'No se entiende: probá «10-14 17-21», «8», F, V o L' : undefined
+  const franco = !carga || carga.tipo === 'franco'
+  const especial = carga?.tipo === 'vacaciones' || carga?.tipo === 'licencia'
+  const fondo = especial
+    ? carga!.tipo === 'vacaciones' ? 'bg-teal-500/15' : 'bg-amber-500/15'
+    : franco ? (emp.plan ? 'bg-emerald-500/10' : 'bg-sky-500/15') : ''
+  const pie = especial
+    ? carga!.tipo === 'vacaciones' ? 'Vacaciones' : 'Licencia'
+    : franco ? (estado === 'falta' ? 'falta un horario' : 'Franco') : hhmm(carga!.horas * 60)
+  const rojoEnt = !franco && !especial && e0 && e0 > apertura.abre
+  const rojoSal = !franco && !especial && s0 && s0 < apertura.cierra
+  const input = 'h-8 w-full min-w-0 bg-transparent text-center text-[13px] tabular-nums outline-none focus:bg-surface-solid focus:ring-1 focus:ring-sky-500'
+  const anillo = estado === 'error' ? 'ring-1 ring-red-500' : estado === 'falta' ? 'ring-1 ring-amber-500' : ''
+  const titulo = estado === 'error' ? 'Hora no válida: probá 10, 10:30 o 17 (o V / L en la entrada)' : estado === 'falta' ? 'Falta la entrada o la salida' : undefined
 
   return (
-    <input
-      value={txt}
-      readOnly={!editable}
-      onChange={(e) => { setTxt(e.target.value); if (estado === 'error') setEstado('ok') }}
-      onBlur={() => void confirmar()}
-      onFocus={(e) => e.currentTarget.select()}
-      onKeyDown={mover}
-      data-g={grupo}
-      data-r={r}
-      data-c={c}
-      title={titulo}
-      aria-label={titulo ?? 'Horario'}
-      className={`h-8 ${ancho} rounded-md border border-transparent px-1 text-center text-[11px] tabular-nums outline-none transition focus:border-sky-500 focus:bg-surface-solid ${fondo} ${borde} ${editable ? '' : 'cursor-default'}`}
-    />
+    <div onBlur={salir} className={`overflow-hidden rounded-lg border border-line ${fondo} ${anillo} ${estado === 'guardando' ? 'opacity-60' : ''}`} title={titulo}>
+      {especial ? (
+        <input
+          value={ent} readOnly={!editable} aria-label={`${emp.nombre} ${fecha}`}
+          onChange={(e) => { setEnt(e.target.value); setEstado('ok') }} onFocus={(e) => e.currentTarget.select()}
+          onKeyDown={(e) => teclas(e, d * 2)} data-hr={r} data-hc={d * 2}
+          className={`${input} font-bold ${carga!.tipo === 'vacaciones' ? 'text-teal-500' : 'text-amber-500'}`}
+        />
+      ) : (
+        <div className="grid grid-cols-2 divide-x divide-line">
+          <input
+            value={ent} readOnly={!editable} aria-label={`Entrada ${emp.nombre} ${fecha}`} placeholder={editable && franco ? '–' : ''}
+            onChange={(e) => { setEnt(e.target.value); setEstado('ok') }} onFocus={(e) => e.currentTarget.select()}
+            onKeyDown={(e) => teclas(e, d * 2)} data-hr={r} data-hc={d * 2}
+            className={`${input} ${rojoEnt ? 'font-semibold text-red-400' : 'text-ink'} placeholder:text-sub/40`}
+          />
+          <input
+            value={sal} readOnly={!editable} aria-label={`Salida ${emp.nombre} ${fecha}`} placeholder={editable && franco ? '–' : ''}
+            onChange={(e) => { setSal(e.target.value); setEstado('ok') }} onFocus={(e) => e.currentTarget.select()}
+            onKeyDown={(e) => teclas(e, d * 2 + 1)} data-hr={r} data-hc={d * 2 + 1}
+            className={`${input} ${rojoSal ? 'font-semibold text-red-400' : 'text-ink'} placeholder:text-sub/40`}
+          />
+        </div>
+      )}
+      <div className={`border-t border-line py-0.5 text-center text-[11px] tabular-nums ${franco || especial ? 'text-sub' : emp.plan ? 'bg-emerald-500/10 text-ink' : 'bg-sky-500/10 text-ink'} ${estado === 'falta' ? 'text-amber-500' : ''}`}>
+        {pie}
+      </div>
+    </div>
   )
 }
 
@@ -167,68 +177,77 @@ export default function CargaHoraria() {
   const { isAdmin, can } = useAuth()
   const puedeEditar = isAdmin || can('rrhh.horarios.edit')
   const hoy = new Date()
-  const [anio, setAnio] = useState(hoy.getFullYear())
-  const [mes, setMes] = useState(hoy.getMonth())
+  const hoyIso = `${hoy.getFullYear()}-${pad(hoy.getMonth() + 1)}-${pad(hoy.getDate())}`
+  const [lunes, setLunes] = useState(() => lunesDe(hoyIso))
   const [vista, setVista] = useState<'local' | 'legajo'>('local')
   const [emps, setEmps] = useState<Emp[]>([])
   const [cargas, setCargas] = useState<Map<string, Carga>>(new Map())
-  const [feriados, setFeriados] = useState<Map<string, string>>(new Map())
+  const [aperturas, setAperturas] = useState<Map<string, Apertura>>(new Map())
   const [local, setLocal] = useState<string>(() => { try { return localStorage.getItem(LS_LOCAL) ?? '' } catch { return '' } })
   const [legajo, setLegajo] = useState('')
   const [busca, setBusca] = useState('')
+  const [editAp, setEditAp] = useState<Apertura | null>(null)
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
 
-  const desde = iso(anio, mes, 1)
-  const diasMes = new Date(Date.UTC(anio, mes + 1, 0)).getUTCDate()
-  const hasta = iso(anio, mes, diasMes)
-  const dias = useMemo(() => Array.from({ length: diasMes }, (_, i) => iso(anio, mes, i + 1)), [anio, mes, diasMes])
-  const hoyIso = iso(hoy.getFullYear(), hoy.getMonth(), hoy.getDate())
+  const fechas = useMemo(() => Array.from({ length: 7 }, (_, i) => sumarDias(lunes, i)), [lunes])
+  const domingo = fechas[6]
 
-  // Empleados activos con legajo
+  // Empleados activos con legajo; puesto = LOCAL 1, 2… (por horas y nombre) o PPP si es plan
   useEffect(() => {
     if (!supabase) return
     void supabase
       .from('empleados')
-      .select('legajo,nombre,lugar,area_sector,horas')
+      .select('legajo,nombre,lugar,area_sector,horas,estado_legajo')
       .not('legajo', 'is', null)
       .or('estado_legajo.in.("NOMINA ACTIVA","PLANES ACTIVOS"),estado_legajo.is.null')
       .order('nombre')
       .range(0, 1999)
       .then(({ data, error: e }) => {
         if (e) { setError(e.message); return }
-        const filas = (data as { legajo: string; nombre: string; lugar: string | null; area_sector: string | null; horas: number | string | null }[] | null) ?? []
-        setEmps(filas.map((f) => ({
+        type Fila = { legajo: string; nombre: string; lugar: string | null; area_sector: string | null; horas: number | string | null; estado_legajo: string | null }
+        const base = ((data as Fila[] | null) ?? []).map((f) => ({
           legajo: String(f.legajo).trim(),
           nombre: f.nombre,
           local: localDe(f.lugar, f.area_sector),
           horasSem: f.horas == null || f.horas === '' ? null : Number(f.horas),
-        })))
+          plan: (f.estado_legajo || '').toUpperCase() === 'PLANES ACTIVOS',
+          puesto: '',
+        }))
+        base.sort((a, b) => a.local.localeCompare(b.local) || Number(a.plan) - Number(b.plan) || (b.horasSem ?? 0) - (a.horasSem ?? 0) || a.nombre.localeCompare(b.nombre))
+        const n = new Map<string, number>()
+        for (const e of base) {
+          if (e.plan) { e.puesto = 'PPP'; continue }
+          const k = (n.get(e.local) ?? 0) + 1
+          n.set(e.local, k)
+          e.puesto = `${e.local} ${k}`
+        }
+        setEmps(base)
       })
+    void supabase.from('rrhh_locales_apertura').select('local,dias,abre,cierra').then(({ data }) => {
+      setAperturas(new Map(((data as Apertura[] | null) ?? []).map((a) => [a.local, a])))
+    })
   }, [])
 
-  // Carga horaria del mes (+ la semana anterior, para «Repetir semana») y feriados
+  // Semana mostrada + la anterior (para «Copiar semana anterior»)
   const cargar = useCallback(async () => {
     const sb = supabase
     if (!sb) { setCargando(false); return }
     setCargando(true)
     setError(null)
-    const ini = sumarDias(desde, -7)
     const todas: Carga[] = []
     for (let p = 0; ; p += 1000) {
       const { data, error: e } = await sb.from('rrhh_carga_horaria').select('legajo,fecha,local,horario,horas,tipo')
-        .gte('fecha', ini).lte('fecha', hasta).order('id').range(p, p + 999)
+        .gte('fecha', sumarDias(lunes, -7)).lte('fecha', domingo).order('id').range(p, p + 999)
       if (e) { setError(e.message); break }
       const filas = (data as Carga[] | null) ?? []
       todas.push(...filas.map((f) => ({ ...f, horas: Number(f.horas) })))
       if (filas.length < 1000) break
     }
     setCargas(new Map(todas.map((c) => [`${c.legajo}|${c.fecha}`, c])))
-    const { data: fer } = await sb.from('objetivos_feriados').select('fecha,local,motivo').is('local', null).gte('fecha', desde).lte('fecha', hasta)
-    setFeriados(new Map(((fer as { fecha: string; motivo: string | null }[] | null) ?? []).map((f) => [f.fecha, f.motivo || 'Feriado'])))
     setCargando(false)
-  }, [desde, hasta])
+  }, [lunes, domingo])
   useEffect(() => { void cargar() }, [cargar])
 
   const locales = useMemo(() => {
@@ -241,43 +260,40 @@ export default function CargaHoraria() {
   }, [locales, local])
   useEffect(() => { try { if (local) localStorage.setItem(LS_LOCAL, local) } catch { /* sin storage */ } }, [local])
 
-  const empsLocal = useMemo(() => emps.filter((e) => e.local === local), [emps, local])
   const empLegajo = useMemo(() => emps.find((e) => e.legajo === legajo), [emps, legajo])
+  const personas = useMemo(
+    () => (vista === 'local' ? emps.filter((e) => e.local === local) : empLegajo ? [empLegajo] : []),
+    [vista, emps, local, empLegajo],
+  )
+  const localVista = vista === 'local' ? local : empLegajo?.local ?? ''
+  const apertura: Apertura = aperturas.get(localVista) ?? { local: localVista, ...APERTURA_DEF }
 
-  const guardar = useCallback(async (emp: Emp, fecha: string, p: Parseo | null): Promise<boolean> => {
+  const guardar = useCallback(async (emp: Emp, fecha: string, c: Omit<Carga, 'legajo' | 'fecha' | 'local'> | null): Promise<boolean> => {
     if (!supabase) return false
-    const k = `${emp.legajo}|${fecha}`
-    const { error: e } = p
+    const { error: e } = c
       ? await supabase.from('rrhh_carga_horaria').upsert(
-        { legajo: emp.legajo, fecha, local: emp.local, horario: p.horario, horas: p.horas, tipo: p.tipo, actualizado_at: new Date().toISOString() },
+        { legajo: emp.legajo, fecha, local: emp.local, ...c, actualizado_at: new Date().toISOString() },
         { onConflict: 'legajo,fecha' },
       )
       : await supabase.from('rrhh_carga_horaria').delete().eq('legajo', emp.legajo).eq('fecha', fecha)
     if (e) { setError(e.message); return false }
     setCargas((prev) => {
       const n = new Map(prev)
-      if (p) n.set(k, { legajo: emp.legajo, fecha, local: emp.local, ...p })
+      const k = `${emp.legajo}|${fecha}`
+      if (c) n.set(k, { legajo: emp.legajo, fecha, local: emp.local, ...c })
       else n.delete(k)
       return n
     })
     return true
   }, [])
 
-  // Semanas (lunes) que tocan el mes
-  const semanas = useMemo(() => {
-    const out: string[] = []
-    for (let l = lunesDe(desde); l <= hasta; l = sumarDias(l, 7)) out.push(l)
-    return out
-  }, [desde, hasta])
-
-  /** Copia la semana anterior a la semana que empieza en `lunes`, solo en las celdas vacías del mes. */
-  async function repetirSemana(lunes: string, personas: Emp[]) {
-    if (!supabase || !lunes) return
-    const filas: (Carga & { actualizado_at: string })[] = []
+  async function copiarSemanaAnterior() {
+    if (!supabase) return
+    setAviso(null)
+    const filas = []
     for (const emp of personas) {
-      for (let i = 0; i < 7; i++) {
-        const f = sumarDias(lunes, i)
-        if (f < desde || f > hasta || cargas.has(`${emp.legajo}|${f}`)) continue
+      for (const f of fechas) {
+        if (cargas.has(`${emp.legajo}|${f}`)) continue
         const src = cargas.get(`${emp.legajo}|${sumarDias(f, -7)}`)
         if (src) filas.push({ legajo: emp.legajo, fecha: f, local: emp.local, horario: src.horario, horas: src.horas, tipo: src.tipo, actualizado_at: new Date().toISOString() })
       }
@@ -285,46 +301,27 @@ export default function CargaHoraria() {
     if (!filas.length) { setAviso('No había nada para copiar (la semana anterior está vacía o esta ya está cargada).'); return }
     const { error: e } = await supabase.from('rrhh_carga_horaria').upsert(filas, { onConflict: 'legajo,fecha' })
     if (e) { setError(e.message); return }
-    setAviso(`Se copiaron ${filas.length} días de la semana anterior a la del ${ddmm(lunes)}.`)
+    setAviso(`Se copiaron ${filas.length} días de la semana anterior.`)
     await cargar()
   }
 
-  function cambiarMes(delta: number) {
-    setAviso(null)
-    const d = new Date(anio, mes + delta, 1)
-    setAnio(d.getFullYear())
-    setMes(d.getMonth())
+  async function guardarApertura() {
+    if (!supabase || !editAp) return
+    const abre = parsearHora(editAp.abre), cierra = parsearHora(editAp.cierra)
+    if (!abre || !cierra || abre === 'error' || cierra === 'error') { setError('Horario de apertura no válido (ej.: 10 y 21).'); return }
+    const fila = { local: editAp.local, dias: editAp.dias.trim() || APERTURA_DEF.dias, abre, cierra, actualizado_at: new Date().toISOString() }
+    const { error: e } = await supabase.from('rrhh_locales_apertura').upsert(fila, { onConflict: 'local' })
+    if (e) { setError(e.message); return }
+    setAperturas((prev) => new Map(prev).set(fila.local, fila))
+    setEditAp(null)
   }
 
-  const horasDe = (leg: string, fs: string[]) => fs.reduce((s, f) => s + (cargas.get(`${leg}|${f}`)?.horas ?? 0), 0)
-  const esperado = (e: Emp, nDias: number) => (e.horasSem == null ? null : (e.horasSem * nDias) / 7)
-
-  const difClase = (real: number, esp: number | null) => {
-    if (esp == null) return 'text-sub'
-    const d = real - esp
-    if (Math.abs(d) < 0.5) return 'text-emerald-500'
-    return d > 0 ? 'text-red-400' : 'text-amber-500'
-  }
-  const difTexto = (real: number, esp: number | null) => {
-    if (esp == null) return '—'
-    const d = Math.round((real - esp) * 10) / 10
-    return d === 0 ? '0' : `${d > 0 ? '+' : ''}${fmtH(d)}`
-  }
-
-  const selectorSemana = (personas: Emp[]) => puedeEditar && (
-    <label className="flex items-center gap-1.5 text-xs text-sub">
-      <Copy size={14} className="text-violet-500" aria-hidden />
-      <select
-        value=""
-        onChange={(e) => void repetirSemana(e.target.value, personas)}
-        className="h-8 rounded-lg border border-line bg-surface2 px-2 text-xs text-ink"
-        aria-label="Repetir la semana anterior"
-      >
-        <option value="">Repetir semana anterior en…</option>
-        {semanas.map((l) => <option key={l} value={l}>Semana del {ddmm(l)} al {ddmm(sumarDias(l, 6))}</option>)}
-      </select>
-    </label>
-  )
+  const minutosDe = (leg: string) => fechas.reduce((s, f) => s + (cargas.get(`${leg}|${f}`)?.horas ?? 0) * 60, 0)
+  const contratoTotal = personas.reduce((s, e) => s + (e.horasSem ?? 0), 0)
+  const enHora = (f: string, h: string) => personas.filter((e) => {
+    const [a, b] = entSal(cargas.get(`${e.legajo}|${f}`))
+    return a && b && a <= h && (b >= h || b < a)
+  }).length
 
   const legajosFiltrados = useMemo(() => {
     const q = busca.trim().toLowerCase()
@@ -332,247 +329,206 @@ export default function CargaHoraria() {
     return emps.filter((e) => e.nombre.toLowerCase().includes(q) || e.legajo.toLowerCase().includes(q)).slice(0, 12)
   }, [busca, emps])
 
+  const hora = (h: string) => (h.endsWith(':00') ? String(Number(h.slice(0, 2))) : h)
+
   return (
     <Layout>
       <BackButton />
-      <header className="mb-4 mt-2 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 font-display text-2xl font-semibold text-ink">
-            <CalendarClock size={22} className="text-sky-500" aria-hidden /> Carga horaria
-          </h1>
-          <p className="mt-1 text-sm text-sub">
-            Horario de cada legajo, día por día. Tipeá <b>10-14 17-21</b>, <b>8</b> (horas), <b>F</b> franco, <b>V</b> vacaciones o <b>L</b> licencia; vacío borra.
-          </p>
-        </div>
-        <div className="flex items-center gap-1 rounded-xl border border-line bg-surface p-1">
-          <button onClick={() => cambiarMes(-1)} className="btn-press rounded-lg p-1.5 text-sub hover:text-ink" aria-label="Mes anterior"><ChevronLeft size={18} /></button>
-          <span className="min-w-[9.5rem] text-center text-sm font-semibold text-ink">{MESES[mes]} {anio}</span>
-          <button onClick={() => cambiarMes(1)} className="btn-press rounded-lg p-1.5 text-sub hover:text-ink" aria-label="Mes siguiente"><ChevronRight size={18} /></button>
-        </div>
+      <header className="mb-4 mt-2">
+        <h1 className="flex items-center gap-2 font-display text-2xl font-semibold text-ink">
+          <CalendarClock size={22} className="text-sky-500" aria-hidden /> Carga horaria
+        </h1>
+        <p className="mt-1 text-sm text-sub">
+          Planilla semanal por local. En cada día, <b className="text-ink">entrada</b> y <b className="text-ink">salida</b> (10, 10:30, 17…); vacío = franco.
+          En la entrada también va <b className="text-ink">V</b> vacaciones o <b className="text-ink">L</b> licencia.
+        </p>
       </header>
 
-      <div className="mb-3 inline-flex rounded-xl border border-line bg-surface p-1" role="tablist">
-        {([['local', 'Por local', Store], ['legajo', 'Por legajo', User]] as const).map(([v, t, Icono]) => (
-          <button
-            key={v}
-            role="tab"
-            aria-selected={vista === v}
-            onClick={() => { setVista(v); setAviso(null) }}
-            className={`btn-press flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition ${vista === v ? 'bg-sky-500 font-semibold text-white' : 'text-sub hover:text-ink'}`}
-          >
-            <Icono size={15} aria-hidden /> {t}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <div className="inline-flex rounded-xl border border-line bg-surface p-1" role="tablist">
+          {([['local', 'Por local', Store], ['legajo', 'Por legajo', User]] as const).map(([v, t, Icono]) => (
+            <button
+              key={v} role="tab" aria-selected={vista === v}
+              onClick={() => { setVista(v); setAviso(null) }}
+              className={`btn-press flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition ${vista === v ? 'bg-sky-500 font-semibold text-white' : 'text-sub hover:text-ink'}`}
+            >
+              <Icono size={15} aria-hidden /> {t}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-1 rounded-xl border border-line bg-surface p-1">
+          <button onClick={() => { setLunes(sumarDias(lunes, -7)); setAviso(null) }} className="btn-press rounded-lg p-1.5 text-sub hover:text-ink" aria-label="Semana anterior"><ChevronLeft size={18} /></button>
+          <span className="min-w-[11.5rem] text-center text-sm font-semibold text-ink">Semana del {ddmm(lunes)} al {ddmm(domingo)}</span>
+          <button onClick={() => { setLunes(sumarDias(lunes, 7)); setAviso(null) }} className="btn-press rounded-lg p-1.5 text-sub hover:text-ink" aria-label="Semana siguiente"><ChevronRight size={18} /></button>
+        </div>
+        {lunes !== lunesDe(hoyIso) && (
+          <button onClick={() => setLunes(lunesDe(hoyIso))} className="text-xs text-sky-500 hover:underline">Ir a esta semana</button>
+        )}
+        {puedeEditar && personas.length > 0 && (
+          <button onClick={() => void copiarSemanaAnterior()} className="btn-press flex items-center gap-1.5 rounded-xl border border-line bg-surface px-3 py-2 text-xs text-ink hover:border-violet-500/50">
+            <Copy size={14} className="text-violet-500" aria-hidden /> Copiar semana anterior
           </button>
-        ))}
+        )}
       </div>
+
+      {vista === 'local' ? (
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {locales.map(([l, n]) => (
+            <button
+              key={l} onClick={() => { setLocal(l); setAviso(null) }} aria-pressed={local === l}
+              className={`btn-press rounded-lg border px-2.5 py-1 text-xs transition ${local === l ? 'border-sky-500/60 bg-sky-500/15 font-semibold text-sky-500' : 'border-line bg-surface text-sub hover:text-ink'}`}
+            >
+              {l} <span className="opacity-60">· {n}</span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="relative mb-3 max-w-md">
+          <Search size={15} className="pointer-events-none absolute left-2.5 top-2.5 text-sub" aria-hidden />
+          <input
+            value={busca} onChange={(e) => setBusca(e.target.value)}
+            placeholder={empLegajo ? `${empLegajo.legajo} · ${empLegajo.nombre}` : 'Buscar por nombre o legajo'}
+            aria-label="Buscar empleado"
+            className="h-9 w-full rounded-lg border border-line bg-surface2 pl-8 pr-2 text-sm text-ink"
+          />
+          {legajosFiltrados.length > 0 && (
+            <ul className="absolute z-30 mt-1 w-full overflow-hidden rounded-xl border border-line bg-surface-solid shadow-lg">
+              {legajosFiltrados.map((e) => (
+                <li key={e.legajo}>
+                  <button onClick={() => { setLegajo(e.legajo); setBusca(''); setAviso(null) }} className="flex w-full justify-between gap-2 px-3 py-1.5 text-left text-sm hover:bg-sky-500/10">
+                    <span><span className="tabular-nums text-sub">{e.legajo}</span> <span className="text-ink">{e.nombre}</span></span>
+                    <span className="text-xs text-sub">{e.local}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {error && <p role="alert" className="mb-3 text-sm text-red-400">{error}</p>}
       {aviso && <p className="mb-3 text-sm text-emerald-500">{aviso}</p>}
 
-      {vista === 'local' ? (
-        <>
-          <div className="mb-3 flex flex-wrap gap-1.5">
-            {locales.map(([l, n]) => (
-              <button
-                key={l}
-                onClick={() => { setLocal(l); setAviso(null) }}
-                aria-pressed={local === l}
-                className={`btn-press rounded-lg border px-2.5 py-1 text-xs transition ${local === l ? 'border-sky-500/60 bg-sky-500/15 font-semibold text-sky-500' : 'border-line bg-surface text-sub hover:text-ink'}`}
-              >
-                {l} <span className="opacity-60">· {n}</span>
-              </button>
-            ))}
+      {vista === 'legajo' && !empLegajo ? (
+        <p className="rounded-2xl border border-line bg-surface p-4 text-sm text-sub">Buscá una persona, o tocá un nombre en la vista «Por local».</p>
+      ) : (
+        <div className="rounded-2xl border border-line bg-surface p-3">
+          {/* Cabecera: apertura · local y semana · carga total */}
+          <div className="mb-3 flex flex-wrap items-stretch gap-2">
+            <div className="rounded-xl border border-line bg-surface2 px-3 py-2">
+              <p className="text-[11px] uppercase tracking-wider text-sub/70">Apertura</p>
+              {editAp ? (
+                <div className="mt-1 flex flex-wrap items-center gap-1.5 text-sm">
+                  <input value={editAp.dias} onChange={(e) => setEditAp({ ...editAp, dias: e.target.value })} aria-label="Días que abre" className="h-8 w-36 rounded-lg border border-line bg-surface px-2 text-ink" />
+                  <input value={editAp.abre} onChange={(e) => setEditAp({ ...editAp, abre: e.target.value })} aria-label="Abre" className="h-8 w-16 rounded-lg border border-line bg-surface px-2 text-center text-ink" />
+                  <span className="text-sub">a</span>
+                  <input value={editAp.cierra} onChange={(e) => setEditAp({ ...editAp, cierra: e.target.value })} aria-label="Cierra" className="h-8 w-16 rounded-lg border border-line bg-surface px-2 text-center text-ink" />
+                  <button onClick={() => void guardarApertura()} className="rounded-lg p-1.5 text-emerald-500 hover:bg-emerald-500/10" aria-label="Guardar apertura"><Check size={16} /></button>
+                  <button onClick={() => setEditAp(null)} className="rounded-lg p-1.5 text-sub hover:bg-surface" aria-label="Cancelar"><X size={16} /></button>
+                </div>
+              ) : (
+                <p className="flex items-center gap-2 text-sm text-ink">
+                  {apertura.dias} · <span className="rounded-md bg-amber-500/15 px-1.5 font-semibold text-amber-500">{hora(apertura.abre)} a {hora(apertura.cierra)} hs</span>
+                  {puedeEditar && (
+                    <button onClick={() => setEditAp({ ...apertura })} className="rounded p-1 text-sub hover:text-ink" aria-label="Cambiar la apertura del local"><Pencil size={13} /></button>
+                  )}
+                </p>
+              )}
+            </div>
+            <div className="flex min-w-[12rem] flex-1 flex-col items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-500/15 px-3 py-2 text-center">
+              <p className="font-display text-lg font-semibold text-ink">{vista === 'local' ? localVista : `${empLegajo!.nombre} · ${localVista}`}</p>
+              <p className="text-xs text-sub">semana del {ddmm(lunes)}</p>
+            </div>
+            <div className="rounded-xl border border-line bg-surface2 px-3 py-2 text-right">
+              <p className="text-[11px] uppercase tracking-wider text-sub/70">Carga total horaria</p>
+              <p className="text-lg font-semibold tabular-nums text-ink">{hhmm(contratoTotal * 60)}</p>
+            </div>
           </div>
 
-          <div className="rounded-2xl border border-line bg-surface p-3">
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-ink">{local} · {empsLocal.length} {empsLocal.length === 1 ? 'persona' : 'personas'}</p>
-              {selectorSemana(empsLocal)}
-            </div>
-            {cargando && !cargas.size ? (
-              <p className="flex items-center gap-2 py-6 text-sm text-sub"><Loader2 size={16} className="animate-spin" /> Cargando…</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="border-separate border-spacing-0 text-xs">
-                  <thead>
-                    <tr className="text-sub">
-                      <th className="sticky left-0 z-10 min-w-[12rem] bg-surface-solid px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wider">Legajo</th>
-                      {dias.map((f) => {
-                        const fer = feriados.get(f)
-                        const d = dow(f)
+          {cargando && !cargas.size ? (
+            <p className="flex items-center gap-2 py-6 text-sm text-sub"><Loader2 size={16} className="animate-spin" /> Cargando…</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[68rem] border-separate border-spacing-1 text-xs">
+                <thead>
+                  <tr className="text-[11px] uppercase tracking-wider">
+                    <th className="sticky left-0 z-10 w-28 bg-surface-solid px-2 py-1.5 text-left font-medium text-sub">Tipo</th>
+                    <th className="sticky left-28 z-10 w-40 bg-surface-solid px-2 py-1.5 text-left font-medium text-sub">Legajo</th>
+                    {fechas.map((f, i) => (
+                      <th key={f} className={`rounded-lg px-1 py-1.5 font-semibold ${f === hoyIso ? 'bg-sky-500/20 text-sky-500' : 'bg-rose-500/15 text-rose-400'}`}>
+                        {DIAS[i]} <span className="font-normal opacity-70">{ddmm(f)}</span>
+                        <div className="mt-0.5 grid grid-cols-2 text-[9px] font-normal normal-case tracking-normal opacity-70"><span>entrada</span><span>salida</span></div>
+                      </th>
+                    ))}
+                    <th className="w-24 rounded-lg bg-rose-500/15 px-2 py-1.5 font-semibold text-rose-400">Horas</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {personas.map((e, r) => {
+                    const cargadas = minutosDe(e.legajo)
+                    const contrato = e.horasSem == null ? null : e.horasSem * 60
+                    const cumple = contrato != null && Math.abs(cargadas - contrato) < 1
+                    return (
+                      <tr key={e.legajo}>
+                        <td className={`sticky left-0 z-10 bg-surface-solid px-2 text-center text-[11px] font-bold ${e.plan ? 'text-emerald-500' : 'text-sky-500'}`}>{e.puesto}</td>
+                        <td className="sticky left-28 z-10 bg-surface-solid px-1">
+                          <button
+                            onClick={() => { setLegajo(e.legajo); setVista('legajo'); setAviso(null) }}
+                            className={`w-full rounded-lg px-2 py-1.5 text-left text-[12px] font-semibold leading-tight text-ink hover:underline ${e.plan ? 'bg-emerald-500/10' : 'bg-orange-500/10'}`}
+                            title="Ver solo a esta persona"
+                          >
+                            {e.nombre}
+                            <span className="block text-[10px] font-normal text-sub tabular-nums">{e.legajo}</span>
+                          </button>
+                        </td>
+                        {fechas.map((f, d) => (
+                          <td key={f} className="align-top">
+                            <Dia emp={e} fecha={f} carga={cargas.get(`${e.legajo}|${f}`)} apertura={apertura} editable={puedeEditar} r={r} d={d} onGuardar={guardar} />
+                          </td>
+                        ))}
+                        <td className="align-top">
+                          <div className="overflow-hidden rounded-lg border border-line text-center tabular-nums">
+                            <div className="h-8 py-1.5 text-[13px] text-ink" title="Horas semanales del contrato">{e.horasSem == null ? '—' : String(e.horasSem).replace('.', ',')}</div>
+                            <div
+                              className={`border-t border-line py-0.5 text-[11px] font-bold ${contrato == null ? 'text-sub' : cumple ? 'bg-emerald-500/20 text-emerald-500' : 'bg-red-500/20 text-red-400'}`}
+                              title="Horas cargadas en la semana"
+                            >
+                              {hhmm(cargadas)}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+                {vista === 'local' && personas.length > 0 && (
+                  <tfoot>
+                    <tr className="text-[11px] text-sub">
+                      <td colSpan={2} className="sticky left-0 z-10 bg-surface-solid px-2 py-1">Personas al abrir / al cerrar</td>
+                      {fechas.map((f) => {
+                        const a = enHora(f, apertura.abre), c = enHora(f, apertura.cierra)
                         return (
-                          <th key={f} title={fer} className={`px-0.5 py-1 text-center font-medium ${fer ? 'text-orange-500' : d === 0 || d === 6 ? 'text-sub/60' : ''} ${f === hoyIso ? 'rounded-t-md bg-sky-500/15 text-sky-500' : ''}`}>
-                            <div className="text-[10px]">{DIAS_CORTO[d]}</div>
-                            <div className="tabular-nums">{Number(f.slice(8))}</div>
-                          </th>
+                          <td key={f} className={`rounded-lg bg-surface2 py-1 text-center tabular-nums ${!a || !c ? 'font-bold text-red-400' : ''}`}>{a} / {c}</td>
                         )
                       })}
-                      <th className="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wider">Horas</th>
-                      <th className="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wider" title="Horas semanales del contrato × días del mes ÷ 7">Contrato</th>
-                      <th className="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wider">Dif.</th>
+                      <td />
                     </tr>
-                  </thead>
-                  <tbody>
-                    {empsLocal.map((e, r) => {
-                      const real = horasDe(e.legajo, dias)
-                      const esp = esperado(e, diasMes)
-                      return (
-                        <tr key={e.legajo} className="group">
-                          <td className="sticky left-0 z-10 max-w-[14rem] truncate border-t border-line bg-surface-solid px-2 py-0.5">
-                            <button onClick={() => { setLegajo(e.legajo); setVista('legajo') }} className="text-left hover:underline" title="Ver el calendario de esta persona">
-                              <span className="text-sub tabular-nums">{e.legajo}</span> <span className="text-ink">{e.nombre}</span>
-                            </button>
-                            <div className="text-[10px] text-sub">{e.horasSem != null ? `${fmtH(e.horasSem)} h/sem` : 'sin horas de contrato'}</div>
-                          </td>
-                          {dias.map((f, c) => {
-                            const d = dow(f)
-                            return (
-                              <td key={f} className="border-t border-line p-px">
-                                <Celda
-                                  carga={cargas.get(`${e.legajo}|${f}`)}
-                                  editable={puedeEditar}
-                                  grupo="local" r={r} c={c}
-                                  feriado={feriados.has(f)}
-                                  finde={d === 0 || d === 6}
-                                  onGuardar={(p) => guardar(e, f, p)}
-                                />
-                              </td>
-                            )
-                          })}
-                          <td className="border-t border-line px-2 text-right font-semibold tabular-nums text-ink">{fmtH(real)}</td>
-                          <td className="border-t border-line px-2 text-right tabular-nums text-sub">{esp == null ? '—' : fmtH(Math.round(esp * 10) / 10)}</td>
-                          <td className={`border-t border-line px-2 text-right font-semibold tabular-nums ${difClase(real, esp)}`}>{difTexto(real, esp)}</td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                  {empsLocal.length > 0 && (
-                    <tfoot>
-                      <tr className="text-sub">
-                        <td className="sticky left-0 z-10 border-t-2 border-line bg-surface-solid px-2 py-1 text-[11px] uppercase tracking-wider">Horas del local</td>
-                        {dias.map((f) => {
-                          const h = empsLocal.reduce((s, e) => s + (cargas.get(`${e.legajo}|${f}`)?.horas ?? 0), 0)
-                          const n = empsLocal.filter((e) => cargas.get(`${e.legajo}|${f}`)?.tipo === 'trabajo').length
-                          return (
-                            <td key={f} className="border-t-2 border-line px-0.5 py-1 text-center tabular-nums" title={`${n} ${n === 1 ? 'persona trabaja' : 'personas trabajan'}`}>
-                              <div className="font-semibold text-ink">{h ? fmtH(h) : ''}</div>
-                              <div className="text-[10px]">{n ? `${n} p.` : ''}</div>
-                            </td>
-                          )
-                        })}
-                        <td className="border-t-2 border-line px-2 text-right font-semibold tabular-nums text-ink">{fmtH(empsLocal.reduce((s, e) => s + horasDe(e.legajo, dias), 0))}</td>
-                        <td className="border-t-2 border-line px-2 text-right tabular-nums">{fmtH(Math.round(empsLocal.reduce((s, e) => s + (esperado(e, diasMes) ?? 0), 0) * 10) / 10)}</td>
-                        <td className="border-t-2 border-line" />
-                      </tr>
-                    </tfoot>
-                  )}
-                </table>
-              </div>
-            )}
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="relative mb-3 max-w-md">
-            <Search size={15} className="pointer-events-none absolute left-2.5 top-2.5 text-sub" aria-hidden />
-            <input
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              placeholder={empLegajo ? `${empLegajo.legajo} · ${empLegajo.nombre}` : 'Buscar por nombre o legajo'}
-              aria-label="Buscar empleado"
-              className="h-9 w-full rounded-lg border border-line bg-surface2 pl-8 pr-2 text-sm text-ink"
-            />
-            {legajosFiltrados.length > 0 && (
-              <ul className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-line bg-surface-solid shadow-lg">
-                {legajosFiltrados.map((e) => (
-                  <li key={e.legajo}>
-                    <button onClick={() => { setLegajo(e.legajo); setBusca(''); setAviso(null) }} className="flex w-full justify-between gap-2 px-3 py-1.5 text-left text-sm hover:bg-sky-500/10">
-                      <span><span className="tabular-nums text-sub">{e.legajo}</span> <span className="text-ink">{e.nombre}</span></span>
-                      <span className="text-xs text-sub">{e.local}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          {!empLegajo ? (
-            <p className="rounded-2xl border border-line bg-surface p-4 text-sm text-sub">Buscá una persona, o tocá un nombre en la vista «Por local».</p>
-          ) : (
-            <div className="rounded-2xl border border-line bg-surface p-3">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <p className="text-sm font-semibold text-ink">{empLegajo.legajo} · {empLegajo.nombre}</p>
-                  <p className="text-xs text-sub">
-                    {empLegajo.local} · {empLegajo.horasSem != null ? `${fmtH(empLegajo.horasSem)} h semanales de contrato` : 'sin horas de contrato cargadas'}
-                    {' · '}en el mes: <b className="text-ink">{fmtH(horasDe(empLegajo.legajo, dias))} h</b>
-                    {(() => {
-                      const esp = esperado(empLegajo, diasMes)
-                      const real = horasDe(empLegajo.legajo, dias)
-                      return esp == null ? null : <> de {fmtH(Math.round(esp * 10) / 10)} (<span className={difClase(real, esp)}>{difTexto(real, esp)}</span>)</>
-                    })()}
-                  </p>
-                </div>
-                {selectorSemana([empLegajo])}
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[40rem] border-separate border-spacing-1 text-xs">
-                  <thead>
-                    <tr className="text-[11px] uppercase tracking-wider text-sub">
-                      {DIAS_SEMANA.map((d) => <th key={d} className="font-medium">{d}</th>)}
-                      <th className="font-medium">Semana</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {semanas.map((lunes, r) => {
-                      const fs = Array.from({ length: 7 }, (_, i) => sumarDias(lunes, i))
-                      const delMes = fs.filter((f) => f >= desde && f <= hasta)
-                      const real = horasDe(empLegajo.legajo, delMes)
-                      const esp = esperado(empLegajo, delMes.length)
-                      return (
-                        <tr key={lunes}>
-                          {fs.map((f, c) => {
-                            const fuera = f < desde || f > hasta
-                            const fer = feriados.get(f)
-                            const carga = cargas.get(`${empLegajo.legajo}|${f}`)
-                            return (
-                              <td key={f} className={`rounded-xl border p-1.5 align-top ${fuera ? 'border-transparent opacity-30' : f === hoyIso ? 'border-sky-500/60' : 'border-line'} ${fer ? 'bg-orange-500/5' : ''}`}>
-                                <div className="mb-1 flex items-center justify-between text-[10px] text-sub">
-                                  <span className={`tabular-nums ${fer ? 'text-orange-500' : ''}`}>{Number(f.slice(8))}</span>
-                                  {fer && <span className="truncate text-orange-500" title={fer}>{fer}</span>}
-                                  {carga?.tipo === 'trabajo' && carga.horario && <span className="tabular-nums">{fmtH(carga.horas)} h</span>}
-                                </div>
-                                {!fuera && (
-                                  <Celda
-                                    carga={carga}
-                                    editable={puedeEditar}
-                                    grupo="legajo" r={r} c={c}
-                                    feriado={!!fer}
-                                    onGuardar={(p) => guardar(empLegajo, f, p)}
-                                    ancho="w-full"
-                                  />
-                                )}
-                              </td>
-                            )
-                          })}
-                          <td className="whitespace-nowrap px-2 text-right tabular-nums">
-                            <div className="font-semibold text-ink">{fmtH(real)} h</div>
-                            <div className={`text-[10px] ${difClase(real, esp)}`}>{esp == null ? '' : `${difTexto(real, esp)} de ${fmtH(Math.round(esp * 10) / 10)}`}</div>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                  </tfoot>
+                )}
+              </table>
             </div>
           )}
-        </>
+        </div>
       )}
 
-      <p className="mt-3 text-xs text-sub">
-        <span className="text-emerald-500">Verde</span>: cumple el contrato · <span className="text-amber-500">ámbar</span>: faltan horas · <span className="text-red-400">rojo</span>: se pasa.
-        Columnas naranjas = feriado de todos los locales.
-      </p>
+      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-sub">
+        <span><i className="mr-1 inline-block size-2.5 rounded-sm bg-sky-500/40 align-[-1px]" />franco</span>
+        <span><i className="mr-1 inline-block size-2.5 rounded-sm bg-teal-500/40 align-[-1px]" />vacaciones</span>
+        <span><i className="mr-1 inline-block size-2.5 rounded-sm bg-amber-500/40 align-[-1px]" />licencia</span>
+        <span><i className="mr-1 inline-block size-2.5 rounded-sm bg-emerald-500/40 align-[-1px]" />PPP / plan</span>
+        <span><b className="text-emerald-500">verde</b>: cargadas = contrato · <b className="text-red-400">rojo</b>: no coincide</span>
+        <span><b className="text-red-400">hora en rojo</b>: entra después de abrir o sale antes de cerrar</span>
+      </div>
     </Layout>
   )
 }
