@@ -2,22 +2,26 @@
  * Chat IA del hub (pantalla /chat-ia, solo administradores).
  *
  *   POST /api/chat  { mensajes: [{ role: 'user'|'assistant', content: string }] }
- *     -> { respuesta, proveedor: 'opencode'|'ollama', consultas: string[] }
+ *     -> { respuesta, proveedor: 'claude'|'opencode'|'ollama', modelo, consultas: string[] }
  *
- * Dos modelos que trabajan juntos:
- *   1. OpenCode Go (Claude Haiku 5.5, endpoint compatible con la API de Anthropic): el principal.
- *   2. Ollama del mito-server (POST <url_agentes>/api/ia/chat): respaldo automático si OpenCode
- *      no está configurado, se agotó el cupo mensual (429) o no responde.
+ * Tres modelos que trabajan juntos, en cascada (si uno no está configurado, se quedó sin saldo,
+ * rechaza o no responde, la MISMA pregunta sigue con el siguiente, desde donde quedó):
+ *   1. Claude Sonnet 5.5 por la API de Anthropic (créditos de API del plan Team): el principal.
+ *   2. OpenCode Go (Claude Haiku 5.5, endpoint compatible con la API de Anthropic).
+ *   3. Ollama del mito-server (POST <url_agentes>/api/ia/chat): último recurso (lento).
  * Las herramientas de datos corren SIEMPRE acá, con el JWT del usuario (RLS y permisos de la
  * base intactos) y son de solo lectura. No se exponen datos personales (RRHH, DNI, clientes
  * de la tienda web, usuarios). No se guarda historial: la conversación vive en la pantalla.
  *
  * Variables de entorno:
- *   OPENCODE_GO_API_KEY            - key de OpenCode Go (NUNCA con prefijo VITE_)
+ *   ANTHROPIC_API_KEY              - key de la consola de Anthropic (NUNCA con prefijo VITE_)
+ *   ANTHROPIC_MODELO (opcional)    - por defecto claude-sonnet-5-5
+ *   OPENCODE_GO_API_KEY           - key de OpenCode Go (NUNCA con prefijo VITE_)
  *   OPENCODE_GO_MODELO (opcional)  - por defecto claude-haiku-5-5
  *   SUPABASE_URL / SUPABASE_ANON_KEY
  *   URL_AGENTES (opcional)         - respaldo si la base no tiene la URL publicada del mito-server
  */
+import Anthropic from '@anthropic-ai/sdk'
 import { tokenDe } from '../src/lib/apiAuth.js'
 import { postAlPuente, urlsDelPuente } from '../src/lib/puenteRetry.js'
 
@@ -896,9 +900,89 @@ type Bloque =
   | { type: 'text'; text: string }
   | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
   | { type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean }
-type Mensaje = { role: 'user' | 'assistant'; content: string | Bloque[] }
+/**
+ * Bloques de la API de Claude que no son texto ni herramienta (thinking, fallback, etc.): se devuelven
+ * TAL CUAL en las vueltas siguientes con Claude (la API lo exige), y se sacan al pasar a otro proveedor.
+ */
+type BloqueClaude = { type: string } & Record<string, unknown>
+type Mensaje = { role: 'user' | 'assistant'; content: string | Array<Bloque | BloqueClaude> }
+type Proveedor = 'claude' | 'opencode' | 'ollama'
 
 class SinCupo extends Error {}
+
+const esBloque = (b: Bloque | BloqueClaude): b is Bloque => b.type === 'text' || b.type === 'tool_use' || b.type === 'tool_result'
+
+/** Conversación sin los bloques propios de Claude, para OpenCode u Ollama. */
+function soloBasicos(mensajes: Mensaje[]): Mensaje[] {
+  return mensajes
+    .map((m) =>
+      typeof m.content === 'string'
+        ? m
+        : {
+            role: m.role,
+            content: m.content.filter(esBloque).map((b) => (b.type === 'text' ? { type: 'text' as const, text: b.text } : b)),
+          },
+    )
+    .filter((m) => typeof m.content === 'string' || m.content.length)
+}
+
+function herramientasAnthropic() {
+  return HERRAMIENTAS.map((h, i) => ({
+    name: h.nombre,
+    description: h.descripcion,
+    input_schema: h.parametros,
+    // Caché de prompt: herramientas + instrucciones son iguales en cada vuelta (la fecha cambia una vez por día)
+    ...(i === HERRAMIENTAS.length - 1 ? { cache_control: { type: 'ephemeral' as const } } : {}),
+  }))
+}
+
+let clienteClaude: Anthropic | null = null
+
+/**
+ * Una vuelta con Claude Sonnet 5.5 por la API de Anthropic. Esfuerzo medium (recomendado para varias
+ * herramientas). Si el modelo rechaza por política, la API reintenta sola con el modelo de respaldo
+ * ("fallbacks: default"). Sin key, sin saldo, límite o caída: SinCupo y sigue OpenCode.
+ */
+async function vueltaClaude(mensajes: Mensaje[], uso: Uso): Promise<{ bloques: Array<Bloque | BloqueClaude>; modelo: string }> {
+  const key = process.env.ANTHROPIC_API_KEY?.trim()
+  if (!key) throw new SinCupo('La API de Claude no está configurada')
+  clienteClaude ??= new Anthropic({ apiKey: key, maxRetries: 1, timeout: 90_000 })
+  let r: Anthropic.Beta.BetaMessage
+  try {
+    r = await clienteClaude.beta.messages.create({
+      model: process.env.ANTHROPIC_MODELO?.trim() || 'claude-sonnet-5-5',
+      max_tokens: 16000,
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+      output_config: { effort: 'medium' },
+      system: [{ type: 'text', text: sistema(), cache_control: { type: 'ephemeral' } }],
+      tools: herramientasAnthropic() as unknown as Anthropic.Beta.BetaToolUnion[],
+      messages: mensajes as unknown as Anthropic.Beta.BetaMessageParam[],
+    })
+  } catch (err) {
+    if (err instanceof Anthropic.APIError) {
+      // 400 por saldo agotado, 401/403 key, 429 límite, 5xx/529 caída: todo sigue con OpenCode
+      const detalle = (err.error as { error?: { message?: string } } | undefined)?.error?.message ?? err.message
+      const motivo = /credit balance/i.test(detalle)
+        ? 'se terminó el saldo de la API de Claude'
+        : err.status === 401 || err.status === 403
+          ? 'la key de la API de Claude no es válida'
+          : err.status === 429
+            ? 'la API de Claude llegó al límite de uso'
+            : err.status && err.status >= 500
+              ? 'la API de Claude está caída'
+              : `API de Claude: ${err.status ?? 'sin conexión'} ${detalle}`
+      throw new SinCupo(motivo.slice(0, 300))
+    }
+    throw new SinCupo(`API de Claude no respondió (${(err as Error).message})`)
+  }
+  uso.vueltas++
+  uso.entrada += (r.usage.input_tokens ?? 0) + (r.usage.cache_creation_input_tokens ?? 0)
+  uso.salida += r.usage.output_tokens ?? 0
+  uso.cache += r.usage.cache_read_input_tokens ?? 0
+  if (r.stop_reason === 'refusal') throw new SinCupo('Claude rechazó la consulta')
+  return { bloques: r.content as unknown as Array<Bloque | BloqueClaude>, modelo: r.model }
+}
 
 // ---------------------------------------------------------------- tokens: resultados compactos y medición
 
@@ -992,14 +1076,8 @@ async function vueltaOpencode(mensajes: Mensaje[], sesion: string, uso: Uso): Pr
       body: JSON.stringify({
         model: process.env.OPENCODE_GO_MODELO?.trim() || 'claude-haiku-5-5',
         max_tokens: 8192,
-        // Caché de prompt: herramientas + instrucciones son iguales en cada vuelta (la fecha cambia una vez por día)
         system: [{ type: 'text', text: sistema(), cache_control: { type: 'ephemeral' } }],
-        tools: HERRAMIENTAS.map((h, i) => ({
-          name: h.nombre,
-          description: h.descripcion,
-          input_schema: h.parametros,
-          ...(i === HERRAMIENTAS.length - 1 ? { cache_control: { type: 'ephemeral' } } : {}),
-        })),
+        tools: herramientasAnthropic(),
         messages: mensajes,
       }),
       signal: AbortSignal.timeout(40_000),
@@ -1074,7 +1152,7 @@ function aOllama(mensajes: Mensaje[]) {
         ...(llamadas.length ? { tool_calls: llamadas.map((l) => ({ function: { name: l.name, arguments: l.input } })) } : {}),
       })
     } else {
-      for (const b of m.content) {
+      for (const b of m.content.filter(esBloque)) {
         if (b.type === 'tool_result') salida.push({ role: 'tool', tool_name: nombres.get(b.tool_use_id) ?? '', content: b.content })
         else if (b.type === 'text') salida.push({ role: 'user', content: b.text })
       }
@@ -1147,8 +1225,9 @@ export default async function handler(req: Req, res: Res) {
   const host = (req.headers['x-forwarded-host'] ?? req.headers.host) as string | undefined
   const origen = `${host?.startsWith('localhost') ? 'http' : 'https'}://${host}`
   const consultas: string[] = []
-  let proveedor: 'opencode' | 'ollama' = 'opencode'
-  let avisoRespaldo = ''
+  let proveedor: Proveedor = 'claude'
+  let modelo = ''
+  const avisos: string[] = []
   const mensajes = [...historial]
   const uso: Uso = { vueltas: 0, entrada: 0, salida: 0, cache: 0 }
   const inicio = Date.now()
@@ -1166,30 +1245,45 @@ export default async function handler(req: Req, res: Res) {
 
   try {
     for (let vuelta = 0; vuelta < MAX_VUELTAS; vuelta++) {
-      let bloques: Bloque[]
-      if (proveedor === 'opencode') {
+      // Cascada: Claude Sonnet → OpenCode (Haiku) → Ollama. Al bajar de proveedor se sigue la misma
+      // conversación (con los resultados de herramientas ya obtenidos), sin los bloques propios de Claude.
+      let bloques: Array<Bloque | BloqueClaude> | null = null
+      while (!bloques) {
         try {
-          bloques = await vueltaOpencode(mensajes, sesion, uso)
+          if (proveedor === 'claude') {
+            const r = await vueltaClaude(mensajes, uso)
+            bloques = r.bloques
+            modelo = r.modelo
+          } else if (proveedor === 'opencode') {
+            bloques = await vueltaOpencode(soloBasicos(mensajes), sesion, uso)
+            modelo = process.env.OPENCODE_GO_MODELO?.trim() || 'claude-haiku-5-5'
+          } else {
+            bloques = await vueltaOllama(soloBasicos(mensajes), token)
+            modelo = 'ollama'
+          }
         } catch (err) {
-          if (!(err instanceof SinCupo)) throw err
-          proveedor = 'ollama'
-          avisoRespaldo = err.message
-          bloques = await vueltaOllama(mensajes, token)
+          if (!(err instanceof SinCupo) || proveedor === 'ollama') throw err
+          avisos.push(err.message)
+          proveedor = proveedor === 'claude' ? 'opencode' : 'ollama'
         }
-      } else {
-        bloques = await vueltaOllama(mensajes, token)
       }
 
       const llamadas = bloques.filter((b): b is Extract<Bloque, { type: 'tool_use' }> => b.type === 'tool_use')
       mensajes.push({ role: 'assistant', content: bloques })
       if (!llamadas.length) {
-        const respuesta = bloques.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text).join('\n').trim()
+        const respuesta = bloques
+          .filter((b): b is Extract<Bloque, { type: 'text' }> => b.type === 'text')
+          .map((b) => b.text)
+          .join('\n')
+          .trim()
         await anotar()
         return res.status(200).json({
           respuesta: respuesta || '(sin respuesta)',
           proveedor,
+          modelo,
           consultas,
-          aviso: avisoRespaldo || undefined,
+          // "La API de Claude no está configurada" no es un aviso: es lo esperado hasta cargar la key
+          aviso: avisos.filter((a) => !/no está configurada/.test(a)).join(' · ') || undefined,
           tokens: uso.entrada + uso.salida + uso.cache,
         })
       }
@@ -1216,11 +1310,12 @@ export default async function handler(req: Req, res: Res) {
     return res.status(200).json({
       respuesta: 'La consulta necesitó demasiados pasos. Probá con una pregunta más acotada.',
       proveedor,
+      modelo,
       consultas,
     })
   } catch (err) {
     return res.status(502).json({
-      error: `No se pudo responder: ${(err as Error).message}${avisoRespaldo ? ` (OpenCode: ${avisoRespaldo})` : ''}`,
+      error: `No se pudo responder: ${(err as Error).message}${avisos.length ? ` (antes: ${avisos.join(' · ')})` : ''}`,
     })
   }
 }

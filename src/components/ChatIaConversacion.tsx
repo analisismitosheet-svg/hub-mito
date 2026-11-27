@@ -9,12 +9,26 @@ import { supabase } from '@/lib/supabase'
  * La IA consulta los datos en /api/chat: OpenCode Go (Haiku 5.5) y, de respaldo, Ollama.
  */
 
+export type ProveedorChatIa = 'claude' | 'opencode' | 'ollama'
+
+/** Nombre legible de quién contestó: Sonnet por la API de Claude, Haiku por OpenCode o Ollama. */
+function quienContesto(m: MensajeChatIa): string {
+  if (m.proveedor === 'ollama') return 'Ollama (respaldo local)'
+  const nombre = (m.modelo ?? '').match(/(fable|opus|sonnet|haiku)-(\d+)(?:-(\d+))?/i)
+  const modelo = nombre
+    ? `Claude ${nombre[1][0].toUpperCase()}${nombre[1].slice(1)} ${nombre[2]}${nombre[3] ? `.${nombre[3]}` : ''}`
+    : m.proveedor === 'claude' ? 'Claude Sonnet' : 'Claude Haiku'
+  return m.proveedor === 'opencode' ? `${modelo} (OpenCode)` : modelo
+}
+
 export interface MensajeChatIa {
   role: 'user' | 'assistant'
   content: string
-  proveedor?: 'opencode' | 'ollama'
+  proveedor?: ProveedorChatIa
+  /** modelo que contestó (ej. claude-sonnet-5-5) */
+  modelo?: string
   consultas?: string[]
-  /** por qué no contestó OpenCode (cuando respondió Ollama) */
+  /** por qué no contestó el proveedor anterior de la cascada (Claude → OpenCode → Ollama) */
   aviso?: string
   /** tokens que consumió la pregunta (entrada + salida + caché) */
   tokens?: number
@@ -58,13 +72,13 @@ async function preguntar(q: string) {
       }),
     })
     const cuerpo = (await res.json().catch(() => null)) as
-      | { respuesta?: string; proveedor?: 'opencode' | 'ollama'; consultas?: string[]; aviso?: string; tokens?: number; error?: string }
+      | { respuesta?: string; proveedor?: ProveedorChatIa; modelo?: string; consultas?: string[]; aviso?: string; tokens?: number; error?: string }
       | null
     if (!res.ok || !cuerpo?.respuesta) throw new Error(cuerpo?.error ?? `Error ${res.status}`)
     fijar({
       mensajes: [
         ...estado.mensajes,
-        { role: 'assistant', content: cuerpo.respuesta, proveedor: cuerpo.proveedor, consultas: cuerpo.consultas, aviso: cuerpo.aviso, tokens: cuerpo.tokens },
+        { role: 'assistant', content: cuerpo.respuesta, proveedor: cuerpo.proveedor, modelo: cuerpo.modelo, consultas: cuerpo.consultas, aviso: cuerpo.aviso, tokens: cuerpo.tokens },
       ],
     })
   } catch (err) {
@@ -318,12 +332,12 @@ export default function ChatIaConversacion({ compacto = false }: { compacto?: bo
               {m.role === 'user' ? <p className="whitespace-pre-wrap">{m.content}</p> : <Markdown texto={m.content} />}
               {m.role === 'assistant' && !m.error && (
                 <p className="mt-2 text-[11px] text-sub/70">
-                  {m.proveedor === 'ollama' ? 'Ollama (respaldo local)' : 'Claude Haiku'}
+                  {quienContesto(m)}
                   {m.consultas?.length
                     ? ` · consultó ${[...new Set(m.consultas)].map((c) => NOMBRE_CONSULTA[c] ?? c).join(', ')}`
                     : ''}
                   {m.tokens ? ` · ${m.tokens.toLocaleString('es-AR')} tokens` : ''}
-                  {m.aviso ? ` · OpenCode no respondió: ${m.aviso}` : ''}
+                  {m.aviso ? ` · respaldo porque: ${m.aviso}` : ''}
                 </p>
               )}
             </div>

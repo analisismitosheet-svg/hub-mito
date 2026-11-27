@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS public.chat_ia_uso (
   id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   creado_at     timestamptz NOT NULL DEFAULT now(),
   usuario_id    uuid,
-  proveedor     text NOT NULL,            -- opencode | ollama
+  proveedor     text NOT NULL,            -- claude | opencode | ollama
   vueltas       int  NOT NULL DEFAULT 0,  -- llamadas al modelo en la pregunta
   herramientas  text[] NOT NULL DEFAULT '{}',
   tokens_entrada int NOT NULL DEFAULT 0,
