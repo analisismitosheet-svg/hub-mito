@@ -5,275 +5,259 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Carga horaria</title>
 <style>
-  :root { --bg:#0f172a; --card:#1e293b; --borde:#334155; --txt:#e2e8f0; --sub:#94a3b8; --acento:#0ea5e9; --ok:#22c55e; --medio:#f59e0b; --mal:#ef4444; --fer:#f97316; }
+  :root { --bg:#0f172a; --card:#1e293b; --borde:#334155; --txt:#e2e8f0; --sub:#94a3b8; --acento:#0ea5e9; }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--txt); font:14px system-ui, sans-serif; padding:16px; }
-  h1 { font-size:20px; margin:0 0 4px; display:flex; align-items:center; gap:8px; }
-  .nota { color:var(--sub); font-size:13px; margin:0 0 14px; }
-  .nota b { color:var(--txt); }
-  .cab { display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:10px; margin-bottom:12px; }
-  .mesnav { display:flex; align-items:center; gap:4px; background:var(--card); border:1px solid var(--borde); border-radius:12px; padding:4px; }
-  .mesnav button { background:none; border:none; color:var(--sub); font-size:18px; padding:2px 8px; cursor:pointer; }
-  .mesnav span { min-width:140px; text-align:center; font-weight:600; }
-  .tabs { display:inline-flex; gap:4px; background:var(--card); border:1px solid var(--borde); border-radius:12px; padding:4px; margin-bottom:12px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .nota { color:var(--sub); font-size:13px; margin:0 0 14px; } .nota b { color:var(--txt); }
+  .maqueta { font-size:11px; color:#fbbf24; border:1px dashed #fbbf2466; border-radius:8px; padding:6px 10px; margin-bottom:12px; }
+  .barra { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:12px; }
+  .semnav { display:flex; align-items:center; gap:4px; background:var(--card); border:1px solid var(--borde); border-radius:12px; padding:4px; }
+  .semnav button { background:none; border:none; color:var(--sub); font-size:18px; padding:2px 8px; cursor:pointer; }
+  .semnav span { min-width:190px; text-align:center; font-weight:600; font-size:13px; }
+  .btn { background:var(--card); border:1px solid var(--borde); color:var(--txt); border-radius:10px; padding:7px 12px; font-size:12px; cursor:pointer; }
+  .tabs { display:inline-flex; gap:4px; background:var(--card); border:1px solid var(--borde); border-radius:12px; padding:4px; }
   .tab { padding:6px 12px; border-radius:8px; color:var(--sub); border:none; background:none; font-size:13px; cursor:pointer; }
   .tab.on { background:var(--acento); color:#fff; font-weight:600; }
   .chips { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
   .chip { padding:4px 10px; border-radius:8px; border:1px solid var(--borde); background:var(--card); color:var(--sub); font-size:12px; cursor:pointer; }
   .chip.on { border-color:#0ea5e999; background:#0ea5e922; color:var(--acento); font-weight:600; }
-  .chip small { opacity:.6; }
-  .marco { background:var(--card); border:1px solid var(--borde); border-radius:16px; padding:12px; }
-  .barra { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px; }
-  .barra .t { font-weight:600; }
-  select, .buscar { background:#0f172a; color:var(--txt); border:1px solid var(--borde); border-radius:8px; padding:6px 8px; font-size:12px; }
-  .scroll { overflow-x:auto; }
-  table.grilla { border-collapse:separate; border-spacing:0; font-size:12px; }
-  .grilla th { color:var(--sub); font-weight:500; padding:4px 1px; text-align:center; }
-  .grilla th .d { font-size:10px; }
-  .grilla th.finde { color:#64748b; } .grilla th.fer { color:var(--fer); } .grilla th.hoy { background:#0ea5e926; color:var(--acento); border-radius:6px 6px 0 0; }
-  .grilla td { border-top:1px solid var(--borde); padding:1px; }
-  .grilla .nom { position:sticky; left:0; z-index:2; background:#1e293b; min-width:200px; max-width:220px; padding:3px 8px; text-align:left; }
-  .nom .leg { color:var(--sub); font-variant-numeric:tabular-nums; } .nom .h { font-size:10px; color:var(--sub); }
-  .nom a { color:var(--txt); text-decoration:none; cursor:pointer; } .nom a:hover { text-decoration:underline; }
-  input.celda { width:78px; height:30px; border-radius:6px; border:1px solid transparent; background:transparent; color:var(--txt); text-align:center; font-size:11px; font-variant-numeric:tabular-nums; outline:none; }
-  input.celda:focus { border-color:var(--acento); background:#0f172a; }
-  input.celda.finde { background:#0f172a99; } input.celda.fer { background:#f9731619; }
-  input.celda.franco { background:#64748b26; color:var(--sub); }
-  input.celda.vacaciones { background:#14b8a626; color:#2dd4bf; }
-  input.celda.licencia { background:#f59e0b26; color:#fbbf24; }
-  input.celda.error { box-shadow:0 0 0 1px var(--mal); }
-  .num { text-align:right; padding:0 8px !important; font-variant-numeric:tabular-nums; white-space:nowrap; }
-  .fuerte { font-weight:700; }
-  .ok { color:var(--ok); } .medio { color:var(--medio); } .mal { color:var(--mal); } .gris { color:var(--sub); }
-  tfoot td { border-top:2px solid var(--borde) !important; text-align:center; color:var(--sub); }
-  tfoot .tot { color:var(--txt); font-weight:600; } tfoot .p { font-size:10px; }
-  .cal { border-collapse:separate; border-spacing:4px; width:100%; min-width:720px; font-size:12px; }
-  .cal th { color:var(--sub); font-weight:500; font-size:11px; text-transform:uppercase; letter-spacing:.05em; }
-  .cal td.dia { border:1px solid var(--borde); border-radius:12px; padding:6px; vertical-align:top; }
-  .cal td.dia.fuera { opacity:.25; border-color:transparent; }
-  .cal td.dia.hoy { border-color:#0ea5e999; } .cal td.dia.fer { background:#f973160d; }
-  .cal .top { display:flex; justify-content:space-between; font-size:10px; color:var(--sub); margin-bottom:4px; }
-  .cal .top .f { color:var(--fer); }
-  .cal input.celda { width:100%; border-color:#33415599; }
-  .cal td.sem { text-align:right; white-space:nowrap; padding:0 6px; }
-  .persona { margin-bottom:10px; } .persona .t { font-weight:600; } .persona .s { color:var(--sub); font-size:12px; }
+  .aviso { color:#22c55e; font-size:13px; margin:0 0 8px; min-height:1em; }
+
+  /* ---------- planilla (estilo Excel) ---------- */
+  .scroll { overflow-x:auto; border-radius:12px; }
+  table.pl { border-collapse:collapse; background:#fff; color:#111; font:13px Calibri, 'Segoe UI', sans-serif; min-width:1100px; width:100%; }
+  .pl td, .pl th { border:1px solid #9ca3af; padding:0; text-align:center; height:26px; }
+  .pl .grueso { border-bottom:2px solid #111; }
+  .pl .etq { text-align:left; padding:0 6px; white-space:nowrap; }
+  .rojo { color:#e11d48; font-weight:700; }
+  .amarillo { background:#ffff00; font-weight:700; }
+  .verdeTit { background:#00ff9c; font-weight:800; font-size:16px; }
+  .rosa { background:#da9694; font-weight:700; }
+  .dia { background:#ff5b5b; color:#111; font-weight:500; letter-spacing:.02em; }
+  .tipo { color:#0ea5e9; font-weight:700; font-size:13px; width:130px; }
+  .tipo.ppp { color:#16a34a; }
+  .tipo select { border:none; background:transparent; color:inherit; font:inherit; text-align:center; cursor:pointer; }
+  .nombre { background:#fce4d6; font-weight:700; font-size:12.5px; width:130px; padding:0 4px !important; }
+  .pl input.h { width:100%; height:26px; border:none; background:transparent; text-align:center; font:13px Calibri, 'Segoe UI', sans-serif; color:#111; outline:none; }
+  .pl input.h:focus { outline:2px solid #0ea5e9; outline-offset:-2px; background:#fff; }
+  .pl input.h.err { outline:2px solid #e11d48; outline-offset:-2px; }
+  .pl input.h.dif { color:#e11d48; }
+  .tot { background:#c5d9f1; font-weight:500; }
+  .franco { background:#8db4e2; }
+  .franco .tot, .franco.tot { background:#8db4e2; }
+  .vac { background:#99e2d6; } .lic { background:#fcd38d; }
+  .marca { font-size:11px; font-weight:700; color:#1e3a8a; }
+  tr.ppp .tot { background:#d8e4bc; } tr.ppp td.franco { background:#c4d79b; }
+  .contrato { font-weight:500; width:120px; }
+  .cargadas { background:#ff5b5b; font-weight:700; }
+  .cargadas.ok { background:#92d050; }
+  .cobert td { background:#f3f4f6; font-size:11px; color:#374151; }
   .ley { display:flex; flex-wrap:wrap; gap:14px; font-size:12px; color:var(--sub); margin-top:10px; }
   .ley i { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:4px; vertical-align:-1px; }
-  .aviso { color:var(--ok); font-size:13px; margin:0 0 8px; min-height:1em; }
-  .maqueta { font-size:11px; color:#fbbf24; border:1px dashed #fbbf2466; border-radius:8px; padding:6px 10px; margin-bottom:12px; }
 </style>
 </head>
 <body>
-<div class="maqueta">MAQUETA · datos de ejemplo, nada se guarda. Probá tipear en las celdas.</div>
+<div class="maqueta">MAQUETA · datos de ejemplo, nada se guarda. Probá tipear entradas y salidas.</div>
+<h1>🗓 Carga horaria</h1>
+<p class="nota">Una planilla por local y por semana. En cada día: <b>entrada</b> y <b>salida</b> (10, 10:30, 17…); vacío = franco. En la entrada también va <b>V</b> vacaciones o <b>L</b> licencia.</p>
 
-<div class="cab">
-  <div>
-    <h1><span style="color:var(--acento)">🗓</span> Carga horaria</h1>
-    <p class="nota">Horario de cada legajo, día por día. Tipeá <b>10-14 17-21</b>, <b>8</b> (horas), <b>F</b> franco, <b>V</b> vacaciones o <b>L</b> licencia; vacío borra.</p>
-  </div>
-  <div class="mesnav"><button>‹</button><span>Noviembre 2026</span><button>›</button></div>
+<div class="barra">
+  <div class="tabs"><button class="tab on" data-v="local">🏬 Por local</button><button class="tab" data-v="legajo">👤 Por legajo</button></div>
+  <div class="semnav"><button id="ant">‹</button><span id="tSem"></span><button id="sig">›</button></div>
+  <button class="btn" id="repetir">📋 Copiar semana anterior</button>
 </div>
-
-<div class="tabs">
-  <button class="tab on" data-v="local">🏬 Por local</button>
-  <button class="tab" data-v="legajo">👤 Por legajo</button>
-</div>
+<div class="chips" id="chips"></div>
 <p class="aviso" id="aviso"></p>
-
-<div id="vLocal">
-  <div class="chips" id="chips"></div>
-  <div class="marco">
-    <div class="barra">
-      <span class="t" id="tLocal"></span>
-      <select id="repetir"><option value="">📋 Repetir semana anterior en…</option></select>
-    </div>
-    <div class="scroll"><table class="grilla" id="grilla"></table></div>
-  </div>
-</div>
-
-<div id="vLegajo" hidden>
-  <div style="margin-bottom:12px"><select id="selLeg" class="buscar" style="min-width:320px"></select></div>
-  <div class="marco">
-    <div class="barra"><div class="persona" id="persona"></div></div>
-    <div class="scroll"><table class="cal" id="cal"></table></div>
-  </div>
-</div>
+<div class="scroll"><table class="pl" id="pl"></table></div>
 
 <div class="ley">
-  <span><i style="background:var(--ok)"></i>cumple el contrato</span>
-  <span><i style="background:var(--medio)"></i>faltan horas</span>
-  <span><i style="background:var(--mal)"></i>se pasa</span>
-  <span><i style="background:#64748b"></i>F franco</span>
-  <span><i style="background:#14b8a6"></i>V vacaciones</span>
-  <span><i style="background:#f59e0b"></i>L licencia</span>
-  <span><i style="background:var(--fer)"></i>feriado</span>
+  <span><i style="background:#8db4e2"></i>franco</span>
+  <span><i style="background:#99e2d6"></i>vacaciones</span>
+  <span><i style="background:#fcd38d"></i>licencia</span>
+  <span><i style="background:#d8e4bc"></i>PPP / plan</span>
+  <span><i style="background:#92d050"></i>horas cargadas = contrato</span>
+  <span><i style="background:#ff5b5b"></i>no coincide con el contrato</span>
+  <span><b style="color:#e11d48">rojo</b>: entra después de la apertura o sale antes del cierre</span>
 </div>
 
 <script>
-const ANIO = 2026, MES = 10, DIAS = 30, HOY = '2026-11-27'
-const FERIADOS = { '2026-11-23': 'Día de la Soberanía (trasladado)' }
+const DIAS = ['LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES', 'SABADO', 'DOMINGO']
 const pad = (n) => String(n).padStart(2, '0')
-const iso = (d) => `${ANIO}-${pad(MES + 1)}-${pad(d)}`
-const dow = (f) => new Date(f + 'T12:00:00Z').getUTCDay()
 const sumar = (f, n) => { const d = new Date(f + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10) }
-const fmt = (h) => (Math.round(h * 10) / 10).toString().replace('.', ',')
-const DC = ['D', 'L', 'M', 'M', 'J', 'V', 'S']
-const dias = Array.from({ length: DIAS }, (_, i) => iso(i + 1))
+const ddmm = (f) => f.slice(8) + '/' + f.slice(5, 7)
+const hhmm = (min) => `${pad(Math.floor(min / 60))}:${pad(min % 60)}`
 
-const LOCALES = { 'NVO CENTRO': 6, '9 DE JULIO': 4, 'BUSTOS': 3, 'CF OLMOS': 3, 'FABRICA': 5, 'POLO 52': 3 }
-const NOMBRES = ['GOMEZ LUCIA', 'PEREZ MARTIN', 'DIAZ SOFIA', 'ROMERO JUAN', 'SOSA CAMILA', 'TORRES NICOLAS', 'ALVAREZ VALENTINA', 'RUIZ TOMAS', 'MOLINA AGUSTINA', 'CASTRO FACUNDO', 'ORTIZ MILAGROS', 'SILVA BRUNO', 'ROJAS ABRIL', 'MEDINA LAUTARO', 'HERRERA JULIETA', 'AGUIRRE IVAN', 'NUÑEZ PILAR', 'LUNA MATEO', 'CABRERA RENATA', 'RIOS GASTON', 'FERREYRA LARA', 'VEGA SANTIAGO', 'PAEZ ZOE', 'FARIAS ELIAS']
-const emps = []
-let k = 0
-for (const [loc, n] of Object.entries(LOCALES)) for (let i = 0; i < n; i++) {
-  const horas = loc === 'FABRICA' || loc === 'POLO 52' ? 48 : [20, 24, 31.5, 48][(k + i) % 4]
-  emps.push({ legajo: String(1200 + k * 7), nombre: NOMBRES[k % NOMBRES.length], local: loc, horas }); k++
+// Locales con su apertura (se configura una vez por local)
+const LOCALES = {
+  'CF RIVERA': { dias: 'lunes a domingos', abre: '10:00', cierra: '21:00' },
+  'NVO CENTRO': { dias: 'lunes a domingos', abre: '09:00', cierra: '21:00' },
+  'BUSTOS': { dias: 'lunes a sábados', abre: '09:30', cierra: '20:30' },
 }
+// Personas por local. tipo = puesto en la planilla (CF RIVERA 1, 2… o PPP para planes)
+const EMPS = [
+  { legajo: '1301', nombre: 'MATI ALESSANDRINI', local: 'CF RIVERA', tipo: 'CF RIVERA 1', horas: 48 },
+  { legajo: '1302', nombre: 'CAMI JAYO', local: 'CF RIVERA', tipo: 'CF RIVERA 2', horas: 48 },
+  { legajo: '1303', nombre: 'CONSTANZA BOSSANA', local: 'CF RIVERA', tipo: 'CF RIVERA 3', horas: 24 },
+  { legajo: '1304', nombre: 'EMIR LUNA', local: 'CF RIVERA', tipo: 'CF RIVERA 4', horas: 24 },
+  { legajo: '1305', nombre: 'LOPEZ NAHUEL', local: 'CF RIVERA', tipo: 'PPP', horas: 20 },
+  { legajo: '1401', nombre: 'GOMEZ LUCIA', local: 'NVO CENTRO', tipo: 'NVO CENTRO 1', horas: 48 },
+  { legajo: '1402', nombre: 'PEREZ MARTIN', local: 'NVO CENTRO', tipo: 'NVO CENTRO 2', horas: 48 },
+  { legajo: '1403', nombre: 'DIAZ SOFIA', local: 'NVO CENTRO', tipo: 'NVO CENTRO 3', horas: 31.5 },
+  { legajo: '1404', nombre: 'SOSA CAMILA', local: 'NVO CENTRO', tipo: 'PPP', horas: 20 },
+  { legajo: '1501', nombre: 'ROMERO JUAN', local: 'BUSTOS', tipo: 'BUSTOS 1', horas: 48 },
+  { legajo: '1502', nombre: 'TORRES NICOLAS', local: 'BUSTOS', tipo: 'BUSTOS 2', horas: 24 },
+]
 
-// Datos de ejemplo: patrón semanal según contrato, hasta el 30 (deja la última semana vacía para probar «repetir»)
+// carga: legajo|fecha → { tipo: 'trabajo'|'vacaciones'|'licencia', ent:'10:00', sal:'21:00' }  (sin fila = franco)
 const cargas = new Map()
-const PATRON = {
-  20: ['F', '10-14', '17-21', '10-14', '17-21', '10-14', 'F'],
-  24: ['F', '10-14', '10-14', 'F', '17-21', '10-14', '17-21'],
-  31.5: ['F', '10-14 17-20', 'F', '10-14 17-20', '10-14', '10-14 17-20', '10-14'],
-  48: ['F', '8-17', '8-17', '8-17', '8-17', '8-17', '9-13'],
+let lunes = '2026-09-28'
+const EJEMPLO = { // semana de la planilla de CF Rivera
+  '1301': [['14', '21'], ['13', '21'], ['10', '17'], ['14', '21'], ['13', '21'], ['10', '21'], null],
+  '1302': [['10', '17'], ['10', '18'], ['13', '21'], ['10', '17'], ['10', '17'], null, ['10', '21']],
+  '1303': [['10', '14'], null, ['10', '13'], null, ['17', '21'], ['10', '16'], ['14', '21']],
+  '1304': [['17', '21'], ['17', '21'], null, ['17', '21'], ['10', '13'], ['16', '21'], ['10', '14']],
+  '1305': [null, ['10', '13'], ['17', '21'], ['10', '14'], ['18', '21'], ['18', '21'], ['18', '21']],
+  '1401': [['9', '18'], ['9', '18'], ['9', '18'], ['9', '18'], ['9', '18'], ['9', '13'], null],
+  '1402': [['12', '21'], ['12', '21'], null, ['12', '21'], ['12', '21'], ['12', '21'], ['13', '21']],
+  '1403': [['V'], ['V'], ['V'], ['V'], ['V'], null, null],
+  '1404': [null, ['17', '21'], ['17', '21'], ['17', '21'], ['17', '21'], ['17', '21'], null],
+  '1501': [['9:30', '18:30'], ['9:30', '18:30'], ['9:30', '18:30'], ['9:30', '18:30'], ['9:30', '18:30'], ['9:30', '12:30'], null],
+  '1502': [['16:30', '20:30'], ['16:30', '20:30'], ['L'], ['16:30', '20:30'], null, ['16:30', '20:30'], null],
 }
-emps.forEach((e, i) => {
-  for (const f of dias) {
-    if (f >= '2026-11-23') continue
-    let t = PATRON[e.horas][(dow(f) + i) % 7 === 0 && e.horas < 48 ? 0 : dow(f)]
-    if (FERIADOS[f]) t = 'F'
-    if (i === 2 && f >= '2026-11-09' && f <= '2026-11-13') t = 'V'
-    if (i === 7 && f === '2026-11-18') t = 'L'
-    const p = parsear(t); if (p && p !== 'error') cargas.set(e.legajo + '|' + f, p)
-  }
+for (const [leg, sem] of Object.entries(EJEMPLO)) sem.forEach((d, i) => {
+  if (!d) return
+  const f = sumar(lunes, i)
+  if (d[0] === 'V') cargas.set(leg + '|' + f, { tipo: 'vacaciones' })
+  else if (d[0] === 'L') cargas.set(leg + '|' + f, { tipo: 'licencia' })
+  else cargas.set(leg + '|' + f, { tipo: 'trabajo', ent: hora(d[0]), sal: hora(d[1]) })
 })
 
-function parsear(txt) {
-  let t = (txt || '').trim().toLowerCase()
+/** «10» → 10:00, «9:30» / «9.30» / «930» → 09:30. null = vacío, 'error' = no se entiende */
+function hora(t) {
+  t = (t || '').trim().toLowerCase().replace(/\s*hs?$/, '')
   if (!t) return null
-  if (['f', 'franco'].includes(t)) return { tipo: 'franco', horario: null, horas: 0 }
-  if (['v', 'vac', 'vacaciones'].includes(t)) return { tipo: 'vacaciones', horario: null, horas: 0 }
-  if (['l', 'lic', 'licencia'].includes(t)) return { tipo: 'licencia', horario: null, horas: 0 }
-  const solo = t.match(/^(\d{1,2}(?:[.,]\d{1,2})?)\s*(?:h|hs|horas)?$/)
-  if (solo) { const h = Number(solo[1].replace(',', '.')); return h > 0 && h <= 24 ? { tipo: 'trabajo', horario: null, horas: h } : 'error' }
-  t = t.replace(/hs?\b/g, '').replace(/\s+a\s+/g, '-').replace(/\s*-\s*/g, '-').replace(/\s+y\s+|[;,/]/g, ' ')
-  const tramos = []; let horas = 0
-  for (const tok of t.split(/\s+/).filter(Boolean)) {
-    const m = tok.match(/^(\d{1,2})(?:[:.](\d{2}))?-(\d{1,2})(?:[:.](\d{2}))?$/)
-    if (!m) return 'error'
-    const [h1, m1, h2, m2] = [+m[1], +(m[2] || 0), +m[3], +(m[4] || 0)]
-    if (h1 > 24 || h2 > 24 || m1 > 59 || m2 > 59) return 'error'
-    let d = h2 * 60 + m2 - (h1 * 60 + m1); if (d <= 0) d += 1440
-    horas += d / 60; tramos.push(`${pad(h1)}:${pad(m1)}-${pad(h2)}:${pad(m2)}`)
-  }
-  if (!tramos.length || horas > 24) return 'error'
-  return { tipo: 'trabajo', horario: tramos.join(' '), horas }
+  let m = t.match(/^(\d{1,2})(?:[:.](\d{2}))?$/) || t.match(/^(\d{1,2})(\d{2})$/)
+  if (!m) return 'error'
+  const h = +m[1], mi = +(m[2] || 0)
+  return h <= 24 && mi <= 59 ? `${pad(h)}:${mi ? pad(mi) : '00'}` : 'error'
 }
-const LETRA = { franco: 'F', vacaciones: 'V', licencia: 'L' }
-const texto = (c) => !c ? '' : c.tipo !== 'trabajo' ? LETRA[c.tipo] : c.horario ? c.horario.replace(/:00/g, '').replace(/(^|[ -])0(\d)/g, '$1$2') : fmt(c.horas)
-const horasDe = (leg, fs) => fs.reduce((s, f) => s + (cargas.get(leg + '|' + f)?.horas || 0), 0)
-const difCls = (r, e) => Math.abs(r - e) < 0.5 ? 'ok' : r > e ? 'mal' : 'medio'
-const difTxt = (r, e) => { const d = Math.round((r - e) * 10) / 10; return d === 0 ? '0' : (d > 0 ? '+' : '') + fmt(d) }
-
-function celda(e, f, extra, g, r, c) {
-  const car = cargas.get(e.legajo + '|' + f)
-  const cls = ['celda', extra, car && car.tipo !== 'trabajo' ? car.tipo : ''].join(' ')
-  const tit = car ? (car.tipo === 'trabajo' ? `${car.horario || 'sin horario'} · ${fmt(car.horas)} h` : car.tipo) : ''
-  return `<input class="${cls}" value="${texto(car)}" title="${tit}" data-leg="${e.legajo}" data-f="${f}" data-g="${g}" data-r="${r}" data-c="${c}">`
+const min = (h) => +h.slice(0, 2) * 60 + +h.slice(3)
+function minutos(c) {
+  if (!c || c.tipo !== 'trabajo' || !c.ent || !c.sal) return 0
+  let d = min(c.sal) - min(c.ent); if (d <= 0) d += 1440
+  return d
 }
 
-let local = 'NVO CENTRO', vista = 'local', legajo = emps[0].legajo
-const semanas = []; { let l = sumar(dias[0], -((dow(dias[0]) + 6) % 7)); while (l <= dias[DIAS - 1]) { semanas.push(l); l = sumar(l, 7) } }
-const ddmm = (f) => f.slice(8) + '/' + f.slice(5, 7)
-document.getElementById('repetir').innerHTML += semanas.map((l) => `<option value="${l}">Semana del ${ddmm(l)} al ${ddmm(sumar(l, 6))}</option>`).join('')
-
-function pintarLocal() {
-  document.getElementById('chips').innerHTML = Object.entries(LOCALES).map(([l, n]) => `<button class="chip ${l === local ? 'on' : ''}" data-l="${l}">${l} <small>· ${n}</small></button>`).join('')
-  const ps = emps.filter((e) => e.local === local)
-  document.getElementById('tLocal').textContent = `${local} · ${ps.length} personas`
-  let h = '<thead><tr><th class="nom" style="text-transform:uppercase;font-size:11px">Legajo</th>'
-  for (const f of dias) { const d = dow(f); h += `<th class="${FERIADOS[f] ? 'fer' : d === 0 || d === 6 ? 'finde' : ''} ${f === HOY ? 'hoy' : ''}" title="${FERIADOS[f] || ''}"><div class="d">${DC[d]}</div>${+f.slice(8)}</th>` }
-  h += '<th class="num">HORAS</th><th class="num" title="horas semanales × días del mes ÷ 7">CONTRATO</th><th class="num">DIF.</th></tr></thead><tbody>'
-  ps.forEach((e, r) => {
-    const real = horasDe(e.legajo, dias), esp = e.horas * DIAS / 7
-    h += `<tr><td class="nom"><a data-ir="${e.legajo}"><span class="leg">${e.legajo}</span> ${e.nombre}</a><div class="h">${fmt(e.horas)} h/sem</div></td>`
-    dias.forEach((f, c) => { const d = dow(f); h += `<td>${celda(e, f, FERIADOS[f] ? 'fer' : d === 0 || d === 6 ? 'finde' : '', 'L', r, c)}</td>` })
-    h += `<td class="num fuerte">${fmt(real)}</td><td class="num gris">${fmt(esp)}</td><td class="num fuerte ${difCls(real, esp)}">${difTxt(real, esp)}</td></tr>`
-  })
-  h += '</tbody><tfoot><tr><td class="nom" style="font-size:11px;text-transform:uppercase">Horas del local</td>'
-  for (const f of dias) {
-    const hs = ps.reduce((s, e) => s + (cargas.get(e.legajo + '|' + f)?.horas || 0), 0)
-    const n = ps.filter((e) => cargas.get(e.legajo + '|' + f)?.tipo === 'trabajo').length
-    h += `<td title="${n} personas trabajan"><div class="tot">${hs ? fmt(hs) : ''}</div><div class="p">${n ? n + ' p.' : ''}</div></td>`
-  }
-  const tr = ps.reduce((s, e) => s + horasDe(e.legajo, dias), 0), te = ps.reduce((s, e) => s + e.horas * DIAS / 7, 0)
-  h += `<td class="num tot">${fmt(tr)}</td><td class="num">${fmt(te)}</td><td></td></tr></tfoot>`
-  document.getElementById('grilla').innerHTML = h
-}
-
-function pintarLegajo() {
-  const sel = document.getElementById('selLeg')
-  if (!sel.options.length) sel.innerHTML = emps.map((e) => `<option value="${e.legajo}">${e.legajo} · ${e.nombre} — ${e.local}</option>`).join('')
-  sel.value = legajo
-  const e = emps.find((x) => x.legajo === legajo)
-  const real = horasDe(e.legajo, dias), esp = e.horas * DIAS / 7
-  document.getElementById('persona').innerHTML = `<div class="t">${e.legajo} · ${e.nombre}</div><div class="s">${e.local} · ${fmt(e.horas)} h semanales de contrato · en el mes: <b style="color:var(--txt)">${fmt(real)} h</b> de ${fmt(esp)} (<span class="${difCls(real, esp)}">${difTxt(real, esp)}</span>)</div>`
-  let h = '<thead><tr>' + ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((d) => `<th>${d}</th>`).join('') + '<th>Semana</th></tr></thead><tbody>'
-  semanas.forEach((l, r) => {
-    const fs = Array.from({ length: 7 }, (_, i) => sumar(l, i)), del = fs.filter((f) => f.slice(5, 7) === pad(MES + 1))
-    h += '<tr>'
-    fs.forEach((f, c) => {
-      const fuera = !del.includes(f), car = cargas.get(e.legajo + '|' + f), fer = FERIADOS[f]
-      h += `<td class="dia ${fuera ? 'fuera' : ''} ${f === HOY ? 'hoy' : ''} ${fer ? 'fer' : ''}"><div class="top"><span class="${fer ? 'f' : ''}">${+f.slice(8)}</span>${fer ? `<span class="f">${fer}</span>` : ''}${car?.horario ? `<span>${fmt(car.horas)} h</span>` : ''}</div>${fuera ? '' : celda(e, f, '', 'G', r, c)}</td>`
-    })
-    const rr = horasDe(e.legajo, del), ee = e.horas * del.length / 7
-    h += `<td class="sem"><div class="fuerte">${fmt(rr)} h</div><div class="${difCls(rr, ee)}" style="font-size:10px">${difTxt(rr, ee)} de ${fmt(ee)}</div></td></tr>`
-  })
-  document.getElementById('cal').innerHTML = h + '</tbody>'
-}
-
-const pintar = () => { document.getElementById('vLocal').hidden = vista !== 'local'; document.getElementById('vLegajo').hidden = vista !== 'legajo'; document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t.dataset.v === vista)); vista === 'local' ? pintarLocal() : pintarLegajo() }
+let local = 'CF RIVERA', vista = 'local', legajo = '1301'
 const aviso = (t) => { document.getElementById('aviso').textContent = t }
 
+function filaPersona(e, r, fechas, ap) {
+  const ppp = e.tipo === 'PPP'
+  let a = `<tr class="${ppp ? 'ppp' : ''}"><td rowspan="2" class="tipo grueso ${ppp ? 'ppp' : ''}">${e.tipo}</td><td rowspan="2" class="nombre grueso">${e.nombre}</td>`
+  let b = `<tr class="${ppp ? 'ppp' : ''}">`
+  let total = 0
+  fechas.forEach((f, i) => {
+    const c = cargas.get(e.legajo + '|' + f)
+    const mins = minutos(c); total += mins
+    if (c && c.tipo === 'trabajo') {
+      const tarde = c.ent > ap.abre, temprano = c.sal < ap.cierra
+      a += `<td><input class="h ${tarde ? 'dif' : ''}" data-leg="${e.legajo}" data-f="${f}" data-k="ent" data-r="${r}" data-c="${i * 2}" value="${c.ent}"></td>`
+      a += `<td><input class="h ${temprano ? 'dif' : ''}" data-leg="${e.legajo}" data-f="${f}" data-k="sal" data-r="${r}" data-c="${i * 2 + 1}" value="${c.sal || ''}"></td>`
+      b += `<td colspan="2" class="tot grueso">${hhmm(mins)}</td>`
+    } else {
+      const cls = !c ? 'franco' : c.tipo === 'vacaciones' ? 'vac' : 'lic'
+      const txt = !c ? '' : c.tipo === 'vacaciones' ? 'V' : 'L'
+      a += `<td colspan="2" class="${cls}"><input class="h marca" data-leg="${e.legajo}" data-f="${f}" data-k="ent" data-r="${r}" data-c="${i * 2}" value="${txt}" title="${!c ? 'Franco: tipeá la entrada para cargar el día' : c.tipo}"></td>`
+      b += `<td colspan="2" class="${cls} grueso">${c ? c.tipo.toUpperCase() : '00:00'}</td>`
+    }
+  })
+  const contrato = e.horas * 60
+  a += `<td class="contrato">${String(e.horas).replace('.', ',')}</td></tr>`
+  b += `<td class="cargadas grueso ${Math.abs(total - contrato) < 1 ? 'ok' : ''}" title="cargadas en la semana / contrato">${hhmm(total)}</td></tr>`
+  return a + b
+}
+
+function pintar() {
+  document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t.dataset.v === vista))
+  const fechas = Array.from({ length: 7 }, (_, i) => sumar(lunes, i))
+  document.getElementById('tSem').textContent = `Semana del ${ddmm(lunes)} al ${ddmm(sumar(lunes, 6))}`
+  const chips = document.getElementById('chips')
+  if (vista === 'local') {
+    chips.innerHTML = Object.keys(LOCALES).map((l) => `<button class="chip ${l === local ? 'on' : ''}" data-l="${l}">${l}</button>`).join('')
+  } else {
+    chips.innerHTML = `<select id="selLeg" class="btn" style="min-width:300px">${EMPS.map((e) => `<option value="${e.legajo}" ${e.legajo === legajo ? 'selected' : ''}>${e.legajo} · ${e.nombre} — ${e.local}</option>`).join('')}</select>`
+  }
+  const ps = vista === 'local' ? EMPS.filter((e) => e.local === local) : EMPS.filter((e) => e.legajo === legajo)
+  const loc = vista === 'local' ? local : ps[0].local
+  const ap = LOCALES[loc]
+  const cargaTotal = ps.reduce((s, e) => s + e.horas, 0)
+  let h = `<tr><td class="etq rojo">apertura</td><td class="etq rojo">horario</td>
+      <td colspan="14" rowspan="2" class="verdeTit">${vista === 'local' ? loc : ps[0].nombre + ' · ' + loc} ${ddmm(lunes)}</td>
+      <td class="etq" style="text-align:center">carga total horaria</td></tr>
+    <tr><td class="etq">${ap.dias}</td><td class="amarillo">${+ap.abre.slice(0, 2)} a ${+ap.cierra.slice(0, 2)}hs</td><td class="rosa">${hhmm(cargaTotal * 60)}</td></tr>
+    <tr><td class="etq">tipo</td><td class="etq rojo">legajo</td>${DIAS.map((d, i) => `<td colspan="2" class="dia" title="${ddmm(fechas[i])}">${d} <span style="opacity:.6;font-size:11px">${ddmm(fechas[i])}</span></td>`).join('')}<td class="dia">Horas</td></tr>`
+  ps.forEach((e, r) => { h += filaPersona(e, r, fechas, ap) })
+  if (vista === 'local') {
+    // cobertura: cuántas personas hay a la apertura y al cierre
+    h += '<tr class="cobert"><td colspan="2" class="etq">personas al abrir / al cerrar</td>'
+    fechas.forEach((f) => {
+      const en = (hh) => ps.filter((e) => { const c = cargas.get(e.legajo + '|' + f); return c?.tipo === 'trabajo' && c.ent <= hh && c.sal >= hh }).length
+      const a = en(ap.abre), c = en(ap.cierra)
+      h += `<td colspan="2" style="${!a || !c ? 'color:#e11d48;font-weight:700' : ''}">${a} / ${c}</td>`
+    })
+    h += '<td></td></tr>'
+  }
+  document.getElementById('pl').innerHTML = h
+}
+
 document.addEventListener('click', (ev) => {
-  const t = ev.target.closest('[data-v],[data-l],[data-ir]'); if (!t) return
+  const t = ev.target.closest('[data-v],[data-l]'); if (!t) return
   if (t.dataset.v) vista = t.dataset.v
   if (t.dataset.l) local = t.dataset.l
-  if (t.dataset.ir) { legajo = t.dataset.ir; vista = 'legajo' }
   aviso(''); pintar()
 })
-document.getElementById('selLeg').addEventListener('change', (ev) => { legajo = ev.target.value; pintar() })
-document.addEventListener('focusin', (ev) => { if (ev.target.classList?.contains('celda')) ev.target.select() })
-document.addEventListener('focusout', (ev) => {
-  const el = ev.target; if (!el.classList?.contains('celda')) return
-  const key = el.dataset.leg + '|' + el.dataset.f, antes = texto(cargas.get(key))
-  if (el.value.trim() === antes) return
-  const p = parsear(el.value)
-  if (p === 'error') { el.classList.add('error'); el.title = 'No se entiende: probá «10-14 17-21», «8», F, V o L'; return }
-  if (p) cargas.set(key, p); else cargas.delete(key)
-  const g = el.dataset.g, r = el.dataset.r, c = el.dataset.c
+document.addEventListener('change', (ev) => { if (ev.target.id === 'selLeg') { legajo = ev.target.value; pintar() } })
+document.getElementById('ant').onclick = () => { lunes = sumar(lunes, -7); aviso(''); pintar() }
+document.getElementById('sig').onclick = () => { lunes = sumar(lunes, 7); aviso(''); pintar() }
+document.getElementById('repetir').onclick = () => {
+  const ps = vista === 'local' ? EMPS.filter((e) => e.local === local) : EMPS.filter((e) => e.legajo === legajo)
+  let n = 0
+  for (const e of ps) for (let i = 0; i < 7; i++) {
+    const f = sumar(lunes, i), k = e.legajo + '|' + f
+    if (cargas.has(k)) continue
+    const src = cargas.get(e.legajo + '|' + sumar(f, -7)); if (src) { cargas.set(k, { ...src }); n++ }
+  }
+  aviso(n ? `Se copiaron ${n} días de la semana anterior.` : 'No había nada para copiar (la semana anterior está vacía o esta ya está cargada).')
   pintar()
-  const sig = document.querySelector(`input[data-g="${g}"][data-r="${r}"][data-c="${+c + (el._enter ? 1 : 0)}"]`)
-  if (el._enter && sig) sig.focus()
+}
+document.addEventListener('focusin', (ev) => { if (ev.target.classList?.contains('h')) ev.target.select() })
+document.addEventListener('focusout', (ev) => {
+  const el = ev.target; if (!el.classList?.contains('h')) return
+  const key = el.dataset.leg + '|' + el.dataset.f, c = cargas.get(key), val = el.value.trim().toLowerCase()
+  const antes = !c ? '' : c.tipo === 'trabajo' ? c[el.dataset.k] || '' : c.tipo === 'vacaciones' ? 'v' : 'l'
+  if (val === antes.toLowerCase()) return
+  if (el.dataset.k === 'ent' && ['v', 'l', 'f'].includes(val)) {
+    if (val === 'f') cargas.delete(key); else cargas.set(key, { tipo: val === 'v' ? 'vacaciones' : 'licencia' })
+  } else {
+    const h = hora(val)
+    if (h === 'error') { el.classList.add('err'); el.title = 'Hora no válida: probá 10, 10:30 o 17'; return }
+    const n = c && c.tipo === 'trabajo' ? { ...c } : { tipo: 'trabajo', ent: null, sal: null }
+    n[el.dataset.k] = h
+    if (!n.ent && !n.sal) cargas.delete(key)
+    else cargas.set(key, n)
+  }
+  const { r, c: col } = el.dataset, sig = el._enter
+  pintar()
+  if (sig) document.querySelector(`input.h[data-r="${r}"][data-c="${+col + 1}"]`)?.focus()
 })
 document.addEventListener('keydown', (ev) => {
-  const el = ev.target; if (!el.classList?.contains('celda')) return
-  const ir = (dr, dc) => { const x = document.querySelector(`input[data-g="${el.dataset.g}"][data-r="${+el.dataset.r + dr}"][data-c="${+el.dataset.c + dc}"]`); if (x) { ev.preventDefault(); x.focus() } }
-  if (ev.key === 'Enter') { el._enter = true; el.blur(); if (document.activeElement === document.body) ir(0, 1) }
+  const el = ev.target; if (!el.classList?.contains('h')) return
+  const ir = (dr, dc) => { const x = document.querySelector(`input.h[data-r="${+el.dataset.r + dr}"][data-c="${+el.dataset.c + dc}"]`) || (dc ? document.querySelector(`input.h[data-r="${+el.dataset.r + dr}"][data-c="${+el.dataset.c + dc * 2}"]`) : null); if (x) { ev.preventDefault(); x.focus() } }
+  if (ev.key === 'Enter') { el._enter = true; el.blur() }
   else if (ev.key === 'ArrowDown') ir(1, 0); else if (ev.key === 'ArrowUp') ir(-1, 0)
   else if (ev.key === 'ArrowRight' && el.selectionStart === el.value.length) ir(0, 1)
   else if (ev.key === 'ArrowLeft' && el.selectionStart === 0) ir(0, -1)
-})
-document.getElementById('repetir').addEventListener('change', (ev) => {
-  const l = ev.target.value; ev.target.value = ''; if (!l) return
-  const ps = vista === 'local' ? emps.filter((e) => e.local === local) : emps.filter((e) => e.legajo === legajo)
-  let n = 0
-  for (const e of ps) for (let i = 0; i < 7; i++) {
-    const f = sumar(l, i); if (!dias.includes(f) || cargas.has(e.legajo + '|' + f)) continue
-    const src = cargas.get(e.legajo + '|' + sumar(f, -7)); if (src) { cargas.set(e.legajo + '|' + f, { ...src }); n++ }
-  }
-  aviso(n ? `Se copiaron ${n} días de la semana anterior a la del ${ddmm(l)}.` : 'No había nada para copiar.')
-  pintar()
 })
 pintar()
 </script>
