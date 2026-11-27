@@ -21,11 +21,9 @@ interface Renglon {
   estado: 'pendiente' | 'hecho' | 'faltante' | 'senado'
   hecho_at: string | null
   escaneadas?: number
-  /** el SKU ya se sacó de la caja (sql/transferencias_deposito_juntar.sql) */
-  juntado_at?: string | null
 }
 
-/** Un SKU (artículo + color + talle) con todos sus renglones, de todos los locales y lotes */
+/** Un SKU (artículo + color + talle) con sus renglones (de uno o varios locales y lotes) */
 interface Sku {
   clave: string
   articulo: string
@@ -37,14 +35,19 @@ interface Sku {
   total: number
 }
 
+type Estado = 'pendiente' | 'hecho' | 'faltante'
+
 const norm = (v: unknown) => String(v ?? '').trim().toUpperCase()
 const claveSku = (r: Renglon) => `${norm(r.articulo)}|${norm(r.color)}|${norm(r.talle)}`
 const fmtTalle = (t: string) => (/^\d+(\.0+)?$/.test(t) ? String(parseInt(t, 10)) : t)
-
-const juntadoR = (r: Renglon) => r.estado === 'hecho' || !!r.juntado_at
-const todosFaltante = (rs: Renglon[]) => rs.length > 0 && rs.every((r) => r.estado === 'faltante')
-const todosJuntados = (rs: Renglon[]) => rs.some((r) => r.estado !== 'faltante') && rs.every((r) => r.estado === 'faltante' || juntadoR(r))
 const unidades = (rs: Renglon[]) => rs.reduce((s, r) => s + r.cantidad, 0)
+
+/** Estado de un grupo de renglones: hecho si no queda nada pendiente y algo se hizo; faltante si todo faltó */
+function estadoDe(rs: Renglon[]): Estado {
+  if (rs.length > 0 && rs.every((r) => r.estado === 'faltante')) return 'faltante'
+  if (rs.some((r) => r.estado === 'pendiente')) return 'pendiente'
+  return 'hecho'
+}
 
 /* ---------- Repo diaria (lotes CASCADA): Indo la ve lunes y jueves ----------
  * El lunes ve la repo de viernes, sábado y domingo; el jueves la de lunes, martes
@@ -91,7 +94,7 @@ function Chip({ children, tono }: { children: React.ReactNode; tono: 'color' | '
   )
 }
 
-function Tilde({ on, disabled, onClick, label }: { on: boolean; disabled?: boolean; onClick?: () => void; label: string }) {
+function Tilde({ on, disabled, onClick, label, chica }: { on: boolean; disabled?: boolean; onClick?: () => void; label: string; chica?: boolean }) {
   return (
     <button
       type="button"
@@ -100,22 +103,50 @@ function Tilde({ on, disabled, onClick, label }: { on: boolean; disabled?: boole
       aria-pressed={on}
       aria-label={label}
       title={label}
-      className={`btn-press flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border-2 transition disabled:cursor-not-allowed ${
-        on ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-line2 bg-surface hover:border-emerald-500'
-      } ${disabled && !on ? 'border-dashed opacity-50' : ''}`}
+      className={`btn-press flex shrink-0 items-center justify-center rounded-lg border-2 transition disabled:opacity-60 ${
+        chica ? 'h-8 w-8' : 'h-9 w-9'
+      } ${on ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-line2 bg-surface hover:border-emerald-500'}`}
     >
-      {on && <Check size={18} strokeWidth={3} aria-hidden />}
+      {on && <Check size={chica ? 16 : 18} strokeWidth={3} aria-hidden />}
+    </button>
+  )
+}
+
+/** ✕ faltante, o deshacer si ya está faltante */
+function BotonFaltante({ faltante, disabled, onClick, chica }: { faltante: boolean; disabled?: boolean; onClick: () => void; chica?: boolean }) {
+  return faltante ? (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      title="Deshacer faltante"
+      aria-label="Deshacer faltante"
+      className={`btn-press shrink-0 rounded-lg border border-line text-sub hover:bg-line ${chica ? 'p-1.5' : 'p-2'}`}
+    >
+      <Undo2 size={15} aria-hidden />
+    </button>
+  ) : (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      title="Faltante (no está)"
+      aria-label="Marcar faltante"
+      className={`btn-press shrink-0 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-60 ${chica ? 'p-1.5' : 'p-2'}`}
+    >
+      <X size={15} aria-hidden />
     </button>
   )
 }
 
 /**
- * Mi repo · Transferencias Depósito Indo en dos pasos (26/11/2026):
- *  1) Juntar: lista por caja (Mapeo de cajas) → SKU con el total de todos los
- *     locales; se tilda el SKU cuando se sacaron todas las unidades. Desplegable
- *     por SKU con cuánto va a cada local. ✕ = faltante (todo el SKU).
- *  2) Separar por local: una tarjeta por local; se tilda a mano lo que se le
- *     pone (queda Hecho). Lo que no se juntó todavía no se puede tildar.
+ * Mi repo · Transferencias Depósito Indo (26/11/2026). Dos formas de ver y marcar
+ * lo MISMO (estado Hecho / Faltante de cada renglón); lo que se marca en una se ve
+ * marcado en la otra:
+ *  - Por artículo y caja: por caja (Mapeo de cajas) → SKU con el total de todos
+ *    los locales. Tilde = todo el SKU hecho; desplegable con cada local y su
+ *    cantidad, que también se tilda de a uno.
+ *  - Por local: una tarjeta por local; adentro, sus SKU para tildar.
  * La repo diaria (lotes CASCADA) se acumula y aparece lunes y jueves.
  */
 export default function TransferenciasIndo({
@@ -128,7 +159,7 @@ export default function TransferenciasIndo({
   const [todos, setTodos] = useState<Renglon[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [paso, setPaso] = useState<'juntar' | 'separar'>('juntar')
+  const [vista, setVista] = useState<'articulo' | 'local'>('articulo')
   const [busca, setBusca] = useState('')
   const [abiertos, setAbiertos] = useState<Set<string>>(new Set())
   const [localSel, setLocalSel] = useState<string | null>(null)
@@ -149,7 +180,7 @@ export default function TransferenciasIndo({
     return () => { desuscribir(); window.clearInterval(id) }
   }, [cargar])
 
-  // Repo diaria: lo cargado después del último lunes/jueves se guarda para el próximo
+  // Repo diaria: lo de los días desde el último lunes/jueves se guarda para el próximo
   const corte = useMemo(() => ultimoCorte(), [])
   const { renglones, acumulando } = useMemo(() => {
     const vis: Renglon[] = []
@@ -164,15 +195,6 @@ export default function TransferenciasIndo({
   const codigos = useMemo(() => renglones.map((r) => String(r.articulo ?? '')), [renglones])
   const cajas = useCajasMapeo(codigos)
   const cajaDe = useCallback((art: string | null) => cajas.get(norm(art))?.[0] ?? null, [cajas])
-
-  const compararSku = useCallback(
-    (a: { caja: number | null; articulo: string; color: string; talle: string }, b: typeof a) =>
-      (a.caja != null && b.caja != null ? a.caja - b.caja : a.caja != null ? -1 : b.caja != null ? 1 : 0) ||
-      a.articulo.localeCompare(b.articulo, 'es', { numeric: true }) ||
-      a.color.localeCompare(b.color, 'es', { numeric: true }) ||
-      compararTalles(a.talle, b.talle),
-    [],
-  )
 
   const armarSkus = useCallback(
     (rs: Renglon[]): Sku[] => {
@@ -196,62 +218,51 @@ export default function TransferenciasIndo({
         s.renglones.push(r)
         s.total += r.cantidad
       }
-      return [...m.values()].sort(compararSku)
+      return [...m.values()].sort(
+        (a, b) =>
+          (a.caja != null && b.caja != null ? a.caja - b.caja : a.caja != null ? -1 : b.caja != null ? 1 : 0) ||
+          a.articulo.localeCompare(b.articulo, 'es', { numeric: true }) ||
+          a.color.localeCompare(b.color, 'es', { numeric: true }) ||
+          compararTalles(a.talle, b.talle),
+      )
     },
-    [cajaDe, compararSku],
+    [cajaDe],
   )
 
   const skus = useMemo(() => armarSkus(renglones), [armarSkus, renglones])
 
-  const filtrados = useMemo(() => {
-    const q = busca.trim().toUpperCase()
-    if (!q) return skus
-    const num = /^\d+$/.test(q) ? Number(q) : null
-    return skus.filter(
-      (s) =>
-        (num != null && s.caja === num) ||
-        `${s.articulo} ${s.color} ${s.talle} ${s.descripcion}`.toUpperCase().includes(q),
-    )
-  }, [skus, busca])
+  const coincide = useCallback(
+    (s: Sku, q: string) => {
+      if (!q) return true
+      const num = /^\d+$/.test(q) ? Number(q) : null
+      return (num != null && s.caja === num) || `${s.articulo} ${s.color} ${s.talle} ${s.descripcion}`.toUpperCase().includes(q)
+    },
+    [],
+  )
+  const q = busca.trim().toUpperCase()
 
   const porCaja = useMemo(() => {
     const g: { caja: number | null; skus: Sku[] }[] = []
-    for (const s of filtrados) {
+    for (const s of skus.filter((s) => coincide(s, q))) {
       const ult = g[g.length - 1]
       if (ult && ult.caja === s.caja) ult.skus.push(s)
       else g.push({ caja: s.caja, skus: [s] })
     }
     return g
-  }, [filtrados])
+  }, [skus, q, coincide])
 
   const resumen = useMemo(() => {
-    const vivos = skus.filter((s) => !todosFaltante(s.renglones))
-    const juntados = vivos.filter((s) => todosJuntados(s.renglones))
+    const vivos = renglones.filter((r) => r.estado !== 'faltante')
     return {
-      skus: vivos.length,
-      juntados: juntados.length,
-      u: unidades(vivos.flatMap((s) => s.renglones.filter((r) => r.estado !== 'faltante'))),
-      uJuntadas: unidades(juntados.flatMap((s) => s.renglones.filter((r) => r.estado !== 'faltante'))),
+      u: unidades(vivos),
+      hechas: unidades(vivos.filter((r) => r.estado === 'hecho')),
+      skus: skus.length,
+      skusHechos: skus.filter((s) => estadoDe(s.renglones) !== 'pendiente').length,
     }
-  }, [skus])
+  }, [renglones, skus])
 
-  /* ---------- Acciones ---------- */
-  async function juntar(s: Sku, juntado: boolean) {
-    if (!supabase) return
-    if (!juntado && s.renglones.some((r) => r.estado === 'hecho')) {
-      setError(`${s.articulo} ${s.color} ${s.talle}: ya se separó en algún local. Destildalo primero en «Separar por local».`)
-      return
-    }
-    const ids = s.renglones.filter((r) => r.estado !== 'faltante').map((r) => r.id)
-    const at = juntado ? new Date().toISOString() : null
-    setTodos((arr) => arr.map((r) => (ids.includes(r.id) ? { ...r, juntado_at: at } : r)))
-    setOcupado(true)
-    const { error: e } = await supabase.rpc('transferencia_juntar_deposito', { p_ids: ids, p_juntado: juntado, p_deposito: 'INDO' })
-    setOcupado(false)
-    if (e) { setError(e.message); await cargar() } else setError(null)
-  }
-
-  async function marcar(ids: string[], estado: 'pendiente' | 'hecho' | 'faltante') {
+  /* ---------- Marcar (lo mismo desde las dos vistas) ---------- */
+  async function marcar(ids: string[], estado: Estado) {
     if (!supabase || !ids.length) return
     const at = estado === 'pendiente' ? null : new Date().toISOString()
     setTodos((arr) => arr.map((r) => (ids.includes(r.id) ? { ...r, estado, hecho_at: at } : r)))
@@ -260,6 +271,15 @@ export default function TransferenciasIndo({
     setOcupado(false)
     if (e) { setError(e.message); await cargar() } else setError(null)
   }
+  /** Tilde de un grupo: si queda algo pendiente lo pasa a hecho; si ya está hecho, vuelve a pendiente */
+  const tildar = (rs: Renglon[]) =>
+    estadoDe(rs) === 'pendiente'
+      ? marcar(rs.filter((r) => r.estado === 'pendiente').map((r) => r.id), 'hecho')
+      : marcar(rs.filter((r) => r.estado === 'hecho').map((r) => r.id), 'pendiente')
+  const faltar = (rs: Renglon[]) =>
+    estadoDe(rs) === 'faltante'
+      ? marcar(rs.map((r) => r.id), 'pendiente')
+      : marcar(rs.filter((r) => r.estado === 'pendiente').map((r) => r.id), 'faltante')
 
   function alternar(clave: string) {
     setAbiertos((prev) => {
@@ -270,25 +290,19 @@ export default function TransferenciasIndo({
     })
   }
 
-  /* ---------- Separar: locales ---------- */
+  /* ---------- Por local ---------- */
   const locales = useMemo(() => {
     const m = new Map<string, Renglon[]>()
     for (const r of renglones) m.set(r.destino, [...(m.get(r.destino) ?? []), r])
     return [...m.entries()]
       .map(([destino, rs]) => {
         const vivos = rs.filter((r) => r.estado !== 'faltante')
-        return {
-          destino,
-          renglones: rs,
-          total: unidades(vivos),
-          separadas: unidades(vivos.filter((r) => r.estado === 'hecho')),
-          paraSeparar: unidades(vivos.filter((r) => r.estado === 'pendiente' && r.juntado_at)),
-        }
+        return { destino, renglones: rs, total: unidades(vivos), hechas: unidades(vivos.filter((r) => r.estado === 'hecho')) }
       })
-      .sort((a, b) => Number(a.separadas >= a.total) - Number(b.separadas >= b.total) || a.destino.localeCompare(b.destino, 'es'))
+      .sort((a, b) => Number(a.hechas >= a.total) - Number(b.hechas >= b.total) || a.destino.localeCompare(b.destino, 'es'))
   }, [renglones])
 
-  const localAbierto = paso === 'separar' && localSel ? locales.find((l) => l.destino === localSel) ?? null : null
+  const localAbierto = vista === 'local' && localSel ? locales.find((l) => l.destino === localSel) ?? null : null
 
   useEffect(() => {
     alAbrir?.(!!localAbierto)
@@ -330,70 +344,83 @@ export default function TransferenciasIndo({
     <p role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-2 text-sm text-red-500">{error}</p>
   )
 
-  /* ---------- Separar: un local abierto ---------- */
-  if (localAbierto) {
-    const skusLocal = armarSkus(localAbierto.renglones)
-    const paraSeparar = skusLocal.filter((s) => s.renglones.some((r) => r.estado === 'pendiente' && r.juntado_at))
-    const sinJuntar = skusLocal.filter((s) => s.renglones.some((r) => r.estado === 'pendiente' && !r.juntado_at))
-    const separados = skusLocal.filter((s) => s.renglones.some((r) => r.estado === 'hecho'))
-    const faltantes = skusLocal.filter((s) => s.renglones.some((r) => r.estado === 'faltante'))
-    const idsPara = paraSeparar.flatMap((s) => s.renglones.filter((r) => r.estado === 'pendiente' && r.juntado_at).map((r) => r.id))
-    const pct = localAbierto.total > 0 ? Math.round((localAbierto.separadas / localAbierto.total) * 100) : 0
+  const buscador = (
+    <div className="relative">
+      <Search size={16} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sub" />
+      <input
+        value={busca}
+        onChange={(e) => setBusca(e.target.value)}
+        placeholder="Buscar artículo, color o caja…"
+        aria-label="Buscar artículo, color o caja"
+        autoComplete="off"
+        className="h-11 w-full rounded-xl border border-line bg-surface pl-9 pr-9 text-sm text-ink outline-none transition placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40"
+      />
+      {busca && (
+        <button
+          onClick={() => setBusca('')}
+          aria-label="Limpiar búsqueda"
+          className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-sub hover:bg-surface2 hover:text-ink"
+        >
+          <X size={15} aria-hidden />
+        </button>
+      )}
+    </div>
+  )
 
-    const filaLocal = (s: Sku, tipo: 'para' | 'sin' | 'hecho' | 'faltante') => {
-      const rs = s.renglones.filter((r) =>
-        tipo === 'para' ? r.estado === 'pendiente' && r.juntado_at
-          : tipo === 'sin' ? r.estado === 'pendiente' && !r.juntado_at
-            : r.estado === tipo,
-      )
-      const ids = rs.map((r) => r.id)
-      return (
-        <li key={`${tipo}|${s.clave}`} className={`flex items-center gap-3 px-3 py-2 ${tipo === 'sin' || tipo === 'hecho' ? 'opacity-60' : ''}`}>
-          {tipo === 'faltante' ? (
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-600/15 text-red-500"><X size={18} aria-hidden /></span>
-          ) : (
-            <Tilde
-              on={tipo === 'hecho'}
-              disabled={ocupado || tipo === 'sin'}
-              label={tipo === 'hecho' ? 'Deshacer separado' : tipo === 'sin' ? 'Todavía no se juntó' : 'Marcar separado'}
-              onClick={() => void marcar(ids, tipo === 'hecho' ? 'pendiente' : 'hecho')}
-            />
-          )}
-          <span className="min-w-0 flex-1">
-            <span className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[15px] font-semibold text-ink">{s.articulo}</span>
-              {s.color && <Chip tono="color">{s.color}</Chip>}
-              {s.talle && <Chip tono="talle">{fmtTalle(s.talle)}</Chip>}
-              {tipo === 'sin' && s.caja != null && <span className="text-[11px] text-sub">caja {s.caja}</span>}
-            </span>
-            {s.descripcion && <span className="block truncate text-xs text-sub">{s.descripcion}</span>}
+  /** Fila de un SKU (en las dos vistas): tilde, código, cantidad, ✕ */
+  const filaSku = (s: Sku, extra?: React.ReactNode) => {
+    const est = estadoDe(s.renglones)
+    const listo = est !== 'pendiente'
+    const pend = unidades(s.renglones.filter((r) => r.estado === 'pendiente'))
+    return (
+      <div className="flex items-center gap-2.5 px-3 py-2">
+        {est === 'faltante' ? (
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-600/15 text-red-500" title="Faltante">
+            <X size={18} aria-hidden />
           </span>
-          <span className="shrink-0 font-display text-base font-bold tabular-nums text-ink">{unidades(rs)}</span>
-          {tipo === 'faltante' && (
-            <button
-              type="button"
-              disabled={ocupado}
-              onClick={() => void marcar(ids, 'pendiente')}
-              title="Deshacer faltante"
-              aria-label="Deshacer faltante"
-              className="btn-press rounded-lg border border-line p-2 text-sub hover:bg-line"
-            >
-              <Undo2 size={15} aria-hidden />
-            </button>
-          )}
-        </li>
-      )
+        ) : (
+          <Tilde on={est === 'hecho'} disabled={ocupado} label={est === 'hecho' ? 'Deshacer' : 'Marcar hecho'} onClick={() => void tildar(s.renglones)} />
+        )}
+        <button
+          type="button"
+          onClick={() => alternar(s.clave)}
+          aria-expanded={abiertos.has(s.clave)}
+          className={`min-w-0 flex-1 text-left ${listo ? 'opacity-55' : ''}`}
+        >
+          <span className="flex flex-wrap items-center gap-1.5">
+            <span className={`text-[15px] font-semibold text-ink ${est === 'hecho' ? 'line-through' : ''}`}>{s.articulo}</span>
+            {s.color && <Chip tono="color">{s.color}</Chip>}
+            {s.talle && <Chip tono="talle">{fmtTalle(s.talle)}</Chip>}
+            {extra}
+          </span>
+          {s.descripcion && <span className="block truncate text-xs text-sub">{s.descripcion}</span>}
+        </button>
+        <span
+          className={`shrink-0 rounded-lg px-2 py-1 text-sm font-bold tabular-nums ${
+            !listo && pend < s.total ? 'bg-amber-500/15 text-amber-500' : 'bg-line text-ink'
+          }`}
+          title={!listo && pend < s.total ? `Faltan ${pend} de ${s.total}` : undefined}
+        >
+          {!listo && pend < s.total ? `${s.total - pend}/${s.total}` : `×${s.total}`}
+        </span>
+        {est !== 'hecho' && <BotonFaltante faltante={est === 'faltante'} disabled={ocupado} onClick={() => void faltar(s.renglones)} />}
+      </div>
+    )
+  }
+
+  /* ---------- Por local: un local abierto ---------- */
+  if (localAbierto) {
+    const skusLocal = armarSkus(localAbierto.renglones).filter((s) => coincide(s, q))
+    const pendientes = skusLocal.filter((s) => estadoDe(s.renglones) === 'pendiente')
+    const listos = skusLocal.filter((s) => estadoDe(s.renglones) !== 'pendiente')
+    const idsPend = pendientes.flatMap((s) => s.renglones.filter((r) => r.estado === 'pendiente').map((r) => r.id))
+    const pct = localAbierto.total > 0 ? Math.round((localAbierto.hechas / localAbierto.total) * 100) : 100
+    const porCajaLocal: { caja: number | null; skus: Sku[] }[] = []
+    for (const s of pendientes) {
+      const ult = porCajaLocal[porCajaLocal.length - 1]
+      if (ult && ult.caja === s.caja) ult.skus.push(s)
+      else porCajaLocal.push({ caja: s.caja, skus: [s] })
     }
-    const bloque = (titulo: string, lista: Sku[], tipo: 'para' | 'sin' | 'hecho' | 'faltante', tono = 'text-sub') =>
-      lista.length > 0 && (
-        <section>
-          <h3 className={`mb-1.5 px-1 text-xs font-bold uppercase tracking-wide ${tono}`}>
-            {titulo} <span className="font-normal">({unidades(lista.flatMap((s) => s.renglones.filter((r) =>
-              tipo === 'para' ? r.estado === 'pendiente' && r.juntado_at : tipo === 'sin' ? r.estado === 'pendiente' && !r.juntado_at : r.estado === tipo)))} u.)</span>
-          </h3>
-          <ul className="divide-y divide-line/40 overflow-hidden rounded-xl border border-line bg-surface">{lista.map((s) => filaLocal(s, tipo))}</ul>
-        </section>
-      )
 
     return (
       <div className="space-y-3 pb-4">
@@ -406,36 +433,52 @@ export default function TransferenciasIndo({
         <div className="space-y-2 rounded-2xl border border-line bg-surface p-3 shadow-soft">
           <p className="flex items-center justify-between gap-2">
             <span className="font-display text-lg font-bold text-orange-500">{localAbierto.destino}</span>
-            <span className="text-xs tabular-nums text-sub">{localAbierto.separadas} de {localAbierto.total} u. separadas</span>
+            <span className="text-xs tabular-nums text-sub">{localAbierto.hechas} de {localAbierto.total} u. hechas</span>
           </p>
           <div className="h-2 w-full overflow-hidden rounded-full bg-line">
             <div className={`h-full rounded-full transition-all ${pct === 100 ? 'bg-emerald-500' : 'bg-orange-500'}`} style={{ width: `${pct}%` }} />
           </div>
         </div>
+        {buscador}
         {errorBox}
-        {bloque('Juntado, para separar', paraSeparar, 'para', 'text-orange-500')}
-        {paraSeparar.length === 0 && sinJuntar.length === 0 && (
+        {porCajaLocal.map((g) => (
+          <div key={g.caja ?? 'sin'} className="overflow-hidden rounded-xl border border-line bg-surface">
+            <div className={`flex items-center justify-between border-b border-line px-3 py-2 ${g.caja === null ? 'bg-surface2' : 'bg-orange-500/10'}`}>
+              <span className="flex items-center gap-1.5 font-display text-base font-bold text-ink">
+                {g.caja === null ? 'Sin caja' : (<><Package size={16} className="text-orange-500" aria-hidden /> Caja {g.caja}</>)}
+              </span>
+              <span className="text-xs tabular-nums text-sub">{unidades(g.skus.flatMap((s) => s.renglones))} u.</span>
+            </div>
+            <ul className="divide-y divide-line/40">{g.skus.map((s) => <li key={s.clave}>{filaSku(s)}</li>)}</ul>
+          </div>
+        ))}
+        {pendientes.length === 0 && !q && (
           <p className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-center text-sm font-semibold text-emerald-400">
-            ✓ Todo separado para {localAbierto.destino}
+            ✓ Todo hecho para {localAbierto.destino}
           </p>
         )}
-        {bloque('Todavía sin juntar', sinJuntar, 'sin')}
-        {bloque('Separados', separados, 'hecho', 'text-emerald-500')}
-        {bloque('Faltantes', faltantes, 'faltante', 'text-red-500')}
-        {idsPara.length > 0 && (
+        {listos.length > 0 && (
+          <section>
+            <h3 className="mb-1.5 px-1 text-xs font-bold uppercase tracking-wide text-emerald-500">Listos ({listos.length})</h3>
+            <ul className="divide-y divide-line/40 overflow-hidden rounded-xl border border-line bg-surface">
+              {listos.map((s) => <li key={s.clave}>{filaSku(s)}</li>)}
+            </ul>
+          </section>
+        )}
+        {idsPend.length > 0 && !q && (
           <button
-            onClick={() => void marcar(idsPara, 'hecho')}
+            onClick={() => void marcar(idsPend, 'hecho')}
             disabled={ocupado}
             className="btn-press ml-14 flex h-12 w-[calc(100%-3.5rem)] items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-base font-semibold text-white shadow-soft transition hover:bg-emerald-700 disabled:opacity-60 sm:ml-0 sm:w-full"
           >
-            <Check size={18} aria-hidden /> Todo lo juntado de {localAbierto.destino}
+            <Check size={18} aria-hidden /> Todo {localAbierto.destino}
           </button>
         )}
       </div>
     )
   }
 
-  const pctJ = resumen.u > 0 ? Math.round((resumen.uJuntadas / resumen.u) * 100) : 0
+  const pctT = resumen.u > 0 ? Math.round((resumen.hechas / resumen.u) * 100) : 0
 
   return (
     <section className="mb-5 space-y-2.5">
@@ -445,59 +488,38 @@ export default function TransferenciasIndo({
       {avisoCorte}
 
       <div className="grid grid-cols-2 gap-1.5" role="tablist">
-        {(['juntar', 'separar'] as const).map((p) => (
+        {(['articulo', 'local'] as const).map((v) => (
           <button
-            key={p}
+            key={v}
             role="tab"
-            aria-selected={paso === p}
-            onClick={() => setPaso(p)}
+            aria-selected={vista === v}
+            onClick={() => setVista(v)}
             className={`btn-press h-10 rounded-xl border text-sm font-semibold transition ${
-              paso === p ? 'border-orange-600 bg-orange-600 text-white' : 'border-line bg-surface text-sub hover:bg-surface2'
+              vista === v ? 'border-orange-600 bg-orange-600 text-white' : 'border-line bg-surface text-sub hover:bg-surface2'
             }`}
           >
-            {p === 'juntar' ? '1 · Juntar' : '2 · Separar por local'}
+            {v === 'articulo' ? 'Por artículo y caja' : 'Por local'}
           </button>
         ))}
       </div>
+
+      <div className="space-y-1.5">
+        <p className="flex flex-wrap gap-x-3 text-xs text-sub">
+          <span><b className="tabular-nums text-ink">{resumen.skusHechos} de {resumen.skus}</b> SKU listos</span>
+          <span><b className="tabular-nums text-ink">{resumen.hechas} de {resumen.u}</b> unidades hechas</span>
+        </p>
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-line">
+          <div className={`h-full rounded-full transition-all ${pctT === 100 ? 'bg-emerald-500' : 'bg-orange-500'}`} style={{ width: `${pctT}%` }} />
+        </div>
+      </div>
       {errorBox}
 
-      {paso === 'juntar' ? (
+      {vista === 'articulo' ? (
         <>
-          <div className="relative">
-            <Search size={16} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sub" />
-            <input
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              placeholder="Buscar artículo, color o caja…"
-              aria-label="Buscar artículo, color o caja"
-              autoComplete="off"
-              className="h-11 w-full rounded-xl border border-line bg-surface pl-9 pr-9 text-sm text-ink outline-none transition placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40"
-            />
-            {busca && (
-              <button
-                onClick={() => setBusca('')}
-                aria-label="Limpiar búsqueda"
-                className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-sub hover:bg-surface2 hover:text-ink"
-              >
-                <X size={15} aria-hidden />
-              </button>
-            )}
-          </div>
-
-          <div className="space-y-1.5">
-            <p className="flex flex-wrap gap-x-3 text-xs text-sub">
-              <span><b className="tabular-nums text-ink">{resumen.juntados} de {resumen.skus}</b> SKU juntados</span>
-              <span><b className="tabular-nums text-ink">{resumen.uJuntadas} de {resumen.u}</b> unidades</span>
-            </p>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-line">
-              <div className={`h-full rounded-full transition-all ${pctJ === 100 ? 'bg-emerald-500' : 'bg-orange-500'}`} style={{ width: `${pctJ}%` }} />
-            </div>
-          </div>
-
+          {buscador}
           {porCaja.length === 0 && (
             <p className="rounded-xl border border-line bg-surface px-4 py-8 text-center text-sm text-sub">Nada coincide con «{busca}».</p>
           )}
-
           {porCaja.map((g) => (
             <div key={g.caja ?? 'sin'} className="overflow-hidden rounded-xl border border-line bg-surface">
               <div className={`flex items-center justify-between border-b border-line px-3 py-2 ${g.caja === null ? 'bg-surface2' : 'bg-orange-500/10'}`}>
@@ -510,66 +532,19 @@ export default function TransferenciasIndo({
               </div>
               <ul className="divide-y divide-line/40">
                 {g.skus.map((s) => {
-                  const falt = todosFaltante(s.renglones)
-                  const junt = !falt && todosJuntados(s.renglones)
                   const abierto = abiertos.has(s.clave)
                   const porLocal = new Map<string, Renglon[]>()
                   for (const r of s.renglones) porLocal.set(r.destino, [...(porLocal.get(r.destino) ?? []), r])
                   const listaLocales = [...porLocal.entries()].sort((a, b) => a[0].localeCompare(b[0], 'es'))
                   return (
                     <li key={s.clave} className={abierto ? 'bg-orange-500/[0.06]' : ''}>
-                      <div className="flex items-center gap-2.5 px-3 py-2">
-                        {falt ? (
-                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-600/15 text-red-500" title="Faltante">
-                            <X size={18} aria-hidden />
-                          </span>
-                        ) : (
-                          <Tilde on={junt} disabled={ocupado} label={junt ? 'Destildar' : 'Marcar juntado'} onClick={() => void juntar(s, !junt)} />
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => alternar(s.clave)}
-                          aria-expanded={abierto}
-                          className={`min-w-0 flex-1 text-left ${junt || falt ? 'opacity-55' : ''}`}
-                        >
-                          <span className="flex flex-wrap items-center gap-1.5">
-                            <span className={`text-[15px] font-semibold text-ink ${junt ? 'line-through' : ''}`}>{s.articulo}</span>
-                            {s.color && <Chip tono="color">{s.color}</Chip>}
-                            {s.talle && <Chip tono="talle">{fmtTalle(s.talle)}</Chip>}
-                          </span>
-                          {s.descripcion && <span className="block truncate text-xs text-sub">{s.descripcion}</span>}
-                        </button>
-                        <span className="shrink-0 rounded-lg bg-line px-2 py-1 text-sm font-bold tabular-nums text-ink">×{s.total}</span>
-                        {falt ? (
-                          <button
-                            type="button"
-                            disabled={ocupado}
-                            onClick={() => void marcar(s.renglones.map((r) => r.id), 'pendiente')}
-                            title="Deshacer faltante"
-                            aria-label="Deshacer faltante"
-                            className="btn-press rounded-lg border border-line p-2 text-sub hover:bg-line"
-                          >
-                            <Undo2 size={15} aria-hidden />
-                          </button>
-                        ) : (
-                          !junt && (
-                            <button
-                              type="button"
-                              disabled={ocupado}
-                              onClick={() => void marcar(s.renglones.filter((r) => r.estado === 'pendiente').map((r) => r.id), 'faltante')}
-                              title="Faltante (no está)"
-                              aria-label="Marcar faltante"
-                              className="btn-press rounded-lg bg-red-600 p-2 text-white hover:bg-red-700 disabled:opacity-60"
-                            >
-                              <X size={15} aria-hidden />
-                            </button>
-                          )
-                        )}
+                      <div className="flex items-center">
+                        <div className="min-w-0 flex-1">{filaSku(s)}</div>
                         <button
                           type="button"
                           onClick={() => alternar(s.clave)}
                           aria-label={abierto ? 'Cerrar locales' : 'Ver locales'}
-                          className="flex h-9 w-7 shrink-0 items-center justify-center text-sub"
+                          className="mr-2 flex h-9 w-7 shrink-0 items-center justify-center text-sub"
                         >
                           <ChevronRight size={18} aria-hidden className={`transition-transform ${abierto ? 'rotate-90 text-orange-500' : ''}`} />
                         </button>
@@ -577,15 +552,17 @@ export default function TransferenciasIndo({
                       {abierto && (
                         <div className="mb-2.5 ml-[3.25rem] mr-3 overflow-hidden rounded-lg border border-line bg-surface2">
                           {listaLocales.map(([dest, rs]) => {
-                            const est = rs.every((r) => r.estado === 'hecho') ? 'hecho' : rs.every((r) => r.estado === 'faltante') ? 'faltante' : null
+                            const est = estadoDe(rs)
                             return (
-                              <div key={dest} className="flex items-center justify-between border-b border-line/50 px-3 py-1.5 text-sm last:border-b-0">
-                                <span className="text-ink">{dest}</span>
-                                <span className="flex items-center gap-2">
-                                  {est === 'hecho' && <span className="text-xs font-medium text-emerald-500">✓ separado</span>}
-                                  {est === 'faltante' && <span className="text-xs font-medium text-red-500">✕ faltante</span>}
-                                  <b className="tabular-nums text-orange-500">{unidades(rs)}</b>
-                                </span>
+                              <div key={dest} className="flex items-center gap-2.5 border-b border-line/50 px-2.5 py-1.5 text-sm last:border-b-0">
+                                {est === 'faltante' ? (
+                                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-600/15 text-red-500"><X size={16} aria-hidden /></span>
+                                ) : (
+                                  <Tilde chica on={est === 'hecho'} disabled={ocupado} label={`${dest}: ${est === 'hecho' ? 'deshacer' : 'hecho'}`} onClick={() => void tildar(rs)} />
+                                )}
+                                <span className={`min-w-0 flex-1 truncate text-ink ${est !== 'pendiente' ? 'opacity-55' : ''} ${est === 'hecho' ? 'line-through' : ''}`}>{dest}</span>
+                                <b className="tabular-nums text-orange-500">{unidades(rs)}</b>
+                                {est !== 'hecho' && <BotonFaltante chica faltante={est === 'faltante'} disabled={ocupado} onClick={() => void faltar(rs)} />}
                               </div>
                             )
                           })}
@@ -605,23 +582,20 @@ export default function TransferenciasIndo({
       ) : (
         <div className="space-y-2">
           {locales.map((l) => {
-            const pct = l.total > 0 ? Math.round((l.separadas / l.total) * 100) : 100
+            const pct = l.total > 0 ? Math.round((l.hechas / l.total) * 100) : 100
             return (
               <button
                 key={l.destino}
-                onClick={() => setLocalSel(l.destino)}
+                onClick={() => { setLocalSel(l.destino); setBusca('') }}
                 className="flex min-h-[4rem] w-full items-center gap-3 rounded-2xl border border-line bg-surface px-4 py-3 text-left shadow-soft transition active:scale-[0.99] hover:bg-surface2"
               >
                 <div className="min-w-0 flex-1">
                   <p className="flex items-center justify-between gap-2">
                     <span className="font-display font-semibold text-ink">{l.destino}</span>
                     <span className="text-xs tabular-nums text-sub">
-                      {pct === 100 ? <span className="font-medium text-emerald-400">✓ Listo</span> : `${l.separadas} de ${l.total} u.`}
+                      {pct === 100 ? <span className="font-medium text-emerald-400">✓ Listo</span> : `${l.hechas} de ${l.total} u.`}
                     </span>
                   </p>
-                  {l.paraSeparar > 0 && (
-                    <p className="mt-0.5 text-xs font-medium text-orange-500">{l.paraSeparar} u. juntadas para separar</p>
-                  )}
                   <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-line">
                     <div className={`h-full rounded-full transition-all ${pct === 100 ? 'bg-emerald-500' : 'bg-orange-500'}`} style={{ width: `${pct}%` }} />
                   </div>
