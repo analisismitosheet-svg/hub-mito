@@ -106,198 +106,172 @@
 </head>
 <body>
   <h1>Control de mercadería · Depósito Indo</h1>
-  <p class="sub">Maqueta para charlar el flujo. Parte del picking que ya existe (Recepción INDO → Picking por factura).</p>
+  <p class="sub">Maqueta v2 (27/11) — se engancha al flujo que ya se usa: Recepción INDO → Picking por factura → «LISTO PARA CONTROLAR».</p>
 
   <div class="flujo">
-    <div class="paso">Picking registrado<small>factura «LISTO PARA CONTROLAR»</small></div><span class="flecha">→</span>
-    <div class="paso a">1 · Compras controla<small>picking vs factura / OC</small></div><span class="flecha">→</span>
-    <div class="paso b">2 · Operario cuenta<small>en el celular, físico</small></div><span class="flecha">→</span>
-    <div class="paso c">Desglose color / talle<small>solo códigos sin variante</small></div><span class="flecha">→</span>
-    <div class="paso d">Controlado<small>vuelve a Compras con diferencias</small></div>
+    <div class="paso">Recepción INDO<small>factura cargada · En depósito</small></div><span class="flecha">→</span>
+    <div class="paso a">1 · Compras hace el picking<small><b>ya existe</b> · /deposito/picking</small></div><span class="flecha">→</span>
+    <div class="paso">LISTO PARA CONTROLAR<small>lo pone solo el picking</small></div><span class="flecha">→</span>
+    <div class="paso b">2 · Control físico<small>cualquiera con rol Depósito</small></div><span class="flecha">→</span>
+    <div class="paso c">Desglose color × talle<small>renglones color 00 / talle U</small></div><span class="flecha">→</span>
+    <div class="paso d">Controlada<small>fecha y quién controló en la recepción</small></div>
   </div>
 
-  <div class="nota"><b>Idea central:</b> el picking a veces viene <b>solo con el código</b> (ej. <b>CF2301 · 120 u.</b>) sin color ni talle. El operario no puede “confirmar” esa línea: tiene que <b>abrirla en color × talle</b> con lo que físicamente hay. Hasta que la suma no esté cargada (o marcada la diferencia), la línea queda violeta y no se puede cerrar el control.</div>
+  <div class="nota"><b>Qué es “sin variante” en los datos reales:</b> en el picking esos renglones vienen con <b>color 00</b> y/o <b>talle U</b> (ej. <b>SZ267102 · 00 · U · 32 u.</b>). Hoy son 4.425 de 10.600 renglones. En el control físico esos renglones piden <b>desglose</b>: el operario carga en la grilla los colores y talles que hay en el piso. <b>El picking no se toca</b>: el desglose queda guardado aparte y se ve desplegando el renglón.</div>
 
-  <!-- ================= PASO 1: COMPRAS (PC) ================= -->
-  <h2>1 · Encargado de compras — chequea el picking (PC)</h2>
+  <!-- ================= RECEPCIÓN INDO ================= -->
+  <h2>Recepción INDO — dónde aparece (PC)</h2>
   <div class="pantallas">
     <div class="pc">
-      <div class="pc-h">
-        <span class="t">Control de mercadería</span>
-        <span class="chip am">LISTO PARA CONTROLAR</span>
-        <span class="sub" style="margin-left:auto">Depósito → Recepción INDO → Factura A-0004-00018233</span>
-      </div>
-      <div class="pc-h" style="gap:8px">
-        <span class="sel">Proveedor: <b>TEXTIL ANDES SRL</b></span>
-        <span class="sel">Factura: <b>A-0004-00018233</b></span>
-        <span class="sel">OC: <b>15183 · 15347</b></span>
-        <span class="sel">Picking: <b>#2</b> · 24/11 · registró <b>Lucas</b></span>
-      </div>
-      <div class="kpis">
-        <div class="kpi"><span>Unidades en factura</span><b class="num">612</b></div>
-        <div class="kpi"><span>Unidades en picking</span><b class="num">606</b></div>
-        <div class="kpi"><span>Diferencia</span><b class="num" style="color:var(--rojo)">−6</b></div>
-        <div class="kpi"><span>Líneas sin color / talle</span><b class="num" style="color:var(--vi)">2</b></div>
-      </div>
+      <div class="pc-h"><span class="t">Recepción INDO</span><span class="sub" style="margin-left:auto">orden: Listo para controlar → En depósito → resto</span></div>
       <table>
-        <thead><tr><th>Artículo</th><th>Descripción</th><th>Color</th><th>Talle</th><th class="r">OC</th><th class="r">Factura</th><th class="r">Picking</th><th class="r">Dif.</th><th>OK</th></tr></thead>
+        <thead><tr><th>Ingreso</th><th>Proveedor</th><th>Factura</th><th>N° OC</th><th>Estado</th><th>Picking</th><th>Control físico <span class="chip vi" style="font-size:10px">nuevo</span></th><th>Controlada</th></tr></thead>
         <tbody>
-          <tr><td><b>CF1188</b></td><td class="sub">Remera básica algodón</td><td><span class="c col">NEGRO</span></td><td><span class="c tal">M</span></td><td class="r num">60</td><td class="r num">60</td><td class="r num">60</td><td class="r num sub">0</td><td><span class="ck on">✓</span></td></tr>
-          <tr><td><b>CF1188</b></td><td class="sub">Remera básica algodón</td><td><span class="c col">NEGRO</span></td><td><span class="c tal">L</span></td><td class="r num">60</td><td class="r num">60</td><td class="r num">54</td><td class="r num" style="color:var(--rojo)">−6</td><td><span class="ck x">!</span></td></tr>
-          <tr class="sinvar"><td><b>CF2301</b></td><td class="sub">Buzo canguro frisa</td><td><span class="c falta">sin color</span></td><td><span class="c falta">sin talle</span></td><td class="r num">120</td><td class="r num">120</td><td class="r num">120</td><td class="r num sub">0</td><td><span class="ck on">✓</span></td></tr>
-          <tr class="sinvar"><td><b>ZM0457</b></td><td class="sub">Jean mom tiro alto</td><td><span class="c falta">sin color</span></td><td><span class="c falta">sin talle</span></td><td class="r num">96</td><td class="r num">96</td><td class="r num">96</td><td class="r num sub">0</td><td><span class="ck on">✓</span></td></tr>
-          <tr><td><b>CF0912</b></td><td class="sub">Campera rompeviento</td><td><span class="c col">AZUL</span></td><td><span class="c tal">XL</span></td><td class="r num">36</td><td class="r num">36</td><td class="r num">36</td><td class="r num sub">0</td><td><span class="ck">&nbsp;</span></td></tr>
-          <tr><td colspan="9" class="sub" style="font-size:12px">… 14 líneas más</td></tr>
+          <tr><td class="num">26/11</td><td><b>Elordi S.A.</b></td><td class="num">0010-00079672</td><td class="num" style="color:var(--sky)">15116</td><td><span class="chip am">LISTO PARA CONTROLAR</span></td><td><span class="chip sky">Picking #1</span></td><td><span class="chip">Pendiente</span></td><td class="sub">pendiente</td></tr>
+          <tr><td class="num">26/11</td><td><b>Cristobal Colon S R L</b></td><td class="num">0161-00313302</td><td class="num" style="color:var(--sky)">15119</td><td><span class="chip am">LISTO PARA CONTROLAR</span></td><td><span class="chip sky">Picking #1</span></td><td><span class="chip am">En curso · Sofía 40%</span></td><td class="sub">pendiente</td></tr>
+          <tr><td class="num">26/11</td><td><b>Id Argentina SA</b></td><td class="num">0011-00140101</td><td class="num" style="color:var(--sky)">15352</td><td><span class="chip am">LISTO PARA CONTROLAR</span></td><td><span class="chip sky">Picking #1</span></td><td><span class="chip rojo">Hecho · −3</span></td><td class="sub">pendiente</td></tr>
+          <tr><td class="num">13/11</td><td><b>Elordi S.A.</b></td><td class="num">0010-00079439</td><td class="num" style="color:var(--sky)">15116</td><td><span class="chip">En deposito</span></td><td><span class="chip sky">Picking #1</span></td><td><span class="chip em">Hecho · OK</span></td><td style="color:#6ee7b7">18/11<br><span class="sub" style="font-size:10px">Sofía</span></td></tr>
         </tbody>
       </table>
-      <div class="aviso vi" style="max-width:640px">2 líneas vinieron solo con código. Al pasarlo al operario le va a pedir el <b>desglose por color y talle</b> de lo que hay en el piso.</div>
-      <div class="pie">
-        <span class="sub" style="margin-right:auto">Observación para el operario: <span class="inp" style="min-width:260px;text-align:left;font-weight:500;color:var(--sub)">Ojo CF1188 L, faltan 6 según picking</span></span>
-        <span class="sel">Asignar a: <b>Cualquiera de Depósito Indo ▾</b></span>
-        <button class="btn gh">Devolver al picking</button>
-        <button class="btn or">Pasar a control físico →</button>
-      </div>
+      <div class="aviso vi" style="max-width:760px">Columna nueva <b>Control físico</b>: Pendiente / En curso (quién y %) / Hecho (OK o con diferencia). Al tocarla abre el control. Cuando el operario lo cierra, se llena <b>Controlada</b> (fecha + quién) como hoy se hace a mano.</div>
     </div>
   </div>
-  <div class="pregunta">❓ ¿Compras puede corregir cantidades del picking acá, o solo aprueba / devuelve? (en la maqueta solo aprueba o devuelve, el picking se corrige en Picking).</div>
-  <div class="pregunta">❓ ¿El control físico se asigna a un operario puntual o lo toma cualquiera del depósito Indo?</div>
+  <div class="pregunta">❓ Al cerrar el control con diferencias, ¿igual se marca «Controlada» o queda esperando que Compras lo revise? (en la maqueta: si está OK se marca solo; con diferencia queda en rojo hasta que Compras lo acepte).</div>
 
-  <!-- ================= PASO 2: OPERARIO (CELULAR) ================= -->
-  <h2>2 · Operario — cuenta lo físico (celular)</h2>
+  <!-- ================= OPERARIO (CELULAR) ================= -->
+  <h2>2 · Control físico — operario en el celular</h2>
   <div class="pantallas">
 
-    <!-- Lista de controles -->
     <div class="tel">
-      <div class="tel-lbl">A · Mis controles</div>
+      <div class="tel-lbl">A · Para controlar</div>
       <div class="back">← Depósito</div>
-      <div class="tit">📦 Control de mercadería</div>
-      <div class="seg"><span class="on">Pendientes · 3</span><span>En curso · 1</span><span>Hechos</span></div>
+      <div class="tit">📦 Control físico</div>
+      <div class="desc">Lo ve cualquiera con rol <b style="color:var(--ink)">Depósito</b>. (Más adelante: asignado por legajo.)</div>
+      <div class="seg"><span class="on">Pendientes · 2</span><span>En curso · 1</span><span>Hechos</span></div>
       <div class="card on">
-        <div class="fila"><span class="cod">TEXTIL ANDES</span><span class="chip sky der">Nuevo</span></div>
-        <div class="desc">Fact. A-0004-00018233 · OC 15183 / 15347</div>
-        <div class="fila" style="margin-top:6px;font-size:12.5px"><span><b>19</b> líneas · <b>606</b> u.</span><span class="chip vi der">2 sin color/talle</span></div>
-        <div class="desc" style="color:#fdba74">💬 Ojo CF1188 L, faltan 6 según picking</div>
+        <div class="fila"><span class="cod">Elordi S.A.</span><span class="chip sky der">Nuevo</span></div>
+        <div class="desc">Fact. 0010-00079672 · OC 15116 · ingresó 26/11</div>
+        <div class="fila" style="margin-top:6px;font-size:12.5px"><span><b>14</b> renglones · <b>212</b> u.</span><span class="chip vi der">3 para desglosar</span></div>
       </div>
       <div class="card">
-        <div class="fila"><span class="cod">HILADOS DEL SUR</span><span class="chip am der">En curso 40%</span></div>
-        <div class="desc">Fact. B-0002-00004411 · OC 15402</div>
+        <div class="fila"><span class="cod">Cristobal Colon</span><span class="chip am der">Sofía · 40%</span></div>
+        <div class="desc">Fact. 0161-00313302 · OC 15119</div>
         <div class="prog"><i style="width:40%"></i></div>
+        <div class="desc">Otro operario lo puede continuar.</div>
       </div>
       <div class="card">
-        <div class="fila"><span class="cod">CONFECC. NORTE</span><span class="chip der">Nuevo</span></div>
-        <div class="desc">Fact. A-0001-00007710 · OC 15390</div>
-        <div class="fila" style="margin-top:6px;font-size:12.5px"><span><b>6</b> líneas · <b>180</b> u.</span></div>
+        <div class="fila"><span class="cod">Id Argentina SA</span><span class="chip sky der">Nuevo</span></div>
+        <div class="desc">Fact. 0011-00140101 · OC 15352</div>
+        <div class="fila" style="margin-top:6px;font-size:12.5px"><span><b>9</b> renglones · <b>140</b> u.</span></div>
       </div>
     </div>
 
-    <!-- Detalle del picking -->
     <div class="tel">
-      <div class="tel-lbl">B · Líneas del picking</div>
-      <div class="back">← Mis controles</div>
-      <div class="tit">TEXTIL ANDES</div>
-      <div class="desc">Fact. A-0004-00018233 · Picking #2</div>
+      <div class="tel-lbl">B · Renglones del picking</div>
+      <div class="back">← Para controlar</div>
+      <div class="tit">Elordi S.A.</div>
+      <div class="desc">Fact. 0010-00079672 · Picking #1</div>
       <div class="prog"><i style="width:32%"></i></div>
-      <div class="desc"><b style="color:var(--ink)">6 de 19</b> líneas controladas · <b style="color:var(--vi)">2 para desglosar</b></div>
+      <div class="desc"><b style="color:var(--ink)">5 de 14</b> controlados · <b style="color:var(--vi)">3 para desglosar</b></div>
       <div class="bus">🔎 Buscar o escanear artículo<span class="cam">📷</span></div>
-      <div class="seg"><span class="on">Todas</span><span>Faltan</span><span>Desglosar</span><span>Con dif.</span></div>
+      <div class="seg"><span class="on">Todos</span><span>Faltan</span><span>Desglosar</span><span>Con dif.</span></div>
 
       <div class="card" style="border-color:rgba(167,139,250,.55);box-shadow:inset 3px 0 0 var(--vi)">
-        <div class="fila"><span class="cod">CF2301</span><span class="c falta">sin color/talle</span><span class="der big num">120</span></div>
-        <div class="desc">Buzo canguro frisa</div>
-        <div class="fila" style="margin-top:7px"><span class="desc" style="margin:0">Cargá colores y talles reales</span><button class="btn vi der" style="padding:7px 12px;font-size:12.5px">Desglosar →</button></div>
+        <div class="fila"><span class="cod">SZ267102</span><span class="c falta">color 00</span><span class="c falta">talle U</span><span class="der big num">32</span></div>
+        <div class="desc">Sin color ni talle en el picking</div>
+        <div class="fila" style="margin-top:7px"><span class="desc" style="margin:0">Cargá lo que hay en el piso</span><button class="btn vi der" style="padding:7px 12px;font-size:12.5px">Desglosar →</button></div>
+      </div>
+
+      <div class="card" style="border-color:rgba(167,139,250,.55);box-shadow:inset 3px 0 0 var(--vi)">
+        <div class="fila"><span class="cod">RU261400</span><span class="c falta">color 00</span><span class="c tal">412</span><span class="der big num">25</span></div>
+        <div class="desc">Tiene talle, falta el color</div>
+        <div class="fila" style="margin-top:7px"><span class="desc" style="margin:0">Grilla de colores para el talle 412</span><button class="btn vi der" style="padding:7px 12px;font-size:12.5px">Desglosar →</button></div>
       </div>
 
       <div class="card">
-        <div class="fila"><span class="cod">CF1188</span><span class="c col">NEGRO</span><span class="c tal">L</span><span class="der big num">54</span></div>
-        <div class="desc">Remera básica algodón · <span style="color:#fdba74">💬 faltan 6 según picking</span></div>
+        <div class="fila"><span class="cod">CA16405C</span><span class="c col">02</span><span class="c tal">M</span><span class="der big num">18</span></div>
         <div class="fila" style="margin-top:7px">
           <span class="desc" style="margin:0">Contado</span>
-          <div class="stepper der"><button>−</button><span class="v num">54</span><button>+</button></div>
-          <span class="ck on">✓</span>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="fila"><span class="cod">CF0912</span><span class="c col">AZUL</span><span class="c tal">XL</span><span class="der big num">36</span></div>
-        <div class="desc">Campera rompeviento</div>
-        <div class="fila" style="margin-top:7px">
-          <span class="desc" style="margin:0">Contado</span>
-          <div class="stepper der"><button>−</button><span class="v num" style="color:var(--rojo)">33</span><button>+</button></div>
+          <div class="stepper der"><button>−</button><span class="v num" style="color:var(--rojo)">15</span><button>+</button></div>
           <span class="ck x">!</span>
         </div>
-        <div class="aviso rojo" style="margin-top:7px;padding:6px 9px">Faltan 3 · <u>Motivo:</u> No llegó ▾</div>
+        <div class="aviso rojo" style="margin-top:7px;padding:6px 9px">Faltan 3 · Motivo: No llegó ▾</div>
       </div>
 
       <div class="card" style="opacity:.6">
-        <div class="fila"><span class="cod">CF1188</span><span class="c col">NEGRO</span><span class="c tal">M</span><span class="der big num">60</span></div>
-        <div class="desc">Contado 60 · ✓ igual al picking</div>
+        <div class="fila"><span class="cod">CA16405C</span><span class="c col">02</span><span class="c tal">S</span><span class="der big num">12</span></div>
+        <div class="desc">Contado 12 · ✓ igual al picking</div>
       </div>
-      <div class="desc" style="margin-top:8px">Tocar ✓ = “está todo lo del picking”. Si cuenta distinto, el número se pone rojo (falta) o verde flúor (sobra).</div>
+      <div class="desc" style="margin-top:8px">Color con variante: se cuenta y ✓. Color 00 o talle U: no tiene ✓, hay que desglosar.</div>
     </div>
 
-    <!-- Desglose color × talle -->
     <div class="tel">
-      <div class="tel-lbl">C · Desglosar código sin variante</div>
-      <div class="back">← Líneas del picking</div>
-      <div class="tit">CF2301 <span class="c falta">sin color/talle</span></div>
-      <div class="desc">Buzo canguro frisa · picking dice <b style="color:var(--ink)">120 u.</b></div>
-
+      <div class="tel-lbl">C · Desglosar SZ267102</div>
+      <div class="back">← Renglones del picking</div>
+      <div class="tit">SZ267102 <span class="c falta">00 · U</span></div>
+      <div class="desc">El picking dice <b style="color:var(--ink)">32 u.</b> sin color ni talle</div>
       <div class="desc" style="margin-top:12px;color:var(--ink);font-weight:700">Cargá cuántas hay de cada color y talle</div>
 
       <table class="mtx" id="mtx">
         <thead><tr><th class="colh">Color</th><th>S</th><th>M</th><th>L</th><th>XL</th><th>Tot.</th></tr></thead>
         <tbody>
-          <tr><th class="colh"><span class="sw" style="background:#111"></span>NEGRO</th>
-            <td><input inputmode="numeric" value="10"></td><td><input inputmode="numeric" value="15"></td><td><input inputmode="numeric" value="15"></td><td><input inputmode="numeric" value="8"></td><td class="tot"></td></tr>
-          <tr><th class="colh"><span class="sw" style="background:#9ca3af"></span>GRIS M.</th>
-            <td><input inputmode="numeric" value="8"></td><td><input inputmode="numeric" value="12"></td><td><input inputmode="numeric" value="12"></td><td><input inputmode="numeric" value="6"></td><td class="tot"></td></tr>
-          <tr><th class="colh"><span class="sw" style="background:#1e3a8a"></span>AZUL</th>
-            <td><input inputmode="numeric" value=""></td><td><input inputmode="numeric" value="10"></td><td><input inputmode="numeric" value="10"></td><td><input inputmode="numeric" value=""></td><td class="tot"></td></tr>
+          <tr><th class="colh"><span class="sw" style="background:#111"></span>01 NEGRO</th>
+            <td><input inputmode="numeric" value="2"></td><td><input inputmode="numeric" value="4"></td><td><input inputmode="numeric" value="4"></td><td><input inputmode="numeric" value="2"></td><td class="tot"></td></tr>
+          <tr><th class="colh"><span class="sw" style="background:#f5f5f4"></span>02 BLANCO</th>
+            <td><input inputmode="numeric" value="2"></td><td><input inputmode="numeric" value="4"></td><td><input inputmode="numeric" value="4"></td><td><input inputmode="numeric" value=""></td><td class="tot"></td></tr>
+          <tr><th class="colh" style="color:#fcd34d"><span class="sw" style="background:#65a30d"></span>VERDE ⚠</th>
+            <td><input inputmode="numeric" value=""></td><td><input inputmode="numeric" value="3"></td><td><input inputmode="numeric" value="3"></td><td><input inputmode="numeric" value=""></td><td class="tot"></td></tr>
         </tbody>
         <tfoot><tr><th class="colh">Tot.</th><td class="tot" data-c="0"></td><td class="tot" data-c="1"></td><td class="tot" data-c="2"></td><td class="tot" data-c="3"></td><td class="tot" id="gran"></td></tr></tfoot>
       </table>
       <div class="add"><span>+ Color</span><span>+ Talle</span></div>
-      <div class="desc" style="margin-top:6px">Colores y talles sugeridos del maestro de artículos (los que existen para CF2301). Si aparece uno que no está, “+ Color” lo pide igual y queda marcado para revisar.</div>
+      <div class="aviso" style="border:1px solid rgba(245,158,11,.45);background:rgba(245,158,11,.08);color:#fde68a;padding:6px 9px">⚠ <b>VERDE</b> no existe en Dragon para SZ267102. Se acepta igual y le avisa a Compras para darlo de alta.</div>
 
       <div class="barra">
-        <div class="fila"><span>Repartido</span><b class="der num" id="rep">0 / 120</b></div>
-        <div class="prog" id="barp"><i id="bari" style="width:0"></i></div>
+        <div class="fila"><span>Repartido</span><b class="der num" id="rep">0 / 32</b></div>
+        <div class="prog"><i id="bari" style="width:0"></i></div>
         <div id="estado" class="aviso vi" style="margin-top:6px">…</div>
-        <button class="btn em full" id="guardar">Guardar desglose</button>
+        <button class="btn em full">Guardar desglose</button>
       </div>
     </div>
   </div>
 
-  <div class="nota"><b>Desglose:</b> el operario carga en la grilla cuántas hay de cada color/talle. La barra compara contra lo del picking: <b>violeta</b> mientras falta repartir, <b style="color:#d9f99d">verde flúor</b> si contó de más, <b style="color:#fca5a5">rojo</b> si al guardar queda de menos (pide motivo). Probá cambiar números en la grilla.</div>
-  <div class="nota"><b>Decidido (27/11):</b> el desglose se carga con la <b>grilla color × talle</b> (sin escaneo prenda por prenda).</div>
-  <div class="pregunta">❓ Si el operario carga un color/talle que no existe en Dragon para ese código, ¿se acepta y Compras lo da de alta, o se bloquea?</div>
-
-  <!-- ================= PASO 3: RESULTADO ================= -->
-  <h2>3 · Resultado — vuelve a Compras</h2>
+  <!-- ================= PICKING CON DESPLEGABLE ================= -->
+  <h2>3 · Picking — el renglón sigue igual y se despliega el control físico (PC)</h2>
   <div class="pantallas">
-    <div class="pc" style="flex-basis:640px;max-width:760px">
-      <div class="pc-h"><span class="t">Control terminado</span><span class="chip em">CONTROLADO</span><span class="sub" style="margin-left:auto">Operario: Sofía · 25/11 11:42</span></div>
-      <div class="kpis">
-        <div class="kpi"><span>Picking</span><b class="num">606</b></div>
-        <div class="kpi"><span>Contado físico</span><b class="num">603</b></div>
-        <div class="kpi"><span>Faltan</span><b class="num" style="color:var(--rojo)">3</b></div>
-        <div class="kpi"><span>Desglosados</span><b class="num" style="color:var(--vi)">2 códigos · 216 u.</b></div>
+    <div class="pc">
+      <div class="pc-h">
+        <span class="t">Picking · OC 15116</span>
+        <span class="sel">Factura del picking: <b>0010-00079672 · Elordi S.A.</b></span>
+        <span class="chip em" style="margin-left:auto">Control físico hecho · Sofía 27/11</span>
       </div>
-      <div class="linea"><b>CF0912</b><span class="c col">AZUL</span><span class="c tal">XL</span><span class="sub">picking 36 · contado 33</span><span class="chip rojo der">−3 No llegó</span></div>
-      <div class="linea"><b>CF2301</b><span class="c falta">desglosado</span><span class="sub">NEGRO 48 · GRIS M. 38 · AZUL 20 (+14 sin cargar)</span><span class="chip vi der">ver grilla</span></div>
-      <div class="linea"><b>ZM0457</b><span class="c falta">desglosado</span><span class="sub">CELESTE 52 · NEGRO 44</span><span class="chip em der">96 = 96</span></div>
-      <div class="pie">
-        <button class="btn gh">Reabrir control</button>
-        <button class="btn or">Aprobar ingreso</button>
-      </div>
+      <table>
+        <thead><tr><th></th><th>Artículo</th><th>Color</th><th>Talle</th><th class="r">Pedido</th><th class="r">Recibido</th><th class="r">Saldo</th><th class="r">Control físico</th></tr></thead>
+        <tbody>
+          <tr class="sinvar"><td>▾</td><td><b>SZ267102</b></td><td><span class="c falta">00</span></td><td><span class="c falta">U</span></td><td class="r num">32</td><td class="r num">32</td><td class="r num sub">0</td><td class="r"><span class="chip vi">desglosado · 28 · −4</span></td></tr>
+          <tr class="sinvar"><td></td><td colspan="7" style="padding:4px 8px 12px 28px">
+            <div class="sub" style="font-size:11.5px;margin-bottom:5px">Lo que contó el operario (no cambia el picking):</div>
+            <div class="fila" style="flex-wrap:wrap;gap:6px">
+              <span class="chip"><span class="c col">01 NEGRO</span> S 2 · M 4 · L 4 · XL 2 = <b>12</b></span>
+              <span class="chip"><span class="c col">02 BLANCO</span> S 2 · M 4 · L 4 = <b>10</b></span>
+              <span class="chip" style="border-color:rgba(245,158,11,.5)"><span class="c col">VERDE</span> M 3 · L 3 = <b>6</b> <span style="color:#fcd34d">⚠ no está en Dragon</span></span>
+              <span class="chip rojo">−4 · No llegó</span>
+            </div>
+          </td></tr>
+          <tr><td>▸</td><td><b>CA16405C</b></td><td><span class="c col">02</span></td><td><span class="c tal">M</span></td><td class="r num">18</td><td class="r num">18</td><td class="r num sub">0</td><td class="r"><span class="chip rojo">15 · −3 No llegó</span></td></tr>
+          <tr><td>▸</td><td><b>CA16405C</b></td><td><span class="c col">02</span></td><td><span class="c tal">S</span></td><td class="r num">12</td><td class="r num">12</td><td class="r num sub">0</td><td class="r"><span class="chip em">12 ✓</span></td></tr>
+        </tbody>
+      </table>
+      <div class="desc" style="margin-top:8px">Columna nueva <b>Control físico</b> en el Picking. Los renglones desglosados tienen ▾ para ver la grilla que cargó el operario.</div>
     </div>
   </div>
-  <div class="pregunta">❓ Lo desglosado, ¿tiene que reemplazar la línea del picking (para que Estado de pedidos y stock vean color/talle) o queda solo como registro del control?</div>
-  <div class="pregunta">❓ ¿Qué sigue después de «Aprobar ingreso»? (¿remito de ingreso en Dragon, etiquetas, ubicación en el mapeo?) — lo dejamos para la próxima etapa.</div>
+
+  <div class="nota"><b>Decidido (27/11):</b> desglose con <b>grilla color × talle</b> · lo toma <b>cualquiera con rol Depósito</b> (después por legajo) · color/talle que no está en Dragon <b>se acepta</b> y queda marcado · el desglose <b>no reemplaza</b> el renglón del picking, se ve desplegándolo.</div>
+  <div class="pregunta">❓ Un renglón 00/U, ¿siempre hay que desglosarlo, o hay artículos que de verdad son talle único (gorras, medias) y alcanza con contarlos? Si es así, el operario podría tocar «Es único» en vez de desglosar.</div>
 
 <script>
 (function(){
-  var OBJ=120, t=document.getElementById('mtx');
+  var OBJ=32, t=document.getElementById('mtx');
   function n(v){v=parseInt(v,10);return isNaN(v)?0:v}
   function calc(){
     var filas=t.tBodies[0].rows, colT=[0,0,0,0], g=0;
