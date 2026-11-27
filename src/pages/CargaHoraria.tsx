@@ -50,10 +50,10 @@ export function parsearHora(txt: string): string | null | 'error' {
   return h <= 24 && mi <= 59 ? `${pad(h)}:${pad(mi)}` : 'error'
 }
 const duracion = (ent: string, sal: string) => { let d = aMin(sal) - aMin(ent); if (d <= 0) d += 1440; return d }
-/** Entrada y salida guardadas en `horario` («10:00-21:00») */
-function entSal(c: Carga | undefined): [string, string] {
-  const m = c?.tipo === 'trabajo' ? c.horario?.match(/(\d{2}:\d{2})-(\d{2}:\d{2})/) : null
-  return m ? [m[1], m[2]] : ['', '']
+/** Tramos guardados en `horario` («10:00-14:00 17:00-21:00»); dos = turno cortado */
+function tramos(c: Carga | undefined): [string, string][] {
+  if (c?.tipo !== 'trabajo' || !c.horario) return []
+  return [...c.horario.matchAll(/(\d{2}:\d{2})-(\d{2}:\d{2})/g)].map((m) => [m[1], m[2]] as [string, string])
 }
 
 /** Local del legajo: el lugar, o el sector cuando el lugar dice LOCALES */
@@ -76,14 +76,22 @@ interface DiaProps {
   onGuardar: (emp: Emp, fecha: string, c: Omit<Carga, 'legajo' | 'fecha' | 'local'> | null) => Promise<boolean>
 }
 
-/** Un día de una persona: entrada | salida y las horas abajo. */
+/** Un día de una persona: entrada | salida (y un segundo tramo si es turno cortado) y las horas abajo. */
 function Dia({ emp, fecha, carga, apertura, editable, r, d, onGuardar }: DiaProps) {
-  const [e0, s0] = entSal(carga)
+  const tr = tramos(carga)
+  const [e0, s0] = tr[0] ?? ['', '']
+  const [e1, s1] = tr[1] ?? ['', '']
   const marca = carga?.tipo === 'vacaciones' ? 'V' : carga?.tipo === 'licencia' ? 'L' : ''
   const [ent, setEnt] = useState(marca || e0)
   const [sal, setSal] = useState(s0)
+  const [ent2, setEnt2] = useState(e1)
+  const [sal2, setSal2] = useState(s1)
+  const [cortado, setCortado] = useState(!!e1)
   const [estado, setEstado] = useState<'ok' | 'error' | 'falta' | 'guardando'>('ok')
-  useEffect(() => { setEnt(marca || e0); setSal(s0); setEstado('ok') }, [marca, e0, s0])
+  const reset = useCallback(() => {
+    setEnt(marca || e0); setSal(s0); setEnt2(e1); setSal2(s1); setCortado(!!e1); setEstado('ok')
+  }, [marca, e0, s0, e1, s1])
+  useEffect(() => { reset() }, [reset])
 
   async function confirmar() {
     const e = ent.trim().toLowerCase()
@@ -93,34 +101,38 @@ function Dia({ emp, fecha, carga, apertura, editable, r, d, onGuardar }: DiaProp
       setEstado(ok ? 'ok' : 'error')
       return
     }
-    const he = parsearHora(ent), hs = parsearHora(sal)
-    if (he === 'error' || hs === 'error') { setEstado('error'); return }
-    if (!he && !hs) {
+    const pares = [[parsearHora(ent), parsearHora(sal)], [parsearHora(ent2), parsearHora(sal2)]]
+    if (pares.some(([a, b]) => a === 'error' || b === 'error')) { setEstado('error'); return }
+    if (pares.some(([a, b]) => !!a !== !!b)) { setEstado('falta'); return }
+    const validos = pares.filter(([a, b]) => a && b) as [string, string][]
+    if (!validos.length) {
       if (carga) { setEstado('guardando'); setEstado((await onGuardar(emp, fecha, null)) ? 'ok' : 'error') }
-      else setEstado('ok')
+      else { setCortado(false); setEstado('ok') }
       return
     }
-    if (!he || !hs) { setEstado('falta'); return }
-    if (he === e0 && hs === s0) { setEstado('ok'); return }
+    const horario = validos.map(([a, b]) => `${a}-${b}`).join(' ')
+    if (horario === carga?.horario) { setEstado('ok'); return }
     setEstado('guardando')
-    const ok = await onGuardar(emp, fecha, { tipo: 'trabajo', horario: `${he}-${hs}`, horas: Math.round((duracion(he, hs) / 60) * 100) / 100 })
+    const min = validos.reduce((t, [a, b]) => t + duracion(a, b), 0)
+    const ok = await onGuardar(emp, fecha, { tipo: 'trabajo', horario, horas: Math.round((min / 60) * 100) / 100 })
     setEstado(ok ? 'ok' : 'error')
   }
 
-  function teclas(ev: KeyboardEvent<HTMLInputElement>, c: number) {
+  function teclas(ev: KeyboardEvent<HTMLInputElement>, c: number | null) {
     const ir = (dr: number, dc: number) => {
+      if (c == null) return
       const el = document.querySelector<HTMLInputElement>(`input[data-hr="${r + dr}"][data-hc="${c + dc}"]`)
       if (el) { ev.preventDefault(); el.focus(); el.select() }
     }
     const v = ev.currentTarget.value
     if (ev.key === 'Enter') ir(0, 1)
-    else if (ev.key === 'Escape') { setEnt(marca || e0); setSal(s0); setEstado('ok') }
+    else if (ev.key === 'Escape') reset()
     else if (ev.key === 'ArrowDown') ir(1, 0)
     else if (ev.key === 'ArrowUp') ir(-1, 0)
     else if (ev.key === 'ArrowRight' && ev.currentTarget.selectionStart === v.length) ir(0, 1)
     else if (ev.key === 'ArrowLeft' && ev.currentTarget.selectionStart === 0) ir(0, -1)
   }
-  // Se guarda cuando el foco sale del día (no al pasar de entrada a salida)
+  // Se guarda cuando el foco sale del día (no al pasar de un casillero a otro del mismo día)
   const salir = (ev: FocusEvent<HTMLDivElement>) => {
     if (!ev.currentTarget.contains(ev.relatedTarget as Node | null)) void confirmar()
   }
@@ -133,14 +145,34 @@ function Dia({ emp, fecha, carga, apertura, editable, r, d, onGuardar }: DiaProp
   const pie = especial
     ? carga!.tipo === 'vacaciones' ? 'Vacaciones' : 'Licencia'
     : franco ? (estado === 'falta' ? 'falta un horario' : 'Franco') : hhmm(carga!.horas * 60)
-  const rojoEnt = !franco && !especial && e0 && e0 > apertura.abre
-  const rojoSal = !franco && !especial && s0 && s0 < apertura.cierra
+  const ultimaSal = tr.length ? tr[tr.length - 1][1] : ''
+  const rojoEnt = !!e0 && e0 > apertura.abre
+  const rojoSal = (s: string) => !!s && s === ultimaSal && s < apertura.cierra
   const input = 'h-8 w-full min-w-0 bg-transparent text-center text-[13px] tabular-nums outline-none focus:bg-surface-solid focus:ring-1 focus:ring-sky-500'
   const anillo = estado === 'error' ? 'ring-1 ring-red-500' : estado === 'falta' ? 'ring-1 ring-amber-500' : ''
   const titulo = estado === 'error' ? 'Hora no válida: probá 10, 10:30 o 17 (o V / L en la entrada)' : estado === 'falta' ? 'Falta la entrada o la salida' : undefined
+  const par = (
+    a: string, b: string, setA: (v: string) => void, setB: (v: string) => void,
+    cA: number | null, rojoA: boolean, rojoB: boolean, segundo = false,
+  ) => (
+    <div className={`grid grid-cols-2 divide-x divide-line ${segundo ? 'border-t border-dashed border-line' : ''}`}>
+      <input
+        value={a} readOnly={!editable} aria-label={`${segundo ? 'Segunda entrada' : 'Entrada'} ${emp.nombre} ${fecha}`} placeholder={editable && (franco || segundo) ? '–' : ''}
+        onChange={(e) => { setA(e.target.value); setEstado('ok') }} onFocus={(e) => e.currentTarget.select()}
+        onKeyDown={(e) => teclas(e, cA)} data-hr={cA != null ? r : undefined} data-hc={cA != null ? cA : undefined}
+        className={`${input} ${rojoA ? 'font-semibold text-red-400' : 'text-ink'} placeholder:text-sub/40`}
+      />
+      <input
+        value={b} readOnly={!editable} aria-label={`${segundo ? 'Segunda salida' : 'Salida'} ${emp.nombre} ${fecha}`} placeholder={editable && (franco || segundo) ? '–' : ''}
+        onChange={(e) => { setB(e.target.value); setEstado('ok') }} onFocus={(e) => e.currentTarget.select()}
+        onKeyDown={(e) => teclas(e, cA != null ? cA + 1 : null)} data-hr={cA != null ? r : undefined} data-hc={cA != null ? cA + 1 : undefined}
+        className={`${input} ${rojoB ? 'font-semibold text-red-400' : 'text-ink'} placeholder:text-sub/40`}
+      />
+    </div>
+  )
 
   return (
-    <div onBlur={salir} className={`overflow-hidden rounded-lg border border-line ${fondo} ${anillo} ${estado === 'guardando' ? 'opacity-60' : ''}`} title={titulo}>
+    <div onBlur={salir} className={`group/dia overflow-hidden rounded-lg border border-line ${fondo} ${anillo} ${estado === 'guardando' ? 'opacity-60' : ''}`} title={titulo}>
       {especial ? (
         <input
           value={ent} readOnly={!editable} aria-label={`${emp.nombre} ${fecha}`}
@@ -149,23 +181,22 @@ function Dia({ emp, fecha, carga, apertura, editable, r, d, onGuardar }: DiaProp
           className={`${input} font-bold ${carga!.tipo === 'vacaciones' ? 'text-teal-500' : 'text-amber-500'}`}
         />
       ) : (
-        <div className="grid grid-cols-2 divide-x divide-line">
-          <input
-            value={ent} readOnly={!editable} aria-label={`Entrada ${emp.nombre} ${fecha}`} placeholder={editable && franco ? '–' : ''}
-            onChange={(e) => { setEnt(e.target.value); setEstado('ok') }} onFocus={(e) => e.currentTarget.select()}
-            onKeyDown={(e) => teclas(e, d * 2)} data-hr={r} data-hc={d * 2}
-            className={`${input} ${rojoEnt ? 'font-semibold text-red-400' : 'text-ink'} placeholder:text-sub/40`}
-          />
-          <input
-            value={sal} readOnly={!editable} aria-label={`Salida ${emp.nombre} ${fecha}`} placeholder={editable && franco ? '–' : ''}
-            onChange={(e) => { setSal(e.target.value); setEstado('ok') }} onFocus={(e) => e.currentTarget.select()}
-            onKeyDown={(e) => teclas(e, d * 2 + 1)} data-hr={r} data-hc={d * 2 + 1}
-            className={`${input} ${rojoSal ? 'font-semibold text-red-400' : 'text-ink'} placeholder:text-sub/40`}
-          />
-        </div>
+        <>
+          {par(ent, sal, setEnt, setSal, d * 2, rojoEnt, rojoSal(s0))}
+          {cortado && par(ent2, sal2, setEnt2, setSal2, null, false, rojoSal(s1), true)}
+        </>
       )}
-      <div className={`border-t border-line py-0.5 text-center text-[11px] tabular-nums ${franco || especial ? 'text-sub' : emp.plan ? 'bg-emerald-500/10 text-ink' : 'bg-sky-500/10 text-ink'} ${estado === 'falta' ? 'text-amber-500' : ''}`}>
+      <div className={`flex items-center justify-center gap-1 border-t border-line py-0.5 text-center text-[11px] tabular-nums ${franco || especial ? 'text-sub' : emp.plan ? 'bg-emerald-500/10 text-ink' : 'bg-sky-500/10 text-ink'} ${estado === 'falta' ? 'text-amber-500' : ''}`}>
         {pie}
+        {editable && !especial && !cortado && (
+          <button
+            type="button" onClick={() => setCortado(true)} tabIndex={-1}
+            className="rounded px-1 text-[10px] leading-none text-sub opacity-0 transition hover:text-sky-500 focus:opacity-100 group-hover/dia:opacity-100"
+            title="Agregar un segundo tramo (turno cortado)" aria-label="Agregar turno cortado"
+          >
+            + tramo
+          </button>
+        )}
       </div>
     </div>
   )
@@ -319,8 +350,7 @@ export default function CargaHoraria() {
   const minutosDe = (leg: string) => fechas.reduce((s, f) => s + (cargas.get(`${leg}|${f}`)?.horas ?? 0) * 60, 0)
   const contratoTotal = personas.reduce((s, e) => s + (e.horasSem ?? 0), 0)
   const enHora = (f: string, h: string) => personas.filter((e) => {
-    const [a, b] = entSal(cargas.get(`${e.legajo}|${f}`))
-    return a && b && a <= h && (b >= h || b < a)
+    return tramos(cargas.get(`${e.legajo}|${f}`)).some(([a, b]) => a <= h && (b >= h || b < a))
   }).length
 
   const legajosFiltrados = useMemo(() => {
