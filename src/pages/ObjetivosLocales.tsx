@@ -203,7 +203,7 @@ export default function ObjetivosLocales({ soloLocal }: { soloLocal?: string } =
           <button onClick={() => mover(-1)} aria-label="Mes anterior" className="btn-press grid h-8 w-8 place-items-center rounded-lg border border-line bg-surface2 text-ink hover:bg-line"><ChevronLeft size={16} aria-hidden /></button>
           <span className="text-base font-semibold text-ink">{nombreMes} <span className="text-xs font-normal text-sub">{ddmm(rango.desde)} al {ddmm(rango.hasta)}</span></span>
           <button onClick={() => mover(1)} aria-label="Mes siguiente" className="btn-press grid h-8 w-8 place-items-center rounded-lg border border-line bg-surface2 text-ink hover:bg-line"><ChevronRight size={16} aria-hidden /></button>
-          {verTodo && (
+          {isAdmin && (
             <div className="inline-flex h-8 overflow-hidden rounded-lg border border-line bg-surface2" role="group" aria-label="Grupo de locales">
               {GRUPOS.map(([g, t]) => (
                 <button key={g || 'todos'} onClick={() => elegirGrupo(g)} aria-pressed={grupoSel === g}
