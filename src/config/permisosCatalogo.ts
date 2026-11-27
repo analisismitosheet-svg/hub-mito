@@ -1,4 +1,6 @@
 import {
+  Fingerprint,
+  CalendarClock,
   Boxes,
   Banknote,
   ScanLine,
@@ -256,6 +258,15 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
     id: 'rrhh-feriados', areaId: 'rrhh', titulo: 'Feriados', descripcion: 'Días que un local no abre (sin objetivo)',
     icon: CalendarOff, color: '#f97316', acciones: { ver: 'rrhh.feriados.view', editar: 'rrhh.feriados.edit' },
     etiquetas: { editar: 'Cargar y quitar' },
+  },
+
+  {
+    id: 'rrhh-carga-horaria', areaId: 'rrhh', titulo: 'Carga horaria', descripcion: 'Planilla mensual de horarios (modifican solo admin y RR. HH.)',
+    icon: CalendarClock, color: '#0ea5e9', acciones: { ver: 'rrhh.horarios.view' },
+  },
+  {
+    id: 'rrhh-marcaciones', areaId: 'rrhh', titulo: 'Marcaciones', descripcion: 'Fichadas del reloj contra la carga horaria (suben solo admin y RR. HH.)',
+    icon: Fingerprint, color: '#c026d3', acciones: { ver: 'rrhh.marcaciones.view' },
   },
 
   // ===== Tesorería =====

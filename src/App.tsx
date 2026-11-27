@@ -57,6 +57,7 @@ import EmpleadosPage from '@/pages/Empleados'
 import Cumpleanios from '@/pages/Cumpleanios'
 import FeriadosRrhh from '@/pages/FeriadosRrhh'
 import CargaHoraria from '@/pages/CargaHoraria'
+import Marcaciones from '@/pages/Marcaciones'
 import ArqueosLocales from '@/pages/ArqueosLocales'
 import MisArqueos from '@/pages/MisArqueos'
 import RequerimientoNuevo from '@/pages/RequerimientoNuevo'
@@ -1116,6 +1117,14 @@ export default function App() {
             element={
               <PermissionRoute permiso="rrhh.horarios.view">
                 <CargaHoraria />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/rrhh/marcaciones"
+            element={
+              <PermissionRoute permiso="rrhh.marcaciones.view">
+                <Marcaciones />
               </PermissionRoute>
             }
           />
