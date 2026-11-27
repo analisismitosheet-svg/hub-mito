@@ -102,7 +102,7 @@ function DiaCarga({ emp, fecha, carga, varia, enOtro, apertura, editable, r, d, 
     : franco ? (estado === 'falta' ? 'falta hora' : enOtro ? `en ${enOtro}` : 'Franco') : hhmm(carga!.horas * 60)
   const ultimaSal = tr.length ? tr[tr.length - 1][1] : ''
   const rojoSal = (s: string) => !!s && s === ultimaSal && s < apertura.cierra
-  const input = 'h-7 w-full min-w-0 bg-transparent text-center text-[12px] tabular-nums outline-none focus:bg-surface-solid focus:ring-1 focus:ring-sky-500'
+  const input = 'h-7 w-full min-w-0 bg-transparent text-center text-[12px] tabular-nums outline-none focus:bg-[var(--surface-solid)] focus:ring-1 focus:ring-sky-500'
   const anillo = estado === 'error' ? 'ring-1 ring-red-500' : estado === 'falta' ? 'ring-1 ring-amber-500' : ''
   const titulo = estado === 'error' ? 'Hora no válida: probá 10, 10:30 o 17 (o V / L en la entrada)' : estado === 'falta' ? 'Falta la entrada o la salida' : undefined
   const par = (a: string, b: string, setA: (v: string) => void, setB: (v: string) => void, cA: number | null, rojoA: boolean, rojoB: boolean, segundo = false) => (
@@ -640,7 +640,7 @@ export default function PlanillaMensual({ modo, puedeEditar, acciones, recargar 
             className="h-9 w-full rounded-lg border border-line bg-surface2 pl-8 pr-2 text-sm text-ink"
           />
           {legajosFiltrados.length > 0 && (
-            <ul className="absolute z-30 mt-1 w-full overflow-hidden rounded-xl border border-line bg-surface-solid shadow-lg">
+            <ul className="absolute z-30 mt-1 w-full overflow-hidden rounded-xl border border-line bg-[var(--surface-solid)] shadow-lg">
               {legajosFiltrados.map((e) => (
                 <li key={e.legajo}>
                   <button onClick={() => { setLegajo(e.legajo); setBusca(''); setAviso(null) }} className="flex w-full justify-between gap-2 px-3 py-1.5 text-left text-sm hover:bg-sky-500/10">
@@ -681,7 +681,7 @@ export default function PlanillaMensual({ modo, puedeEditar, acciones, recargar 
                 aria-label="Buscar legajo para agregar" className="h-9 w-full rounded-lg border border-line bg-surface2 pl-8 pr-2 text-sm text-ink"
               />
               {candidatosAlta.length > 0 && (
-                <ul className="absolute z-30 mt-1 w-full overflow-hidden rounded-xl border border-line bg-surface-solid shadow-lg">
+                <ul className="absolute z-30 mt-1 w-full overflow-hidden rounded-xl border border-line bg-[var(--surface-solid)] shadow-lg">
                   {candidatosAlta.map((e) => {
                     const ls = localesDe(e)
                     return (
@@ -757,7 +757,7 @@ export default function PlanillaMensual({ modo, puedeEditar, acciones, recargar 
               <table className="w-full min-w-[60rem] border-separate border-spacing-1 text-xs">
                 <thead>
                   <tr className="text-[11px]">
-                    <th className="sticky left-0 z-20 w-[15.5rem] bg-surface-solid px-2 py-1.5 text-left font-medium text-sub">
+                    <th className="sticky left-0 z-20 w-[15.5rem] bg-[var(--surface-solid)] px-2 py-1.5 text-left font-medium text-sub">
                       <div className="flex items-end justify-between gap-2">
                         <span className="uppercase tracking-wider">Legajo</span>
                         <span className="w-[4.5rem] text-center text-[9px] font-normal normal-case leading-tight">horas semana<br />{esCarga ? 'contrato / cargadas' : 'planif. / marcadas'}</span>
@@ -785,7 +785,7 @@ export default function PlanillaMensual({ modo, puedeEditar, acciones, recargar 
                     const ok = arriba != null && Math.abs(abajo - arriba) < 0.5
                     return (
                       <tr key={`${e.legajo}|${e.local}`}>
-                        <td className="sticky left-0 z-10 bg-surface-solid px-1 align-top">
+                        <td className="sticky left-0 z-10 bg-[var(--surface-solid)] px-1 align-top">
                           <div className="flex gap-1">
                             <button
                               onClick={() => { setLegajo(e.legajo); setVista('legajo'); setAviso(null) }}
@@ -867,7 +867,7 @@ export default function PlanillaMensual({ modo, puedeEditar, acciones, recargar 
                 {vista === 'local' && personas.length > 0 && (
                   <tfoot>
                     <tr className="text-[11px] text-sub">
-                      <td className="sticky left-0 z-10 bg-surface-solid px-2 py-1">Personas al abrir / al cerrar</td>
+                      <td className="sticky left-0 z-10 bg-[var(--surface-solid)] px-2 py-1">Personas al abrir / al cerrar</td>
                       {columnas.map((col) => {
                         const a = enHora(col, apertura.abre), c = enHora(col, apertura.cierra)
                         return <td key={col.key} className={`rounded-lg bg-surface2 py-1 text-center tabular-nums ${!a || !c ? 'font-bold text-red-400' : ''}`}>{a} / {c}</td>
