@@ -109,3 +109,26 @@ create policy rrhh_marcaciones_ver on public.rrhh_marcaciones for select to auth
 drop policy if exists rrhh_marcaciones_editar on public.rrhh_marcaciones;
 create policy rrhh_marcaciones_editar on public.rrhh_marcaciones for all to authenticated
   using (private.es_rrhh()) with check (private.es_rrhh());
+
+-- =====================================================
+-- 27/11/2026: legajos por local en la planilla (agregar, mover, quitar) sin tocar la nómina.
+-- Sin filas para un legajo = está en el local de su legajo (empleados.lugar / area_sector).
+-- Con filas: está en los locales con desde <= mes y (hasta null o hasta >= mes). Puede estar en dos.
+-- =====================================================
+create table if not exists public.rrhh_planilla_locales (
+  id bigint generated always as identity primary key,
+  legajo text not null,
+  local text not null,
+  desde date not null,
+  hasta date,
+  creado_por uuid default auth.uid(),
+  creado_at timestamptz not null default now()
+);
+create index if not exists rrhh_planilla_locales_legajo on public.rrhh_planilla_locales (legajo);
+alter table public.rrhh_planilla_locales enable row level security;
+drop policy if exists rrhh_planilla_locales_ver on public.rrhh_planilla_locales;
+create policy rrhh_planilla_locales_ver on public.rrhh_planilla_locales for select to authenticated
+  using (private.es_admin() or private.tengo_permiso('rrhh.horarios.view') or private.tengo_permiso('rrhh.marcaciones.view'));
+drop policy if exists rrhh_planilla_locales_editar on public.rrhh_planilla_locales;
+create policy rrhh_planilla_locales_editar on public.rrhh_planilla_locales for all to authenticated
+  using (private.es_rrhh()) with check (private.es_rrhh());

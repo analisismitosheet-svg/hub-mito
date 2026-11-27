@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FocusEvent, type KeyboardEvent, type ReactNode } from 'react'
-import { Check, ChevronLeft, ChevronRight, Copy, Loader2, Pencil, Search, Store, User, X } from 'lucide-react'
+import { ArrowRightLeft, Check, ChevronLeft, ChevronRight, Copy, Loader2, Pencil, Search, Store, Trash2, User, UserPlus, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import {
   dow, ddmm, duracion, hhmm, iso, localDe, lunesDe, parsearHora, sumarDias, tramosDe,
@@ -29,9 +29,9 @@ type Guardar = (emp: Emp, fecha: string, c: Omit<Carga, 'legajo' | 'fecha' | 'lo
 
 /* ---------------- celda de Carga horaria (editable) ---------------- */
 
-interface DiaCargaProps { emp: Emp; fecha: string; carga: Carga | undefined; varia?: string; apertura: Apertura; editable: boolean; r: number; d: number; onGuardar: Guardar }
+interface DiaCargaProps { emp: Emp; fecha: string; carga: Carga | undefined; varia?: string; enOtro?: string; apertura: Apertura; editable: boolean; r: number; d: number; onGuardar: Guardar }
 
-function DiaCarga({ emp, fecha, carga, varia, apertura, editable, r, d, onGuardar }: DiaCargaProps) {
+function DiaCarga({ emp, fecha, carga, varia, enOtro, apertura, editable, r, d, onGuardar }: DiaCargaProps) {
   const tr = carga?.tipo === 'trabajo' ? tramosDe(carga.horario) : []
   const [e0, s0] = tr[0] ?? ['', '']
   const [e1, s1] = tr[1] ?? ['', '']
@@ -96,10 +96,10 @@ function DiaCarga({ emp, fecha, carga, varia, apertura, editable, r, d, onGuarda
   const especial = carga?.tipo === 'vacaciones' || carga?.tipo === 'licencia'
   const fondo = especial
     ? carga!.tipo === 'vacaciones' ? 'bg-teal-500/15' : 'bg-amber-500/15'
-    : franco ? (emp.plan ? 'bg-emerald-500/10' : 'bg-sky-500/15') : ''
+    : franco ? (enOtro ? 'bg-surface2' : emp.plan ? 'bg-emerald-500/10' : 'bg-sky-500/15') : ''
   const pie = especial
     ? carga!.tipo === 'vacaciones' ? 'Vacac.' : 'Licencia'
-    : franco ? (estado === 'falta' ? 'falta hora' : 'Franco') : hhmm(carga!.horas * 60)
+    : franco ? (estado === 'falta' ? 'falta hora' : enOtro ? `en ${enOtro}` : 'Franco') : hhmm(carga!.horas * 60)
   const ultimaSal = tr.length ? tr[tr.length - 1][1] : ''
   const rojoSal = (s: string) => !!s && s === ultimaSal && s < apertura.cierra
   const input = 'h-7 w-full min-w-0 bg-transparent text-center text-[12px] tabular-nums outline-none focus:bg-surface-solid focus:ring-1 focus:ring-sky-500'
@@ -212,6 +212,9 @@ interface Props {
 /** Una columna de la planilla: en Carga horaria un día de la semana (todas sus fechas del mes); en Marcaciones una fecha. */
 interface Columna { key: string; titulo: string; sub: string; fechas: string[]; fecha?: string }
 
+interface Asig { id: number; legajo: string; local: string; desde: string; hasta: string | null }
+const DESDE_SIEMPRE = '2000-01-01'
+
 const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
 const firma = (c: Carga | undefined) => (c ? `${c.tipo}|${c.horario ?? ''}|${c.horas}` : '')
 
@@ -233,6 +236,12 @@ export default function PlanillaMensual({ modo, puedeEditar, acciones, recargar 
   const [editAp, setEditAp] = useState<Apertura | null>(null)
   const [cargando, setCargando] = useState(true)
   const [copiando, setCopiando] = useState(false)
+  const [asig, setAsig] = useState<Asig[]>([])
+  const [agregando, setAgregando] = useState(false)
+  const [buscaAlta, setBuscaAlta] = useState('')
+  const [eleccion, setEleccion] = useState<{ emp: Emp; otros: string[] } | null>(null)
+  const [accion, setAccion] = useState<{ legajo: string; tipo: 'mover' | 'quitar'; destino?: string } | null>(null)
+  const [trabajando, setTrabajando] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
 
@@ -276,21 +285,21 @@ export default function PlanillaMensual({ modo, puedeEditar, acciones, recargar 
           plan: (f.estado_legajo || '').toUpperCase() === 'PLANES ACTIVOS',
           puesto: '',
         }))
-        base.sort((a, b) => a.local.localeCompare(b.local) || Number(a.plan) - Number(b.plan) || (b.horasSem ?? 0) - (a.horasSem ?? 0) || a.nombre.localeCompare(b.nombre))
-        const n = new Map<string, number>()
-        for (const e of base) {
-          if (e.plan) { e.puesto = 'PPP'; continue }
-          const k = (n.get(e.local) ?? 0) + 1
-          n.set(e.local, k)
-          e.puesto = `${e.local} ${k}`
-        }
         setEmps(base)
         onEmpleados?.(base)
       })
+    void leerAsig()
     void supabase.from('rrhh_locales_apertura').select('local,dias,abre,cierra').then(({ data }) => {
       setAperturas(new Map(((data as Apertura[] | null) ?? []).map((a) => [a.local, a])))
     })
   }, [onEmpleados])
+
+  async function leerAsig() {
+    if (!supabase) return
+    const { data, error: e } = await supabase.from('rrhh_planilla_locales').select('id,legajo,local,desde,hasta').order('id')
+    if (e) { setError(e.message); return }
+    setAsig((data as Asig[] | null) ?? [])
+  }
 
   async function leerTabla<T>(tabla: string, campos: string, ini: string, fin: string): Promise<T[]> {
     const out: T[] = []
@@ -323,40 +332,73 @@ export default function PlanillaMensual({ modo, puedeEditar, acciones, recargar 
   }, [desde, hasta, esCarga])
   useEffect(() => { void cargar() }, [cargar, recargar])
 
+  // Mes que manda para saber en qué local está cada legajo (en Marcaciones, el del lunes de la semana)
+  const mesIni = esCarga ? iso(anio, mes, 1) : `${lunes.slice(0, 8)}01`
+  const asigPorLegajo = useMemo(() => {
+    const m = new Map<string, Asig[]>()
+    for (const a of asig) m.set(a.legajo, [...(m.get(a.legajo) ?? []), a])
+    return m
+  }, [asig])
+  /** Locales del legajo ese mes: los de rrhh_planilla_locales vigentes, o el de su legajo si nunca se tocó */
+  const localesDe = useCallback((e: Emp): string[] => {
+    const rs = asigPorLegajo.get(e.legajo)
+    if (!rs) return [e.local]
+    return [...new Set(rs.filter((a) => a.desde <= mesIni && (!a.hasta || a.hasta >= mesIni)).map((a) => a.local))]
+  }, [asigPorLegajo, mesIni])
+  /** Una fila por legajo y local (puede estar en dos), con el puesto LOCAL 1, 2… o PPP */
+  const filas = useMemo(() => {
+    const out: Emp[] = []
+    for (const e of emps) for (const l of localesDe(e)) out.push({ ...e, local: l })
+    out.sort((a, b) => a.local.localeCompare(b.local) || Number(a.plan) - Number(b.plan) || (b.horasSem ?? 0) - (a.horasSem ?? 0) || a.nombre.localeCompare(b.nombre))
+    const n = new Map<string, number>()
+    for (const e of out) {
+      if (e.plan) { e.puesto = 'PPP'; continue }
+      const k = (n.get(e.local) ?? 0) + 1
+      n.set(e.local, k)
+      e.puesto = `${e.local} ${k}`
+    }
+    return out
+  }, [emps, localesDe])
+
   const locales = useMemo(() => {
     const m = new Map<string, number>()
-    for (const e of emps) m.set(e.local, (m.get(e.local) ?? 0) + 1)
+    for (const e of filas) m.set(e.local, (m.get(e.local) ?? 0) + 1)
+    if (local && !m.has(local) && emps.length) m.set(local, 0)
     return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]))
-  }, [emps])
+  }, [filas, local, emps.length])
   useEffect(() => {
-    if (locales.length && !locales.some(([l]) => l === local)) setLocal(locales[0][0])
+    if (locales.length && !local) setLocal(locales[0][0])
   }, [locales, local])
   useEffect(() => { try { if (local) localStorage.setItem(LS_LOCAL, local) } catch { /* sin storage */ } }, [local])
 
-  const empLegajo = useMemo(() => emps.find((e) => e.legajo === legajo), [emps, legajo])
+  const empLegajo = useMemo(() => filas.find((e) => e.legajo === legajo) ?? emps.find((e) => e.legajo === legajo), [filas, emps, legajo])
   const personas = useMemo(
-    () => (vista === 'local' ? emps.filter((e) => e.local === local) : empLegajo ? [empLegajo] : []),
-    [vista, emps, local, empLegajo],
+    () => (vista === 'local' ? filas.filter((e) => e.local === local) : filas.filter((e) => e.legajo === legajo)),
+    [vista, filas, local, legajo],
   )
   const localVista = vista === 'local' ? local : empLegajo?.local ?? ''
   const apertura: Apertura = aperturas.get(localVista) ?? { local: localVista, ...APERTURA_DEF }
 
   /** Horario del mes para un día de la semana: el que más se repite entre sus fechas (y las que difieren) */
-  const plantilla = useCallback((leg: string, col: Columna): { carga: Carga | undefined; varia: string | undefined } => {
+  const plantilla = useCallback((emp: Emp, col: Columna): { carga: Carga | undefined; varia: string | undefined; enOtro?: string } => {
+    const leg = emp.legajo
+    const deOtro = (c: Carga | undefined) => !!c?.local && c.local !== emp.local
+    const clave = (c: Carga | undefined) => (deOtro(c) ? `otro:${c!.local}` : firma(c))
     const cuenta = new Map<string, { n: number; c: Carga | undefined }>()
     for (const f of col.fechas) {
       const c = cargas.get(`${leg}|${f}`)
-      const k = firma(c)
+      const k = clave(c)
       const x = cuenta.get(k) ?? { n: 0, c }
       x.n++
       cuenta.set(k, x)
     }
     const top = [...cuenta.entries()].sort((a, b) => b[1].n - a[1].n || (a[0] ? -1 : 1))[0]
     if (!top) return { carga: undefined, varia: undefined }
-    const otras = col.fechas.filter((f) => firma(cargas.get(`${leg}|${f}`)) !== top[0])
+    const otras = col.fechas.filter((f) => clave(cargas.get(`${leg}|${f}`)) !== top[0])
     const varia = otras.length
-      ? `Distinto en ${otras.map((f) => { const c = cargas.get(`${leg}|${f}`); return `${ddmm(f)} (${c ? (c.tipo === 'trabajo' ? c.horario : c.tipo) : 'franco'})` }).join(', ')}. Si lo cambiás, se pisa en todas las semanas.`
+      ? `Distinto en ${otras.map((f) => { const c = cargas.get(`${leg}|${f}`); return `${ddmm(f)} (${c ? (deOtro(c) ? `en ${c.local}` : c.tipo === 'trabajo' ? c.horario : c.tipo) : 'franco'})` }).join(', ')}. Si lo cambiás, se pisa en todas las semanas.`
       : undefined
+    if (top[0].startsWith('otro:')) return { carga: undefined, varia, enOtro: top[0].slice(5) }
     return { carga: top[1].c, varia }
   }, [cargas])
 
@@ -420,6 +462,78 @@ export default function PlanillaMensual({ modo, puedeEditar, acciones, recargar 
     await cargar()
   }
 
+  const diaAntes = (f: string) => sumarDias(f, -1)
+
+  /** Si el legajo nunca se tocó, deja escrito que está en el local de su legajo desde siempre */
+  async function asegurarBase(e: Emp): Promise<Asig[] | null> {
+    const ya = asigPorLegajo.get(e.legajo)
+    if (ya) return ya
+    const { data, error: er } = await supabase!.from('rrhh_planilla_locales')
+      .insert({ legajo: e.legajo, local: emps.find((x) => x.legajo === e.legajo)?.local ?? e.local, desde: DESDE_SIEMPRE }).select('id,legajo,local,desde,hasta')
+    if (er) { setError(er.message); return null }
+    return (data as Asig[]) ?? []
+  }
+
+  /** Saca el legajo del local desde este mes (las filas que empiezan este mes o después se borran) */
+  async function cerrar(rs: Asig[], loc: string): Promise<boolean> {
+    for (const a of rs.filter((x) => x.local === loc && (!x.hasta || x.hasta >= mesIni))) {
+      const { error: er } = a.desde >= mesIni
+        ? await supabase!.from('rrhh_planilla_locales').delete().eq('id', a.id)
+        : await supabase!.from('rrhh_planilla_locales').update({ hasta: diaAntes(mesIni) }).eq('id', a.id)
+      if (er) { setError(er.message); return false }
+    }
+    return true
+  }
+
+  async function agregarA(e: Emp, destino: string, mover: string[] = []) {
+    if (!supabase) return
+    setTrabajando(true); setError(null); setAviso(null)
+    try {
+      const rs = await asegurarBase(e)
+      if (!rs) return
+      for (const o of mover) {
+        if (!(await cerrar(rs, o))) return
+        // el horario cargado en el local viejo pasa al nuevo desde este mes
+        const { error: er } = await supabase.from('rrhh_carga_horaria').update({ local: destino }).eq('legajo', e.legajo).eq('local', o).gte('fecha', mesIni)
+        if (er) { setError(er.message); return }
+      }
+      const { error: er } = await supabase.from('rrhh_planilla_locales').insert({ legajo: e.legajo, local: destino, desde: mesIni })
+      if (er) { setError(er.message); return }
+      setAviso(mover.length
+        ? `${e.nombre} pasó de ${mover.join(' y ')} a ${destino} desde ${MESES[Number(mesIni.slice(5, 7)) - 1].toLowerCase()}.`
+        : `${e.nombre} se agregó a ${destino} desde ${MESES[Number(mesIni.slice(5, 7)) - 1].toLowerCase()}.`)
+      setEleccion(null); setAgregando(false); setBuscaAlta(''); setAccion(null)
+      await leerAsig(); await cargar()
+    } finally { setTrabajando(false) }
+  }
+
+  async function quitarDe(e: Emp, loc: string) {
+    if (!supabase) return
+    setTrabajando(true); setError(null); setAviso(null)
+    try {
+      const rs = await asegurarBase(e)
+      if (!rs || !(await cerrar(rs, loc))) return
+      const { error: er } = await supabase.from('rrhh_carga_horaria').delete().eq('legajo', e.legajo).eq('local', loc).gte('fecha', mesIni)
+      if (er) { setError(er.message); return }
+      setAviso(`${e.nombre} ya no está en ${loc} desde ${MESES[Number(mesIni.slice(5, 7)) - 1].toLowerCase()} (se borró su horario en ese local).`)
+      setAccion(null)
+      await leerAsig(); await cargar()
+    } finally { setTrabajando(false) }
+  }
+
+  /** Elegir un legajo para el local: si ya está en otro, pregunta mover o agregar */
+  function elegirAlta(e: Emp) {
+    const actuales = localesDe(e)
+    if (actuales.includes(local)) { setAviso(`${e.nombre} ya está en ${local}.`); return }
+    if (!actuales.length) { void agregarA(e, local); return }
+    setEleccion({ emp: e, otros: actuales })
+  }
+  const candidatosAlta = useMemo(() => {
+    const q = buscaAlta.trim().toLowerCase()
+    if (!q) return []
+    return emps.filter((e) => e.nombre.toLowerCase().includes(q) || e.legajo.toLowerCase().includes(q)).slice(0, 10)
+  }, [buscaAlta, emps])
+
   async function guardarApertura() {
     if (!supabase || !editAp) return
     const abre = parsearHora(editAp.abre), cierra = parsearHora(editAp.cierra)
@@ -442,13 +556,13 @@ export default function PlanillaMensual({ modo, puedeEditar, acciones, recargar 
   const irActual = () => { setAnio(hoy.getFullYear()); setMes(hoy.getMonth()); setLunes(lunesDe(hoyIso)) }
 
   // Horas: Carga = semana tipo del mes contra el contrato semanal. Marcaciones = la semana planificada contra lo marcado.
-  const horasSemanaTipo = (leg: string) => columnas.reduce((s, col) => s + (plantilla(leg, col).carga?.horas ?? 0), 0)
+  const horasSemanaTipo = (e: Emp) => columnas.reduce((s, col) => s + (plantilla(e, col).carga?.horas ?? 0), 0)
   const horasCarga = (leg: string) => columnas.reduce((s, col) => s + col.fechas.reduce((t, f) => t + (cargas.get(`${leg}|${f}`)?.horas ?? 0), 0), 0)
   const horasMarcas = (leg: string) => columnas.reduce((s, col) => s + (marcas.get(`${leg}|${col.fecha}`)?.horas ?? 0), 0)
   // «Ausente» solo hasta el último día que trajo el reloj (antes de subir el Excel no hay nada que comparar)
   const hastaMarcado = useMemo(() => [...marcas.values()].reduce((m, x) => (x.fecha > m ? x.fecha : m), ''), [marcas])
   const enHora = (col: Columna, h: string) => personas.filter((e) => {
-    const tr = esCarga ? tramosDe(plantilla(e.legajo, col).carga?.horario) : tramosDe(marcas.get(`${e.legajo}|${col.fecha}`)?.horario)
+    const tr = esCarga ? tramosDe(plantilla(e, col).carga?.horario) : tramosDe(marcas.get(`${e.legajo}|${col.fecha}`)?.horario)
     return tr.some(([a, b]) => a <= h && (b >= h || b < a))
   }).length
 
@@ -460,7 +574,7 @@ export default function PlanillaMensual({ modo, puedeEditar, acciones, recargar 
 
   const hora = (h: string) => (h.endsWith(':00') ? String(Number(h.slice(0, 2))) : h)
   const contratoTotal = personas.reduce((s, e) => s + (e.horasSem ?? 0), 0)
-  const totalSemanaTipo = personas.reduce((s, e) => s + horasSemanaTipo(e.legajo), 0)
+  const totalSemanaTipo = personas.reduce((s, e) => s + horasSemanaTipo(e), 0)
   const totalPlan = personas.reduce((s, e) => s + horasCarga(e.legajo), 0)
   const totalMarcado = personas.reduce((s, e) => s + horasMarcas(e.legajo), 0)
   const periodo = esCarga ? `${MESES[mes]} ${anio}` : `Semana del ${ddmm(lunes)} al ${ddmm(sumarDias(lunes, 6))}`
@@ -492,6 +606,14 @@ export default function PlanillaMensual({ modo, puedeEditar, acciones, recargar 
             title="A las personas que este mes no tienen horario les copia el del mes anterior"
           >
             {copiando ? <Loader2 size={14} className="animate-spin" /> : <Copy size={14} className="text-violet-500" aria-hidden />} Copiar mes anterior
+          </button>
+        )}
+        {editable && vista === 'local' && (
+          <button
+            onClick={() => { setAgregando((v) => !v); setEleccion(null); setBuscaAlta('') }}
+            className={`btn-press flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs transition ${agregando ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-500' : 'border-line bg-surface text-ink hover:border-emerald-500/50'}`}
+          >
+            <UserPlus size={14} className="text-emerald-500" aria-hidden /> Agregar legajo
           </button>
         )}
         {acciones}
@@ -534,6 +656,49 @@ export default function PlanillaMensual({ modo, puedeEditar, acciones, recargar 
 
       {error && <p role="alert" className="mb-3 text-sm text-red-400">{error}</p>}
       {aviso && <p className="mb-3 text-sm text-emerald-500">{aviso}</p>}
+      {editable && agregando && vista === 'local' && (
+        <div className="mb-3 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-3">
+          <p className="mb-2 text-sm text-ink">Agregar un legajo a <b>{local}</b> desde {MESES[Number(mesIni.slice(5, 7)) - 1].toLowerCase()}</p>
+          {eleccion ? (
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="text-ink">
+                <b>{eleccion.emp.legajo} · {eleccion.emp.nombre}</b> está en <b className="text-amber-500">{eleccion.otros.join(' y ')}</b>.
+              </span>
+              <button disabled={trabajando} onClick={() => void agregarA(eleccion.emp, local, eleccion.otros)} className="btn-press flex items-center gap-1.5 rounded-lg bg-sky-500 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">
+                <ArrowRightLeft size={13} /> Mover a {local}
+              </button>
+              <button disabled={trabajando} onClick={() => void agregarA(eleccion.emp, local)} className="btn-press flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">
+                <UserPlus size={13} /> Agregar (queda en los dos)
+              </button>
+              <button onClick={() => setEleccion(null)} className="text-xs text-sub hover:text-ink">Cancelar</button>
+              {trabajando && <Loader2 size={14} className="animate-spin text-sub" />}
+            </div>
+          ) : (
+            <div className="relative max-w-md">
+              <Search size={15} className="pointer-events-none absolute left-2.5 top-2.5 text-sub" aria-hidden />
+              <input
+                autoFocus value={buscaAlta} onChange={(e) => setBuscaAlta(e.target.value)} placeholder="Buscar por nombre o legajo"
+                aria-label="Buscar legajo para agregar" className="h-9 w-full rounded-lg border border-line bg-surface2 pl-8 pr-2 text-sm text-ink"
+              />
+              {candidatosAlta.length > 0 && (
+                <ul className="absolute z-30 mt-1 w-full overflow-hidden rounded-xl border border-line bg-surface-solid shadow-lg">
+                  {candidatosAlta.map((e) => {
+                    const ls = localesDe(e)
+                    return (
+                      <li key={e.legajo}>
+                        <button onClick={() => elegirAlta(e)} className="flex w-full justify-between gap-2 px-3 py-1.5 text-left text-sm hover:bg-emerald-500/10">
+                          <span><span className="tabular-nums text-sub">{e.legajo}</span> <span className="text-ink">{e.nombre}</span></span>
+                          <span className={`text-xs ${ls.includes(local) ? 'text-emerald-500' : 'text-sub'}`}>{ls.length ? ls.join(' · ') : 'sin local'}</span>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      )}
       {!esCarga && !cargando && !marcas.size && (
         <p className="mb-3 rounded-xl border border-fuchsia-500/30 bg-fuchsia-500/10 px-3 py-2 text-sm text-ink">
           Todavía no hay marcaciones de esta semana.
@@ -616,10 +781,10 @@ export default function PlanillaMensual({ modo, puedeEditar, acciones, recargar 
                 <tbody>
                   {personas.map((e, r) => {
                     const arriba = esCarga ? e.horasSem : horasCarga(e.legajo)
-                    const abajo = esCarga ? horasSemanaTipo(e.legajo) : horasMarcas(e.legajo)
+                    const abajo = esCarga ? horasSemanaTipo(e) : horasMarcas(e.legajo)
                     const ok = arriba != null && Math.abs(abajo - arriba) < 0.5
                     return (
-                      <tr key={e.legajo}>
+                      <tr key={`${e.legajo}|${e.local}`}>
                         <td className="sticky left-0 z-10 bg-surface-solid px-1 align-top">
                           <div className="flex gap-1">
                             <button
@@ -631,6 +796,12 @@ export default function PlanillaMensual({ modo, puedeEditar, acciones, recargar 
                               <span className="block text-[12px] font-semibold text-ink">{e.nombre}</span>
                               <span className="block text-[10px] tabular-nums text-sub">{e.legajo}</span>
                             </button>
+                            {editable && vista === 'local' && (
+                              <div className="flex shrink-0 flex-col gap-0.5 self-start">
+                                <button onClick={() => setAccion({ legajo: e.legajo, tipo: 'mover' })} className="rounded p-1 text-sub hover:bg-sky-500/10 hover:text-sky-500" title="Mover a otro local" aria-label={`Mover ${e.nombre} a otro local`}><ArrowRightLeft size={13} /></button>
+                                <button onClick={() => setAccion({ legajo: e.legajo, tipo: 'quitar' })} className="rounded p-1 text-sub hover:bg-red-500/10 hover:text-red-400" title={`Quitar de ${e.local}`} aria-label={`Quitar ${e.nombre} de ${e.local}`}><Trash2 size={13} /></button>
+                              </div>
+                            )}
                             <div className="w-[4.5rem] shrink-0 self-start overflow-hidden rounded-lg border border-line text-center tabular-nums">
                               <div className="py-1 text-[12px] text-ink" title={esCarga ? 'Horas semanales del contrato' : 'Horas planificadas en la semana'}>
                                 {arriba == null ? '—' : esCarga ? String(arriba).replace('.', ',') : hhmm(arriba * 60)}
@@ -643,14 +814,41 @@ export default function PlanillaMensual({ modo, puedeEditar, acciones, recargar 
                               </div>
                             </div>
                           </div>
+                          {accion?.legajo === e.legajo && (
+                            <div className="mt-1 rounded-lg border border-line bg-surface2 p-1.5 text-[11px] text-ink">
+                              {accion.tipo === 'quitar' ? (
+                                <>
+                                  <p>¿Quitar de {e.local} desde {MESES[Number(mesIni.slice(5, 7)) - 1].toLowerCase()}? Se borra su horario en este local.</p>
+                                  <div className="mt-1 flex gap-1.5">
+                                    <button disabled={trabajando} onClick={() => void quitarDe(e, e.local)} className="rounded bg-red-500 px-2 py-0.5 font-semibold text-white disabled:opacity-50">Quitar</button>
+                                    <button onClick={() => setAccion(null)} className="rounded px-2 py-0.5 text-sub hover:text-ink">Cancelar</button>
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  <select
+                                    value={accion.destino ?? ''} onChange={(ev) => setAccion({ ...accion, destino: ev.target.value })}
+                                    className="h-7 w-full rounded border border-line bg-surface px-1 text-[11px] text-ink" aria-label="Local de destino"
+                                  >
+                                    <option value="">Mover a…</option>
+                                    {locales.filter(([l]) => l !== e.local).map(([l]) => <option key={l} value={l}>{l}</option>)}
+                                  </select>
+                                  <div className="mt-1 flex gap-1.5">
+                                    <button disabled={trabajando || !accion.destino} onClick={() => void agregarA(e, accion.destino!, [e.local])} className="rounded bg-sky-500 px-2 py-0.5 font-semibold text-white disabled:opacity-50">Mover</button>
+                                    <button onClick={() => setAccion(null)} className="rounded px-2 py-0.5 text-sub hover:text-ink">Cancelar</button>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          )}
                         </td>
                         {columnas.map((col, d) => {
                           if (esCarga) {
-                            const { carga, varia } = plantilla(e.legajo, col)
+                            const { carga, varia, enOtro } = plantilla(e, col)
                             return (
                               <td key={col.key} className="align-top">
                                 <DiaCarga
-                                  emp={e} fecha={col.titulo} carga={carga} varia={varia} apertura={apertura} editable={editable} r={r} d={d}
+                                  emp={e} fecha={col.titulo} carga={carga} varia={varia} enOtro={enOtro} apertura={apertura} editable={editable} r={r} d={d}
                                   onGuardar={(emp, _f, c) => guardarColumna(emp, col.fechas, c)}
                                 />
                               </td>
