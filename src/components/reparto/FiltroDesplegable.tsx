@@ -6,8 +6,8 @@ export interface OpcionDesplegable { id: string; label: string }
 
 /**
  * Filtro como los del tablero de Power BI: lista desplegable con buscador, «Seleccionar todo» y
- * casillas. Vacío = «Todas» («Seleccionar todo» tildado); tocar opciones elige una o varias
- * (sacar la última vuelve a «Todas»: nunca queda en «Ninguno» ni vacía la grilla). Muestra «Todas»,
+ * casillas. Vacío = «Todas» (todo tildado); «Seleccionar todo» tilda o destilda todo de una y
+ * después se tildan las que se quieren (sin nada tildado sigue siendo «Todas»: nunca vacía la grilla). Muestra «Todas»,
  * el elegido, «Todos menos X, Y» o «Selección múltiple (n)». Activo = naranja.
  * Con algo elegido aparece la goma junto al título: borra solo ese filtro.
  */
@@ -26,6 +26,9 @@ export default function FiltroDesplegable({
 }) {
   const [abierto, setAbierto] = useState(false)
   const [busq, setBusq] = useState('')
+  // «Seleccionar todo» destildado: nada tildado a la vista, pero por afuera sigue vacío = «Todas»
+  // hasta que se tilde alguna (la grilla nunca queda vacía).
+  const [nada, setNada] = useState(false)
   const boton = useRef<HTMLButtonElement>(null)
   const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null)
 
@@ -35,7 +38,8 @@ export default function FiltroDesplegable({
   }, [opciones, busq])
 
   const ninguno = valor.has('\u0000')
-  const tildada = (id: string) => !ninguno && valor.has(id)
+  const todoTildado = !nada && !ninguno && valor.size === 0
+  const tildada = (id: string) => !nada && !ninguno && (valor.size === 0 || valor.has(id))
   const activo = valor.size > 0
   const faltan = opciones.filter((o) => !valor.has(o.id))
   const texto = ninguno
@@ -49,13 +53,20 @@ export default function FiltroDesplegable({
           : `Selección múltiple (${valor.size})`
 
   function toggle(id: string) {
-    // Con «Todas» (vacío) tocar una opción ELIGE solo esa (antes la destildaba: con una sola
-    // opción quedaba en «Ninguno» y se vaciaba la grilla). Después se suman o sacan de a una.
-    const base = valor.size === 0 || ninguno ? new Set<string>() : new Set(valor)
+    // Con «Todas» (vacío) se ven todas tildadas: tocar una la saca. Con «Seleccionar todo»
+    // destildado se arranca de cero. Sacar la última vuelve a «Todas» por afuera (no vacía la grilla).
+    const base = nada || ninguno ? new Set<string>() : valor.size === 0 ? new Set(opciones.map((o) => o.id)) : new Set(valor)
     if (base.has(id)) base.delete(id)
     else base.add(id)
+    setNada(base.size === 0)
     if (base.size === opciones.length) onChange(new Set())
     else onChange(base) // vacío = «Todas»
+  }
+
+  /** «Seleccionar todo» tilda todo o, si ya estaba todo, destilda todo. */
+  function tocarTodo() {
+    if (todoTildado) setNada(true)
+    else { setNada(false); onChange(new Set()) }
   }
 
   useLayoutEffect(() => {
@@ -84,7 +95,7 @@ export default function FiltroDesplegable({
       <button
         ref={boton}
         type="button"
-        onClick={() => { setAbierto((a) => !a); setBusq('') }}
+        onClick={() => { setAbierto((a) => !a); setBusq(''); setNada(false) }}
         className={
           'btn-press flex h-9 w-full items-center justify-between gap-2 rounded-lg border px-2.5 text-left text-[13px] transition ' +
           (activo ? 'border-orange-500/60 bg-orange-500/10 font-semibold text-orange-300' : 'border-line2 bg-surface2 text-ink hover:border-line2')
@@ -96,14 +107,14 @@ export default function FiltroDesplegable({
       {abierto && pos &&
         createPortal(
           <>
-            <div className="fixed inset-0 z-[70]" onClick={() => setAbierto(false)} />
+            <div className="fixed inset-0 z-[70]" onClick={() => { setAbierto(false); setNada(false) }} />
             <div className="fixed z-[80] rounded-xl border border-line2 p-2 shadow-soft-lg" style={{ ...pos, background: 'var(--surface-solid)' }}>
               <div className="mb-1 flex items-center gap-1.5 rounded-lg border border-line bg-surface2 px-2">
                 <Search size={13} className="text-sub/70" aria-hidden />
                 <input autoFocus value={busq} onChange={(e) => setBusq(e.target.value)} placeholder="Buscar" className="h-8 w-full bg-transparent text-xs text-ink outline-none placeholder:text-sub/60" />
               </div>
               <label className="flex cursor-pointer items-center gap-2 border-b border-line px-1.5 py-1.5 text-xs font-semibold text-ink">
-                <input type="checkbox" className="h-3.5 w-3.5 accent-orange-500" checked={valor.size === 0} onChange={() => onChange(new Set())} />
+                <input type="checkbox" className="h-3.5 w-3.5 accent-orange-500" checked={todoTildado} onChange={tocarTodo} />
                 Seleccionar todo
               </label>
               <div className="max-h-64 overflow-y-auto">

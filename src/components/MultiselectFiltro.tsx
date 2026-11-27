@@ -177,24 +177,35 @@ export function SelectBuscarVarios({
   className?: string
 }) {
   const [abierto, setAbierto] = useState(false)
+  // «Todos» destildado: nada tildado a la vista, pero por afuera sigue vacío = todos
+  // hasta que se tilde alguna (así la pantalla nunca queda vacía).
+  const [ninguno, setNinguno] = useState(false)
   const elegidas = new Set(valores)
+  const todosTildado = !ninguno && valores.length === 0
   const texto =
     valores.length === 0 ? label
       : valores.length <= 2 ? opciones.filter((o) => elegidas.has(o.id)).map((o) => o.label).join(', ')
         : `${label}: ${valores.length}`
 
   function toggle(id: string) {
-    const nuevo = new Set(elegidas)
+    const nuevo = ninguno ? new Set<string>() : valores.length === 0 ? new Set(opciones.map((o) => o.id)) : new Set(elegidas)
     if (nuevo.has(id)) nuevo.delete(id)
     else nuevo.add(id)
-    onChange(opciones.map((o) => o.id).filter((x) => nuevo.has(x)))
+    setNinguno(nuevo.size === 0)
+    onChange(nuevo.size === opciones.length ? [] : opciones.map((o) => o.id).filter((x) => nuevo.has(x)))
+  }
+
+  /** «Todos» tilda todo o, si ya estaba todo, destilda todo. */
+  function tocarTodos() {
+    if (todosTildado) setNinguno(true)
+    else { setNinguno(false); onChange([]) }
   }
 
   return (
     <div className={'relative ' + (className ?? '')}>
       <button
         type="button"
-        onClick={() => setAbierto((o) => !o)}
+        onClick={() => { setAbierto((o) => !o); setNinguno(false) }}
         title={valores.length ? opciones.filter((o) => elegidas.has(o.id)).map((o) => o.label).join(', ') : `${label} (todos)`}
         className="btn-press inline-flex w-full items-center justify-between gap-1.5 rounded-lg border border-line bg-surface2 px-2 py-1.5 text-xs font-medium text-ink hover:bg-line"
       >
@@ -203,17 +214,17 @@ export function SelectBuscarVarios({
       </button>
       {abierto && (
         <>
-          <div className="fixed inset-0 z-30" onClick={() => setAbierto(false)} />
+          <div className="fixed inset-0 z-30" onClick={() => { setAbierto(false); setNinguno(false) }} />
           <div className="absolute left-0 top-full z-40 mt-1 w-56 rounded-xl border border-line bg-surface p-2 shadow-lg">
             <label className="flex cursor-pointer items-center gap-1.5 rounded-lg px-1.5 py-1 text-xs font-medium text-ink hover:bg-line/40">
-              <input type="checkbox" checked={valores.length === 0} onChange={() => onChange([])} className="h-3.5 w-3.5 rounded border-line bg-surface2 accent-brand-600" />
+              <input type="checkbox" checked={todosTildado} onChange={tocarTodos} className="h-3.5 w-3.5 rounded border-line bg-surface2 accent-brand-600" />
               {label} (todos)
             </label>
             <div className="my-1 border-t border-line" />
             <div className="max-h-64 overflow-y-auto">
               {opciones.map((o) => (
                 <label key={o.id} className="flex cursor-pointer items-center gap-1.5 rounded-lg px-1.5 py-1 text-xs text-ink hover:bg-line/40">
-                  <input type="checkbox" checked={elegidas.has(o.id)} onChange={() => toggle(o.id)} className="h-3.5 w-3.5 rounded border-line bg-surface2 accent-brand-600" />
+                  <input type="checkbox" checked={!ninguno && (valores.length === 0 || elegidas.has(o.id))} onChange={() => toggle(o.id)} className="h-3.5 w-3.5 rounded border-line bg-surface2 accent-brand-600" />
                   <span className="truncate">{o.label}</span>
                 </label>
               ))}
@@ -253,6 +264,9 @@ export default function MultiselectFiltro({
 }) {
   const [abierto, setAbierto] = useState(false)
   const [busq, setBusq] = useState('')
+  // «Todos» destildado: nada tildado a la vista, pero por afuera sigue vacío = todas hasta que se
+  // tilde alguna (así la pantalla nunca queda vacía ni se manda una lista vacía a las consultas).
+  const [ninguno, setNinguno] = useState(false)
   const botonRef = useRef<HTMLButtonElement>(null)
   const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null)
 
@@ -262,24 +276,28 @@ export default function MultiselectFiltro({
     return opciones.filter((o) => o.label.toUpperCase().includes(t))
   }, [opciones, busq])
 
-  /* Con arrancaTodo, el vacío se ve como "todas tildadas": destildar la primera
-     equivale a elegir todas menos esa (se toman de `opciones`, no de las que
-     dejó ver el buscador, para no perder las que están fuera de la búsqueda). */
-  const tildada = (id: string) => (arrancaTodo && seleccionadas.size === 0 ? true : seleccionadas.has(id))
+  /* El vacío se ve como "todas tildadas": destildar la primera equivale a elegir
+     todas menos esa (se toman de `opciones`, no de las que dejó ver el buscador,
+     para no perder las que están fuera de la búsqueda). */
+  const todosTildado = !ninguno && seleccionadas.size === 0
+  const tildada = (id: string) => (ninguno ? false : seleccionadas.size === 0 ? true : seleccionadas.has(id))
 
   const fuera = opciones.length - seleccionadas.size
   const insignia =
     seleccionadas.size === 0 ? '' : arrancaTodo ? (fuera > 0 ? `(-${fuera})` : '') : `(${seleccionadas.size})`
 
   function toggle(id: string) {
-    if (arrancaTodo && seleccionadas.size === 0) {
-      onChange(new Set(opciones.map((o) => o.id).filter((x) => x !== id)))
-      return
-    }
-    const nuevo = new Set(seleccionadas)
+    const nuevo = ninguno ? new Set<string>() : seleccionadas.size === 0 ? new Set(opciones.map((o) => o.id)) : new Set(seleccionadas)
     if (nuevo.has(id)) nuevo.delete(id)
     else nuevo.add(id)
-    onChange(nuevo)
+    setNinguno(nuevo.size === 0)
+    onChange(nuevo.size === opciones.length ? new Set() : nuevo) // vacío = todas
+  }
+
+  /** «Todos» tilda todo o, si ya estaba todo, destilda todo. */
+  function tocarTodos() {
+    if (todosTildado) setNinguno(true)
+    else { setNinguno(false); onChange(new Set()) }
   }
 
   function abrir() {
@@ -295,6 +313,7 @@ export default function MultiselectFiltro({
     }
     setAbierto((o) => !o)
     setBusq('')
+    setNinguno(false)
   }
 
   // Recalcular posición al hacer scroll/resize mientras está abierto
@@ -341,7 +360,7 @@ export default function MultiselectFiltro({
       </button>
       {abierto && pos && createPortal(
         <>
-          <div className="fixed inset-0 z-[70]" onClick={() => setAbierto(false)} />
+          <div className="fixed inset-0 z-[70]" onClick={() => { setAbierto(false); setNinguno(false) }} />
           <div className="fixed z-[80] rounded-xl border border-line bg-surface p-2 shadow-xl" style={{ top: pos.top, left: pos.left, width: pos.width }}>
             <div className="flex items-center gap-1.5 border-b border-line pb-2">
               <Search size={13} className="shrink-0 text-sub/70" aria-hidden />
@@ -359,7 +378,7 @@ export default function MultiselectFiltro({
               )}
             </div>
             <label className="mt-2 flex cursor-pointer items-center gap-1.5 rounded-lg px-1.5 py-1 text-xs font-medium text-ink hover:bg-line/40">
-              <input type="checkbox" checked={seleccionadas.size === 0} onChange={() => onChange(new Set())} className="h-3.5 w-3.5 rounded border-line bg-surface2 accent-brand-600" />
+              <input type="checkbox" checked={todosTildado} onChange={tocarTodos} className="h-3.5 w-3.5 rounded border-line bg-surface2 accent-brand-600" />
               Todos
             </label>
             <div className="my-1 border-t border-line" />
