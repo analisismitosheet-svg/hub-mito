@@ -110,6 +110,7 @@ const OrdenesCompra = lazy(() => import('@/pages/OrdenesCompra'))
 const ReposicionEscaneo = lazy(() => import('@/pages/ReposicionEscaneo'))
 const StockValorizado = lazy(() => import('@/pages/StockValorizado'))
 const Flexxus = lazy(() => import('@/pages/Flexxus'))
+const TableroLocales = lazy(() => import('@/pages/TableroLocales'))
 const PoloMapeo = lazy(() => import('@/pages/PoloMapeo'))
 const PoloPosiciones = lazy(() => import('@/pages/PoloPosiciones'))
 const MayoristaStock = lazy(() => import('@/pages/MayoristaStock'))
@@ -754,6 +755,16 @@ export default function App() {
               <PermissionRoute permiso="flexxus.view">
                 <Suspense fallback={null}>
                   <Flexxus />
+                </Suspense>
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="/administracion/tablero-locales"
+            element={
+              <PermissionRoute permiso="tablero_locales.view">
+                <Suspense fallback={null}>
+                  <TableroLocales />
                 </Suspense>
               </PermissionRoute>
             }

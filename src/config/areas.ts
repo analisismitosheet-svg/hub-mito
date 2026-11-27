@@ -306,6 +306,17 @@ export const APPS: AppDef[] = [
     permiso: 'flexxus.view',
   },
   {
+    id: 'tablero-locales',
+    areaId: 'administracion',
+    title: 'Tablero locales',
+    description: 'Caja y errores de caja de uno o varios locales, en vivo desde Dragon.',
+    icon: Banknote,
+    kind: 'internal',
+    target: '/administracion/tablero-locales',
+    color: '#14b8a6',
+    permiso: 'tablero_locales.view',
+  },
+  {
     id: 'ventas-web',
     areaId: 'web',
     title: 'Ventas web',

@@ -42,6 +42,8 @@
  *                   (lo que da MITO en el Reparto manual -> pedido de venta por local en Dragon: reparto-dragon.js)
  *   POST /          body: { accion: 'ventas_articulos', fechas, local?, agrupar?, top? } -> { estado: 'calculando' } | { estado: 'listo', ranking, ... }
  *                     (lee las bases Dragon directo con sql/ventas-articulos.sql; si falla, la foto de la repo diaria)
+ *   POST /          body: { accion: 'tablero_locales', hoja: 'caja'|'errores'|'billetes'|'articulos', desde?, hasta?, locales?, local?, arqueo?, codigo? }
+ *                   (Administración > Tablero locales: hojas Caja y Errores de caja del Tablero del local, por base Dragon; tablero-locales.js)
  *   POST /          body: { accion: 'analisis_ventas', desde, hasta, comparar, gran, dim, camino, filtros, corte, opciones? }
  *                   -> { estado: 'listo', kpis, serie, dow, tabla, anio, marcas, faltan, carga }
  *                   (Compras > Análisis ventas: venta por ticket guardada por día en D:\memoria ia\analisis; analisis-ventas.js)
@@ -1519,6 +1521,17 @@ async function completarMemoriaVentas() {
     completandoVentas = false
   }
 }
+/* ---- Tablero locales (hub: Administración > Tablero locales). Ver tablero-locales.js ---- */
+const tableroLocales = require('./tablero-locales').crear({
+  locales: STOCK_PUBLICO_LOCALES,
+  servidor: (donde) => {
+    const principal = SERVIDORES.get(ALIAS_PRINCIPAL.toUpperCase())
+    if (donde !== 'local') return principal
+    return [...SERVIDORES.values()].find((s) => !s.principal) ?? principal
+  },
+  asegurarConexion: (srv) => asegurarConexion(srv),
+  conTope: (p, ms, que) => conTope(p, ms, que),
+})
 /* ---- Análisis ventas (hub: Compras > Análisis ventas, solo admin). Ver analisis-ventas.js ---- */
 let stockAnalisis = { en: -1, mapa: null }
 const analisisVentas = require('./analisis-ventas').crear({
@@ -2073,6 +2086,14 @@ const server = http.createServer(async (req, res) => {
 
     // Ranking de ventas por artículo: bases directo, con la foto de la repo diaria de respaldo (Chat IA)
     // Compras > Análisis ventas (solo admin en el hub). Solo lectura.
+    // Administración > Tablero locales: Caja y Errores de caja por local. Solo lectura.
+    if (body?.accion === 'tablero_locales') {
+      try {
+        return enviar(res, 200, await tableroLocales.accion(body))
+      } catch (e) {
+        return enviar(res, 400, { error: e.message })
+      }
+    }
     if (body?.accion === 'analisis_ventas') {
       try {
         return enviar(res, 200, await analisisVentas.accion(body))

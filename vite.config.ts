@@ -80,6 +80,8 @@ export default defineConfig({
       '/api/sql/reparto': 'http://localhost:4177',
       // Compras > Análisis ventas: `node scripts/mock-analisis-ventas.mjs` (+ Puente en :3128 o una copia en :3199)
       '/api/sql/analisis-ventas': 'http://localhost:4181',
+      // Administración > Tablero locales: `node scripts/mock-tablero-locales.mjs` (+ Puente en :3128 o una copia en :3199)
+      '/api/sql/tablero-locales': 'http://localhost:4182',
     },
   },
 })

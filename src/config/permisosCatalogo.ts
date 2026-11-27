@@ -346,6 +346,10 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
     id: 'flexxus', areaId: 'administracion', titulo: 'Flexxus', descripcion: 'Ventas, saldos de clientes y asientos (solo lectura)',
     icon: Database, color: '#6366f1', acciones: { ver: 'flexxus.view', editar: 'flexxus.clasificar' }, etiquetas: { editar: 'Clasificar cuentas' },
   },
+  {
+    id: 'tablero-locales', areaId: 'administracion', titulo: 'Tablero locales', descripcion: 'Caja y errores de caja de cada local (solo lectura)',
+    icon: Banknote, color: '#14b8a6', acciones: { ver: 'tablero_locales.view' },
+  },
 
   // ===== Administradores =====
   {
