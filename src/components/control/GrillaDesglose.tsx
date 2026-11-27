@@ -7,6 +7,7 @@ import {
   MOTIVOS_DIFERENCIA,
   n0,
   tallesDragon,
+  talleRango,
   type Desglose,
   type ItemMaestro,
   type LineaControl,
@@ -237,6 +238,7 @@ export default function GrillaDesglose({
           })}
         </div>
       )}
+      {!talleFijo && <RangoDeTalles maestro={maestroTalles} onAgregar={agregarTalles} />}
 
       <div className="sticky bottom-2 space-y-2 rounded-2xl border border-line bg-surface p-3 shadow-soft">
         <div className="flex items-center justify-between text-sm">
@@ -341,6 +343,70 @@ function BuscadorMaestro({
           {!filtrados.length && items.length > 0 && <li className="px-1 py-6 text-center text-sm text-sub">No está en Dragon. Pedile a Compras que lo dé de alta.</li>}
         </ul>
       </div>
+    </div>
+  )
+}
+
+/**
+ * Talles «desde → hasta»: S a 4XL, 35 a 44, 3 a 12… Si el rango es de números
+ * pregunta si se agregan también los medios (3.5, 4.5…). Solo talles de Dragon.
+ */
+function RangoDeTalles({ maestro, onAgregar }: { maestro: ItemMaestro[]; onAgregar: (talles: string[]) => void }) {
+  const [desde, setDesde] = useState('')
+  const [hasta, setHasta] = useState('')
+  const [pregunta, setPregunta] = useState<{ enteros: string[]; conMedios: string[]; ejemplo: string; faltanEnteros: string[]; faltanConMedios: string[] } | null>(null)
+  const [aviso, setAviso] = useState<string | null>(null)
+
+  function cerrar(talles: string[], noEstan: string[]) {
+    onAgregar(talles)
+    setPregunta(null)
+    setAviso(
+      `Agregados: ${talles.join(', ') || 'ninguno'}` +
+        (noEstan.length ? ` · No están en Dragon (no se agregan): ${noEstan.join(', ')}` : ''),
+    )
+  }
+
+  function agregar() {
+    setAviso(null)
+    if (!maestro.length) { setAviso('Todavía no llegaron los talles de Dragon'); return }
+    const sin = talleRango(desde, hasta, maestro, false)
+    if (sin.error) { setAviso(sin.error); return }
+    if (sin.numerico) {
+      const con = talleRango(desde, hasta, maestro, true)
+      const medios = con.talles.filter((t) => !sin.talles.includes(t))
+      if (medios.length) {
+        setPregunta({ enteros: sin.talles, conMedios: con.talles, ejemplo: medios.slice(0, 3).join(', '), faltanEnteros: sin.noEstan, faltanConMedios: con.noEstan })
+        return
+      }
+    }
+    cerrar(sin.talles, sin.noEstan)
+  }
+
+  const campo = 'h-9 w-16 rounded-lg border border-line bg-surface2 text-center text-sm font-bold uppercase text-ink outline-none focus:border-violet-500'
+  return (
+    <div className="space-y-1.5 rounded-xl border border-line bg-surface p-2">
+      <p className="text-xs font-semibold text-sub">Rango de talles</p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-xs text-sub">del</span>
+        <input value={desde} onChange={(e) => { setDesde(e.target.value.slice(0, 6)); setPregunta(null) }} placeholder="S" aria-label="Talle desde" className={campo} />
+        <span className="text-xs text-sub">al</span>
+        <input value={hasta} onChange={(e) => { setHasta(e.target.value.slice(0, 6)); setPregunta(null) }} placeholder="4XL" aria-label="Talle hasta" className={campo} />
+        <button type="button" onClick={agregar} disabled={!desde.trim() || !hasta.trim()}
+          className="h-9 rounded-lg bg-violet-600 px-3 text-xs font-bold text-white disabled:opacity-40">
+          Agregar
+        </button>
+      </div>
+      <p className="text-[11px] text-sub">Ej.: S al 4XL · 35 al 44 · 3 al 12</p>
+      {pregunta && (
+        <div className="space-y-1.5 rounded-lg border border-violet-500/40 bg-violet-500/10 p-2 text-xs text-violet-200">
+          <p>¿Agregás también los medios talles? (ej. {pregunta.ejemplo})</p>
+          <div className="flex gap-1.5">
+            <button type="button" onClick={() => cerrar(pregunta.conMedios, pregunta.faltanConMedios)} className="flex-1 rounded-lg bg-violet-600 py-1.5 font-bold text-white">Sí, con medios</button>
+            <button type="button" onClick={() => cerrar(pregunta.enteros, pregunta.faltanEnteros)} className="flex-1 rounded-lg border border-line py-1.5 font-bold text-ink">No, solo enteros</button>
+          </div>
+        </div>
+      )}
+      {aviso && <p className="text-[11px] text-sub">{aviso}</p>}
     </div>
   )
 }

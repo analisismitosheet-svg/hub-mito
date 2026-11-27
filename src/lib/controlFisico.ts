@@ -201,6 +201,7 @@ export function tallesDragon(forzar = false): Promise<ItemMaestro[]> {
 
 /** Curvas rápidas de talles (se agregan solo las que existen en Dragon). */
 export const CURVAS_RAPIDAS: { nombre: string; talles: string[] }[] = [
+  { nombre: 'S a 4XL', talles: ['S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL'] },
   { nombre: 'XS a XXL', talles: ['XS', 'S', 'M', 'L', 'XL', 'XXL'] },
   { nombre: '36 al 46', talles: ['36', '38', '40', '42', '44', '46'] },
   { nombre: '1 al 16', talles: ['1', '2', '4', '6', '8', '10', '12', '14', '16'] },
@@ -229,4 +230,70 @@ export function estadoLinea(l: LineaControl): 'sin' | 'ok' | 'falta' | 'sobra' {
   if (l.contado == null) return 'sin'
   if (l.contado === l.picking) return 'ok'
   return l.contado < l.picking ? 'falta' : 'sobra'
+}
+
+/* --------------------------- rango de talles --------------------------- */
+
+/** Talles de letra de menor a mayor (2XL = XXL, 3XL = XXXL…). */
+const ESCALA_LETRA = ['XXXS', 'XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', 'XXXXL', 'XXXXXL']
+function rangoLetra(t: string): number {
+  const s = t.trim().toUpperCase().replace(/^(\d)X(S|L)$/, (_, n: string, l: string) => `${'X'.repeat(Number(n))}${l}`)
+  return ESCALA_LETRA.indexOf(s)
+}
+const aNumero = (t: string) => {
+  const s = t.trim().replace(',', '.')
+  return /^\d+(\.\d+)?$/.test(s) ? Number(s) : NaN
+}
+
+export interface RangoTalles {
+  talles: string[]
+  /** del rango pedido, los que no existen en Dragon (no se agregan) */
+  noEstan: string[]
+  numerico: boolean
+  error?: string
+}
+
+/**
+ * Talles «desde → hasta» con los códigos de Dragon.
+ *  - Letras: S → 4XL = S, M, L, XL, XXL, 3XL, 4XL (con la forma que use Dragon).
+ *  - Números: 35 → 44 enteros; con `medios`, también 35.5, 36.5… (3 → 12 con medios = 3, 3.5, 4… 12).
+ */
+export function talleRango(desde: string, hasta: string, maestro: ItemMaestro[], medios: boolean): RangoTalles {
+  const codigos = maestro.map((m) => m.codigo)
+  const d = desde.trim().toUpperCase()
+  const h = hasta.trim().toUpperCase()
+  if (!d || !h) return { talles: [], noEstan: [], numerico: false, error: 'Poné desde y hasta' }
+
+  const nd = aNumero(d)
+  const nh = aNumero(h)
+  if (Number.isFinite(nd) && Number.isFinite(nh)) {
+    const [a, b] = nd <= nh ? [nd, nh] : [nh, nd]
+    if (b - a > 60) return { talles: [], noEstan: [], numerico: true, error: 'El rango es demasiado grande' }
+    const paso = medios ? 0.5 : 1
+    const talles: string[] = []
+    const noEstan: string[] = []
+    for (let v = Math.ceil(a / paso) * paso; v <= b + 1e-9; v += paso) {
+      const t = Number.isInteger(v) ? String(v) : v.toFixed(1)
+      if (codigos.includes(t)) talles.push(t)
+      else noEstan.push(t)
+    }
+    return { talles, noEstan, numerico: true }
+  }
+
+  const ld = rangoLetra(d)
+  const lh = rangoLetra(h)
+  if (ld < 0 || lh < 0) {
+    return { talles: [], noEstan: [], numerico: false, error: 'Usá letras (XS, S… 4XL) o números (35, 3.5) en los dos' }
+  }
+  const [a, b] = ld <= lh ? [ld, lh] : [lh, ld]
+  const talles: string[] = []
+  const noEstan: string[] = []
+  for (let i = a; i <= b; i++) {
+    // la forma que tenga Dragon: XXL o 2XL, 3XL o XXXL…
+    // si Dragon tiene las dos (XXS y 2XS) va la de letras
+    const enDragon = codigos.filter((c) => rangoLetra(c) === i).sort((x, y) => Number(/\d/.test(x)) - Number(/\d/.test(y)))[0]
+    if (enDragon) talles.push(enDragon)
+    else noEstan.push(ESCALA_LETRA[i])
+  }
+  return { talles, noEstan, numerico: false }
 }
