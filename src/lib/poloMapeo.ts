@@ -20,6 +20,11 @@ export function leerPosicion(texto: string): string | null {
   return /^[A-Z0-9][A-Z0-9-]{0,19}$/.test(c) ? c : null
 }
 
+/** Cómo se muestra una posición: «PALET-1» -> «PALET - 1» */
+export function nombrePosicion(codigo: string) {
+  return codigo.replace(/-/g, ' - ')
+}
+
 /** Código válido de posición (lo mismo que acepta la base) */
 export function posicionValida(c: string) {
   return /^[A-Z0-9][A-Z0-9-]{0,19}$/.test(c)

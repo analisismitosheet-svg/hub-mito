@@ -7,14 +7,14 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import { tamanoMembrete } from '@/components/EtiquetasBultos'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
-import { posicionValida, qrPosicion } from '@/lib/poloMapeo'
+import { nombrePosicion, posicionValida, qrPosicion } from '@/lib/poloMapeo'
 
 const inputCls =
   'h-11 w-full rounded-xl border border-line bg-surface2 px-3 text-base text-ink outline-none transition placeholder:text-sub/70 focus-visible:border-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/40'
 
 const MAX_POR_VEZ = 1000
 
-/** Arma los códigos: «A» + 1..20 -> A-001..A-020; sin «desde», el código tal cual */
+/** Arma los códigos: «PALET» + 1..20 -> PALET-1..PALET-20 (sin ceros); sin «desde», el código tal cual */
 function codigosDe(prefijo: string, desde: string, hasta: string): string[] | string {
   const p = prefijo.trim().toUpperCase().replace(/\s+/g, '-').replace(/-+$/, '')
   if (!desde.trim()) {
@@ -25,15 +25,16 @@ function codigosDe(prefijo: string, desde: string, hasta: string): string[] | st
   const h = hasta.trim() ? Math.floor(Number(hasta)) : d
   if (!(d >= 0) || !(h >= d)) return 'El «hasta» tiene que ser igual o mayor que el «desde».'
   if (h - d + 1 > MAX_POR_VEZ) return `Son ${h - d + 1}: de a ${MAX_POR_VEZ} como máximo por vez.`
-  const ancho = Math.max(3, String(h).length)
   const out: string[] = []
-  for (let n = d; n <= h; n++) out.push(`${p ? `${p}-` : ''}${String(n).padStart(ancho, '0')}`)
+  for (let n = d; n <= h; n++) out.push(`${p ? `${p}-` : ''}${n}`)
   const mala = out.find((c) => !posicionValida(c))
   return mala ? `«${mala}» no sirve: letras, números y guiones, hasta 20.` : out
 }
 
 function MembretePosicion({ codigo, ancho, alto }: { codigo: string; ancho: number; alto: number }) {
-  const qrMm = Math.max(10, Math.min(alto - 6, ancho * 0.5))
+  const nombre = nombrePosicion(codigo)
+  const qrMm = Math.max(10, Math.min(alto - 8, ancho * 0.35))
+  const textoMm = ancho - qrMm - 6
   return (
     <div
       className="etiqueta-bulto"
@@ -41,9 +42,9 @@ function MembretePosicion({ codigo, ancho, alto }: { codigo: string; ancho: numb
     >
       <QRCodeSVG value={qrPosicion(codigo)} size={256} level="M" style={{ width: `${qrMm}mm`, height: `${qrMm}mm`, flexShrink: 0 }} />
       <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '1mm', minWidth: 0, flex: 1, textAlign: 'center' }}>
-        <div style={{ fontSize: `${alto * 0.1}mm`, fontWeight: 700, textTransform: 'uppercase' }}>POLO 52 · POSICIÓN</div>
-        <div style={{ fontSize: `${Math.min(alto * 0.32, (ancho * 0.9) / Math.max(codigo.length, 3))}mm`, fontWeight: 800, lineHeight: 1, whiteSpace: 'nowrap' }}>
-          {codigo}
+        <div style={{ fontSize: `${alto * 0.08}mm`, fontWeight: 700, textTransform: 'uppercase' }}>POLO 52</div>
+        <div style={{ fontSize: `${Math.min(alto * 0.4, (textoMm * 1.6) / Math.max(nombre.length, 3))}mm`, fontWeight: 900, lineHeight: 1, whiteSpace: 'nowrap' }}>
+          {nombre}
         </div>
       </div>
     </div>
@@ -119,7 +120,7 @@ export default function PoloPosiciones() {
   const previa = useMemo(() => {
     const r = codigosDe(prefijo, desde, hasta)
     if (typeof r === 'string') return ''
-    return r.length === 1 ? `Crea la posición ${r[0]}.` : `Crea ${r[0]} a ${r[r.length - 1]} (${r.length}).`
+    return r.length === 1 ? `Crea la posición ${nombrePosicion(r[0])}.` : `Crea ${nombrePosicion(r[0])} a ${nombrePosicion(r[r.length - 1])} (${r.length}).`
   }, [prefijo, desde, hasta])
 
   async function crear(e: FormEvent) {
@@ -200,7 +201,7 @@ export default function PoloPosiciones() {
             </button>
           </div>
           <p className="mt-2 text-xs text-sub">
-            {previa || 'Ej: prefijo A, desde 1 hasta 30 crea A-001 a A-030. Sin «desde» crea el código tal cual.'} Las que ya existen no se tocan.
+            {previa || 'Ej: prefijo PALET, desde 1 hasta 30 crea PALET - 1 a PALET - 30. Sin «desde» crea el código tal cual.'} Las que ya existen no se tocan.
           </p>
         </form>
       )}
@@ -242,7 +243,7 @@ export default function PoloPosiciones() {
                 }`}
               >
                 <button onClick={() => alternar([c])} aria-pressed={on} className="inline-flex h-full items-center gap-1.5 px-3 py-2">
-                  <MapPin size={14} aria-hidden /> {c}
+                  <MapPin size={14} aria-hidden /> {nombrePosicion(c)}
                   <span className="text-xs font-normal text-sub">{n > 0 ? `· ${n} bultos` : '· vacía'}</span>
                 </button>
                 {puedeGestionar && n === 0 && (

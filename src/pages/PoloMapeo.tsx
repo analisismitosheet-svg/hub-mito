@@ -10,7 +10,7 @@ import ScannerCamara from '@/components/ScannerCamara'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
-import { leerPosicion, parsearBulto, posicionValida, type RespuestaBulto, type BultoParseado } from '@/lib/poloMapeo'
+import { leerPosicion, nombrePosicion, parsearBulto, posicionValida, type RespuestaBulto, type BultoParseado } from '@/lib/poloMapeo'
 
 type Bulto = {
   id: string
@@ -303,7 +303,7 @@ export default function PoloMapeo() {
               <MapPin size={22} aria-hidden className="shrink-0 text-violet-500" />
               <div className="min-w-0 flex-1">
                 <p className="text-xs text-sub">Posición</p>
-                <p className="truncate font-display text-2xl font-bold leading-tight text-ink">{posicion}</p>
+                <p className="truncate font-display text-2xl font-bold leading-tight text-ink">{nombrePosicion(posicion)}</p>
               </div>
               <div className="shrink-0 text-right">
                 <p className="font-display text-xl font-bold leading-tight tabular-nums text-violet-500">{enPosActual}</p>
