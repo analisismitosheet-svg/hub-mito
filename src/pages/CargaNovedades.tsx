@@ -213,9 +213,11 @@ export default function CargaNovedades() {
     return s.dir === 1 ? `▲${i > 0 ? String(i + 1) : ''}` : `▼${i > 0 ? String(i + 1) : ''}`
   }
 
-  const cargar = useCallback(async () => {
+  /** silencioso: recarga sin mostrar el "cargando" (no saca la tabla, así no se pierde el scroll). */
+  const cargar = useCallback(async (silencioso = false) => {
     if (!supabase) { setCargando(false); return }
-    setCargando(true); setError(null)
+    if (!silencioso) setCargando(true)
+    setError(null)
     // Filtros aplicados en el servidor (la tabla tiene ~11k filas; sin esto solo llegan las primeras 1000)
     let query = supabase.from('novedades').select('*')
     if (fAnio) query = query.eq('anio', fAnio)
@@ -310,13 +312,13 @@ export default function CargaNovedades() {
       : await supabase.from('novedades').insert(payload)
     setBusy(false)
     if (result.error) { setError(result.error.message); return }
-    setModalAbierto(false); reset(); await cargar()
+    setModalAbierto(false); reset(); await cargar(true)
   }
 
   async function eliminar(n: Novedad) {
     if (!supabase) return
     const { error: err } = await supabase.from('novedades').delete().eq('id', n.id)
-    if (!err) await cargar()
+    if (!err) await cargar(true)
   }
 
   /** Detecta la columna en el Excel por nombre normalizado (el formato del archivo "Novedades rrhh"). */

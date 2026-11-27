@@ -4,6 +4,8 @@ import { compararTalles } from '@/lib/ordenPiso'
 import {
   coloresDragon,
   CURVAS_RAPIDAS,
+  esSinColor,
+  esSinTalle,
   MOTIVOS_DIFERENCIA,
   n0,
   tallesDragon,
@@ -13,47 +15,62 @@ import {
   type LineaControl,
 } from '@/lib/controlFisico'
 
-const esSinColor = (c: string) => ['', '0', '00'].includes(c.trim().toUpperCase())
-const esSinTalle = (t: string) => ['', 'U', 'UNICO', 'ÚNICO'].includes(t.trim().toUpperCase())
+/** Lo que se guarda: el desglose de cada renglón del picking del grupo */
+export interface DesglosePorLinea {
+  linea: LineaControl
+  desglose: Desglose[]
+  motivo: string | null
+}
 
 /**
- * Desglose de un renglón 00 / U en color × talle (siempre se desglosa).
- * Filas = colores y columnas = talles, elegidos solo de los maestros de Dragon Indo.
- * Si el renglón ya trae color (o talle), esa dimensión queda fija.
+ * Desglose de un artículo en color × talle (siempre se desglosa).
+ * Recibe todos los renglones del mismo artículo (y OC) que vienen sin color o sin talle:
+ *  - color 00 con talles (3.5, 4.5, 6…): las columnas son ESOS talles, cada una con lo
+ *    que dice el picking, y se agregan los colores.
+ *  - color con talle U: las filas son esos colores y se agregan los talles.
+ *  - 00 / U: se agregan colores y talles.
+ * Colores y talles solo de los maestros de Dragon Indo. Cada celda se guarda en el
+ * renglón del picking que le corresponde (el picking no cambia).
  */
 export default function GrillaDesglose({
-  linea,
+  lineas,
   onVolver,
   onGuardar,
 }: {
-  linea: LineaControl
+  lineas: LineaControl[]
   onVolver: () => void
-  onGuardar: (desglose: Desglose[], motivo: string | null) => Promise<void>
+  onGuardar: (items: DesglosePorLinea[]) => Promise<void>
 }) {
-  const colorFijo = !esSinColor(linea.color)
-  const talleFijo = !esSinTalle(linea.talle)
+  const primera = lineas[0]
+  // Una dimensión queda fija cuando TODOS los renglones la traen detallada
+  const talleFijo = lineas.every((l) => !esSinTalle(l.talle))
+  const colorFijo = !talleFijo && lineas.every((l) => !esSinColor(l.color))
+  const pickingTotal = lineas.reduce((s, l) => s + l.picking, 0)
+
+  /** Renglón del picking al que va una celda */
+  const lineaDe = (color: string, talle: string): LineaControl | undefined =>
+    talleFijo ? lineas.find((l) => l.talle === talle) : colorFijo ? lineas.find((l) => l.color === color) : primera
 
   const [colores, setColores] = useState<ItemMaestro[]>(() => {
-    if (colorFijo) return [{ codigo: linea.color, descripcion: '' }]
+    if (colorFijo) return lineas.map((l) => ({ codigo: l.color, descripcion: '' }))
     const vistos = new Map<string, ItemMaestro>()
-    for (const d of linea.desglose ?? []) if (!vistos.has(d.color)) vistos.set(d.color, { codigo: d.color, descripcion: d.color_desc ?? '' })
+    for (const l of lineas) for (const d of l.desglose ?? []) if (!vistos.has(d.color)) vistos.set(d.color, { codigo: d.color, descripcion: d.color_desc ?? '' })
     return [...vistos.values()]
   })
   const [talles, setTalles] = useState<string[]>(() => {
-    if (talleFijo) return [linea.talle]
-    return [...new Set((linea.desglose ?? []).map((d) => d.talle))].sort(compararTalles)
+    if (talleFijo) return [...new Set(lineas.map((l) => l.talle))].sort(compararTalles)
+    return [...new Set(lineas.flatMap((l) => (l.desglose ?? []).map((d) => d.talle)))].sort(compararTalles)
   })
   const [cant, setCant] = useState<Record<string, string>>(() => {
     const m: Record<string, string> = {}
-    for (const d of linea.desglose ?? []) m[`${d.color}|${d.talle}`] = String(d.cantidad)
+    for (const l of lineas) for (const d of l.desglose ?? []) m[`${d.color}|${d.talle}`] = String(d.cantidad)
     return m
   })
-  const [motivo, setMotivo] = useState(linea.motivo ?? '')
+  const [motivo, setMotivo] = useState(lineas.find((l) => l.motivo)?.motivo ?? '')
   const [buscar, setBuscar] = useState<'color' | 'talle' | null>(null)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Descripción de los colores ya cargados (y del color fijo) desde Dragon
   const [maestroColores, setMaestroColores] = useState<ItemMaestro[]>([])
   const [maestroTalles, setMaestroTalles] = useState<ItemMaestro[]>([])
   const [errMaestro, setErrMaestro] = useState<string | null>(null)
@@ -73,8 +90,22 @@ export default function GrillaDesglose({
     return Number.isFinite(v) && v > 0 ? v : 0
   }
   const total = colores.reduce((s, c) => s + talles.reduce((s2, t) => s2 + valor(c.codigo, t), 0), 0)
-  const falta = linea.picking - total
-  const pideMotivo = total < linea.picking
+
+  /** Lo repartido en cada renglón del picking */
+  const porLinea = useMemo(() => {
+    const m = new Map<LineaControl, number>()
+    for (const l of lineas) m.set(l, 0)
+    for (const c of colores) for (const t of talles) {
+      const l = lineaDe(c.codigo, t)
+      if (l) m.set(l, (m.get(l) ?? 0) + valor(c.codigo, t))
+    }
+    return m
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cant, colores, talles, lineas])
+  const cortas = lineas.filter((l) => (porLinea.get(l) ?? 0) < l.picking)
+  const falta = cortas.reduce((s, l) => s + l.picking - (porLinea.get(l) ?? 0), 0)
+  const sobra = lineas.reduce((s, l) => s + Math.max(0, (porLinea.get(l) ?? 0) - l.picking), 0)
+  const pideMotivo = cortas.length > 0
 
   function agregarColor(item: ItemMaestro) {
     if (!colores.some((c) => c.codigo === item.codigo)) setColores((cs) => [...cs, item])
@@ -97,16 +128,17 @@ export default function GrillaDesglose({
   async function guardar() {
     setError(null)
     if (pideMotivo && !motivo) { setError(`Faltan ${n0.format(falta)} u.: elegí el motivo.`); return }
-    const desglose: Desglose[] = []
+    const items: DesglosePorLinea[] = lineas.map((l) => ({ linea: l, desglose: [], motivo: (porLinea.get(l) ?? 0) < l.picking ? motivo : null }))
     for (const c of colores) {
       for (const t of talles) {
         const v = valor(c.codigo, t)
-        if (v > 0) desglose.push({ color: c.codigo, color_desc: descColor(c.codigo, c.descripcion) || null, talle: t, cantidad: v })
+        const l = lineaDe(c.codigo, t)
+        if (v > 0 && l) items.find((x) => x.linea === l)!.desglose.push({ color: c.codigo, color_desc: descColor(c.codigo, c.descripcion) || null, talle: t, cantidad: v })
       }
     }
     setGuardando(true)
     try {
-      await onGuardar(desglose, pideMotivo ? motivo : null)
+      await onGuardar(items)
     } catch (e) {
       setError((e as Error).message)
     } finally {
@@ -115,7 +147,8 @@ export default function GrillaDesglose({
   }
 
   const tallesDisponibles = new Set(maestroTalles.map((t) => t.codigo))
-  const barra = total < linea.picking ? 'bg-violet-500' : total === linea.picking ? 'bg-emerald-500' : 'bg-lime-400'
+  const barra = total < pickingTotal ? 'bg-violet-500' : total === pickingTotal && !sobra ? 'bg-emerald-500' : 'bg-lime-400'
+  const tono = (hecho: number, meta: number) => (hecho === meta ? 'text-emerald-400' : hecho < meta ? 'text-red-400' : 'text-lime-300')
 
   return (
     <div className="space-y-3 pb-4">
@@ -124,16 +157,20 @@ export default function GrillaDesglose({
       </button>
       <div>
         <h2 className="flex flex-wrap items-center gap-2 font-display text-xl font-bold text-ink">
-          {linea.articulo}
+          {primera.articulo}
           <span className="rounded-md border border-dashed border-violet-500/50 bg-violet-500/10 px-1.5 text-xs font-bold text-violet-400">
-            {linea.color || '—'} · {linea.talle || '—'}
+            {talleFijo ? `color ${primera.color || '—'}` : colorFijo ? `talle ${primera.talle || '—'}` : `${primera.color || '—'} · ${primera.talle || '—'}`}
           </span>
         </h2>
         <p className="text-sm text-sub">
-          {linea.descripcion || '—'} · el picking dice <b className="text-ink">{n0.format(linea.picking)} u.</b>
+          {primera.descripcion || '—'}{primera.numero ? ` · OC ${primera.numero}` : ''} · el picking dice <b className="text-ink">{n0.format(pickingTotal)} u.</b>
         </p>
         <p className="mt-2 text-sm font-semibold text-ink">
-          {colorFijo ? `Cargá cuántas hay de cada talle (color ${linea.color})` : talleFijo ? `Cargá cuántas hay de cada color (talle ${linea.talle})` : 'Cargá cuántas hay de cada color y talle'}
+          {talleFijo
+            ? 'Ya vienen los talles: agregá los colores y cargá cuántas hay de cada uno'
+            : colorFijo
+              ? 'Ya vienen los colores: agregá los talles y cargá cuántas hay de cada uno'
+              : 'Cargá cuántas hay de cada color y talle'}
         </p>
       </div>
 
@@ -144,64 +181,82 @@ export default function GrillaDesglose({
         </div>
       )}
 
-      {colores.length > 0 && talles.length > 0 ? (
+      {talles.length > 0 && (colores.length > 0 || talleFijo) ? (
         <div className="overflow-x-auto">
           <table className="border-separate border-spacing-1 text-sm">
             <thead>
               <tr>
                 <th className="text-left text-xs font-semibold text-sky-400">Color</th>
-                {talles.map((t) => (
-                  <th key={t} className="min-w-[3.25rem] text-center text-xs font-semibold text-violet-400">
-                    {t}
-                    {!talleFijo && (
-                      <button type="button" onClick={() => quitarTalle(t)} className="ml-0.5 align-middle text-sub hover:text-red-400" aria-label={`Quitar talle ${t}`}>
-                        <X size={11} aria-hidden />
-                      </button>
-                    )}
-                  </th>
-                ))}
+                {talles.map((t) => {
+                  const l = talleFijo ? lineas.find((x) => x.talle === t) : undefined
+                  return (
+                    <th key={t} className="min-w-[3.25rem] text-center text-xs font-semibold text-violet-400">
+                      {t}
+                      {!talleFijo && (
+                        <button type="button" onClick={() => quitarTalle(t)} className="ml-0.5 align-middle text-sub hover:text-red-400" aria-label={`Quitar talle ${t}`}>
+                          <X size={11} aria-hidden />
+                        </button>
+                      )}
+                      {l && <span className="block text-[10px] font-medium text-sub">de {l.picking}</span>}
+                    </th>
+                  )
+                })}
                 <th className="text-center text-xs text-sub">Tot.</th>
               </tr>
             </thead>
             <tbody>
-              {colores.map((c) => (
-                <tr key={c.codigo}>
-                  <th className="max-w-[7.5rem] pr-1 text-left text-xs font-bold text-sky-400">
-                    <span className="flex items-center gap-1">
-                      <span className="truncate">{c.codigo} {descColor(c.codigo, c.descripcion)}</span>
-                      {!colorFijo && (
-                        <button type="button" onClick={() => quitarColor(c.codigo)} className="shrink-0 text-sub hover:text-red-400" aria-label={`Quitar color ${c.codigo}`}>
-                          <X size={12} aria-hidden />
-                        </button>
-                      )}
-                    </span>
-                  </th>
-                  {talles.map((t) => {
-                    const k = `${c.codigo}|${t}`
-                    const lleno = valor(c.codigo, t) > 0
-                    return (
-                      <td key={t}>
-                        <input
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                          value={cant[k] ?? ''}
-                          onChange={(e) => setCant((m) => ({ ...m, [k]: e.target.value.replace(/\D/g, '').slice(0, 5) }))}
-                          aria-label={`Cantidad ${c.codigo} talle ${t}`}
-                          className={`h-11 w-full min-w-[3.25rem] rounded-xl border text-center text-base font-bold text-ink outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/30 ${lleno ? 'border-sky-500/50 bg-sky-500/10' : 'border-line bg-surface2'}`}
-                        />
-                      </td>
-                    )
-                  })}
-                  <td className="text-center font-bold tabular-nums text-sub">{talles.reduce((s, t) => s + valor(c.codigo, t), 0)}</td>
+              {colores.map((c) => {
+                const l = colorFijo ? lineas.find((x) => x.color === c.codigo) : undefined
+                const fila = talles.reduce((s, t) => s + valor(c.codigo, t), 0)
+                return (
+                  <tr key={c.codigo}>
+                    <th className="max-w-[7.5rem] pr-1 text-left text-xs font-bold text-sky-400">
+                      <span className="flex items-center gap-1">
+                        <span className="truncate">{c.codigo} {descColor(c.codigo, c.descripcion)}</span>
+                        {!colorFijo && (
+                          <button type="button" onClick={() => quitarColor(c.codigo)} className="shrink-0 text-sub hover:text-red-400" aria-label={`Quitar color ${c.codigo}`}>
+                            <X size={12} aria-hidden />
+                          </button>
+                        )}
+                      </span>
+                      {l && <span className="block text-[10px] font-medium text-sub">de {l.picking}</span>}
+                    </th>
+                    {talles.map((t) => {
+                      const k = `${c.codigo}|${t}`
+                      const lleno = valor(c.codigo, t) > 0
+                      return (
+                        <td key={t}>
+                          <input
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            value={cant[k] ?? ''}
+                            onChange={(e) => setCant((m) => ({ ...m, [k]: e.target.value.replace(/\D/g, '').slice(0, 5) }))}
+                            aria-label={`Cantidad ${c.codigo} talle ${t}`}
+                            className={`h-11 w-full min-w-[3.25rem] rounded-xl border text-center text-base font-bold text-ink outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/30 ${lleno ? 'border-sky-500/50 bg-sky-500/10' : 'border-line bg-surface2'}`}
+                          />
+                        </td>
+                      )
+                    })}
+                    <td className={`text-center font-bold tabular-nums ${l ? tono(fila, l.picking) : 'text-sub'}`}>{fila}</td>
+                  </tr>
+                )
+              })}
+              {colores.length === 0 && (
+                <tr>
+                  <td colSpan={talles.length + 2} className="rounded-xl border border-dashed border-line px-3 py-4 text-center text-sm text-sub">
+                    Agregá los colores que hay en el piso
+                  </td>
                 </tr>
-              ))}
+              )}
             </tbody>
             <tfoot>
               <tr>
                 <th className="text-left text-xs text-sub">Tot.</th>
-                {talles.map((t) => (
-                  <td key={t} className="text-center font-bold tabular-nums text-sub">{colores.reduce((s, c) => s + valor(c.codigo, t), 0)}</td>
-                ))}
+                {talles.map((t) => {
+                  const col = colores.reduce((s, c) => s + valor(c.codigo, t), 0)
+                  const l = talleFijo ? lineas.find((x) => x.talle === t) : undefined
+                  return <td key={t} className={`text-center font-bold tabular-nums ${l ? tono(col, l.picking) : 'text-sub'}`}>{col}</td>
+                })}
                 <td className="text-center font-bold tabular-nums text-ink">{total}</td>
               </tr>
             </tfoot>
@@ -243,26 +298,30 @@ export default function GrillaDesglose({
       <div className="sticky bottom-2 space-y-2 rounded-2xl border border-line bg-surface p-3 shadow-soft">
         <div className="flex items-center justify-between text-sm">
           <span className="text-sub">Repartido</span>
-          <b className="font-display text-lg tabular-nums text-ink">{n0.format(total)} / {n0.format(linea.picking)}</b>
+          <b className="font-display text-lg tabular-nums text-ink">{n0.format(total)} / {n0.format(pickingTotal)}</b>
         </div>
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-line">
-          <div className={`h-full ${barra}`} style={{ width: `${Math.min(100, linea.picking ? (total / linea.picking) * 100 : 100)}%` }} />
+          <div className={`h-full ${barra}`} style={{ width: `${Math.min(100, pickingTotal ? (total / pickingTotal) * 100 : 100)}%` }} />
         </div>
-        {total < linea.picking && (
+        {pideMotivo && (
           <div className="space-y-1.5 rounded-xl border border-dashed border-violet-500/50 bg-violet-500/10 p-2 text-xs text-violet-300">
-            <p>Faltan repartir <b>{n0.format(falta)}</b>. Si físicamente no están, elegí el motivo:</p>
+            <p>
+              Faltan repartir <b>{n0.format(falta)}</b>
+              {lineas.length > 1 && <> ({cortas.map((l) => `${talleFijo ? l.talle : l.color}: ${l.picking - (porLinea.get(l) ?? 0)}`).join(' · ')})</>}
+              . Si físicamente no están, elegí el motivo:
+            </p>
             <select value={motivo} onChange={(e) => setMotivo(e.target.value)} className="h-9 w-full rounded-lg border border-line bg-surface2 px-2 text-sm text-ink">
               <option value="">Motivo…</option>
               {MOTIVOS_DIFERENCIA.map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
           </div>
         )}
-        {total === linea.picking && total > 0 && (
+        {!pideMotivo && !sobra && total > 0 && (
           <p className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2 text-xs font-semibold text-emerald-400">✓ Coincide con el picking.</p>
         )}
-        {total > linea.picking && (
+        {sobra > 0 && (
           <p className="rounded-xl border border-lime-400/40 bg-lime-400/10 p-2 text-xs text-lime-300">
-            Contaste <b>{n0.format(total - linea.picking)}</b> de más que el picking. Se guarda y queda como diferencia.
+            Contaste <b>{n0.format(sobra)}</b> de más que el picking. Se guarda y queda como diferencia.
           </p>
         )}
         {error && <p className="rounded-xl border border-red-500/30 bg-red-500/10 p-2 text-xs text-red-400">{error}</p>}

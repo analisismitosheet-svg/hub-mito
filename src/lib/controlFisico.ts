@@ -297,3 +297,20 @@ export function talleRango(desde: string, hasta: string, maestro: ItemMaestro[],
   }
   return { talles, noEstan, numerico: false }
 }
+
+/** Color sin detallar (00) / talle sin detallar (U) */
+export const esSinColor = (c: string) => ['', '0', '00'].includes(c.trim().toUpperCase())
+export const esSinTalle = (t: string) => ['', 'U', 'UNICO', 'ÚNICO'].includes(t.trim().toUpperCase())
+
+/**
+ * Renglones para desglosar agrupados: el mismo artículo de la misma OC va en una sola
+ * tarjeta. Color 00 con talles → un grupo con esos talles; color con talle U → un grupo
+ * con esos colores; 00 / U → solo.
+ */
+export function clavesGrupo(l: LineaControl): string {
+  const sinC = esSinColor(l.color)
+  const sinT = esSinTalle(l.talle)
+  if (sinC && !sinT) return `${l.codigo}|${l.articulo}|C:${l.color}`
+  if (!sinC && sinT) return `${l.codigo}|${l.articulo}|T:${l.talle}`
+  return claveLinea(l)
+}

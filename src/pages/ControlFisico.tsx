@@ -9,6 +9,9 @@ import DesgloseChips from '@/components/control/DesgloseChips'
 import { useAuth } from '@/context/AuthContext'
 import {
   claveLinea,
+  clavesGrupo,
+  esSinColor,
+  esSinTalle,
   estadoLinea,
   fechaHora,
   guardarLinea,
@@ -192,34 +195,52 @@ function DetalleFactura({
     onCambio()
   }
 
+  // Una tarjeta por renglón, salvo los que se desglosan: el mismo artículo de la misma OC
+  // va junto (ej. color 00 con talles 3.5, 4.5, 6…) y se desglosa en una sola grilla
+  const tarjetas = useMemo(() => {
+    const out: Tarjeta[] = []
+    const grupos = new Map<string, Tarjeta>()
+    for (const l of lineas ?? []) {
+      if (!l.requiere_desglose) { out.push({ clave: claveLinea(l), lineas: [l], desglose: false }); continue }
+      const k = clavesGrupo(l)
+      const g = grupos.get(k)
+      if (g) g.lineas.push(l)
+      else { const n: Tarjeta = { clave: k, lineas: [l], desglose: true }; grupos.set(k, n); out.push(n) }
+    }
+    return out
+  }, [lineas])
+
   const visibles = useMemo(() => {
     const t = q.trim().toUpperCase()
-    return (lineas ?? []).filter((l) => {
-      if (t && ![l.articulo, l.descripcion ?? '', l.color, l.talle].some((v) => v.toUpperCase().includes(t))) return false
-      if (filtro === 'faltan') return l.contado == null
-      if (filtro === 'desglosar') return l.requiere_desglose
-      if (filtro === 'dif') return l.contado != null && l.contado !== l.picking
+    return tarjetas.filter((tj) => {
+      if (t && !tj.lineas.some((l) => [l.articulo, l.descripcion ?? '', l.color, l.talle].some((v) => v.toUpperCase().includes(t)))) return false
+      if (filtro === 'faltan') return tj.lineas.some((l) => l.contado == null)
+      if (filtro === 'desglosar') return tj.desglose
+      if (filtro === 'dif') return tj.lineas.some((l) => l.contado != null && l.contado !== l.picking)
       return true
     })
-  }, [lineas, q, filtro])
+  }, [tarjetas, q, filtro])
 
-  const enDesglose = desglosando ? (lineas ?? []).find((l) => claveLinea(l) === desglosando) : null
+  const enDesglose = desglosando ? tarjetas.find((tj) => tj.clave === desglosando) : null
   if (enDesglose) {
     return (
       <GrillaDesglose
-        linea={enDesglose}
+        lineas={enDesglose.lineas}
         onVolver={() => setDesglosando(null)}
-        onGuardar={async (d, motivo) => {
-          await guardar(enDesglose, null, motivo, d)
+        onGuardar={async (items) => {
+          // un renglón del picking por vez (cada uno guarda su parte de la grilla)
+          for (const it of items) await guardarLinea(factura, it.linea, null, it.motivo, it.desglose)
+          await cargar()
+          onCambio()
           setDesglosando(null)
         }}
       />
     )
   }
 
-  const total = lineas?.length ?? 0
-  const hechos = (lineas ?? []).filter((l) => l.contado != null).length
-  const paraDesglosar = (lineas ?? []).filter((l) => l.requiere_desglose && l.contado == null).length
+  const total = tarjetas.length
+  const hechos = tarjetas.filter((tj) => tj.lineas.every((l) => l.contado != null)).length
+  const paraDesglosar = tarjetas.filter((tj) => tj.desglose && tj.lineas.some((l) => l.contado == null)).length
   const faltan = (lineas ?? []).reduce((s, l) => s + (l.contado != null && l.contado < l.picking ? l.picking - l.contado : 0), 0)
   const sobran = (lineas ?? []).reduce((s, l) => s + (l.contado != null && l.contado > l.picking ? l.contado - l.picking : 0), 0)
   const completo = total > 0 && hechos === total
@@ -285,15 +306,19 @@ function DetalleFactura({
       )}
 
       <div className="space-y-2">
-        {visibles.map((l) => (
-          <TarjetaLinea key={claveLinea(l)} l={l} editable={editable} onDesglosar={() => setDesglosando(claveLinea(l))} onGuardar={guardar} />
-        ))}
+        {visibles.map((tj) =>
+          tj.desglose ? (
+            <TarjetaGrupo key={tj.clave} lineas={tj.lineas} editable={editable} onDesglosar={() => setDesglosando(tj.clave)} />
+          ) : (
+            <TarjetaLinea key={tj.clave} l={tj.lineas[0]} editable={editable} onDesglosar={() => setDesglosando(tj.clave)} onGuardar={guardar} />
+          ),
+        )}
       </div>
 
       {editable && lineas && lineas.length > 0 && (
         <div className="sticky bottom-2 rounded-2xl border border-line bg-surface p-3 shadow-soft">
           {!completo ? (
-            <p className="text-center text-sm text-sub">Faltan <b className="text-ink">{total - hechos}</b> renglón(es) para poder terminar.</p>
+            <p className="text-center text-sm text-sub">Faltan <b className="text-ink">{total - hechos}</b> artículo(s) para poder terminar.</p>
           ) : (
             <>
               {(faltan > 0 || sobran > 0) && (
@@ -309,6 +334,65 @@ function DetalleFactura({
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+interface Tarjeta {
+  clave: string
+  lineas: LineaControl[]
+  desglose: boolean
+}
+
+/** Artículo para desglosar: muestra los talles (o colores) que ya trae el picking y lo cargado. */
+function TarjetaGrupo({ lineas, editable, onDesglosar }: { lineas: LineaControl[]; editable: boolean; onDesglosar: () => void }) {
+  const l0 = lineas[0]
+  const picking = lineas.reduce((s, l) => s + l.picking, 0)
+  const hechas = lineas.filter((l) => l.contado != null)
+  const contado = hechas.reduce((s, l) => s + (l.contado ?? 0), 0)
+  const completo = hechas.length === lineas.length
+  const talleFijo = lineas.every((l) => !esSinTalle(l.talle))
+  const colorFijo = !talleFijo && lineas.every((l) => !esSinColor(l.color))
+  const dims = talleFijo ? lineas.map((l) => ({ k: l.talle, n: l.picking })) : colorFijo ? lineas.map((l) => ({ k: l.color, n: l.picking })) : []
+  const desglose = lineas.flatMap((l) => l.desglose ?? [])
+  const motivos = [...new Set(lineas.map((l) => l.motivo).filter(Boolean))].join(' · ')
+  const tono = !completo ? 'text-amber-400' : contado === picking ? 'text-emerald-400' : contado < picking ? 'text-red-400' : 'text-lime-300'
+  const borde = !hechas.length ? 'border-violet-500/60 shadow-[inset_3px_0_0_#8b5cf6]' : !completo ? 'border-amber-500/50' : contado === picking ? 'border-emerald-500/40' : contado < picking ? 'border-red-500/50' : 'border-lime-400/50'
+
+  return (
+    <div className={`rounded-2xl border bg-surface p-3 ${borde}`}>
+      <div className="flex items-center gap-1.5">
+        <span className="font-display text-base font-bold text-ink">{l0.articulo}</span>
+        <span className="rounded border border-dashed border-violet-500/50 px-1.5 text-xs font-bold text-violet-300">
+          {talleFijo ? `color ${l0.color || '—'}` : colorFijo ? `talle ${l0.talle || '—'}` : `${l0.color || '—'} · ${l0.talle || '—'}`}
+        </span>
+        <span className="ml-auto font-display text-lg font-bold tabular-nums text-ink">{n0.format(picking)}</span>
+      </div>
+      <p className="truncate text-xs text-sub">{l0.descripcion || '—'}{l0.numero ? ` · OC ${l0.numero}` : ''}</p>
+      {dims.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {dims.map((d) => (
+            <span key={d.k} className={`rounded px-1.5 text-[11px] font-bold ${talleFijo ? 'bg-violet-500/15 text-violet-400' : 'bg-sky-500/15 text-sky-400'}`}>
+              {d.k} <span className="font-medium text-sub">· {d.n}</span>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="mt-2 space-y-1.5">
+        {desglose.length > 0 && <DesgloseChips desglose={desglose} />}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-sub">
+            {!hechas.length
+              ? talleFijo ? 'Sin color: cargá los colores de cada talle' : colorFijo ? 'Sin talle: cargá los talles de cada color' : 'Sin color/talle: cargá lo que hay en el piso'
+              : <>Contado <b className={tono}>{n0.format(contado)}</b>{completo && contado !== picking ? ` · ${contado > picking ? 'sobran' : 'faltan'} ${Math.abs(contado - picking)}` : ''}{!completo ? ' · a medias' : ''}{motivos ? ` · ${motivos}` : ''}</>}
+          </span>
+          {editable && (
+            <button type="button" onClick={onDesglosar} className="ml-auto rounded-xl bg-violet-600 px-3 py-1.5 text-xs font-bold text-white">
+              {hechas.length ? 'Editar' : 'Desglosar →'}
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
