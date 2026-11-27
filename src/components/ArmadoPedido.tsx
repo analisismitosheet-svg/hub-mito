@@ -784,7 +784,7 @@ export default function ArmadoPedido({ armado, alVolver, alCambiar }: Props) {
           <form
             onSubmit={(e) => { e.preventDefault(); void soltarTarea() }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm rounded-2xl border border-line2 bg-surface-solid p-5 shadow-soft"
+            className="w-full max-w-sm rounded-2xl border border-line2 bg-[var(--surface-solid)] p-5 shadow-soft"
           >
             <h3 className="flex items-center gap-2 font-display text-base font-bold text-ink">
               <LogOut size={17} aria-hidden className="text-brand-400" /> ¿Soltar la tarea?

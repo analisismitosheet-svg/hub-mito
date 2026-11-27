@@ -476,7 +476,7 @@ export default function Roles() {
 
       {/* ===== Barra de guardado ===== */}
       <div
-        className={`fixed bottom-4 left-1/2 z-40 flex max-w-[calc(100vw-24px)] -translate-x-1/2 items-center gap-2 rounded-2xl border border-line2 bg-surface-solid/95 py-2 pl-4 pr-2 shadow-soft-lg backdrop-blur transition-transform duration-300 ease-out-strong ${totalCambios > 0 ? 'translate-y-0' : 'translate-y-[200%]'}`}
+        className={`fixed bottom-4 left-1/2 z-40 flex max-w-[calc(100vw-24px)] -translate-x-1/2 items-center gap-2 rounded-2xl border border-line2 bg-[var(--surface-solid)]/95 py-2 pl-4 pr-2 shadow-soft-lg backdrop-blur transition-transform duration-300 ease-out-strong ${totalCambios > 0 ? 'translate-y-0' : 'translate-y-[200%]'}`}
       >
         <span className="whitespace-nowrap text-sm font-medium text-ink">
           {totalCambios} cambio{totalCambios === 1 ? '' : 's'} sin guardar
@@ -869,7 +869,7 @@ function CabeceraPersona({
 
       {copiar && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center sm:p-4" onClick={() => setCopiar(false)}>
-          <div className="flex max-h-[80vh] w-full max-w-md flex-col rounded-t-2xl border border-line2 bg-surface-solid p-4 shadow-soft-lg sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="flex max-h-[80vh] w-full max-w-md flex-col rounded-t-2xl border border-line2 bg-[var(--surface-solid)] p-4 shadow-soft-lg sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-display text-lg font-semibold text-ink">Copiar permisos de…</h3>
             <p className="mb-3 mt-1 text-xs text-sub">
               {persona.nombre} queda con los mismos accesos que la persona que elijas. Sus roles no cambian; la diferencia queda como extras. Después lo guardás con “Guardar”.

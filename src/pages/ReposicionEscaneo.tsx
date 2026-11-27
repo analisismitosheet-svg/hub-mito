@@ -649,7 +649,7 @@ export default function ReposicionEscaneo() {
             </div>
             <div className="max-h-[440px] overflow-auto">
               <table className="w-full text-xs">
-                <thead className="sticky top-0 bg-surface-solid text-left text-sub">
+                <thead className="sticky top-0 bg-[var(--surface-solid)] text-left text-sub">
                   <tr>
                     <th className="px-3 py-2 font-semibold">Artículo</th>
                     <th className="px-2 py-2 font-semibold">Col</th>

@@ -359,7 +359,7 @@ export default function SeguimientoPedidos() {
 
       {modal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setModal(null)}>
-          <div role="dialog" aria-modal="true" className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-line bg-surface-solid p-5" onClick={(e) => e.stopPropagation()}>
+          <div role="dialog" aria-modal="true" className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-line bg-[var(--surface-solid)] p-5" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start gap-2">
               <div className="min-w-0 flex-1">
                 <h2 className="font-display text-lg font-semibold text-ink">{pedsModal.length === 1 ? `Cancelar en pedido ${pedsModal[0].num}` : `Cancelar en ${pedsModal.length} pedidos`}</h2>

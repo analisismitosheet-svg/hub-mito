@@ -301,7 +301,7 @@ function Editor({ tarea, onCerrar, onGuardar, onBorrar }: {
   const campo = 'h-9 w-full rounded-lg border border-line bg-surface2 px-2 text-sm text-ink'
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-3 sm:items-center" onClick={onCerrar}>
-      <div className="w-full max-w-md rounded-2xl border border-line bg-surface-solid p-4" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-md rounded-2xl border border-line bg-[var(--surface-solid)] p-4" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-base font-semibold text-ink">Editar tarjeta</h2>
           <button type="button" onClick={onCerrar} aria-label="Cerrar" className="text-sub hover:text-ink"><X size={20} /></button>

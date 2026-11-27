@@ -128,7 +128,7 @@ function GraficoEvolucion({ serie, metrica, gran }: { serie: Analisis['serie']; 
         )}
       </svg>
       {p && (
-        <div className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2 rounded-lg border border-line bg-surface-solid px-3 py-2 text-xs shadow-xl">
+        <div className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2 rounded-lg border border-line bg-[var(--surface-solid)] px-3 py-2 text-xs shadow-xl">
           <b className="text-ink">
             {gran === 'dia' ? `${DIAS_CORTOS[p.dow ?? 0]} ${fechaCorta(p.desde)}` : p.desde === p.hasta ? fechaCorta(p.desde) : `${fechaCorta(p.desde)} al ${fechaCorta(p.hasta)}`}
           </b>
