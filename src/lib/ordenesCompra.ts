@@ -511,15 +511,18 @@ export function leerTxtArticulos(contenido: string): { lineas: LineaTxt[]; malas
   return { lineas, malas }
 }
 
-/** Separa color y talle con lo que existe en Dragon (el color no siempre tiene 2 caracteres). null si esa combinación no existe. */
-export function separarVariante(variante: string, v: Variantes): { color: string; talle: string } | null {
-  for (const c of v.colores) {
+/** Separa color y talle tal cual vienen (el color no siempre tiene 2 caracteres): primero busca la combinación en Dragon,
+    después un color conocido como prefijo y si no, los 2 primeros caracteres son el color. `existe` dice si Dragon la tiene. */
+export function separarVariante(variante: string, v: Variantes): { color: string; talle: string; existe: boolean } {
+  const colores = [...v.colores].sort((a, b) => b.codigo.length - a.codigo.length)
+  for (const c of colores) {
     const color = c.codigo.toUpperCase()
-    if (variante.startsWith(color) && v.talles.some((t) => t.toUpperCase() === variante.slice(color.length))) {
-      return { color: c.codigo, talle: v.talles.find((t) => t.toUpperCase() === variante.slice(color.length)) as string }
-    }
+    const talle = v.talles.find((t) => t.toUpperCase() === variante.slice(color.length))
+    if (variante.startsWith(color) && talle) return { color: c.codigo, talle, existe: true }
   }
-  return null
+  const conocido = colores.find((c) => variante.startsWith(c.codigo.toUpperCase()) && variante.length > c.codigo.length)
+  if (conocido) return { color: conocido.codigo, talle: variante.slice(conocido.codigo.length), existe: false }
+  return variante.length > 2 ? { color: variante.slice(0, 2), talle: variante.slice(2), existe: false } : { color: variante, talle: '', existe: false }
 }
 /** Colores y talles del artículo en Dragon (en vivo por el puente). null si el puente no lo tiene todavía. */
 export async function variantesArticulo(articulo: string, base = 'INDOD'): Promise<Variantes | null> {

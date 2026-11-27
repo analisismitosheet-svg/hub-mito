@@ -264,7 +264,7 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
     setItems((l) => [...l.slice(0, i + 1), ...faltan.map((t) => ({ ...it, talle: t, cantidad: 0 })), ...l.slice(i + 1)])
   }
 
-  /** Txt `CANTIDAD+ARTICULO%COLORTALLE`: valida contra Dragon, suma los repetidos y deja afuera (a la vista) lo que no existe. */
+  /** Txt `CANTIDAD+ARTICULO%COLORTALLE`: el artículo tiene que existir en Dragon; color y talle se toman tal cual. Suma los repetidos y deja afuera (a la vista) lo que no se pudo leer. */
   const importarTxt = async (archivo: File | undefined) => {
     if (!archivo) return
     setImportando(true)
@@ -278,8 +278,8 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
       for (const l of lineas) {
         const a = datos.get(l.articulo)
         if (!a) { rechazadas.push({ linea: l.linea, texto: l.texto, motivo: `El artículo no existe en ${f.dragon_base}` }); continue }
+        // Color y talle se toman tal cual vienen en el txt aunque Dragon no los tenga (ej. talle 4.5)
         const sku = separarVariante(l.variante, a)
-        if (!sku) { rechazadas.push({ linea: l.linea, texto: l.texto, motivo: 'Ese color y talle no existen para el artículo' }); continue }
         nuevos.push({ articulo: a.articulo, descripcion: a.descripcion, color: sku.color, talle: sku.talle, cantidad: l.cantidad, precio: a.precio ?? 0 })
       }
       setVariantes((v) => ({ ...v, ...Object.fromEntries([...datos.values()].map((a) => [a.articulo, { colores: a.colores, talles: a.talles }])) }))
@@ -635,18 +635,15 @@ export default function FormOrdenCompra({ oc, enfocarDragon, nombreUsuario, onCe
                           </td>
                           <td className="p-1.5 text-sub">{it.descripcion}</td>
                           <td className="p-1">
-                            {v?.colores.length ? (
-                              <select value={it.color} disabled={bloqueadoDragon} onChange={(e) => setItem(i, { color: e.target.value })} className="h-8 w-full rounded-lg border border-line bg-surface2 px-1 text-xs text-ink">
-                                {v.colores.map((c) => <option key={c.codigo} value={c.codigo}>{c.codigo} {c.nombre}</option>)}
-                              </select>
-                            ) : <input value={it.color} disabled={bloqueadoDragon} onChange={(e) => setItem(i, { color: e.target.value.toUpperCase() })} className="h-8 w-full rounded-lg border border-line bg-surface2 px-2 text-xs text-ink" />}
+                            {/* Libre: sugiere los colores de Dragon pero acepta cualquiera */}
+                            <input value={it.color} disabled={bloqueadoDragon} list={v?.colores.length ? `oc-colores-${i}` : undefined}
+                              onChange={(e) => setItem(i, { color: e.target.value.toUpperCase() })} className="h-8 w-full rounded-lg border border-line bg-surface2 px-2 text-xs text-ink" />
+                            {v?.colores.length ? <datalist id={`oc-colores-${i}`}>{v.colores.map((c) => <option key={c.codigo} value={c.codigo}>{c.nombre}</option>)}</datalist> : null}
                           </td>
                           <td className="p-1">
-                            {v?.talles.length ? (
-                              <select value={it.talle} disabled={bloqueadoDragon} onChange={(e) => setItem(i, { talle: e.target.value })} className="h-8 w-full rounded-lg border border-line bg-surface2 px-1 text-xs text-ink">
-                                {v.talles.map((t) => <option key={t}>{t}</option>)}
-                              </select>
-                            ) : <input value={it.talle} disabled={bloqueadoDragon} onChange={(e) => setItem(i, { talle: e.target.value.toUpperCase() })} className="h-8 w-full rounded-lg border border-line bg-surface2 px-2 text-xs text-ink" />}
+                            <input value={it.talle} disabled={bloqueadoDragon} list={v?.talles.length ? `oc-talles-${i}` : undefined}
+                              onChange={(e) => setItem(i, { talle: e.target.value.toUpperCase() })} className="h-8 w-full rounded-lg border border-line bg-surface2 px-2 text-xs text-ink" />
+                            {v?.talles.length ? <datalist id={`oc-talles-${i}`}>{v.talles.map((t) => <option key={t} value={t} />)}</datalist> : null}
                           </td>
                           <td className="p-1"><input value={it.cantidad} disabled={bloqueadoDragon} inputMode="numeric" onChange={(e) => setItem(i, { cantidad: Number(e.target.value) || 0 })} className="h-8 w-full rounded-lg border border-line bg-surface2 px-2 text-xs text-ink" /></td>
                           <td className="p-1"><input value={it.precio} disabled={bloqueadoDragon} inputMode="decimal" onChange={(e) => setItem(i, { precio: Number(e.target.value.replace(',', '.')) || 0 })} className="h-8 w-full rounded-lg border border-line bg-surface2 px-2 text-xs text-ink" /></td>
