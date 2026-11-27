@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Maqueta · Control de mercadería Depósito Indo</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{--paper:#050508;--surface:#0e0e13;--surface2:#16161d;--line:rgba(255,255,255,.09);--ink:#f8fafc;--sub:#94a3b8;--or:#f97316;--am:#f59e0b;--em:#10b981;--rojo:#f87171;--sky:#38bdf8;--vi:#a78bfa;--lima:#a3e635}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:14px;line-height:1.45;padding:20px clamp(12px,3vw,36px) 64px}
+  h1{font-size:24px;margin:0;font-weight:700;letter-spacing:-.02em}
+  h2{font-size:14px;margin:26px 0 10px;font-weight:800;color:#fdba74;letter-spacing:.02em;text-transform:uppercase}
+  p{margin:0}.sub{color:var(--sub)}.num{font-variant-numeric:tabular-nums}
+  .nota{border:1px dashed rgba(249,115,22,.5);background:rgba(249,115,22,.07);color:#fdba74;border-radius:12px;padding:9px 12px;font-size:12.5px;margin:10px 0;max-width:1100px}
+  .nota b{color:#fed7aa}
+  .pregunta{border:1px solid rgba(56,189,248,.45);background:rgba(56,189,248,.08);color:#bae6fd;border-radius:12px;padding:9px 12px;font-size:12.5px;margin:8px 0;max-width:1100px}
+  .flujo{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0 4px;align-items:center}
+  .paso{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:6px 10px;font-size:12.5px;font-weight:700}
+  .paso small{display:block;font-weight:500;color:var(--sub);font-size:11px}
+  .paso.a{border-color:rgba(245,158,11,.5)}.paso.b{border-color:rgba(56,189,248,.5)}.paso.c{border-color:rgba(167,139,250,.5)}.paso.d{border-color:rgba(16,185,129,.5)}
+  .flecha{color:var(--sub)}
+  .pantallas{display:flex;gap:28px;flex-wrap:wrap;margin-top:12px;align-items:flex-start}
+
+  /* PC */
+  .pc{flex:1 1 820px;max-width:1150px;border:1px solid var(--line);border-radius:18px;background:#08080c;padding:18px}
+  .pc-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+  .pc-h .t{font-size:18px;font-weight:800}
+  .chip{font-size:11.5px;font-weight:700;border-radius:99px;padding:2px 9px;border:1px solid var(--line);background:var(--surface2);color:#cbd5e1}
+  .chip.am{border-color:rgba(245,158,11,.45);background:rgba(245,158,11,.12);color:#fcd34d}
+  .chip.sky{border-color:rgba(56,189,248,.45);background:rgba(56,189,248,.1);color:#7dd3fc}
+  .chip.em{border-color:rgba(16,185,129,.45);background:rgba(16,185,129,.1);color:#6ee7b7}
+  .chip.rojo{border-color:rgba(248,113,113,.45);background:rgba(248,113,113,.1);color:#fca5a5}
+  .chip.vi{border-color:rgba(167,139,250,.45);background:rgba(167,139,250,.1);color:#c4b5fd}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}
+  .kpi{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:9px 12px}
+  .kpi span{font-size:11.5px;color:var(--sub)}.kpi b{display:block;font-size:20px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;font-size:11.5px;color:var(--sub);font-weight:600;padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+  td{padding:8px;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:middle}
+  td.r,th.r{text-align:right}
+  tr.sinvar td{background:rgba(167,139,250,.05)}
+  tr.dif td{background:rgba(248,113,113,.05)}
+  .c{font-size:11.5px;font-weight:700;border-radius:6px;padding:1px 6px}
+  .c.col{background:rgba(56,189,248,.15);color:var(--sky)}
+  .c.tal{background:rgba(167,139,250,.15);color:var(--vi)}
+  .c.falta{background:rgba(167,139,250,.12);color:#c4b5fd;border:1px dashed rgba(167,139,250,.5)}
+  .ck{width:20px;height:20px;border-radius:6px;border:1px solid var(--line);display:inline-grid;place-items:center;font-size:12px}
+  .ck.on{background:var(--em);border-color:var(--em);color:#04120c;font-weight:900}
+  .ck.x{background:rgba(248,113,113,.2);border-color:var(--rojo);color:var(--rojo);font-weight:900}
+  .inp{display:inline-block;min-width:54px;text-align:right;border:1px solid var(--line);background:var(--surface2);border-radius:8px;padding:3px 8px;font-weight:700}
+  .inp.dif{border-color:var(--rojo);color:#fca5a5}
+  .pie{display:flex;gap:10px;align-items:center;justify-content:flex-end;flex-wrap:wrap;margin-top:14px}
+  .btn{border:0;border-radius:11px;padding:10px 16px;font-weight:800;font-size:13.5px;font-family:inherit;cursor:pointer}
+  .btn.or{background:#ea580c;color:#fff}.btn.gh{background:var(--surface2);color:var(--ink);border:1px solid var(--line)}
+  .btn.em{background:#059669;color:#fff}.btn.vi{background:#7c3aed;color:#fff}
+  .sel{border:1px solid var(--line);background:var(--surface2);border-radius:10px;padding:8px 12px;font-weight:600;display:inline-flex;gap:8px;align-items:center}
+
+  /* Teléfono */
+  .tel{width:390px;max-width:100%;border:1px solid var(--line);border-radius:28px;background:#08080c;padding:16px 14px 20px;position:relative}
+  .tel-lbl{font-size:12px;font-weight:800;color:#fdba74;text-transform:uppercase;letter-spacing:.03em;margin-bottom:8px}
+  .back{font-size:12.5px;color:var(--sub);margin-bottom:8px}
+  .tit{display:flex;align-items:center;gap:8px;font-weight:800;font-size:17px;margin-bottom:4px}
+  .card{border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:11px 12px;margin-top:9px}
+  .card.on{border-color:rgba(249,115,22,.55);box-shadow:inset 3px 0 0 var(--or)}
+  .fila{display:flex;align-items:center;gap:8px}
+  .cod{font-weight:800;font-size:15px}
+  .desc{font-size:12px;color:var(--sub);margin-top:2px}
+  .der{margin-left:auto;text-align:right}
+  .big{font-weight:800;font-size:16px}
+  .prog{height:6px;border-radius:99px;background:var(--surface2);overflow:hidden;margin:8px 0 2px}
+  .prog i{display:block;height:100%;background:var(--or)}
+  .prog.ok i{background:var(--em)}
+  .seg{display:flex;gap:6px;margin:10px 0}
+  .seg span{flex:1;text-align:center;font-size:12.5px;font-weight:700;border-radius:10px;padding:7px 0;border:1px solid var(--line);background:var(--surface2);color:var(--sub)}
+  .seg span.on{background:#ea580c;border-color:#ea580c;color:#fff}
+  .bus{height:44px;border-radius:12px;border:1px solid #3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.2);background:var(--surface);display:flex;align-items:center;padding:0 12px;gap:8px;color:var(--sub);margin:8px 0}
+  .bus .cam{margin-left:auto;font-size:18px}
+  .stepper{display:flex;align-items:center;gap:6px}
+  .stepper button{width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:var(--surface2);color:var(--ink);font-size:18px;font-weight:800;cursor:pointer;font-family:inherit}
+  .stepper .v{min-width:44px;text-align:center;font-weight:800;font-size:16px}
+  .aviso{border-radius:12px;padding:9px 11px;font-size:12.5px;margin-top:9px}
+  .aviso.vi{border:1px dashed rgba(167,139,250,.55);background:rgba(167,139,250,.08);color:#ddd6fe}
+  .aviso.rojo{border:1px solid rgba(248,113,113,.45);background:rgba(248,113,113,.08);color:#fecaca}
+  .aviso.em{border:1px solid rgba(16,185,129,.4);background:rgba(16,185,129,.08);color:#a7f3d0}
+  .aviso.lima{border:1px solid rgba(163,230,53,.45);background:rgba(163,230,53,.1);color:#d9f99d}
+
+  /* Matriz color × talle */
+  .mtx{width:100%;border-collapse:separate;border-spacing:4px;margin:8px -4px 0}
+  .mtx th{font-size:11.5px;color:var(--vi);text-align:center;padding:2px;border:0}
+  .mtx th.colh{text-align:left;color:var(--sky);font-size:12px}
+  .mtx td{padding:0;border:0}
+  .mtx input{width:100%;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--surface2);color:var(--ink);text-align:center;font-weight:800;font-size:15px;font-family:inherit}
+  .mtx input:focus{outline:0;border-color:var(--or);box-shadow:0 0 0 3px rgba(249,115,22,.25)}
+  .mtx input.lleno{border-color:rgba(56,189,248,.5);background:rgba(56,189,248,.08)}
+  .mtx td.tot{font-weight:800;text-align:center;color:var(--sub);font-size:13px}
+  .sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px;border:1px solid rgba(255,255,255,.25)}
+  .add{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+  .add span{font-size:12px;font-weight:700;border-radius:9px;padding:5px 10px;border:1px dashed var(--line);color:var(--sub);cursor:pointer}
+  .barra{position:sticky;bottom:0;margin-top:12px;border:1px solid var(--line);background:var(--surface2);border-radius:14px;padding:10px 12px}
+  .barra .fila b{font-size:18px}
+  .btn.full{width:100%;margin-top:8px}
+  .linea{display:flex;align-items:center;gap:6px;padding:7px 0;border-top:1px solid rgba(255,255,255,.05);font-size:13px}
+  .linea:first-child{border-top:0}
+</style>
+</head>
+<body>
+  <h1>Control de mercadería · Depósito Indo</h1>
+  <p class="sub">Maqueta para charlar el flujo. Parte del picking que ya existe (Recepción INDO → Picking por factura).</p>
+
+  <div class="flujo">
+    <div class="paso">Picking registrado<small>factura «LISTO PARA CONTROLAR»</small></div><span class="flecha">→</span>
+    <div class="paso a">1 · Compras controla<small>picking vs factura / OC</small></div><span class="flecha">→</span>
+    <div class="paso b">2 · Operario cuenta<small>en el celular, físico</small></div><span class="flecha">→</span>
+    <div class="paso c">Desglose color / talle<small>solo códigos sin variante</small></div><span class="flecha">→</span>
+    <div class="paso d">Controlado<small>vuelve a Compras con diferencias</small></div>
+  </div>
+
+  <div class="nota"><b>Idea central:</b> el picking a veces viene <b>solo con el código</b> (ej. <b>CF2301 · 120 u.</b>) sin color ni talle. El operario no puede “confirmar” esa línea: tiene que <b>abrirla en color × talle</b> con lo que físicamente hay. Hasta que la suma no esté cargada (o marcada la diferencia), la línea queda violeta y no se puede cerrar el control.</div>
+
+  <!-- ================= PASO 1: COMPRAS (PC) ================= -->
+  <h2>1 · Encargado de compras — chequea el picking (PC)</h2>
+  <div class="pantallas">
+    <div class="pc">
+      <div class="pc-h">
+        <span class="t">Control de mercadería</span>
+        <span class="chip am">LISTO PARA CONTROLAR</span>
+        <span class="sub" style="margin-left:auto">Depósito → Recepción INDO → Factura A-0004-00018233</span>
+      </div>
+      <div class="pc-h" style="gap:8px">
+        <span class="sel">Proveedor: <b>TEXTIL ANDES SRL</b></span>
+        <span class="sel">Factura: <b>A-0004-00018233</b></span>
+        <span class="sel">OC: <b>15183 · 15347</b></span>
+        <span class="sel">Picking: <b>#2</b> · 24/11 · registró <b>Lucas</b></span>
+      </div>
+      <div class="kpis">
+        <div class="kpi"><span>Unidades en factura</span><b class="num">612</b></div>
+        <div class="kpi"><span>Unidades en picking</span><b class="num">606</b></div>
+        <div class="kpi"><span>Diferencia</span><b class="num" style="color:var(--rojo)">−6</b></div>
+        <div class="kpi"><span>Líneas sin color / talle</span><b class="num" style="color:var(--vi)">2</b></div>
+      </div>
+      <table>
+        <thead><tr><th>Artículo</th><th>Descripción</th><th>Color</th><th>Talle</th><th class="r">OC</th><th class="r">Factura</th><th class="r">Picking</th><th class="r">Dif.</th><th>OK</th></tr></thead>
+        <tbody>
+          <tr><td><b>CF1188</b></td><td class="sub">Remera básica algodón</td><td><span class="c col">NEGRO</span></td><td><span class="c tal">M</span></td><td class="r num">60</td><td class="r num">60</td><td class="r num">60</td><td class="r num sub">0</td><td><span class="ck on">✓</span></td></tr>
+          <tr><td><b>CF1188</b></td><td class="sub">Remera básica algodón</td><td><span class="c col">NEGRO</span></td><td><span class="c tal">L</span></td><td class="r num">60</td><td class="r num">60</td><td class="r num">54</td><td class="r num" style="color:var(--rojo)">−6</td><td><span class="ck x">!</span></td></tr>
+          <tr class="sinvar"><td><b>CF2301</b></td><td class="sub">Buzo canguro frisa</td><td><span class="c falta">sin color</span></td><td><span class="c falta">sin talle</span></td><td class="r num">120</td><td class="r num">120</td><td class="r num">120</td><td class="r num sub">0</td><td><span class="ck on">✓</span></td></tr>
+          <tr class="sinvar"><td><b>ZM0457</b></td><td class="sub">Jean mom tiro alto</td><td><span class="c falta">sin color</span></td><td><span class="c falta">sin talle</span></td><td class="r num">96</td><td class="r num">96</td><td class="r num">96</td><td class="r num sub">0</td><td><span class="ck on">✓</span></td></tr>
+          <tr><td><b>CF0912</b></td><td class="sub">Campera rompeviento</td><td><span class="c col">AZUL</span></td><td><span class="c tal">XL</span></td><td class="r num">36</td><td class="r num">36</td><td class="r num">36</td><td class="r num sub">0</td><td><span class="ck">&nbsp;</span></td></tr>
+          <tr><td colspan="9" class="sub" style="font-size:12px">… 14 líneas más</td></tr>
+        </tbody>
+      </table>
+      <div class="aviso vi" style="max-width:640px">2 líneas vinieron solo con código. Al pasarlo al operario le va a pedir el <b>desglose por color y talle</b> de lo que hay en el piso.</div>
+      <div class="pie">
+        <span class="sub" style="margin-right:auto">Observación para el operario: <span class="inp" style="min-width:260px;text-align:left;font-weight:500;color:var(--sub)">Ojo CF1188 L, faltan 6 según picking</span></span>
+        <span class="sel">Asignar a: <b>Cualquiera de Depósito Indo ▾</b></span>
+        <button class="btn gh">Devolver al picking</button>
+        <button class="btn or">Pasar a control físico →</button>
+      </div>
+    </div>
+  </div>
+  <div class="pregunta">❓ ¿Compras puede corregir cantidades del picking acá, o solo aprueba / devuelve? (en la maqueta solo aprueba o devuelve, el picking se corrige en Picking).</div>
+  <div class="pregunta">❓ ¿El control físico se asigna a un operario puntual o lo toma cualquiera del depósito Indo?</div>
+
+  <!-- ================= PASO 2: OPERARIO (CELULAR) ================= -->
+  <h2>2 · Operario — cuenta lo físico (celular)</h2>
+  <div class="pantallas">
+
+    <!-- Lista de controles -->
+    <div class="tel">
+      <div class="tel-lbl">A · Mis controles</div>
+      <div class="back">← Depósito</div>
+      <div class="tit">📦 Control de mercadería</div>
+      <div class="seg"><span class="on">Pendientes · 3</span><span>En curso · 1</span><span>Hechos</span></div>
+      <div class="card on">
+        <div class="fila"><span class="cod">TEXTIL ANDES</span><span class="chip sky der">Nuevo</span></div>
+        <div class="desc">Fact. A-0004-00018233 · OC 15183 / 15347</div>
+        <div class="fila" style="margin-top:6px;font-size:12.5px"><span><b>19</b> líneas · <b>606</b> u.</span><span class="chip vi der">2 sin color/talle</span></div>
+        <div class="desc" style="color:#fdba74">💬 Ojo CF1188 L, faltan 6 según picking</div>
+      </div>
+      <div class="card">
+        <div class="fila"><span class="cod">HILADOS DEL SUR</span><span class="chip am der">En curso 40%</span></div>
+        <div class="desc">Fact. B-0002-00004411 · OC 15402</div>
+        <div class="prog"><i style="width:40%"></i></div>
+      </div>
+      <div class="card">
+        <div class="fila"><span class="cod">CONFECC. NORTE</span><span class="chip der">Nuevo</span></div>
+        <div class="desc">Fact. A-0001-00007710 · OC 15390</div>
+        <div class="fila" style="margin-top:6px;font-size:12.5px"><span><b>6</b> líneas · <b>180</b> u.</span></div>
+      </div>
+    </div>
+
+    <!-- Detalle del picking -->
+    <div class="tel">
+      <div class="tel-lbl">B · Líneas del picking</div>
+      <div class="back">← Mis controles</div>
+      <div class="tit">TEXTIL ANDES</div>
+      <div class="desc">Fact. A-0004-00018233 · Picking #2</div>
+      <div class="prog"><i style="width:32%"></i></div>
+      <div class="desc"><b style="color:var(--ink)">6 de 19</b> líneas controladas · <b style="color:var(--vi)">2 para desglosar</b></div>
+      <div class="bus">🔎 Buscar o escanear artículo<span class="cam">📷</span></div>
+      <div class="seg"><span class="on">Todas</span><span>Faltan</span><span>Desglosar</span><span>Con dif.</span></div>
+
+      <div class="card" style="border-color:rgba(167,139,250,.55);box-shadow:inset 3px 0 0 var(--vi)">
+        <div class="fila"><span class="cod">CF2301</span><span class="c falta">sin color/talle</span><span class="der big num">120</span></div>
+        <div class="desc">Buzo canguro frisa</div>
+        <div class="fila" style="margin-top:7px"><span class="desc" style="margin:0">Cargá colores y talles reales</span><button class="btn vi der" style="padding:7px 12px;font-size:12.5px">Desglosar →</button></div>
+      </div>
+
+      <div class="card">
+        <div class="fila"><span class="cod">CF1188</span><span class="c col">NEGRO</span><span class="c tal">L</span><span class="der big num">54</span></div>
+        <div class="desc">Remera básica algodón · <span style="color:#fdba74">💬 faltan 6 según picking</span></div>
+        <div class="fila" style="margin-top:7px">
+          <span class="desc" style="margin:0">Contado</span>
+          <div class="stepper der"><button>−</button><span class="v num">54</span><button>+</button></div>
+          <span class="ck on">✓</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="fila"><span class="cod">CF0912</span><span class="c col">AZUL</span><span class="c tal">XL</span><span class="der big num">36</span></div>
+        <div class="desc">Campera rompeviento</div>
+        <div class="fila" style="margin-top:7px">
+          <span class="desc" style="margin:0">Contado</span>
+          <div class="stepper der"><button>−</button><span class="v num" style="color:var(--rojo)">33</span><button>+</button></div>
+          <span class="ck x">!</span>
+        </div>
+        <div class="aviso rojo" style="margin-top:7px;padding:6px 9px">Faltan 3 · <u>Motivo:</u> No llegó ▾</div>
+      </div>
+
+      <div class="card" style="opacity:.6">
+        <div class="fila"><span class="cod">CF1188</span><span class="c col">NEGRO</span><span class="c tal">M</span><span class="der big num">60</span></div>
+        <div class="desc">Contado 60 · ✓ igual al picking</div>
+      </div>
+      <div class="desc" style="margin-top:8px">Tocar ✓ = “está todo lo del picking”. Si cuenta distinto, el número se pone rojo (falta) o verde flúor (sobra).</div>
+    </div>
+
+    <!-- Desglose color × talle -->
+    <div class="tel">
+      <div class="tel-lbl">C · Desglosar código sin variante</div>
+      <div class="back">← Líneas del picking</div>
+      <div class="tit">CF2301 <span class="c falta">sin color/talle</span></div>
+      <div class="desc">Buzo canguro frisa · picking dice <b style="color:var(--ink)">120 u.</b></div>
+
+      <div class="seg" style="margin-top:12px"><span class="on">Grilla color × talle</span><span>Escanear prenda</span></div>
+
+      <table class="mtx" id="mtx">
+        <thead><tr><th class="colh">Color</th><th>S</th><th>M</th><th>L</th><th>XL</th><th>Tot.</th></tr></thead>
+        <tbody>
+          <tr><th class="colh"><span class="sw" style="background:#111"></span>NEGRO</th>
+            <td><input inputmode="numeric" value="10"></td><td><input inputmode="numeric" value="15"></td><td><input inputmode="numeric" value="15"></td><td><input inputmode="numeric" value="8"></td><td class="tot"></td></tr>
+          <tr><th class="colh"><span class="sw" style="background:#9ca3af"></span>GRIS M.</th>
+            <td><input inputmode="numeric" value="8"></td><td><input inputmode="numeric" value="12"></td><td><input inputmode="numeric" value="12"></td><td><input inputmode="numeric" value="6"></td><td class="tot"></td></tr>
+          <tr><th class="colh"><span class="sw" style="background:#1e3a8a"></span>AZUL</th>
+            <td><input inputmode="numeric" value=""></td><td><input inputmode="numeric" value="10"></td><td><input inputmode="numeric" value="10"></td><td><input inputmode="numeric" value=""></td><td class="tot"></td></tr>
+        </tbody>
+        <tfoot><tr><th class="colh">Tot.</th><td class="tot" data-c="0"></td><td class="tot" data-c="1"></td><td class="tot" data-c="2"></td><td class="tot" data-c="3"></td><td class="tot" id="gran"></td></tr></tfoot>
+      </table>
+      <div class="add"><span>+ Color</span><span>+ Talle</span></div>
+      <div class="desc" style="margin-top:6px">Colores y talles sugeridos del maestro de artículos (los que existen para CF2301). Si aparece uno que no está, “+ Color” lo pide igual y queda marcado para revisar.</div>
+
+      <div class="barra">
+        <div class="fila"><span>Repartido</span><b class="der num" id="rep">0 / 120</b></div>
+        <div class="prog" id="barp"><i id="bari" style="width:0"></i></div>
+        <div id="estado" class="aviso vi" style="margin-top:6px">…</div>
+        <button class="btn em full" id="guardar">Guardar desglose</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="nota"><b>Desglose:</b> el operario carga en la grilla cuántas hay de cada color/talle. La barra compara contra lo del picking: <b>violeta</b> mientras falta repartir, <b style="color:#d9f99d">verde flúor</b> si contó de más, <b style="color:#fca5a5">rojo</b> si al guardar queda de menos (pide motivo). Probá cambiar números en la grilla.</div>
+  <div class="pregunta">❓ ¿Prefieren la grilla color × talle, o escanear prenda por prenda con el código de barras (cada lectura suma 1)? En la maqueta están las dos pestañas.</div>
+  <div class="pregunta">❓ Si el operario carga un color/talle que no existe en Dragon para ese código, ¿se acepta y Compras lo da de alta, o se bloquea?</div>
+
+  <!-- ================= PASO 3: RESULTADO ================= -->
+  <h2>3 · Resultado — vuelve a Compras</h2>
+  <div class="pantallas">
+    <div class="pc" style="flex-basis:640px;max-width:760px">
+      <div class="pc-h"><span class="t">Control terminado</span><span class="chip em">CONTROLADO</span><span class="sub" style="margin-left:auto">Operario: Sofía · 25/11 11:42</span></div>
+      <div class="kpis">
+        <div class="kpi"><span>Picking</span><b class="num">606</b></div>
+        <div class="kpi"><span>Contado físico</span><b class="num">603</b></div>
+        <div class="kpi"><span>Faltan</span><b class="num" style="color:var(--rojo)">3</b></div>
+        <div class="kpi"><span>Desglosados</span><b class="num" style="color:var(--vi)">2 códigos · 216 u.</b></div>
+      </div>
+      <div class="linea"><b>CF0912</b><span class="c col">AZUL</span><span class="c tal">XL</span><span class="sub">picking 36 · contado 33</span><span class="chip rojo der">−3 No llegó</span></div>
+      <div class="linea"><b>CF2301</b><span class="c falta">desglosado</span><span class="sub">NEGRO 48 · GRIS M. 38 · AZUL 20 (+14 sin cargar)</span><span class="chip vi der">ver grilla</span></div>
+      <div class="linea"><b>ZM0457</b><span class="c falta">desglosado</span><span class="sub">CELESTE 52 · NEGRO 44</span><span class="chip em der">96 = 96</span></div>
+      <div class="pie">
+        <button class="btn gh">Reabrir control</button>
+        <button class="btn or">Aprobar ingreso</button>
+      </div>
+    </div>
+  </div>
+  <div class="pregunta">❓ Lo desglosado, ¿tiene que reemplazar la línea del picking (para que Estado de pedidos y stock vean color/talle) o queda solo como registro del control?</div>
+  <div class="pregunta">❓ ¿Qué sigue después de «Aprobar ingreso»? (¿remito de ingreso en Dragon, etiquetas, ubicación en el mapeo?) — lo dejamos para la próxima etapa.</div>
+
+<script>
+(function(){
+  var OBJ=120, t=document.getElementById('mtx');
+  function n(v){v=parseInt(v,10);return isNaN(v)?0:v}
+  function calc(){
+    var filas=t.tBodies[0].rows, colT=[0,0,0,0], g=0;
+    for(var i=0;i<filas.length;i++){
+      var ins=filas[i].querySelectorAll('input'), s=0;
+      for(var j=0;j<ins.length;j++){var v=n(ins[j].value);s+=v;colT[j]+=v;ins[j].classList.toggle('lleno',v>0)}
+      filas[i].querySelector('.tot').textContent=s; g+=s;
+    }
+    t.querySelectorAll('tfoot [data-c]').forEach(function(td){td.textContent=colT[+td.dataset.c]});
+    document.getElementById('gran').textContent=g;
+    document.getElementById('rep').textContent=g+' / '+OBJ;
+    var bi=document.getElementById('bari'), es=document.getElementById('estado');
+    bi.style.width=Math.min(100,g/OBJ*100)+'%';
+    if(g<OBJ){bi.style.background='var(--vi)';es.className='aviso vi';es.innerHTML='Faltan repartir <b>'+(OBJ-g)+'</b>. Si físicamente no están, al guardar te pide el motivo.'}
+    else if(g===OBJ){bi.style.background='var(--em)';es.className='aviso em';es.innerHTML='✓ Coincide con el picking.'}
+    else{bi.style.background='var(--lima)';es.className='aviso lima';es.innerHTML='Contaste <b>'+(g-OBJ)+'</b> de más que el picking. Se guarda y se avisa a Compras.'}
+  }
+  t.addEventListener('input',calc); calc();
+})();
+</script>
+</body>
+</html>
