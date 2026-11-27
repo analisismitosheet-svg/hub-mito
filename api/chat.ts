@@ -16,6 +16,7 @@
  * Variables de entorno:
  *   ANTHROPIC_API_KEY              - key de la consola de Anthropic (NUNCA con prefijo VITE_)
  *   ANTHROPIC_MODELO (opcional)    - por defecto claude-sonnet-5-5
+ *   ANTHROPIC_WORKSPACE_ID (opc.)  - solo si la key es de organización (sin workspace): wrkspc_...
  *   OPENCODE_GO_API_KEY           - key de OpenCode Go (NUNCA con prefijo VITE_)
  *   OPENCODE_GO_MODELO (opcional)  - por defecto claude-haiku-5-5
  *   SUPABASE_URL / SUPABASE_ANON_KEY
@@ -946,7 +947,15 @@ let clienteClaude: Anthropic | null = null
 async function vueltaClaude(mensajes: Mensaje[], uso: Uso): Promise<{ bloques: Array<Bloque | BloqueClaude>; modelo: string }> {
   const key = process.env.ANTHROPIC_API_KEY?.trim()
   if (!key) throw new SinCupo('La API de Claude no está configurada')
-  clienteClaude ??= new Anthropic({ apiKey: key, maxRetries: 1, timeout: 90_000 })
+  // Una key de organización (sin workspace) exige el header anthropic-workspace-id; una key creada
+  // dentro de un workspace no lo necesita.
+  const workspace = process.env.ANTHROPIC_WORKSPACE_ID?.trim()
+  clienteClaude ??= new Anthropic({
+    apiKey: key,
+    maxRetries: 1,
+    timeout: 90_000,
+    ...(workspace ? { defaultHeaders: { 'anthropic-workspace-id': workspace } } : {}),
+  })
   let r: Anthropic.Beta.BetaMessage
   try {
     r = await clienteClaude.beta.messages.create({
@@ -965,6 +974,8 @@ async function vueltaClaude(mensajes: Mensaje[], uso: Uso): Promise<{ bloques: A
       const detalle = (err.error as { error?: { message?: string } } | undefined)?.error?.message ?? err.message
       const motivo = /credit balance/i.test(detalle)
         ? 'se terminó el saldo de la API de Claude'
+        : /workspace/i.test(detalle)
+          ? 'la key de Claude no tiene workspace: creá la key dentro de un workspace o cargá ANTHROPIC_WORKSPACE_ID en Vercel'
         : err.status === 401 || err.status === 403
           ? 'la key de la API de Claude no es válida'
           : err.status === 429
