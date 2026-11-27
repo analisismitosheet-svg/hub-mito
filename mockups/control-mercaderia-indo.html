@@ -219,13 +219,13 @@
             <td><input inputmode="numeric" value="2"></td><td><input inputmode="numeric" value="4"></td><td><input inputmode="numeric" value="4"></td><td><input inputmode="numeric" value="2"></td><td class="tot"></td></tr>
           <tr><th class="colh"><span class="sw" style="background:#f5f5f4"></span>02 BLANCO</th>
             <td><input inputmode="numeric" value="2"></td><td><input inputmode="numeric" value="4"></td><td><input inputmode="numeric" value="4"></td><td><input inputmode="numeric" value=""></td><td class="tot"></td></tr>
-          <tr><th class="colh" style="color:#fcd34d"><span class="sw" style="background:#65a30d"></span>VERDE ⚠</th>
+          <tr><th class="colh"><span class="sw" style="background:#65a30d"></span>06 VERDE</th>
             <td><input inputmode="numeric" value=""></td><td><input inputmode="numeric" value="3"></td><td><input inputmode="numeric" value="3"></td><td><input inputmode="numeric" value=""></td><td class="tot"></td></tr>
         </tbody>
         <tfoot><tr><th class="colh">Tot.</th><td class="tot" data-c="0"></td><td class="tot" data-c="1"></td><td class="tot" data-c="2"></td><td class="tot" data-c="3"></td><td class="tot" id="gran"></td></tr></tfoot>
       </table>
-      <div class="add"><span>+ Color</span><span>+ Talle</span></div>
-      <div class="aviso" style="border:1px solid rgba(245,158,11,.45);background:rgba(245,158,11,.08);color:#fde68a;padding:6px 9px">⚠ <b>VERDE</b> no existe en Dragon para SZ267102. Se acepta igual y le avisa a Compras para darlo de alta.</div>
+      <div class="add"><span style="border-color:var(--sky);color:var(--sky)">+ Color de Dragon</span><span style="border-color:var(--vi);color:var(--vi)">+ Talle de Dragon</span></div>
+      <div class="desc" style="margin-top:6px">Las filas y columnas salen <b style="color:var(--ink)">solo</b> de los maestros de Dragon (colores y talles). Se ven con el código de Dragon: <b style="color:var(--ink)">06 VERDE</b>.</div>
 
       <div class="barra">
         <div class="fila"><span>Repartido</span><b class="der num" id="rep">0 / 32</b></div>
@@ -234,7 +234,34 @@
         <button class="btn em full">Guardar desglose</button>
       </div>
     </div>
+
+    <div class="tel">
+      <div class="tel-lbl">D · + Color / + Talle (buscar en Dragon)</div>
+      <div class="back">← Desglosar SZ267102</div>
+      <div class="tit">Agregar color</div>
+      <div class="bus" style="color:var(--ink)">🔎 verde<span class="cam" style="font-size:12px;color:var(--sub)">788 colores</span></div>
+      <div class="desc">Busca por código o nombre en el maestro de colores de Dragon (Indo).</div>
+      <div class="card" style="padding:4px 12px">
+        <div class="linea"><span class="c col">06</span><b>VERDE</b><span class="chip em der">Agregar</span></div>
+        <div class="linea"><span class="c col">9F</span>VERDE (FOREST)<span class="chip der">Agregar</span></div>
+        <div class="linea"><span class="c col">1K</span>CAMO VERDE<span class="chip der">Agregar</span></div>
+        <div class="linea"><span class="c col">18</span>BCO/ VERDE<span class="chip der">Agregar</span></div>
+        <div class="linea"><span class="c col">BG</span>(DOL)VERDE/NEGRO<span class="chip der">Agregar</span></div>
+        <div class="linea sub" style="font-size:12px">… 7 más</div>
+      </div>
+      <div class="desc" style="margin-top:6px">Arriba, los colores que <b style="color:var(--ink)">más se usaron</b> con ese proveedor en desgloses anteriores.</div>
+
+      <div class="tit" style="margin-top:16px">Agregar talles</div>
+      <div class="desc">Curvas rápidas (todas son talles de Dragon):</div>
+      <div class="add" style="margin-top:6px">
+        <span style="border-style:solid;border-color:var(--or);color:#fdba74">XS · S · M · L · XL · XXL</span>
+        <span>36 al 46</span><span>1 al 16</span><span>3.5 al 8</span>
+      </div>
+      <div class="bus" style="margin-top:10px">🔎 Buscar talle (ej. 378, ML)<span class="cam" style="font-size:12px;color:var(--sub)">311 talles</span></div>
+      <div class="aviso vi">Si no está en Dragon, <b>no se puede cargar</b>: Compras lo da de alta en Dragon y aparece al día siguiente (o al tocar «Actualizar»).</div>
+    </div>
   </div>
+  <div class="nota"><b>Ojo, dato real:</b> en Dragon Indo estos artículos están dados de alta <b>solo como 00 / UNICO</b> (SZ267102 tiene una sola combinación). Por eso los colores y talles no salen del artículo sino de los <b>maestros generales de Dragon</b>: 788 colores y 311 talles.</div>
 
   <!-- ================= PICKING CON DESPLEGABLE ================= -->
   <h2>3 · Picking — el renglón sigue igual y se despliega el control físico (PC)</h2>
@@ -254,7 +281,7 @@
             <div class="fila" style="flex-wrap:wrap;gap:6px">
               <span class="chip"><span class="c col">01 NEGRO</span> S 2 · M 4 · L 4 · XL 2 = <b>12</b></span>
               <span class="chip"><span class="c col">02 BLANCO</span> S 2 · M 4 · L 4 = <b>10</b></span>
-              <span class="chip" style="border-color:rgba(245,158,11,.5)"><span class="c col">VERDE</span> M 3 · L 3 = <b>6</b> <span style="color:#fcd34d">⚠ no está en Dragon</span></span>
+              <span class="chip"><span class="c col">06 VERDE</span> M 3 · L 3 = <b>6</b></span>
               <span class="chip rojo">−4 · No llegó</span>
             </div>
           </td></tr>
@@ -266,7 +293,7 @@
     </div>
   </div>
 
-  <div class="nota"><b>Decidido (27/11):</b> desglose con <b>grilla color × talle</b> · lo toma <b>cualquiera con rol Depósito</b> (después por legajo) · color/talle que no está en Dragon <b>se acepta</b> y queda marcado · el desglose <b>no reemplaza</b> el renglón del picking, se ve desplegándolo.</div>
+  <div class="nota"><b>Decidido (27/11):</b> desglose con <b>grilla color × talle</b> · lo toma <b>cualquiera con rol Depósito</b> (después por legajo) · colores y talles <b>se eligen o buscan en los maestros de Dragon</b> (lo que no está en Dragon no se carga) · el desglose <b>no reemplaza</b> el renglón del picking, se ve desplegándolo.</div>
   <div class="nota"><b>Decidido (27/11):</b> un renglón con color 00 o talle U <b>siempre se desglosa</b>, aunque sea un artículo de talle único (no hay botón «Es único»).</div>
 
 <script>
