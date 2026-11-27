@@ -111,6 +111,21 @@ export default function OrdenesCompra() {
     })
   }, [])
 
+  // Mientras haya OC en cola para Dragon, se reconsultan solas cada 10 s (con la pestaña visible):
+  // el puente las manda en menos de 1 minuto y así el «En cola» pasa a creada (o al error) sin recargar.
+  const enCola = useMemo(() => (lista ?? []).filter((o) => o.dragon_estado === 'pendiente' || o.dragon_estado === 'enviando').map((o) => o.numero).join(','), [lista])
+  useEffect(() => {
+    if (!enCola) return
+    const numeros = enCola.split(',').map(Number)
+    const id = setInterval(() => {
+      if (document.hidden) return
+      for (const n of numeros) {
+        void cargarOrden(n).then((o) => { if (o) setLista((l) => l?.map((x) => (x.numero === n ? o : x)) ?? l) }).catch(() => {})
+      }
+    }, 10_000)
+    return () => clearInterval(id)
+  }, [enCola])
+
   const meses = useMemo(
     () => [...new Set((lista ?? []).map((o) => o.fecha_compra?.slice(0, 7)).filter(Boolean) as string[])].sort().reverse(),
     [lista],
