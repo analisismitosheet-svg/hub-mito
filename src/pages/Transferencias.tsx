@@ -35,6 +35,8 @@ interface Lote {
   motivo: string | null
   fecha: string
   created_at: string
+  /** Quién lo cargó (RPC transfer_lotes_autores); null = automático o sin dato */
+  autor?: string | null
 }
 type EstadoItem = 'pendiente' | 'hecho' | 'senado' | 'faltante'
 interface Item {
@@ -475,6 +477,13 @@ export default function Transferencias({ embebido = false }: { embebido?: boolea
     if (ld.error) setError(`No se pudieron cargar los archivos: ${ld.error.message}`)
     setUsuariosLocales((uRes.data as { email: string; local: string }[]) ?? [])
     const lotesData = (ld.data as Lote[]) ?? []
+    // Quién cargó cada lote (usuarios solo la lee el admin: va por RPC)
+    if (lotesData.length) {
+      const { data: aut } = await supabase.rpc('transfer_lotes_autores', { p_ids: lotesData.map((l) => l.id) })
+      if (mia !== cargaActual.current) return
+      const porId = new Map(((aut ?? []) as { id: string; autor: string | null }[]).map((a) => [a.id, a.autor]))
+      for (const l of lotesData) l.autor = porId.get(l.id) ?? null
+    }
     setLotes(lotesData)
     // Las líneas se piden lote por lote (la RPC con todos los lotes a la vez
     // corta en archivos grandes), pero de a LOTES_EN_PARALELO a la vez y no
@@ -967,7 +976,8 @@ export default function Transferencias({ embebido = false }: { embebido?: boolea
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium text-ink">{lote.nombre}</p>
                     <p className="truncate text-xs text-sub">
-                      Cargado {fmtFechaHora(lote.created_at)} · {origenes.length} locales
+                      Cargado {fmtFechaHora(lote.created_at)}
+                      {lote.autor ? ` por ${lote.autor}` : /CASCADA/i.test(lote.nombre) ? ' · automático' : ''} · {origenes.length} locales
                       {lote.motivo ? ` · ${lote.motivo}` : ''}
                     </p>
                   </div>
